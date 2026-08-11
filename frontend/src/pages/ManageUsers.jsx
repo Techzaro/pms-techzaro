@@ -17,7 +17,10 @@
  */
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
-import { MdVisibility, MdEdit } from "react-icons/md";
+import { MdVisibility, MdEdit, MdDelete } from "react-icons/md";
+import { Check, Trash2, SlidersVertical, Download } from "lucide-react";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 import { IoSearchOutline } from "react-icons/io5";
 import { CiCirclePlus } from "react-icons/ci";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -84,6 +87,11 @@ function ManageUsers() {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState({ type: "", value: "" });
   const [avatarRemoveConfirmOpen, setAvatarRemoveConfirmOpen] = useState(false);
+  const [requestDeletionConfirmOpen, setRequestDeletionConfirmOpen] = useState(false);
+  const [adminDeleteConfirmOpen, setAdminDeleteConfirmOpen] = useState(false);
+  const [pendingDeletionUser, setPendingDeletionUser] = useState(null);
+  const [deleteGuestConfirmOpen, setDeleteGuestConfirmOpen] = useState(false);
+  const [pendingDeleteGuest, setPendingDeleteGuest] = useState(null);
   const [newUser, setNewUser] = useState({
     fullName: "",
     fatherName: "",
@@ -122,11 +130,29 @@ function ManageUsers() {
   const [savingUserId, setSavingUserId] = useState(null);
   const { submitting, run } = useSubmit();
   const [addErrors, setAddErrors] = useState({});
+  const ALL_COLUMNS = [
+    { key: "user", label: "User (Name & Email)" },
+    { key: "role", label: "Role" },
+    { key: "status", label: "Status" },
+    { key: "phone_number", label: "Phone Number" },
+    { key: "father_name", label: "Father Name" },
+    { key: "id_card_number", label: "CNIC / ID Card" },
+    { key: "department", label: "Department" },
+    { key: "designation", label: "Designation" },
+    { key: "employee_code", label: "Employee Code" },
+    { key: "bank_name", label: "Bank Name" },
+    { key: "bank_account_number", label: "Bank Account No" },
+    { key: "bank_account_title", label: "Bank Account Title" },
+    { key: "present_address", label: "Address" },
+  ];
+
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [sortOrder, setSortOrder] = useState("");
   const [timeFilter, setTimeFilter] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+  const [selectedColumns, setSelectedColumns] = useState(["user", "role", "status"]);
   const [resignConfirmOpen, setResignConfirmOpen] = useState(false);
   const [resignUserId, setResignUserId] = useState(null);
   const [resignUser, setResignUser] = useState(null);
@@ -212,17 +238,21 @@ function ManageUsers() {
     </svg>
   );
 
-  const StatusBadge = ({ active, mustChangePassword }) => {
+  const StatusBadge = ({ active, mustChangePassword, status }) => {
     let label, className;
-    if (active) {
-      label = "Active";
-      className = "status-active";
-    } else if (mustChangePassword) {
-      label = "Inactive";
-      className = "status-inactive";
-    } else {
+    const st = status ? status.toLowerCase() : "";
+    if (st === "resigned") {
       label = "Resigned";
       className = "status-resigned";
+    } else if (st === "inactive" || (!active && mustChangePassword)) {
+      label = "Inactive";
+      className = "status-inactive";
+    } else if (st === "active" || active) {
+      label = "Active";
+      className = "status-active";
+    } else {
+      label = active ? "Active" : "Inactive";
+      className = active ? "status-active" : "status-inactive";
     }
     return <span className={`status-badge ${className}`}>{label}</span>;
   };
@@ -468,6 +498,7 @@ function ManageUsers() {
       jobStartedDate: fullUser.job_started_date ? fullUser.job_started_date.substring(0, 10) : "",
       jobEndedDate: fullUser.job_ended_date ? fullUser.job_ended_date.substring(0, 10) : "",
       role: fullUser.role || "member",
+      status: fullUser.status || (fullUser.active !== false ? "Active" : "Inactive"),
       grossSalary: fullUser.gross_salary || "",
       appliedVia: fullUser.applied_via || "",
       bankName: fullUser.bank_name || "",
@@ -479,6 +510,7 @@ function ManageUsers() {
       otherDocument: [],
       avatar: null,
       _existingAvatar: fullUser.avatar || null,
+      remove_avatar: false,
     });
     // Initialize existing other docs with rename state
     const docs = typeof fullUser.other_document === "string" ? (() => { try { return JSON.parse(fullUser.other_document); } catch { return []; } })() : (fullUser.other_document || []);
@@ -519,6 +551,7 @@ function ManageUsers() {
       jobStartedDate: "",
       jobEndedDate: "",
       role: "member",
+      status: "Active",
       grossSalary: "",
       appliedVia: "",
       bankName: "",
@@ -530,6 +563,7 @@ function ManageUsers() {
       otherDocument: [],
       avatar: null,
       _existingAvatar: null,
+      remove_avatar: false,
     });
   };
 
@@ -571,11 +605,6 @@ function ManageUsers() {
     moduleType: "user",
     enabled: addIsDirty,
   });
-
-  const handleSaveDraft = useCallback(async () => {
-    draftSaveRef.current = userSaveNow;
-    await userSaveNow();
-  }, [userSaveNow]);
 
   // ── Guest Management Functions ──
   const openGuestModal = (guest = null) => {
@@ -783,7 +812,9 @@ function ManageUsers() {
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.personalEmail.trim())) {
       errors.personalEmail = "Please enter a valid personal email address.";
     }
-    if (newUser.professionalEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.professionalEmail.trim())) {
+    if (!newUser.professionalEmail.trim()) {
+      errors.professionalEmail = "Professional Email Address is required.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.professionalEmail.trim())) {
       errors.professionalEmail = "Please enter a valid professional email address.";
     }
     const isExistingProEmail = editingUser && newUser.professionalEmail.trim() === (editingUser.professional_email || "").trim();
@@ -939,6 +970,106 @@ function ManageUsers() {
     publish('data:changed', { type: 'user', action: 'resigned' });
   };
 
+  const handleActivateUser = async (user) => {
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/users/${user.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ active: true, status: "Active" }),
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to activate user");
+      showSuccessMessage("User", "activated");
+      setLocalUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, active: true, status: "Active" } : u));
+      setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, active: true, status: "Active" } : u));
+    } catch (err) {
+      notify.error(err.message || "Failed to activate user");
+    }
+  };
+
+  const handleRequestDeletion = (user) => {
+    setPendingDeletionUser(user);
+    setRequestDeletionConfirmOpen(true);
+  };
+
+  const confirmRequestDeletion = async () => {
+    if (!pendingDeletionUser) return;
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/users/${pendingDeletionUser.id}/request-deletion`, {
+        method: "POST",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to request user deletion");
+      showSuccessMessage("User deletion request", "submitted to Admin");
+      setLocalUsers((prev) => prev.map((u) => u.id === pendingDeletionUser.id ? { ...u, deletion_requested: true } : u));
+      setUsers((prev) => prev.map((u) => u.id === pendingDeletionUser.id ? { ...u, deletion_requested: true } : u));
+    } catch (err) {
+      notify.error(err.message || "Failed to submit deletion request");
+    } finally {
+      setRequestDeletionConfirmOpen(false);
+      setPendingDeletionUser(null);
+    }
+  };
+
+  const handleAdminDeleteUser = (user) => {
+    setPendingDeletionUser(user);
+    setAdminDeleteConfirmOpen(true);
+  };
+
+  const confirmAdminDeleteUser = async () => {
+    if (!pendingDeletionUser) return;
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/users/${pendingDeletionUser.id}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to delete user");
+      showSuccessMessage("User", "deleted");
+      setLocalUsers((prev) => prev.filter((u) => u.id !== pendingDeletionUser.id));
+      setUsers((prev) => prev.filter((u) => u.id !== pendingDeletionUser.id));
+    } catch (err) {
+      notify.error(err.message || "Failed to delete user");
+    } finally {
+      setAdminDeleteConfirmOpen(false);
+      setPendingDeletionUser(null);
+    }
+  };
+
+  const handleDeleteGuest = (guest) => {
+    setPendingDeleteGuest(guest);
+    setDeleteGuestConfirmOpen(true);
+  };
+
+  const confirmDeleteGuest = async () => {
+    if (!pendingDeleteGuest) return;
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/guests/${pendingDeleteGuest.id}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to delete guest");
+      showSuccessMessage("Guest", "deleted");
+      setLocalUsers((prev) => prev.filter((u) => u.id !== pendingDeleteGuest.id));
+      setUsers((prev) => prev.filter((u) => u.id !== pendingDeleteGuest.id));
+    } catch (err) {
+      notify.error(err.message || "Failed to delete guest");
+    } finally {
+      setDeleteGuestConfirmOpen(false);
+      setPendingDeleteGuest(null);
+    }
+  };
+
   const getInitials = (name) => {
     return name
       .split(" ")
@@ -950,7 +1081,7 @@ function ManageUsers() {
   const renderUserRow = (user) => {
     const isSelf = currentUserId === user.id;
     const isTargetProtected = user.role === "admin" || user.role === "manager";
-    const isResigned = user.active === false && user.must_change_password === false;
+    const isResigned = user.status === "Resigned" || user.status === "resigned";
     const canModifyUser =
       !isResigned && !isSelf && !(currentUserRole === "manager" && isTargetProtected);
 
@@ -977,7 +1108,7 @@ function ManageUsers() {
           </span>
         </td>
         <td style={{ width: "20%" }}>
-          <StatusBadge active={user.active} mustChangePassword={user.must_change_password} />
+          <StatusBadge active={user.active} mustChangePassword={user.must_change_password} status={user.status} />
         </td>
         <td style={{ width: "20%" }}>
           <div className="action-buttons">
@@ -996,6 +1127,32 @@ function ManageUsers() {
             >
               <MdEdit size={20} />
             </button>
+            {user.active === false && user.status !== "Resigned" && user.status !== "resigned" && (
+              <button className="btn-view" style={{ color: "#10b981" }} onClick={() => handleActivateUser(user)} title="Activate User">
+                <Check size={18} />
+              </button>
+            )}
+            {currentUserRole === "manager" && !isSelf && !isTargetProtected && (
+              <button
+                className="btn-view"
+                style={{ color: user.deletion_requested ? "#f59e0b" : "#ef4444" }}
+                onClick={() => handleRequestDeletion(user)}
+                title={user.deletion_requested ? "Deletion Requested" : "Request Deletion"}
+                disabled={user.deletion_requested}
+              >
+                <Trash2 size={18} />
+              </button>
+            )}
+            {currentUserRole === "admin" && !isSelf && (
+              <button
+                className="btn-view"
+                style={{ color: "#ef4444" }}
+                onClick={() => handleAdminDeleteUser(user)}
+                title={user.deletion_requested ? "Approve & Delete User" : "Delete User"}
+              >
+                <Trash2 size={18} />
+              </button>
+            )}
           </div>
         </td>
       </tr>
@@ -1011,8 +1168,9 @@ function ManageUsers() {
     const matchesRole = roleFilter === "" || user.role === roleFilter;
     const matchesStatus =
       statusFilter === "" ||
-      (statusFilter === "active" && user.active !== false) ||
-      (statusFilter === "resigned" && user.active === false);
+      (statusFilter === "active" && user.active !== false && user.status !== "Resigned" && user.status !== "resigned") ||
+      (statusFilter === "inactive" && user.active === false && user.status !== "Resigned" && user.status !== "resigned") ||
+      (statusFilter === "resigned" && (user.status === "Resigned" || user.status === "resigned"));
     return matchesSearch && matchesRole && matchesStatus;
   });
 
@@ -1032,41 +1190,83 @@ function ManageUsers() {
    * SortableUserRow — A draggable user row for the users table.
    * Wraps the standard row with @dnd-kit sortable functionality.
    */
-  function SortableUserRow({ user, isActive, canModifyUser, isSelf, isTargetProtected }) {
+  function SortableUserRow({ user, isActive, canModifyUser, isSelf, isTargetProtected, selectedColumns = ["user", "role", "status"] }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: user.id });
     const rowStyle = {
       transform: CSS.Transform.toString(transform),
       transition,
       opacity: isDragging ? 0.4 : 1,
     };
-    const isResigned = user.active === false && user.must_change_password === false;
+    const isResigned = user.status === "Resigned" || user.status === "resigned";
     return (
       <tr ref={setNodeRef} className={isResigned ? "resigned-row" : ""} style={rowStyle} {...listeners} {...attributes}>
-        <td style={{ width: "40%", textAlign: "left" }}>
-          <div className="user-info">
-            <span className="user-avatar">
-              {user.avatar ? (
-                <img src={`${API_URL.replace('/api', '')}/storage/${user.avatar}`} alt={user.name} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-              ) : (
-                getInitials(user.name)
-              )}
-            </span>
-            <div className="user-details">
-              <span className="user-name">{user.name}</span>
-              <span className="user-email">{user.professional_email || "—"}</span>
+        {selectedColumns.includes("user") && (
+          <td style={{ textAlign: "left" }}>
+            <div className="user-info">
+              <span className="user-avatar">
+                {user.avatar ? (
+                  <img src={user.avatar.startsWith('http') ? user.avatar : `${API_URL.replace('/api', '')}/storage/${user.avatar}`} alt={user.name} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                ) : (
+                  getInitials(user.name)
+                )}
+              </span>
+              <div className="user-details">
+                <span className="user-name">{user.name}</span>
+                <span className="user-email">{user.professional_email || user.email || user.personal_email || "—"}</span>
+              </div>
             </div>
-          </div>
-        </td>
-        <td style={{ width: "20%" }}>
-          <span className={`role-badge role-${user.role}`}>
-            {normalizeRole(user.role)}
-          </span>
-        </td>
-        <td style={{ width: "20%" }}><StatusBadge active={user.active} mustChangePassword={user.must_change_password} /></td>
-        <td style={{ width: "20%" }}>
+          </td>
+        )}
+        {selectedColumns.includes("role") && (
+          <td>
+            <span className={`role-badge role-${user.role}`}>
+              {normalizeRole(user.role)}
+            </span>
+          </td>
+        )}
+        {selectedColumns.includes("status") && (
+          <td><StatusBadge active={user.active} mustChangePassword={user.must_change_password} status={user.status} /></td>
+        )}
+        {selectedColumns.includes("phone_number") && <td><span style={{ fontSize: 13, color: "var(--text-dark)" }}>{user.phone_number || user.contact_no || "—"}</span></td>}
+        {selectedColumns.includes("father_name") && <td><span style={{ fontSize: 13, color: "var(--text-dark)" }}>{user.father_name || "—"}</span></td>}
+        {selectedColumns.includes("id_card_number") && <td><span style={{ fontSize: 13, color: "var(--text-dark)" }}>{user.id_card_number || "—"}</span></td>}
+        {selectedColumns.includes("department") && <td><span style={{ fontSize: 13, color: "var(--text-dark)" }}>{user.department || "—"}</span></td>}
+        {selectedColumns.includes("designation") && <td><span style={{ fontSize: 13, color: "var(--text-dark)" }}>{user.designation || "—"}</span></td>}
+        {selectedColumns.includes("employee_code") && <td><span style={{ fontSize: 13, color: "var(--text-dark)" }}>{user.employee_code || "—"}</span></td>}
+        {selectedColumns.includes("bank_name") && <td><span style={{ fontSize: 13, color: "var(--text-dark)" }}>{user.bank_name || "—"}</span></td>}
+        {selectedColumns.includes("bank_account_number") && <td><span style={{ fontSize: 13, color: "var(--text-dark)" }}>{user.bank_account_number || "—"}</span></td>}
+        {selectedColumns.includes("bank_account_title") && <td><span style={{ fontSize: 13, color: "var(--text-dark)" }}>{user.bank_account_title || "—"}</span></td>}
+        {selectedColumns.includes("present_address") && <td><span style={{ fontSize: 13, color: "var(--text-dark)" }}>{user.present_address || "—"}</span></td>}
+        <td>
           <div className="action-buttons">
             <button className="btn-view" onClick={() => navigate(rolePath(`manage-users/user-profile/${user.id}`))} aria-label="View user profile"><MdVisibility size={24} /></button>
             <button className="btn-view" onClick={() => openEditModal(user)} disabled={!canModifyUser} aria-label="Edit user"><MdEdit size={20} /></button>
+            {user.active === false && user.status !== "Resigned" && user.status !== "resigned" && (
+              <button className="btn-view" style={{ color: "#10b981" }} onClick={() => handleActivateUser(user)} title="Activate User">
+                <Check size={18} />
+              </button>
+            )}
+            {currentUserRole === "manager" && !isSelf && !isTargetProtected && (
+              <button
+                className="btn-view"
+                style={{ color: user.deletion_requested ? "#f59e0b" : "#ef4444" }}
+                onClick={() => handleRequestDeletion(user)}
+                title={user.deletion_requested ? "Deletion Requested" : "Request Deletion"}
+                disabled={user.deletion_requested}
+              >
+                <Trash2 size={18} />
+              </button>
+            )}
+            {currentUserRole === "admin" && !isSelf && (
+              <button
+                className="btn-view"
+                style={{ color: "#ef4444" }}
+                onClick={() => handleAdminDeleteUser(user)}
+                title={user.deletion_requested ? "Approve & Delete User" : "Delete User"}
+              >
+                <Trash2 size={18} />
+              </button>
+            )}
           </div>
         </td>
       </tr>
@@ -1259,14 +1459,19 @@ function ManageUsers() {
   };
 
   // Submit new user or update existing user via API with FormData (supports file uploads)
-  const handleSubmit = async (event) => {
-    if (event) event.preventDefault();
+  const handleSubmit = async (event, options = {}) => {
+    if (event && typeof event.preventDefault === "function") {
+      event.preventDefault();
+    }
+    const isDraft = typeof options === "object" && options !== null && options.isDraft === true;
 
-    const errors = validateAddForm();
-    setAddErrors(errors);
-    if (Object.keys(errors).length > 0) {
-      scrollToFirstError(errors);
-      return;
+    if (!isDraft) {
+      const errors = validateAddForm();
+      setAddErrors(errors);
+      if (Object.keys(errors).length > 0) {
+        scrollToFirstError(errors);
+        return;
+      }
     }
 
     const finalDepartment =
@@ -1291,7 +1496,7 @@ function ManageUsers() {
     }
 
     const formData = new FormData();
-    formData.append("name", newUser.fullName.trim());
+    formData.append("name", (newUser.fullName || "").trim() || "Draft User");
     formData.append("email", (newUser.personalEmail || newUser.email || "").trim());
     formData.append("father_name", newUser.fatherName);
     formData.append("id_card_number", newUser.idCardNumber);
@@ -1312,7 +1517,10 @@ function ManageUsers() {
     formData.append("employee_code", newUser.employeeCode);
     formData.append("job_started_date", newUser.jobStartedDate);
     formData.append("job_ended_date", newUser.jobEndedDate);
-    formData.append("role", newUser.role);
+    formData.append("role", newUser.role || "member");
+    const selectedStatus = isDraft ? "Draft" : (newUser.status || (newUser.active !== false ? "Active" : "Inactive"));
+    formData.append("status", selectedStatus);
+    formData.append("active", selectedStatus === "Active" ? "1" : "0");
     formData.append("gross_salary", newUser.grossSalary);
     formData.append("applied_via", newUser.appliedVia);
     formData.append("bank_name", newUser.bankName);
@@ -1354,9 +1562,12 @@ function ManageUsers() {
       }
     }
 
-    // Avatar upload
+    // Avatar upload and removal
     if (newUser.avatar) {
       formData.append("avatar", newUser.avatar);
+    } else if (newUser.remove_avatar || (editingUser && editingUser.avatar && !newUser._existingAvatar)) {
+      formData.append("remove_avatar", "true");
+      formData.append("avatar_remove", "1");
     }
 
     await run(async () => {
@@ -1415,6 +1626,14 @@ function ManageUsers() {
     });
   };
 
+  const handleSaveDraft = useCallback(async () => {
+    if (typeof userSaveNow === "function") {
+      draftSaveRef.current = userSaveNow;
+      await userSaveNow();
+    }
+    await handleSubmit(null, { isDraft: true });
+  }, [userSaveNow, handleSubmit]);
+
   const breadcrumbs = [
     { label: "Users" },
   ];
@@ -1448,6 +1667,78 @@ function ManageUsers() {
     try { return new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }); } catch { return "—"; }
   };
 
+  const handleExportPDF = () => {
+    const activeHeaderCols = ALL_COLUMNS.filter((col) => selectedColumns.includes(col.key));
+    if (activeHeaderCols.length === 0) {
+      notify.error("Please select at least one column to export.");
+      return;
+    }
+
+    const doc = new jsPDF({
+      orientation: activeHeaderCols.length > 5 ? "landscape" : "portrait",
+    });
+
+    doc.setFontSize(16);
+    doc.text("System Users Custom Export Report", 14, 18);
+    doc.setFontSize(9);
+    doc.setTextColor(100);
+    doc.text(
+      `Generated on: ${new Date().toLocaleDateString()} | Active Columns (${activeHeaderCols.length}): ${activeHeaderCols.map(c => c.label).join(", ")}`,
+      14,
+      25
+    );
+
+    const tableColumn = activeHeaderCols.map((col) => col.label);
+
+    const targetUsers = activeTab === "guests" ? paginatedGuests : paginatedUsers;
+    const tableRows = targetUsers.map((u) => {
+      return activeHeaderCols.map((col) => {
+        switch (col.key) {
+          case "user":
+            return `${u.name || u.fullName || "—"}\n(${u.email || u.personal_email || u.professional_email || "—"})`;
+          case "role":
+            return (u.role || "member").replace("_", " ").toUpperCase();
+          case "status":
+            return u.status || (u.active !== false ? "Active" : "Resigned");
+          case "phone_number":
+            return u.phone_number || u.contact_no || "—";
+          case "father_name":
+            return u.father_name || "—";
+          case "id_card_number":
+            return u.id_card_number || "—";
+          case "department":
+            return u.department || "—";
+          case "designation":
+            return u.designation || "—";
+          case "employee_code":
+            return u.employee_code || "—";
+          case "bank_name":
+            return u.bank_name || "—";
+          case "bank_account_number":
+            return u.bank_account_number || "—";
+          case "bank_account_title":
+            return u.bank_account_title || "—";
+          case "present_address":
+            return u.present_address || "—";
+          default:
+            return u[col.key] || "—";
+        }
+      });
+    });
+
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: 30,
+      theme: "grid",
+      headStyles: { fillColor: [79, 70, 229] },
+      styles: { fontSize: 8, cellPadding: 3 },
+    });
+
+    doc.save(`users_custom_report_${new Date().toISOString().slice(0, 10)}.pdf`);
+    notify.success(`Exported ${activeHeaderCols.length} columns for ${targetUsers.length} users to PDF!`);
+  };
+
   return (
     <>
     <DashboardLayout>
@@ -1473,6 +1764,38 @@ function ManageUsers() {
                 <CiCirclePlus fontSize={"21px"} /> Add Guest
               </button>
             )}
+            <button
+              type="button"
+              className="primary-button"
+              onClick={handleExportPDF}
+              style={{
+                background: "#ffffff",
+                color: "#334155",
+                border: "1px solid #cbd5e1",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+            >
+              <Download size={16} />
+              Export PDF
+            </button>
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => setShowFilters(!showFilters)}
+              style={{
+                background: showFilters ? "#4338ca" : "#ffffff",
+                color: showFilters ? "#ffffff" : "#334155",
+                border: "1px solid #cbd5e1",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+            >
+              <SlidersVertical size={16} />
+              Filters {(roleFilter || statusFilter || searchQuery || timeFilter || selectedColumns.length !== 3) ? "•" : ""}
+            </button>
           </div>
         </div>
 
@@ -1491,35 +1814,100 @@ function ManageUsers() {
         {/* ═══════════ EMPLOYEES TAB ═══════════ */}
         {activeTab === "employees" && (
         <>
-        <div className="bar">
-          <div className="search-bar">
-            <IoSearchOutline fontSize={"25px"} />
-            <input type="text" placeholder="Search by employee name or email..." value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }} />
+        {showFilters && (
+          <div className="bar" style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "16px", padding: "16px", background: "var(--bg-card, #ffffff)", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "12px" }}>
+            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center", width: "100%" }}>
+              <div className="search-bar" style={{ flex: 1, minWidth: "220px" }}>
+                <IoSearchOutline fontSize={"25px"} />
+                <input type="text" placeholder="Search by name, email, or info..." value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }} />
+              </div>
+              <select className="bar-role" value={roleFilter} onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }}>
+                <option value="">All Roles</option>
+                <option value="admin">Admin</option>
+                <option value="manager">Manager</option>
+                <option value="team_lead">Team Lead</option>
+                <option value="member">Member</option>
+                <option value="guest">Guest</option>
+              </select>
+              <select className="bar-status" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}>
+                <option value="">All Statuses</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="resigned">Resigned</option>
+              </select>
+              <select className="reports-filter" value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}>
+                <option value="">All Time</option>
+                <option value="7">Last 7 Days</option>
+                <option value="30">Last 30 Days</option>
+                <option value="180">Last 6 Months</option>
+              </select>
+              <select className="bar-sort" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}>
+                <option value="">Sort By</option>
+                <option value="asc">Ascending</option>
+                <option value="desc">Descending</option>
+              </select>
+              {(roleFilter || statusFilter || searchQuery || timeFilter || sortOrder) && (
+                <button
+                  type="button"
+                  onClick={() => { setRoleFilter(""); setStatusFilter(""); setSearchQuery(""); setTimeFilter(""); setSortOrder(""); setPage(1); }}
+                  style={{ padding: "6px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", background: "#ffffff", color: "#dc2626", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
+
+            {/* Column Selector Box */}
+            <div style={{ paddingTop: "12px", borderTop: "1px solid var(--border-color, #f1f5f9)", width: "100%" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  Select Fields / Columns to Display & Export:
+                </span>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedColumns(ALL_COLUMNS.map(c => c.key))}
+                    style={{ fontSize: "11px", color: "#4f46e5", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}
+                  >
+                    Select All ({ALL_COLUMNS.length})
+                  </button>
+                  <span style={{ color: "#cbd5e1" }}>|</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedColumns(["user", "role", "status"])}
+                    style={{ fontSize: "11px", color: "#64748b", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}
+                  >
+                    Reset Default
+                  </button>
+                </div>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 16px" }}>
+                {ALL_COLUMNS.map((col) => {
+                  const isChecked = selectedColumns.includes(col.key);
+                  return (
+                    <label key={col.key} style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "12px", color: isChecked ? "#0f172a" : "#64748b", fontWeight: isChecked ? 600 : 400, cursor: "pointer", userSelect: "none" }}>
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => {
+                          if (isChecked) {
+                            if (selectedColumns.length > 1) {
+                              setSelectedColumns(selectedColumns.filter((k) => k !== col.key));
+                            }
+                          } else {
+                            setSelectedColumns([...selectedColumns, col.key]);
+                          }
+                        }}
+                        style={{ cursor: "pointer", accentColor: "#4f46e5" }}
+                      />
+                      {col.label}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
           </div>
-          <select className="reports-filter" value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}>
-            <option value="">All Time</option>
-            <option value="7">Last 7 Days</option>
-            <option value="30">Last 30 Days</option>
-            <option value="180">Last 6 Months</option>
-          </select>
-          <select className="bar-role" value={roleFilter} onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }}>
-            <option value="">Role</option>
-            <option value="admin">Admin</option>
-            <option value="manager">Manager</option>
-            <option value="team_lead">Team-Lead</option>
-            <option value="member">Member</option>
-          </select>
-          <select className="bar-status" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}>
-            <option value="">Status</option>
-            <option value="active">Active</option>
-            <option value="resigned">Resigned</option>
-          </select>
-          <select className="bar-sort" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}>
-            <option value="">Sort By</option>
-            <option value="asc">Ascending</option>
-            <option value="desc">Descending</option>
-          </select>
-        </div>
+        )}
 
         <div className="manage-users-table-card">
           <div className="table-card-header">
@@ -1529,34 +1917,43 @@ function ManageUsers() {
             <table className="manage-user-table">
               <thead>
                 <tr>
-                  <th style={{ width: "40%" }}>User</th>
-                  <th style={{ width: "20%" }}>Role</th>
-                  <th style={{ width: "20%" }}>Status</th>
-                  <th style={{ width: "20%" }}>Action</th>
+                  {selectedColumns.includes("user") && <th>User</th>}
+                  {selectedColumns.includes("role") && <th>Role</th>}
+                  {selectedColumns.includes("status") && <th>Status</th>}
+                  {selectedColumns.includes("phone_number") && <th>Phone Number</th>}
+                  {selectedColumns.includes("father_name") && <th>Father Name</th>}
+                  {selectedColumns.includes("id_card_number") && <th>CNIC / ID Card</th>}
+                  {selectedColumns.includes("department") && <th>Department</th>}
+                  {selectedColumns.includes("designation") && <th>Designation</th>}
+                  {selectedColumns.includes("employee_code") && <th>Employee Code</th>}
+                  {selectedColumns.includes("bank_name") && <th>Bank Name</th>}
+                  {selectedColumns.includes("bank_account_number") && <th>Bank Account No</th>}
+                  {selectedColumns.includes("present_address") && <th>Address</th>}
+                  <th style={{ width: "120px" }}>Action</th>
                 </tr>
               </thead>
               <SortableContext items={paginatedUsers.filter(Boolean).map((u) => u.id)} strategy={verticalListSortingStrategy}>
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan="4" className="loading-row">Loading users...</td>
+                      <td colSpan={selectedColumns.length + 1} className="loading-row">Loading users...</td>
                     </tr>
                   ) : localUsers.length ? (
                       paginatedUsers.length ? (
                         paginatedUsers.filter(Boolean).map((user) => {
                         const isSelf = currentUserId === user.id;
                         const isTargetProtected = user.role === "admin" || user.role === "manager";
-                        const isResigned = user.active === false && user.must_change_password === false;
+                        const isResigned = user.status === "Resigned" || user.status === "resigned";
                         const canModifyUser = !isResigned && !isSelf && !(currentUserRole === "manager" && isTargetProtected);
                         return (
-                          <SortableUserRow key={user.id} user={user} isActive={user.active !== false} canModifyUser={canModifyUser} isSelf={isSelf} isTargetProtected={isTargetProtected} />
+                          <SortableUserRow key={user.id} user={user} isActive={user.active !== false} canModifyUser={canModifyUser} isSelf={isSelf} isTargetProtected={isTargetProtected} selectedColumns={selectedColumns} />
                         );
                       })
                     ) : (
-                      <tr><td colSpan="4" className="empty-row">No users match your search or filters.</td></tr>
+                      <tr><td colSpan={selectedColumns.length + 1} className="empty-row">No users match your search or filters.</td></tr>
                     )
                   ) : (
-                    <tr><td colSpan="4" className="empty-row">No users found yet.</td></tr>
+                    <tr><td colSpan={selectedColumns.length + 1} className="empty-row">No users found yet.</td></tr>
                   )}
                 </tbody>
               </SortableContext>
@@ -1594,31 +1991,51 @@ function ManageUsers() {
           <table className="manage-user-table">
             <thead>
               <tr>
-                <th style={{ width: "35%" }}>Client</th>
-                <th style={{ width: "20%" }}>Company</th>
-                <th style={{ width: "15%" }}>Status</th>
-                <th style={{ width: "15%" }}>Actions</th>
+                {selectedColumns.includes("user") && <th>Client</th>}
+                {selectedColumns.includes("role") && <th>Role</th>}
+                {selectedColumns.includes("status") && <th>Status</th>}
+                {selectedColumns.includes("phone_number") && <th>Phone Number</th>}
+                {selectedColumns.includes("father_name") && <th>Father Name</th>}
+                {selectedColumns.includes("id_card_number") && <th>CNIC / ID Card</th>}
+                {selectedColumns.includes("department") && <th>Department</th>}
+                {selectedColumns.includes("designation") && <th>Designation</th>}
+                {selectedColumns.includes("employee_code") && <th>Employee Code</th>}
+                {selectedColumns.includes("bank_name") && <th>Bank Name</th>}
+                {selectedColumns.includes("bank_account_number") && <th>Bank Account No</th>}
+                {selectedColumns.includes("present_address") && <th>Address</th>}
+                <th style={{ width: "120px" }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan="4" className="loading-row">Loading guests...</td></tr>
+                <tr><td colSpan={selectedColumns.length + 1} className="loading-row">Loading guests...</td></tr>
               ) : paginatedGuests.length > 0 ? (
                 paginatedGuests.map((g) => {
                   const st = getGuestStatus(g);
                   return (
                     <tr key={g.id} className={g.active === false ? "resigned-row" : ""}>
-                      <td style={{ textAlign: "left" }}>
-                        <div className="user-info">
-                          <span className="user-avatar">{g.avatar ? <img src={`${API_URL.replace('/api', '')}/storage/${g.avatar}`} alt={g.name} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} /> : getGuestInitials(g.name)}</span>
-                          <div className="user-details">
-                            <span className="user-name">{g.name}</span>
-                            <span className="user-email">{g.personal_email || g.email || "—"}</span>
+                      {selectedColumns.includes("user") && (
+                        <td style={{ textAlign: "left" }}>
+                          <div className="user-info">
+                            <span className="user-avatar">{g.avatar ? <img src={g.avatar.startsWith('http') ? g.avatar : `${API_URL.replace('/api', '')}/storage/${g.avatar}`} alt={g.name} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} /> : getGuestInitials(g.name)}</span>
+                            <div className="user-details">
+                              <span className="user-name">{g.name}</span>
+                              <span className="user-email">{g.personal_email || g.email || "—"}</span>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td><span style={{ fontSize: 14, color: "var(--text-dark)" }}>{g.company_name || "—"}</span></td>
-                      <td><span className={`status-badge ${st.className}`}>{st.label}</span></td>
+                        </td>
+                      )}
+                      {selectedColumns.includes("role") && <td><span className="role-badge role-guest">Guest</span></td>}
+                      {selectedColumns.includes("status") && <td><span className={`status-badge ${st.className}`}>{st.label}</span></td>}
+                      {selectedColumns.includes("phone_number") && <td><span style={{ fontSize: 14, color: "var(--text-dark)" }}>{g.phone_number || g.contact_no || "—"}</span></td>}
+                      {selectedColumns.includes("father_name") && <td><span style={{ fontSize: 14, color: "var(--text-dark)" }}>{g.father_name || "—"}</span></td>}
+                      {selectedColumns.includes("id_card_number") && <td><span style={{ fontSize: 14, color: "var(--text-dark)" }}>{g.id_card_number || "—"}</span></td>}
+                      {selectedColumns.includes("department") && <td><span style={{ fontSize: 14, color: "var(--text-dark)" }}>{g.department || "—"}</span></td>}
+                      {selectedColumns.includes("designation") && <td><span style={{ fontSize: 14, color: "var(--text-dark)" }}>{g.designation || "—"}</span></td>}
+                      {selectedColumns.includes("employee_code") && <td><span style={{ fontSize: 14, color: "var(--text-dark)" }}>{g.employee_code || "—"}</span></td>}
+                      {selectedColumns.includes("bank_name") && <td><span style={{ fontSize: 14, color: "var(--text-dark)" }}>{g.bank_name || "—"}</span></td>}
+                      {selectedColumns.includes("bank_account_number") && <td><span style={{ fontSize: 14, color: "var(--text-dark)" }}>{g.bank_account_number || "—"}</span></td>}
+                      {selectedColumns.includes("present_address") && <td><span style={{ fontSize: 14, color: "var(--text-dark)" }}>{g.present_address || "—"}</span></td>}
                       <td>
                         <div className="action-buttons">
                           <button className="btn-view" title="View Profile" onClick={() => navigate(rolePath(`manage-users/user-profile/${g.id}`))} aria-label="View guest profile">
@@ -1627,13 +2044,16 @@ function ManageUsers() {
                           <button className="btn-view" title="Edit" onClick={() => openGuestModal(g)} aria-label="Edit guest">
                             <MdEdit size={20} />
                           </button>
+                          <button className="btn-view" style={{ color: "#ef4444" }} title="Delete Guest" onClick={() => handleDeleteGuest(g)} aria-label="Delete guest">
+                            <MdDelete size={20} />
+                          </button>
                         </div>
                       </td>
                     </tr>
                   );
                 })
               ) : (
-                <tr><td colSpan="4" className="empty-row">
+                <tr><td colSpan={selectedColumns.length + 1} className="empty-row">
                   {guestSearch ? "No guests match your search." : "No guests yet. Click \"Add Guest\" to invite a guest."}
                 </td></tr>
               )}
@@ -1795,6 +2215,32 @@ function ManageUsers() {
                     </div>
                     {addErrors.professionalEmailPassword && <span className="field-error-text">{addErrors.professionalEmailPassword}</span>}
                   </div>
+                  {editingUser && (
+                    <div className="form-row">
+                      <label htmlFor="userStatus">Account Status *</label>
+                      <select
+                        id="userStatus"
+                        name="userStatus"
+                        className="user-field-input"
+                        value={newUser.status || (newUser.active !== false ? "Active" : "Inactive")}
+                        onChange={(e) => { setNewUser((prev) => ({ ...prev, status: e.target.value })); markDirty(); }}
+                        style={{
+                          width: "100%",
+                          height: "44px",
+                          border: "1px solid var(--border-color)",
+                          borderRadius: "10px",
+                          padding: "0 12px",
+                          fontSize: "14px",
+                          background: "var(--bg-card)",
+                          color: "var(--text-dark)",
+                        }}
+                      >
+                        <option value="Active">Active</option>
+                        <option value="Inactive">Inactive</option>
+                        <option value="Resigned">Resigned</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
 
                 {/* ===== Employment Details ===== */}
@@ -2210,7 +2656,7 @@ function ManageUsers() {
     <ConfirmModal
       isOpen={avatarRemoveConfirmOpen}
       onClose={() => setAvatarRemoveConfirmOpen(false)}
-      onConfirm={() => { setNewUser((prev) => ({ ...prev, avatar: null, _existingAvatar: null })); setAvatarRemoveConfirmOpen(false); }}
+      onConfirm={() => { setNewUser((prev) => ({ ...prev, avatar: null, _existingAvatar: null, remove_avatar: true })); markDirty(); setAvatarRemoveConfirmOpen(false); }}
       title="Remove Photo"
       message="Are you sure you want to remove this profile photo?"
       confirmText="Remove"
@@ -2395,6 +2841,39 @@ function ManageUsers() {
       }
       cancelText="Cancel"
       danger={guestConfirmModal.type === "delete" || guestConfirmModal.type === "toggle-status" || guestConfirmModal.type === "resign"}
+    />
+
+    <ConfirmModal
+      isOpen={requestDeletionConfirmOpen}
+      onClose={() => { setRequestDeletionConfirmOpen(false); setPendingDeletionUser(null); }}
+      onConfirm={confirmRequestDeletion}
+      title="Request User Deletion"
+      message={`Are you sure you want to request deletion of user "${pendingDeletionUser?.name}"? An Administrator will be notified to review and approve.`}
+      confirmText="Request Deletion"
+      cancelText="Cancel"
+      danger
+    />
+
+    <ConfirmModal
+      isOpen={adminDeleteConfirmOpen}
+      onClose={() => { setAdminDeleteConfirmOpen(false); setPendingDeletionUser(null); }}
+      onConfirm={confirmAdminDeleteUser}
+      title="Delete User Account"
+      message={`Are you sure you want to permanently delete user "${pendingDeletionUser?.name}"? All associated files and settings will be permanently removed.`}
+      confirmText="Delete User"
+      cancelText="Cancel"
+      danger
+    />
+
+    <ConfirmModal
+      isOpen={deleteGuestConfirmOpen}
+      onClose={() => { setDeleteGuestConfirmOpen(false); setPendingDeleteGuest(null); }}
+      onConfirm={confirmDeleteGuest}
+      title="Delete Guest Account"
+      message={`Are you sure you want to delete guest "${pendingDeleteGuest?.name}"? This action cannot be undone.`}
+      confirmText="Delete Guest"
+      cancelText="Cancel"
+      danger
     />
     </>
   );

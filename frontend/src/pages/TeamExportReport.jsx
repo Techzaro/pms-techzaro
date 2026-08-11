@@ -138,23 +138,26 @@ function TeamExportReport({ isOpen, onClose, team }) {
       doc.setTextColor(99, 102, 241); doc.setFont("helvetica", "bold");
       doc.text(team.leader ? `Lead: ${team.leader.name}` : "", M + 27, y + 16);
 
-      const profileRX = M + CW / 2 + 5;
+      const col1StartX = M + 70;
+      const col1ValX = M + 95;
+      const col2StartX = M + 132;
+      const col2ValX = M + 158;
       const profileData = [
         ["Team ID:", `TEAM-${String(team.id || 0).padStart(4, "0")}`, "Team Lead:", team.leader?.name || "-"],
-        ["Report Period:", dateRangeLabels[dateRange], "Total Members:", String(members.length)],
+        ["Report Period:", dateRangeLabels[dateRange] || "All Time", "Total Members:", String(members.length)],
         ["Total Assigned:", String(totalAssigned), "Report Date:", genDate],
         ["Total Completed:", String(totalCompleted), "Report Time:", genTime],
       ];
       profileData.forEach((row, ri) => {
         const ry = y + 4 + ri * 5;
-        doc.setFontSize(5); doc.setFont("helvetica", "normal"); doc.setTextColor(107, 114, 128);
-        doc.text(row[0], profileRX, ry);
+        doc.setFontSize(5.5); doc.setFont("helvetica", "normal"); doc.setTextColor(107, 114, 128);
+        doc.text(row[0], col1StartX, ry);
         doc.setFont("helvetica", "bold"); doc.setTextColor(17, 24, 39);
-        doc.text(String(row[1]).substring(0, 28), profileRX + 28, ry);
-        doc.setFont("helvetica", "normal"); doc.setTextColor(107, 114, 128);
-        doc.text(row[2], profileRX + CW / 2 - 12, ry);
+        doc.text(String(row[1]).substring(0, 24), col1ValX, ry);
+        doc.setFontSize(5.5); doc.setFont("helvetica", "normal"); doc.setTextColor(107, 114, 128);
+        doc.text(row[2], col2StartX, ry);
         doc.setFont("helvetica", "bold"); doc.setTextColor(17, 24, 39);
-        doc.text(String(row[3]).substring(0, 28), profileRX + CW / 2 + 16, ry);
+        doc.text(String(row[3]).substring(0, 24), col2ValX, ry);
       });
       y += 30;
 
@@ -422,9 +425,19 @@ function TeamExportReport({ isOpen, onClose, team }) {
               </div>
               {dateRange === "custom" && (
                 <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
-                  <input type="date" value={customStart} onChange={(e) => { setCustomStart(e.target.value); setConfigIsDirty(true); }}
+                  <input type="date" value={customStart} max={customEnd || undefined} onChange={(e) => {
+                    const val = e.target.value;
+                    setCustomStart(val);
+                    if (customEnd && val > customEnd) setCustomEnd(val);
+                    setConfigIsDirty(true);
+                  }}
                     style={{ flex: 1, padding: "10px 14px", border: "1px solid var(--border-color)", borderRadius: 10, fontSize: 13, color: "var(--text-dark)", outline: "none" }} />
-                  <input type="date" value={customEnd} onChange={(e) => { setCustomEnd(e.target.value); setConfigIsDirty(true); }}
+                  <input type="date" value={customEnd} min={customStart || undefined} onChange={(e) => {
+                    const val = e.target.value;
+                    setCustomEnd(val);
+                    if (customStart && val < customStart) setCustomStart(val);
+                    setConfigIsDirty(true);
+                  }}
                     style={{ flex: 1, padding: "10px 14px", border: "1px solid var(--border-color)", borderRadius: 10, fontSize: 13, color: "var(--text-dark)", outline: "none" }} />
                 </div>
               )}

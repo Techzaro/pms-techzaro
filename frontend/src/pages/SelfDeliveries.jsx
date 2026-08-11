@@ -9,14 +9,16 @@
 
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
+import DraggableStatusBadges from "../components/DraggableStatusBadges";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { GoDotFill } from "react-icons/go";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
-import { ArrowUpRight, Pause, Play, Lock } from "lucide-react";
+import { ArrowUpRight, Pause, Play, Lock, StickyNote } from "lucide-react";
 import { authToken, getUser, rolePath } from "../utils/auth";
+import { renderDynamicDates } from "../utils/tableDateUtils";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
@@ -81,8 +83,8 @@ function SelfDeliveries() {
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
   const [actingId, setActingId] = useState(null);
-  const [actingType, setActingType] = useState(null);
-  const ITEMS_PER_PAGE = 10;
+  const [perPage, setPerPage] = useState(10);
+  const ITEMS_PER_PAGE = perPage;
 
   useEffect(() => {
     setOrderedSubtasks(subtasks);
@@ -112,8 +114,14 @@ function SelfDeliveries() {
     })
       .then((res) => (res.ok ? res.json() : { data: [] }))
       .then((data) => {
-        const items = data?.data;
-        setSubtasks(Array.isArray(items) ? items : (Array.isArray(items?.data) ? items.data : []));
+        let raw = data?.data;
+        if (raw && typeof raw === "object" && !Array.isArray(raw) && Array.isArray(raw.data)) {
+          raw = raw.data;
+        }
+        if (!Array.isArray(raw)) {
+          raw = Array.isArray(data?.deliverables) ? data.deliverables : (Array.isArray(data) ? data : []);
+        }
+        setSubtasks(raw);
       })
       .catch(() => setSubtasks([]))
       .finally(() => setLoading(false));
@@ -246,13 +254,15 @@ function SelfDeliveries() {
 
   const handleSubtaskUpdate = (updatedSubtask) => {
     setSubtasks((prev) =>
-      prev.map((d) =>
-        d.id === updatedSubtask.id ? { ...d, ...updatedSubtask } : d
-      )
+      Array.isArray(prev)
+        ? prev.map((d) => (d.id === updatedSubtask.id ? { ...d, ...updatedSubtask } : d))
+        : []
     );
   };
 
-  const displayItems = orderedSubtasks.length ? orderedSubtasks : subtasks;
+  const safeSubtasks = Array.isArray(subtasks) ? subtasks : [];
+  const safeOrderedSubtasks = Array.isArray(orderedSubtasks) ? orderedSubtasks : [];
+  const displayItems = safeOrderedSubtasks.length ? safeOrderedSubtasks : safeSubtasks;
   const currentUser = getUser();
   const canCreateSubtask = currentUser && ["admin", "manager", "team_lead"].includes(currentUser.role);
 
@@ -291,10 +301,11 @@ function SelfDeliveries() {
       })
     : searchFilteredItems;
 
-  const subtaskIds = filteredItems.map((item) => item.id);
+  const safeFilteredItems = Array.isArray(filteredItems) ? filteredItems : [];
+  const subtaskIds = safeFilteredItems.map((item) => item.id);
 
-  const totalPages = showAll ? 1 : Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
-  const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+  const totalPages = showAll ? 1 : Math.max(1, Math.ceil(safeFilteredItems.length / (ITEMS_PER_PAGE || 10)));
+  const paginatedItems = showAll ? safeFilteredItems : safeFilteredItems.slice((page - 1) * (ITEMS_PER_PAGE || 10), page * (ITEMS_PER_PAGE || 10));
 
   const breadcrumbs = [
     { label: "Subtasks", path: rolePath("deliveries") },
@@ -325,39 +336,25 @@ function SelfDeliveries() {
           </div>
         </div>
 
-        <div className="task-progress">
-          <p className={`DueToday ${statusFilter === "due_today" ? "active" : ""}`} onClick={() => selectStatusFilter("due_today")} style={{ cursor: "pointer" }}>
-            <GoDotFill color="#EF4444" /> Due Today ({dueTodayCount})
-          </p>
-          <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => selectStatusFilter("pending")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Pending ({pendingCount})
-          </p>
-          <p className={`InProgress ${statusFilter === "in_progress" ? "active" : ""}`} onClick={() => selectStatusFilter("in_progress")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> In Progress ({inProgressCount})
-          </p>
-          <p className={`Paused ${statusFilter === "paused" ? "active" : ""}`} onClick={() => selectStatusFilter("paused")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Paused ({pausedCount})
-          </p>
-          <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => selectStatusFilter("submitted")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Submitted ({submittedCount})
-          </p>
-          <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => selectStatusFilter("reopened")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Reopened ({reopenedCount})
-          </p>
-          <p className={`Transferred ${statusFilter === "transferred" ? "active" : ""}`} onClick={() => selectStatusFilter("transferred")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Transferred ({transferredCount})
-          </p>
-          <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => selectStatusFilter("approved")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Approved ({approvedCount})
-          </p>
-          <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Declined ({rejectedCount})
-          </p>
-          <p className={`Reopened ${statusFilter === "rework_required" ? "active" : ""}`} onClick={() => selectStatusFilter("rework_required")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Rework Required ({reworkRequiredCount})
-          </p>
-          <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All ({allCount})</p>
-        </div>
+        <DraggableStatusBadges
+          badges={[
+            { id: "due_today", label: "Due Today", count: dueTodayCount, className: "DueToday", dotColor: "#EF4444" },
+            { id: "pending", label: "Pending", count: pendingCount, className: "Pending" },
+            { id: "in_progress", label: "In Progress", count: inProgressCount, className: "InProgress" },
+            { id: "paused", label: "Paused", count: pausedCount, className: "Paused" },
+            { id: "submitted", label: "Submitted", count: submittedCount, className: "Submitted" },
+            { id: "reopened", label: "Reopened", count: reopenedCount, className: "Reopened" },
+            { id: "transferred", label: "Transferred", count: transferredCount, className: "Transferred" },
+            { id: "approved", label: "Approved", count: approvedCount, className: "Approved" },
+            { id: "rejected", label: "Declined", count: rejectedCount, className: "Rejected" },
+            { id: "rework_required", label: "Rework Required", count: reworkRequiredCount, className: "Reopened" },
+            { id: "", label: "All", count: allCount, className: "All" },
+          ]}
+          activeStatus={statusFilter}
+          onSelectStatus={selectStatusFilter}
+          storageKey="pms_self_deliveries_status_order"
+          containerClassName="task-progress"
+        />
 
         <div className="delivery-serach-bar">
           <IoSearchOutline fontSize={"20px"} />
@@ -371,7 +368,7 @@ function SelfDeliveries() {
             <div>Related Task/Project</div>
             <div>Status</div>
             <div>Start & Due Date</div>
-            <div>Action</div>
+            <div style={{ textAlign: "center" }}>Action</div>
           </div>
 
           {loading ? (
@@ -418,45 +415,47 @@ function SelfDeliveries() {
                       )}
                     </div>
                   <div className="date-box">
-                    <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.start_date)}{"\n"}{formatDate(item.due_date)}</div>
+                    {renderDynamicDates(item, currentUser)}
                   </div>
-                    <ActionPopover
-                      trigger={
-                        <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
-                          <IoEyeOutline size={20} />
-                        </button>
-                      }
-                      onTriggerClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { from: "self-deliveries", subtaskIds } })}
-                    >
-                      <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
-                      {item.status === "in_progress" && !item.assigner_paused && (
-                        <button className="action-icon-btn action-submit" title="Pause" disabled={actingId === item.id} onClick={() => handlePause(item.id)} style={{ color: "#D97706" }}>
-                          <Pause size={16} />
-                        </button>
-                      )}
-                      {item.status === "paused" && !item.assigner_paused && (
-                        <button className="action-icon-btn action-submit" title="Resume" disabled={actingId === item.id} onClick={() => handleResume(item.id)} style={{ color: "#059669" }}>
-                          <Play size={16} />
-                        </button>
-                      )}
-                      {item.assigner_paused && (
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#92400E", fontSize: "11px", fontWeight: 600, border: "1px solid #F59E0B" }}>
-                          <Lock size={12} />
-                          On Hold
-                        </span>
-                      )}
-                      {canSubmit && (
-                        <button
-                          className="action-icon-btn action-submit"
-                          title={item.task?.status === "paused" ? "Parent task is paused. Resume the task first." : item.task?.assigner_paused ? "Parent task is on hold by assigner." : item.status === "rework_required" ? "Resubmit Subtask" : "Submit Subtask"}
-                          disabled={item.task?.status === "paused" || item.task?.assigner_paused}
-                          onClick={() => setSubmitModal({ open: true, subtask: item })}
-                          style={item.task?.status === "paused" || item.task?.assigner_paused ? { opacity: 0.4, cursor: "not-allowed" } : {}}
-                        >
-                          <LuSend size={16} />
-                        </button>
-                      )}
-                    </ActionPopover>
+                    <div className="col-action" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%" }}>
+                      <ActionPopover
+                        trigger={
+                          <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
+                            <IoEyeOutline size={20} />
+                          </button>
+                        }
+                        onTriggerClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { from: "self-deliveries", subtaskIds } })}
+                      >
+                        <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
+                        {item.status === "in_progress" && !item.assigner_paused && (
+                          <button className="action-icon-btn action-submit" title="Pause" disabled={actingId === item.id} onClick={() => handlePause(item.id)} style={{ color: "#D97706" }}>
+                            <Pause size={16} />
+                          </button>
+                        )}
+                        {item.status === "paused" && !item.assigner_paused && (
+                          <button className="action-icon-btn action-submit" title="Resume" disabled={actingId === item.id} onClick={() => handleResume(item.id)} style={{ color: "#059669" }}>
+                            <Play size={16} />
+                          </button>
+                        )}
+                        {item.assigner_paused && (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#92400E", fontSize: "11px", fontWeight: 600, border: "1px solid #F59E0B" }}>
+                            <Lock size={12} />
+                            On Hold
+                          </span>
+                        )}
+                        {canSubmit && (
+                          <button
+                            className="action-icon-btn action-submit"
+                            title={item.task?.status === "paused" ? "Parent task is paused. Resume the task first." : item.task?.assigner_paused ? "Parent task is on hold by assigner." : item.status === "rework_required" ? "Resubmit Subtask" : "Submit Subtask"}
+                            disabled={item.task?.status === "paused" || item.task?.assigner_paused}
+                            onClick={() => setSubmitModal({ open: true, subtask: item })}
+                            style={item.task?.status === "paused" || item.task?.assigner_paused ? { opacity: 0.4, cursor: "not-allowed" } : {}}
+                          >
+                            <LuSend size={16} />
+                          </button>
+                        )}
+                      </ActionPopover>
+                    </div>
                   </div>
                 );
               }}
@@ -465,8 +464,14 @@ function SelfDeliveries() {
         </div>
       </div>
 
-      {!showAll && totalPages > 1 && (
-        <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+      {!showAll && (
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          itemsPerPage={perPage}
+          onItemsPerPageChange={(val) => { setPerPage(val); setPage(1); }}
+        />
       )}
 
       <SubmitDeliverableModal

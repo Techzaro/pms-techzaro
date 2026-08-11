@@ -21,6 +21,7 @@ import { useApiQuery } from "../hooks/useApi";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { MdGroup } from "react-icons/md";
+import Pagination from "../components/Pagination";
 import "../components/Charts.css";
 import "./Reports.css";
 
@@ -29,7 +30,10 @@ const PERIOD_MAP = {
   "All Time": "all",
   "Last 7 Days": "week",
   "Last 30 Days": "month",
+  "Month": "month",
   "Last 6 Months": "month",
+  "3 Months": "3months",
+  "Custom Date Range": "custom",
 };
 
 /** Palette used to generate deterministic avatar colours from user names. */
@@ -123,12 +127,14 @@ const SummaryCard = memo(function SummaryCard({ card, onClick }) {
 
 /** Main Reports page — fetches summary data and renders KPI cards + user table. */
 function Reports() {
-  const [timeFilter, setTimeFilter] = useState("All Time");
+  const [timeFilter, setTimeFilter] = useState("all");
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
   const [showCompanyReport, setShowCompanyReport] = useState(false);
   const [teamSearch, setTeamSearch] = useState("");
   const [userSearch, setUserSearch] = useState("");
 
-  const period = PERIOD_MAP[timeFilter] || "all";
+  const period = timeFilter || "all";
   const queryClient = useQueryClient();
   const stored = getUser();
   const currentRole = stored?.role || "member";
@@ -143,16 +149,16 @@ function Reports() {
   const view = isTeamLead ? (isTeamMembersView ? "team" : "self") : "self";
 
   const { data: summary, isLoading } = useApiQuery(
-    ["report-summary-cards", period, view],
+    ["report-summary-cards", period, customStart, customEnd, view],
     "/reports/summary-cards",
-    { period, view },
+    { period, time_filter: period, startDate: customStart, endDate: customEnd, view },
     { staleTime: 60000, refetchOnMount: true }
   );
 
   const { data: userTableData, isLoading: isTableLoading } = useApiQuery(
-    ["report-user-table", period],
+    ["report-user-table", period, customStart, customEnd],
     "/reports/user-performance-table",
-    { period },
+    { period, time_filter: period, startDate: customStart, endDate: customEnd },
     { staleTime: 60000, refetchOnMount: true, enabled: isAdminOrManager || isTeamMembersView }
   );
 
@@ -185,6 +191,14 @@ function Reports() {
         (ROLE_LABEL[u.role] || u.role || "").toLowerCase().includes(q)
     );
   }, [userTableData, userSearch]);
+
+  const [userPage, setUserPage] = useState(1);
+  const [userItemsPerPage, setUserItemsPerPage] = useState(10);
+  const userTotalPages = Math.max(1, Math.ceil((filteredUsers || []).length / userItemsPerPage));
+  const paginatedUsers = useMemo(() => {
+    const start = (userPage - 1) * userItemsPerPage;
+    return (filteredUsers || []).slice(start, start + userItemsPerPage);
+  }, [filteredUsers, userPage, userItemsPerPage]);
 
   // Status breakdown for donut chart — API returns flat summary fields
   const totalTasks = summary?.total_assigned || 0;
@@ -274,17 +288,49 @@ function Reports() {
             <h1>{isTeamMembersView ? "Team Members Performance" : "Performance Report"}</h1>
             <p>{isTeamMembersView ? "Track progress and performance of your team members" : "Track progress, tasks, and performance across your team"}</p>
           </div>
-          <div className="reports-header-actions">
+          <div className="reports-header-actions" style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
             <select
               value={timeFilter}
               onChange={(e) => setTimeFilter(e.target.value)}
               className="reports-filter"
             >
-              <option>All Time</option>
-              <option>Last 7 Days</option>
-              <option>Last 30 Days</option>
-              <option>Last 6 Months</option>
+              <option value="all">All Time</option>
+              <option value="7">Last 7 Days</option>
+              <option value="30">Last 30 Days</option>
+              <option value="90">Last 3 Months</option>
+              <option value="180">Last 6 Months</option>
+              <option value="custom">Custom Date Range</option>
             </select>
+            {timeFilter === "custom" && (
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>From:</span>
+                <input
+                  type="date"
+                  value={customStart}
+                  max={customEnd || undefined}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setCustomStart(v);
+                    if (customEnd && v > customEnd) setCustomEnd(v);
+                  }}
+                  className="reports-filter"
+                  style={{ padding: "4px 8px" }}
+                />
+                <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>To:</span>
+                <input
+                  type="date"
+                  value={customEnd}
+                  min={customStart || undefined}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setCustomEnd(v);
+                    if (customStart && v < customStart) setCustomStart(v);
+                  }}
+                  className="reports-filter"
+                  style={{ padding: "4px 8px" }}
+                />
+              </div>
+            )}
             {isAdminOrManager && (
               <button
                 className="reports-export-btn"
@@ -521,10 +567,10 @@ function Reports() {
 
                 {isTableLoading ? (
                   <div style={{ padding: "24px", textAlign: "center", color: "var(--text-muted)" }}>Loading...</div>
-                ) : (filteredUsers || []).length === 0 ? (
+                ) : (paginatedUsers || []).length === 0 ? (
                   <div style={{ padding: "24px", textAlign: "center", color: "var(--text-muted)" }}>No data available</div>
                 ) : (
-                  (filteredUsers || []).map((member) => (
+                  (paginatedUsers || []).map((member) => (
                     <div key={member.id} className="table-row">
                       <div className="table-member">
                         <div
@@ -573,10 +619,10 @@ function Reports() {
             <div className="reports-table-cards">
               {isTableLoading ? (
                 <div style={{ padding: "24px", textAlign: "center", color: "var(--text-muted)" }}>Loading...</div>
-              ) : (filteredUsers || []).length === 0 ? (
+              ) : (paginatedUsers || []).length === 0 ? (
                 <div style={{ padding: "24px", textAlign: "center", color: "var(--text-muted)" }}>No data available</div>
               ) : (
-                (filteredUsers || []).map((member) => (
+                (paginatedUsers || []).map((member) => (
                   <div key={member.id} className="report-member-card">
                     <div className="report-member-card-header">
                       <div
@@ -623,6 +669,14 @@ function Reports() {
                 ))
               )}
             </div>
+
+            <Pagination
+              currentPage={userPage}
+              totalPages={userTotalPages}
+              onPageChange={setUserPage}
+              itemsPerPage={userItemsPerPage}
+              onItemsPerPageChange={(newVal) => { setUserItemsPerPage(newVal); setUserPage(1); }}
+            />
           </>
         )}
 

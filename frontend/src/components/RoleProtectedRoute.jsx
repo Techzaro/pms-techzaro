@@ -43,15 +43,24 @@ function RoleProtectedRoute({ allowedRoles, children }) {
 
   useLayoutEffect(() => {
     if (!authToken()) {
-      try {
-        window.history.replaceState(null, "", "/");
-      } catch {}
-      navigate("/", { replace: true });
+      const intendedPath = location.pathname + location.search;
+      if (intendedPath && intendedPath !== "/" && intendedPath !== "/login") {
+        try {
+          sessionStorage.setItem("intended_url", intendedPath);
+        } catch {}
+      }
+      navigate("/", { replace: true, state: { from: intendedPath } });
     }
-  }, [location.pathname, navigate]);
+  }, [location.pathname, location.search, navigate]);
 
   if (!token) {
-    return <Navigate to="/" replace />;
+    const intendedPath = location.pathname + location.search;
+    if (intendedPath && intendedPath !== "/" && intendedPath !== "/login") {
+      try {
+        sessionStorage.setItem("intended_url", intendedPath);
+      } catch {}
+    }
+    return <Navigate to="/" state={{ from: intendedPath }} replace />;
   }
 
   if (urlRole !== sessionUrlRole) {

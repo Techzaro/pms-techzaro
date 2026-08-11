@@ -81,13 +81,26 @@ class ProjectController extends Controller
                 ->orderBy('sort_order')
                 ->latest('id');
         } else {
-            $projectsQuery = Project::where(function ($q) use ($user) {
+            $userTeamIds = Team::where('leader_id', $user->id)
+                ->orWhereHas('members', fn ($q) => $q->where('users.id', $user->id))
+                ->pluck('id')
+                ->toArray();
+
+            $projectsQuery = Project::where(function ($q) use ($user, $userTeamIds) {
                 $q->whereHas('manuallyVisibleTo', fn ($q) => $q->where('user_id', $user->id))
-                    ->orWhere(function ($q) use ($user) {
-                        $q->where(function ($q) use ($user) {
+                    ->orWhere(function ($q) use ($user, $userTeamIds) {
+                        $q->where(function ($q) use ($user, $userTeamIds) {
                             $q->where('created_by', $user->id)
+                                ->orWhereIn('team_id', $userTeamIds)
                                 ->orWhereHas('team.members', fn ($q) => $q->where('users.id', $user->id))
                                 ->orWhereHas('team', fn ($q) => $q->where('leader_id', $user->id));
+
+                            if (!empty($userTeamIds)) {
+                                foreach ($userTeamIds as $tid) {
+                                    $q->orWhereJsonContains('team_ids', (int)$tid);
+                                    $q->orWhereJsonContains('team_ids', (string)$tid);
+                                }
+                            }
                         })->whereDoesntHave('visibility', fn ($q) => $q->where('user_id', $user->id)->where('is_visible', false));
                     })
                     ->orWhereJsonContains('assigned_users', $user->id);
@@ -106,8 +119,67 @@ class ProjectController extends Controller
                 ->latest('id');
         }
 
-        if ($filter === 'active') {
+        if ($filter === 'active' || request()->query('status') === 'active') {
             $projectsQuery->whereNotIn('status', $this->inactiveProjectStatuses());
+        } elseif (request()->filled('status')) {
+            $st = request()->query('status');
+            if ($st === 'due_today') {
+                $todayStr = now()->toDateString();
+                $projectsQuery->where(function ($q) use ($todayStr) {
+                    $q->whereDate('end_date', $todayStr)
+                      ->orWhereDate('start_date', $todayStr);
+                });
+            } else {
+                $projectsQuery->where('status', $st);
+            }
+        }
+
+        if (request()->filled('search')) {
+            $search = request()->query('search');
+            $projectsQuery->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                  ->orWhere('description', 'like', "%{$search}%")
+                  ->orWhere('business_id', 'like', "%{$search}%");
+            });
+        }
+
+        if (request()->filled('user_id')) {
+            $userId = (int) request()->query('user_id');
+            $projectsQuery->where(function ($q) use ($userId) {
+                $q->whereJsonContains('assigned_users', $userId)
+                  ->orWhere('created_by', $userId)
+                  ->orWhere('team_id', function ($sub) use ($userId) {
+                      $sub->select('team_id')->from('team_user')->where('user_id', $userId)->limit(1);
+                  });
+            });
+        }
+
+        $days = request()->query('days') ?? request()->query('time_filter');
+        if ($days && is_numeric($days) && (int)$days > 0) {
+            $cutoff = now()->subDays((int)$days)->startOfDay();
+            $projectsQuery->where(function ($q) use ($cutoff) {
+                $q->where('created_at', '>=', $cutoff)
+                  ->orWhereDate('start_date', '>=', $cutoff->toDateString())
+                  ->orWhereDate('end_date', '>=', $cutoff->toDateString());
+            });
+        }
+
+        if (request()->filled('start_date')) {
+            $sDate = request()->query('start_date');
+            $projectsQuery->where(function ($q) use ($sDate) {
+                $q->whereDate('start_date', '>=', $sDate)
+                  ->orWhereDate('created_at', '>=', $sDate)
+                  ->orWhereDate('end_date', '>=', $sDate);
+            });
+        }
+
+        if (request()->filled('end_date')) {
+            $eDate = request()->query('end_date');
+            $projectsQuery->where(function ($q) use ($eDate) {
+                $q->whereDate('start_date', '<=', $eDate)
+                  ->orWhereDate('created_at', '<=', $eDate)
+                  ->orWhereDate('end_date', '<=', $eDate);
+            });
         }
 
         $projects = $projectsQuery->limit(200)->get();
@@ -115,6 +187,7 @@ class ProjectController extends Controller
         return $projects->map(function ($project) use ($user) {
             $isAssigned = in_array($user->id, $project->assigned_users ?? []);
             $project->is_assigned = $isAssigned;
+            $project->members_count = $project->getMembers()->count();
 
             return $project;
         });
@@ -329,12 +402,19 @@ class ProjectController extends Controller
                 // fallback: team may not exist
             }
             $userId = (int) $user->id;
+            $userTeamIds = Team::where('leader_id', $userId)
+                ->orWhereHas('members', fn ($q) => $q->where('users.id', $userId))
+                ->pluck('id')
+                ->toArray();
+
             $isCreator = (int) $project->created_by === $userId;
             $isAssigned = in_array($userId, array_map('intval', $project->assigned_users ?? []));
-            $isTeamMember = $project->team_id && $project->team && (
-                $project->team->members->contains('id', $userId) ||
-                (int) $project->team->leader_id === $userId
-            );
+            $isTeamMember = ($project->team_id && in_array((int)$project->team_id, array_map('intval', $userTeamIds)))
+                || (!empty($project->team_ids) && !empty(array_intersect(array_map('intval', $project->team_ids ?? []), array_map('intval', $userTeamIds))))
+                || ($project->team_id && $project->team && (
+                    $project->team->members->contains('id', $userId) ||
+                    (int) $project->team->leader_id === $userId
+                ));
             $hasTasksUnderProject = $project->tasks()->whereHas('assignees', fn ($q) => $q->where('users.id', $userId))->exists();
             $isManuallyVisible = \App\Models\ProjectVisibility::where('project_id', $project->id)
                 ->where('user_id', $userId)
@@ -474,6 +554,8 @@ class ProjectController extends Controller
             'team_ids' => 'nullable|array',
             'team_ids.*' => 'exists:teams,id',
             'assigned_users' => 'nullable|array',
+            'view_only_users' => 'nullable|array',
+            'view_only_users.*' => 'exists:users,id',
             'created_by' => 'nullable|exists:users,id',
             'status' => 'sometimes|nullable|string|max:64',
             'start_date' => 'nullable|date',
@@ -487,12 +569,22 @@ class ProjectController extends Controller
             'existing_file_names' => 'nullable|array',
             'existing_file_names.*.id' => 'required_with:existing_file_names|exists:project_files,id',
             'existing_file_names.*.name' => 'required_with:existing_file_names|string|max:255',
+            'links' => 'nullable|array',
+            'links.*.url' => 'required_with:links|url|max:2048',
+            'links.*.name' => 'nullable|string|max:255',
+            'attachments' => 'nullable|array',
+            'attachments.*.name' => 'required_with:attachments|string|max:255',
+            'attachments.*.url' => 'nullable|string|max:2048',
         ]);
 
         $milestones = $validated['milestones'] ?? null;
         unset($validated['milestones']);
         $existingFileNames = $validated['existing_file_names'] ?? null;
         unset($validated['existing_file_names']);
+        $newLinks = $validated['links'] ?? null;
+        unset($validated['links']);
+        $newAttachments = $validated['attachments'] ?? null;
+        unset($validated['attachments']);
 
         if ($request->has('project_deadline')) {
             $validated['end_date'] = $request->input('project_deadline') ? date('Y-m-d H:i:s', strtotime($request->input('project_deadline'))) : null;
@@ -519,6 +611,28 @@ class ProjectController extends Controller
                 \App\Models\ProjectFile::where('id', $item['id'])
                     ->where('project_id', $project->id)
                     ->update(['name' => $item['name']]);
+            }
+        }
+
+        // Sync new links if provided in update payload
+        if ($newLinks) {
+            foreach ($newLinks as $link) {
+                $project->files()->create([
+                    'name' => $link['name'] ?? $link['url'],
+                    'url' => $link['url'],
+                ]);
+            }
+        }
+
+        // Sync new attachments if provided in update payload
+        if ($newAttachments) {
+            foreach ($newAttachments as $att) {
+                $project->files()->create([
+                    'name' => $att['name'],
+                    'url' => $att['url'] ?? null,
+                    'file_path' => $att['file_path'] ?? null,
+                    'file_size' => $att['file_size'] ?? null,
+                ]);
             }
         }
 
@@ -1406,7 +1520,7 @@ class ProjectController extends Controller
     public function storeAccessCredential(Request $request, Project $project)
     {
         $request->validate([
-            'website_name' => 'required|string|max:255',
+            'website_name' => 'nullable|string|max:255',
             'username' => 'required|string|max:255',
             'password' => 'required|string|max:1000',
             'assigned_user_ids' => 'required|array|min:1',
@@ -1414,7 +1528,7 @@ class ProjectController extends Controller
         ]);
 
         $credential = $project->accessCredentials()->create([
-            'website_name' => $request->website_name,
+            'website_name' => $request->website_name ?? 'Access Credential',
             'username' => $request->username,
             'password' => $request->password,
             'created_by' => $request->user()->id,
@@ -1425,7 +1539,7 @@ class ProjectController extends Controller
         $this->activityService->log(
             $request->user()->id,
             'access_credential_added',
-            "Added access credential: {$request->website_name}",
+            "Added access credential: " . ($request->website_name ?? 'Access Credential'),
             'Project',
             $project->id
         );
@@ -1454,7 +1568,7 @@ class ProjectController extends Controller
         }
 
         $request->validate([
-            'website_name' => 'required|string|max:255',
+            'website_name' => 'nullable|string|max:255',
             'website_url' => 'nullable|string|max:500',
             'username' => 'required|string|max:255',
             'password' => 'required|string|max:1000',
@@ -1494,11 +1608,114 @@ class ProjectController extends Controller
             return response()->json(['success' => false, 'message' => 'Credential does not belong to this project'], 404);
         }
 
+        $credential->assignedUsers()->detach();
         $credential->delete();
 
         return response()->json([
             'success' => true,
             'message' => 'Access credential deleted successfully',
+        ]);
+    }
+
+    /**
+     * Get unified activity feed for a project with date, user_id, and type filtering.
+     */
+    public function unifiedActivity(Request $request, Project $project): JsonResponse
+    {
+        $dateFilter = $request->query('date');
+        $userFilter = $request->query('user_id');
+        $typeFilter = $request->query('type');
+
+        $feed = collect();
+
+        // 1. Project Workflow Events
+        $events = \App\Models\ProjectWorkflowEvent::with('user:id,name,email')
+            ->where('project_id', $project->id)
+            ->get();
+
+        foreach ($events as $e) {
+            $category = in_array($e->action, ['submitted', 'resubmitted']) ? 'submissions' : 'timelines';
+            $feed->push([
+                'id' => 'pevt-' . $e->id,
+                'type' => $category,
+                'category' => $category,
+                'action' => $e->action,
+                'title' => ucfirst(str_replace('_', ' ', $e->action)),
+                'description' => $e->comment ?: "Project status changed to {$e->action}",
+                'user_id' => $e->user_id,
+                'user_name' => $e->user?->name ?? 'System',
+                'created_at' => $e->created_at->toIso8601String(),
+                'details' => ['comment' => $e->comment],
+            ]);
+        }
+
+        // 2. Project Changes
+        $changes = \App\Models\ProjectChange::with('user:id,name,email')
+            ->where('project_id', $project->id)
+            ->get();
+
+        foreach ($changes as $c) {
+            $feed->push([
+                'id' => 'pchg-' . $c->id,
+                'type' => 'changes',
+                'category' => 'changes',
+                'action' => 'field_updated',
+                'title' => 'Field Updated: ' . ucwords(str_replace('_', ' ', $c->field_name)),
+                'description' => "Changed from '" . ($c->old_value ?? 'none') . "' to '" . ($c->new_value ?? 'none') . "'",
+                'user_id' => $c->user_id ?? $c->modified_by,
+                'user_name' => $c->user?->name ?? $c->modifiedBy?->name ?? 'System',
+                'created_at' => $c->created_at->toIso8601String(),
+                'details' => ['field' => $c->field_name, 'old' => $c->old_value, 'new' => $c->new_value],
+            ]);
+        }
+
+        // 3. Project Activities
+        $activities = \App\Models\Activity::with('user:id,name,email')
+            ->where('related_module', 'project')
+            ->where('related_id', $project->id)
+            ->get();
+
+        foreach ($activities as $a) {
+            $cat = str_contains($a->action, 'transfer') ? 'transfers' : (str_contains($a->action, 'submit') ? 'submissions' : 'timelines');
+            $feed->push([
+                'id' => 'pact-' . $a->id,
+                'type' => $cat,
+                'category' => $cat,
+                'action' => $a->action,
+                'title' => ucfirst(str_replace('_', ' ', $a->action)),
+                'description' => $a->description,
+                'user_id' => $a->user_id,
+                'user_name' => $a->user?->name ?? 'System',
+                'created_at' => $a->created_at->toIso8601String(),
+                'details' => [],
+            ]);
+        }
+
+        // Filter by Date
+        if ($dateFilter) {
+            $feed = $feed->filter(fn ($item) => substr($item['created_at'], 0, 10) === $dateFilter);
+        }
+
+        // Filter by User / Person
+        if ($userFilter) {
+            $feed = $feed->filter(fn ($item) => (string) $item['user_id'] === (string) $userFilter);
+        }
+
+        // Filter by Type
+        if ($typeFilter && $typeFilter !== 'all') {
+            $feed = $feed->filter(fn ($item) => $item['type'] === $typeFilter);
+        }
+
+        // Sort DESC
+        $sorted = $feed->sortByDesc('created_at')->values();
+
+        // Extract list of unique members
+        $users = $project->getMembers()->map(fn ($u) => ['id' => $u->id, 'name' => $u->name]);
+
+        return response()->json([
+            'success' => true,
+            'data' => $sorted,
+            'users' => $users,
         ]);
     }
 }

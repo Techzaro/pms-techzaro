@@ -59,14 +59,43 @@ class UserController extends Controller
      *
      * @return \Illuminate\Http\JsonResponse  JSON response with the user list.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $users = Cache::remember('all_users_list', 10, fn () =>
-            User::select('id', 'name', 'avatar', 'email', 'role', 'active', 'department', 'designation', 'employee_code', 'contact_no', 'sort_order', 'must_change_password', 'personal_email', 'professional_email', 'company_name', 'phone_number', 'last_login_at', 'created_at', 'credentials_managed_by_admin', 'password_reset_locked')
-                ->orderBy('sort_order')->latest('updated_at')
-                ->get()
-                ->toArray()
+        $role = $request->query('role');
+        $status = $request->query('status');
+        $search = $request->query('search');
+
+        $query = User::select(
+            'id', 'name', 'avatar', 'email', 'role', 'active', 'status', 'deletion_requested', 'deletion_requested_by',
+            'department', 'designation', 'employee_code', 'contact_no', 'sort_order', 'must_change_password',
+            'personal_email', 'professional_email', 'company_name', 'phone_number', 'last_login_at', 'created_at',
+            'father_name', 'id_card_number', 'present_address', 'permanent_address', 'gross_salary',
+            'bank_name', 'bank_account_number', 'bank_account_title'
         );
+
+        if ($role) {
+            $normalizedRole = $role === 'teamlead' ? 'team_lead' : $role;
+            $query->where('role', $normalizedRole);
+        }
+
+        if ($status) {
+            if ($status === 'active') {
+                $query->where('active', true);
+            } elseif ($status === 'inactive' || $status === 'resigned') {
+                $query->where('active', false);
+            }
+        }
+
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%")
+                  ->orWhere('personal_email', 'like', "%{$search}%")
+                  ->orWhere('professional_email', 'like', "%{$search}%");
+            });
+        }
+
+        $users = $query->orderBy('sort_order')->latest('updated_at')->get();
 
         return response()->json([
             'success' => true,
@@ -101,14 +130,16 @@ class UserController extends Controller
     {
         $this->normalizeEmptyStrings($request);
 
+        $isDraft = strtolower($request->input('status', '')) === 'draft' || $request->boolean('is_draft');
+
         try {
             $request->validate([
                 'name' => 'required|string|max:255',
-                'email' => 'required|string|email|max:255|unique:users,email',
+                'email' => $isDraft ? 'nullable|string|email|max:255|unique:users,email' : 'required|string|email|max:255|unique:users,email',
                 'personal_email' => 'nullable|email|max:255',
-                'professional_email' => 'nullable|string|max:255',
+                'professional_email' => $isDraft ? 'nullable|string|email|max:255|unique:users,professional_email' : 'required|string|email|max:255|unique:users,professional_email',
                 'professional_email_password' => 'nullable|string|max:255',
-                'role' => ['required', Rule::in(['admin', 'manager', 'team_lead', 'teamlead', 'member', 'guest'])],
+                'role' => [$isDraft ? 'nullable' : 'required', Rule::in(['admin', 'manager', 'team_lead', 'teamlead', 'member', 'guest'])],
                 'father_name' => 'nullable|string|max:255',
                 'id_card_number' => 'nullable|string|max:32',
                 'phone_number' => 'nullable|string|max:32',
@@ -120,10 +151,10 @@ class UserController extends Controller
                 'emergency_contact_relation' => 'nullable|string|max:255',
                 'emergency_contact_phone' => 'nullable|string|max:32',
                 'recovery_email' => 'nullable|email|max:255',
-                'department' => 'required|string|max:255',
-                'designation' => 'required|string|max:255',
+                'department' => $isDraft ? 'nullable|string|max:255' : 'required|string|max:255',
+                'designation' => $isDraft ? 'nullable|string|max:255' : 'required|string|max:255',
                 'hired_for' => 'nullable|string|max:255',
-                'employee_code' => 'required|string|max:64',
+                'employee_code' => $isDraft ? 'nullable|string|max:64' : 'required|string|max:64',
                 'job_started_date' => 'nullable|date',
                 'job_ended_date' => 'nullable|date|after_or_equal:job_started_date',
                 'gross_salary' => 'nullable|string|max:255',
@@ -146,7 +177,7 @@ class UserController extends Controller
         }
 
         $plainPassword = Str::random(10);
-        $role = $request->input('role') === 'teamlead' ? 'team_lead' : $request->input('role');
+        $role = $request->input('role') === 'teamlead' ? 'team_lead' : ($request->input('role') ?: 'member');
 
         $authUser = $request->user();
 
@@ -159,10 +190,11 @@ class UserController extends Controller
 
         $user = User::create([
             'name' => $request->input('name'),
-            'email' => $request->input('email'),
+            'email' => $request->input('email') ?: ($isDraft ? 'draft_' . Str::random(8) . '@draft.local' : null),
             'password' => Hash::make($plainPassword),
             'role' => $role,
-            'active' => false,
+            'status' => $isDraft ? 'Draft' : ($request->input('status') ?: 'Active'),
+            'active' => $isDraft ? false : ($request->input('status') === 'Inactive' ? false : true),
             'must_change_password' => true,
 
             // Contact
@@ -270,21 +302,25 @@ class UserController extends Controller
         $personalEmail = $request->input('personal_email');
         $adderEmail = $authUser->professional_email ?: $authUser->personal_email ?: $authUser->email;
 
-        $message = $personalEmail
-            ? 'User created successfully. Welcome email will be sent to ' . $personalEmail
-            : 'User created successfully.';
+        $message = $isDraft
+            ? 'User draft created successfully.'
+            : ($personalEmail
+                ? 'User created successfully. Welcome email will be sent to ' . $personalEmail
+                : 'User created successfully.');
 
-        // Send emails synchronously to ensure delivery
-        try {
-            SendUserCreatedEmails::dispatchSync(
-                $user, $plainPassword, $profEmail, $profPassword, $loginUrl, $emailAttachments,
-                $personalEmail, $adderEmail, $authUser->name
-            );
-        } catch (\Throwable $e) {
-            Log::error('Failed to send user created emails', [
-                'user_id' => $user->id,
-                'error' => $e->getMessage(),
-            ]);
+        // Send emails synchronously to ensure delivery (skip for drafts)
+        if (! $isDraft) {
+            try {
+                SendUserCreatedEmails::dispatchSync(
+                    $user, $plainPassword, $profEmail, $profPassword, $loginUrl, $emailAttachments,
+                    $personalEmail, $adderEmail, $authUser->name
+                );
+            } catch (\Throwable $e) {
+                Log::error('Failed to send user created emails', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
         return response()->json([
@@ -327,8 +363,9 @@ class UserController extends Controller
             'emergency_contact_relation' => 'nullable|string|max:255',
             'emergency_contact_phone' => 'nullable|string|max:32',
             'personal_email' => 'nullable|email|max:255',
-            'professional_email' => 'nullable|string|max:255',
+            'professional_email' => ['sometimes', 'required', 'string', 'email', 'max:255', Rule::unique('users', 'professional_email')->ignore($user->id)],
             'professional_email_password' => 'nullable|string|max:255',
+            'status' => ['sometimes', 'nullable', 'string', Rule::in(['Active', 'Inactive', 'Resigned', 'active', 'inactive', 'resigned'])],
             'recovery_email' => 'nullable|email|max:255',
             'department' => 'sometimes|required|string|max:255',
             'designation' => 'sometimes|required|string|max:255',
@@ -350,6 +387,7 @@ class UserController extends Controller
             'other_document_names.*' => 'nullable|string|max:255',
             'existing_other_docs' => 'nullable|string',
             'avatar' => 'nullable|image|mimes:jpeg,jpg,png,webp|max:5120',
+            'avatar_remove' => 'nullable|in:1',
         ]);
 
         $authUser = $request->user();
@@ -361,7 +399,7 @@ class UserController extends Controller
             ], 403);
         }
 
-        if ($user->active === false && !$user->must_change_password) {
+        if ($user->status === 'Resigned') {
             return response()->json([
                 'success' => false,
                 'message' => 'Resigned users cannot be modified.',
@@ -438,6 +476,39 @@ class UserController extends Controller
             $user->role = 'team_lead';
         }
 
+        // Handle status and active boolean sync
+        if ($request->has('status') && $request->input('status')) {
+            $statusStr = ucfirst(strtolower($request->input('status')));
+            $user->status = $statusStr;
+            if ($statusStr === 'Active') {
+                $user->active = true;
+            } else {
+                $user->active = false;
+            }
+        } elseif ($request->has('active')) {
+            $activeBool = filter_var($request->input('active'), FILTER_VALIDATE_BOOLEAN);
+            $user->active = $activeBool;
+            if ($activeBool && $user->status !== 'Active') {
+                $user->status = 'Active';
+            } elseif (!$activeBool && $user->status === 'Active') {
+                $user->status = 'Inactive';
+            }
+        }
+
+        // Handle avatar removal from edit modal or flag
+        if (
+            $request->boolean('remove_avatar') ||
+            $request->input('remove_avatar') === true ||
+            $request->input('remove_avatar') === 'true' ||
+            $request->input('avatar_remove') === '1' ||
+            $request->input('avatar_remove') === 1
+        ) {
+            if ($user->avatar && Storage::disk('public')->exists($user->avatar)) {
+                Storage::disk('public')->delete($user->avatar);
+            }
+            $user->avatar = null;
+        }
+
         // Handle avatar upload
         if ($request->hasFile('avatar')) {
             $user->avatar = $this->handleAvatarUpload($request, $user);
@@ -459,7 +530,6 @@ class UserController extends Controller
         foreach ($oldValues as $field => $oldVal) {
             $dateFieldsList = ['job_started_date', 'job_ended_date'];
             if (in_array($field, $dateFieldsList)) {
-                // Compare request input date against old DB date-only to avoid timezone shifts
                 $oldStr = $oldDateStrings[$field] ?? '';
                 $newStr = $request->exists($field) ? substr((string) $request->input($field), 0, 10) : '';
             } else {
@@ -572,6 +642,32 @@ class UserController extends Controller
     }
 
     /**
+     * Remove the user's profile photo (Bug Fix: USER_002).
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function removePhoto($id)
+    {
+        $user = User::findOrFail($id);
+
+        if ($user->avatar) {
+            if (Storage::disk('public')->exists($user->avatar)) {
+                Storage::disk('public')->delete($user->avatar);
+            }
+            $user->update(['avatar' => null]);
+            
+            Cache::forget('all_users_list');
+            Cache::forget("user_profile_{$user->id}");
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Profile photo removed successfully'
+        ]);
+    }
+
+    /**
      * Reorder users by updating their sort_order values in bulk.
      *
      * @param  \Illuminate\Http\Request  $request  Input: items[] with id and sort_order.
@@ -603,16 +699,16 @@ class UserController extends Controller
      * @param  \App\Models\User  $user  The user to delete.
      * @return \Illuminate\Http\JsonResponse  JSON response confirming deletion.
      */
-    public function destroy(User $user)
+    public function destroy(Request $request, User $user)
     {
-        $authUser = request()->user();
+        $authUser = $request->user() ?: request()->user();
 
-        if ($authUser->id === $user->id) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        if ($authUser->role !== 'admin') {
+            return response()->json(['success' => false, 'message' => 'Unauthorized. Only Admins can execute user deletion.'], 403);
         }
 
-        if ($authUser->role === 'manager' && in_array($user->role, ['admin', 'manager'])) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        if ($authUser->id === $user->id) {
+            return response()->json(['success' => false, 'message' => 'You cannot delete your own account.'], 403);
         }
 
         // Delete associated files
@@ -640,6 +736,87 @@ class UserController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'User deleted successfully',
+        ]);
+    }
+
+    /**
+     * Request user deletion (for Manager role).
+     * Flags deletion_requested = true and notifies Admins.
+     */
+    public function requestDeletion(Request $request, User $user)
+    {
+        $authUser = $request->user();
+
+        if ($authUser->role !== 'manager') {
+            return response()->json(['success' => false, 'message' => 'Only managers can submit a deletion request.'], 403);
+        }
+
+        if (in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['success' => false, 'message' => 'Managers cannot request deletion of administrators or managers.'], 403);
+        }
+
+        $user->deletion_requested = true;
+        $user->deletion_requested_by = $authUser->id;
+        $user->save();
+
+        Cache::forget('all_users_list');
+
+        $this->activityService->log(
+            $authUser->id,
+            'user_deletion_requested',
+            "You requested deletion of user {$user->name}",
+            'user',
+            $user->id,
+            'updated',
+            $user->name
+        );
+
+        $admins = User::where('role', 'admin')->get();
+        foreach ($admins as $admin) {
+            $this->notificationService->notify(
+                $admin->id,
+                $authUser->id,
+                'user_deletion_requested',
+                'user',
+                $user->id,
+                'User Deletion Requested',
+                "Manager {$authUser->name} requested deletion of user {$user->name}.",
+                '/manage-users'
+            );
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'User deletion request submitted successfully to Admin.',
+        ]);
+    }
+
+    /**
+     * Delete a guest user account.
+     */
+    public function destroyGuest(Request $request, User $user)
+    {
+        $authUser = $request->user();
+
+        if (!in_array($authUser->role, ['admin', 'manager'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        if ($user->role !== 'guest') {
+            return response()->json(['success' => false, 'message' => 'Selected user is not a guest account.'], 422);
+        }
+
+        if ($user->avatar && Storage::disk('public')->exists($user->avatar)) {
+            Storage::disk('public')->delete($user->avatar);
+        }
+
+        $user->delete();
+
+        Cache::forget('all_users_list');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Guest deleted successfully.',
         ]);
     }
 
@@ -852,7 +1029,7 @@ class UserController extends Controller
                 'account' => [
                     'account_age' => $accountAge,
                     'days_since_creation' => $daysSinceCreation,
-                    'status' => $user->active ? 'Active' : ($user->must_change_password ? 'Inactive' : 'Resigned'),
+                    'status' => $user->status ?: ($user->active ? 'Active' : 'Inactive'),
                     'last_login' => $user->last_login_at?->toDateTimeString() ?? 'Never logged in',
                 ],
                 'activity_max_id' => (int) \App\Models\UserChange::where('user_id', $id)->max('id'),

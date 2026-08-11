@@ -190,7 +190,8 @@ function Sidebar() {
 
     const isSettingsRoute =
       isActive("audit-logs") ||
-      isActive("settings/notifications");
+      isActive("settings/notifications") ||
+      isActive("settings/personalization");
 
     if (isSettingsRoute) {
       setSettingsOpen(true);
@@ -384,15 +385,6 @@ function Sidebar() {
           </div>
           )}
 
-          {/* Calendar link */}
-          <Link
-            to={rolePath("calender")}
-            className={`sidebar-link ${isActiveOrStart("calender") ? "active" : ""}`}
-          >
-            <MdCalendarToday />
-            Calendar
-          </Link>
-
           {/* Drafts link */}
           <Link
             to={rolePath("drafts")}
@@ -538,12 +530,28 @@ function Sidebar() {
                     Application Logs
                   </Link>
                 )}
+                {(user.role === "admin" || user.role === "manager") && (
+                  <Link
+                    to={rolePath("feedback")}
+                    className={`sidebar-sub-link ${isActive("feedback") ? "active" : ""}`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    User Feedback
+                  </Link>
+                )}
                 <Link
                   to={rolePath("settings/notifications")}
                   className={`sidebar-sub-link ${isActive("settings/notifications") ? "active" : ""}`}
                   onClick={(e) => e.stopPropagation()}
                 >
                   Notification Preferences
+                </Link>
+                <Link
+                  to={rolePath("settings/personalization")}
+                  className={`sidebar-sub-link ${isActive("settings/personalization") ? "active" : ""}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Personalization
                 </Link>
               </div>
             )}

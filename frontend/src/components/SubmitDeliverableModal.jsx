@@ -52,6 +52,26 @@ function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess, sub
     return () => { document.body.style.overflow = ""; };
   }, [isOpen, submissionToEdit]);
 
+  // Handle Ctrl+V (Clipboard Paste) for files/screenshots when modal is open
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handlePaste = (e) => {
+      const clipboardFiles = e.clipboardData?.files;
+      if (clipboardFiles && clipboardFiles.length > 0) {
+        const newFiles = Array.from(clipboardFiles);
+        setIsDirty(true);
+        setFiles((prev) => [...prev, ...newFiles]);
+        notify.success(`Pasted ${newFiles.length} file(s) from clipboard`);
+      }
+    };
+
+    window.addEventListener("paste", handlePaste);
+    return () => {
+      window.removeEventListener("paste", handlePaste);
+    };
+  }, [isOpen, setIsDirty]);
+
   /** Appends newly selected files to the existing file list */
   const handleFileSelect = (e) => {
     const selected = Array.from(e.target.files || []);

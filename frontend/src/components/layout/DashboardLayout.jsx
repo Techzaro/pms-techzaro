@@ -25,7 +25,7 @@ const POLL_INTERVAL = 20000; // 20 seconds
 /**
  * @param {{ children: React.ReactNode, hideRightSidebar?: boolean }} props
  */
-function DashboardLayout({ children, hideRightSidebar = false }) {
+function DashboardLayout({ children, hideRightSidebar = true }) {
   const [rightOpen, setRightOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const prevCountRef = useRef(null);

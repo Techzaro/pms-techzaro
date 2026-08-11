@@ -95,7 +95,7 @@
 .sidebar-link.active:not(.sidebar-dropdown-group) {
   color: #ffffff !important;
   background-color: #4f46e5 !important;
-  font-weight: 600;
+  font-weight: 700 !important;
   box-shadow: 0 4px 10px rgba(79, 70, 229, 0.25); 
 }
 
@@ -130,15 +130,20 @@
   cursor: pointer;
   padding: 6px 8px;
   color: #475569;
-  font-weight: 600;
+  font-weight: 500;
   font-size: 0.9rem;
   border-radius: 10px;
   transition: color 0.2s ease;
 }
 
-.sidebar-dropdown-group.open .sidebar-dropdown-header,
+.sidebar-dropdown-group.open .sidebar-dropdown-header {
+  color: #ffffff !important;
+  font-weight: 500;
+}
+
 .sidebar-dropdown-group.active .sidebar-dropdown-header {
   color: #ffffff !important;
+  font-weight: 700 !important;
 }
 
 .sidebar-dropdown-group.open .sidebar-dropdown-header svg,

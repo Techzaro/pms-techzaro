@@ -35,4 +35,9 @@ class TaskChange extends Model
     {
         return $this->belongsTo(User::class, 'modified_by');
     }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'modified_by');
+    }
 }

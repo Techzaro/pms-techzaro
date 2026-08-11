@@ -12,6 +12,7 @@ import { useState, useMemo, memo, useEffect, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
+import DraggableStatusBadges from "../components/DraggableStatusBadges";
 import MemberExportReport from "./MemberExportReport";
 import CreateTaskModal from "../components/CreateTaskModal";
 import DonutChart from "../components/DonutChart";
@@ -120,6 +121,18 @@ function UserPerformance() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [showCreateTask, setShowCreateTask] = useState(false);
 
+  // Filter & task table states (initialized before useApiQuery to prevent TDZ crash)
+  const [timeFilter, setTimeFilter] = useState("all");
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
+  const [items, setItems] = useState([]);
+  const [tasksLoading, setTasksLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [totalCount, setTotalCount] = useState(0);
+  const [statusFilter, setStatusFilter] = useState("");
+  const [orderedItems, setOrderedItems] = useState([]);
+
   const stored = getUser();
   const currentRole = stored?.role || "member";
   const isAdminOrManager = currentRole === "admin" || currentRole === "manager";
@@ -140,9 +153,9 @@ function UserPerformance() {
   }, [urlUserId, stored, userId]);
 
   const { data, isLoading } = useApiQuery(
-    ["user-performance", userId],
+    ["user-performance", userId, timeFilter, customStart, customEnd],
     `/reports/user/${userId}`,
-    null,
+    { period: timeFilter, time_filter: timeFilter, start_date: customStart, end_date: customEnd, startDate: customStart, endDate: customEnd },
     { staleTime: 60000, refetchOnMount: true }
   );
 
@@ -181,16 +194,6 @@ function UserPerformance() {
     };
   }, [priorityBreakdown]);
 
-  // --- TASKS SECTION STATE ---
-  const [items, setItems] = useState([]);
-  const [tasksLoading, setTasksLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [totalCount, setTotalCount] = useState(0);
-  const [statusFilter, setStatusFilter] = useState("");
-  const [timeFilter, setTimeFilter] = useState("");
-  const [orderedItems, setOrderedItems] = useState([]);
-
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(timer);
@@ -205,6 +208,10 @@ function UserPerformance() {
     if (debouncedSearch) params.append("search", debouncedSearch);
     if (statusFilter) params.append("status", statusFilter);
     if (timeFilter) params.append("time_filter", timeFilter);
+    if (timeFilter === "custom") {
+      if (customStart) params.append("start_date", customStart);
+      if (customEnd) params.append("end_date", customEnd);
+    }
 
     fetch(`${API_URL}/user-tasks/${userId}?${params.toString()}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -217,7 +224,7 @@ function UserPerformance() {
       })
       .catch(() => setItems([]))
       .finally(() => setTasksLoading(false));
-  }, [userId, debouncedSearch, statusFilter, timeFilter]);
+  }, [userId, debouncedSearch, statusFilter, timeFilter, customStart, customEnd]);
 
   useEffect(() => {
     fetchTasks();
@@ -237,6 +244,16 @@ function UserPerformance() {
   const pendingStatuses = ["pending", "in_progress", "paused", "In Progress", "In-progress", "planned", "Planning", "Planned", "submitted", "reopened", "rejected"];
 
   const filteredItems = baseItems.filter((item) => {
+    if (search && search.trim()) {
+      const term = search.trim().toLowerCase();
+      const titleMatch = (item.title || "").toLowerCase().includes(term);
+      const statusMatch = (item.status || "").toLowerCase().includes(term);
+      const priorityMatch = (item.priority || "").toLowerCase().includes(term);
+      const businessIdMatch = (item.business_id || "").toLowerCase().includes(term);
+      if (!titleMatch && !statusMatch && !priorityMatch && !businessIdMatch) {
+        return false;
+      }
+    }
     if (statusFilter === "due_today") {
       const dateVal = item.end_date || item.due_date || item.start_date;
       if (!dateVal) return false;
@@ -375,39 +392,63 @@ function UserPerformance() {
                     Tasks: {filteredItems.length}
                   </span>
                 </div>
-                <div className="all-time">
+                <div className="all-time" style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                   <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}>
-                    <option value="">All Time</option>
+                    <option value="all">All Time</option>
                     <option value="7">Last 7 Days</option>
                     <option value="30">Last 30 Days</option>
+                    <option value="90">Last 3 Months</option>
                     <option value="180">Last 6 Months</option>
+                    <option value="custom">Custom Date Range</option>
                   </select>
+                  {timeFilter === "custom" && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>From:</span>
+                      <input
+                        type="date"
+                        value={customStart}
+                        max={customEnd || undefined}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setCustomStart(v);
+                          if (customEnd && v > customEnd) setCustomEnd(v);
+                        }}
+                        style={{ padding: "4px 8px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", color: "var(--text-primary)", fontSize: "13px" }}
+                      />
+                      <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>To:</span>
+                      <input
+                        type="date"
+                        value={customEnd}
+                        min={customStart || undefined}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setCustomEnd(v);
+                          if (customStart && v < customStart) setCustomStart(v);
+                        }}
+                        style={{ padding: "4px 8px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", color: "var(--text-primary)", fontSize: "13px" }}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="task-progress">
-            <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
-            <p className={`DueToday ${statusFilter === "due_today" ? "active" : ""}`} onClick={() => selectStatusFilter("due_today")} style={{ cursor: "pointer" }}>
-              <GoDotFill color="#EF4444" /> Due Today
-            </p>
-            <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => selectStatusFilter("pending")} style={{ cursor: "pointer" }}>
-              <GoDotFill /> Pending
-            </p>
-            <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => selectStatusFilter("submitted")} style={{ cursor: "pointer" }}>
-              <GoDotFill /> Submitted
-            </p>
-            <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => selectStatusFilter("reopened")} style={{ cursor: "pointer" }}>
-              <GoDotFill /> Reopened
-            </p>
-            <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => selectStatusFilter("approved")} style={{ cursor: "pointer" }}>
-              <GoDotFill /> Approved
-            </p>
-            <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
-              <GoDotFill /> Declined
-            </p>
-          </div>
+          <DraggableStatusBadges
+            badges={[
+              { id: "", label: "All", className: "All" },
+              { id: "due_today", label: "Due Today", className: "DueToday", dotColor: "#EF4444" },
+              { id: "pending", label: "Pending", className: "Pending" },
+              { id: "submitted", label: "Submitted", className: "Submitted" },
+              { id: "reopened", label: "Reopened", className: "Reopened" },
+              { id: "approved", label: "Approved", className: "Approved" },
+              { id: "rejected", label: "Declined", className: "Rejected" },
+            ]}
+            activeStatus={statusFilter}
+            onSelectStatus={selectStatusFilter}
+            storageKey="pms_user_performance_status_order"
+            containerClassName="task-progress"
+          />
 
           <div className="tasks-search-bar">
             <IoSearchOutline fontSize={"20px"} />

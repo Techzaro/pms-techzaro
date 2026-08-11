@@ -55,8 +55,11 @@ import AddNoteModal from "../components/AddNoteModal";
 import EditTaskModal from "../components/EditTaskModal";
 import PauseReasonModal from "../components/PauseReasonModal";
 import ActionPopover from "../components/ActionPopover";
+import UnifiedActivityFeed from "../components/UnifiedActivityFeed";
+import ProjectMembersModal from "../components/ProjectMembersModal";
 import "../components/ActionPopover.css";
 import { formatDateTimeShort, formatDateTime, formatDateTimeInline } from "../utils/formatDateTime";
+import { renderDynamicDates } from "../utils/tableDateUtils";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { useSubmit } from "../hooks/useSubmit";
 import { useNotification } from "../context/NotificationContext";
@@ -365,6 +368,7 @@ function ProjectDetails() {
   const [managerDropdownOpen, setManagerDropdownOpen] = useState(false);
   const managerDropdownRef = useRef(null);
   const [showManagerModal, setShowManagerModal] = useState(false);
+  const [showProjectMembersModal, setShowProjectMembersModal] = useState(false);
   const [mgrSearch, setMgrSearch] = useState("");
   const [savingManager, setSavingManager] = useState(false);
   const [mgrHighlightedIndex, setMgrHighlightedIndex] = useState(0);
@@ -853,8 +857,9 @@ function ProjectDetails() {
   const isCreator = project.is_creator;
   const isAssigned = project.is_assigned;
   const isAdminOrManager = project.is_admin_or_manager;
+  const isViewOnlyUser = (project.view_only_users || []).some((u) => (u.id || u) === currentUser?.id);
 
-  const canEdit = project.can_edit;
+  const canEdit = project.can_edit && !isViewOnlyUser;
 
   const handleMilestoneToggle = async (milestone) => {
     await runMilestoneToggle(async () => {
@@ -1024,62 +1029,17 @@ function ProjectDetails() {
 
   const renderRail = () => (
     <div className="pd-rail">
-      <section className="pd-rail-card">
-        <h1 className="pd-rail-card__title">Tasks</h1>
-        {tasks.length === 0 ? (
-          <p className="pd-muted" style={{ margin: 0 }}>
-            No tasks yet.
-          </p>
-        ) : (
-          <ul className="pd-rail-tasks">
-            {tasks.map((t) => (
-              <li key={t.id} className="pd-rail-tasks__row">
-                <div className="pd-rail-tasks__name">
-                  {t.title}
-                </div>
-                <div className="pd-rail-tasks__due">
-                  {t.end_date ? new Date(t.end_date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      {/* ACTIVITY */}
-      <section
-        className={`pd-rail-card${projectHasUnread ? " activity-panel--unread" : ""}`}
-      >
-        <h1 className="pd-rail-card__title">Activity</h1>
-        {(() => {
-          const changes = project?.all_changes || [];
-          if (!changes.length) return <p className="pd-muted" style={{ margin: 0 }}>No activity yet.</p>;
-          return (
-            <ul className="td-activity-list">
-              {changes.map((c, i) => (
-                <li key={c.id || i} className={`td-activity-item${isProjectItemUnread(c) ? " activity-item--unread" : ""}`}>
-                  <span className="td-activity-icon">✏️</span>
-                  <div className="td-activity-body">
-                    <span className="td-activity-text">
-                      {c.field_name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} changed
-                    </span>
-                    <span className="td-activity-time">{formatDateTimeInline(c.created_at)}</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          );
-        })()}
-      </section>
+      {/* UNIFIED ACTIVITY FEED */}
+      <UnifiedActivityFeed module="project" entityId={projectId} initialUsers={members} />
     </div>
   );
 
   const overviewInner = (
     <>
       {project.description && (
-        <div style={{ marginBottom: 20 }}>
+        <div style={{ marginBottom: 20, overflow: "hidden", wordBreak: "break-word", overflowWrap: "break-word" }}>
           <h2 className="pd-block-title">Description</h2>
-          <div className="pd-desc-tx pd-rich" dangerouslySetInnerHTML={{ __html: sanitizeHtml(project.description) }} />
+          <div className="pd-desc-tx pd-rich" style={{ overflow: "hidden", wordBreak: "break-word", overflowWrap: "anywhere", whiteSpace: "pre-wrap" }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(project.description) }} />
         </div>
       )}
       <div className="pd-shell-split">
@@ -1416,11 +1376,7 @@ function ProjectDetails() {
                                         </div>
                                         <div className="col-due-date">
                                           <div className="date-box">
-                                            <div style={{ whiteSpace: "pre-line" }}>
-                                              {formatDateTimeInline(t.start_date)}
-                                              {"\n"}
-                                              {formatDateTimeInline(t.end_date)}
-                                            </div>
+                                            {renderDynamicDates(t, currentUser)}
                                           </div>
                                         </div>
                                         <div>
@@ -1667,7 +1623,7 @@ function ProjectDetails() {
                             {isAdminOrManager && (
                               <button
                                 type="button"
-                                onClick={() => setShowEditModal(true)}
+                                onClick={() => setShowProjectMembersModal(true)}
                                 className="pd-link-manage"
                                 style={{ background: "none", border: "none", cursor: "pointer" }}
                               >
@@ -2200,6 +2156,13 @@ function ProjectDetails() {
       )}
 
       {MgrConfirmDialog}
+
+      <ProjectMembersModal
+        isOpen={showProjectMembersModal}
+        onClose={() => setShowProjectMembersModal(false)}
+        project={project}
+        onSuccess={loadProject}
+      />
     </>
   );
 }

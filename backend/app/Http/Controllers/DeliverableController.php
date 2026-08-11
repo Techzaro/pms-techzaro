@@ -254,8 +254,12 @@ class DeliverableController extends Controller
             'creator:id,name,role', 'task:id,title,project_id', 'task.project:id,title',
             'latestSubmission', 'latestSubmission.submittedBy:id,name,email', 'latestSubmission.attachments',
         ])
-            ->where('assigned_to', $user->id)
-            ->where('created_by', $user->id)
+            ->where(function ($q) use ($user) {
+                $q->where('assigned_to', $user->id)
+                    ->orWhere(function ($sq) use ($user) {
+                        $sq->where('created_by', $user->id)->whereNull('assigned_to');
+                    });
+            })
             ->when($isDueTodayFilter, fn ($q) => $q->whereDate('due_date', today())->whereNotIn('status', $this->dueTodayExcludedStatuses()))
             ->orderBy('sort_order')->latest('updated_at')
             ->filter($filters)
@@ -484,7 +488,9 @@ class DeliverableController extends Controller
         )));
         if (! empty($allAssigneeIds)) {
             $projectMemberIds = $project->getMembers()->pluck('id')->map(fn ($id) => (int) $id)->toArray();
-            $invalidIds = array_diff(array_map('intval', $allAssigneeIds), $projectMemberIds);
+            $adminManagerIds = User::whereIn('id', $allAssigneeIds)->whereIn('role', ['admin', 'manager'])->pluck('id')->map(fn ($id) => (int) $id)->toArray();
+            $allowedIds = array_unique(array_merge($projectMemberIds, $adminManagerIds));
+            $invalidIds = array_diff(array_map('intval', $allAssigneeIds), $allowedIds);
             if (! empty($invalidIds)) {
                 throw ValidationException::withMessages([
                     'assigned_to' => 'One or more selected users are not members of this project. Please select only project members.',
@@ -570,6 +576,19 @@ class DeliverableController extends Controller
         ]);
 
         try {
+            $this->activityService->log(
+                $user->id,
+                'deliverable_created',
+                'Created subtask "'.$deliverable->title.'"',
+                'deliverable',
+                $deliverable->id,
+                'create'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log activity for deliverable create', ['error' => $e->getMessage()]);
+        }
+
+        try {
             $this->auditService->log(
                 module: 'deliverable_management',
                 action: 'create',
@@ -647,7 +666,9 @@ class DeliverableController extends Controller
         )));
         if (! empty($allAssigneeIds) && $project) {
             $projectMemberIds = $project->getMembers()->pluck('id')->map(fn ($id) => (int) $id)->toArray();
-            $invalidIds = array_diff(array_map('intval', $allAssigneeIds), $projectMemberIds);
+            $adminManagerIds = User::whereIn('id', $allAssigneeIds)->whereIn('role', ['admin', 'manager'])->pluck('id')->map(fn ($id) => (int) $id)->toArray();
+            $allowedIds = array_unique(array_merge($projectMemberIds, $adminManagerIds));
+            $invalidIds = array_diff(array_map('intval', $allAssigneeIds), $allowedIds);
             if (! empty($invalidIds)) {
                 throw ValidationException::withMessages([
                     'assigned_to' => 'One or more selected users are not members of this project.',
@@ -701,6 +722,33 @@ class DeliverableController extends Controller
         }
 
         $deliverable->load('task:id,title,business_id');
+
+        try {
+            $this->activityService->log(
+                $user->id,
+                'deliverable_created',
+                'Created subtask "'.$deliverable->title.'"',
+                'deliverable',
+                $deliverable->id,
+                'create'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log activity for deliverable create standalone', ['error' => $e->getMessage()]);
+        }
+
+        try {
+            $this->auditService->log(
+                module: 'deliverable_management',
+                action: 'create',
+                description: "Created deliverable {$deliverable->title}",
+                user: $user,
+                entityType: 'Deliverable',
+                entityId: $deliverable->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit for deliverable create standalone', ['error' => $e->getMessage()]);
+        }
 
         return response()->json([
             'success' => true,
@@ -924,7 +972,7 @@ class DeliverableController extends Controller
         if (! $isAssignee && ! $isCurrentOwner && ! $isAuthorizedRole) {
             return response()->json(['success' => false, 'message' => 'Only the assignee or current owner can submit this deliverable'], 403);
         }
-        if (! in_array($deliverable->status, ['pending', 'rejected', 'reopened', 'rework_required'])) {
+        if (! in_array($deliverable->status, ['pending', 'in_progress', 'rejected', 'reopened', 'rework_required'])) {
             return response()->json(['success' => false, 'message' => 'This deliverable cannot be submitted in its current status'], 422);
         }
 
@@ -1649,6 +1697,10 @@ class DeliverableController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized to edit this submission.'], 403);
         }
 
+        if ($deliverable->has_edited_submission) {
+            return response()->json(['success' => false, 'message' => 'Submission can only be edited once.'], 422);
+        }
+
         $validated = $request->validate([
             'comment' => 'nullable|string|max:2000',
             'file' => 'nullable|file|max:51200',
@@ -1669,6 +1721,7 @@ class DeliverableController extends Controller
         }
 
         $submission->save();
+        $deliverable->update(['has_edited_submission' => true]);
 
         if ($request->hasFile('files')) {
             $submission->attachments()->createMany(
@@ -1856,16 +1909,14 @@ class DeliverableController extends Controller
         if (! $isAssignee && ! in_array($user->role, ['admin', 'manager'])) {
             return response()->json(['success' => false, 'message' => 'You do not have permission to pause/resume this subtask.'], 403);
         }
-        if ($deliverable->timer_state !== 'running') {
-            return response()->json(['success' => false, 'message' => 'Timer is not running'], 422);
-        }
-
         $validated = $request->validate([
             'reason' => 'nullable|string|max:64',
             'reason_detail' => 'nullable|string|max:500',
         ]);
 
-        $deliverable->pauseTimer($validated['reason'] ?? null, $validated['reason_detail'] ?? null, false, $user->id);
+        if ($deliverable->timer_state === 'running') {
+            $deliverable->pauseTimer($validated['reason'] ?? null, $validated['reason_detail'] ?? null, false, $user->id);
+        }
         $deliverable->update(['status' => 'paused', 'paused_by' => $user->id, 'paused_at' => now(), 'updated_by' => $user->id]);
 
         DeliverableWorkflowEvent::create([
@@ -2171,7 +2222,11 @@ class DeliverableController extends Controller
             ->where('user_id', $request->user()->id)
             ->first();
 
-        return response()->json(['success' => true, 'note' => $note]);
+        return response()->json([
+            'success' => true,
+            'note' => $note,
+            'notes' => $note ? [$note] : [],
+        ]);
     }
 
     /**
@@ -2309,33 +2364,8 @@ class DeliverableController extends Controller
         // ── Role-based visibility ──
         switch ($role) {
             case 'admin':
-                // Admin sees everything — no scope filter
-                break;
-
             case 'manager':
-                // Manager sees deliverables where any participant (assignee/creator) is in the same team(s)
-                $teamIds = $user->teams()->pluck('teams.id');
-                $ledTeamIds = $user->ledTeams()->pluck('teams.id');
-                $allTeamIds = $teamIds->merge($ledTeamIds)->unique();
-
-                if ($allTeamIds->isNotEmpty()) {
-                    $scopeUserIds = DB::table('team_user')
-                        ->whereIn('team_id', $allTeamIds)
-                        ->pluck('user_id')
-                        ->push($user->id)
-                        ->unique();
-
-                    $query->where(function ($q) use ($scopeUserIds) {
-                        $q->whereIn('assigned_to', $scopeUserIds)
-                            ->orWhereIn('created_by', $scopeUserIds);
-                    });
-                } else {
-                    // No teams — only own deliverables
-                    $query->where(function ($q) use ($user) {
-                        $q->where('assigned_to', $user->id)
-                            ->orWhere('created_by', $user->id);
-                    });
-                }
+                // Admin and Manager see everything — no scope filter
                 break;
 
             case 'team_lead':

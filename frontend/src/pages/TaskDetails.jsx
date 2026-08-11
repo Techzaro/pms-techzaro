@@ -41,6 +41,7 @@ import { LuSend } from "react-icons/lu";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
+import { renderDynamicDates } from "../utils/tableDateUtils";
 import SmartDragHandle from "../components/SmartDragHandle";
 import EditTaskModal from "../components/EditTaskModal";
 import ConfirmModal from "../components/ConfirmModal";
@@ -56,6 +57,7 @@ import DelegationChain from "../components/DelegationChain";
 import AddAccessModal from "../components/AddAccessModal";
 import AddNoteModal from "../components/AddNoteModal";
 import TaskDiscussion from "../components/TaskDiscussion";
+import UnifiedActivityFeed from "../components/UnifiedActivityFeed";
 import CreateDeliverableModel from "../components/layout/CreateDeliverableModel";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
@@ -284,6 +286,7 @@ function TaskDetails() {
   const [showCreateSubtaskModal, setShowCreateSubtaskModal] = useState(false);
   const [submitModal, setSubmitModal] = useState({ open: false, subtask: null });
   const [taskSubmitModalOpen, setTaskSubmitModalOpen] = useState(false);
+  const [isEditingTaskSubmission, setIsEditingTaskSubmission] = useState(false);
   const [taskConfirmDialog, setTaskConfirmDialog] = useState({ open: false, type: null });
   const [taskReopenDialog, setTaskReopenDialog] = useState(false);
   const [transferDialog, setTransferDialog] = useState(false);
@@ -393,7 +396,7 @@ function TaskDetails() {
   const isCreator = task?.is_creator ?? (task && currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10));
   const isAssignee = task?.is_assignee ?? (task && currentUser && (task.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10)));
   const canEdit = readOnly ? false : (task?.can_edit ?? (task && currentUser && isCreator && !["approved", "submitted"].includes(task?.status?.toLowerCase())));
-  const canSubmitTask = readOnly ? false : (task?.can_submit ?? (task && currentUser && isAssignee && ["in_progress", "reopened", "paused"].includes(task?.status)));
+  const canSubmitTask = readOnly ? false : (task?.my_status === "submitted" || (isAssignee && task?.my_status === "submitted") ? false : (task?.can_submit ?? (task && currentUser && isAssignee && ["in_progress", "reopened", "paused"].includes(task?.status))));
   const canAcknowledge = readOnly ? false : (task && currentUser && isAssignee && ["pending", "reopened"].includes(task?.status));
   const isAdminOrManager = currentUser && ["admin", "manager"].includes(currentUser.role);
   const canPause = readOnly ? false : (task && currentUser && (isAssignee || isAdminOrManager) && task?.my_status !== "submitted" && task?.status === "in_progress" && !task?.assigner_paused);
@@ -849,6 +852,29 @@ function TaskDetails() {
     });
   };
 
+  const handleAcceptTransfer = async () => {
+    if (!task?.pending_delegation) return;
+    setTaskActing(true);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${task.id}/accept-delegation`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        notify.success("Transfer acknowledged and accepted");
+        loadTaskDetails();
+      } else {
+        notify.error(data.message || "Failed to acknowledge transfer");
+      }
+    } catch {
+      notify.error("Error acknowledging transfer");
+    } finally {
+      setTaskActing(false);
+    }
+  };
+
   const handlePause = async ({ reason, reason_detail }) => {
     await runPause(async () => {
       try {
@@ -1125,7 +1151,18 @@ function TaskDetails() {
                       Transfer
                     </button>
                   )}
-                  {canAcknowledge && !isTransferor && !task?.active_outgoing_delegation && (
+                  {hasPendingDelegation && (
+                    <button
+                      className="td-btn-primary"
+                      onClick={handleAcceptTransfer}
+                      disabled={taskActing}
+                      style={{ backgroundColor: "var(--color-success)", borderColor: "var(--color-success)" }}
+                    >
+                      <CheckCircle2 size={15} />
+                      {taskActing ? "Acknowledging..." : "Acknowledge Transfer"}
+                    </button>
+                  )}
+                  {canAcknowledge && !isTransferor && !task?.active_outgoing_delegation && !hasPendingDelegation && (
                     <button className="td-btn-primary" onClick={handleAcknowledge} disabled={acknowledging || isAssignerLocked} style={acknowledging || isAssignerLocked ? { opacity: 0.6, cursor: "not-allowed" } : {}}>
                       <CheckCircle2 size={15} />
                       {acknowledging ? "Acknowledging..." : "Acknowledge"}
@@ -1241,7 +1278,8 @@ function TaskDetails() {
                   isCreator={isCreator}
                   isAssignee={isAssignee}
                   onTaskUpdate={handleTaskActionSuccess}
-                  onSubmitClick={() => setTaskSubmitModalOpen(true)}
+                  onSubmitClick={() => { setIsEditingTaskSubmission(false); setTaskSubmitModalOpen(true); }}
+                  onEditSubmissionClick={() => { setIsEditingTaskSubmission(true); setTaskSubmitModalOpen(true); }}
                   confirmDialog={taskConfirmDialog}
                   setConfirmDialog={setTaskConfirmDialog}
                   reopenDialog={taskReopenDialog}
@@ -1386,7 +1424,9 @@ function TaskDetails() {
                                     {statusLabel(d.status)}
                                   </span>
                                 </div>
-                                <div style={{ fontSize: 12, color: "#6b7280", lineHeight: 1.6, whiteSpace: "pre-line" }}>{formatDateTimeShort(d.start_date)}{"\n"}{formatDateTimeShort(d.due_date)}</div>
+                                 <div>
+                                   {renderDynamicDates(d, currentUser)}
+                                 </div>
                                 <div className="action-btns">
                                   <ActionPopover
                                     trigger={
@@ -1670,222 +1710,8 @@ function TaskDetails() {
               </ul>
             </div>
 
-            {/* TIMELINE HISTORY */}
-            {(() => {
-              const workflowEvents = task?.workflow_events || task?.workflowEvents || [];
-              const historyItems = workflowEvents
-                .filter((e) => e.action !== 'field_changed')
-                .map((e) => ({
-                  id: `evt-${e.id}`,
-                  action: e.action,
-                  user: e.user,
-                  date: e.created_at,
-                  comment: e.comment,
-                }));
-              const actionLabel = (action) => {
-                const map = {
-                  submitted: "Submitted",
-                  resubmitted: "Resubmitted",
-                  acknowledged: "Acknowledged",
-                  paused: "Paused",
-                  continued: "Continued",
-                  approved: "Approved",
-                  rejected: "Declined",
-                  reopened: "Reopened",
-                  created: "Created",
-                };
-                return map[action] || action;
-              };
-              if (historyItems.length === 0) return null;
-              return (
-                <div className="td-card">
-                  <h3 className="td-card-title">Timeline History</h3>
-                  <ul className="td-history-list">
-                    {historyItems.map((item) => (
-                      <li key={item.id} className="td-history-item">
-                        <div className="td-history-header">
-                          <span className={`td-history-badge td-history-badge--${item.action}`}>{actionLabel(item.action)}</span>
-                          <span className="td-history-date">{formatDateTime(item.date)}</span>
-                        </div>
-                        <div className="td-history-meta">
-                          by {item.user?.name || "Unknown"}
-                        </div>
-                        {item.comment && <p className="td-submission-text">{item.comment}</p>}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            })()}
-
-            {/* SUBMISSION HISTORY */}
-            {(task?.submissions || []).length > 0 && (
-              <div className="td-card">
-                <h3 className="td-card-title">Submission History</h3>
-                {(task?.submissions || []).map((sub, idx) => (
-                  <div key={sub.id} style={{
-                    padding: "10px 0",
-                    borderBottom: idx < (task?.submissions || []).length - 1 ? "1px solid var(--border)" : "none",
-                  }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                      <span style={{ fontWeight: 600, fontSize: "13px" }}>
-                        Submission #{sub.version_number || ((task?.submissions || []).length - idx)}
-                      </span>
-                      <span className="badge" style={{
-                        background: sub.status === "approved" ? "var(--color-success-bg)" : sub.status === "reopened" ? "var(--color-warning-bg)" : "var(--color-blue-bg)",
-                        color: sub.status === "approved" ? "var(--color-success)" : sub.status === "reopened" ? "var(--color-warning)" : "var(--color-blue)",
-                        fontSize: "11px", padding: "2px 8px", borderRadius: "12px", fontWeight: 600,
-                      }}>
-                        {sub.status === "approved" ? "Approved" : sub.status === "reopened" ? "Reopened" : "Pending"}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
-                      <span>By: {sub.submitted_by?.name || sub.submittedBy?.name || "Unknown"}</span>
-                      <span style={{ marginLeft: 12 }}>On: {formatDateTime(sub.created_at)}</span>
-                    </div>
-                    {sub.reopen_reason && (
-                      <p style={{ fontSize: "12px", color: "var(--color-warning)", marginTop: "4px" }}>
-                        Reason: {sub.reopen_reason}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* REOPEN COUNT */}
-            {(task?.reopen_count > 0 || (task?.workflow_events || task?.workflowEvents || []).filter(e => e.action === 'reopened').length > 0) && (
-              <div className="td-card" style={{ padding: "12px 16px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>Reopen Count</span>
-                  <span style={{ fontSize: "18px", fontWeight: 700, color: "var(--color-warning)" }}>
-                    {task?.reopen_count || (task?.workflow_events || task?.workflowEvents || []).filter(e => e.action === 'reopened').length}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* PERFORMANCE DASHBOARD */}
-            {task?.status === 'approved' && (
-              <div className="td-card">
-                <h3 className="td-card-title" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <BarChart3 size={16} />
-                  Performance
-                </h3>
-                <div className="td-timer-metrics">
-                  {task.submitted_at && (
-                    <div className="td-timer-metric">
-                      <span className="td-timer-metric-label">Submitted</span>
-                      <span className="td-timer-metric-value">{formatDateTime(task.submitted_at)}</span>
-                    </div>
-                  )}
-                  {task.approved_at && (
-                    <div className="td-timer-metric">
-                      <span className="td-timer-metric-label">Approved</span>
-                      <span className="td-timer-metric-value">{formatDateTime(task.approved_at)}</span>
-                    </div>
-                  )}
-                  {task.end_date && (
-                    <div className="td-timer-metric">
-                      <span className="td-timer-metric-label">Deadline</span>
-                      <span className="td-timer-metric-value">{formatDateTime(task.end_date)}</span>
-                    </div>
-                  )}
-                  {task.approved_at && task.end_date && (
-                    <div className="td-timer-metric">
-                      <span className="td-timer-metric-label">Result</span>
-                      <span className="td-timer-metric-value" style={{                         color: new Date(task.approved_at) <= new Date(task.end_date) ? "var(--color-success)" : "var(--color-danger)" }}>
-                        {new Date(task.approved_at) <= new Date(task.end_date) ? "On Time" : "Late"}
-                      </span>
-                    </div>
-                  )}
-                  {(() => {
-                    const reworkCount = (task?.workflowEvents || []).filter(e => e.action === 'reopened').length;
-                    return reworkCount > 0 ? (
-                      <div className="td-timer-metric">
-                        <span className="td-timer-metric-label">Reworks</span>
-                        <span className="td-timer-metric-value">{reworkCount}</span>
-                      </div>
-                    ) : null;
-                  })()}
-                  {(() => {
-                    const approvalAttempts = (task?.workflowEvents || []).filter(e => e.action === 'submitted').length;
-                    return (
-                      <div className="td-timer-metric">
-                        <span className="td-timer-metric-label">Attempts</span>
-                        <span className="td-timer-metric-value">{approvalAttempts}</span>
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
-            )}
-
-            {/* ACTIVITY LOG */}
-            <div className={`td-card${taskHasUnread ? " activity-panel--unread" : ""}`}>
-              <h3 className="td-card-title">Activity</h3>
-              {(() => {
-                const events = (task?.workflowEvents || []).map(e => ({
-                  id: e.id,
-                  type: 'event',
-                  action: e.action,
-                  comment: e.comment,
-                  created_at: e.created_at,
-                  sort: new Date(e.created_at).getTime(),
-                }));
-                const changes = (task?.changes || []).map(c => ({
-                  id: c.id,
-                  type: 'change',
-                  field: c.field_name,
-                  created_at: c.created_at,
-                  sort: new Date(c.created_at).getTime(),
-                }));
-                const timeline = [...events, ...changes].sort((a, b) => b.sort - a.sort);
-                if (!timeline.length) return <p className="td-activity-empty">No activity yet.</p>;
-                return (
-                  <ul className="td-activity-list">
-                    {timeline.map((item, i) => (
-                      <li key={i} className={`td-activity-item${isTaskItemUnread(item) ? " activity-item--unread" : ""}`}>
-                        <span className="td-activity-icon">
-                          {item.type === 'event' && (
-                            <>
-                              {item.action === 'created' && '📝'}
-                              {item.action === 'submitted' && '📤'}
-                              {item.action === 'acknowledged' && '👍'}
-                              {item.action === 'paused' && '⏸️'}
-                              {item.action === 'continued' && '▶️'}
-                              {item.action === 'approved' && '✅'}
-                              {item.action === 'rejected' && '❌'}
-                              {item.action === 'reopened' && '🔄'}
-                              {item.action === 'field_changed' && '✏️'}
-                              {item.action === 'timer_started' && '⏱️'}
-                              {item.action === 'timer_paused' && '⏸️'}
-                              {item.action === 'timer_resumed' && '▶️'}
-                              {item.action === 'timer_paused_by_assigner' && '🔒'}
-                              {item.action === 'timer_resumed_by_assigner' && '🔓'}
-                              {item.action === 'timer_stopped' && '⏹️'}
-                              {item.action === 'assigner_paused' && '🔒'}
-                              {item.action === 'assigner_resumed' && '🔓'}
-                              {!['created','submitted','acknowledged','paused','continued','approved','rejected','reopened','field_changed','timer_started','timer_paused','timer_resumed','timer_paused_by_assigner','timer_resumed_by_assigner','timer_stopped','assigner_paused','assigner_resumed'].includes(item.action) && '📌'}
-                            </>
-                          )}
-                          {item.type === 'change' && '✏️'}
-                        </span>
-                        <div className="td-activity-body">
-                          <span className="td-activity-text">
-                            {item.type === 'event'
-                              ? (item.comment || item.action.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()))
-                              : item.field.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) + ' changed'
-                            }
-                          </span>
-                          <span className="td-activity-time">{formatDateTime(item.created_at)}</span>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                );
-              })()}
-            </div>
+            {/* UNIFIED ACTIVITY FEED */}
+            <UnifiedActivityFeed module="task" entityId={task.id} initialUsers={assignees} />
 
             <div className="td-card">
               <div className="td-card-head">
@@ -1933,11 +1759,16 @@ function TaskDetails() {
       />
 
       <SubmitTaskModal
-        key={`td-task-submit-${task?.id || "none"}`}
+        key={`td-task-submit-${task?.id || "none"}-${isEditingTaskSubmission ? "edit" : "submit"}`}
         isOpen={taskSubmitModalOpen}
-        onClose={() => setTaskSubmitModalOpen(false)}
+        onClose={() => { setTaskSubmitModalOpen(false); setIsEditingTaskSubmission(false); }}
         task={task}
-        onSubmitSuccess={handleTaskActionSuccess}
+        isEdit={isEditingTaskSubmission}
+        existingSubmission={task?.latest_submission || task?.latestSubmission}
+        onSubmitSuccess={(updatedTask) => {
+          setIsEditingTaskSubmission(false);
+          handleTaskActionSuccess(updatedTask);
+        }}
       />
 
       <PauseReasonModal

@@ -196,23 +196,26 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
       doc.setTextColor(99, 102, 241); doc.setFont("helvetica", "bold");
       doc.text(user.team || "", M + 27, y + 16);
       // Profile right side — 2-col grid
-      const profileRX = M + CW / 2 + 5;
+      const col1StartX = M + 70;
+      const col1ValX = M + 95;
+      const col2StartX = M + 132;
+      const col2ValX = M + 158;
       const profileData = [
         ["Employee ID:", empId, "Role:", roleDisplay],
-        ["Report Period:", dateRangeLabels[dateRange], "Reporting To:", user.reporting_to || "-"],
+        ["Report Period:", dateRangeLabels[dateRange] || "All Time", "Reporting To:", user.reporting_to || "-"],
         ["Total Work Items:", String(totalItems), "Report Date:", genDate],
         ["Team:", user.team || "-", "Report Time:", genTime],
       ];
       profileData.forEach((row, ri) => {
         const ry = y + 4 + ri * 5;
-        doc.setFontSize(5); doc.setFont("helvetica", "normal"); doc.setTextColor(107, 114, 128);
-        doc.text(row[0], profileRX, ry);
+        doc.setFontSize(5.5); doc.setFont("helvetica", "normal"); doc.setTextColor(107, 114, 128);
+        doc.text(row[0], col1StartX, ry);
         doc.setFont("helvetica", "bold"); doc.setTextColor(17, 24, 39);
-        doc.text(String(row[1]).substring(0, 28), profileRX + 28, ry);
-        doc.setFont("helvetica", "normal"); doc.setTextColor(107, 114, 128);
-        doc.text(row[2], profileRX + CW / 2 - 12, ry);
+        doc.text(String(row[1]).substring(0, 24), col1ValX, ry);
+        doc.setFontSize(5.5); doc.setFont("helvetica", "normal"); doc.setTextColor(107, 114, 128);
+        doc.text(row[2], col2StartX, ry);
         doc.setFont("helvetica", "bold"); doc.setTextColor(17, 24, 39);
-        doc.text(String(row[3]).substring(0, 28), profileRX + CW / 2 + 16, ry);
+        doc.text(String(row[3]).substring(0, 24), col2ValX, ry);
       });
       y += 30;
 
@@ -514,9 +517,19 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
               </div>
               {dateRange === "custom" && (
                 <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
-                  <input type="date" value={customStart} onChange={(e) => { setCustomStart(e.target.value); setIsDirty(true); }}
+                  <input type="date" value={customStart} max={customEnd || undefined} onChange={(e) => {
+                    const val = e.target.value;
+                    setCustomStart(val);
+                    if (customEnd && val > customEnd) setCustomEnd(val);
+                    setIsDirty(true);
+                  }}
                     style={{ flex: 1, padding: "10px 14px", border: "1px solid var(--border-color)", borderRadius: 10, fontSize: 13, color: "var(--text-dark)", outline: "none" }} />
-                  <input type="date" value={customEnd} onChange={(e) => { setCustomEnd(e.target.value); setIsDirty(true); }}
+                  <input type="date" value={customEnd} min={customStart || undefined} onChange={(e) => {
+                    const val = e.target.value;
+                    setCustomEnd(val);
+                    if (customStart && val < customStart) setCustomStart(val);
+                    setIsDirty(true);
+                  }}
                     style={{ flex: 1, padding: "10px 14px", border: "1px solid var(--border-color)", borderRadius: 10, fontSize: 13, color: "var(--text-dark)", outline: "none" }} />
                 </div>
               )}

@@ -71,9 +71,9 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
 
   // Fetch company employee report data filtered by selected time period
   const { data: reportData, isLoading } = useApiQuery(
-    ["company-employees-report", period],
+    ["company-employees-report", period, customStart, customEnd],
     "/reports/company-employees",
-    { period },
+    { period, time_filter: period, start_date: customStart, end_date: customEnd, startDate: customStart, endDate: customEnd },
     { staleTime: 60000, refetchOnMount: true }
   );
 
@@ -452,9 +452,19 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
               </div>
               {dateRange === "custom" && (
                 <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
-                  <input type="date" value={customStart} onChange={(e) => { setCustomStart(e.target.value); setIsDirty(true); }}
+                  <input type="date" value={customStart} max={customEnd || undefined} onChange={(e) => {
+                    const val = e.target.value;
+                    setCustomStart(val);
+                    if (customEnd && val > customEnd) setCustomEnd(val);
+                    setIsDirty(true);
+                  }}
                     style={{ flex: 1, padding: "10px 14px", border: "1px solid var(--border-color)", borderRadius: 10, fontSize: 13, color: "var(--text-dark)", outline: "none" }} />
-                  <input type="date" value={customEnd} onChange={(e) => { setCustomEnd(e.target.value); setIsDirty(true); }}
+                  <input type="date" value={customEnd} min={customStart || undefined} onChange={(e) => {
+                    const val = e.target.value;
+                    setCustomEnd(val);
+                    if (customStart && val < customStart) setCustomStart(val);
+                    setIsDirty(true);
+                  }}
                     style={{ flex: 1, padding: "10px 14px", border: "1px solid var(--border-color)", borderRadius: 10, fontSize: 13, color: "var(--text-dark)", outline: "none" }} />
                 </div>
               )}

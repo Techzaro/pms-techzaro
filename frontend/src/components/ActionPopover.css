@@ -3,9 +3,11 @@
 .ap-wrap {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   position: relative;
   width: fit-content;
-  justify-self: end;
+  justify-self: center;
+  margin: 0 auto;
 }
 
 .ap-trigger {
@@ -48,4 +50,29 @@
 }
 .ap-popover-item--highlighted * {
   color: #fff !important;
+}
+
+/* Standardized Soft-Button Eye (View) Action Button UI */
+.action-icon-btn.action-view,
+.popover-action-btn.view-btn,
+.action-view {
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 8px !important;
+  background: #eef2ff !important;
+  color: #4f46e5 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border: none !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  padding: 0 !important;
+}
+
+.action-icon-btn.action-view:hover,
+.popover-action-btn.view-btn:hover,
+.action-view:hover {
+  background: #e0e7ff !important;
+  color: #4338ca !important;
 }

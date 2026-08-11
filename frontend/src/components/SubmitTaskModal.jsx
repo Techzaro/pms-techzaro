@@ -28,7 +28,7 @@ import "./layout/CreateTaskModal.css";
  * @param {Object} task - The task being submitted.
  * @param {Function} onSubmitSuccess - Callback after successful submission, receives updated task.
  */
-function SubmitTaskModal({ isOpen, onClose, task, onSubmitSuccess }) {
+function SubmitTaskModal({ isOpen, onClose, task, existingSubmission = null, isEdit = false, onSubmitSuccess }) {
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
   useEscapeKey(isOpen, handleClose);
 
@@ -43,14 +43,44 @@ function SubmitTaskModal({ isOpen, onClose, task, onSubmitSuccess }) {
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
-      setComment("");
-      setFiles([]);
-      setLinks([]);
+      if (isEdit && (existingSubmission || task?.latest_submission || task?.latestSubmission)) {
+        const sub = existingSubmission || task?.latest_submission || task?.latestSubmission;
+        setComment(sub?.comment || "");
+        const prevLinks = (sub?.attachments || [])
+          .filter((a) => a.attachment_type === "link")
+          .map((a) => ({ url: a.url || a.file_name }));
+        setLinks(prevLinks);
+        setFiles([]);
+      } else {
+        setComment("");
+        setFiles([]);
+        setLinks([]);
+      }
     } else {
       document.body.style.overflow = "";
     }
     return () => { document.body.style.overflow = ""; };
-  }, [isOpen]);
+  }, [isOpen, isEdit, existingSubmission, task]);
+
+  // Handle Ctrl+V (Clipboard Paste) for files/screenshots when modal is open
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handlePaste = (e) => {
+      const clipboardFiles = e.clipboardData?.files;
+      if (clipboardFiles && clipboardFiles.length > 0) {
+        const newFiles = Array.from(clipboardFiles);
+        setIsDirty(true);
+        setFiles((prev) => [...prev, ...newFiles]);
+        notify.success(`Pasted ${newFiles.length} file(s) from clipboard`);
+      }
+    };
+
+    window.addEventListener("paste", handlePaste);
+    return () => {
+      window.removeEventListener("paste", handlePaste);
+    };
+  }, [isOpen, setIsDirty]);
 
   /** Appends newly selected files to the existing file list */
   const handleFileSelect = (e) => {
@@ -87,7 +117,12 @@ function SubmitTaskModal({ isOpen, onClose, task, onSubmitSuccess }) {
         files.forEach((f) => formData.append("files[]", f));
         validLinks.forEach((l) => formData.append("links[]", l));
 
-        const res = await fetch(`${API_URL}/tasks/${task.id}/submit`, {
+        const sub = existingSubmission || task?.latest_submission || task?.latestSubmission;
+        const endpoint = isEdit && sub
+          ? `${API_URL}/tasks/submissions/${sub.id}`
+          : `${API_URL}/tasks/${task.id}/submit`;
+
+        const res = await fetch(endpoint, {
           method: "POST",
           headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
           body: formData,
@@ -134,15 +169,20 @@ function SubmitTaskModal({ isOpen, onClose, task, onSubmitSuccess }) {
                 </span>
               )}
               <span className={`sd-status-badge sd-status-${task.status || "pending"}`}>{statusLabel}</span>
-              {task.end_date && (
-                <span className="sd-due-date">Due Date & Time {formatDateTimeShort(task.end_date)}</span>
+              {task.due_date && (
+                <span className="sd-due-date" style={{ marginLeft: "12px" }}>
+                  Due Date & Time {formatDateTimeShort(task.due_date)}
+                </span>
               )}
             </div>
           </div>
+          <button className="sd-close-btn" onClick={handleClose} title="Close">
+            <X size={18} />
+          </button>
         </div>
 
         <div className="sd-body">
-          <h3 className="sd-section-title">{isResubmit ? "Resubmit Task" : "Submit Task"}</h3>
+          <h3 className="sd-section-title">{isEdit ? "Edit Submission" : isResubmit ? "Resubmit Task" : "Submit Task"}</h3>
 
           <div className="sd-field">
             <label className="sd-label">Submission Notes</label>

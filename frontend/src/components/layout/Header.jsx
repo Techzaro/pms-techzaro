@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import { MdKeyboardArrowDown, MdNotifications, MdPerson, MdHistory, MdLogout, MdLock, MdDarkMode, MdLightMode } from "react-icons/md";
+import { MdKeyboardArrowDown, MdNotifications, MdPerson, MdHistory, MdLogout, MdLock, MdDarkMode, MdLightMode, MdFeedback } from "react-icons/md";
 import { useNavigate } from "react-router-dom";
 
 import API_URL from "../../config/api";
@@ -23,6 +23,7 @@ import "./Header.css";
 import CreateTaskModal from "../CreateTaskModal";
 import CreateProjectModal from "../CreateProjectModal";
 import CreateDeliverableModel from "./CreateDeliverableModel";
+import FeedbackModal from "../FeedbackModal";
 
 /**
  * Header component – renders the top navigation bar.
@@ -43,6 +44,7 @@ function Header() {
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [showSubtaskModal, setShowSubtaskModal] = useState(false);
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isSmallScreen, setIsSmallScreen] = useState(window.innerWidth <= 1200);
   const [notifications, setNotifications] = useState([]);
@@ -807,8 +809,12 @@ function Header() {
                   <MdHistory size={20} />
                   <span>My Activity</span>
                 </button>
+                <button className={`hmc-menu-item${profileHighlightIndex === 3 ? ' hmc-menu-item--highlighted' : ''}`} onClick={() => { setIsProfileOpen(false); setIsFeedbackOpen(true); }} onMouseEnter={() => setProfileHighlightIndex(3)}>
+                  <MdFeedback size={20} />
+                  <span>Feedback</span>
+                </button>
                 <div className="hmc-logout-wrap">
-                  <button className={`hmc-logout-btn${profileHighlightIndex === 3 ? ' hmc-menu-item--highlighted' : ''}`} onMouseEnter={() => setProfileHighlightIndex(3)} onClick={() => logoutUser()}>
+                  <button className={`hmc-logout-btn${profileHighlightIndex === 4 ? ' hmc-menu-item--highlighted' : ''}`} onMouseEnter={() => setProfileHighlightIndex(4)} onClick={() => logoutUser()}>
                     <MdLogout size={18} />
                     <span>Logout</span>
                   </button>
@@ -889,6 +895,11 @@ function Header() {
           onClose={() => setShowSubtaskModal(false)}
         />
       )}
+
+      <FeedbackModal
+        isOpen={isFeedbackOpen}
+        onClose={() => setIsFeedbackOpen(false)}
+      />
 
     </>
   );

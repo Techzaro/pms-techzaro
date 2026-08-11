@@ -12,7 +12,7 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useNavigate } from "react-router-dom";
 import { MdEdit, MdArrowBack } from "react-icons/md";
-import { Pencil, Trash2, Eye } from "lucide-react";
+import { Pencil, Trash2, Eye, Download } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import ConfirmModal from "../components/ConfirmModal";
@@ -134,6 +134,7 @@ function UserProfile() {
   const [filePreviews, setFilePreviews] = useState({});
   const [editOtherDocs, setEditOtherDocs] = useState([]);
   const [editAvatarFile, setEditAvatarFile] = useState(null);
+  const [avatarRemoved, setAvatarRemoved] = useState(false);
   const [currentUserRole] = useState(() => getCurrentRole());
   const [changes, setChanges] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
@@ -530,6 +531,8 @@ function UserProfile() {
     setEditErrors({});
     setEditFiles({});
     setFilePreviews({});
+    setEditAvatarFile(null);
+    setAvatarRemoved(false);
     // Initialize existing other docs with rename state
     const docs = typeof u.other_document === "string" ? (() => { try { return JSON.parse(u.other_document); } catch { return []; } })() : (u.other_document || []);
     setExistingOtherDocs((Array.isArray(docs) ? docs : []).filter(d => d).map((doc) => {
@@ -967,9 +970,11 @@ function UserProfile() {
         }
       }
 
-      // Avatar upload
+      // Avatar upload or removal flag
       if (editAvatarFile) {
         formData.append("avatar", editAvatarFile);
+      } else if (avatarRemoved) {
+        formData.append("avatar_remove", "1");
       }
 
       let url = isOwnProfile ? `${API_URL}/auth/update-profile` : `${API_URL}/users/${userId}`;
@@ -996,6 +1001,7 @@ function UserProfile() {
       setFilePreviews({});
       setEditOtherDocs([]);
       setExistingOtherDocs([]);
+      setAvatarRemoved(false);
 
       if (data.user) {
         setProfileData((prev) => ({ ...prev, user: { ...prev.user, ...data.user } }));
@@ -1045,7 +1051,7 @@ function UserProfile() {
   }
 
   const { user, account } = profileData;
-  const isResignedProfile = account?.status === "Resigned" || (user && !user.active && user.must_change_password === false);
+  const isResignedProfile = user?.status === "Resigned" || user?.status === "resigned" || account?.status === "Resigned" || account?.status === "resigned";
   const isOwnProfile = String(getUser()?.id) === String(userId);
 
   const breadcrumbs = [
@@ -1452,7 +1458,7 @@ function UserProfile() {
                   ].map(({ label, key }) => (
                     <div className="info-row" key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                       <span className="info-label">{label}</span>
-                      <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                         {user[key] ? (
                           <>
                             <a
@@ -1463,6 +1469,14 @@ function UserProfile() {
                               title="View"
                             >
                               <Eye size={16} />
+                            </a>
+                            <a
+                              href={`${API_URL}/users/${userId}/documents/${key}?token=${authToken()}&download=1`}
+                              download
+                              style={{ background: "var(--bg-hover)", border: "1px solid var(--border-color)", color: "var(--text-dark)", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
+                              title="Download"
+                            >
+                              <Download size={16} />
                             </a>
                           </>
                         ) : "---"}
@@ -1486,18 +1500,27 @@ function UserProfile() {
                     return docs.map((doc, i) => {
                       const docPath = typeof doc === "string" ? doc : doc.path;
                       const docName = typeof doc === "object" && doc.name ? doc.name : docPath.split("/").pop().replace(/^other_document_\d+_\d+_/, "").replace(/\.[^.]+$/, "");
+                      const docUrl = `${API_URL}/users/${userId}/documents/other_document?token=${authToken()}&file=${encodeURIComponent(docPath)}`;
                       return (
                         <div className="info-row" key={`other-${i}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                           <span className="info-label">{docName}</span>
-                          <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                             <a
-                              href={`${API_URL}/users/${userId}/documents/other_document?token=${authToken()}&file=${encodeURIComponent(docPath)}`}
+                              href={docUrl}
                               target="_blank"
                               rel="noopener noreferrer"
                               style={{ background: "var(--color-primary)", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
                               title="View"
                             >
                               <Eye size={16} />
+                            </a>
+                            <a
+                              href={`${docUrl}&download=1`}
+                              download
+                              style={{ background: "var(--bg-hover)", border: "1px solid var(--border-color)", color: "var(--text-dark)", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
+                              title="Download"
+                            >
+                              <Download size={16} />
                             </a>
                           </div>
                         </div>
@@ -1506,18 +1529,27 @@ function UserProfile() {
                   })()}
                   {companyDocs?.other_documents?.files?.map((file, i) => {
                     const fileName = file.filename.replace(/^other_document_\d+_/, "").replace(/\.[^.]+$/, "");
+                    const storageUrl = `${API_URL.replace("/api", "")}/storage/${file.path}`;
                     return (
                       <div className="info-row" key={`company-${i}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <span className="info-label">{fileName}</span>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end", flex: 1 }}>
                           <a
-                            href={`${API_URL.replace("/api", "")}/storage/${file.path}`}
+                            href={storageUrl}
                             target="_blank"
                             rel="noopener noreferrer"
                             style={{ background: "var(--color-primary)", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
                             title="View"
                           >
                             <Eye size={16} />
+                          </a>
+                          <a
+                            href={storageUrl}
+                            download
+                            style={{ background: "var(--bg-hover)", border: "1px solid var(--border-color)", color: "var(--text-dark)", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
+                            title="Download"
+                          >
+                            <Download size={16} />
                           </a>
                         </div>
                       </div>
@@ -1536,8 +1568,19 @@ function UserProfile() {
                 <h3>Account Status</h3>
                 <div className="status-list">
                   <div className="status-item">
-                    <span className={`status-dot ${account?.status === "Active" ? "dot-active" : "dot-inactive"}`}></span>
-                    <span className="status-text">{account?.status || (user.active ? "Active" : user.must_change_password ? "Inactive" : "Resigned")}</span>
+                    {(() => {
+                      const st = String(user?.status || account?.status || (user?.active ? "Active" : "Inactive")).toLowerCase();
+                      const colorClass = st === "resigned" ? "text-red-500" : st === "inactive" ? "text-yellow-500" : "text-green-500";
+                      const colorStyle = st === "resigned" ? "#ef4444" : st === "inactive" ? "#f59e0b" : "#10b981";
+                      return (
+                        <>
+                          <span className={`status-dot ${st === "active" ? "dot-active" : "dot-inactive"}`} style={{ backgroundColor: colorStyle }}></span>
+                          <span className={`status-text ${colorClass}`} style={{ color: colorStyle, fontWeight: 600 }}>
+                            {user?.status || account?.status || (user?.active ? "Active" : "Inactive")}
+                          </span>
+                        </>
+                      );
+                    })()}
                   </div>
                   <div className="status-item">
                     <span className="status-icon">
@@ -1559,12 +1602,12 @@ function UserProfile() {
                       <span className="status-value">
                         {user.last_login_at
                           ? new Date(user.last_login_at).toLocaleString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            hour: "numeric",
-                            minute: "2-digit",
-                            hour12: true,
-                          })
+                              month: "short",
+                              day: "numeric",
+                              hour: "numeric",
+                              minute: "2-digit",
+                              hour12: true,
+                            })
                           : "Never logged in"}
                       </span>
                     </div>
@@ -1652,7 +1695,7 @@ function UserProfile() {
                     <div className="avatar-preview" onClick={() => document.getElementById('edit-avatar-input').click()}>
                       {editAvatarFile ? (
                         <img src={URL.createObjectURL(editAvatarFile)} alt="Avatar preview" />
-                      ) : user.avatar ? (
+                      ) : (!avatarRemoved && user.avatar) ? (
                         <img src={`${API_URL.replace('/api', '')}/storage/${user.avatar}`} alt="Avatar preview" />
                       ) : (
                         <>
@@ -1664,8 +1707,8 @@ function UserProfile() {
                         </>
                       )}
                     </div>
-                    <input id="edit-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={(e) => { const file = e.target.files[0]; if (file) setEditAvatarFile(file); }} />
-                    {(editAvatarFile || user.avatar) && (
+                    <input id="edit-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={(e) => { const file = e.target.files[0]; if (file) { setEditAvatarFile(file); setAvatarRemoved(false); } }} />
+                    {(editAvatarFile || (!avatarRemoved && user.avatar)) && (
                       <button type="button" className="avatar-remove-btn" onClick={() => setAvatarRemoveConfirmOpen(true)}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
                         Remove
@@ -2090,7 +2133,7 @@ function UserProfile() {
       <ConfirmModal
         isOpen={avatarRemoveConfirmOpen}
         onClose={() => setAvatarRemoveConfirmOpen(false)}
-        onConfirm={() => { setEditAvatarFile(null); setAvatarRemoveConfirmOpen(false); }}
+        onConfirm={() => { setEditAvatarFile(null); setAvatarRemoved(true); setAvatarRemoveConfirmOpen(false); }}
         title="Remove Photo"
         message="Are you sure you want to remove this profile photo?"
         confirmText="Remove"

@@ -513,7 +513,14 @@ class TaskCommentController extends Controller
             $task->id,
             $title,
             $message,
-            $link
+            $link,
+            [
+                'comment_text' => $comment->body,
+                'comment_by' => $poster->name,
+                'comment_at' => $comment->created_at ? $comment->created_at->format('d M Y, g:i A') : now()->format('d M Y, g:i A'),
+                'task_name' => $task->title,
+                'project_name' => $task->project->title ?? null,
+            ]
         );
     }
 
@@ -562,7 +569,14 @@ class TaskCommentController extends Controller
             $deliverable->id,
             $title,
             $message,
-            $link
+            $link,
+            [
+                'comment_text' => $comment->body,
+                'comment_by' => $poster->name,
+                'comment_at' => $comment->created_at ? $comment->created_at->format('d M Y, g:i A') : now()->format('d M Y, g:i A'),
+                'task_name' => $deliverable->title,
+                'project_name' => $deliverable->project->title ?? null,
+            ]
         );
     }
 }

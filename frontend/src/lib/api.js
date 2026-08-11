@@ -74,7 +74,17 @@ export const api = {
    * @returns {Promise<Object>} Response data
    */
   get: (path, params) => {
-    const qs = params ? "?" + new URLSearchParams(params).toString() : "";
+    let qs = "";
+    if (params && typeof params === "object") {
+      const cleanParams = new URLSearchParams();
+      Object.entries(params).forEach(([key, val]) => {
+        if (val !== undefined && val !== null && val !== "") {
+          cleanParams.append(key, val);
+        }
+      });
+      const str = cleanParams.toString();
+      if (str) qs = "?" + str;
+    }
     return apiFetch(`${path}${qs}`);
   },
   /**

@@ -25,6 +25,7 @@ use App\Http\Controllers\TaskCommentController;
 use App\Http\Controllers\DraftController;
 use App\Http\Controllers\CredentialController;
 use App\Http\Controllers\NotificationSettingController;
+use App\Http\Controllers\FeedbackController;
 
 /*
 | Public Routes
@@ -164,9 +165,13 @@ Route::middleware('auth:sanctum')->group(function () {
         // Reorder users list
         Route::post('/users/reorder', [UserController::class, 'reorder']);
 
+        // Request user deletion (for Manager role)
+        Route::post('/users/{user}/request-deletion', [UserController::class, 'requestDeletion']);
+
         // Guest (Client Portal) management
         Route::post('/guests', [UserController::class, 'storeGuest']);
         Route::put('/guests/{user}', [UserController::class, 'updateGuest']);
+        Route::delete('/guests/{user}', [UserController::class, 'destroyGuest']);
         Route::post('/guests/{user}/resend-invitation', [UserController::class, 'resendInvitation']);
         Route::post('/guests/{user}/reset-password', [UserController::class, 'resetGuestPassword']);
         Route::put('/guests/{user}/toggle-status', [UserController::class, 'toggleGuestStatus']);
@@ -204,6 +209,15 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Member/Team Lead: view own team(s)
     Route::get('/my-team', [TeamController::class, 'myTeam']);
+
+    /*
+    | User Feedback & Product Improvement Routes
+    */
+    Route::post('/feedback', [FeedbackController::class, 'store']);
+    Route::get('/feedback', [FeedbackController::class, 'index']);
+    Route::get('/feedback/{id}', [FeedbackController::class, 'show']);
+    Route::patch('/feedback/{id}', [FeedbackController::class, 'update']);
+    Route::post('/feedback/{id}/notes', [FeedbackController::class, 'addNote']);
 
     /*
     | Team Management Routes
@@ -324,6 +338,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/tasks/{task}/timer', [TaskController::class, 'timer']); // Get live timer state
     Route::get('/tasks/{task}/timer-sessions', [TaskController::class, 'timerSessions']); // Get pause session history
     Route::get('/tasks/{task}/latest-submission', [TaskController::class, 'latestSubmission']); // Get latest submission
+    Route::match(['put', 'post'], '/tasks/submissions/{submission}', [TaskController::class, 'updateSubmission']); // Edit submission
     Route::post('/tasks/{task}/approve', [TaskController::class, 'approve'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Approve submitted task
     Route::post('/tasks/{task}/reject', [TaskController::class, 'reject'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Reject submitted task
     Route::post('/tasks/{task}/reopen', [TaskController::class, 'reopen'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Reopen rejected task
@@ -407,12 +422,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/self-deliverables', [DeliverableController::class, 'mySelfDeliverables']); // Deliverables I created for myself
     Route::post('/deliverables/reorder', [DeliverableController::class, 'reorder']); // Reorder deliverables
 
-    // Write routes (admin, manager, team lead only)
-    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager,team_lead')->group(function () {
+    // Deliverable creation & update routes (accessible to non-guest authenticated users)
+    Route::middleware(\App\Http\Middleware\EnsureNotGuest::class)->group(function () {
         Route::post('/projects/{project}/deliverables', [DeliverableController::class, 'store']); // Create deliverable (project-scoped)
         Route::post('/deliverables', [DeliverableController::class, 'storeStandalone']); // Create deliverable (no project, task_id required)
         Route::put('/deliverables/{deliverable}', [DeliverableController::class, 'update']); // Update deliverable
         Route::delete('/deliverables/{deliverable}', [DeliverableController::class, 'destroy']); // Delete deliverable
+    });
+
+    // Deliverable review routes (admin, manager, team lead only)
+    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager,team_lead')->group(function () {
         Route::post('/deliverables/{deliverable}/approve', [DeliverableController::class, 'approve']); // Approve deliverable
         Route::post('/deliverables/{deliverable}/reject', [DeliverableController::class, 'reject']); // Reject deliverable
         Route::post('/deliverables/{deliverable}/reopen', [DeliverableController::class, 'reopen']); // Reopen deliverable
@@ -471,6 +490,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/notifications/latest', [\App\Http\Controllers\NotificationController::class, 'latest']); // Get latest unread for desktop notifications
     Route::post('/notifications/{notification}/read', [\App\Http\Controllers\NotificationController::class, 'markAsRead']); // Mark notification as read
     Route::post('/notifications/read-all', [\App\Http\Controllers\NotificationController::class, 'markAllAsRead']); // Mark all as read
+    Route::get('/notifications/{notification}/comments', [\App\Http\Controllers\NotificationController::class, 'getComments']); // List comments on a notification
+    Route::post('/notifications/{notification}/comments', [\App\Http\Controllers\NotificationController::class, 'storeComment']); // Add comment to a notification
 
     // Device tokens for push notifications (all authenticated users)
     Route::post('/device-tokens', [\App\Http\Controllers\DeviceTokenController::class, 'store']); // Register device token
@@ -495,6 +516,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/activities/today', [ActivityController::class, 'today']); // Today's activities
     Route::get('/activities/past', [ActivityController::class, 'past']); // Past activities
     Route::get('/activities', [ActivityController::class, 'index']); // All activities
+    Route::get('/tasks/{task}/unified-activity', [TaskController::class, 'unifiedActivity']);
+    Route::get('/projects/{project}/unified-activity', [ProjectController::class, 'unifiedActivity']);
 
     /*
     | My Activity (all authenticated users)

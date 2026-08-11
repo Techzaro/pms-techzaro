@@ -115,20 +115,27 @@ function AuditLogExportModal({ onClose }) {
     try {
       const res = await fetch(`${API_URL}/audit-logs/export`, {
         method: "POST",
-        headers: { Accept: "application/json", Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ format: "xlsx" }),
       });
       if (!res.ok) throw new Error("Export failed");
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `audit-logs-${new Date().toISOString().slice(0, 10)}.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-      onClose();
+      const resBlob = await res.blob();
+      const excelBlob = new Blob([resBlob], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = window.URL.createObjectURL(excelBlob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `audit-logs-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        if (document.body.contains(link)) document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 100);
     } catch (e) {
       console.error("Excel export failed", e);
     }

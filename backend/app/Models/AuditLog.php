@@ -38,12 +38,65 @@ class AuditLog extends Model
 
     public function scopeModule($query, $module)
     {
-        return $query->where('module', $module);
+        if (empty($module)) {
+            return $query;
+        }
+        $cleanModule = strtolower(trim($module));
+
+        $moduleVariants = [
+            'user' => ['user', 'User', 'users', 'Users', 'user_management', 'User Management'],
+            'users' => ['user', 'User', 'users', 'Users', 'user_management', 'User Management'],
+            'user_management' => ['user', 'User', 'users', 'Users', 'user_management', 'User Management'],
+            'auth' => ['auth', 'Auth', 'authentication', 'Authentication'],
+            'task' => ['task', 'Task', 'tasks', 'Tasks', 'task_management', 'Task Management'],
+            'tasks' => ['task', 'Task', 'tasks', 'Tasks', 'task_management', 'Task Management'],
+            'task_management' => ['task', 'Task', 'tasks', 'Tasks', 'task_management', 'Task Management'],
+            'project' => ['project', 'Project', 'projects', 'Projects', 'project_management', 'Project Management'],
+            'projects' => ['project', 'Project', 'projects', 'Projects', 'project_management', 'Project Management'],
+            'project_management' => ['project', 'Project', 'projects', 'Projects', 'project_management', 'Project Management'],
+            'deliverable' => ['deliverable', 'Deliverable', 'deliverables', 'Deliverables', 'subtask', 'Subtask', 'deliverable_management', 'Subtask Management'],
+            'deliverables' => ['deliverable', 'Deliverable', 'deliverables', 'Deliverables', 'subtask', 'Subtask', 'deliverable_management', 'Subtask Management'],
+            'subtask' => ['deliverable', 'Deliverable', 'deliverables', 'Deliverables', 'subtask', 'Subtask', 'deliverable_management', 'Subtask Management'],
+            'deliverable_management' => ['deliverable', 'Deliverable', 'deliverables', 'Deliverables', 'subtask', 'Subtask', 'deliverable_management', 'Subtask Management'],
+            'team' => ['team', 'Team', 'teams', 'Teams', 'team_management', 'Team Management'],
+            'teams' => ['team', 'Team', 'teams', 'Teams', 'team_management', 'Team Management'],
+            'event' => ['event', 'Event', 'events', 'Events'],
+            'events' => ['event', 'Event', 'events', 'Events'],
+        ];
+
+        $allowedModules = $moduleVariants[$cleanModule] ?? [$module, strtolower($module), ucfirst($module)];
+
+        return $query->whereIn('module', $allowedModules);
     }
 
     public function scopeAction($query, $action)
     {
-        return $query->where('action', $action);
+        if (empty($action)) {
+            return $query;
+        }
+        $cleanAction = strtolower(trim($action));
+
+        $actionVariants = [
+            'create' => ['create', 'Create', 'created', 'Created'],
+            'created' => ['create', 'Create', 'created', 'Created'],
+            'update' => ['update', 'Update', 'updated', 'Updated', 'status_change', 'Status Change', 'status'],
+            'updated' => ['update', 'Update', 'updated', 'Updated', 'status_change', 'Status Change', 'status'],
+            'delete' => ['delete', 'Delete', 'deleted', 'Deleted'],
+            'deleted' => ['delete', 'Delete', 'deleted', 'Deleted'],
+            'approve' => ['approve', 'Approve', 'approved', 'Approved'],
+            'approved' => ['approve', 'Approve', 'approved', 'Approved'],
+            'reject' => ['reject', 'Reject', 'rejected', 'Rejected', 'declined', 'Declined'],
+            'rejected' => ['reject', 'Reject', 'rejected', 'Rejected', 'declined', 'Declined'],
+            'submit' => ['submit', 'Submit', 'submitted', 'Submitted'],
+            'submitted' => ['submit', 'Submit', 'submitted', 'Submitted'],
+            'login' => ['login', 'Login', 'auth_login', 'Auth Login'],
+            'auth_login' => ['login', 'Login', 'auth_login', 'Auth Login'],
+            'logout' => ['logout', 'Logout'],
+        ];
+
+        $allowedActions = $actionVariants[$cleanAction] ?? [$action, strtolower($action), ucfirst($action)];
+
+        return $query->whereIn('action', $allowedActions);
     }
 
     public function scopeStatus($query, $status)
