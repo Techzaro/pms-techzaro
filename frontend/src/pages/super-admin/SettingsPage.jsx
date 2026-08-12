@@ -3,8 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Save, Sun, Moon, User, Lock, Loader2 } from 'lucide-react';
 import { useOrgBranding, useUpdateBranding } from '../../hooks/useOrgBranding';
 import { useTheme } from '../../context/ThemeContext';
-import { getUser, getStoredEmail } from '../../utils/auth';
-import API_URL from '../../config/api';
+import { getSuperAdminUser } from '../../utils/auth';
+import { api } from './api/superAdminApi';
 
 const tabs = [
   { id: 'profile', label: 'Profile' },
@@ -73,9 +73,9 @@ export default function SettingsPage() {
 }
 
 function ProfileSection() {
-  const user = getUser('admin');
+  const user = getSuperAdminUser();
   const [name, setName] = useState(user?.name || '');
-  const [email, setEmail] = useState(user?.email || getStoredEmail('admin') || '');
+  const [email, setEmail] = useState(user?.email || '');
   const [phone, setPhone] = useState(user?.phone || '');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -85,24 +85,7 @@ function ProfileSection() {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/super-admin/my-profile`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({ email: user?.email || getStoredEmail('admin') }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to update profile');
-      if (data.user) {
-        const sessions = JSON.parse(localStorage.getItem('sessions_admin') || '{}');
-        const sid = sessionStorage.getItem('sessionId');
-        if (sid && sessions[sid]) {
-          sessions[sid].user = { ...sessions[sid].user, ...data.user };
-          localStorage.setItem('sessions_admin', JSON.stringify(sessions));
-        }
-      }
+      await api.getMyProfile(user?.email);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
@@ -163,7 +146,7 @@ function ProfileSection() {
 }
 
 function PasswordSection() {
-  const user = getUser('admin');
+  const user = getSuperAdminUser();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -183,16 +166,7 @@ function PasswordSection() {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/super-admin/change-password`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({ email: user?.email || getStoredEmail('admin'), old_password: currentPassword, new_password: newPassword }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to change password');
+      await api.changePassword(currentPassword, newPassword);
       setSaved(true);
       setCurrentPassword('');
       setNewPassword('');

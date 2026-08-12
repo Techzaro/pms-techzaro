@@ -3,7 +3,7 @@
  *
  * Thin wrapper around the Admin component. Managers see the same
  * dashboard experience as admins, so this component simply renders
- * the Admin page. This allows role-based routing to /manager/dashboard
+ * the Admin page. This allows role-based routing to /org/{slug}/dashboard
  * while sharing the same UI.
  */
 

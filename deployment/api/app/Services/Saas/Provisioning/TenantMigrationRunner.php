@@ -1,0 +1,86 @@
+<?php
+
+namespace App\Services\Saas\Provisioning;
+
+use App\Services\Saas\DatabaseProvisionService;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Log;
+
+/**
+ * TenantMigrationRunner.
+ *
+ * Responsible for executing tenant database migrations:
+ * - Run all existing PMS tenant migrations
+ * - Never execute master database migrations
+ * - Track migration status
+ * - Return detailed results
+ */
+class TenantMigrationRunner
+{
+    public function __construct(
+        protected DatabaseProvisionService $db,
+    ) {}
+
+    /**
+     * Run all tenant migrations on the specified database.
+     *
+     * @return array{success: bool, output: string, migrations: int}
+     * @throws \RuntimeException If migrations fail.
+     */
+    public function run(string $databaseName): array
+    {
+        Log::info("Running tenant migrations on database: {$databaseName}");
+
+        $this->db->runMigrations($databaseName);
+
+        $output = Artisan::output();
+
+        Log::info("Tenant migrations completed on database: {$databaseName}");
+
+        return [
+            'success'    => true,
+            'output'     => $output,
+            'database'   => $databaseName,
+        ];
+    }
+
+    /**
+     * Get the status of migrations for a database.
+     */
+    public function getStatus(string $databaseName): array
+    {
+        // Configure a temporary connection to check migration status
+        $masterConfig = config("database.connections." . config('tenancy.master_connection', 'mysql_master'));
+
+        config()->set('database.connections.tenant_status', [
+            'driver'    => 'mysql',
+            'host'      => $masterConfig['host'],
+            'port'      => $masterConfig['port'],
+            'database'  => $databaseName,
+            'username'  => $masterConfig['username'],
+            'password'  => $masterConfig['password'] ?? '',
+            'charset'   => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix'    => '',
+            'prefix_indexes' => true,
+            'strict'    => true,
+            'engine'    => null,
+        ]);
+
+        try {
+            Artisan::call('migrate:status', [
+                '--database' => 'tenant_status',
+            ]);
+
+            return [
+                'success' => true,
+                'output'  => Artisan::output(),
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'error'   => $e->getMessage(),
+            ];
+        }
+    }
+}

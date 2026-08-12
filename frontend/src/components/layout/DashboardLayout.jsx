@@ -10,10 +10,12 @@
  */
 
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
+import { Outlet } from "react-router-dom";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
 import RightSidebar from "./RightSidebar";
 import ChatWidget from "./ChatWidget";
+import StorageNotificationBanner from "../StorageNotificationBanner";
 import { authToken } from "../../utils/auth";
 import { publish } from "../../utils/eventBus";
 import API_URL from "../../config/api";
@@ -23,9 +25,9 @@ import "./DashboardLayout.css";
 const POLL_INTERVAL = 20000; // 20 seconds
 
 /**
- * @param {{ children: React.ReactNode, hideRightSidebar?: boolean }} props
+ * @param {{ hideRightSidebar?: boolean }} props
  */
-function DashboardLayout({ children, hideRightSidebar = false }) {
+function DashboardLayout({ hideRightSidebar = false, children }) {
   const [rightOpen, setRightOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const prevCountRef = useRef(null);
@@ -34,9 +36,9 @@ function DashboardLayout({ children, hideRightSidebar = false }) {
   useLayoutEffect(() => {
     if (!authToken()) {
       try {
-        window.history.replaceState(null, "", "/");
+        window.history.replaceState(null, "", "/login");
       } catch {}
-      window.location.replace("/?message=" + encodeURIComponent("Session expired. Please log in."));
+      window.location.replace("/login?message=" + encodeURIComponent("Session expired. Please log in."));
     }
   }, []);
 
@@ -105,13 +107,14 @@ function DashboardLayout({ children, hideRightSidebar = false }) {
       </svg>
 
       <Header />
+      <StorageNotificationBanner />
 
       <div className={`main-layout${hideRightSidebar ? " main-layout--no-right" : ""}`}>
 
         <Sidebar />
 
         <div className="dashboard-content">
-          {children}
+          {children || <Outlet />}
         </div>
 
         {!hideRightSidebar && <RightSidebar isOpen={rightOpen} onClose={() => setRightOpen(false)} />}

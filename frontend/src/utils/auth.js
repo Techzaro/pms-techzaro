@@ -291,6 +291,7 @@ export function clearAllSessions() {
   localStorage.removeItem("userId");
   localStorage.removeItem("name");
   localStorage.removeItem("email");
+  localStorage.removeItem("tenant_slug");
 }
 
 export function getTenantSlug() {
@@ -377,23 +378,21 @@ export function getDisplayUser() {
 
 /* ───── role-prefixed path helper ───── */
 
-const ROLE_URL_MAP = {
-  admin: "admin",
-  manager: "manager",
-  team_lead: "teamlead",
-  teamlead: "teamlead",
-  member: "member",
-  guest: "guest",
-};
-
+/**
+ * Generate a path under the current organization: /org/{slug}/{page}
+ * Falls back to /login if no slug is available.
+ * This replaces the old role-based /{role}/{page} pattern.
+ */
 export function rolePath(page = "") {
-  const role = getCurrentRole() || "member";
-  const urlRole = ROLE_URL_MAP[role] || "member";
-  return page ? `/${urlRole}/${page}` : `/${urlRole}/dashboard`;
+  const slug = localStorage.getItem("tenant_slug") || "";
+  if (!slug) return page ? `/login` : `/login`;
+  return page ? `/org/${slug}/${page}` : `/org/${slug}/dashboard`;
 }
 
 export function getUrlRole() {
-  return ROLE_URL_MAP[getCurrentRole()] || "member";
+  const path = window.location.pathname;
+  const match = path.match(/^\/org\/([a-z0-9\-]+)(?:\/|$)/);
+  return match ? match[1] : "";
 }
 
 /* ───── role display normalization ───── */
@@ -403,4 +402,144 @@ export function normalizeRole(role) {
   if (role === "team_lead" || role === "teamlead") return "Team Lead";
   if (role === "guest") return "Guest";
   return role.charAt(0).toUpperCase() + role.slice(1);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SUPER ADMIN SESSION MANAGEMENT
+   Completely separate from PMS session management.
+   Uses its own storage keys to ensure security isolation.
+   ═══════════════════════════════════════════════════════════════ */
+
+const SUPER_ADMIN_STORAGE_KEY = "sessions_super_admin";
+const SUPER_ADMIN_ROLE_KEY = "superAdminRole";
+const SUPER_ADMIN_SESSION_KEY = "superAdminSessionId";
+
+function _getSuperAdminSessions() {
+  try {
+    return JSON.parse(localStorage.getItem(SUPER_ADMIN_STORAGE_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+
+function _setSuperAdminSessions(sessions) {
+  localStorage.setItem(SUPER_ADMIN_STORAGE_KEY, JSON.stringify(sessions));
+}
+
+export function getSuperAdminRole() {
+  return sessionStorage.getItem(SUPER_ADMIN_ROLE_KEY) || "super_admin";
+}
+
+export function setSuperAdminRole(role) {
+  sessionStorage.setItem(SUPER_ADMIN_ROLE_KEY, role);
+}
+
+export function getSuperAdminSessionId() {
+  return sessionStorage.getItem(SUPER_ADMIN_SESSION_KEY) || "";
+}
+
+export function setSuperAdminSessionId(id) {
+  sessionStorage.setItem(SUPER_ADMIN_SESSION_KEY, id);
+}
+
+export function getSuperAdminToken() {
+  const sid = getSuperAdminSessionId();
+  if (!sid) return "";
+
+  const sessions = _getSuperAdminSessions();
+  const sess = sessions[sid];
+  if (!sess) return "";
+
+  if (sess.expiresAt && Date.now() > sess.expiresAt) {
+    delete sessions[sid];
+    _setSuperAdminSessions(sessions);
+    sessionStorage.removeItem(SUPER_ADMIN_SESSION_KEY);
+    return "";
+  }
+
+  return sess.token || "";
+}
+
+export function getSuperAdminUser() {
+  const sid = getSuperAdminSessionId();
+  if (!sid) return null;
+
+  const sessions = _getSuperAdminSessions();
+  const sess = sessions[sid];
+  if (!sess) return null;
+
+  if (sess.expiresAt && Date.now() > sess.expiresAt) {
+    delete sessions[sid];
+    _setSuperAdminSessions(sessions);
+    sessionStorage.removeItem(SUPER_ADMIN_SESSION_KEY);
+    return null;
+  }
+
+  return sess.user || null;
+}
+
+export function saveSuperAdminSession(token, user, rememberMe = false, expiresAt = null) {
+  const sessions = _getSuperAdminSessions();
+  const sid = "sess_sa_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+
+  const durationMs = rememberMe ? 24 * 60 * 60 * 1000 : 3 * 60 * 60 * 1000;
+  const calculatedExpiry = expiresAt ? new Date(expiresAt).getTime() : Date.now() + durationMs;
+
+  sessions[sid] = {
+    token,
+    user,
+    rememberMe: Boolean(rememberMe),
+    expiresAt: calculatedExpiry,
+    createdAt: Date.now(),
+  };
+  _setSuperAdminSessions(sessions);
+
+  setSuperAdminRole("super_admin");
+  setSuperAdminSessionId(sid);
+
+  return true;
+}
+
+export function clearSuperAdminSession() {
+  const sid = getSuperAdminSessionId();
+
+  if (sid) {
+    const sessions = _getSuperAdminSessions();
+    if (sessions[sid]) {
+      delete sessions[sid];
+      _setSuperAdminSessions(sessions);
+    }
+    sessionStorage.removeItem(SUPER_ADMIN_SESSION_KEY);
+  }
+
+  sessionStorage.removeItem(SUPER_ADMIN_ROLE_KEY);
+}
+
+export function superAdminAuthToken() {
+  return getSuperAdminToken();
+}
+
+export async function logoutSuperAdmin() {
+  const sid = getSuperAdminSessionId();
+  const sessions = _getSuperAdminSessions();
+  const token = sid ? sessions[sid]?.token : null;
+
+  if (token) {
+    try {
+      const rawUrl = import.meta.env.VITE_API_URL || "";
+      const apiUrl = rawUrl.replace(/\/+$/g, "");
+      await fetch(`${apiUrl}/super-admin/logout`, {
+        method: "POST",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+    } catch { /* ignore network error during logout */ }
+  }
+
+  clearSuperAdminSession();
+
+  try {
+    window.history.replaceState(null, "", "/super-admin/login");
+  } catch {}
+  window.location.replace("/super-admin/login");
 }

@@ -1,0 +1,23 @@
+# Zip files
+*.zip
+
+# Temp files
+temp_*
+Thumbs.db
+
+# OS files
+.DS_Store
+Desktop.ini
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Backend vendor (cPanel pe composer install chalega)
+backend/vendor/
+
+# Frontend node_modules
+frontend/node_modules/

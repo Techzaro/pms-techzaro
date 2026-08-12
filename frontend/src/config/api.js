@@ -5,7 +5,8 @@
  * and cross-tab session synchronization.
  */
 
-import { getCurrentRole, getToken, clearSession, getSessionId } from "../utils/auth";
+import { getCurrentRole, getToken, clearSession, getSessionId, getTenantSlug } from "../utils/auth";
+import { isAdminDomain } from "../utils/domain";
 import { notify } from "../utils/notify";
 
 /** @type {string} API base URL without trailing slashes */
@@ -18,6 +19,14 @@ window.fetch = async function (...args) {
   try {
     const [resource, config = {}] = args;
     const noCacheConfig = { ...config, cache: 'no-store' };
+    const tenantSlug = getTenantSlug();
+    const url = typeof resource === 'string' ? resource : resource?.url || '';
+    const skipTenantHeader = url.includes('/login') || url.includes('/forgot-password') || url.includes('/reset-password') || url.includes('/public/') || url.includes('/super-admin');
+    if (tenantSlug && !skipTenantHeader && noCacheConfig.headers) {
+      noCacheConfig.headers = { ...noCacheConfig.headers, "X-Tenant-ID": tenantSlug };
+    } else if (tenantSlug && !skipTenantHeader) {
+      noCacheConfig.headers = { "X-Tenant-ID": tenantSlug };
+    }
     const role = getCurrentRole();
     const tokenAtRequest = getToken(role);
     const res = await originalFetch.apply(this, [resource, noCacheConfig]);
@@ -43,10 +52,12 @@ window.fetch = async function (...args) {
           }
         } catch {}
 
+        // Domain-aware redirect
+        const loginPath = isAdminDomain() ? "/super-admin/login" : "/login";
         try {
-          window.history.replaceState(null, "", "/");
+          window.history.replaceState(null, "", loginPath);
         } catch {}
-        window.location.replace("/?message=" + encodeURIComponent(targetMsg));
+        window.location.replace(`${loginPath}?message=${encodeURIComponent(targetMsg)}`);
       }
     }
 
@@ -101,19 +112,21 @@ window.addEventListener("storage", (e) => {
         // Our session was removed by another tab
         _sessionConflictHandled = true;
         clearSession(role);
+        const loginPath = isAdminDomain() ? "/super-admin/login" : "/login";
         try {
-          window.history.replaceState(null, "", "/");
+          window.history.replaceState(null, "", loginPath);
         } catch {}
-        window.location.replace("/?message=" + encodeURIComponent("You have been logged in from another tab."));
+        window.location.replace(`${loginPath}?message=${encodeURIComponent("You have been logged in from another tab.")}`);
       }
     } catch {
       // Parse error — treat as session lost
       _sessionConflictHandled = true;
       clearSession(role);
+      const loginPath = isAdminDomain() ? "/super-admin/login" : "/login";
       try {
-        window.history.replaceState(null, "", "/");
+        window.history.replaceState(null, "", loginPath);
       } catch {}
-      window.location.replace("/?message=" + encodeURIComponent("Your session has been interrupted. Please login again."));
+      window.location.replace(`${loginPath}?message=${encodeURIComponent("Your session has been interrupted. Please login again.")}`);
     }
   }
 });

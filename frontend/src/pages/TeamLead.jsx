@@ -1,6 +1,6 @@
 /**
  * TeamLead page component.
- * Rendered when the user navigates to /teamlead/dashboard.
+ * Rendered when the user navigates to /org/{slug}/dashboard.
  */
 
 import Admin from "./Admin";

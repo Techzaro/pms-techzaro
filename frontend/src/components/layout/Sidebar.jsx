@@ -31,7 +31,8 @@ import {
   MdEditNote,
   MdDifference,
   MdMenuBook,
-  MdOpenInNew,
+  MdChat,
+  MdStorage,
 } from "react-icons/md";
 
 import "./Sidebar.css";
@@ -88,8 +89,8 @@ function Sidebar() {
   });
 
   const location = useLocation();
-  const { role: urlRole } = useParams();
-  const rolePrefix = `/${urlRole}`;
+  const { slug } = useParams();
+  const rolePrefix = `/org/${slug}`;
 
   // ── Route-matching helpers ──
   /** Exact match for a given page slug. */
@@ -516,22 +517,8 @@ function Sidebar() {
             </Link>
           )}
 
-          {/* Super Admin link – only for the platform owner tenant */}
-          {getTenantSlug() === import.meta.env.VITE_SUPER_ADMIN_TENANT && user.role === "admin" && (
-            <a
-              href="/super-admin"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="sidebar-link"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <MdOpenInNew />
-              <span>Organization</span>
-            </a>
-          )}
-
           {/* Settings dropdown – click to toggle like Tasks */}
-          <div className={`sidebar-dropdown-group ${settingsOpen || isActive("audit-logs") || isActive("settings/notifications") || isActive("branding") || isActive("subscription") ? "open active" : ""}`}>
+          <div className={`sidebar-dropdown-group ${settingsOpen || isActive("audit-logs") || isActive("settings/notifications") || isActive("branding") || isActive("subscription") || isActive("organization-details") ? "open active" : ""}`}>
             <div
               className="sidebar-dropdown-header"
               onClick={() => setSettingsOpen((p) => !p)}
@@ -564,15 +551,13 @@ function Sidebar() {
                 >
                   Notification Preferences
                 </Link>
-                {getTenantSlug() !== import.meta.env.VITE_SUPER_ADMIN_TENANT && (
-                  <Link
-                    to={rolePath("subscription")}
-                    className={`sidebar-sub-link ${isActive("subscription") ? "active" : ""}`}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    Subscription
-                  </Link>
-                )}
+                <Link
+                  to={rolePath("organization-details")}
+                  className={`sidebar-sub-link ${isActive("organization-details") ? "active" : ""}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Organization Details
+                </Link>
                 {(user.role === "admin") && (
                   <Link
                     to={rolePath("branding")}

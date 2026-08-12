@@ -15,15 +15,17 @@ use Illuminate\Support\Facades\Artisan;
  * - Registering dynamic database connections
  * - Dropping databases
  *
- * Does not handle organization CRUD or subscription logic.
+ * Uses cPanel API when configured (shared hosting), falls back to raw SQL.
  */
 class DatabaseProvisionService
 {
     protected string $masterConnection;
+    protected ?CPanelDatabaseService $cpanel;
 
     public function __construct()
     {
         $this->masterConnection = config('tenancy.master_connection', 'mysql_master');
+        $this->cpanel = app(CPanelDatabaseService::class);
     }
 
     /**
@@ -31,6 +33,12 @@ class DatabaseProvisionService
      */
     public function createDatabase(string $databaseName): void
     {
+        if ($this->cpanel->isConfigured()) {
+            $this->cpanel->createDatabase($databaseName);
+            $this->cpanel->grantAllPrivileges($databaseName, config('database.connections.mysql_master.username', ''));
+            return;
+        }
+
         $pdo = DB::connection($this->masterConnection)->getPdo();
         $escaped = str_replace('`', '``', $databaseName);
         $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$escaped}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
@@ -41,6 +49,11 @@ class DatabaseProvisionService
      */
     public function dropDatabase(string $databaseName): void
     {
+        if ($this->cpanel->isConfigured()) {
+            $this->cpanel->dropDatabase($databaseName);
+            return;
+        }
+
         $pdo = DB::connection($this->masterConnection)->getPdo();
         $escaped = str_replace('`', '``', $databaseName);
         $pdo->exec("DROP DATABASE IF EXISTS `{$escaped}`");
@@ -48,10 +61,6 @@ class DatabaseProvisionService
 
     /**
      * Run all tenant migrations on a specific database.
-     *
-     * Temporarily configures a "tenant" connection pointing to the
-     * target database, runs migrations, then leaves the config in place
-     * for potential immediate use.
      */
     public function runMigrations(string $databaseName): void
     {
@@ -80,8 +89,6 @@ class DatabaseProvisionService
 
     /**
      * Register a tenant's database connection dynamically at runtime.
-     *
-     * After this call, DB::connection('tenant_{id}') is available.
      */
     public function registerConnection(Organization $organization): void
     {

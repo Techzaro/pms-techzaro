@@ -3,25 +3,30 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Building2, CreditCard, Puzzle, Globe, HeartPulse,
   ClipboardList, Settings, ChevronLeft, Menu, Shield, LogOut,
-  Bell, Search, Sun, Moon, ChevronDown, User, Activity, CheckCheck,
+  Bell, Search, Sun, Moon, ChevronDown, User, Activity, CheckCheck, Key,
+  HardDrive, FileText, MessageSquare,
 } from 'lucide-react';
-import { getUser, clearSession, getStoredEmail, setStoredEmail } from '../../../utils/auth';
+import { getSuperAdminUser, getSuperAdminToken, logoutSuperAdmin } from '../../../utils/auth';
+import { getOrgBaseUrl } from '../../../utils/domain';
 import { api } from '../api/superAdminApi';
 import {
   showDesktopNotification,
   getNotificationPermission,
 } from '../../../utils/browserNotification';
+import SuperAdminChatWidget from './SuperAdminChatWidget';
 
 const navItems = [
   { label: 'Dashboard', path: '/super-admin', icon: LayoutDashboard, exact: true },
   { label: 'Organizations', path: '/super-admin/organizations', icon: Building2 },
   { label: 'Plans', path: '/super-admin/plans', icon: CreditCard },
   { label: 'Modules', path: '/super-admin/modules', icon: Puzzle },
+  { label: 'Storage', path: '/super-admin/storage', icon: HardDrive },
+  { label: 'Billing', path: '/super-admin/billing', icon: FileText },
+  { label: 'Support', path: '/super-admin/support', icon: MessageSquare },
   { label: 'Domains', path: '/super-admin/domains', icon: Globe },
   // { label: 'System Health', path: '/super-admin/health', icon: HeartPulse },
   { label: 'Notifications', path: '/super-admin/notifications', icon: Bell },
   { label: 'Activity Logs', path: '/super-admin/activity', icon: ClipboardList },
-  // { label: 'Settings', path: '/super-admin/settings', icon: Settings },
 ];
 
 export default function SuperAdminLayout({ isDark, toggleTheme }) {
@@ -32,20 +37,27 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [cpOldPassword, setCpOldPassword] = useState('');
+  const [cpNewPassword, setCpNewPassword] = useState('');
+  const [cpConfirmPassword, setCpConfirmPassword] = useState('');
+  const [cpLoading, setCpLoading] = useState(false);
+  const [cpError, setCpError] = useState('');
+  const [cpSuccess, setCpSuccess] = useState('');
   const notifRef = useRef(null);
   const initialPollDoneRef = useRef(false);
   const lastNotifIdRef = useRef(0);
   const navigate = useNavigate();
   const location = useLocation();
-  const user = getUser('admin');
-  const adminEmail = user?.email || getStoredEmail('admin') || '';
+  const user = getSuperAdminUser();
+  const token = getSuperAdminToken();
 
-  // If we have a user with email but stored email is missing, store it now
+  // Auth guard - redirect to login if not authenticated
   useEffect(() => {
-    if (user?.email && !getStoredEmail('admin')) {
-      setStoredEmail('admin', user.email);
+    if (!token) {
+      navigate('/super-admin/login', { replace: true });
     }
-  }, [user]);
+  }, [token, navigate]);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -55,6 +67,7 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
 
   // ─── Notification system ──────────────────────────────────────
   const fetchUnreadCount = useCallback(() => {
+    if (!token) return;
     api.getUnreadCount()
       .then((data) => {
         const newCount = data.unread_count || 0;
@@ -71,7 +84,7 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
         });
       })
       .catch(() => {});
-  }, []);
+  }, [token]);
 
   useEffect(() => {
     fetchUnreadCount();
@@ -118,6 +131,53 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // ─── Change Password ──────────────────────────────────────────
+  const handleChangePassword = async () => {
+    setCpError('');
+    setCpSuccess('');
+
+    if (!cpOldPassword) {
+      setCpError('Please enter your current password.');
+      return;
+    }
+    if (!cpNewPassword) {
+      setCpError('Please enter a new password.');
+      return;
+    }
+    if (cpNewPassword.length < 8) {
+      setCpError('Password must be at least 8 characters.');
+      return;
+    }
+    if (!/[A-Z]/.test(cpNewPassword) || !/[a-z]/.test(cpNewPassword) || !/[0-9]/.test(cpNewPassword) || !/[@$!%*?&#]/.test(cpNewPassword)) {
+      setCpError('Password must include uppercase, lowercase, number, and special character.');
+      return;
+    }
+    if (cpNewPassword !== cpConfirmPassword) {
+      setCpError('Passwords do not match.');
+      return;
+    }
+
+    setCpLoading(true);
+    try {
+      await api.changePassword(cpOldPassword, cpNewPassword);
+      setCpSuccess('Password updated successfully!');
+      setCpOldPassword('');
+      setCpNewPassword('');
+      setCpConfirmPassword('');
+      setTimeout(() => {
+        setShowChangePassword(false);
+        setCpSuccess('');
+      }, 2000);
+    } catch (err) {
+      setCpError(err.message || 'Failed to update password.');
+    } finally {
+      setCpLoading(false);
+    }
+  };
+
+  // Don't render if not authenticated
+  if (!token) return null;
+
   const SidebarContent = ({ collapsed }) => (
     <div className="flex flex-col h-full">
       <div
@@ -163,8 +223,8 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
 
       <div className="p-3" style={{ borderTop: '1px solid var(--border-light)' }}>
         <button
-          onClick={() => navigate('/')}
-          title={collapsed ? 'Back to PMS' : undefined}
+          onClick={() => { window.location.href = `${getOrgBaseUrl()}/login`; }}
+          title={collapsed ? 'Login to PMS' : undefined}
           className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${collapsed ? 'justify-center' : ''}`}
           style={{ color: 'var(--text-muted)' }}
           onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
@@ -280,7 +340,7 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
                     navigate(`/super-admin/organizations?search=${encodeURIComponent(headerSearch.trim())}`);
                   }
                 }}
-                className="w-full pl-9 pr-4 py-2 text-sm border-0 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-9 pr-4 py-2 text-sm border-0 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)]"
                 style={{
                   background: 'var(--bg-hover)',
                   color: 'var(--text-dark)',
@@ -326,7 +386,7 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
                     }
                   }}
                   className="fixed rounded-xl shadow-xl z-50 overflow-hidden"
-                  style={{ background: 'var(--bg-card)', border: '1px solid var(--border-light)', width: '420px', maxHeight: 'calc(100vh - 80px)' }}
+                  style={{ background: 'var(--bg-card)', border: '1px solid var(--border-light)', width: 'min(420px, calc(100vw - 32px))', maxHeight: 'calc(100vh - 80px)' }}
                 >
                   {/* Header */}
                   <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid var(--border-light)' }}>
@@ -423,7 +483,7 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
                   </span>
                 </div>
                 <span className="hidden sm:block text-sm font-semibold" style={{ color: 'var(--text-heading)' }}>{user?.name || 'Super Admin'}</span>
-                {adminEmail && <span className="hidden lg:block text-xs truncate max-w-[120px]" style={{ color: 'var(--text-muted)' }}>{adminEmail}</span>}
+                {user?.email && <span className="hidden lg:block text-xs truncate max-w-[120px]" style={{ color: 'var(--text-muted)' }}>{user.email}</span>}
                 <ChevronDown className={`w-4 h-4 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} style={{ color: 'var(--text-muted)' }} />
               </button>
               {userMenuOpen && (
@@ -445,7 +505,7 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-heading)' }}>{user?.name || 'Super Admin'}</p>
-                          <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{adminEmail}</p>
+                          <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{user?.email}</p>
                         </div>
                       </div>
                     </div>
@@ -470,10 +530,20 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
                         <Activity className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
                         My Activity
                       </button>
+                      <button
+                        onClick={() => { setShowChangePassword(true); setUserMenuOpen(false); }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
+                        style={{ color: 'var(--text-dark)' }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                      >
+                        <Key className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
+                        Change Password
+                      </button>
                     </div>
                     <div className="py-1" style={{ borderTop: '1px solid var(--border-light)' }}>
                       <button
-                        onClick={() => { clearSession('admin'); navigate('/'); }}
+                        onClick={logoutSuperAdmin}
                         className="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
                         style={{ color: 'var(--color-danger)' }}
                         onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-danger-bg)'; }}
@@ -492,11 +562,97 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto">
-          <div className="p-6 max-w-7xl mx-auto">
+          <div className="p-4 sm:p-6 max-w-7xl mx-auto">
             <Outlet />
           </div>
         </main>
       </div>
+
+      {/* Change Password Modal */}
+      {showChangePassword && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.5)' }}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4" style={{ background: 'var(--bg-card)' }}>
+            <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--border-light)' }}>
+              <h3 className="text-lg font-semibold" style={{ color: 'var(--text-heading)' }}>Change Password</h3>
+              <button
+                onClick={() => { setShowChangePassword(false); setCpError(''); setCpSuccess(''); }}
+                className="p-1 rounded-lg transition-colors"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+            <div className="px-6 py-4 space-y-4">
+              {cpError && (
+                <div className="p-3 rounded-lg text-sm" style={{ background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>
+                  {cpError}
+                </div>
+              )}
+              {cpSuccess && (
+                <div className="p-3 rounded-lg text-sm" style={{ background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0' }}>
+                  {cpSuccess}
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-heading)' }}>Current Password</label>
+                <input
+                  type="password"
+                  value={cpOldPassword}
+                  onChange={(e) => setCpOldPassword(e.target.value)}
+                  placeholder="Enter current password"
+                  className="w-full px-3 py-2 rounded-lg border text-sm"
+                  style={{ borderColor: 'var(--border-light)', background: 'var(--bg-hover)', color: 'var(--text-dark)' }}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-heading)' }}>New Password</label>
+                <input
+                  type="password"
+                  value={cpNewPassword}
+                  onChange={(e) => setCpNewPassword(e.target.value)}
+                  placeholder="Enter new password"
+                  className="w-full px-3 py-2 rounded-lg border text-sm"
+                  style={{ borderColor: 'var(--border-light)', background: 'var(--bg-hover)', color: 'var(--text-dark)' }}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-heading)' }}>Confirm New Password</label>
+                <input
+                  type="password"
+                  value={cpConfirmPassword}
+                  onChange={(e) => setCpConfirmPassword(e.target.value)}
+                  placeholder="Confirm new password"
+                  className="w-full px-3 py-2 rounded-lg border text-sm"
+                  style={{ borderColor: 'var(--border-light)', background: 'var(--bg-hover)', color: 'var(--text-dark)' }}
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3 px-6 py-4" style={{ borderTop: '1px solid var(--border-light)' }}>
+              <button
+                onClick={() => { setShowChangePassword(false); setCpError(''); setCpSuccess(''); }}
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                style={{ color: 'var(--text-secondary)', background: 'var(--bg-hover)' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleChangePassword}
+                disabled={cpLoading}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors"
+                style={{ background: cpLoading ? '#94a3b8' : 'var(--color-primary)' }}
+              >
+                {cpLoading ? 'Updating...' : 'Update Password'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Chat Widget */}
+      <SuperAdminChatWidget />
     </div>
   );
 }

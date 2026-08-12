@@ -98,23 +98,6 @@ export default function SubscriptionPage() {
 
   const { subscription, plan, modules, organization, trial_config } = data || {};
 
-  if (organization?.is_owner) {
-    return (
-      <DashboardLayout hideRightSidebar>
-        <Breadcrumb items={[{ label: 'Settings' }, { label: 'Subscription' }]} />
-        <div style={{ background: 'var(--bg-card)', borderRadius: '20px', padding: '40px', boxShadow: 'var(--shadow-sm)', textAlign: 'center' }}>
-          <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: 'var(--color-primary-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-            <Shield style={{ width: '32px', height: '32px', color: 'var(--color-primary)' }} />
-          </div>
-          <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-heading)', marginBottom: '8px' }}>Owner Organization</h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
-            This organization has full platform access with unlimited features.
-          </p>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
   if (!plan) {
     return (
       <DashboardLayout hideRightSidebar>

@@ -1,8 +1,14 @@
 *.log
 .DS_Store
+
+# ALL env files - NEVER commit
 .env
-.env.backup
+.env.staging
 .env.production
+.env.backup
+.env.local
+.env.*
+
 .phpactor.json
 .phpunit.result.cache
 /.fleet

@@ -7,6 +7,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import API_URL from "../../config/api";
+import { getOrgBaseUrl } from "../../utils/domain";
 import "../Login.css";
 
 function RegisterOrganization() {
@@ -17,7 +18,7 @@ function RegisterOrganization() {
   const [trialPlan, setTrialPlan] = useState(null);
 
   useEffect(() => {
-    fetch(`${API_URL}/public/plans`).then(r => r.json()).then(res => {
+    fetch(`${API_URL}/super-admin/public/plans`).then(r => r.json()).then(res => {
       const trial = (res.data || []).find(p => p.slug === 'trial');
       if (trial) setTrialPlan(trial);
     }).catch(() => {});
@@ -133,8 +134,8 @@ function RegisterOrganization() {
               </ol>
             </div>
 
-            <Link
-              to="/"
+            <a
+              href={`${getOrgBaseUrl()}/login`}
               style={{
                 display: "inline-block",
                 padding: "12px 34px",
@@ -313,9 +314,9 @@ function RegisterOrganization() {
 
           <p style={{ textAlign: "center", marginTop: 20, fontSize: 14, color: "#747d8c" }}>
             Already have an account?{" "}
-            <Link to="/" style={{ color: "#1e90ff", textDecoration: "none" }}>
+            <a href={`${getOrgBaseUrl()}/login`} style={{ color: "#1e90ff", textDecoration: "none" }}>
               Login
-            </Link>
+            </a>
           </p>
         </div>
       </div>

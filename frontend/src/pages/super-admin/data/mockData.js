@@ -2,14 +2,14 @@
 // All data is static — no API calls. Ready for future integration.
 
 export const organizations = [
-  { id: 1, name: 'TechXaro', slug: 'techxaro', logo: null, domain: 'techxaro.pms.test', database: 'pms_techxaro', plan: 'Enterprise', type: 'owner', status: 'active', users: 25, storage: '2.4 GB', storagePercent: 12, projects: 18, createdAt: '2025-01-15' },
-  { id: 2, name: 'Acme Corporation', slug: 'acme', logo: null, domain: 'acme.pms.test', database: 'pms_tenant_acme', plan: 'Standard', type: 'standard', status: 'active', users: 42, storage: '18.7 GB', storagePercent: 37, projects: 34, createdAt: '2025-03-22' },
-  { id: 3, name: 'Globex Industries', slug: 'globex', logo: null, domain: 'globex.pms.test', database: 'pms_tenant_globex', plan: 'Starter', type: 'standard', status: 'trial', users: 8, storage: '1.2 GB', storagePercent: 24, projects: 5, createdAt: '2025-06-10' },
-  { id: 4, name: 'Initech', slug: 'initech', logo: null, domain: 'initech.pms.test', database: 'pms_tenant_initech', plan: 'Standard', type: 'standard', status: 'active', users: 15, storage: '5.8 GB', storagePercent: 11, projects: 12, createdAt: '2025-04-05' },
-  { id: 5, name: 'Umbrella Corp', slug: 'umbrella', logo: null, domain: 'umbrella.pms.test', database: 'pms_tenant_umbrella', plan: 'Enterprise', type: 'standard', status: 'suspended', users: 67, storage: '45.2 GB', storagePercent: 90, projects: 52, createdAt: '2024-11-20' },
-  { id: 6, name: 'Wayne Enterprises', slug: 'wayne', logo: null, domain: 'wayne.pms.test', database: 'pms_tenant_wayne', plan: 'Standard', type: 'standard', status: 'active', users: 31, storage: '12.3 GB', storagePercent: 24, projects: 22, createdAt: '2025-02-28' },
-  { id: 7, name: 'Stark Industries', slug: 'stark', logo: null, domain: 'stark.pms.test', database: 'pms_tenant_stark', plan: 'Enterprise', type: 'standard', status: 'archived', users: 89, storage: '67.8 GB', storagePercent: 13, projects: 71, createdAt: '2024-08-15' },
-  { id: 8, name: 'Cyberdyne Systems', slug: 'cyberdyne', logo: null, domain: 'cyberdyne.pms.test', database: 'pms_tenant_cyberdyne', plan: 'Starter', type: 'standard', status: 'active', users: 5, storage: '0.8 GB', storagePercent: 16, projects: 3, createdAt: '2025-07-01' },
+  { id: 1, name: 'TechXaro', slug: 'techxaro', logo: null, url: '/org/techxaro', database: 'pms_techxaro', plan: 'Enterprise', type: 'owner', status: 'active', users: 25, storage: '2.4 GB', storagePercent: 12, projects: 18, createdAt: '2025-01-15' },
+  { id: 2, name: 'Acme Corporation', slug: 'acme', logo: null, url: '/org/acme', database: 'pms_tenant_acme', plan: 'Standard', type: 'standard', status: 'active', users: 42, storage: '18.7 GB', storagePercent: 37, projects: 34, createdAt: '2025-03-22' },
+  { id: 3, name: 'Globex Industries', slug: 'globex', logo: null, url: '/org/globex', database: 'pms_tenant_globex', plan: 'Starter', type: 'standard', status: 'trial', users: 8, storage: '1.2 GB', storagePercent: 24, projects: 5, createdAt: '2025-06-10' },
+  { id: 4, name: 'Initech', slug: 'initech', logo: null, url: '/org/initech', database: 'pms_tenant_initech', plan: 'Standard', type: 'standard', status: 'active', users: 15, storage: '5.8 GB', storagePercent: 11, projects: 12, createdAt: '2025-04-05' },
+  { id: 5, name: 'Umbrella Corp', slug: 'umbrella', logo: null, url: '/org/umbrella', database: 'pms_tenant_umbrella', plan: 'Enterprise', type: 'standard', status: 'suspended', users: 67, storage: '45.2 GB', storagePercent: 90, projects: 52, createdAt: '2024-11-20' },
+  { id: 6, name: 'Wayne Enterprises', slug: 'wayne', logo: null, url: '/org/wayne', database: 'pms_tenant_wayne', plan: 'Standard', type: 'standard', status: 'active', users: 31, storage: '12.3 GB', storagePercent: 24, projects: 22, createdAt: '2025-02-28' },
+  { id: 7, name: 'Stark Industries', slug: 'stark', logo: null, url: '/org/stark', database: 'pms_tenant_stark', plan: 'Enterprise', type: 'standard', status: 'archived', users: 89, storage: '67.8 GB', storagePercent: 13, projects: 71, createdAt: '2024-08-15' },
+  { id: 8, name: 'Cyberdyne Systems', slug: 'cyberdyne', logo: null, url: '/org/cyberdyne', database: 'pms_tenant_cyberdyne', plan: 'Starter', type: 'standard', status: 'active', users: 5, storage: '0.8 GB', storagePercent: 16, projects: 3, createdAt: '2025-07-01' },
 ];
 
 export const plans = [
@@ -39,11 +39,11 @@ export const modules = [
 ];
 
 export const domains = [
-  { id: 1, orgId: 1, orgName: 'TechXaro', primaryDomain: 'techxaro.pms.test', customDomain: null, ssl: true, verified: true, status: 'active', dns: 'configured' },
-  { id: 2, orgId: 2, orgName: 'Acme Corporation', primaryDomain: 'acme.pms.test', customDomain: 'app.acme.com', ssl: true, verified: true, status: 'active', dns: 'configured' },
-  { id: 3, orgId: 3, orgName: 'Globex Industries', primaryDomain: 'globex.pms.test', customDomain: null, ssl: true, verified: true, status: 'active', dns: 'configured' },
-  { id: 4, orgId: 4, orgName: 'Initech', primaryDomain: 'initech.pms.test', customDomain: null, ssl: true, verified: true, status: 'active', dns: 'configured' },
-  { id: 5, orgId: 5, orgName: 'Umbrella Corp', primaryDomain: 'umbrella.pms.test', customDomain: 'pm.umbrella.co', ssl: false, verified: false, status: 'suspended', dns: 'pending' },
+  { id: 1, orgId: 1, orgName: 'TechXaro', primaryDomain: '/org/techxaro', customDomain: null, ssl: true, verified: true, status: 'active', dns: 'configured' },
+  { id: 2, orgId: 2, orgName: 'Acme Corporation', primaryDomain: '/org/acme', customDomain: 'app.acme.com', ssl: true, verified: true, status: 'active', dns: 'configured' },
+  { id: 3, orgId: 3, orgName: 'Globex Industries', primaryDomain: '/org/globex', customDomain: null, ssl: true, verified: true, status: 'active', dns: 'configured' },
+  { id: 4, orgId: 4, orgName: 'Initech', primaryDomain: '/org/initech', customDomain: null, ssl: true, verified: true, status: 'active', dns: 'configured' },
+  { id: 5, orgId: 5, orgName: 'Umbrella Corp', primaryDomain: '/org/umbrella', customDomain: 'pm.umbrella.co', ssl: false, verified: false, status: 'suspended', dns: 'pending' },
 ];
 
 export const activityLogs = [

@@ -1,8 +1,17 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Building2, Loader2, X, Check, ArrowRight, ArrowLeft, Settings2 } from 'lucide-react';
+import { Building2, Loader2, X, Check, ArrowRight, ArrowLeft, Sliders, Globe } from 'lucide-react';
 import { api } from './api/superAdminApi';
 import TrialConfigurationModal from './components/TrialConfigurationModal';
+import PlanCustomizeModal from './components/PlanCustomizeModal';
 import useUnsavedChanges from '../../hooks/useUnsavedChanges';
+import { countries, getCountryByCode, formatPhoneByCountry } from './data/countries';
+import CountrySelect from '../../components/CountrySelect';
+
+const flagEmoji = (code) => {
+  if (!code) return '🌍';
+  const map = { PK:'🇵🇰', US:'🇺🇸', GB:'🇬🇧', IN:'🇮🇳', AE:'🇦🇪', SA:'🇸🇦', CA:'🇨🇦', AU:'🇦🇺', DE:'🇩🇪', FR:'🇫🇷', TR:'🇹🇷', CN:'🇨🇳', JP:'🇯🇵', BR:'🇧🇷', NG:'🇳🇬', ZA:'🇿🇦', EG:'🇪🇬', KE:'🇰🇪', PH:'🇵🇭', MY:'🇲🇾', BD:'🇧🇩', NP:'🇳🇵', LK:'🇱🇰', SG:'🇸🇬', HK:'🇭🇰', NZ:'🇳🇿', IT:'🇮🇹', ES:'🇪🇸', NL:'🇳🇱', SE:'🇸🇪', CH:'🇨🇭', PL:'🇵🇱', RU:'🇷🇺', KR:'🇰🇷', TH:'🇹🇭', ID:'🇮🇩', VN:'🇻🇳', MX:'🇲🇽', AR:'🇦🇷', CO:'🇨🇴', GH:'🇬🇭', TZ:'🇹🇿', UG:'🇺🇬', ET:'🇪🇹', JO:'🇯🇴', KW:'🇰🇼', BH:'🇧🇭', QA:'🇶🇦', OM:'🇴🇲', LB:'🇱🇧', IQ:'🇮🇶', MA:'🇲🇦', DZ:'🇩🇿', TN:'🇹🇳' };
+  return map[code] || '🌍';
+};
 
 export default function CreateOrganizationModal({ onClose, onSuccess }) {
   const [step, setStep] = useState(1);
@@ -12,20 +21,24 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
   const [plansLoading, setPlansLoading] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState(null);
   const [billingPeriod, setBillingPeriod] = useState('monthly');
-  const [form, setForm] = useState({ name: '', admin_name: '', admin_email: '', admin_phone: '' });
+  const [form, setForm] = useState({ name: '', slug: '', admin_name: '', admin_email: '', admin_phone: '' });
+  const [slugEdited, setSlugEdited] = useState(false);
+  const [selectedCountry, setSelectedCountry] = useState('PK');
   const [showTrialModal, setShowTrialModal] = useState(false);
   const [trialDefaults, setTrialDefaults] = useState(null);
   const [trialCustomization, setTrialCustomization] = useState(null);
+  const [showPlanCustomModal, setShowPlanCustomModal] = useState(false);
+  const [planCustomization, setPlanCustomization] = useState(null);
 
   const initialValues = useMemo(() => ({
-    name: '', admin_name: '', admin_email: '', admin_phone: '',
+    name: '', slug: '', admin_name: '', admin_email: '', admin_phone: '', country_code: 'PK',
     selectedPlanId: null, billingPeriod: 'monthly',
   }), []);
 
   const currentValues = useMemo(() => ({
-    name: form.name, admin_name: form.admin_name, admin_email: form.admin_email, admin_phone: form.admin_phone,
-    selectedPlanId, billingPeriod,
-  }), [form.name, form.admin_name, form.admin_email, form.admin_phone, selectedPlanId, billingPeriod]);
+    name: form.name, slug: form.slug, admin_name: form.admin_name, admin_email: form.admin_email, admin_phone: form.admin_phone,
+    country_code: selectedCountry, selectedPlanId, billingPeriod,
+  }), [form.name, form.slug, form.admin_name, form.admin_email, form.admin_phone, selectedCountry, selectedPlanId, billingPeriod]);
 
   const { isDirty, handleClose, ConfirmDialog } = useUnsavedChanges(
     initialValues, currentValues, onClose,
@@ -63,14 +76,32 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
   const handleNext = () => { if (!form.name || !form.admin_name || !form.admin_email) return; setStep(2); setError(null); };
   const handleBack = () => { setStep(1); setError(null); };
 
+  const toSlug = (str) => str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+  const handleNameChange = (e) => {
+    const name = e.target.value;
+    setForm(prev => ({
+      ...prev,
+      name,
+      slug: slugEdited ? prev.slug : toSlug(name),
+    }));
+  };
+
+  const handleSlugChange = (e) => {
+    setSlugEdited(true);
+    setForm(prev => ({ ...prev, slug: toSlug(e.target.value) }));
+  };
+
   const handleSubmit = async () => {
     if (!selectedPlanId) { setError('Please select a plan'); return; }
     const isTrial = plans.find(p => p.id === selectedPlanId)?.slug === 'trial';
     setSubmitting(true); setError(null);
     try {
       const payload = {
-        name: form.name, admin_name: form.admin_name, admin_email: form.admin_email,
-        admin_phone: form.admin_phone || undefined, plan_id: selectedPlanId, billing_period: billingPeriod,
+        name: form.name, slug: form.slug || undefined, admin_name: form.admin_name, admin_email: form.admin_email,
+        admin_phone: form.admin_phone ? `${getCountryByCode(selectedCountry).dial} ${form.admin_phone}` : undefined,
+        country_code: selectedCountry,
+        plan_id: selectedPlanId, billing_period: billingPeriod,
       };
       if (isTrial && trialCustomization) {
         payload.customize_trial = true;
@@ -79,6 +110,14 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
         payload.trial_max_users = trialCustomization.max_users;
         payload.trial_max_projects = trialCustomization.max_projects;
         payload.trial_max_storage_gb = trialCustomization.max_storage_gb;
+      }
+      if (planCustomization) {
+        payload.is_custom = true;
+        payload.custom_price_monthly = planCustomization.custom_price_monthly;
+        payload.custom_price_yearly = planCustomization.custom_price_yearly;
+        payload.custom_max_users = planCustomization.custom_max_users;
+        payload.custom_max_projects = planCustomization.custom_max_projects;
+        payload.custom_max_storage_gb = planCustomization.custom_max_storage_gb;
       }
       await api.createOrganization(payload);
       onSuccess(`Organization "${form.name}" created successfully. Credentials emailed to ${form.admin_email}.`);
@@ -144,20 +183,60 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
         <div className="flex-1 overflow-y-auto p-6">
           {step === 1 && (
             <div className="space-y-4">
-              {[
-                { label: 'Company Name *', key: 'name', type: 'text', placeholder: 'Acme Corporation' },
-                { label: 'Admin Name *', key: 'admin_name', type: 'text', placeholder: 'John Smith' },
-                { label: 'Email *', key: 'admin_email', type: 'email', placeholder: 'admin@acme.com' },
-                { label: 'Phone Number', key: 'admin_phone', type: 'tel', placeholder: '03XX-XXXXXXX' },
-              ].map(({ label, key, type, placeholder }) => (
-                <div key={key}>
-                  <label className="block text-sm font-medium mb-1" style={s.textSecondary}>{label}</label>
-                  <input type={type} value={form[key]}
-                    onChange={(e) => setForm(prev => ({ ...prev, [key]: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-                    style={s.input} placeholder={placeholder} />
+              <div>
+                <label className="block text-sm font-medium mb-1" style={s.textSecondary}>Organization Name *</label>
+                <input type="text" value={form.name}
+                  onChange={handleNameChange}
+                  className="w-full px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                  style={s.input} placeholder="Acme Corporation" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1" style={s.textSecondary}>
+                  <span className="flex items-center gap-1.5"><Globe className="w-3.5 h-3.5" /> Slug</span>
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                  <input type="text" value={form.slug}
+                    onChange={handleSlugChange}
+                    className="flex-1 px-3 py-2 rounded-l-lg text-sm focus:ring-2 focus:ring-blue-500"
+                    style={s.input} placeholder="acme-corporation" />
+                  <span className="px-3 py-2 text-sm rounded-r-lg" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-light)', borderLeft: 'none', whiteSpace: 'nowrap' }}>
+                    /org/{form.slug || 'slug'}
+                  </span>
                 </div>
-              ))}
+                <p className="text-xs mt-1" style={s.textMuted}>Auto-generated from name. You can customize it.</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1" style={s.textSecondary}>Admin Name *</label>
+                <input type="text" value={form.admin_name}
+                  onChange={(e) => setForm(prev => ({ ...prev, admin_name: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                  style={s.input} placeholder="John Smith" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1" style={s.textSecondary}>Email *</label>
+                <input type="email" value={form.admin_email}
+                  onChange={(e) => setForm(prev => ({ ...prev, admin_email: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                  style={s.input} placeholder="admin@acme.com" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1" style={s.textSecondary}>Country</label>
+                <CountrySelect value={selectedCountry} onChange={setSelectedCountry} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1" style={s.textSecondary}>Phone Number</label>
+                <div style={{ display: 'flex', gap: 0 }}>
+                  <div style={{ padding: '8px 12px', background: 'var(--bg-hover)', borderRight: '1px solid var(--border-light)', borderRadius: '8px 0 0 8px', fontSize: 13, color: 'var(--text-dark)', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', userSelect: 'none' }}>
+                    <span style={{ fontSize: 14 }}>{flagEmoji(selectedCountry)}</span>
+                    <span style={{ fontWeight: 500 }}>{getCountryByCode(selectedCountry).dial}</span>
+                  </div>
+                  <input type="tel" value={form.admin_phone}
+                    onChange={(e) => setForm(prev => ({ ...prev, admin_phone: formatPhoneByCountry(e.target.value, getCountryByCode(selectedCountry)) }))}
+                    className="flex-1 px-3 py-2 rounded-r-lg text-sm focus:ring-2 focus:ring-blue-500"
+                    style={{ ...s.input, borderRadius: '0 8px 8px 0' }}
+                    placeholder={getCountryByCode(selectedCountry).pattern} />
+                </div>
+              </div>
             </div>
           )}
 
@@ -188,9 +267,16 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
                 <div className="space-y-3">
                   {plans.map((plan) => {
                     const isSelected = selectedPlanId === plan.id;
-                    const price = billingPeriod === 'monthly' ? plan.price_monthly : plan.price_yearly;
+                    const isTrial = plan.slug === 'trial';
+                    const hasCustom = isTrial ? (trialCustomization && isSelected) : (planCustomization && isSelected);
+                    const price = hasCustom && !isTrial
+                      ? (billingPeriod === 'monthly' ? planCustomization.custom_price_monthly : planCustomization.custom_price_yearly)
+                      : (billingPeriod === 'monthly' ? plan.price_monthly : plan.price_yearly);
+                    const users = hasCustom ? (isTrial ? trialCustomization.max_users : planCustomization.custom_max_users) : plan.max_users;
+                    const projects = hasCustom ? (isTrial ? trialCustomization.max_projects : planCustomization.custom_max_projects) : plan.max_projects;
+                    const storage = hasCustom ? (isTrial ? trialCustomization.max_storage_gb : planCustomization.custom_max_storage_gb) : plan.max_storage_gb;
                     return (
-                      <div key={plan.id} onClick={() => setSelectedPlanId(plan.id)}
+                      <div key={plan.id} onClick={() => { setSelectedPlanId(plan.id); if (!isSelected) { setPlanCustomization(null); setTrialCustomization(null); } }}
                         className="relative cursor-pointer rounded-xl border-2 p-4 transition-all hover:shadow-md flex items-center gap-4"
                         style={{
                           borderColor: isSelected ? 'var(--color-primary)' : 'var(--border-light)',
@@ -205,7 +291,7 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
                                 <Check className="w-3 h-3 text-white" />
                               </div>
                             )}
-                            {plan.slug === 'trial' && (
+                            {isTrial && (
                               <span className="px-2 py-0.5 text-xs font-medium rounded-full"
                                 style={{ background: 'rgba(147,51,234,0.12)', color: 'var(--color-primary)' }}>{plan.trial_duration || 14} {(plan.trial_duration_unit || 'days').replace(/s$/, '')} Free</span>
                             )}
@@ -213,60 +299,43 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
                               <span className="px-2 py-0.5 text-xs font-medium rounded-full"
                                 style={{ background: 'var(--color-primary-bg)', color: 'var(--color-primary)' }}>Default</span>
                             )}
+                            {hasCustom && (
+                              <span className="px-2 py-0.5 text-xs font-medium rounded-full"
+                                style={{ background: isTrial ? 'rgba(147,51,234,0.12)' : 'rgba(245,158,11,0.12)', color: isTrial ? '#9333ea' : '#d97706' }}>Custom</span>
+                            )}
                           </div>
                           <p className="text-sm mt-0.5" style={s.textSecondary}>
-                            {plan.slug === 'trial' ? (
-                              <>Free · {plan.max_users} users · {plan.max_projects} projects</>
+                            {isTrial ? (
+                              <>Free · {users === 9999 ? 'Unlimited' : users} users · {projects === 9999 ? 'Unlimited' : projects} projects</>
                             ) : (
                               <>
                                 ${price}/{billingPeriod === 'monthly' ? 'mo' : 'yr'}
                                 <span className="mx-1.5" style={{ color: 'var(--border-light)' }}>·</span>
-                                {plan.max_users === 9999 ? 'Unlimited' : plan.max_users} users
+                                {users === 9999 ? 'Unlimited' : users} users
                                 <span className="mx-1.5" style={{ color: 'var(--border-light)' }}>·</span>
-                                {plan.max_projects === 9999 ? 'Unlimited' : plan.max_projects} projects
+                                {projects === 9999 ? 'Unlimited' : projects} projects
                               </>
                             )}
                           </p>
                         </div>
-                        <div className="text-right text-xs" style={s.textMuted}>{plan.max_storage_gb} GB storage</div>
+                        <div className="flex items-center gap-3">
+                          <div className="text-right text-xs" style={s.textMuted}>{storage === 9999 ? 'Unlimited' : storage} GB storage</div>
+                          {isSelected && (
+                            <button type="button" onClick={(e) => { e.stopPropagation(); isTrial ? setShowTrialModal(true) : setShowPlanCustomModal(true); }}
+                              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors"
+                              style={{
+                                background: hasCustom ? (isTrial ? 'rgba(147,51,234,0.1)' : 'rgba(245,158,11,0.1)') : 'var(--bg-hover)',
+                                color: hasCustom ? (isTrial ? '#9333ea' : '#d97706') : 'var(--text-secondary)',
+                                border: hasCustom ? (isTrial ? '1px solid rgba(147,51,234,0.3)' : '1px solid rgba(245,158,11,0.3)') : '1px solid var(--border-light)',
+                              }}>
+                              <Sliders className="w-3.5 h-3.5" />
+                              {hasCustom ? 'Edit Custom' : 'Custom'}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
-                </div>
-              )}
-
-              {/* Customize Trial Option */}
-              {selectedPlan && selectedPlan.slug === 'trial' && (
-                <div className="mt-4 p-4 rounded-xl border" style={{ borderColor: 'var(--border-light)', background: 'var(--bg-card)' }}>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium" style={s.textHeading}>Trial Configuration</p>
-                      <p className="text-xs mt-0.5" style={s.textMuted}>
-                        {trialCustomization
-                          ? 'Custom settings configured for this organization'
-                          : 'Uses default from Plans page. Optionally customize for this org.'}
-                      </p>
-                    </div>
-                    <button type="button" onClick={() => setShowTrialModal(true)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
-                      style={{
-                        background: trialCustomization ? 'rgba(147,51,234,0.1)' : 'var(--bg-hover)',
-                        color: trialCustomization ? '#9333ea' : 'var(--text-secondary)',
-                        border: trialCustomization ? '1px solid rgba(147,51,234,0.3)' : '1px solid var(--border-light)',
-                      }}>
-                      <Settings2 className="w-3.5 h-3.5" />
-                      {trialCustomization ? 'Edit Trial' : 'Customize Trial'}
-                    </button>
-                  </div>
-                  {trialCustomization && (
-                    <div className="mt-2 flex gap-2 text-xs" style={s.textSecondary}>
-                      <span>{trialCustomization.trial_duration} {trialCustomization.trial_duration_unit}</span>
-                      <span>·</span>
-                      <span>{trialCustomization.max_users} users</span>
-                      <span>·</span>
-                      <span>{trialCustomization.max_projects} projects</span>
-                    </div>
-                  )}
                 </div>
               )}
             </div>
@@ -312,6 +381,24 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
             setShowTrialModal(false);
           }}
           onClose={() => setShowTrialModal(false)}
+        />
+      )}
+      {/* Plan Customization Modal */}
+      {showPlanCustomModal && selectedPlan && (
+        <PlanCustomizeModal
+          plan={selectedPlan}
+          billingPeriod={billingPeriod}
+          initialData={planCustomization}
+          isCustom={!!planCustomization}
+          onSaved={(data) => {
+            setPlanCustomization(data);
+            setShowPlanCustomModal(false);
+          }}
+          onReset={() => {
+            setPlanCustomization(null);
+            setShowPlanCustomModal(false);
+          }}
+          onClose={() => setShowPlanCustomModal(false)}
         />
       )}
       {ConfirmDialog}

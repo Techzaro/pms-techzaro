@@ -223,21 +223,11 @@ function SuperAdminNotifications() {
   };
 
   return (
-    <div className="sanotif-page">
+    <div>
       {/* Header */}
-      <div className="sanotif-header">
-        <div className="sanotif-header-left">
-          <div className="sanotif-header-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-            </svg>
-          </div>
-          <div>
-            <h1 className="sanotif-title">Notifications</h1>
-            <p className="sanotif-subtitle">Stay updated with platform activity</p>
-          </div>
-        </div>
+      <div style={{ marginBottom: 24 }}>
+        <h1 className="text-2xl font-bold" style={{ color: 'var(--text-heading)' }}>Notifications</h1>
+        <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>Stay updated with platform activity</p>
       </div>
 
       {/* Search + Type Filter */}

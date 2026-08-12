@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Building2, Plus, Search, Filter, ChevronRight, X } from 'lucide-react';
+import { Building2, Plus, Search, Filter, ChevronRight, X, Hash } from 'lucide-react';
 import StatusBadge from './components/StatusBadge';
 import Pagination from './components/Pagination';
 import EmptyState from './components/EmptyState';
@@ -99,7 +99,7 @@ export default function OrganizationsPage() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={s.textMuted} />
             <input
-              type="text" placeholder="Search organizations..." value={search}
+              type="text" placeholder="Search by name, slug, or ID..." value={search}
               onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
               className="w-full pl-9 pr-4 py-2 text-sm rounded-lg focus:ring-2 focus:ring-blue-500"
               style={s.input}
@@ -128,7 +128,7 @@ export default function OrganizationsPage() {
               <table className="w-full">
                 <thead>
                   <tr style={s.divider}>
-                    {['Organization', 'Plan', 'Users', 'Projects', 'Status'].map((h) => (
+                    {['ID', 'Organization', 'Plan', 'Users', 'Projects', 'Status'].map((h) => (
                       <th key={h} className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider"
                         style={s.textMuted}>
                         {h}
@@ -149,13 +149,19 @@ export default function OrganizationsPage() {
                         onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
                         <td className="px-5 py-4">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold"
+                            style={{ background: 'var(--color-primary-bg)', color: 'var(--color-primary)', fontFamily: 'monospace' }}>
+                            <Hash className="w-3 h-3" />{org.id}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'var(--color-primary-bg)' }}>
                               <Building2 className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
                             </div>
                             <div className="min-w-0">
                               <p className="text-sm font-semibold truncate" style={s.textHeading}>{org.name}</p>
-                              <p className="text-xs truncate" style={s.textMuted}>{org.slug}.{import.meta.env.VITE_TENANT_DOMAIN || 'pms.test'}</p>
+                              <p className="text-xs truncate" style={s.textMuted}>/org/{org.slug}</p>
                             </div>
                           </div>
                         </td>

@@ -8,12 +8,16 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-dist
 dist-ssr
 dist-check
-.env
-.env.*
 *.local
+
+# ALL env files - NEVER commit
+.env
+.env.staging
+.env.production
+.env.local
+.env.*
 
 # Editor directories and files
 .vscode/*

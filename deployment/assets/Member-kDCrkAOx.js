@@ -1,0 +1,1 @@
+import{Mt as e}from"./index-DTg4FuY1.js";import t from"./Admin-8ZVOc1cO.js";var n=e();function r(){return(0,n.jsx)(t,{})}export{r as default};

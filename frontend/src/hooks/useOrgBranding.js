@@ -32,11 +32,13 @@ export function useUpdateBranding() {
     mutationFn: async (formData) => {
       formData.append("_method", "PUT");
       const token = authToken();
+      const tenantSlug = getTenantSlug();
       const res = await fetch(`${API_URL}/organization-settings/branding`, {
         method: "POST",
         headers: {
           Accept: "application/json",
           Authorization: `Bearer ${token}`,
+          ...(tenantSlug ? { "X-Tenant-ID": tenantSlug } : {}),
         },
         body: formData,
       });

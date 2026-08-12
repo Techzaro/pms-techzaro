@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Eye, Lock, Calendar, Clock, Shield, Save, Loader2 } from 'lucide-react';
-import API_URL from '../../config/api';
-import { getUser, getStoredEmail } from '../../utils/auth';
+import { getSuperAdminUser, superAdminAuthToken } from '../../utils/auth';
+import { api } from './api/superAdminApi';
 import { showSuccessMessage } from '../../utils/notify';
 import '../../pages/UserProfile.css';
 
@@ -30,19 +30,14 @@ export default function SuperAdminMyProfile() {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const user = getUser('admin');
-  const storedEmail = getStoredEmail('admin');
-  const userEmail = user?.email || storedEmail || '';
+  const user = getSuperAdminUser();
+  const userEmail = user?.email || '';
 
   const fetchProfile = async () => {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${API_URL}/super-admin/my-profile?email=${encodeURIComponent(userEmail)}`, {
-        headers: { Accept: 'application/json', 'Content-Type': 'application/json', skipLoader: true },
-      });
-      if (!res.ok) throw new Error('Unable to load profile');
-      const data = await res.json();
+      const data = await api.getMyProfile(userEmail);
       setProfileData(data);
     } catch (err) {
       setError(err.message || 'Failed to load profile');
@@ -80,14 +75,7 @@ export default function SuperAdminMyProfile() {
 
     setSaving(true);
     try {
-      const res = await fetch(`${API_URL}/super-admin/change-password`, {
-        method: 'POST',
-        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: userEmail, old_password: passwordForm.old_password, new_password: passwordForm.new_password }),
-        _notifHandled: true,
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to change password');
+      await api.changePassword(passwordForm.old_password, passwordForm.new_password);
       showSuccessMessage('Password', 'changed');
       setShowPasswordModal(false);
       setPasswordForm({ old_password: '', new_password: '', confirm_password: '' });
