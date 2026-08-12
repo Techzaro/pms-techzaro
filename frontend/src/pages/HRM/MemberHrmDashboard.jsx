@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import API_URL from "../../config/api";
-import { authToken, getUser } from "../../utils/auth";
+import { authToken, getUser, rolePath } from "../../utils/auth";
 import Breadcrumb from "../../components/Breadcrumb";
 import {
   Calendar,
@@ -140,6 +140,10 @@ export default function MemberHrmDashboard() {
   const [formStep, setFormStep] = useState(1);
   const [formResetKey, setFormResetKey] = useState(Date.now());
   const [reqAttachments, setReqAttachments] = useState(null);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+
+  const [appHistorySearch, setAppHistorySearch] = useState("");
+  const [appHistoryFilter, setAppHistoryFilter] = useState("All");
   const [filePreviews, setFilePreviews] = useState([]);
   const [memberLightboxUrl, setMemberLightboxUrl] = useState(null);
 
@@ -598,12 +602,7 @@ export default function MemberHrmDashboard() {
       const token = authToken();
       const formData = new FormData();
       
-      const matchedType = appTypes.find(t => t.name === requestType || t.id === requestType);
-      if (!matchedType) {
-        throw new Error(`Application type '${requestType}' not found in database. Please ask admin to configure this type.`);
-      }
-
-      formData.append("application_type_id", matchedType.id);
+      formData.append("application_type", requestType);
       formData.append("title", data.subject || `${requestType} Request`);
       if (data.comments) formData.append("description", data.comments);
 
@@ -654,16 +653,8 @@ export default function MemberHrmDashboard() {
     setSubmittingReq(true);
     try {
       const token = authToken();
-      const matchedType = appTypes.find(t => t.name === requestCategory || t.id === requestCategory);
-      
-      if (!matchedType) {
-         alert("Please select a valid application type");
-         setSubmittingReq(false);
-         return;
-      }
-
       const formData = new FormData();
-      formData.append("application_type_id", matchedType.id);
+      formData.append("application_type", requestCategory);
       formData.append("title", requestSubject);
       
       if (requestDetails) {
@@ -799,15 +790,17 @@ export default function MemberHrmDashboard() {
   const activeWarning = data?.activeWarning || null;
   const warningsList = data?.warnings || [];
 
+  const isAdminOrManagerView = ["admin", "owner", "manager", "hr_manager", "hr_user"].includes(user?.role?.toLowerCase());
+
   return (
-    <main className="mem-page" id="member-hrm-portal">
+    <main className="mem-page" id="member-hrm-portal" style={isAdminOrManagerView ? { padding: '20px' } : {}}>
       {toast && <div className={`mem-toast mem-toast--${toast.kind}`} role="alert">{toast.message}</div>}
 
 
 
 
       {/* SUB-MODULE CONTENT */}
-      {activeTab === "overview" && (
+      {!isAdminOrManagerView && activeTab === "overview" && (
         <section className="mem-card" id="section-member-summary">
 
           
@@ -927,20 +920,39 @@ export default function MemberHrmDashboard() {
       )}
 
       {/* MEMBER PORTAL HEADER */}
-      <header className="mem-header" id="member-portal-header">
-        <div>
-          <div className="mem-title-row">
-            <h1>Member Enterprise Portal &amp; Work Engine</h1>
-            <span className="mem-live-pill">
-              <ShieldAlert size={14} /> Implemented Policy: <strong>{activePolicy.name || "Standard Working Policy"}</strong> ({activePolicy.weekly_hours || 40.0}h/wk)
-            </span>
+      {!isAdminOrManagerView && (
+        <header className="mem-header" id="member-portal-header">
+          <div>
+            <div className="mem-title-row">
+              <h1>Member Enterprise Portal &amp; Work Engine</h1>
+              <span className="mem-live-pill">
+                <ShieldAlert size={14} /> Implemented Policy: <strong>{activePolicy.name || "Standard Working Policy"}</strong> ({activePolicy.weekly_hours || 40.0}h/wk)
+              </span>
+            </div>
+            <p>Welcome back, <strong>{user.name}</strong> ({user.email}). Track your active shift, leaves, offer letter stipends, and PMS project hours.</p>
           </div>
-          <p>Welcome back, <strong>{user.name}</strong> ({user.email}). Track your active shift, leaves, offer letter stipends, and PMS project hours.</p>
+        </header>
+      )}
+
+      {/* ADMIN/MANAGER "MY APPLICATIONS" HEADER */}
+      {isAdminOrManagerView && activeTab === "applications" && (
+        <div style={{ paddingBottom: '20px' }}>
+          <Breadcrumb items={[{ label: "Enterprise HRM", path: rolePath("hrm") }, { label: "My Applications" }]} />
+          <header className="att-header" style={{ marginBottom: "20px", marginTop: "15px", padding: '20px', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
+            <div>
+              <div className="att-title-row">
+                <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#0f172a', margin: 0 }}>My Application Requests</h1>
+              </div>
+              <p style={{ margin: '8px 0 0', color: '#64748b', fontSize: '14.5px' }}>
+                Submit and track your own personal leave, advance salary, and HR requests. 
+              </p>
+            </div>
+          </header>
         </div>
-      </header>
+      )}
 
       {/* PROMINENT CORPORATE POLICY WARNING ALERT BANNER */}
-      {activeWarning && (
+      {!isAdminOrManagerView && activeWarning && (
         <div
           style={{
             background: activeWarning.status === "Removal Requested" ? "#fffbe6" : "#fef2f2",
@@ -1001,7 +1013,7 @@ export default function MemberHrmDashboard() {
       )}
 
       {/* REAL-TIME LEAVE DECISION ALERT BANNER */}
-      {latestLeaveDecision && (
+      {!isAdminOrManagerView && latestLeaveDecision && (
         <div
           style={{
             background: latestLeaveDecision.status === "Approved" ? "#f0fdf4" : "#fef2f2",
@@ -1044,77 +1056,77 @@ export default function MemberHrmDashboard() {
       )}
 
       {/* SUB-MODULE 1: LIVE WORK SESSION ENGINE BANNER */}
-      <section className="mem-clock-banner" id="section-web-clock-engine">
-        <div className="mem-clock-left">
-          <div className="mem-work-mode-select">
-            <label id="lbl-work-mode">Work Location Mode:</label>
-            <select
-              id="select-work-mode"
-              className="mem-input"
-              value={workMode}
-              onChange={(e) => setWorkMode(e.target.value)}
-              disabled={isWorking}
-            >
-              <option value="Office">🏢 Office Mode (In-House)</option>
-              <option value="WFH">🏡 Work From Home (Remote)</option>
-            </select>
-          </div>
+          <section className="mem-clock-banner" id="section-web-clock-engine">
+            <div className="mem-clock-left">
+              <div className="mem-work-mode-select">
+                <label id="lbl-work-mode">Work Location Mode:</label>
+                <select
+                  id="select-work-mode"
+                  className="mem-input"
+                  value={workMode}
+                  onChange={(e) => setWorkMode(e.target.value)}
+                  disabled={isWorking}
+                >
+                  <option value="Office">🏢 Office Mode (In-House)</option>
+                  <option value="WFH">🏡 Work From Home (Remote)</option>
+                </select>
+              </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <span className={`mem-status-badge ${isPaused ? "mem-status-badge--paused" : isWorking ? "mem-status-badge--live" : "mem-status-badge--off"}`}>
-              {isPaused ? "⏸ PAUSED (Break Time Deducted)" : isWorking ? "🟢 LIVE ON DUTY" : "⏹ OFF DUTY"}
-            </span>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <span className={`mem-status-badge ${isPaused ? "mem-status-badge--paused" : isWorking ? "mem-status-badge--live" : "mem-status-badge--off"}`}>
+                  {isPaused ? "⏸ PAUSED (Break Time Deducted)" : isWorking ? "🟢 LIVE ON DUTY" : "⏹ OFF DUTY"}
+                </span>
 
-            {lastCapturedTime && (
-              <span style={{ fontSize: "11px", color: "#64748b" }}>
-                📸 Last Auto Proof: {lastCapturedTime}
-              </span>
-            )}
-          </div>
+                {lastCapturedTime && (
+                  <span style={{ fontSize: "11px", color: "#64748b" }}>
+                    📸 Last Auto Proof: {lastCapturedTime}
+                  </span>
+                )}
+              </div>
 
-          {wfhToday && wfhToday.status === "Rejected" && (
-            <div style={{ background: "#fef2f2", border: "1px solid #fecaca", padding: "8px 12px", borderRadius: "6px", fontSize: "12px", color: "#991b1b" }}>
-              ⚠️ <strong>WFH Request Rejected:</strong> {wfhToday.rejection_reason || "In-office attendance required today."}
+              {wfhToday && wfhToday.status === "Rejected" && (
+                <div style={{ background: "#fef2f2", border: "1px solid #fecaca", padding: "8px 12px", borderRadius: "6px", fontSize: "12px", color: "#991b1b" }}>
+                  ⚠️ <strong>WFH Request Rejected:</strong> {wfhToday.rejection_reason || "In-office attendance required today."}
+                </div>
+              )}
             </div>
-          )}
-        </div>
 
-        <div className="mem-clock-right">
-          <div className="mem-timer-box">
-            <span className="mem-timer-label">Today's Active Working Time (Hours, Mins, Secs):</span>
-            <span className="mem-timer-digits" style={{ fontSize: "20px", color: "#0082ff" }}>
-              {formatDetailedTime(workSeconds)}
-            </span>
-          </div>
+            <div className="mem-clock-right">
+              <div className="mem-timer-box">
+                <span className="mem-timer-label">Today's Active Working Time (Hours, Mins, Secs):</span>
+                <span className="mem-timer-digits" style={{ fontSize: "20px", color: "#0082ff" }}>
+                  {formatDetailedTime(workSeconds)}
+                </span>
+              </div>
 
-          <div className="mem-clock-actions">
-            {!isWorking ? (
-              <button id="btn-start-work" className="mem-btn mem-btn--primary" onClick={handleStartWork}>
-                <Play size={20} /> {consentAgreed ? "▶️ Start Work & Share Screen" : "▶️ Start Work Session"}
-              </button>
-            ) : (
-              <>
-                {isPaused ? (
-                  <button id="btn-resume-work" className="mem-btn" style={{ background: "#3b82f6", color: "#fff" }} onClick={handleResumeWork}>
-                    <Play size={18} /> ▶️ Resume Session
+              <div className="mem-clock-actions">
+                {!isWorking ? (
+                  <button id="btn-start-work" className="mem-btn mem-btn--primary" onClick={handleStartWork}>
+                    <Play size={20} /> {consentAgreed ? "▶️ Start Work & Share Screen" : "▶️ Start Work Session"}
                   </button>
                 ) : (
-                  <button id="btn-pause-work" className="mem-btn" style={{ background: "#f59e0b", color: "#fff" }} onClick={handlePauseWork}>
-                    <Pause size={18} /> ⏸ Pause (Break)
-                  </button>
+                  <>
+                    {isPaused ? (
+                      <button id="btn-resume-work" className="mem-btn" style={{ background: "#3b82f6", color: "#fff" }} onClick={handleResumeWork}>
+                        <Play size={18} /> ▶️ Resume Session
+                      </button>
+                    ) : (
+                      <button id="btn-pause-work" className="mem-btn" style={{ background: "#f59e0b", color: "#fff" }} onClick={handlePauseWork}>
+                        <Pause size={18} /> ⏸ Pause (Break)
+                      </button>
+                    )}
+
+                    <button id="btn-end-work" className="mem-btn" style={{ background: "#ef4444", color: "#fff" }} onClick={handleEndWork}>
+                      <UserX size={20} /> ⏹ End Work Session
+                    </button>
+                  </>
                 )}
+              </div>
+            </div>
+          </section>
 
-                <button id="btn-end-work" className="mem-btn" style={{ background: "#ef4444", color: "#fff" }} onClick={handleEndWork}>
-                  <UserX size={20} /> ⏹ End Work Session
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* SCREEN CAPTURE & CONSENT TOGGLE CARD */}
-      <section className="mem-card" style={{ background: consentAgreed ? "#f0fdf4" : "#eff6ff", border: consentAgreed ? "1px solid #bbf7d0" : "1px solid #bfdbfe", marginBottom: "20px" }}>
+          {/* SCREEN CAPTURE & CONSENT TOGGLE CARD */}
+          <section className="mem-card" style={{ background: consentAgreed ? "#f0fdf4" : "#eff6ff", border: consentAgreed ? "1px solid #bbf7d0" : "1px solid #bfdbfe", marginBottom: "20px" }}>
         <h2 className="mem-card-title">
           <ShieldAlert size={20} color={consentAgreed ? "#166534" : "#1d4ed8"} /> Screen Sharing &amp; Monitoring Settings
         </h2>
@@ -1226,24 +1238,93 @@ export default function MemberHrmDashboard() {
             </p>
           </div>
 
-          {memberRequests.length === 0 && leaveHistory.length === 0 ? (
-            <div className="mem-table-empty">
-              No applications submitted yet.
-            </div>
-          ) : (
-            <div className="mem-table-wrap">
-              <table className="mem-table">
-                <thead>
-                  <tr>
-                    <th>Request Type</th>
-                    <th>Subject / Details</th>
-                    <th>Status</th>
-                    <th>Submitted Date</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...memberRequests, ...leaveHistory].sort((a,b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)).map((r) => (
+          {(() => {
+            const allHistoryItems = [...memberRequests, ...leaveHistory];
+            const historyTotal = allHistoryItems.length;
+            const historyPending = allHistoryItems.filter(r => !r.status || r.status === "Pending" || r.status === "In Progress" || r.status === "Additional Information Required").length;
+            const historyApproved = allHistoryItems.filter(r => r.status === "Approved" || r.status === "Completed").length;
+            const historyRejected = allHistoryItems.filter(r => r.status === "Rejected" || r.status === "Cancelled").length;
+
+            const filteredHistory = allHistoryItems
+              .filter(r => {
+                if (appHistoryFilter !== "All") {
+                  const s = r.status || "Pending";
+                  if (appHistoryFilter === "Pending" && !["Pending", "In Progress", "Additional Information Required"].includes(s)) return false;
+                  if (appHistoryFilter === "Approved" && !["Approved", "Completed"].includes(s)) return false;
+                  if (appHistoryFilter === "Rejected" && !["Rejected", "Cancelled"].includes(s)) return false;
+                }
+                if (appHistorySearch.trim()) {
+                  const term = appHistorySearch.toLowerCase();
+                  const type = (r.category || r.leave_type || r.application_type || r.name || "").toLowerCase();
+                  const subj = (r.subject || r.title || r.reason || "").toLowerCase();
+                  if (!type.includes(term) && !subj.includes(term)) return false;
+                }
+                return true;
+              })
+              .sort((a,b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+
+            return (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px', marginBottom: '20px' }}>
+                  <div style={{ padding: '16px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '24px', fontWeight: '700', color: '#1e293b' }}>{historyTotal}</div>
+                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Applications</div>
+                  </div>
+                  <div style={{ padding: '16px', background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: '8px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '24px', fontWeight: '700', color: '#b45309' }}>{historyPending}</div>
+                    <div style={{ fontSize: '12px', color: '#b45309', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Pending Review</div>
+                  </div>
+                  <div style={{ padding: '16px', background: '#ecfdf5', border: '1px solid #d1fae5', borderRadius: '8px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '24px', fontWeight: '700', color: '#047857' }}>{historyApproved}</div>
+                    <div style={{ fontSize: '12px', color: '#047857', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Approved</div>
+                  </div>
+                  <div style={{ padding: '16px', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '8px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '24px', fontWeight: '700', color: '#b91c1c' }}>{historyRejected}</div>
+                    <div style={{ fontSize: '12px', color: '#b91c1c', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Rejected</div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: '200px', position: 'relative' }}>
+                    <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                    <input 
+                      type="text" 
+                      placeholder="Search applications..." 
+                      value={appHistorySearch}
+                      onChange={(e) => setAppHistorySearch(e.target.value)}
+                      style={{ width: '100%', padding: '10px 10px 10px 36px', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '13px' }}
+                    />
+                  </div>
+                  <select 
+                    value={appHistoryFilter}
+                    onChange={(e) => setAppHistoryFilter(e.target.value)}
+                    style={{ padding: '10px 16px', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '13px', background: 'white' }}
+                  >
+                    <option value="All">All Statuses</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Approved">Approved</option>
+                    <option value="Rejected">Rejected</option>
+                  </select>
+                </div>
+
+                {filteredHistory.length === 0 ? (
+                  <div className="mem-table-empty">
+                    {allHistoryItems.length === 0 ? "No applications submitted yet." : "No applications found matching your criteria."}
+                  </div>
+                ) : (
+                  <div className="mem-table-wrap">
+                    <table className="mem-table">
+                      <thead>
+                        <tr>
+                          <th>Request Type</th>
+                          <th>Subject / Details</th>
+                          <th>Status</th>
+                          <th>Submitted Date</th>
+                          <th>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredHistory.map((r) => (
                     <tr key={r.id}>
                       <td style={{ fontWeight: "600", color: "var(--text-heading)" }}>{r.category || r.leave_type || r.application_type || r.name}</td>
                       <td style={{ fontWeight: "600", color: "var(--text-dark)", maxWidth: "250px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -1263,11 +1344,14 @@ export default function MemberHrmDashboard() {
                         </button>
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </section>
       )}
 

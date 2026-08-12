@@ -42,6 +42,10 @@ function Sidebar() {
         sessionStorage.setItem("hrm_recruitmentOpen", "false");
         setWorkforceOpen(false);
         sessionStorage.setItem("hrm_workforceOpen", "false");
+        setSettingsOpen(false);
+        sessionStorage.setItem("hrm_settingsOpen", "false");
+        setApplicationsOpen(false);
+        sessionStorage.setItem("hrm_applicationsOpen", "false");
       }
       return next;
     });
@@ -61,6 +65,10 @@ function Sidebar() {
         sessionStorage.setItem("hrm_recruitmentOpen", "false");
         setWorkforceOpen(false);
         sessionStorage.setItem("hrm_workforceOpen", "false");
+        setSettingsOpen(false);
+        sessionStorage.setItem("hrm_settingsOpen", "false");
+        setApplicationsOpen(false);
+        sessionStorage.setItem("hrm_applicationsOpen", "false");
       }
       return next;
     });
@@ -80,6 +88,10 @@ function Sidebar() {
         sessionStorage.setItem("hrm_performanceOpen", "false");
         setWorkforceOpen(false);
         sessionStorage.setItem("hrm_workforceOpen", "false");
+        setSettingsOpen(false);
+        sessionStorage.setItem("hrm_settingsOpen", "false");
+        setApplicationsOpen(false);
+        sessionStorage.setItem("hrm_applicationsOpen", "false");
       }
       return next;
     });
@@ -99,6 +111,10 @@ function Sidebar() {
         sessionStorage.setItem("hrm_performanceOpen", "false");
         setRecruitmentOpen(false);
         sessionStorage.setItem("hrm_recruitmentOpen", "false");
+        setSettingsOpen(false);
+        sessionStorage.setItem("hrm_settingsOpen", "false");
+        setApplicationsOpen(false);
+        sessionStorage.setItem("hrm_applicationsOpen", "false");
       }
       return next;
     });
@@ -116,8 +132,29 @@ function Sidebar() {
   const location = useLocation();
 
   const isMemberRole =
-    user?.role?.toLowerCase() === "member" ||
+    ["member", "team_lead", "guest"].includes(user?.role?.toLowerCase()) ||
     location.pathname.toLowerCase().includes("hrm/member-dashboard");
+
+  const [isWorkflowApprover, setIsWorkflowApprover] = useState(false);
+
+  useEffect(() => {
+    if (isMemberRole) {
+      const checkApprover = async () => {
+        try {
+          const res = await fetch(`${API_URL}/hrm/workflows/check-approver`, {
+            headers: { Authorization: `Bearer ${authToken()}` }
+          });
+          const json = await res.json();
+          if (json.success && json.is_approver) {
+            setIsWorkflowApprover(true);
+          }
+        } catch (e) {
+          // ignore
+        }
+      };
+      checkApprover();
+    }
+  }, [isMemberRole]);
 
   const isActive = (page) => location.pathname.toLowerCase().endsWith(page.toLowerCase());
   const isActiveOrStart = (page) => location.pathname.toLowerCase().includes(page.toLowerCase());
@@ -129,13 +166,36 @@ function Sidebar() {
     return currentTab === tabVal;
   };
 
-  const isApplicationsRoute = location.pathname.toLowerCase().includes("hrm/applications");
+  const isApplicationsRoute = location.pathname.toLowerCase().includes("hrm/applications") || location.pathname.toLowerCase().includes("hrm/my-applications");
 
   const isPerformanceRoute = location.pathname.toLowerCase().includes("hrm/performance");
   const isPerformanceTabActive = (tabVal) => {
     if (!isPerformanceRoute) return false;
     const currentTab = new URLSearchParams(location.search).get("tab") || "utilization";
     return currentTab === tabVal;
+  };
+
+  const [settingsOpen, setSettingsOpen] = useState(
+    () => sessionStorage.getItem("hrm_settingsOpen") === "true"
+  );
+  const toggleSettings = () => {
+    setSettingsOpen((prev) => {
+      const next = !prev;
+      sessionStorage.setItem("hrm_settingsOpen", next);
+      if (next) {
+        setAttendanceOpen(false);
+        sessionStorage.setItem("hrm_attendanceOpen", "false");
+        setPerformanceOpen(false);
+        sessionStorage.setItem("hrm_performanceOpen", "false");
+        setRecruitmentOpen(false);
+        sessionStorage.setItem("hrm_recruitmentOpen", "false");
+        setWorkforceOpen(false);
+        sessionStorage.setItem("hrm_workforceOpen", "false");
+        setApplicationsOpen(false);
+        sessionStorage.setItem("hrm_applicationsOpen", "false");
+      }
+      return next;
+    });
   };
 
   const isMemberDashboardRoute = location.pathname.toLowerCase().includes("hrm/member-dashboard");
@@ -145,10 +205,34 @@ function Sidebar() {
     return currentTab === tabVal;
   };
 
+  const [applicationsOpen, setApplicationsOpen] = useState(
+    () => sessionStorage.getItem("hrm_applicationsOpen") === "true"
+  );
+  const toggleApplications = () => {
+    setApplicationsOpen((prev) => {
+      const next = !prev;
+      sessionStorage.setItem("hrm_applicationsOpen", next);
+      if (next) {
+        setAttendanceOpen(false);
+        sessionStorage.setItem("hrm_attendanceOpen", "false");
+        setPerformanceOpen(false);
+        sessionStorage.setItem("hrm_performanceOpen", "false");
+        setRecruitmentOpen(false);
+        sessionStorage.setItem("hrm_recruitmentOpen", "false");
+        setWorkforceOpen(false);
+        sessionStorage.setItem("hrm_workforceOpen", "false");
+        setSettingsOpen(false);
+        sessionStorage.setItem("hrm_settingsOpen", "false");
+      }
+      return next;
+    });
+  };
+
   // Auto expand dropdowns based on current route
   useEffect(() => {
     const isRecruitmentRoute = isActiveOrStart("hrm/recruitment") || isActiveOrStart("hrm/offer-letters");
     const isWorkforceRoute = isActiveOrStart("hrm/workforce") || isActiveOrStart("hrm/documents");
+    const isSettingsRoute = isActiveOrStart("hrm/workflow-settings") || isActiveOrStart("hrm/settings");
 
     if (isAttendanceRoute) {
       setAttendanceOpen(true);
@@ -159,6 +243,10 @@ function Sidebar() {
       sessionStorage.setItem("hrm_recruitmentOpen", "false");
       setWorkforceOpen(false);
       sessionStorage.setItem("hrm_workforceOpen", "false");
+      setSettingsOpen(false);
+      sessionStorage.setItem("hrm_settingsOpen", "false");
+      setApplicationsOpen(false);
+      sessionStorage.setItem("hrm_applicationsOpen", "false");
     } else if (isPerformanceRoute) {
       setPerformanceOpen(true);
       sessionStorage.setItem("hrm_performanceOpen", "true");
@@ -168,6 +256,10 @@ function Sidebar() {
       sessionStorage.setItem("hrm_recruitmentOpen", "false");
       setWorkforceOpen(false);
       sessionStorage.setItem("hrm_workforceOpen", "false");
+      setSettingsOpen(false);
+      sessionStorage.setItem("hrm_settingsOpen", "false");
+      setApplicationsOpen(false);
+      sessionStorage.setItem("hrm_applicationsOpen", "false");
     } else if (isRecruitmentRoute) {
       setRecruitmentOpen(true);
       sessionStorage.setItem("hrm_recruitmentOpen", "true");
@@ -177,6 +269,10 @@ function Sidebar() {
       sessionStorage.setItem("hrm_performanceOpen", "false");
       setWorkforceOpen(false);
       sessionStorage.setItem("hrm_workforceOpen", "false");
+      setSettingsOpen(false);
+      sessionStorage.setItem("hrm_settingsOpen", "false");
+      setApplicationsOpen(false);
+      sessionStorage.setItem("hrm_applicationsOpen", "false");
     } else if (isWorkforceRoute) {
       setWorkforceOpen(true);
       sessionStorage.setItem("hrm_workforceOpen", "true");
@@ -186,6 +282,36 @@ function Sidebar() {
       sessionStorage.setItem("hrm_performanceOpen", "false");
       setRecruitmentOpen(false);
       sessionStorage.setItem("hrm_recruitmentOpen", "false");
+      setSettingsOpen(false);
+      sessionStorage.setItem("hrm_settingsOpen", "false");
+      setApplicationsOpen(false);
+      sessionStorage.setItem("hrm_applicationsOpen", "false");
+    } else if (isSettingsRoute) {
+      setSettingsOpen(true);
+      sessionStorage.setItem("hrm_settingsOpen", "true");
+      setAttendanceOpen(false);
+      sessionStorage.setItem("hrm_attendanceOpen", "false");
+      setPerformanceOpen(false);
+      sessionStorage.setItem("hrm_performanceOpen", "false");
+      setRecruitmentOpen(false);
+      sessionStorage.setItem("hrm_recruitmentOpen", "false");
+      setWorkforceOpen(false);
+      sessionStorage.setItem("hrm_workforceOpen", "false");
+      setApplicationsOpen(false);
+      sessionStorage.setItem("hrm_applicationsOpen", "false");
+    } else if (isApplicationsRoute) {
+      setApplicationsOpen(true);
+      sessionStorage.setItem("hrm_applicationsOpen", "true");
+      setAttendanceOpen(false);
+      sessionStorage.setItem("hrm_attendanceOpen", "false");
+      setPerformanceOpen(false);
+      sessionStorage.setItem("hrm_performanceOpen", "false");
+      setRecruitmentOpen(false);
+      sessionStorage.setItem("hrm_recruitmentOpen", "false");
+      setWorkforceOpen(false);
+      sessionStorage.setItem("hrm_workforceOpen", "false");
+      setSettingsOpen(false);
+      sessionStorage.setItem("hrm_settingsOpen", "false");
     } else {
       setAttendanceOpen(false);
       sessionStorage.setItem("hrm_attendanceOpen", "false");
@@ -195,6 +321,10 @@ function Sidebar() {
       sessionStorage.setItem("hrm_recruitmentOpen", "false");
       setWorkforceOpen(false);
       sessionStorage.setItem("hrm_workforceOpen", "false");
+      setSettingsOpen(false);
+      sessionStorage.setItem("hrm_settingsOpen", "false");
+      setApplicationsOpen(false);
+      sessionStorage.setItem("hrm_applicationsOpen", "false");
     }
   }, [location.pathname, location.search]);
 
@@ -218,28 +348,28 @@ function Sidebar() {
   const toggleMobile = () => setIsMobileOpen((prev) => !prev);
   const toggleTablet = () => setIsTabletExpanded((prev) => !prev);
 
+  /** Collapse tablet sidebar when the mouse leaves (tablet viewport only). */
+  const handleMouseLeave = () => {
+    if (window.innerWidth <= 1200 && window.innerWidth >= 769) {
+      setIsTabletExpanded(false);
+    }
+  };
+
+  /** Expand tablet sidebar when clicking inside it (tablet viewport only). */
+  const handleSidebarClick = (e) => {
+    if (window.innerWidth <= 1200 && window.innerWidth >= 769) {
+      e.stopPropagation();
+      setIsTabletExpanded(true);
+    }
+  };
+
   return (
     <>
       <div
         className={`sidebar ${isMobileOpen ? "sidebar--open" : ""} ${isTabletExpanded ? "sidebar--tablet-expanded" : ""}`}
+        onMouseLeave={handleMouseLeave}
+        onClick={handleSidebarClick}
       >
-        {/* Mobile header */}
-        <div className="sidebar-mobile-header">
-          <button className="sidebar-close-btn" onClick={toggleMobile} aria-label="Close sidebar">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <path d="M18 6L6 18" />
-              <path d="M6 6L18 18" />
-            </svg>
-          </button>
-          <div className="sidebar-logo-box">
-            <b>TX</b>
-          </div>
-          <div className="sidebar-logo-text">
-            <h3>Techxaro</h3>
-            <span>HRM Portal</span>
-          </div>
-        </div>
-
         <div>
           {/* Main Landing Link */}
           <Link
@@ -263,7 +393,7 @@ function Sidebar() {
                   onClick={toggleRecruitment}
                 >
                   <MdWork />
-                  <span style={{ flex: 1 }}>Hiring &amp; Onboarding</span>
+                  <span style={{ flex: 1 }}>Hiring</span>
                   <MdKeyboardArrowDown
                     size={18}
                     style={{
@@ -301,7 +431,7 @@ function Sidebar() {
                   onClick={toggleWorkforce}
                 >
                   <MdPeople />
-                  <span style={{ flex: 1 }}>Workforce &amp; Directory</span>
+                  <span style={{ flex: 1 }}>Workforce</span>
                   <MdKeyboardArrowDown
                     size={18}
                     style={{
@@ -339,7 +469,7 @@ function Sidebar() {
                   onClick={toggleAttendance}
                 >
                   <MdCalendarToday />
-                  <span style={{ flex: 1 }}>Attendance &amp; Leave</span>
+                  <span style={{ flex: 1 }}>Attendance</span>
                   <MdKeyboardArrowDown
                     size={18}
                     style={{
@@ -397,14 +527,44 @@ function Sidebar() {
               </div>
 
               {/* Applications */}
-              <Link
-                to={rolePath("hrm/applications")}
-                className={`sidebar-link ${isApplicationsRoute ? "active" : ""}`}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <MdFactCheck />
-                <span>Applications</span>
-              </Link>
+              {["admin", "owner", "manager", "hr_manager", "hr_user"].includes(user?.role) && (
+                <div
+                  className={`sidebar-dropdown-group ${applicationsOpen ? "open" : ""} ${isApplicationsRoute || isMemberDashboardRoute ? "active" : ""}`}
+                >
+                  <div
+                    className="sidebar-dropdown-header"
+                    onClick={toggleApplications}
+                  >
+                    <MdFactCheck />
+                    <span style={{ flex: 1 }}>Applications</span>
+                    <MdKeyboardArrowDown
+                      size={18}
+                      style={{
+                        transition: "transform 0.2s",
+                        transform: applicationsOpen ? "rotate(180deg)" : "rotate(0deg)",
+                      }}
+                    />
+                  </div>
+                  {applicationsOpen && (
+                    <div className="sidebar-sub-links">
+                      <Link
+                        to={rolePath("hrm/applications")}
+                        className={`sidebar-sub-link ${isActiveOrStart("hrm/applications") ? "active" : ""}`}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Application Approvals
+                      </Link>
+                      <Link
+                        to={rolePath("hrm/my-applications")}
+                        className={`sidebar-sub-link ${isActiveOrStart("hrm/my-applications") ? "active" : ""}`}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        My Applications
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Performance & Evaluation Dropdown */}
               <div
@@ -415,7 +575,7 @@ function Sidebar() {
                   onClick={togglePerformance}
                 >
                   <MdBarChart />
-                  <span style={{ flex: 1 }}>Performance &amp; Evaluation</span>
+                  <span style={{ flex: 1 }}>Performance</span>
                   <MdKeyboardArrowDown
                     size={18}
                     style={{
@@ -482,10 +642,10 @@ function Sidebar() {
                 onClick={(e) => e.stopPropagation()}
               >
                 <MdSchool />
-                <span>Training &amp; Learning</span>
+                <span>Training</span>
               </Link>
 
-              <hr />
+            
 
               {/* HR Reports & Analytics */}
               <Link
@@ -494,12 +654,57 @@ function Sidebar() {
                 onClick={(e) => e.stopPropagation()}
               >
                 <MdBarChart />
-                <span>HR Reports &amp; Analytics</span>
+                <span>HR Reports</span>
               </Link>
+
+          
+
+              {/* Settings Dropdown */}
+              {["admin", "owner"].includes(user?.role) && (
+                <div
+                  className={`sidebar-dropdown-group ${settingsOpen ? "open" : ""} ${isActiveOrStart("hrm/settings") || isActiveOrStart("hrm/workflow-settings") ? "active" : ""}`}
+                >
+                  <div
+                    className="sidebar-dropdown-header"
+                    onClick={toggleSettings}
+                  >
+                    <MdFactCheck />
+                    <span style={{ flex: 1 }}>Settings</span>
+                    <MdKeyboardArrowDown
+                      size={18}
+                      style={{
+                        transition: "transform 0.2s",
+                        transform: settingsOpen ? "rotate(180deg)" : "rotate(0deg)",
+                      }}
+                    />
+                  </div>
+                  {settingsOpen && (
+                    <div className="sidebar-sub-links">
+                      <Link
+                        to={rolePath("hrm/workflow-settings")}
+                        className={`sidebar-sub-link ${isActiveOrStart("hrm/workflow-settings") ? "active" : ""}`}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Application Workflow
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           ) : (
             /* MEMBER HUB NAVIGATION LINKS */
             <>
+              {(["team_lead"].includes(user?.role) || isWorkflowApprover) && (
+                <Link
+                  to={rolePath("hrm/applications")}
+                  className={`sidebar-link ${isApplicationsRoute ? "active" : ""}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <MdFactCheck />
+                  <span>{user?.role === "team_lead" ? "Team Applications" : "Application Approvals"}</span>
+                </Link>
+              )}
                <Link
                 to={rolePath("hrm/member-dashboard?tab=corrections")}
                 className={`sidebar-link ${isMemberTabActive("corrections") ? "active" : ""}`}

@@ -26,13 +26,13 @@ use App\Http\Controllers\DraftController;
 use App\Http\Controllers\CredentialController;
 use App\Http\Controllers\HrmRecruitmentController;
 use App\Http\Controllers\HrmAttendanceController;
-use App\Http\Controllers\HrmMemberPortalController;
+use App\Http\Controllers\ApplicationController;
 use App\Http\Controllers\HrmGlobalSettingsController;
 use App\Http\Controllers\HrmShiftController;
 use App\Http\Controllers\HrmWarningController;
 use App\Http\Controllers\HrmPerformanceController;
 use App\Http\Controllers\HrmApplicationHistoryController;
-use App\Http\Controllers\HrmApplicationTypeController;
+
 use App\Http\Controllers\NotificationSettingController;
 
 /*
@@ -696,8 +696,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/hrm/leaves/{id}', [HrmAttendanceController::class, 'respondLeaveRequest']);
 
     // Member Self-Service Portal Routes
-    Route::get('/hrm/member/summary', [HrmMemberPortalController::class, 'getMemberDashboardSummary']);
-    Route::post('/hrm/member/request-form', [HrmMemberPortalController::class, 'submitMemberRequest']);
+    Route::get('/hrm/member/summary', [ApplicationController::class, 'getMemberDashboardSummary']);
+    Route::post('/hrm/member/request-form', [\App\Http\Controllers\ApplicationController::class, 'submitMemberRequest']);
+    Route::get('/hrm/member/application-context', [\App\Http\Controllers\ApplicationController::class, 'getApplicationContext']);
     Route::patch('/hrm/member/requests/{id}', [HrmAttendanceController::class, 'respondMemberRequest']);
     Route::post('/hrm/member/requests/{id}', [HrmAttendanceController::class, 'respondMemberRequest']);
 
@@ -736,11 +737,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/hrm/application-history/all/{id}/status', [HrmApplicationHistoryController::class, 'updateStatus']);
 
     // Dynamic Admin Custom Application Types Routes
-    Route::get('/hrm/application-types', [HrmApplicationTypeController::class, 'index']);
-    Route::post('/hrm/application-types', [HrmApplicationTypeController::class, 'store']);
-    Route::patch('/hrm/application-types/{id}', [HrmApplicationTypeController::class, 'update']);
-    Route::put('/hrm/application-types/{id}', [HrmApplicationTypeController::class, 'update']);
-    Route::delete('/hrm/application-types/{id}', [HrmApplicationTypeController::class, 'destroy']);
+
+
+    // Dynamic Approval Workflow Builder Routes
+    Route::get('/hrm/workflows', [\App\Http\Controllers\HrmWorkflowController::class, 'index']);
+    Route::get('/hrm/workflows/check-approver', [\App\Http\Controllers\HrmWorkflowController::class, 'checkApprover']);
+    Route::get('/hrm/workflows/department-users', [\App\Http\Controllers\HrmWorkflowController::class, 'getDepartmentUsers']);
+    Route::get('/hrm/workflows/departments', [\App\Http\Controllers\HrmWorkflowController::class, 'getDepartments']);
+    Route::get('/hrm/workflows/organization-roles', [\App\Http\Controllers\HrmWorkflowController::class, 'getOrganizationRoles']);
+    Route::post('/hrm/workflows', [\App\Http\Controllers\HrmWorkflowController::class, 'save']);
+    Route::delete('/hrm/workflows/{id}', [\App\Http\Controllers\HrmWorkflowController::class, 'destroy']);
 
     // Performance & Evaluation Routes
     Route::get('/hrm/performance/summary', [HrmPerformanceController::class, 'getPerformanceSummary']);

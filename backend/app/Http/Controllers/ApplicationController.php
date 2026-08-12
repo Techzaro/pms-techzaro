@@ -9,11 +9,78 @@ use Illuminate\Support\Facades\Schema;
 use App\Models\HrmCandidate;
 use App\Models\HrmOfferLetter;
 
-class HrmMemberPortalController extends Controller
+class ApplicationController extends Controller
 {
     private function resolveAuth(Request $request)
     {
         return $request->user();
+    }
+
+    public function getApplicationContext(Request $request)
+    {
+        $user = $this->resolveAuth($request);
+        if (!$user) return response()->json(['success' => false, 'message' => 'Unauthenticated.'], 401);
+
+        $type = $request->query('type');
+        $context = [];
+        $metrics = [];
+
+        // Common metrics (Total past requests of this type)
+        $totalRequests = \App\Models\HrmMemberRequest::where('employee_id', $user->id)
+            ->where('application_type', $type)
+            ->count();
+            
+        $approvedRequests = \App\Models\HrmMemberRequest::where('employee_id', $user->id)
+            ->where('application_type', $type)
+            ->where('status', 'Approved')
+            ->count();
+
+        // Categorize by exact requested type
+        if (in_array($type, ['Full Day Leave', 'Half Day Leave', 'Leave Encashment', 'Work From Home Request'])) {
+            $metrics[] = ['label' => 'Total Leaves Requested', 'value' => $totalRequests, 'icon' => 'calendar'];
+            $metrics[] = ['label' => 'Approved Leaves', 'value' => $approvedRequests, 'icon' => 'check-circle'];
+            $metrics[] = ['label' => 'Remaining Leaves', 'value' => max(0, 20 - $approvedRequests), 'icon' => 'alert-circle', 'subtext' => '(Assuming 20/yr quota)'];
+        } 
+        else if ($type === 'Advance Salary' || $type === 'Loan Request') {
+            $metrics[] = ['label' => 'Current Gross Salary', 'value' => number_format($user->gross_salary ?: 0, 2), 'icon' => 'banknote'];
+            
+            // Calculate total advances taken
+            $totalAdvances = \App\Models\HrmMemberRequest::with('fields')->where('employee_id', $user->id)
+                ->whereIn('application_type', ['Advance Salary', 'Loan Request'])
+                ->where('status', 'Approved')
+                ->get()
+                ->sum(function($req) {
+                    $amountField = $req->fields->firstWhere('field_name', 'amount');
+                    return $amountField ? (float) $amountField->field_value : 0;
+                });
+                
+            $metrics[] = ['label' => 'Total Advanced / Loaned', 'value' => number_format($totalAdvances, 2), 'icon' => 'pie-chart'];
+            $metrics[] = ['label' => 'Total Requests', 'value' => $totalRequests, 'icon' => 'file-text'];
+        }
+        else if ($type === 'Promotion Request' || $type === 'Change/Transfer Request') {
+            $metrics[] = ['label' => 'Current Designation', 'value' => $user->designation ?: 'N/A', 'icon' => 'briefcase'];
+            $metrics[] = ['label' => 'Current Department', 'value' => $user->department ?: 'N/A', 'icon' => 'building'];
+            
+            $tenure = 'N/A';
+            if ($user->job_started_date) {
+                $start = \Carbon\Carbon::parse($user->job_started_date);
+                $tenure = $start->diffForHumans(null, true);
+            }
+            $metrics[] = ['label' => 'Tenure', 'value' => $tenure, 'icon' => 'clock'];
+        }
+        else {
+            // Default generic context
+            $metrics[] = ['label' => 'Total Past Requests', 'value' => $totalRequests, 'icon' => 'file-text'];
+            $metrics[] = ['label' => 'Approved Requests', 'value' => $approvedRequests, 'icon' => 'check-circle'];
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'type' => $type,
+                'metrics' => $metrics
+            ]
+        ]);
     }
 
     // Get Member HRM Portal Dashboard Summary
@@ -153,13 +220,13 @@ class HrmMemberPortalController extends Controller
             }
 
                         // Consolidated Applications Aggregation across all HRM tables for member
-            $allRequests = \App\Models\HrmMemberRequest::with(['type', 'history.performedBy'])
+            $allRequests = \App\Models\HrmMemberRequest::with(['history.performedBy'])
                 ->where('employee_id', $user->id)
                 ->orderBy('created_at', 'desc')
                 ->get()
                 ->map(function ($r) {
                     $r->table_type = 'Member Request';
-                    $r->category = $r->type ? $r->type->name : 'Member Request';
+                    $r->category = $r->application_type ?? 'Member Request';
                     $r->category_name = $r->category;
                     $r->subject = $r->title;
                     $r->details = $r->description;
@@ -305,28 +372,42 @@ class HrmMemberPortalController extends Controller
         if (!$user) return response()->json(['success' => false, 'message' => 'Unauthenticated.'], 401);
 
         $request->validate([
-            'application_type_id' => 'required|exists:hrm_application_types,id',
+            'application_type' => 'required|string',
             'title' => 'required|string',
             'description' => 'nullable|string',
-            'priority' => 'nullable|string',
             'dynamic_fields' => 'nullable|array',
         ]);
+
+        $organization = \App\Models\Organization::find($user->organization_id ?? 1);
+        if ($organization) {
+            $currentMonthCount = \App\Models\HrmMemberRequest::where('organization_id', $user->organization_id ?? 1)
+                ->whereYear('created_at', date('Y'))
+                ->whereMonth('created_at', date('m'))
+                ->count();
+            
+            $limit = $organization->max_applications_per_month ?? 100;
+            if ($currentMonthCount >= $limit) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Monthly application limit reached for your organization ($limit). Please contact your administrator."
+                ], 403);
+            }
+        }
 
         try {
             DB::beginTransaction();
 
-            $appType = \App\Models\HrmApplicationType::find($request->application_type_id);
-            $prefix = $appType && $appType->slug ? strtoupper(substr($appType->slug, 0, 3)) : 'REQ';
+            $prefix = strtoupper(substr(preg_replace('/[^a-zA-Z0-9]/', '', $request->application_type), 0, 3));
+            if (empty($prefix)) $prefix = 'REQ';
             $requestNumber = $prefix . '-' . date('Ymd') . '-' . rand(1000, 9999);
 
             $memberRequest = \App\Models\HrmMemberRequest::create([
-                'organization_id' => $user->organization_id,
+                'organization_id' => $user->organization_id ?? 1,
                 'employee_id' => $user->id,
-                'application_type_id' => $request->application_type_id,
+                'application_type' => $request->application_type,
                 'request_number' => $requestNumber,
                 'title' => $request->title,
                 'description' => $request->description,
-                'priority' => $request->priority ?? 'Medium',
                 'status' => 'Pending',
                 'submitted_at' => now(),
             ]);
@@ -343,7 +424,7 @@ class HrmMemberPortalController extends Controller
                     }
                     
                     \App\Models\HrmMemberRequestField::create([
-                        'organization_id' => $user->organization_id,
+                        'organization_id' => $user->organization_id ?? 1,
                         'request_id' => $memberRequest->id,
                         'field_name' => $fieldName,
                         'field_value' => $valueToSave,
@@ -352,13 +433,141 @@ class HrmMemberPortalController extends Controller
             }
 
             \App\Models\HrmRequestHistory::create([
-                'organization_id' => $user->organization_id,
+                'organization_id' => $user->organization_id ?? 1,
                 'request_id' => $memberRequest->id,
                 'performed_by' => $user->id,
                 'action' => 'Submitted',
                 'new_status' => 'Pending',
-                'comments' => 'Application submitted by employee.',
+                'comments' => 'Application submitted by employee.'
             ]);
+
+            // Instantiate Approval Workflow Chain.
+            // Stage 1: Workflow explicitly targeted at this specific user ID
+            $workflowQuery = \App\Models\HrmWorkflow::where('organization_id', $user->organization_id ?? 1)
+                ->whereJsonContains('application_types', $request->application_type)
+                ->with('steps');
+
+            $workflow = (clone $workflowQuery)
+                ->whereJsonContains('submitter_role', (string) $user->id)
+                ->latest('created_at')
+                ->first();
+
+            // Stage 2: Workflow targeted at the user's role (e.g. "member", "team_lead")
+            if (!$workflow && $user->role) {
+                $workflow = (clone $workflowQuery)
+                    ->whereJsonContains('submitter_role', (string) $user->role)
+                    ->latest('created_at')
+                    ->first();
+            }
+
+            // Stage 3: Department workflow with no submitter restriction (open to all)
+            if (!$workflow && $user->department) {
+                $workflow = (clone $workflowQuery)
+                    ->where('department', $user->department)
+                    ->where(function ($q) {
+                        $q->whereNull('submitter_role')
+                          ->orWhereRaw("JSON_LENGTH(COALESCE(submitter_role, '[]')) = 0");
+                    })
+                    ->latest('created_at')
+                    ->first();
+            }
+
+            // Stage 4: Any workflow for the department (submitter_role doesn't matter)
+            // This is the catch-all — if admin set up a chain for this dept, use it
+            if (!$workflow && $user->department) {
+                $workflow = (clone $workflowQuery)
+                    ->where('department', $user->department)
+                    ->latest('created_at')
+                    ->first();
+            }
+
+            if ($workflow) {
+                foreach ($workflow->steps as $step) {
+                    // Save EXACTLY what the admin configured — no overrides, no fallbacks
+                    \App\Models\HrmRequestApproval::create([
+                        'request_id'   => $memberRequest->id,
+                        'step_order'   => $step->step_order,
+                        'approver_type' => $step->approver_type,
+                        'approver_id'  => $step->approver_id,
+                        'status'       => 'Pending',
+                    ]);
+                }
+            }
+
+            // Notify the first approver in the chain
+            $firstApproval = \App\Models\HrmRequestApproval::where('request_id', $memberRequest->id)
+                ->orderBy('step_order', 'asc')
+                ->first();
+
+            $userIdsToNotify = [];
+            if ($firstApproval) {
+                if ($firstApproval->approver_type === 'User') {
+                    // Specific user by ID
+                    $userIdsToNotify[] = (int) $firstApproval->approver_id;
+                } else {
+                    // Role or Designation — find matching users
+                    $roleMap = [
+                        'Manager'            => 'manager',
+                        'Team Lead'          => 'team_lead',
+                        'HR Manager'         => 'hr_manager',
+                        'Organization Owner' => 'owner',
+                        'Admin'              => 'admin',
+                    ];
+                    $approverId = $firstApproval->approver_id;
+                    $mappedRole = $roleMap[$approverId] ?? null;
+
+                    // Global roles (Admin, HR Manager, Owner) — find anywhere in org
+                    if (in_array($approverId, ['Admin', 'Organization Owner', 'HR Manager'])) {
+                        $userIdsToNotify = \App\Models\User::where('role', $mappedRole ?? 'admin')
+                            ->pluck('id')->toArray();
+                    } else {
+                        // Department-scoped designation/role — search org-wide if no dept match
+                        $deptQuery = \App\Models\User::where(function($q) use ($approverId, $mappedRole) {
+                            if ($mappedRole) $q->where('role', $mappedRole);
+                            $q->orWhere('designation', $approverId)
+                              ->orWhere('role', $approverId);
+                        });
+
+                        // Prefer users in the workflow's department or submitter's department
+                        $searchDept = $workflow->department ?: $user->department;
+                        if ($searchDept) {
+                            $deptUsers = (clone $deptQuery)->where('department', $searchDept)->pluck('id')->toArray();
+                            $userIdsToNotify = !empty($deptUsers) ? $deptUsers : $deptQuery->pluck('id')->toArray();
+                        } else {
+                            $userIdsToNotify = $deptQuery->pluck('id')->toArray();
+                        }
+
+                        // Last resort fallback: notify admins
+                        if (empty($userIdsToNotify)) {
+                            $userIdsToNotify = \App\Models\User::where('role', 'admin')->pluck('id')->toArray();
+                        }
+                    }
+                }
+            } else {
+                // No workflow found at all — create a default admin approval step
+                \App\Models\HrmRequestApproval::create([
+                    'request_id'    => $memberRequest->id,
+                    'step_order'    => 1,
+                    'approver_type' => 'Designation',
+                    'approver_id'   => 'Admin',
+                    'status'        => 'Pending',
+                ]);
+                $userIdsToNotify = \App\Models\User::where('role', 'admin')->pluck('id')->toArray();
+            }
+
+            if (!empty($userIdsToNotify)) {
+                $ns = app(\App\Services\NotificationService::class);
+                $ns->notifyMultiple(
+                    array_unique($userIdsToNotify),
+                    $user->id,
+                    'hrm_application_approval',
+                    'hrm_member_request',
+                    $memberRequest->id,
+                    '📝 Application Requires Approval',
+                    $user->name . ' has submitted a ' . $memberRequest->application_type . ' application that requires your approval.',
+                    null
+                );
+            }
 
             DB::commit();
 

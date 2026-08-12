@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import HRMRichTextEditor from "./HRMRichTextEditor";
-import { CheckCircle, XCircle, Trash2 } from "lucide-react";
+import { CheckCircle, XCircle, Trash2, Clock, HelpCircle } from "lucide-react";
 import "./HRMAdminActions.css";
 
 export default function HRMAdminActions({ onAction }) {
@@ -42,18 +42,19 @@ export default function HRMAdminActions({ onAction }) {
             <CheckCircle size={16} /> Approve
           </button>
           <button 
+            className="hrm-action-btn hrm-action-info" 
+            onClick={() => handleAction('request_info')}
+            disabled={isSubmitting}
+            style={{ color: '#9333ea', borderColor: '#e9d5ff', background: '#faf5ff' }}
+          >
+            <HelpCircle size={16} /> Request Info
+          </button>
+          <button 
             className="hrm-action-btn hrm-action-reject" 
             onClick={() => handleAction('reject')}
             disabled={isSubmitting}
           >
             <XCircle size={16} /> Reject
-          </button>
-          <button 
-            className="hrm-action-btn hrm-action-remove" 
-            onClick={() => handleAction('remove')}
-            disabled={isSubmitting}
-          >
-            <Trash2 size={16} /> Remove
           </button>
         </div>
       </div>

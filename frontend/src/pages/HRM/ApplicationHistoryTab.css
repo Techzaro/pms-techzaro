@@ -149,7 +149,7 @@
   text-transform: uppercase;
 }
 
-.filter-item select, .filter-item input[type="date"] {
+.filter-item select, .filter-item input[type="date"], .filter-item input[type="text"] {
   padding: 7px 10px;
   border: 1px solid #cbd5e1;
   border-radius: 6px;

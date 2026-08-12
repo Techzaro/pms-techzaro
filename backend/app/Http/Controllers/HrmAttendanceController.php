@@ -699,6 +699,20 @@ class HrmAttendanceController extends Controller
             'updated_at' => now(),
         ]);
 
+        $memberRequest = \App\Models\HrmMemberRequest::find($id);
+        if ($memberRequest && $memberRequest->employee_id) {
+            $ns = app(\App\Services\NotificationService::class);
+            $ns->create([
+                'user_id' => $memberRequest->employee_id,
+                'type' => 'hrm_application_response',
+                'related_module' => 'hrm_member_request',
+                'related_id' => $memberRequest->id,
+                'title' => '📝 Application ' . $request->status,
+                'message' => 'Your ' . $memberRequest->application_type . ' application has been ' . strtolower($request->status) . ' by ' . $user->name . '.',
+                'link' => null
+            ]);
+        }
+
         return response()->json([
             'success' => true,
             'message' => "Member Request has been {$request->status} by Admin ✔"

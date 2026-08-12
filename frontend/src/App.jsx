@@ -70,9 +70,11 @@ const Workforce=lazy(()=>import("./pages/HRM/Workforce"))
 const EmployeeDocuments=lazy(()=>import("./pages/HRM/EmployeeDocuments"))
 const Attendance=lazy(()=>import("./pages/HRM/Attendance"))
 const MemberHrmDashboard=lazy(()=>import("./pages/HRM/MemberHrmDashboard"))
+const AdminMyApplications=lazy(()=>import("./pages/HRM/AdminMyApplications"))
 const HrmPerformance=lazy(()=>import("./pages/HRM/HrmPerformance"))
 const Applications=lazy(()=>import("./pages/HRM/Applications"))
-// =======================================================================================
+const WorkflowSettings=lazy(()=>import("./pages/HRM/WorkflowSettings"))
+// END HRM imports=======================================================================================
 // =======================================================================================
 class ErrorBoundary extends Component {
   state = { hasError: false };
@@ -245,14 +247,18 @@ function App() {
             <Route path="/:role/hrm/documents" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><EmployeeDocuments/></RoleProtectedRoute>} />
             <Route path="/:role/hrm/attendance" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><Attendance/></RoleProtectedRoute>} />
             <Route path="/:role/attendance" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><Attendance/></RoleProtectedRoute>} />
-            <Route path="/:role/hrm/applications" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><Applications/></RoleProtectedRoute>} />
-            <Route path="/:role/applications" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><Applications/></RoleProtectedRoute>} />
+            <Route path="/:role/hrm/applications" element={<RoleProtectedRoute allowedRoles={["admin", "owner", "manager", "hr_manager", "hr_user", "team_lead", "member"]}><Applications/></RoleProtectedRoute>} />
+            <Route path="/:role/applications" element={<RoleProtectedRoute allowedRoles={["admin", "owner", "manager", "hr_manager", "hr_user", "team_lead", "member"]}><Applications/></RoleProtectedRoute>} />
+            <Route path="/:role/hrm/workflow-settings" element={<RoleProtectedRoute allowedRoles={["admin", "owner"]}><WorkflowSettings/></RoleProtectedRoute>} />
             <Route path="/:role/hrm/performance" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><HrmPerformance/></RoleProtectedRoute>} />
             <Route path="/:role/performance" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><HrmPerformance/></RoleProtectedRoute>} />
             
+            {/* Admin/Manager specific My Applications */}
+            <Route path="/:role/hrm/my-applications" element={<RoleProtectedRoute allowedRoles={["admin", "owner", "manager", "hr_manager", "hr_user"]}><AdminMyApplications/></RoleProtectedRoute>} />
+
             {/* Member / Team Lead / Guest Portal HRM Routes */}
-            <Route path="/:role/hrm/member-dashboard" element={<RoleProtectedRoute allowedRoles={["member", "team_lead", "guest"]}><MemberHrmDashboard/></RoleProtectedRoute>} />
-            <Route path="/member/hrm" element={<ProtectedRoute><MemberHrmDashboard/></ProtectedRoute>} />
+            <Route path="/:role/hrm/member-dashboard" element={<RoleProtectedRoute allowedRoles={["admin", "owner", "manager", "hr_manager", "hr_user", "team_lead", "member", "guest"]}><MemberHrmDashboard/></RoleProtectedRoute>} />
+            <Route path="/member/hrm" element={<RoleProtectedRoute allowedRoles={["admin", "owner", "manager", "hr_manager", "hr_user", "team_lead", "member"]}><MemberHrmDashboard/></RoleProtectedRoute>} />
           </Route>
 
           {/* Candidate Public Offer Portal */}

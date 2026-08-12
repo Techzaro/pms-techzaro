@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from "react";
+import { Send, CheckCircle2, FileText, ClipboardList, Calendar, Banknote, Briefcase, AlertCircle, PieChart, Clock, Building } from "lucide-react";
+import API_URL from "../../config/api";
+import { authToken } from "../../utils/auth";
 import HRMFieldRenderer from "./HRMFieldRenderer";
 import "./HRMDynamicFormRenderer.css";
 
@@ -195,71 +198,52 @@ const formConfigs = {
   "Miscellaneous Request": [{ id: "details", type: "richtext", label: "Details", required: true }]
 };
 
-// Category to Request Type Mapping
-const categoryMapping = {
-  "Attendance Requests": [
-    "Attendance Correction", "Missing Punch", "Late Arrival Justification", 
-    "Overtime Request", "Overtime Approval", "Shift Swap", "Shift Change", "Work From Home Request"
-  ],
-  "Leave Requests": [
-    "Full Day Leave", "Half Day Leave", "Leave Encashment"
-  ],
-  "Payroll Requests": [
-    "Salary Advance", "Loan Request", "Increment Request", "Expense Reimbursement", 
-    "Allowance Request", "Performance Bonus Claim", "Commission Request", 
-    "Salary Correction", "Bank Account Change", "Final Settlement Request", "Health Insurance Enrollment"
-  ],
-  "HR Requests": [
-    "Promotion Request", "Issue Of Document", "Change/Transfer Request", 
-    "Resignation", "Resignation Withdrawal", "Retirement Request"
-  ],
-  "Asset Requests": [
-    "Company Assets Issue", "Asset Replacement"
-  ],
-  "IT Requests": [
-    "Password Reset", "Email Creation", "Email Access", "Software Installation", 
-    "Shared Folder Access", "Network Access", "Internet Issue", "New User Setup", "Computer Repair", "Hardware Upgrade"
-  ],
-  "Finance Requests": [
-    "Purchase Request", "Vendor Payment", "Budget Approval", "Cash Advance", "Expense Claim", "Refund Request"
-  ],
-  "Travel Requests": [
-    "Business Trip", "Flight Booking", "Hotel Booking", "Visa Request", "Airport Pickup", "Travel Insurance", "Travel Extension", "Travel Expense Claim"
-  ],
-  "Training Requests": [
-    "Course Registration", "Certification Request", "Mentorship Request", "Seminar Attendance"
-  ],
-  "Facilities Requests": [
-    "Meeting Room Booking", "Cleaning Request", "Stationery Request"
-  ],
-  "Compliance Requests": [
-    "Harassment Complaint"
-  ],
-  "Miscellaneous / Custom Request": [
-    "Miscellaneous Request"
-  ]
-};
-
+import { categoryMapping } from '../../utils/applicationTypes';
 const categories = Object.keys(categoryMapping);
 
 export default function HRMDynamicFormRenderer({ onSubmit }) {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [requestType, setRequestType] = useState("");
   const [formData, setFormData] = useState({});
-  const [step, setStep] = useState(1); // 1: Fill form, 2: Review
+  const [contextData, setContextData] = useState(null);
+  const [loadingContext, setLoadingContext] = useState(false);
 
   // Reset requestType when category changes
   useEffect(() => {
     setRequestType("");
     setFormData({});
-    setStep(1);
+    setContextData(null);
   }, [selectedCategory]);
 
   // Reset form when request type changes
   useEffect(() => {
     setFormData({});
-    setStep(1);
+    if (requestType) {
+      fetchContextData(requestType);
+    } else {
+      setContextData(null);
+    }
   }, [requestType]);
+
+  const fetchContextData = async (type) => {
+    setLoadingContext(true);
+    try {
+      const res = await fetch(`${API_URL}/hrm/member/application-context?type=${encodeURIComponent(type)}`, {
+        headers: {
+          'Authorization': `Bearer ${authToken()}`,
+          'Accept': 'application/json'
+        }
+      });
+      const json = await res.json();
+      if (json.success) {
+        setContextData(json.data.metrics);
+      }
+    } catch (err) {
+      console.error("Failed to fetch context", err);
+    } finally {
+      setLoadingContext(false);
+    }
+  };
 
   const rawFields = formConfigs[requestType] || [];
   // Filter out any existing comments or attachment fields from the hardcoded config to prevent duplication
@@ -276,42 +260,65 @@ export default function HRMDynamicFormRenderer({ onSubmit }) {
     setFormData(prev => ({ ...prev, [id]: value }));
   };
 
-  const handleNext = () => {
+  const handleSubmit = () => {
     // Basic validation
     const missing = fields.filter(f => f.required && (!formData[f.id] || (Array.isArray(formData[f.id]) && formData[f.id].length === 0)));
     if (missing.length > 0) {
       alert(`Please fill all required fields: ${missing.map(m => m.label).join(", ")}`);
       return;
     }
-    setStep(2);
-  };
-
-  const handleSubmit = () => {
     if (onSubmit) {
       onSubmit({ requestType, data: formData });
     }
   };
 
-  const renderReviewValue = (field, val) => {
-    if (!val) return "N/A";
-    if (field.type === "daterange") {
-      return `${val.start || "N/A"} to ${val.end || "N/A"}`;
+  const getIcon = (iconName) => {
+    switch (iconName) {
+      case 'calendar': return <Calendar size={18} />;
+      case 'check-circle': return <CheckCircle2 size={18} />;
+      case 'alert-circle': return <AlertCircle size={18} />;
+      case 'banknote': return <Banknote size={18} />;
+      case 'pie-chart': return <PieChart size={18} />;
+      case 'file-text': return <FileText size={18} />;
+      case 'briefcase': return <Briefcase size={18} />;
+      case 'building': return <Building size={18} />;
+      case 'clock': return <Clock size={18} />;
+      default: return <FileText size={18} />;
     }
-    if (field.type === "attachment") {
-      return val.map(f => f.name).join(", ");
+  };
+
+  const renderContextDashboard = () => {
+    if (loadingContext) {
+      return <div className="hrm-context-dashboard loading"><div className="spinner"></div> Loading application context...</div>;
     }
-    if (field.type === "richtext") {
-      return <div dangerouslySetInnerHTML={{ __html: val }} className="hrm-review-html" />;
-    }
-    return String(val);
+    if (!contextData || contextData.length === 0) return null;
+
+    return (
+      <div className="hrm-context-dashboard">
+        <h4 className="hrm-context-title">Your {requestType} Overview</h4>
+        <div className="hrm-context-grid">
+          {contextData.map((metric, idx) => (
+            <div key={idx} className="hrm-context-card">
+              <div className="hrm-context-icon">
+                {getIcon(metric.icon)}
+              </div>
+              <div className="hrm-context-info">
+                <span className="hrm-context-label">{metric.label}</span>
+                <span className="hrm-context-value">{metric.value}</span>
+                {metric.subtext && <span className="hrm-context-subtext">{metric.subtext}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   };
 
   const dependentTypes = selectedCategory ? categoryMapping[selectedCategory] : [];
 
   return (
     <div className="hrm-dynamic-form-container">
-      {step === 1 && (
-        <div className="hrm-dynamic-form-fill">
+      <div className="hrm-dynamic-form-fill">
           <div className="hrm-form-section" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
             <div>
               <label className="hrm-dynamic-label">Application Category</label>
@@ -345,8 +352,9 @@ export default function HRMDynamicFormRenderer({ onSubmit }) {
           </div>
 
           {requestType && (
-            <div className="hrm-form-fields" style={{ borderTop: '1px solid #e2e8f0', paddingTop: '20px' }}>
-              <h3 className="hrm-dynamic-title">{requestType} Details</h3>
+            <div className="hrm-form-fields" style={{ borderTop: '1px solid var(--border-light)', paddingTop: '24px' }}>
+              <h3 className="hrm-dynamic-title"><ClipboardList size={22} className="text-pms-primary" /> {requestType} Details</h3>
+              {renderContextDashboard()}
               <div className="hrm-fields-grid">
                 {fields.map(field => (
                   <div key={field.id} className="hrm-field-wrapper" style={{ gridColumn: field.type === 'richtext' ? '1 / -1' : 'auto' }}>
@@ -359,48 +367,13 @@ export default function HRMDynamicFormRenderer({ onSubmit }) {
                 ))}
               </div>
               <div className="hrm-form-actions">
-                <button type="button" className="hrm-btn hrm-btn-primary" onClick={handleNext}>
-                  Review Request
+                <button type="button" className="hrm-btn hrm-btn-primary" onClick={handleSubmit}>
+                  Submit Request <Send size={18} />
                 </button>
               </div>
             </div>
           )}
-        </div>
-      )}
-
-      {step === 2 && requestType && (
-        <div className="hrm-dynamic-form-review">
-          <h3 className="hrm-dynamic-title">Request Summary</h3>
-          <div className="hrm-review-list">
-            <div className="hrm-review-item">
-              <span className="hrm-review-label">Category:</span>
-              <span className="hrm-review-val"><strong>{selectedCategory}</strong></span>
-            </div>
-            <div className="hrm-review-item">
-              <span className="hrm-review-label">Request Type:</span>
-              <span className="hrm-review-val"><strong>{requestType}</strong></span>
-            </div>
-            <div className="hrm-review-item">
-              <span className="hrm-review-label">Submission Date:</span>
-              <span className="hrm-review-val">{new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
-            </div>
-            {fields.map(field => (
-              <div key={field.id} className="hrm-review-item" style={{ gridColumn: field.type === 'richtext' ? '1 / -1' : 'auto' }}>
-                <span className="hrm-review-label">{field.label}:</span>
-                <span className="hrm-review-val">{renderReviewValue(field, formData[field.id])}</span>
-              </div>
-            ))}
-          </div>
-          <div className="hrm-form-actions hrm-review-actions">
-            <button type="button" className="hrm-btn hrm-btn-secondary" onClick={() => setStep(1)}>
-              Edit
-            </button>
-            <button type="button" className="hrm-btn hrm-btn-success" onClick={handleSubmit}>
-              Submit Request
-            </button>
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 }

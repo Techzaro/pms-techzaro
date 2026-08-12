@@ -13,8 +13,9 @@ class HrmMemberRequest extends Model
             }
         });
     }
-    public function type() { return $this->belongsTo(HrmApplicationType::class, 'application_type_id'); }
+
     public function fields() { return $this->hasMany(HrmMemberRequestField::class, 'request_id'); }
     public function history() { return $this->hasMany(HrmRequestHistory::class, 'request_id'); }
     public function employee() { return $this->belongsTo(User::class, 'employee_id'); }
+    public function approvals() { return $this->hasMany(HrmRequestApproval::class, 'request_id')->orderBy('step_order'); }
 }

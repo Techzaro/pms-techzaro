@@ -67,6 +67,10 @@ const NOTIFICATION_TYPE_MAP = {
 
   // Chat
   chat_message: { page: "chat", buildPath: (id) => `chat/${id}` },
+
+  // HRM Applications
+  hrm_application_approval: { page: "applications", buildPath: (id) => `applications?id=${id}` },
+  hrm_application_response: { page: "applications", buildPath: (id) => `applications?id=${id}` },
 };
 
 // ── Dashboard Activity → Destination mapping ──
