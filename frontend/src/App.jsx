@@ -159,6 +159,8 @@ function AuthSecurityGuard({ children }) {
   }, [location.pathname]);
 
   return children;
+}
+
 function SuperAdminWrapper() {
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === "dark";
@@ -184,89 +186,76 @@ function App() {
 
               {/* Dashboard routes - role-specific */}
               <Route path="/:role/dashboard" element={<RoleProtectedRoute><Admin /></RoleProtectedRoute>} />
-      <ScrollToTop />
-      <ErrorBoundary>
-        <Suspense fallback={<LoadingSpinner />}>
-          <Routes>
-            {/* Public routes */}
-            <Route path="/" element={<Login />} />
-            <Route path="/logged-out" element={<LoggedOut />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            {/* <Route path="/register-organization" element={<RegisterOrganization />} /> */}
 
-            {/* Dashboard routes - role-specific */}
-            <Route path="/:role/dashboard" element={<RoleProtectedRoute><Admin /></RoleProtectedRoute>} />
+              {/* Task routes */}
+              <Route path="/:role/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
+              <Route path="/:role/guest-tasks" element={<ProtectedRoute><GuestTasks /></ProtectedRoute>} />
+              <Route path="/:role/taskby" element={<ProtectedRoute><Taskby /></ProtectedRoute>} />
+              <Route path="/:role/self-tasks" element={<ProtectedRoute><SelfTasks /></ProtectedRoute>} />
+              <Route path="/:role/all-tasks" element={<ProtectedRoute><AllTasks /></ProtectedRoute>} />
+              <Route path="/:role/tasks/task-details/:taskId" element={<ProtectedRoute><TaskDetails /></ProtectedRoute>} />
 
-            {/* Task routes */}
-            <Route path="/:role/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
-            <Route path="/:role/guest-tasks" element={<ProtectedRoute><GuestTasks /></ProtectedRoute>} />
-            <Route path="/:role/taskby" element={<ProtectedRoute><Taskby /></ProtectedRoute>} />
-            <Route path="/:role/self-tasks" element={<ProtectedRoute><SelfTasks /></ProtectedRoute>} />
-            <Route path="/:role/all-tasks" element={<ProtectedRoute><AllTasks /></ProtectedRoute>} />
-            <Route path="/:role/tasks/task-details/:taskId" element={<ProtectedRoute><TaskDetails /></ProtectedRoute>} />
+              {/* Project routes */}
+              <Route path="/:role/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
+              <Route path="/:role/create-project" element={<ProtectedRoute><CreateProject /></ProtectedRoute>} />
+              <Route path="/:role/projects/project-details/:projectId" element={<ProtectedRoute><ProjectDetails /></ProtectedRoute>} />
 
-            {/* Project routes */}
-            <Route path="/:role/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
-            <Route path="/:role/create-project" element={<ProtectedRoute><CreateProject /></ProtectedRoute>} />
-            <Route path="/:role/projects/project-details/:projectId" element={<ProtectedRoute><ProjectDetails /></ProtectedRoute>} />
+              {/* Subtask routes */}
+              <Route path="/:role/deliveries" element={<ProtectedRoute><Deliveries /></ProtectedRoute>} />
+              <Route path="/:role/deliveries-by-you" element={<ProtectedRoute><DeliveriesByYou /></ProtectedRoute>} />
+              <Route path="/:role/self-deliveries" element={<ProtectedRoute><SelfDeliveries /></ProtectedRoute>} />
+              <Route path="/:role/all-deliverables" element={<ProtectedRoute><AllDeliveries /></ProtectedRoute>} />
+              <Route path="/:role/deliveries/deliverable-details/:deliverable" element={<ProtectedRoute><SubtaskDetails /></ProtectedRoute>} />
 
-            {/* Subtask routes */}
-            <Route path="/:role/deliveries" element={<ProtectedRoute><Deliveries /></ProtectedRoute>} />
-            <Route path="/:role/deliveries-by-you" element={<ProtectedRoute><DeliveriesByYou /></ProtectedRoute>} />
-            <Route path="/:role/self-deliveries" element={<ProtectedRoute><SelfDeliveries /></ProtectedRoute>} />
-            <Route path="/:role/all-deliverables" element={<ProtectedRoute><AllDeliveries /></ProtectedRoute>} />
-            <Route path="/:role/deliveries/deliverable-details/:deliverable" element={<ProtectedRoute><SubtaskDetails /></ProtectedRoute>} />
+              {/* Admin/Manager only routes */}
+              <Route path="/:role/manage-users" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><ManageUsers /></RoleProtectedRoute>} />
+              <Route path="/:role/manage-users/user-profile/:userId" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><UserProfile /></RoleProtectedRoute>} />
+              <Route path="/:role/manage-team" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><ManageTeam /></RoleProtectedRoute>} />
 
-            {/* Admin/Manager only routes */}
-            <Route path="/:role/manage-users" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><ManageUsers /></RoleProtectedRoute>} />
-            <Route path="/:role/manage-users/user-profile/:userId" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><UserProfile /></RoleProtectedRoute>} />
-            <Route path="/:role/manage-team" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><ManageTeam /></RoleProtectedRoute>} />
+              {/* Member/Team Lead: read-only team view */}
+              <Route path="/:role/my-team" element={<ProtectedRoute><MemberTeam /></ProtectedRoute>} />
 
-            {/* Member/Team Lead: read-only team view */}
-            <Route path="/:role/my-team" element={<ProtectedRoute><MemberTeam /></ProtectedRoute>} />
+              {/* Other protected routes */}
+              <Route path="/:role/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
+              <Route path="/:role/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+              <Route path="/:role/team-members-report" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+              <Route path="/:role/my-profile" element={<ProtectedRoute><MyProfile /></ProtectedRoute>} />
+              <Route path="/:role/calender" element={<ProtectedRoute><Calender /></ProtectedRoute>} />
+              <Route path="/:role/drafts" element={<ProtectedRoute><DraftCenter /></ProtectedRoute>} />
+              <Route path="/:role/templates" element={<ProtectedRoute><Templates /></ProtectedRoute>} />
+              <Route path="/:role/knowledge-base" element={<ProtectedRoute><KnowledgeBase /></ProtectedRoute>} />
+              <Route path="/:role/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+              <Route path="/:role/settings/notifications" element={<ProtectedRoute><NotificationSettings /></ProtectedRoute>} />
+              <Route path="/:role/audit-logs" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><AuditLogs /></RoleProtectedRoute>} />
+              <Route path="/:role/branding" element={<RoleProtectedRoute allowedRoles={["admin"]}><BrandingPage /></RoleProtectedRoute>} />
+              <Route path="/:role/subscription" element={<RoleProtectedRoute allowedRoles={["admin"]}><SubscriptionPage /></RoleProtectedRoute>} />
+              <Route path="/:role/reports/user-performance/:userId" element={<ProtectedRoute><UserPerformance /></ProtectedRoute>} />
+              <Route path="/:role/reports/team-members/:teamId" element={<ProtectedRoute><TeamMembersReport /></ProtectedRoute>} />
+              <Route path="/:role/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
+              <Route path="/:role/chat/:conversationId" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
 
-            {/* Other protected routes */}
-            <Route path="/:role/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
-            <Route path="/:role/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
-            <Route path="/:role/team-members-report" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
-            <Route path="/:role/my-profile" element={<ProtectedRoute><MyProfile /></ProtectedRoute>} />
-            <Route path="/:role/calender" element={<ProtectedRoute><Calender /></ProtectedRoute>} />
-            <Route path="/:role/drafts" element={<ProtectedRoute><DraftCenter /></ProtectedRoute>} />
-            <Route path="/:role/templates" element={<ProtectedRoute><Templates /></ProtectedRoute>} />
-            <Route path="/:role/knowledge-base" element={<ProtectedRoute><KnowledgeBase /></ProtectedRoute>} />
-            <Route path="/:role/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
-            <Route path="/:role/settings/notifications" element={<ProtectedRoute><NotificationSettings /></ProtectedRoute>} />
-            <Route path="/:role/audit-logs" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><AuditLogs /></RoleProtectedRoute>} />
-            <Route path="/:role/branding" element={<RoleProtectedRoute allowedRoles={["admin"]}><BrandingPage /></RoleProtectedRoute>} />
-            <Route path="/:role/subscription" element={<RoleProtectedRoute allowedRoles={["admin"]}><SubscriptionPage /></RoleProtectedRoute>} />
-            <Route path="/:role/reports/user-performance/:userId" element={<ProtectedRoute><UserPerformance /></ProtectedRoute>} />
-            <Route path="/:role/reports/team-members/:teamId" element={<ProtectedRoute><TeamMembersReport /></ProtectedRoute>} />
-            <Route path="/:role/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
-            <Route path="/:role/chat/:conversationId" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
+              {/* Super Admin routes */}
+              <Route path="/super-admin" element={<SuperAdminWrapper />}>
+                <Route index element={<SuperDashboard />} />
+                <Route path="organizations" element={<SuperOrganizations />} />
+                <Route path="organizations/:id" element={<SuperOrganizationDetail />} />
+                <Route path="plans" element={<SuperPlans />} />
+                <Route path="modules" element={<SuperModules />} />
+                <Route path="domains" element={<SuperDomains />} />
+                <Route path="health" element={<SuperHealth />} />
+                <Route path="activity" element={<SuperActivity />} />
+                <Route path="notifications" element={<SuperNotifications />} />
+                <Route path="settings" element={<SuperSettings />} />
+                <Route path="my-profile" element={<SuperMyProfile />} />
+              </Route>
 
-            {/* Super Admin routes */}
-            <Route path="/super-admin" element={<SuperAdminWrapper />}>
-              <Route index element={<SuperDashboard />} />
-              <Route path="organizations" element={<SuperOrganizations />} />
-              <Route path="organizations/:id" element={<SuperOrganizationDetail />} />
-              <Route path="plans" element={<SuperPlans />} />
-              <Route path="modules" element={<SuperModules />} />
-              <Route path="domains" element={<SuperDomains />} />
-              <Route path="health" element={<SuperHealth />} />
-              <Route path="activity" element={<SuperActivity />} />
-              <Route path="notifications" element={<SuperNotifications />} />
-              <Route path="settings" element={<SuperSettings />} />
-              <Route path="my-profile" element={<SuperMyProfile />} />
-            </Route>
-
-            {/* Catch-all redirect */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
-      </ErrorBoundary>
-    </AuthSecurityGuard>
-  </BrowserRouter>
+              {/* Catch-all redirect */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
+        </ErrorBoundary>
+      </AuthSecurityGuard>
+    </BrowserRouter>
   );
 }
 
