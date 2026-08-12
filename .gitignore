@@ -21,3 +21,9 @@ backend/vendor/
 
 # Frontend node_modules
 frontend/node_modules/
+
+# Backend env files with secrets
+backend/.env.staging
+backend/.env.production
+backend/.env.local
+backend/.env
