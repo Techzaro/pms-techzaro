@@ -192,13 +192,12 @@ function Sidebar() {
       sessionStorage.setItem("reportsOpen", false);
     }
 
- 
-const isSettingsRoute =
-    isActive("audit-logs") ||
-    isActive("settings/notifications") ||
-    isActive("settings/personalization") ||
-    isActive("branding") ||
-    isActive("subscription");
+    const isSettingsRoute =
+      isActive("audit-logs") ||
+      isActive("settings/notifications") ||
+      isActive("settings/personalization") ||
+      isActive("branding") ||
+      isActive("subscription");
 
     if (isSettingsRoute) {
       setSettingsOpen(true);
@@ -560,6 +559,7 @@ const isSettingsRoute =
                 >
                   Personalization
                 </Link>
+                <Link
                   to={rolePath("organization-details")}
                   className={`sidebar-sub-link ${isActive("organization-details") ? "active" : ""}`}
                   onClick={(e) => e.stopPropagation()}

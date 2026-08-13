@@ -1,0 +1,1 @@
+import{D as e}from"./index-DxgESDhw.js";import t from"./Admin-BAJQb2FI.js";var n=e();function r(){return(0,n.jsx)(t,{})}export{r as default};
