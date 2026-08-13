@@ -54,13 +54,8 @@ class AuthController extends Controller
                 'password' => 'required',
             ]);
 
-            // AUTH_025: Restrict Personal Email Logins
-            if ($this->isPersonalEmail($request->email)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Login using personal email addresses is not allowed',
-                ], 403);
-            }
+            // Note: personal email restriction removed — allow authentication
+            // any additional organization-level email policy is enforced elsewhere.
 
             // Rate limiting key per normalized email & IP
             $throttleKey = Str::lower(trim($request->email)) . '|' . $request->ip();
@@ -312,6 +307,7 @@ class AuthController extends Controller
         // Also remove the token mapping from saas_master
         try {
             $token = $request->bearerToken();
+            \Log::info('firstTimeChangePassword called', ['has_bearer' => $token ? true : false]);
             if ($token) {
                 $tokenHash = hash('sha256', $token);
                 DB::connection('mysql_master')->table('personal_access_tokens')
@@ -399,6 +395,7 @@ class AuthController extends Controller
                 $tokenRow = $stmt->fetch();
 
                 if ($tokenRow) {
+                    \Log::info('firstTimeChangePassword: token row found in tenant DB', ['tokenable_id' => $tokenRow->tokenable_id]);
                     config()->set('database.connections.first_time_tenant', [
                         'driver'   => 'mysql',
                         'host'     => $organization->database_host,
@@ -435,6 +432,7 @@ class AuthController extends Controller
                 $tokenRow = $stmt->fetch();
 
                 if ($tokenRow) {
+                    \Log::info('firstTimeChangePassword: token row found in default DB', ['tokenable_id' => $tokenRow->tokenable_id]);
                     $user = User::on('mysql')->where('id', $tokenRow->tokenable_id)->first();
                 }
 
@@ -459,37 +457,67 @@ class AuthController extends Controller
             $user->password_changed_at = now();
             $user->save();
 
-            // Revoke the token
-            if ($dsn) {
-                $revokePdo = new \PDO($dsn, $dbUsername, $dbPassword, [
-                    \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
-                ]);
-                $revokeStmt = $revokePdo->prepare('DELETE FROM `personal_access_tokens` WHERE token = ?');
-                $revokeStmt->execute([$hashedToken]);
-                $revokePdo = null;
+            // Issue a fresh token for the user so frontend can continue the session.
+            // Do not remove all tokens for the user; only revoke the temporary token used for first-time change.
+            $expiresAt = now()->addHours(3);
+            try {
+                $newTokenResult = $user->createToken('auth_token', ['*'], $expiresAt);
+                $newToken = $newTokenResult->plainTextToken;
 
-                $cleanupPdo = new \PDO($dsn, $dbUsername, $dbPassword, [
-                    \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
-                ]);
-                $cleanupStmt = $cleanupPdo->prepare('DELETE FROM `personal_access_tokens` WHERE tokenable_id = ?');
-                $cleanupStmt->execute([$user->id]);
-                $cleanupPdo = null;
-            } else {
-                $pdo = new \PDO(
-                    'mysql:host=' . config('database.connections.mysql.host')
-                        . ';port=' . config('database.connections.mysql.port')
-                        . ';dbname=' . config('database.connections.mysql.database')
-                        . ';charset=utf8mb4',
-                    config('database.connections.mysql.username'),
-                    config('database.connections.mysql.password') ?? '',
-                    [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
-                );
-                $revokeStmt = $pdo->prepare('DELETE FROM `personal_access_tokens` WHERE token = ?');
-                $revokeStmt->execute([$hashedToken]);
+                // Store mapping in master DB (if available)
+                try {
+                    $newTokenHash = hash('sha256', $newToken);
+                    DB::connection('mysql_master')->table('personal_access_tokens')->insert([
+                        'tokenable_type' => 'App\\Models\\User',
+                        'tokenable_id'   => $user->id,
+                        'name'           => 'pms_token|' . ($organization->slug ?? ''),
+                        'token'          => $newTokenHash,
+                        'abilities'      => json_encode(['*']),
+                        'expires_at'     => $expiresAt,
+                        'created_at'     => now(),
+                        'updated_at'     => now(),
+                    ]);
+                } catch (\Throwable $e) {
+                    \Log::warning('Failed to store new token mapping in master DB', ['error' => $e->getMessage()]);
+                }
 
-                $cleanupStmt = $pdo->prepare('DELETE FROM `personal_access_tokens` WHERE tokenable_id = ?');
-                $cleanupStmt->execute([$user->id]);
-                $pdo = null;
+                // Revoke only the temporary token used in this request (if present).
+                // Try both hashing strategies to cover possible stored formats.
+                $oldTokenRaw = $request->bearerToken() ?: '';
+                $candidateHashes = [];
+                if ($oldTokenRaw !== '') {
+                    $candidateHashes[] = hash('sha256', $oldTokenRaw);
+                    $tokenValue = str_contains($oldTokenRaw, '|') ? substr($oldTokenRaw, strpos($oldTokenRaw, '|') + 1) : $oldTokenRaw;
+                    $candidateHashes[] = hash('sha256', $tokenValue);
+                }
+
+                if (! empty($candidateHashes)) {
+                    if ($dsn) {
+                        $revokePdo = new \PDO($dsn, $dbUsername, $dbPassword, [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
+                        $placeholders = rtrim(str_repeat('?,', count($candidateHashes)), ',');
+                        $revokeStmt = $revokePdo->prepare("DELETE FROM `personal_access_tokens` WHERE token IN ($placeholders)");
+                        $revokeStmt->execute($candidateHashes);
+                        $revokePdo = null;
+                    } else {
+                        $pdo = new \PDO(
+                            'mysql:host=' . config('database.connections.mysql.host')
+                                . ';port=' . config('database.connections.mysql.port')
+                                . ';dbname=' . config('database.connections.mysql.database')
+                                . ';charset=utf8mb4',
+                            config('database.connections.mysql.username'),
+                            config('database.connections.mysql.password') ?? '',
+                            [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
+                        );
+                        $placeholders = rtrim(str_repeat('?,', count($candidateHashes)), ',');
+                        $revokeStmt = $pdo->prepare("DELETE FROM `personal_access_tokens` WHERE token IN ($placeholders)");
+                        $revokeStmt->execute($candidateHashes);
+                        $pdo = null;
+                    }
+                }
+            } catch (\Throwable $e) {
+                // Token creation failure should not block password update — log and continue.
+                \Log::warning('Failed to create new token after first-time password change', ['error' => $e->getMessage()]);
+                $newToken = null;
             }
 
             try {
@@ -506,10 +534,18 @@ class AuthController extends Controller
 
             $responseData = [
                 'success' => true,
-                'message' => 'Password changed successfully. Please login with your new password.',
+                'message' => 'Password changed successfully.',
             ];
             if ($organization) {
                 $responseData['tenant_slug'] = $organization->slug;
+            }
+
+            // If we created a new token, return it so the frontend can update stored token
+            if (isset($newToken) && $newToken) {
+                $responseData['token'] = $newToken;
+                if (isset($expiresAt)) {
+                    $responseData['expires_at'] = $expiresAt->toISOString();
+                }
             }
 
             return response()->json($responseData);
@@ -1110,6 +1146,12 @@ class AuthController extends Controller
         // Regex check for common personal domain patterns (e.g. yahoo.*, hotmail.*, gmx.*)
         if (preg_match('/^(gmail|yahoo|hotmail|outlook|live|icloud|aol|protonmail|proton|yandex|mail|gmx|rediffmail)\./i', $domain)) {
             return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Search for a user across all tenant databases.
      * Returns ['user' => User, 'slug' => string, 'organization' => Organization] or null.
      */

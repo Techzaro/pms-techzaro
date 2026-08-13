@@ -18,7 +18,7 @@ const DonutChart = memo(function DonutChart({ segments, size = 140, strokeWidth 
         ? `${(seg.count / total) * circumference} ${circumference}`
         : `0 ${circumference}`;
       const strokeDashoffset = -accumulated;
-      accumulated += (seg.count / total) * circumference;
+      if (total > 0) accumulated += (seg.count / total) * circumference;
       return { ...seg, percent, strokeDasharray, strokeDashoffset };
     });
   }, [segments, total, circumference]);
