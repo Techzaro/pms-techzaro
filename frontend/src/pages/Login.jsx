@@ -55,21 +55,8 @@ function Login() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
 
-  const PERSONAL_DOMAINS = [
-    "gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.in", "yahoo.co.uk", "yahoo.ca",
-    "ymail.com", "rocketmail.com", "hotmail.com", "hotmail.co.uk", "hotmail.fr", "hotmail.de",
-    "live.com", "live.co.uk", "msn.com", "outlook.com", "outlook.co.uk", "icloud.com",
-    "me.com", "mac.com", "aol.com", "aim.com", "protonmail.com", "proton.me", "pm.me",
-    "zoho.com", "zohomail.com", "yandex.com", "yandex.ru", "mail.com", "email.com",
-    "gmx.com", "gmx.net", "rediffmail.com", "inbox.com", "fastmail.com", "hushmail.com"
-  ];
-
-  const checkIsPersonalEmail = (emailStr) => {
-    if (!emailStr || !emailStr.includes("@")) return false;
-    const domain = emailStr.split("@").pop().toLowerCase().trim();
-    if (PERSONAL_DOMAINS.includes(domain)) return true;
-    return /^(gmail|yahoo|hotmail|outlook|live|icloud|aol|protonmail|proton|yandex|mail|gmx|rediffmail)\./i.test(domain);
-  };
+  // Note: email policy (allowing/disallowing personal emails) is enforced by the server
+  // based on organization settings. Client-side blocking removed so server decides.
 
   /**
    * handleLogin — Validates form fields and sends login request to API.
@@ -80,9 +67,7 @@ function Login() {
     const errors = { email: "", password: "", form: "" };
 
     if (!email.trim()) {
-      errors.email = "Please enter your professional email address.";
-    } else if (checkIsPersonalEmail(email)) {
-      errors.email = "Login using personal email addresses is not allowed";
+      errors.email = "Please enter your email address.";
     }
 
     if (!password.trim()) {
@@ -229,14 +214,29 @@ function Login() {
         throw new Error(data.message || "Failed to change password. Please try again.");
       }
 
-      clearAllSessions();
-
-      showSuccessMessage("Password", "changed");
-      setMustChangePassword(false);
-      setNewPassword("");
-      setConfirmPassword("");
-      setEmail("");
-      setPassword("");
+      // If backend issued a new token, keep the session by saving it; otherwise clear sessions and ask to re-login.
+      if (data.token) {
+        saveSession(data.role || 'member', data.token, data.user || {}, rememberMe, data.expires_at);
+        if (data.tenant_slug) {
+          localStorage.setItem('tenant_slug', data.tenant_slug);
+        }
+        showSuccessMessage('Password', 'changed');
+        setMustChangePassword(false);
+        setNewPassword('');
+        setConfirmPassword('');
+        setEmail('');
+        setPassword('');
+        // Redirect to dashboard using saved role
+        redirectToDashboard(data.role || 'member');
+      } else {
+        clearAllSessions();
+        showSuccessMessage("Password", "changed");
+        setMustChangePassword(false);
+        setNewPassword("");
+        setConfirmPassword("");
+        setEmail("");
+        setPassword("");
+      }
 
     } catch (error) {
       notify.error(error.message || "Failed to change password. Please try again.");
@@ -328,7 +328,7 @@ function Login() {
 
           <input
             type="email"
-            placeholder="Enter Professional Email"
+              placeholder="Enter Email"
             value={email}
             onChange={(e) => { setEmail(e.target.value); setFieldErrors(prev => ({ ...prev, email: "", form: "" })); }}
             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); document.getElementById("login-password")?.focus(); } }}

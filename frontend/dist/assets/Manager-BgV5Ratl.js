@@ -1,1 +1,0 @@
-import{Mt as e}from"./index-dizJ-Le7.js";import t from"./Admin-POsOFIjV.js";var n=e();function r(){return(0,n.jsx)(t,{})}export{r as default};
