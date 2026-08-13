@@ -1,15 +1,13 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import API_URL from "../../config/api";
 import { authToken, getCurrentRole } from "../../utils/auth";
 import ApplicationDetailsPage from "../../components/hrm/ApplicationDetailsPage";
 import ApplicationTypesManager from "../../components/hrm/ApplicationTypesManager";
 import {
   Search,
-  Filter,
   RefreshCw,
-  FileSpreadsheet,
   FileText,
-  Printer,
   Sliders,
   Eye,
   CheckCircle,
@@ -22,11 +20,8 @@ import {
   ChevronRight,
   User,
   Building,
-  Tag,
   Calendar,
-  Layers,
-  Paperclip,
-  MessageSquare
+  Layers
 } from "lucide-react";
 import "./ApplicationHistoryTab.css";
 
@@ -57,7 +52,7 @@ function ApplicationHistoryTab({ approverMode = false, excludeOwn = false }) {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [manageTypesOpen, setManageTypesOpen] = useState(false);
 
-  const location = window.location;
+  const location = useLocation();
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -67,12 +62,16 @@ function ApplicationHistoryTab({ approverMode = false, excludeOwn = false }) {
     }
   }, [location.search]);
 
+
   useEffect(() => {
     fetchApplications();
     const interval = setInterval(() => {
       fetchApplications(true); // Silent poll every 30s
     }, 30000);
     return () => clearInterval(interval);
+    // The explicit query inputs define when polling must be restarted.
+    // The explicit query inputs define when polling must be restarted.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, perPage, employeeId, department, applicationType, status, search, dateFrom, dateTo, sortBy, sortDir, assignedToMe]);
 
   const fetchApplications = async (silent = false) => {

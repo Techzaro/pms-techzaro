@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import  { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import {
-  FileText, CheckCircle2, XCircle, Clock, ShieldCheck,
-  Send, MessageSquare, AlertCircle, Calendar, User, MapPin, Building, Printer
+   CheckCircle2, XCircle, Clock, ShieldCheck,
+  Send, MessageSquare, AlertCircle, MapPin, Printer
 } from 'lucide-react';
 
 import API_URL from "../../config/api";
@@ -46,6 +46,8 @@ const CandidateOfferPortal = () => {
 
   useEffect(() => {
     fetchOffer();
+    // The offer identity, not fetchOffer's render-local identity, controls reloads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, token]);
 
   const handleRespond = async (action, payload = {}) => {

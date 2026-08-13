@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import  { useState } from "react";
 import HRMRichTextEditor from "./HRMRichTextEditor";
-import { CheckCircle, XCircle, Trash2, Clock, HelpCircle } from "lucide-react";
+import { CheckCircle, XCircle, HelpCircle } from "lucide-react";
 import "./HRMAdminActions.css";
 
 export default function HRMAdminActions({ onAction }) {
@@ -25,7 +25,7 @@ export default function HRMAdminActions({ onAction }) {
 
   return (
     <div className="hrm-admin-actions-container">
-      <h3 className="hrm-admin-actions-title">Admin Actions</h3>
+      <h3 className="hrm-admin-actions-title">Approval Actions</h3>
       <div className="hrm-admin-actions-content">
         <HRMRichTextEditor 
           label="Admin Comment" 

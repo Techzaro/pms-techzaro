@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import  { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import API_URL from "../../config/api";
 import { authToken, rolePath, getUser } from "../../utils/auth";
@@ -17,10 +17,7 @@ import {
   Clock,
   AlertTriangle,
   Layers,
-  Building2,
-  CheckCircle2,
   Send,
-  ShieldAlert,
 } from "lucide-react";
 
 import "./Admin.css";
@@ -78,7 +75,7 @@ function HRMAdmin() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notices, setNotices] = useState([]);
-  const [birthdays, setBirthdays] = useState([]);
+  const [birthdays] = useState([]);
 
   const currentUser = getUser() || { name: "Admin User" };
   const firstName = (currentUser.name || "Admin").split(" ")[0];

@@ -1,4 +1,4 @@
-import React from "react";
+import "react";
 import { FileText, X, FileSpreadsheet, Download } from "lucide-react";
 
 export default function GenerateAttendanceReportModal({

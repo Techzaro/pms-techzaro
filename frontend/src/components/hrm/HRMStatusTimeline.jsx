@@ -1,4 +1,4 @@
-import React from "react";
+import "react";
 import { Check, Clock, Eye, AlertCircle, RefreshCw } from "lucide-react";
 import "./HRMStatusTimeline.css";
 

@@ -1,24 +1,17 @@
-import React, { useState, useEffect, useCallback } from "react";
+import  { useState, useEffect, useCallback } from "react";
 import API_URL from "../../config/api";
 import { authToken } from "../../utils/auth";
 import Breadcrumb from "../../components/Breadcrumb";
 import {
   FileText,
   Search,
-  Plus,
   ShieldAlert,
   CheckCircle2,
-  AlertTriangle,
   Upload,
   Download,
   X,
   Users,
   Phone,
-  Mail,
-  Award,
-  Briefcase,
-  Eye,
-  Trash2,
 } from "lucide-react";
 import "./EmployeeDocuments.css";
 

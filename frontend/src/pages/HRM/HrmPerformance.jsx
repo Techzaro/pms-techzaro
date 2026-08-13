@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import  { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
-import DashboardLayout from "../../components/layout/hrm/DashboardLayout";
+import "../../components/layout/hrm/DashboardLayout";
 import Breadcrumb from "../../components/Breadcrumb";
 import {
   TrendingUp,
   Award,
-  CheckCircle2,
   Plus,
   X,
   Search,
@@ -13,10 +12,6 @@ import {
   Edit3,
   FileText,
   RefreshCw,
-  Sliders,
-  Users,
-  Calendar,
-  Clock,
 } from "lucide-react";
 import API_URL from "../../config/api";
 import { authToken } from "../../utils/auth";
@@ -41,7 +36,7 @@ async function apiRequest(path, options = {}) {
 }
 
 export default function HrmPerformance() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const tabFromUrl = searchParams.get("tab") || "utilization";
   const [activeTab, setActiveTab] = useState(tabFromUrl);
 
@@ -52,7 +47,7 @@ export default function HrmPerformance() {
     }
   }, [searchParams]);
 
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
 
   // Data States
@@ -98,7 +93,7 @@ export default function HrmPerformance() {
   const [timeScore, setTimeScore] = useState(4.5);
   const [collabScore, setCollabScore] = useState(4.5);
   const [probScore, setProbScore] = useState(4.0);
-  const [commScore, setCommScore] = useState(4.5);
+  const [commScore] = useState(4.5);
   const [feedbackNotes, setFeedbackNotes] = useState("");
   const [promotionEligible, setPromotionEligible] = useState(true);
 

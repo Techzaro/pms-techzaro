@@ -561,6 +561,16 @@ function Sidebar() {
                       >
                         My Applications
                       </Link>
+                      {["admin", "owner"].includes(user?.role) && (
+                        <Link
+                          to={rolePath("hrm/workflow-settings")}
+                          className={`sidebar-sub-link ${isActiveOrStart("hrm/workflow-settings") ? "active" : ""}`}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          Workflow Settings
+                        </Link>
+                      )}
+
                     </div>
                   )}
                 </div>
@@ -660,37 +670,7 @@ function Sidebar() {
           
 
               {/* Settings Dropdown */}
-              {["admin", "owner"].includes(user?.role) && (
-                <div
-                  className={`sidebar-dropdown-group ${settingsOpen ? "open" : ""} ${isActiveOrStart("hrm/settings") || isActiveOrStart("hrm/workflow-settings") ? "active" : ""}`}
-                >
-                  <div
-                    className="sidebar-dropdown-header"
-                    onClick={toggleSettings}
-                  >
-                    <MdFactCheck />
-                    <span style={{ flex: 1 }}>Settings</span>
-                    <MdKeyboardArrowDown
-                      size={18}
-                      style={{
-                        transition: "transform 0.2s",
-                        transform: settingsOpen ? "rotate(180deg)" : "rotate(0deg)",
-                      }}
-                    />
-                  </div>
-                  {settingsOpen && (
-                    <div className="sidebar-sub-links">
-                      <Link
-                        to={rolePath("hrm/workflow-settings")}
-                        className={`sidebar-sub-link ${isActiveOrStart("hrm/workflow-settings") ? "active" : ""}`}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        Application Workflow
-                      </Link>
-                    </div>
-                  )}
-                </div>
-              )}
+            
             </>
           ) : (
             /* MEMBER HUB NAVIGATION LINKS */

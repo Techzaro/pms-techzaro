@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import  { useState, useEffect } from "react";
 import { Send, CheckCircle2, FileText, ClipboardList, Calendar, Banknote, Briefcase, AlertCircle, PieChart, Clock, Building } from "lucide-react";
 import API_URL from "../../config/api";
 import { authToken } from "../../utils/auth";
@@ -6,7 +6,8 @@ import HRMFieldRenderer from "./HRMFieldRenderer";
 import "./HRMDynamicFormRenderer.css";
 
 // Form configurations mapping
-const formConfigs = {
+export const formConfigs = {
+
   // 1. Attendance Requests
   "Attendance Correction": [
     { id: "corrDate", type: "date", label: "Date", required: true },
@@ -207,17 +208,20 @@ export default function HRMDynamicFormRenderer({ onSubmit }) {
   const [formData, setFormData] = useState({});
   const [contextData, setContextData] = useState(null);
   const [loadingContext, setLoadingContext] = useState(false);
+  const [reviewMode, setReviewMode] = useState(false);
 
   // Reset requestType when category changes
   useEffect(() => {
     setRequestType("");
     setFormData({});
     setContextData(null);
+    setReviewMode(false);
   }, [selectedCategory]);
 
   // Reset form when request type changes
   useEffect(() => {
     setFormData({});
+    setReviewMode(false);
     if (requestType) {
       fetchContextData(requestType);
     } else {
@@ -260,13 +264,17 @@ export default function HRMDynamicFormRenderer({ onSubmit }) {
     setFormData(prev => ({ ...prev, [id]: value }));
   };
 
-  const handleSubmit = () => {
+  const handleReview = () => {
     // Basic validation
     const missing = fields.filter(f => f.required && (!formData[f.id] || (Array.isArray(formData[f.id]) && formData[f.id].length === 0)));
     if (missing.length > 0) {
       alert(`Please fill all required fields: ${missing.map(m => m.label).join(", ")}`);
       return;
     }
+    setReviewMode(true);
+  };
+
+  const handleSubmit = () => {
     if (onSubmit) {
       onSubmit({ requestType, data: formData });
     }
@@ -314,14 +322,53 @@ export default function HRMDynamicFormRenderer({ onSubmit }) {
     );
   };
 
+  const getDisplayValue = (field) => {
+    const val = formData[field.id];
+    if (!val) return <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Not provided</span>;
+    if (field.type === 'richtext') return <div className="hrm-review-html" dangerouslySetInnerHTML={{ __html: val }} />;
+    if (field.type === 'attachment') {
+      if (Array.isArray(val) && val.length > 0) return <span>{val.length} file(s) attached</span>;
+      return <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>No files attached</span>;
+    }
+    if (field.type === 'daterange' && typeof val === 'object') return `${val.start || ''} → ${val.end || ''}`;
+    if (Array.isArray(val)) return val.join(', ');
+    return String(val);
+  };
+
   const dependentTypes = selectedCategory ? categoryMapping[selectedCategory] : [];
 
   return (
     <div className="hrm-dynamic-form-container">
-      <div className="hrm-dynamic-form-fill">
-          <div className="hrm-form-section" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+      {reviewMode ? (
+        <div className="hrm-dynamic-form-review" style={{ animation: 'formFadeIn 0.3s ease-out forwards' }}>
+          <h3 className="hrm-dynamic-title"><CheckCircle2 size={22} className="text-pms-primary" /> Review Your Application</h3>
+          <div style={{ marginBottom: '20px', padding: '14px 18px', background: 'var(--color-primary-bg, #eef2ff)', borderRadius: '10px', border: '1px solid var(--color-primary-ring, #c7d2fe)' }}>
+            <strong style={{ color: 'var(--color-primary, #4f46e5)' }}>Application Type:</strong>{' '}
+            <span style={{ fontWeight: 600 }}>{requestType}</span>
+          </div>
+          <div className="hrm-review-list">
+            {fields.filter(f => f.type !== 'attachment' || (formData[f.id] && (Array.isArray(formData[f.id]) ? formData[f.id].length > 0 : formData[f.id]))).map(field => (
+              <div key={field.id} className="hrm-review-item" style={field.type === 'richtext' ? { gridColumn: '1 / -1' } : {}}>
+                <span className="hrm-review-label">{field.label}</span>
+                <span className="hrm-review-val">{getDisplayValue(field)}</span>
+              </div>
+            ))}
+          </div>
+          <div className="hrm-form-actions hrm-review-actions">
+            <button type="button" className="hrm-btn hrm-btn-secondary" onClick={() => setReviewMode(false)}>
+              ← Back to Edit
+            </button>
+            <button type="button" className="hrm-btn hrm-btn-success" onClick={handleSubmit}>
+              <Send size={18} /> Confirm & Submit
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="hrm-dynamic-form-fill">
+          <div className="hrm-form-section hrm-category-type-grid">
             <div>
               <label className="hrm-dynamic-label">Application Category</label>
+
               <select 
                 className="hrm-dynamic-select"
                 value={selectedCategory} 
@@ -367,13 +414,15 @@ export default function HRMDynamicFormRenderer({ onSubmit }) {
                 ))}
               </div>
               <div className="hrm-form-actions">
-                <button type="button" className="hrm-btn hrm-btn-primary" onClick={handleSubmit}>
-                  Submit Request <Send size={18} />
+                <button type="button" className="hrm-btn hrm-btn-primary" onClick={handleReview}>
+                  Review Application <FileText size={18} />
                 </button>
               </div>
             </div>
           )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
+

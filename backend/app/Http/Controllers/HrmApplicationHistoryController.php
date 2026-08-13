@@ -322,4 +322,139 @@ class HrmApplicationHistoryController extends Controller
             'data' => $record
         ]);
     }
+
+    public function respondInfoRequest(Request $request, $id)
+    {
+        $user = $this->resolveAuth($request);
+        if (!$user) return response()->json(['success' => false, 'message' => 'Unauthenticated.'], 401);
+
+        $request->validate([
+            'comments' => 'nullable|string',
+        ]);
+
+        $orgId = $user->organization_id ?? 1;
+        $record = HrmMemberRequest::with(['approvals', 'employee', 'fields'])->where('organization_id', $orgId)->where('id', $id)->first();
+        if (!$record) return response()->json(['success' => false, 'message' => 'Not found.'], 404);
+
+        $oldStatus = $record->status;
+        
+        // Update Title / Description if applicant edited them
+        if ($request->filled('title')) {
+            $record->title = $request->title;
+        }
+        if ($request->filled('description')) {
+            $record->description = $request->description;
+        }
+
+        // Update custom fields if applicant edited them
+        $fieldsInput = $request->input('fields', $request->input('dynamic_fields', []));
+        if (is_string($fieldsInput)) {
+            $fieldsInput = json_decode($fieldsInput, true) ?: [];
+        }
+
+        // Handle File uploads if present in request
+        $uploadedPaths = [];
+        if ($request->hasFile('files')) {
+            $fileList = is_array($request->file('files')) ? $request->file('files') : [$request->file('files')];
+            foreach ($fileList as $file) {
+                if ($file) {
+                    $path = $file->store('hrm/member_requests', 'public');
+                    $uploadedPaths[] = '/storage/' . $path;
+                }
+            }
+        } elseif ($request->hasFile('global_attachment')) {
+            $fileList = is_array($request->file('global_attachment')) ? $request->file('global_attachment') : [$request->file('global_attachment')];
+            foreach ($fileList as $file) {
+                if ($file) {
+                    $path = $file->store('hrm/member_requests', 'public');
+                    $uploadedPaths[] = '/storage/' . $path;
+                }
+            }
+        }
+
+        if (!empty($uploadedPaths)) {
+            $existingAtt = \App\Models\HrmMemberRequestField::where('request_id', $record->id)->whereIn('field_name', ['global_attachment', 'attachment', 'documents', 'files'])->first();
+            $fieldName = $existingAtt ? $existingAtt->field_name : 'global_attachment';
+            $prevValue = $existingAtt ? $existingAtt->field_value : null;
+            $prevArray = [];
+            if ($prevValue) {
+                try {
+                    $parsed = json_decode($prevValue, true);
+                    if (is_array($parsed)) $prevArray = $parsed;
+                    else if (is_string($prevValue) && !empty($prevValue)) $prevArray = [$prevValue];
+                } catch(\Exception $e) {}
+            }
+            $finalArray = array_values(array_unique(array_merge($prevArray, $uploadedPaths)));
+            $fieldsInput[$fieldName] = $finalArray;
+        }
+
+        if (is_array($fieldsInput)) {
+            foreach ($fieldsInput as $fieldName => $fieldValue) {
+                $valStr = is_array($fieldValue) ? json_encode($fieldValue) : (string)$fieldValue;
+                \App\Models\HrmMemberRequestField::updateOrCreate(
+                    [
+                        'request_id' => $record->id,
+                        'field_name' => $fieldName,
+                    ],
+                    [
+                        'organization_id' => $orgId,
+                        'field_value' => $valStr,
+                    ]
+                );
+            }
+        }
+
+
+        // Reset any approval step marked 'Additional Information Required' back to 'Pending'
+        foreach ($record->approvals as $appr) {
+            if ($appr->status === 'Additional Information Required') {
+                $appr->status = 'Pending';
+                $appr->save();
+            }
+        }
+
+        $hasPendingSteps = $record->approvals->where('status', 'Pending')->count() > 0;
+        $newStatus = $hasPendingSteps ? 'Under Review' : 'Pending';
+
+        $record->status = $newStatus;
+        $record->updated_by = $user->id;
+        $record->save();
+
+        HrmRequestHistory::create([
+            'organization_id' => $user->organization_id ?? 1,
+            'request_id' => $record->id,
+            'performed_by' => $user->id,
+            'action' => 'Application Updated & Resubmitted',
+            'old_status' => $oldStatus,
+            'new_status' => $newStatus,
+            'comments' => $request->comments ?: 'Applicant provided updated information and resubmitted the application.',
+        ]);
+
+        try {
+            $pendingStep = $record->approvals->where('status', 'Pending')->sortBy('step_order')->first();
+            $targetUserId = null;
+            if ($pendingStep && $pendingStep->approver_type === 'User') {
+                $targetUserId = $pendingStep->approver_id;
+            }
+            if ($targetUserId) {
+                DB::table('hrm_notifications')->insert([
+                    'user_id' => $targetUserId,
+                    'type' => 'Application Resubmitted',
+                    'title' => "Application Updated for Request #{$record->request_number}",
+                    'message' => "{$user->name} has updated and resubmitted their application '{$record->title}'.",
+                    'is_read' => 0,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        } catch (\Exception $e) {}
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Application updated and resubmitted successfully.',
+            'data' => $record
+        ]);
+    }
+
 }
+

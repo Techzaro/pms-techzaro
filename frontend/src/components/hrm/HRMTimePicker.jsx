@@ -1,4 +1,4 @@
-import React from "react";
+import "react";
 import { Clock, X } from "lucide-react";
 import "./HRMPickers.css";
 

@@ -735,6 +735,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/hrm/application-history/all/{id}/comments', [HrmApplicationHistoryController::class, 'addComment']);
     Route::post('/hrm/application-history/all/{id}/attachments', [HrmApplicationHistoryController::class, 'uploadAttachment']);
     Route::patch('/hrm/application-history/all/{id}/status', [HrmApplicationHistoryController::class, 'updateStatus']);
+    Route::post('/hrm/application-history/all/{id}/respond-info', [HrmApplicationHistoryController::class, 'respondInfoRequest']);
 
     // Dynamic Admin Custom Application Types Routes
 

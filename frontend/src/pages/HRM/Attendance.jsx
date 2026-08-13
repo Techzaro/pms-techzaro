@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import  { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import API_URL from "../../config/api";
 import { authToken, getUser } from "../../utils/auth";
@@ -15,37 +15,25 @@ import {
   UserCheck,
   UserX,
   AlertTriangle,
-  CheckCircle2,
   Building2,
   Laptop,
   RefreshCw,
   Sliders,
   Plus,
   Search,
-  Filter,
   ShieldAlert,
   FileText,
   X,
   Play,
   Pause,
-  Users,
   Briefcase,
-  Bell,
   Eye,
   Trash2,
   Edit3,
   Gift,
   Award,
-  Check,
-  MapPin,
-  Camera,
-  Layers,
   LayoutGrid,
   List,
-  ChevronRight,
-  TrendingUp,
-  Download,
-  Printer,
   FileSpreadsheet,
 } from "lucide-react";
 import "./Attendance.css";
@@ -166,10 +154,10 @@ export default function Attendance() {
   const currentUser = getUser() || {};
   const [data, setData] = useState(null);
   const [leaves, setLeaves] = useState([]);
-  const [timesheets, setTimesheets] = useState([]);
+  const [, setTimesheets] = useState([]);
   const [corrections, setCorrections] = useState([]);
   const [shifts, setShifts] = useState([]);
-  const [settings, setSettings] = useState({});
+  const [, setSettings] = useState({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [toast, setToast] = useState(null);
@@ -239,7 +227,7 @@ export default function Attendance() {
   // Member Requests Multi-Select & Detailed Audit Drawer State
   const [selectedRequestIds, setSelectedRequestIds] = useState([]);
   const [inspectRequestModal, setInspectRequestModal] = useState(null);
-  const [inspectAdminNotes, setInspectAdminNotes] = useState("");
+  const [, setInspectAdminNotes] = useState("");
 
   const handleToggleSelectRequest = (id) => {
     setSelectedRequestIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
@@ -259,7 +247,7 @@ export default function Attendance() {
     try {
       notify(`✔ Bulk approving selected requests...`);
       for (const reqId of selectedRequestIds) {
-        const reqObj = unifiedRequests.find((r) => r.id === reqId);
+        const reqObj = allRequestsUnified.find((r) => r.id === reqId);
         if (reqObj) {
           if (reqObj.type === "leave") await handleRespondLeave(reqObj.rawId, "Approved");
           else if (reqObj.type === "wfh") await handleApproveWfh(reqObj.rawId);
@@ -453,8 +441,8 @@ export default function Attendance() {
   const [warningsSummary, setWarningsSummary] = useState({});
   const [deptSettings, setDeptSettings] = useState([]);
   const [maxLateAllowed, setMaxLateAllowed] = useState(3);
-  const [removeWarningTarget, setRemoveWarningTarget] = useState(null);
-  const [adminRemoveNotes, setAdminRemoveNotes] = useState("");
+  const [, setRemoveWarningTarget] = useState(null);
+  const [, setAdminRemoveNotes] = useState("");
   const [warningStatusFilter, setWarningStatusFilter] = useState("All");
 
   // Request History, Search, & Filters State (Point 2)
@@ -710,22 +698,7 @@ export default function Attendance() {
   };
 
   // Admin Confirm Remove Warning from Account
-  const handleAdminConfirmRemoveWarning = async (e) => {
-    e.preventDefault();
-    if (!removeWarningTarget) return;
-    try {
-      const res = await apiRequest(`/hrm/warnings/${removeWarningTarget.id}/remove`, {
-        method: "POST",
-        body: JSON.stringify({ admin_notes: adminRemoveNotes }),
-      });
-      notify(res.message || "Policy warning successfully removed from member account ✔");
-      setRemoveWarningTarget(null);
-      setAdminRemoveNotes("");
-      loadData();
-    } catch (err) {
-      notify(err.message || "Failed to remove warning.", "error");
-    }
-  };
+  
 
   // Admin Reject Warning Removal Request
   const handleAdminRejectWarningRemoval = async (warningId) => {
@@ -952,9 +925,9 @@ export default function Attendance() {
     }
   };
 
-  const users = data?.users || [];
+  const users = useMemo(() => data?.users || [], [data?.users]);
   const attendances = data?.attendances || [];
-  const wfhRequests = data?.wfhRequests || [];
+  const wfhRequests = useMemo(() => data?.wfhRequests || [], [data?.wfhRequests]);
   const snapshots = data?.snapshots || [];
   const activePolicy = data?.activePolicy || shifts.find((s) => s.is_active === true || String(s.is_active) === "1") || shifts[0] || {};
 
@@ -1140,10 +1113,10 @@ export default function Attendance() {
   const pausedCount = attendances.filter((a) => a.status === "Paused").length;
   const leaveCount = leaves.filter((l) => l.status === "Approved").length;
 
-  const pendingWfhCount = wfhRequests.filter((w) => w.status === "Pending").length;
-  const pendingLeavesCount = leaves.filter((l) => l.status === "Pending").length;
-  const pendingCorrectionsCount = corrections.filter((c) => c.status === "Pending").length;
-  const pendingTimesheetsCount = timesheets.filter((t) => t.status === "Submitted").length;
+  
+  
+  
+  
 
   const pendingTotal = requestsStats.pending;
 
@@ -1575,7 +1548,7 @@ export default function Attendance() {
                 <div className="att-kanban-grid">
                   {filteredUsers.map((u) => {
                     const att = attendances.find((a) => String(a.user_id) === String(u.id));
-                    const wfh = wfhRequests.find((w) => String(w.user_id) === String(u.id));
+                    
                     const userSnaps = snapshots.filter((s) => String(s.user_id) === String(u.id));
 
                     const isLiveNow = att?.clock_in && !att?.clock_out && att?.status !== "Paused";
@@ -2869,14 +2842,8 @@ export default function Attendance() {
   );
 }
 
-function roundVal(v, d) {
-  return Number(Math.round(v + "e" + d) + "e-" + d) || 0;
-}
 
-function minVal(a, b) {
-  return Math.min(a, b);
-}
 
-function maxVal(a, b) {
-  return Math.max(a, b);
-}
+
+
+

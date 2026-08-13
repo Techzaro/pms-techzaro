@@ -1,11 +1,11 @@
-import React, { useState } from "react";
+import  { useState } from "react";
 import Breadcrumb from "../../components/Breadcrumb";
 import ApplicationHistoryTab from "./ApplicationHistoryTab";
 import { rolePath, getCurrentRole } from "../../utils/auth";
 import "./Attendance.css"; // Reuse page layout styles
 
 export default function Applications() {
-  const [resetKey] = useState(Date.now());
+  const [resetKey] = useState(() => Date.now());
   const role = getCurrentRole();
   // Members visiting this page are here to approve — show only assigned-to-them apps
   const isMemberApprover = ["member", "team_lead", "guest"].includes(role);

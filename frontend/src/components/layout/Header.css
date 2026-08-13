@@ -584,14 +584,24 @@
     min-height: 60px !important;
     max-height: 60px !important;
     flex-wrap: nowrap !important;
-    padding: 0 10px !important;
+    padding: 0 8px !important;
     gap: 6px !important;
     border-radius: 14px !important;
+    overflow: visible !important;
   }
 
   .header-left {
-    flex: 0 0 auto;
-    gap: 8px;
+    flex: 0 0 auto !important;
+    gap: 6px !important;
+    overflow: visible !important;
+  }
+
+  .header-logo-switcher {
+    overflow: visible !important;
+    position: relative !important;
+    touch-action: manipulation;
+    padding: 4px 6px;
+    border-radius: 8px;
   }
 
   .logo-text {
@@ -599,24 +609,61 @@
   }
 
   .header-search {
-    flex: 1 !important;
-    max-width: 200px !important;
-    min-width: 100px !important;
-    margin: 0 4px !important;
+    flex: 1 1 auto !important;
+    max-width: 140px !important;
+    min-width: 70px !important;
+    margin: 0 2px !important;
   }
 
   .header-search input {
-    height: 36px;
-    padding-left: 34px;
-    font-size: 12px;
+    height: 36px !important;
+    padding-left: 30px !important;
+    font-size: 12px !important;
+  }
+
+  .search-icon {
+    left: 9px !important;
+    font-size: 12px !important;
   }
 
   .header-right {
-    flex: 0 0 auto;
-    gap: 4px;
+    flex: 0 0 auto !important;
+    gap: 4px !important;
+    display: flex !important;
+    align-items: center !important;
+    flex-shrink: 0 !important;
+  }
+
+  .header-container hr {
+    display: none !important;
+  }
+
+  .user-info {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    cursor: pointer !important;
+    flex-shrink: 0 !important;
+  }
+
+  .user-avatar {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 50% !important;
+    flex-shrink: 0 !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+
   }
 
   .user-text {
+    display: none !important;
+  }
+
+  .arrow-icon {
     display: none !important;
   }
 
@@ -630,26 +677,59 @@
 
   .task-btn1,
   .project-btn {
-    padding: 6px 10px !important;
-    font-size: 12px !important;
-    font-weight: 700 !important;
-    border-radius: 8px !important;
-    white-space: nowrap !important;
+    display: none !important;
   }
 }
 
 @media (max-width: 480px) {
   .header-container {
-    padding: 0 8px !important;
+    padding: 0 6px !important;
+    height: 54px !important;
+    min-height: 54px !important;
+    gap: 4px !important;
   }
 
   .header-search {
-    max-width: 130px !important;
+    max-width: 90px !important;
+    min-width: 60px !important;
+  }
+
+  .header-search input {
+    height: 34px !important;
+    padding-left: 26px !important;
+    font-size: 11px !important;
+  }
+
+  .search-icon {
+    left: 8px !important;
+    font-size: 11px !important;
   }
 
   .logo-box {
-    width: 34px;
-    height: 34px;
-    font-size: 13px;
+    width: 34px !important;
+    height: 34px !important;
+    font-size: 13px !important;
+  background-color: #020704;
+  }
+
+  .theme-toggle-btn {
+    display: none !important;
+  }
+
+  .user-avatar {
+    width: 32px !important;
+    height: 32px !important;
+    font-size: 13px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .header-notif-icon-wrap {
+    width: 32px !important;
+    height: 32px !important;
+  }
+
+  .header-modal-card {
+    width: min(290px, calc(100vw - 12px)) !important;
+    right: -4px !important;
   }
 }

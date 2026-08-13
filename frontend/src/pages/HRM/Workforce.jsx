@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import  { useState, useEffect, useCallback } from "react";
 import API_URL from "../../config/api";
 import { authToken } from "../../utils/auth";
 import Breadcrumb from "../../components/Breadcrumb";
@@ -15,7 +15,6 @@ import {
   Filter,
   Edit3,
   Shield,
-  Award,
 } from "lucide-react";
 import WorkforceEmployeeModal from "../../components/layout/hrm/layoutComponent/hrm Modal/WorkforceEmployeeModal";
 import "./Workforce.css";
@@ -44,7 +43,7 @@ export default function Workforce() {
   const [search, setSearch] = useState("");
   const [selectedDept, setSelectedDept] = useState("All");
   const [selectedStatus, setSelectedStatus] = useState("All");
-  const [selectedUser, setSelectedUser] = useState(null);
+  const [, setSelectedUser] = useState(null);
   const [toast, setToast] = useState(null);
   const [editModal, setEditModal] = useState(false);
   const [uploading, setUploading] = useState(false);

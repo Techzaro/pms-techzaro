@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import  { useState, useEffect, useRef } from "react";
 import { Plus, Trash2, Save, GripVertical, Settings, Users, ArrowUp, ArrowDown, Building2, CheckSquare, ChevronDown } from "lucide-react";
 import API_URL from "../../config/api";
 import { authToken } from "../../utils/auth";
@@ -63,10 +63,14 @@ export default function WorkflowSettings() {
       setDepartmentWorkflows([]);
       setSubmitterRole([]);
     }
+    // selectedDepartment is the complete trigger for this coordinated reload.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDepartment]);
 
   useEffect(() => {
     applyWorkflowData();
+    // Apply only when the selected role or fetched workflow data changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [submitterRole, departmentWorkflows]);
 
   const fetchDepartments = async () => {

@@ -1,4 +1,4 @@
-import React from "react";
+import "react";
 import { Calendar, X } from "lucide-react";
 import "./HRMPickers.css";
 

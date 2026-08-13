@@ -367,3 +367,66 @@
   font-weight: 600;
   color: #0f172a;
 }
+
+/* Responsive Mobile & Tablet Rules */
+@media (max-width: 640px) {
+  .history-stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  .stat-box {
+    padding: 12px !important;
+  }
+
+  .stat-val {
+    font-size: 20px !important;
+  }
+
+  .toolbar-top-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  .search-box {
+    min-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .export-controls {
+    width: 100% !important;
+    justify-content: space-between !important;
+  }
+
+  .btn-export {
+    flex: 1 !important;
+    justify-content: center !important;
+  }
+
+  .filters-bottom-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  .filter-group {
+    width: 100% !important;
+  }
+
+  .filter-select {
+    width: 100% !important;
+  }
+
+  .table-footer {
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 10px !important;
+  }
+
+  .pagination-controls {
+    width: 100% !important;
+    justify-content: space-between !important;
+  }
+}
+

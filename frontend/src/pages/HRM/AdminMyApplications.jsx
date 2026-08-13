@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useLocation } from "react-router-dom";
 import API_URL from "../../config/api";
 import { authToken, rolePath } from "../../utils/auth";
 import Breadcrumb from "../../components/Breadcrumb";
-import { FileText, List, Eye } from "lucide-react";
+import { FileText, List, Eye, Search } from "lucide-react";
 import HRMDynamicFormRenderer from "../../components/hrm/HRMDynamicFormRenderer";
 import ApplicationDetailsPage from "../../components/hrm/ApplicationDetailsPage";
-import "./MemberHrmDashboard.css"; // Reuse styling for the form and tables
+import "./MemberHrmDashboard.css";
 
 async function apiRequest(path, options = {}) {
   const token = authToken();
@@ -29,9 +30,24 @@ export default function AdminMyApplications() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
-  const [formResetKey, setFormResetKey] = useState(Date.now());
+  const [formResetKey, setFormResetKey] = useState(() => Date.now());
   const [submittingReq, setSubmittingReq] = useState(false);
   const [selectedHistoryId, setSelectedHistoryId] = useState(null);
+
+  const location = useLocation();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const id = params.get('id');
+    if (id) {
+      setSelectedHistoryId(Number(id));
+    }
+  }, [location.search]);
+
+  // Search & Filter State matching Member HRM Dashboard
+  const [appHistorySearch, setAppHistorySearch] = useState("");
+  const [appHistoryFilter, setAppHistoryFilter] = useState("All");
+
 
   function notify(msg, kind = "success") {
     setToast({ message: msg, kind });
@@ -41,7 +57,6 @@ export default function AdminMyApplications() {
   const loadMyApplications = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      // Reusing the member/summary endpoint to fetch own requests (history)
       const summaryRes = await apiRequest("/hrm/member/summary");
       setData(summaryRes);
     } catch (err) {
@@ -106,8 +121,45 @@ export default function AdminMyApplications() {
   const memberRequests = data?.memberRequests || [];
   const leaveHistory = data?.leaveHistory || [];
 
+  const allHistoryItems = useMemo(() => {
+    return [...memberRequests, ...leaveHistory];
+  }, [memberRequests, leaveHistory]);
+
+  const historyTotal = allHistoryItems.length;
+  const historyPending = useMemo(() => {
+    return allHistoryItems.filter(r => !r.status || r.status === "Pending" || r.status === "In Progress" || r.status === "Additional Information Required").length;
+  }, [allHistoryItems]);
+
+  const historyApproved = useMemo(() => {
+    return allHistoryItems.filter(r => r.status === "Approved" || r.status === "Completed").length;
+  }, [allHistoryItems]);
+
+  const historyRejected = useMemo(() => {
+    return allHistoryItems.filter(r => r.status === "Rejected" || r.status === "Cancelled").length;
+  }, [allHistoryItems]);
+
+  const filteredHistory = useMemo(() => {
+    return allHistoryItems
+      .filter(r => {
+        if (appHistoryFilter !== "All") {
+          const s = r.status || "Pending";
+          if (appHistoryFilter === "Pending" && !["Pending", "In Progress", "Additional Information Required"].includes(s)) return false;
+          if (appHistoryFilter === "Approved" && !["Approved", "Completed"].includes(s)) return false;
+          if (appHistoryFilter === "Rejected" && !["Rejected", "Cancelled"].includes(s)) return false;
+        }
+        if (appHistorySearch.trim()) {
+          const term = appHistorySearch.toLowerCase();
+          const type = (r.category || r.leave_type || r.application_type || r.name || "").toLowerCase();
+          const subj = (r.subject || r.title || r.reason || "").toLowerCase();
+          if (!type.includes(term) && !subj.includes(term)) return false;
+        }
+        return true;
+      })
+      .sort((a,b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+  }, [allHistoryItems, appHistoryFilter, appHistorySearch]);
+
   return (
-    <div style={{ padding: "20px" }}>
+    <div className="my-apps-page-container">
       {toast && <div className={`mem-toast mem-toast--${toast.kind}`} role="alert">{toast.message}</div>}
 
       <Breadcrumb items={[{ label: "Enterprise HRM", path: rolePath("hrm") }, { label: "My Applications" }]} />
@@ -138,7 +190,7 @@ export default function AdminMyApplications() {
             </p>
           </div>
 
-          <div style={{ background: "var(--bg-card-alt)", border: "1px solid var(--border-color)", borderRadius: "12px", padding: "20px", marginBottom: "28px" }}>
+          <div className="my-apps-form-card">
             <p className="mem-section-sub" style={{ margin: "0 0 16px" }}>
               <FileText size={16} /> New Application Request
             </p>
@@ -153,11 +205,56 @@ export default function AdminMyApplications() {
             </p>
           </div>
 
+          {/* Member Side Metric Stats Grid */}
+          <div className="mem-stat-grid">
+
+            <div style={{ padding: '16px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', textAlign: 'center' }}>
+              <div style={{ fontSize: '24px', fontWeight: '700', color: '#1e293b' }}>{historyTotal}</div>
+              <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Applications</div>
+            </div>
+            <div style={{ padding: '16px', background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: '8px', textAlign: 'center' }}>
+              <div style={{ fontSize: '24px', fontWeight: '700', color: '#b45309' }}>{historyPending}</div>
+              <div style={{ fontSize: '12px', color: '#b45309', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Pending Review</div>
+            </div>
+            <div style={{ padding: '16px', background: '#ecfdf5', border: '1px solid #d1fae5', borderRadius: '8px', textAlign: 'center' }}>
+              <div style={{ fontSize: '24px', fontWeight: '700', color: '#047857' }}>{historyApproved}</div>
+              <div style={{ fontSize: '12px', color: '#047857', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Approved</div>
+            </div>
+            <div style={{ padding: '16px', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '8px', textAlign: 'center' }}>
+              <div style={{ fontSize: '24px', fontWeight: '700', color: '#b91c1c' }}>{historyRejected}</div>
+              <div style={{ fontSize: '12px', color: '#b91c1c', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Rejected</div>
+            </div>
+          </div>
+
+          {/* Search & Status Filter Controls */}
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: '200px', position: 'relative' }}>
+              <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted, #64748b)' }} />
+              <input 
+                type="text" 
+                placeholder="Search applications..." 
+                value={appHistorySearch}
+                onChange={(e) => setAppHistorySearch(e.target.value)}
+                style={{ width: '100%', padding: '10px 10px 10px 36px', border: '1px solid var(--border-color, #cbd5e1)', borderRadius: '6px', fontSize: '13px' }}
+              />
+            </div>
+            <select 
+              value={appHistoryFilter}
+              onChange={(e) => setAppHistoryFilter(e.target.value)}
+              style={{ padding: '10px 16px', border: '1px solid var(--border-color, #cbd5e1)', borderRadius: '6px', fontSize: '13px', background: 'white' }}
+            >
+              <option value="All">All Statuses</option>
+              <option value="Pending">Pending</option>
+              <option value="Approved">Approved</option>
+              <option value="Rejected">Rejected</option>
+            </select>
+          </div>
+
           {loading && !data ? (
             <div className="mem-table-empty">Loading applications...</div>
-          ) : memberRequests.length === 0 && leaveHistory.length === 0 ? (
+          ) : filteredHistory.length === 0 ? (
             <div className="mem-table-empty">
-              No applications submitted yet.
+              {allHistoryItems.length === 0 ? "No applications submitted yet." : "No applications found matching your criteria."}
             </div>
           ) : (
             <div className="mem-table-wrap">
@@ -172,18 +269,24 @@ export default function AdminMyApplications() {
                   </tr>
                 </thead>
                 <tbody>
-                  {[...memberRequests, ...leaveHistory].sort((a,b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)).map((r) => (
+                  {filteredHistory.map((r) => (
                     <tr key={r.id}>
-                      <td style={{ fontWeight: "600", color: "var(--text-heading)" }}>{r.category || r.leave_type || r.application_type || r.name}</td>
-                      <td style={{ fontWeight: "600", color: "var(--text-dark)", maxWidth: "250px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <td style={{ fontWeight: "600", color: "var(--text-heading, #0f172a)" }}>
+                        {r.category || r.leave_type || r.application_type || r.name}
+                      </td>
+                      <td style={{ fontWeight: "600", color: "var(--text-dark, #334155)", maxWidth: "250px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {r.subject || r.title || r.reason || "-"}
                       </td>
                       <td>
-                        <span className={`mem-badge ${r.status === "Approved" ? "mem-badge--success" : r.status === "Rejected" ? "mem-badge--danger" : "mem-badge--warning"}`}>
+                        <span className={`mem-badge ${
+                          r.status === "Approved" || r.status === "Completed" ? "mem-badge--success" : 
+                          r.status === "Rejected" || r.status === "Cancelled" ? "mem-badge--danger" : 
+                          "mem-badge--warning"
+                        }`}>
                           {r.status || "Pending"}
                         </span>
                       </td>
-                      <td style={{ fontSize: "11.5px", color: "var(--text-muted)" }}>
+                      <td style={{ fontSize: "11.5px", color: "var(--text-muted, #64748b)" }}>
                         {r.created_at ? new Date(r.created_at).toLocaleDateString() : "-"}
                       </td>
                       <td>

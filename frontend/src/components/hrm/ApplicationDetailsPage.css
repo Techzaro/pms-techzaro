@@ -822,3 +822,50 @@
 .details-text-box ol { list-style-type: decimal !important; padding-left: 1.5rem !important; margin-bottom: 1rem !important; }
 .details-text-box h1, .details-text-box h2, .details-text-box h3 { font-weight: 700 !important; margin-top: 1.5rem !important; margin-bottom: 0.5rem !important; }
 .details-text-box p { margin-bottom: 0.75rem !important; }
+
+/* Responsive Mobile & Tablet Rules */
+@media (max-width: 768px) {
+  .app-detail-page {
+    padding: 12px !important;
+  }
+
+  .app-detail-navbar {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 10px !important;
+  }
+
+  .app-detail-banner {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    padding: 16px !important;
+    gap: 12px !important;
+  }
+
+  .banner-status-box {
+    align-self: flex-start !important;
+  }
+
+  .app-detail-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+
+  .details-grid-2col {
+    grid-template-columns: 1fr !important;
+  }
+
+  .action-buttons-row {
+    flex-direction: column !important;
+    width: 100% !important;
+  }
+
+  .btn-pms-approve,
+  .btn-pms-reject,
+  .btn-pms-cancel,
+  .btn-pms-info {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+}
+

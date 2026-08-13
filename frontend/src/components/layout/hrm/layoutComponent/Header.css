@@ -899,141 +899,193 @@
   }
 }
 
-/* ── ≤1200px: Show hamburger button (matches PMS) ── */
-@media (max-width: 1200px) {
-  .header-menu-btn {
-    display: flex;
-  }
-}
-
 @media (max-width: 768px) {
+  .header-container,
+  .hrm-layout .header-container {
+    height: 60px !important;
+    min-height: 60px !important;
+    max-height: 60px !important;
+    flex-wrap: nowrap !important;
+    padding: 0 8px !important;
+    gap: 6px !important;
+    border-radius: 14px !important;
+    overflow: visible !important;
+  }
 
-  .header-container {
-    padding: 0 12px;
-    height: 60px;
-    border-radius: 0;
-    gap: 6px;
+  .header-left,
+  .hrm-layout .header-left {
+    flex: 0 0 auto !important;
+    gap: 6px !important;
+    overflow: visible !important;
+  }
+
+  .header-logo-switcher,
+  .hrm-layout .header-logo-switcher {
+    overflow: visible !important;
+    position: relative !important;
+    touch-action: manipulation;
+    padding: 4px 6px;
+    border-radius: 8px;
+  }
+
+  .logo-text,
+  .hrm-layout .logo-text {
+    display: none !important;
+  }
+
+  .header-search,
+  .hrm-layout .header-search {
+    flex: 1 1 auto !important;
+    max-width: 120px !important;
+    min-width: 65px !important;
+    margin: 0 2px !important;
+  }
+
+  .header-search input,
+  .hrm-layout .header-search input {
+    height: 36px !important;
+    padding-left: 30px !important;
+    font-size: 12px !important;
+  }
+
+  .search-icon,
+  .hrm-layout .search-icon {
+    left: 9px !important;
+    font-size: 12px !important;
+  }
+
+  .header-right,
+  .hrm-layout .header-right {
+    flex: 0 0 auto !important;
+    min-width: 0 !important;
+    width: auto !important;
+    gap: 4px !important;
+    display: flex !important;
+    align-items: center !important;
+    flex-shrink: 0 !important;
+  }
+
+  .header-container hr,
+  .hrm-layout .header-container hr {
+    display: none !important;
+  }
+
+  .user-info,
+  .hrm-layout .user-info {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    cursor: pointer !important;
+    flex-shrink: 0 !important;
+  }
+
+  .user-avatar,
+  .hrm-layout .user-avatar {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 50% !important;
+    flex-shrink: 0 !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    margin-right: 0 !important;
+  }
+
+  .user-text,
+  .hrm-layout .user-text {
+    display: none !important;
+  }
+
+  .arrow-icon,
+  .hrm-layout .arrow-icon {
+    display: none !important;
   }
 
   .task-btn1,
-  .project-btn {
-    display: none;
+  .project-btn,
+  .hrm-layout .task-btn1,
+  .hrm-layout .project-btn {
+    display: none !important;
   }
 
-  .header-right {
-    gap: 6px;
+  .header-notif,
+  .hrm-layout .header-notif {
+    flex-shrink: 0 !important;
   }
 
-  .header-search {
-    flex: 1 1 auto;
-    min-width: 0;
+  .header-notif-icon-wrap,
+  .hrm-layout .header-notif-icon-wrap {
+    width: 34px !important;
+    height: 34px !important;
   }
 
-  .header-search input {
-    height: 38px;
-    font-size: 13px;
-    padding-left: 34px;
-  }
-
-  .search-icon {
-    left: 11px;
-    font-size: 13px;
-  }
-
-  .user-avatar {
-    width: 34px;
-    height: 34px;
-    font-size: 15px;
-  }
-
-  .header-modal-card {
-    width: min(280px, calc(100vw - 20px));
-    right: -8px;
-  }
-
-  .user-text {
-    display: none;
-  }
-
-  .arrow-icon {
-    display: none;
-  }
-
-  .header-container hr {
-    display: none;
+  .header-modal-card,
+  .hrm-layout .header-modal-card {
+    width: min(290px, calc(100vw - 16px)) !important;
+    right: -4px !important;
   }
 }
 
 @media (max-width: 480px) {
-  .header-container {
-    padding: 0 8px;
-    height: 54px;
-    gap: 4px;
+  .header-container,
+  .hrm-layout .header-container {
+    padding: 0 6px !important;
+    height: 54px !important;
+    min-height: 54px !important;
+    gap: 4px !important;
   }
 
-  .header-left {
-    gap: 6px;
+  .header-search,
+  .hrm-layout .header-search {
+    max-width: 80px !important;
+    min-width: 50px !important;
   }
 
-  .header-right {
-    gap: 4px;
+  .header-search input,
+  .hrm-layout .header-search input {
+    height: 34px !important;
+    padding-left: 24px !important;
+    font-size: 11px !important;
   }
 
-  .header-search input {
-    height: 34px;
-    font-size: 12px;
-    padding-left: 30px;
+  .search-icon,
+  .hrm-layout .search-icon {
+    left: 7px !important;
+    font-size: 11px !important;
   }
 
-  .search-icon {
-    left: 9px;
-    font-size: 11px;
-  }
-
-  .user-avatar {
-    width: 32px;
-    height: 32px;
-    font-size: 14px;
-  }
-
-  .header-modal-card {
-    width: calc(100vw - 16px);
-    padding: 0 14px 14px;
-  }
-
-  .logo-box {
-    width: 32px;
-    height: 32px;
-    font-size: 13px;
-  }
-
-  .logo-text h3 {
-    font-size: 13px;
-  }
-
-  .logo-text span {
-    font-size: 10px;
-  }
-
-  .header-menu-btn {
-    width: 30px;
-    height: 30px;
-  }
-
-  .header-menu-btn svg {
-    width: 16px;
-    height: 16px;
+  .logo-box,
+  .hrm-layout .logo-box {
+    width: 34px !important;
+    height: 34px !important;
+    font-size: 13px !important;
   }
 
   .theme-toggle-btn,
-  .header-notif-icon-wrap {
-    width: 34px;
-    height: 34px;
+  .hrm-layout .theme-toggle-btn {
+    display: none !important;
   }
 
-  /* Least essential control drops first, profile avatar stays put */
-  .theme-toggle-btn {
-    display: none;
+  .user-avatar,
+  .hrm-layout .user-avatar {
+    width: 32px !important;
+    height: 32px !important;
+    font-size: 13px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .header-notif-icon-wrap,
+  .hrm-layout .header-notif-icon-wrap {
+    width: 32px !important;
+    height: 32px !important;
+  }
+
+  .header-right,
+  .hrm-layout .header-right {
+    gap: 4px !important;
+    min-width: 0 !important;
   }
 }
 
@@ -1137,6 +1189,46 @@
   flex-shrink: 0;
 }
 
+/* Header-only profile selectors prevent page-level `.user-info` and
+   `.user-avatar` rules from changing or hiding the navigation avatar. */
+.hrm-layout .hrm-header-profile-trigger {
+  position: relative;
+  display: inline-flex !important;
+  align-items: center;
+  order: 10;
+  flex: 0 0 auto;
+  min-width: 42px;
+  min-height: 42px;
+  visibility: visible !important;
+  opacity: 1 !important;
+  z-index: 2;
+}
+
+.hrm-layout .hrm-header-profile-avatar {
+  display: flex !important;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  background: #6366f1 !important;
+  color: #ffffff !important;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.35);
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.hrm-layout .hrm-header-profile-avatar .hrm-profile-fallback-icon {
+  display: block !important;
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 20px;
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: none;
+}
+
 .hrm-layout .header-notif {
   flex-shrink: 0;
 }
@@ -1156,9 +1248,29 @@
   .hrm-layout .header-menu-btn {
     display: flex !important;
   }
+
+  /* Tablet widths cannot accommodate HRM's three desktop-only create
+     actions. Hide them at the same point the sidebar becomes an overlay. */
+  .hrm-layout .task-btn1,
+  .hrm-layout .project-btn,
+  .hrm-layout .desktop-notification-prompt,
+  .hrm-layout .header-container > hr {
+    display: none !important;
+  }
+
+  .hrm-layout .header-container {
+    justify-content: flex-start;
+  }
+
   .hrm-layout .header-search {
     flex: 1 1 180px;
     min-width: 100px;
+    max-width: none;
+  }
+
+  .hrm-layout .header-right {
+    min-width: auto;
+    margin-left: auto;
   }
 }
 
@@ -1169,79 +1281,190 @@
   }
   .hrm-layout .header-search {
     width: 100%;
-    max-width: 300px;
+    max-width: none;
   }
 }
 
-@media (max-width: 768px) {
+/* These rules intentionally come after the desktop HRM overrides above.
+   They keep the header on one row and let search consume only the space
+   left between the navigation controls and the fixed-size action icons. */
+@media (max-width: 900px) {
   .hrm-layout .header-container {
-    padding: 0 10px;
     height: 60px;
-    border-radius: 12px;
+    min-height: 60px;
+    padding: 0 10px;
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+
+  .hrm-layout .header-left,
+  .hrm-layout .header-right {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+
+  .hrm-layout .header-left {
     gap: 6px;
   }
-  .hrm-layout .logo-text {
+
+  .hrm-layout .header-logo-switcher {
+    padding: 3px;
+  }
+
+  .hrm-layout .logo-text,
+  .hrm-layout .user-text,
+  .hrm-layout .arrow-icon,
+  .hrm-layout .desktop-notification-prompt,
+  .hrm-layout .task-btn1,
+  .hrm-layout .project-btn,
+  .hrm-layout .header-container > hr {
     display: none !important;
   }
+
   .hrm-layout .header-search {
-    flex: 1 1 auto;
-    min-width: 0;
-    max-width: 100%;
     width: auto;
+    max-width: none;
+    min-width: 0;
+    flex: 1 1 0;
     margin: 0;
   }
+
   .hrm-layout .header-search input {
     height: 38px;
+    min-width: 0;
+    padding: 0 10px 0 34px;
     font-size: 13px;
-    padding-left: 36px;
   }
+
   .hrm-layout .search-icon {
-    left: 10px;
-    font-size: 13px;
+    left: 11px;
   }
-  .hrm-layout .task-btn1,
-  .hrm-layout .project-btn {
-    display: none !important;
-  }
+
   .hrm-layout .header-right {
-    gap: 6px;
+    gap: 5px;
+    min-width: 36px;
+    justify-content: flex-end;
+    overflow: visible;
   }
-  .hrm-layout .user-text {
-    display: none !important;
+
+  .hrm-layout .user-info,
+  .hrm-layout .hrm-header-profile-trigger {
+    gap: 0;
   }
-  .hrm-layout .arrow-icon {
-    display: none !important;
+
+  .hrm-layout .user-avatar,
+  .hrm-layout .header-notif-icon-wrap,
+  .hrm-layout .theme-toggle-btn {
+    width: 36px;
+    height: 36px;
   }
+
   .hrm-layout .user-avatar {
-    width: 34px;
-    height: 34px;
-    margin-right: 0;
+    font-size: 14px;
   }
-  .hrm-layout .header-notif-icon-wrap {
-    width: 34px;
-    height: 34px;
+
+  .hrm-layout .hrm-header-profile-trigger {
+    display: inline-flex !important;
+    min-width: 36px;
+    min-height: 36px;
+    flex: 0 0 36px;
+  }
+
+  .hrm-layout .hrm-header-profile-avatar {
+    display: flex !important;
+    width: 36px;
+    height: 36px;
+    flex: 0 0 36px;
+  }
+
+  .hrm-layout .header-modal-card {
+    position: fixed;
+    top: 66px;
+    right: 8px;
+    width: min(360px, calc(100vw - 16px));
+    max-height: calc(100vh - 74px);
+    overflow-y: auto;
+  }
+
+  .hrm-layout .search-dropdown {
+    position: fixed;
+    top: 66px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-height: min(420px, calc(100vh - 78px));
   }
 }
 
 @media (max-width: 480px) {
   .hrm-layout .header-container {
     height: 54px;
-    padding: 0 8px;
+    min-height: 54px;
+    padding: 0 6px;
     gap: 4px;
+    border-radius: 12px;
   }
-  .hrm-layout .header-right {
-    gap: 4px;
-  }
-  .hrm-layout .user-avatar {
-    width: 32px;
-    height: 32px;
-  }
+
+  .hrm-layout .header-menu-btn,
+  .hrm-layout .logo-box,
+  .hrm-layout .user-avatar,
   .hrm-layout .header-notif-icon-wrap {
     width: 32px;
     height: 32px;
   }
-  /* Same rule as PMS header: theme toggle drops before profile ever does */
+
+  .hrm-layout .logo-box,
+  .hrm-layout .user-avatar {
+    font-size: 13px;
+  }
+
+  .hrm-layout .header-right {
+    min-width: 32px;
+  }
+
+  .hrm-layout .hrm-header-profile-trigger {
+    min-width: 32px;
+    min-height: 32px;
+    flex-basis: 32px;
+  }
+
+  .hrm-layout .hrm-header-profile-avatar {
+    width: 32px;
+    height: 32px;
+    flex-basis: 32px;
+  }
+
+  .hrm-layout .hrm-header-profile-avatar .hrm-profile-fallback-icon {
+    width: 18px !important;
+    height: 18px !important;
+    min-width: 18px;
+  }
+
   .hrm-layout .theme-toggle-btn {
     display: none;
+  }
+
+  .hrm-layout .header-search input {
+    height: 34px;
+    padding-left: 29px;
+    padding-right: 7px;
+    font-size: 12px;
+  }
+
+  .hrm-layout .header-search input::placeholder {
+    font-size: 0;
+  }
+
+  .hrm-layout .header-search input::placeholder {
+    color: transparent;
+  }
+
+  .hrm-layout .search-icon {
+    left: 9px;
+  }
+
+  .hrm-layout .header-modal-card,
+  .hrm-layout .search-dropdown {
+    top: 60px;
   }
 }

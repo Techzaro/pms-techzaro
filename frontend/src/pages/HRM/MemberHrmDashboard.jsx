@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import  { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import API_URL from "../../config/api";
 import { authToken, getUser, rolePath } from "../../utils/auth";
@@ -6,41 +6,18 @@ import Breadcrumb from "../../components/Breadcrumb";
 import {
   Calendar,
   Clock,
-  UserCheck,
   UserX,
   AlertTriangle,
-  CheckCircle2,
-  Building2,
-  Laptop,
-  RefreshCw,
-  Sliders,
-  Plus,
   Search,
-  Filter,
   ShieldAlert,
   FileText,
   X,
   Play,
   Pause,
-  Users,
   Briefcase,
-  Bell,
   Eye,
-  Trash2,
-  Edit3,
-  Gift,
-  Award,
-  Check,
-  MapPin,
   Camera,
-  Layers,
-  LayoutGrid,
-  CreditCard,
   List,
-  ChevronRight,
-  TrendingUp,
-  Send,
-  Info,
 } from "lucide-react";
 import "./MemberHrmDashboard.css";
 import HRMDynamicFormRenderer from "../../components/hrm/HRMDynamicFormRenderer";
@@ -63,12 +40,7 @@ async function apiRequest(path, options = {}) {
   return res.json();
 }
 
-function formatTimer(totalSecs) {
-  const h = Math.floor(totalSecs / 3600);
-  const m = Math.floor((totalSecs % 3600) / 60);
-  const s = totalSecs % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
+
 
 function formatDetailedTime(totalSecs) {
   const h = Math.floor(totalSecs / 3600);
@@ -80,10 +52,10 @@ function formatDetailedTime(totalSecs) {
 export default function MemberHrmDashboard() {
   const user = getUser() || {};
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
 
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const currentTabFromUrl = searchParams.get("tab") || "overview";
   const [activeTab, setActiveTab] = useState(currentTabFromUrl);
 
@@ -101,10 +73,7 @@ export default function MemberHrmDashboard() {
     }
   }, [searchParams]);
 
-  const handleTabChange = (tabName) => {
-    setActiveTab(tabName);
-    setSearchParams({ tab: tabName });
-  };
+  
 
   // Web Clock & Active Duty Session State
   const [isWorking, setIsWorking] = useState(false);
@@ -125,73 +94,44 @@ export default function MemberHrmDashboard() {
   const [rejectReasonText, setRejectReasonText] = useState("");
 
   // Dedicated WFH Request Form State
-  const [wfhDate, setWfhDate] = useState(dateToday());
-  const [wfhReason, setWfhReason] = useState("");
-  const [submittingWfh, setSubmittingWfh] = useState(false);
+  
+  
 
   // HR General Request Form State
-  const [requestCategory, setRequestCategory] = useState("General Support");
-  const [requestSubject, setRequestSubject] = useState("");
-  const [requestDetails, setRequestDetails] = useState("");
-  const [submittingReq, setSubmittingReq] = useState(false);
-  const [appTypes, setAppTypes] = useState([]);
-  const [editingReqId, setEditingReqId] = useState(null);
-  const [dynamicFormState, setDynamicFormState] = useState({});
-  const [formStep, setFormStep] = useState(1);
-  const [formResetKey, setFormResetKey] = useState(Date.now());
-  const [reqAttachments, setReqAttachments] = useState(null);
-  const [lightboxIndex, setLightboxIndex] = useState(0);
+  
+  const [, setSubmittingReq] = useState(false);
+  const [, setAppTypes] = useState([]);
+  
+  const [formResetKey, setFormResetKey] = useState(() => Date.now());
 
   const [appHistorySearch, setAppHistorySearch] = useState("");
   const [appHistoryFilter, setAppHistoryFilter] = useState("All");
-  const [filePreviews, setFilePreviews] = useState([]);
+  
   const [memberLightboxUrl, setMemberLightboxUrl] = useState(null);
 
-  const handleMemberFileChange = (e) => {
-    const files = Array.from(e.target.files);
-    setReqAttachments(files);
-    
-    const previews = files.map(file => {
-      const isImage = file.type.startsWith('image/');
-      return {
-        name: file.name,
-        size: (file.size / 1024 / 1024).toFixed(2) + ' MB',
-        isImage,
-        url: isImage ? URL.createObjectURL(file) : null
-      };
-    });
-    setFilePreviews(previews);
-  };
+  
 
   // Real-Time Leave Application Form State
-  const [leaveType, setLeaveType] = useState("Casual Leave");
-  const [leaveStartDate, setLeaveStartDate] = useState(dateToday());
-  const [leaveEndDate, setLeaveEndDate] = useState(dateToday());
-  const [leaveReason, setLeaveReason] = useState("");
-  const [submittingLeave, setSubmittingLeave] = useState(false);
+  
+  
+  
+  
 
   // Attendance Correction Form State
-  const [corrDate, setCorrDate] = useState(dateToday());
-  const [corrIn, setCorrIn] = useState("09:00");
-  const [corrOut, setCorrOut] = useState("17:00");
-  const [corrReason, setCorrReason] = useState("");
-  const [submittingCorr, setSubmittingCorr] = useState(false);
+  
+  
+  
+  
 
   // Financial Claims Sub-tab State (Advance Salary vs Expense Reimbursement)
-  const [claimsSubTab, setClaimsSubTab] = useState("advance");
+  const [, setClaimsSubTab] = useState("advance");
 
   // Advance Salary & Emergency Loan State
-  const [advanceAmount, setAdvanceAmount] = useState("");
-  const [advanceDeductionMonth, setAdvanceDeductionMonth] = useState("Next Month Payroll");
-  const [advanceReason, setAdvanceReason] = useState("");
-  const [submittingAdvance, setSubmittingAdvance] = useState(false);
+  
 
   // Expense Reimbursement Claim State
-  const [expenseCategory, setExpenseCategory] = useState("Travel & Fuel");
-  const [expenseAmount, setExpenseAmount] = useState("");
-  const [expenseDate, setExpenseDate] = useState(dateToday());
-  const [expenseNotes, setExpenseNotes] = useState("");
-  const [submittingExpense, setSubmittingExpense] = useState(false);
+  
+  
 
   // Corporate Policy Warning State
   const [warningModalOpen, setWarningModalOpen] = useState(false);
@@ -235,9 +175,7 @@ export default function MemberHrmDashboard() {
     setTimeout(() => setToast(null), 4000);
   }
 
-  function dateToday() {
-    return new Date().toISOString().split("T")[0];
-  }
+  
 
   const loadMemberSummary = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -458,27 +396,7 @@ export default function MemberHrmDashboard() {
   };
 
   // Submit Dedicated WFH Request
-  const handleSubmitWfhRequest = async (e) => {
-    e.preventDefault();
-    if (!wfhDate || !wfhReason) return;
-    setSubmittingWfh(true);
-    try {
-      const res = await apiRequest("/hrm/attendance/wfh-request", {
-        method: "POST",
-        body: JSON.stringify({
-          request_date: wfhDate,
-          reason: wfhReason,
-        }),
-      });
-      notify(res.message || "Work From Home request submitted to HR in real-time ✔");
-      setWfhReason("");
-      await loadMemberSummary(false);
-    } catch (err) {
-      notify(err.message || "Failed to submit WFH request.", "error");
-    } finally {
-      setSubmittingWfh(false);
-    }
-  };
+  
 
   // Start Work Session
   const handleStartWork = async () => {
@@ -572,29 +490,7 @@ export default function MemberHrmDashboard() {
   };
 
   // Submit Real-Time Leave Application
-  const handleSubmitLeaveApplication = async (e) => {
-    e.preventDefault();
-    if (!leaveStartDate || !leaveEndDate || !leaveReason) return;
-    setSubmittingLeave(true);
-    try {
-      const res = await apiRequest("/hrm/leaves", {
-        method: "POST",
-        body: JSON.stringify({
-          leave_type: leaveType,
-          start_date: leaveStartDate,
-          end_date: leaveEndDate,
-          reason: leaveReason,
-        }),
-      });
-      notify(res.message || "Leave application submitted to HR in real-time ✔");
-      setLeaveReason("");
-      await loadMemberSummary(false);
-    } catch (err) {
-      notify(err.message || "Failed to submit leave application.", "error");
-    } finally {
-      setSubmittingLeave(false);
-    }
-  };
+  
   // Unified Dynamic Form Submit
   const handleDynamicFormSubmit = async ({ requestType, data }) => {
     setSubmittingReq(true);
@@ -647,134 +543,16 @@ export default function MemberHrmDashboard() {
   const [selectedHistoryId, setSelectedHistoryId] = useState(null);
 
   // Submit HR Request Form
-  const handleSubmitHrRequest = async (e) => {
-    e.preventDefault();
-    if (!requestSubject || !requestCategory) return;
-    setSubmittingReq(true);
-    try {
-      const token = authToken();
-      const formData = new FormData();
-      formData.append("application_type", requestCategory);
-      formData.append("title", requestSubject);
-      
-      if (requestDetails) {
-         formData.append("reason", requestDetails);
-      }
-      
-      if (Object.keys(dynamicFormState).length > 0) {
-         Object.keys(dynamicFormState).forEach(key => {
-            formData.append(`dynamic_fields[${key}]`, dynamicFormState[key]);
-         });
-      }
-      
-      if (reqAttachments && reqAttachments.length > 0) {
-         for (let i = 0; i < reqAttachments.length; i++) {
-            formData.append("attachments[]", reqAttachments[i]);
-         }
-      }
-
-      const res = await fetch(`${API_URL}/hrm/member/request-form`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Accept": "application/json"
-        },
-        body: formData,
-      });
-      
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to submit HR request.");
-
-      notify(data.message || "HR Request submitted successfully ✔");
-      setRequestSubject("");
-      setRequestDetails("");
-      setReqAttachments(null);
-      setFilePreviews([]);
-      setDynamicFormState({});
-      setFormStep(1);
-      loadMemberSummary(false);
-    } catch (err) {
-      notify(err.message || "Failed to submit HR request.", "error");
-    } finally {
-      setSubmittingReq(false);
-    }
-  };
+  
 
   // Submit Attendance Correction Request
-  const handleSubmitCorrection = async (e) => {
-    e.preventDefault();
-    if (!corrReason) return;
-    setSubmittingCorr(true);
-    try {
-      const res = await apiRequest("/hrm/attendance/corrections", {
-        method: "POST",
-        body: JSON.stringify({
-          date: corrDate,
-          requested_clock_in: corrIn,
-          requested_clock_out: corrOut,
-          work_mode: workMode,
-          reason: corrReason,
-        }),
-      });
-      notify(res.message || "Attendance Correction submitted to HR for approval ✔");
-      setCorrReason("");
-      await loadMemberSummary(false);
-    } catch (err) {
-      notify(err.message || "Failed to submit attendance correction.", "error");
-    } finally {
-      setSubmittingCorr(false);
-    }
-  };
+  
 
   // Submit Advance Salary / Loan Request
-  const handleSubmitAdvance = async (e) => {
-    e.preventDefault();
-    if (!advanceAmount || !advanceReason) return;
-    setSubmittingAdvance(true);
-    try {
-      const res = await apiRequest("/hrm/member/request-form", {
-        method: "POST",
-        body: JSON.stringify({
-          category: "Advance Salary Request",
-          subject: `Advance Salary Request - PKR/USD ${Number(advanceAmount).toLocaleString()}`,
-          details: `Requested Amount: PKR/USD ${advanceAmount}\nDeduction Plan: ${advanceDeductionMonth}\nReason: ${advanceReason}`,
-        }),
-      });
-      notify(res.message || "Advance Salary Request submitted to HR Payroll for review ✔");
-      setAdvanceAmount("");
-      setAdvanceReason("");
-      await loadMemberSummary(false);
-    } catch (err) {
-      notify(err.message || "Failed to submit advance salary request.", "error");
-    } finally {
-      setSubmittingAdvance(false);
-    }
-  };
+  
 
   // Submit Expense Reimbursement Claim
-  const handleSubmitExpense = async (e) => {
-    e.preventDefault();
-    if (!expenseAmount || !expenseNotes) return;
-    setSubmittingExpense(true);
-    try {
-      const res = await apiRequest("/hrm/member/request-form", {
-        method: "POST",
-        body: JSON.stringify({
-          category: "Expense Reimbursement Claim",
-          subject: `Expense Reimbursement - ${expenseCategory} (PKR/USD ${Number(expenseAmount).toLocaleString()})`,
-          details: `Expense Date: ${expenseDate}\nCategory: ${expenseCategory}\nClaim Amount: PKR/USD ${expenseAmount}\nNotes: ${expenseNotes}`,
-        }),
-      });
-      notify(res.message || "Expense Reimbursement Claim submitted to HR Finance ✔");
-      setExpenseAmount("");
-      setExpenseNotes("");
-      await loadMemberSummary(false);
-    } catch (err) {
-      notify(err.message || "Failed to submit expense claim.", "error");
-    } finally {
-      setSubmittingExpense(false);
-    }
-  };
+  
 
   const summary = data?.summary || {};
   const activePolicy = data?.activePolicy || {};
@@ -783,12 +561,12 @@ export default function MemberHrmDashboard() {
   const salarySlips = data?.salarySlips || [];
   const memberRequests = data?.memberRequests || [];
   const offerLetter = data?.offerLetter || null;
-  const customDocuments = data?.customDocuments || [];
+  
   const wfhToday = data?.wfhToday || null;
   const leaveHistory = data?.leaveHistory || [];
   const latestLeaveDecision = data?.latestLeaveDecision || null;
   const activeWarning = data?.activeWarning || null;
-  const warningsList = data?.warnings || [];
+  
 
   const isAdminOrManagerView = ["admin", "owner", "manager", "hr_manager", "hr_user"].includes(user?.role?.toLowerCase());
 

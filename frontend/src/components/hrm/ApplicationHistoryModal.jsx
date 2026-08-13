@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import  { useState, useEffect } from "react";
 import API_URL from "../../config/api";
 import { authToken } from "../../utils/auth";
 import {
@@ -8,22 +8,16 @@ import {
   Shield,
   FileText,
   Paperclip,
-  MessageSquare,
   Upload,
-  Send,
   CheckCircle,
   XCircle,
   RotateCcw,
   HelpCircle,
   Lock,
-  UserCheck,
-  Eye,
   AlertTriangle,
   Download,
-  Calendar,
   Building,
-  Tag,
-  Laptop
+  Tag
 } from "lucide-react";
 import "./ApplicationHistoryModal.css";
 
@@ -34,10 +28,9 @@ function ApplicationHistoryModal({ isOpen, onClose, requestType, requestId, onRe
   const [activeTab, setActiveTab] = useState("timeline"); // timeline, attachments, comments
 
   // Action states
-  const [newComment, setNewComment] = useState("");
-  const [actionType, setActionType] = useState("Comment Added"); // Comment Added, Info Requested, Returned for Revision
-  const [isInternal, setIsInternal] = useState(false);
-  const [submittingComment, setSubmittingComment] = useState(false);
+   // Comment Added, Info Requested, Returned for Revision
+  
+  
 
   const [uploadFile, setUploadFile] = useState(null);
   const [uploadNote, setUploadNote] = useState("");
@@ -48,12 +41,15 @@ function ApplicationHistoryModal({ isOpen, onClose, requestType, requestId, onRe
   const [adminRemarks, setAdminRemarks] = useState("");
   const [submittingStatus, setSubmittingStatus] = useState(false);
 
-  const [adminsList, setAdminsList] = useState([]);
+  const [, setAdminsList] = useState([]);
 
   useEffect(() => {
     if (isOpen && requestType && requestId) {
       fetchDetail();
     }
+    // Re-fetch only when the modal target changes.
+    // Re-fetch only when the modal target changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, requestType, requestId]);
 
   const fetchDetail = async () => {
@@ -93,43 +89,10 @@ function ApplicationHistoryModal({ isOpen, onClose, requestType, requestId, onRe
 
   const app = data?.application || {};
   const audits = data?.audits || [];
-  const comments = data?.comments || [];
+  
   const attachments = data?.attachments || [];
 
-  const handlePostComment = async (e) => {
-    e.preventDefault();
-    if (!newComment.trim()) return;
-
-    setSubmittingComment(true);
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/hrm/application-history/${encodeURIComponent(requestType)}/${requestId}/comments`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          comment: newComment,
-          action_type: actionType,
-          is_internal: isInternal
-        })
-      });
-      const json = await res.json();
-      if (json.success) {
-        setNewComment("");
-        fetchDetail();
-        if (onRefresh) onRefresh();
-      } else {
-        alert(json.message || "Failed to post comment.");
-      }
-    } catch (err) {
-      alert("Error posting comment.");
-    } finally {
-      setSubmittingComment(false);
-    }
-  };
+  
 
   const handleUploadAttachment = async (e) => {
     e.preventDefault();

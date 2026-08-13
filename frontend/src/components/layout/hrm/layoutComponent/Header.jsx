@@ -62,6 +62,7 @@ function Header() {
 
   // ── State ──
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [failedAvatarPath, setFailedAvatarPath] = useState(null);
   const [showEmployeeModal, setShowEmployeeModal] = useState(false);
   const [showJobOpeningModal, setShowJobOpeningModal] = useState(false);
   const [showNoticeModal, setShowNoticeModal] = useState(false);
@@ -544,7 +545,6 @@ function Header() {
         setShowAppSwitcher(false);
       }
     };
-    // Use both mousedown and touchstart so it works on all devices.
     document.addEventListener('mousedown', handleOutside);
     document.addEventListener('touchstart', handleOutside, { passive: true });
     return () => {
@@ -562,15 +562,16 @@ function Header() {
     setShowAppSwitcher(true);
   };
 
-  /** Closes the app-switcher dropdown after a short delay (desktop hover), so
-   * moving the mouse from the logo into the dropdown itself doesn't close it. */
+  /** Closes the app-switcher dropdown after a short delay (desktop hover). */
   const closeAppSwitcherSoon = () => {
     appSwitcherCloseTimer.current = setTimeout(() => setShowAppSwitcher(false), 200);
   };
 
-  /** Toggle open/close on click — works for both mouse and touch. */
+  /** Toggle open/close on click/tap — works reliably for both mouse and touch. */
   const toggleAppSwitcher = (e) => {
-    e.stopPropagation();
+    if (e) {
+      e.stopPropagation();
+    }
     if (appSwitcherCloseTimer.current) {
       clearTimeout(appSwitcherCloseTimer.current);
       appSwitcherCloseTimer.current = null;
@@ -582,10 +583,10 @@ function Header() {
     <>
 
       {/* ── Left: Menu toggle + Logo ── */}
-      <div className="header-container">
+      <div className="header-container" style={{ overflow: "visible" }}>
 
         {/* LEFT */}
-        <div className="header-left">
+        <div className="header-left" style={{ overflow: "visible" }}>
 
           <button
             className="header-menu-btn"
@@ -604,10 +605,13 @@ function Header() {
           <div
             className="header-logo-switcher"
             ref={logoSwitcherRef}
+            role="button"
+            tabIndex={0}
             onMouseEnter={openAppSwitcher}
             onMouseLeave={closeAppSwitcherSoon}
             onClick={toggleAppSwitcher}
-            style={{ position: "relative", display: "flex", alignItems: "center", cursor: "pointer", userSelect: "none", WebkitTapHighlightColor: "transparent" }}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleAppSwitcher(e); } }}
+            style={{ position: "relative", display: "flex", alignItems: "center", cursor: "pointer", userSelect: "none", WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
           >
             <div className="logo-box">
               <b>TX</b>
@@ -626,6 +630,7 @@ function Header() {
                 transform: showAppSwitcher ? "rotate(180deg)" : "rotate(0deg)",
                 transition: "transform 0.15s ease",
                 flexShrink: 0,
+                display: "inline-block"
               }}
             />
 
@@ -637,17 +642,19 @@ function Header() {
                 onClick={(e) => e.stopPropagation()}
                 style={{
                   position: "absolute",
-                  top: "calc(100% + 10px)",
+                  top: "calc(100% + 8px)",
                   left: 0,
-                  minWidth: 240,
+                  minWidth: 230,
+                  maxWidth: "calc(100vw - 20px)",
                   background: "var(--bg-card, #fff)",
                   border: "1px solid var(--border-color, #e5e7eb)",
                   borderRadius: 12,
-                  boxShadow: "0 12px 36px rgba(15, 23, 42, 0.14)",
+                  boxShadow: "0 12px 36px rgba(15, 23, 42, 0.18)",
                   padding: 6,
-                  zIndex: 10010,
+                  zIndex: 999999,
                 }}
               >
+
                 <div style={{ padding: "6px 10px 8px", fontSize: 11, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--text-secondary, #6b7280)" }}>
                   Switch Portal
                 </div>
@@ -839,7 +846,7 @@ function Header() {
           {/* Enable desktop notifications button - only shows when permission not granted */}
           {notifPermission !== 'granted' && 'Notification' in window && (
             <button
-              className="header-notif-link"
+              className="header-notif-link desktop-notification-prompt"
               onClick={handleEnableNotifications}
               title={notifPermission === 'denied' ? 'Notifications blocked - click for instructions' : 'Enable desktop notifications'}
               style={{ cursor: 'pointer', padding: '6px 10px', borderRadius: 8, border: notifPermission === 'denied' ? '1px solid #f87171' : '1px solid #fbbf24', background: notifPermission === 'denied' ? '#fee2e2' : '#fef3c7', color: notifPermission === 'denied' ? '#991b1b' : '#92400e', fontSize: 12, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4 }}
@@ -916,20 +923,32 @@ function Header() {
 
           <hr />
 
-          {/* User info + profile dropdown */}
+        </div>
 
-          <div
-            className="user-info"
+        {/* User info is a direct header child so it always owns a visible
+            column and cannot be pushed out by search or notification actions. */}
+
+        <div
+            className="user-info hrm-header-profile-trigger"
             ref={profileRef}
             onClick={toggleProfileModal}
             onKeyDown={handleProfileKeyDown}
+            role="button"
+            tabIndex={0}
+            aria-label={`Open profile menu for ${user.name}`}
+            aria-expanded={isProfileOpen}
           >
 
-            <div className="user-avatar">
-              {user.avatar ? (
-                <img src={`${API_URL.replace('/api', '')}/storage/${user.avatar}`} alt={user.name} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+            <div className="user-avatar hrm-header-profile-avatar">
+              {user.avatar && failedAvatarPath !== user.avatar ? (
+                <img
+                  src={`${API_URL.replace('/api', '')}/storage/${user.avatar}`}
+                  alt={user.name}
+                  onError={() => setFailedAvatarPath(user.avatar)}
+                  style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
+                />
               ) : (
-                user.name.charAt(0).toUpperCase()
+                <User className="hrm-profile-fallback-icon" size={20} strokeWidth={2.4} aria-hidden="true" />
               )}
             </div>
 
@@ -957,10 +976,15 @@ function Header() {
                 {/* Profile header: gradient with photo + name + role */}
                 <div className="hmc-header">
                   <div className="hmc-avatar">
-                    {user.avatar ? (
-                      <img src={`${API_URL.replace('/api', '')}/storage/${user.avatar}`} alt={user.name} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                    {user.avatar && failedAvatarPath !== user.avatar ? (
+                      <img
+                        src={`${API_URL.replace('/api', '')}/storage/${user.avatar}`}
+                        alt={user.name}
+                        onError={() => setFailedAvatarPath(user.avatar)}
+                        style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
+                      />
                     ) : (
-                      user.name.charAt(0).toUpperCase()
+                      <User className="hrm-profile-fallback-icon" size={28} strokeWidth={2.4} aria-hidden="true" />
                     )}
                   </div>
                   <div className="hmc-user-text">
@@ -1011,8 +1035,6 @@ function Header() {
 
               </div>
             )}
-
-          </div>
 
         </div>
 

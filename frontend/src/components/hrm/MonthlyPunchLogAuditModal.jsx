@@ -1,4 +1,4 @@
-import React from "react";
+import "react";
 import { X } from "lucide-react";
 
 function getInitials(name) {

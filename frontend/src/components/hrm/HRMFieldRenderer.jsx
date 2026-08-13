@@ -1,4 +1,4 @@
-import React from "react";
+import "react";
 import HRMDatePicker from "./HRMDatePicker";
 import HRMTimePicker from "./HRMTimePicker";
 import HRMDateTimePicker from "./HRMDateTimePicker";

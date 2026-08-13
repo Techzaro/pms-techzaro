@@ -684,13 +684,23 @@ class HrmAttendanceController extends Controller
     public function respondMemberRequest(Request $request, $id)
     {
         $user = $this->resolveAuth($request);
-        if (!$user || !in_array($user->role, ['admin', 'manager'])) {
+        if (!$user) {
+            return response()->json(['success' => false, 'message' => 'Unauthenticated.'], 401);
+        }
+
+        // If applicant is submitting requested info
+        if ($request->filled('comments') && in_array($request->input('status', 'Pending'), ['Pending', 'Under Review', 'Additional Information Required'])) {
+            return app(\App\Http\Controllers\HrmApplicationHistoryController::class)->respondInfoRequest($request, $id);
+        }
+
+        if (!in_array($user->role, ['admin', 'manager', 'owner'])) {
             return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
         }
 
         $request->validate([
             'status' => 'required|in:Approved,Rejected',
         ]);
+
 
         DB::table('hrm_member_requests')->where('id', $id)->update([
             'status' => $request->status,

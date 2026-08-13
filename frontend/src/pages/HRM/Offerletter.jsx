@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import  { useState, useEffect, useMemo } from 'react';
 import {
-  FileText, Plus, Search, X, Send, Printer, CheckCircle2, XCircle, Clock,
-  Eye, Edit3, Trash2, ShieldCheck, MessageSquare, AlertCircle, RefreshCw
+  FileText, Plus, Search, X, Send, CheckCircle2, XCircle, Clock,
+  Eye, Edit3, Trash2, ShieldCheck, MessageSquare, RefreshCw
 } from 'lucide-react';
 
 import API_URL from "../../config/api";
@@ -159,6 +159,8 @@ const OfferLetters = () => {
 
   useEffect(() => {
     loadData();
+    // Initial page load only; later refreshes are triggered by the actions below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filtered = useMemo(() => {
