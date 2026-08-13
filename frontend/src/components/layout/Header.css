@@ -11,6 +11,7 @@
 
   padding: 15px 15px;
 
+  background: #ffffff;
   border-radius: 18px;
   border: 1px solid #e2e8f0;
   background-color: var(--bg-card, #ffffff);

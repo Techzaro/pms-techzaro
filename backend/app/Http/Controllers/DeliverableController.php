@@ -17,6 +17,7 @@ use App\Services\ActivityService;
 use App\Services\AuditService;
 use App\Services\DelegationService;
 use App\Services\NotificationService;
+use App\Traits\HasStorageEnforcement;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -35,6 +36,7 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
  */
 class DeliverableController extends Controller
 {
+    use HasStorageEnforcement;
     public function __construct(
         private NotificationService $notificationService,
         private ActivityService $activityService,
@@ -2106,7 +2108,15 @@ class DeliverableController extends Controller
         ]);
 
         $file = $request->file('file');
+
+        $storageCheck = $this->checkStorageLimit($request, $file);
+        if ($storageCheck && !$storageCheck['allowed']) {
+            return response()->json(['success' => false, 'message' => $storageCheck['message']], 422);
+        }
+
         $path = $file->store('deliverable-files/'.$deliverable->id, 'public');
+        $this->trackFileUpload($request, 'attachments', '/storage/'.$path, $file->getClientOriginalName(), $file->getMimeType(), $file->getSize());
+
         $name = $request->input('name', $file->getClientOriginalName());
 
         $deliverableFile = $deliverable->files()->create([

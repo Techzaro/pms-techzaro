@@ -1,0 +1,1 @@
+import{At as e,V as t}from"./index-DTg4FuY1.js";function n(n,r,i,a={}){return e({queryKey:Array.isArray(n)?n:[n,i],queryFn:()=>t.get(r,i),...a})}export{n as t};

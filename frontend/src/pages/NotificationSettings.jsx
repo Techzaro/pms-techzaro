@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../lib/api';
 import API_URL from '../config/api';
 import { authToken } from '../utils/auth';
 import DashboardLayout from '../components/layout/DashboardLayout';
@@ -43,19 +43,13 @@ export default function NotificationSettings() {
 
   const fetchPreferences = async () => {
     try {
-      const token = authToken();
-      const response = await axios.get(`${API_URL}/notification-settings`, {
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (response.data?.success) {
-        if (response.data.preferences) {
-          setPreferences(response.data.preferences);
+      const response = await api.get('/notification-settings');
+      if (response?.success) {
+        if (response.preferences) {
+          setPreferences(response.preferences);
         }
-        if (response.data.webhooks) {
-          setWebhooks(response.data.webhooks);
+        if (response.webhooks) {
+          setWebhooks(response.webhooks);
         }
       }
     } catch (err) {
@@ -93,18 +87,11 @@ export default function NotificationSettings() {
     setSaving(true);
     setMessage('');
     try {
-      const token = authToken();
-      const response = await axios.put(
-        `${API_URL}/notification-settings`,
-        { preferences, webhooks },
-        {
-          headers: {
-            Accept: 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        }
+      const response = await api.put(
+        '/notification-settings',
+        { preferences, webhooks }
       );
-      if (response.data?.success) {
+      if (response?.success) {
         setMessage('Notification preferences & webhooks saved successfully!');
       } else {
         setMessage('Failed to save preferences.');

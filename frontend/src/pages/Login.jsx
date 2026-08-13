@@ -130,6 +130,8 @@ function Login() {
           msg = data.message || "Login using personal email addresses is not allowed";
         } else if (res.status === 422) {
           msg = data.message || "Please enter valid email and password.";
+        } else if (res.status === 404) {
+          msg = data.message || "Organization does not exist. Please contact administration.";
         } else {
           msg = data.message || "Something went wrong. Please try again.";
         }
@@ -139,6 +141,10 @@ function Login() {
 
       if (data.success) {
         saveSession(data.role, data.token, data.user || {}, rememberMe, data.expires_at);
+
+        if (data.tenant_slug) {
+          localStorage.setItem("tenant_slug", data.tenant_slug);
+        }
 
         if (data.must_change_password) {
           setMustChangePassword(true);
@@ -153,33 +159,27 @@ function Login() {
   };
 
   /**
-   * redirectToDashboard — Navigates to the intended deep link URL if available,
-   * otherwise navigates to the appropriate dashboard based on user role.
+   * redirectToDashboard — Navigates to the user's organization dashboard.
+   * Uses tenant_slug from login response to build /org/{slug}/dashboard.
+   * Preserves ?redirect= parameter for post-login redirect.
    */
   const redirectToDashboard = (role) => {
-    let intendedUrl = location.state?.from || sessionStorage.getItem("intended_url");
-    if (intendedUrl) {
-      sessionStorage.removeItem("intended_url");
-      const currentRoleUrl = role === "team_lead" || role === "teamlead" ? "teamlead" : role;
-      const parts = intendedUrl.split("/").filter(Boolean);
-      if (parts.length > 0 && ["admin", "manager", "teamlead", "member", "guest"].includes(parts[0])) {
-        parts[0] = currentRoleUrl;
-        intendedUrl = "/" + parts.join("/");
-      }
-      window.location.href = intendedUrl;
+    const slug = localStorage.getItem("tenant_slug") || "";
+    const searchParams = new URLSearchParams(window.location.search);
+    const redirectPath = searchParams.get("redirect");
+
+    // If there's a safe internal redirect path, use it
+    if (redirectPath && redirectPath.startsWith('/org/')) {
+      window.location.href = redirectPath;
       return;
     }
 
-    if (role === "admin") {
-      window.location.href = "/admin/dashboard";
-    } else if (role === "manager") {
-      window.location.href = "/manager/dashboard";
-    } else if (role === "teamlead" || role === "team_lead") {
-      window.location.href = "/teamlead/dashboard";
-    } else if (role === "guest") {
-      window.location.href = "/guest/dashboard";
+    // Default: go to org dashboard
+    if (slug) {
+      window.location.href = `/org/${slug}/dashboard`;
     } else {
-      window.location.href = "/member/dashboard";
+      // Fallback: no slug available (shouldn't happen for valid login)
+      window.location.href = "/login";
     }
   };
 
@@ -207,6 +207,7 @@ function Login() {
       setChangingPassword(true);
 
       const token = authToken();
+      const tenantSlug = localStorage.getItem("tenant_slug") || "";
 
       const res = await fetch(`${API_URL}/user/first-time-change-password`, {
         method: "PUT",
@@ -214,6 +215,7 @@ function Login() {
           "Content-Type": "application/json",
           "Accept": "application/json",
           "Authorization": `Bearer ${token}`,
+          ...(tenantSlug ? { "X-Tenant-ID": tenantSlug } : {}),
         },
         body: JSON.stringify({
           new_password: newPassword,

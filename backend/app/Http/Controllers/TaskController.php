@@ -19,6 +19,7 @@ use App\Services\AuditService;
 use App\Services\DelegationService;
 use App\Services\NotificationService;
 use App\Services\RecurringService;
+use App\Traits\HasStorageEnforcement;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -38,6 +39,7 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
  */
 class TaskController extends Controller
 {
+    use HasStorageEnforcement;
     public function __construct(
         private NotificationService $notificationService,
         private ActivityService $activityService,
@@ -3538,7 +3540,15 @@ class TaskController extends Controller
 
         $request->validate(['file' => 'required|file|max:10240', 'name' => 'nullable|string|max:255']);
         $file = $request->file('file');
+
+        $storageCheck = $this->checkStorageLimit($request, $file);
+        if ($storageCheck && !$storageCheck['allowed']) {
+            return response()->json(['success' => false, 'message' => $storageCheck['message']], 422);
+        }
+
         $path = $file->store('task-files/'.$task->id, 'public');
+        $this->trackFileUpload($request, 'attachments', '/storage/'.$path, $file->getClientOriginalName(), $file->getMimeType(), $file->getSize());
+
         $customName = $request->input('name') ?: $file->getClientOriginalName();
         $nextOrder = $task->files()->max('sort_order') + 1;
         $fileRecord = $task->files()->create(['name' => $customName, 'url' => '/storage/'.$path, 'sort_order' => $nextOrder]);

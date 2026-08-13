@@ -177,7 +177,7 @@ function ResetPassword() {
               Your password has been reset successfully.
               You can now log in with your new password.
             </p>
-            <Link to="/" className="reset-submit-btn" style={{ textAlign: "center", textDecoration: "none" }}>
+            <Link to="/login" className="reset-submit-btn" style={{ textAlign: "center", textDecoration: "none" }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="19" y1="12" x2="5" y2="12"/>
                 <polyline points="12 19 5 12 12 5"/>
@@ -210,7 +210,7 @@ function ResetPassword() {
       <div className="reset-right">
         <div className="reset-box">
           <div className="reset-top-link">
-            <Link to="/" className="reset-back-link">
+            <Link to="/login" className="reset-back-link">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="19" y1="12" x2="5" y2="12"/>
                 <polyline points="12 19 5 12 12 5"/>

@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Services\ActivityService;
 use App\Services\AuditService;
 use App\Services\NotificationService;
+use App\Traits\HasStorageEnforcement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -31,6 +32,7 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
  */
 class ProjectController extends Controller
 {
+    use HasStorageEnforcement;
     private const CACHE_TTL = 300;
 
     public function __construct(
@@ -949,7 +951,14 @@ class ProjectController extends Controller
     {
         $request->validate(['file' => 'required|file|max:10240']);
         $file = $request->file('file');
+
+        $storageCheck = $this->checkStorageLimit($request, $file);
+        if ($storageCheck && !$storageCheck['allowed']) {
+            return response()->json(['success' => false, 'message' => $storageCheck['message']], 422);
+        }
+
         $path = $file->store('project-files', 'public');
+        $this->trackFileUpload($request, 'attachments', '/storage/'.$path, $file->getClientOriginalName(), $file->getMimeType(), $file->getSize());
 
         $attachment = $project->files()->create([
             'name' => $file->getClientOriginalName(),

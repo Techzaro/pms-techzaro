@@ -2,15 +2,17 @@
  * ProtectedRoute.jsx
  * Route guard component that prevents unauthenticated users from accessing
  * protected pages. Redirects to the login page if no auth token is found.
+ * Preserves the intended URL for post-login redirect.
  */
 
 import { useLayoutEffect } from "react";
 import { Navigate, useNavigate, useLocation } from "react-router-dom";
 import { authToken } from "../utils/auth";
+import { isAdminDomain } from "../utils/domain";
 
 /**
  * Redirects to login if no auth token is present, otherwise renders children.
- * Replaces browser history state so users cannot click Back into protected pages after logout.
+ * Preserves intended path for redirect after login (safe internal paths only).
  * @param {React.ReactNode} children - The protected page content.
  */
 function ProtectedRoute({ children }) {
@@ -20,24 +22,23 @@ function ProtectedRoute({ children }) {
 
   useLayoutEffect(() => {
     if (!authToken()) {
-      const intendedPath = location.pathname + location.search;
-      if (intendedPath && intendedPath !== "/" && intendedPath !== "/login") {
-        try {
-          sessionStorage.setItem("intended_url", intendedPath);
-        } catch {}
-      }
-      navigate("/", { replace: true, state: { from: intendedPath } });
+      const currentPath = window.location.pathname;
+      const loginPath = isAdminDomain() ? '/super-admin/login' : '/login';
+      // Only preserve internal paths (prevent open redirect)
+      const safePath = currentPath && currentPath.startsWith('/') && !currentPath.startsWith('//')
+        ? currentPath
+        : loginPath;
+      const redirectUrl = `${loginPath}?redirect=${encodeURIComponent(safePath)}`;
+      try {
+        window.history.replaceState(null, "", redirectUrl);
+      } catch {}
+      navigate(redirectUrl, { replace: true });
     }
   }, [location.pathname, location.search, navigate]);
 
   if (!token) {
-    const intendedPath = location.pathname + location.search;
-    if (intendedPath && intendedPath !== "/" && intendedPath !== "/login") {
-      try {
-        sessionStorage.setItem("intended_url", intendedPath);
-      } catch {}
-    }
-    return <Navigate to="/" state={{ from: intendedPath }} replace />;
+    const loginPath = isAdminDomain() ? '/super-admin/login' : '/login';
+    return <Navigate to={loginPath} replace />;
   }
 
   return children;

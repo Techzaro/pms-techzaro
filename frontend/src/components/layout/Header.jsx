@@ -18,6 +18,7 @@ import { initFirebase } from "../../utils/firebase";
 import { formatDateTimeInline } from "../../utils/formatDateTime";
 import { getNotificationDestination } from "../../utils/navigation";
 import { useTheme } from "../../context/ThemeContext.jsx";
+import { useOrgBranding } from "../../hooks/useOrgBranding";
 import "./Header.css";
 
 import CreateTaskModal from "../CreateTaskModal";
@@ -38,6 +39,7 @@ function Header() {
   const notifListRef = useRef(null);
   const profileMenuRef = useRef(null);
   const { theme, toggleTheme } = useTheme();
+  const { data: branding } = useOrgBranding();
 
   // ── State ──
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -538,12 +540,16 @@ function Header() {
           </button>
 
           <div className="logo-box">
-            <b>TX</b>
+            {branding?.logo_url ? (
+              <img src={branding.logo_url} alt="Logo" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "14px" }} />
+            ) : (
+              <b>{(branding?.subtitle || 'TX').substring(0, 2).toUpperCase()}</b>
+            )}
           </div>
 
           <div className={"logo-text" + (showFullLogo || isSmallScreen ? "" : " logo-text--hidden")}>
-            <h3>Techxaro</h3>
-            <span>PMS Portal</span>
+            <h3>{branding?.subtitle || 'PMS Portal'}</h3>
+            <span>{branding?.org_name || 'Organization'}</span>
           </div>
 
         </div>

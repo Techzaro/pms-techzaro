@@ -12,6 +12,7 @@ import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { useCalendarData } from "../../hooks/useCalendarData";
 import { useUnifiedSummary } from "../../hooks/useUnifiedSummary";
 import { TYPE_COLORS, TYPE_LABELS, DEFAULT_EVENT_COLOR } from "../../utils/calendarConstants";
+import { rolePath } from "../../utils/auth";
 import EventsWidget from "../EventsWidget";
 import EventInfoPopup from "../EventInfoPopup";
 import ItemDetailPopup from "../ItemDetailPopup";
@@ -92,9 +93,8 @@ function RightSidebar({ isOpen, onClose }) {
 
   /** Navigate to the full calendar page and close the sidebar. */
   const handleViewAllClick = () => {
-    const role = getCurrentRole() || "admin";
     onClose?.();
-    navigate(`/${role}/calender`);
+    navigate(rolePath("calender"));
   };
 
   const currentRole = getCurrentRole() || "admin";

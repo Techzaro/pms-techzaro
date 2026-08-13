@@ -26,6 +26,8 @@ use App\Http\Controllers\DraftController;
 use App\Http\Controllers\CredentialController;
 use App\Http\Controllers\NotificationSettingController;
 use App\Http\Controllers\FeedbackController;
+use App\Http\Controllers\OrganizationSettingsController;
+use App\Http\Controllers\OrganizationOrgController;
 
 /*
 | Public Routes
@@ -86,6 +88,48 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/notification-settings', [NotificationSettingController::class, 'update']);
     Route::post('/notification-settings', [NotificationSettingController::class, 'update']);
     Route::post('/notification-settings/test-webhook', [NotificationSettingController::class, 'testWebhook']);
+
+    // Organization settings (branding, subscription, email policy)
+    Route::get('/organization-settings/email-policy', [OrganizationSettingsController::class, 'getEmailPolicy']);
+    Route::put('/organization-settings/email-policy', [OrganizationSettingsController::class, 'updateEmailPolicy']);
+    Route::get('/organization-settings/branding', [OrganizationSettingsController::class, 'getBranding']);
+    Route::put('/organization-settings/branding', [OrganizationSettingsController::class, 'updateBranding']);
+    Route::get('/organization-settings/subscription', [OrganizationSettingsController::class, 'getSubscription']);
+    Route::get('/organization-settings/subscription-history', [OrganizationSettingsController::class, 'getSubscriptionHistory']);
+    Route::get('/organization-settings/details', [OrganizationSettingsController::class, 'getOrganizationDetails']);
+    Route::get('/organization-settings/billing-history', [OrganizationSettingsController::class, 'getBillingHistory']);
+    Route::put('/organization-settings/timezone', [OrganizationSettingsController::class, 'updateTimezone']);
+
+    // Organization Storage Management
+    Route::get('/organization/storage', [OrganizationOrgController::class, 'getStorageUsage']);
+    Route::get('/organization/storage/summary', [OrganizationOrgController::class, 'getStorageSummary']);
+    Route::get('/organization/storage/large-files', [OrganizationOrgController::class, 'getLargeFiles']);
+    Route::post('/organization/storage/track', [OrganizationOrgController::class, 'trackStorageUsage']);
+    Route::delete('/organization/storage/old-files', [OrganizationOrgController::class, 'deleteOldFiles']);
+    Route::delete('/organization/storage/large-files', [OrganizationOrgController::class, 'deleteLargeFiles']);
+    Route::delete('/organization/storage/{id}', [OrganizationOrgController::class, 'deleteStorageRecord']);
+
+    // Storage Notifications
+    Route::get('/organization/storage/notifications', [OrganizationOrgController::class, 'getStorageNotifications']);
+    Route::post('/organization/storage/notifications/{notifId}/read', [OrganizationOrgController::class, 'markNotificationRead']);
+    Route::post('/organization/storage/notifications/{notifId}/dismiss', [OrganizationOrgController::class, 'dismissNotification']);
+    Route::post('/organization/storage/notifications/dismiss-all', [OrganizationOrgController::class, 'dismissAllNotifications']);
+
+    // Storage Preferences
+    Route::get('/organization/storage/preferences', [OrganizationOrgController::class, 'getStoragePreferences']);
+    Route::put('/organization/storage/preferences', [OrganizationOrgController::class, 'updateStoragePreferences']);
+
+    // Organization Billing
+    Route::get('/organization/billing/invoices', [OrganizationOrgController::class, 'getBillingInvoices']);
+    Route::post('/organization/billing/generate-invoice', [OrganizationOrgController::class, 'generateInvoice']);
+
+    // Organization Support Tickets
+    Route::get('/organization/support/tickets', [OrganizationOrgController::class, 'getSupportTickets']);
+    Route::get('/organization/support/unread-count', [OrganizationOrgController::class, 'getUnreadSupportCount']);
+    Route::post('/organization/support/tickets', [OrganizationOrgController::class, 'createSupportTicket']);
+    Route::get('/organization/support/tickets/{ticketId}', [OrganizationOrgController::class, 'getSupportTicketDetail']);
+    Route::post('/organization/support/tickets/{ticketId}/reply', [OrganizationOrgController::class, 'replySupportTicket']);
+    Route::post('/organization/support/tickets/{ticketId}/close', [OrganizationOrgController::class, 'closeSupportTicket']);
 
     // Self-service document management
     Route::put('/auth/my-document/rename', [\App\Http\Controllers\UserController::class, 'renameMyDocument']);
@@ -508,6 +552,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/conversations', [ChatController::class, 'store']); // Create new conversation
     Route::post('/conversations/{conversation}/messages', [ChatController::class, 'sendMessage']); // Send message
     Route::get('/messages/{message}/file', [ChatController::class, 'downloadFile']); // Download message attachment
+
+    /*
+    | Org Chat Routes
+    | Organization <-> Super Admin messaging.
+    */
+    Route::get('/org-chat/conversations', [\App\Http\Controllers\OrgChatController::class, 'orgIndex']);
+    Route::get('/org-chat/unread-count', [\App\Http\Controllers\OrgChatController::class, 'orgUnreadCount']);
+    Route::get('/org-chat/conversations/{conversationId}', [\App\Http\Controllers\OrgChatController::class, 'orgShow']);
+    Route::post('/org-chat/conversations/{conversationId}/messages', [\App\Http\Controllers\OrgChatController::class, 'orgSend']);
+    Route::get('/org-chat/messages/{messageId}/file', [\App\Http\Controllers\OrgChatController::class, 'downloadFile']);
 
     /*
     | Activity Routes
