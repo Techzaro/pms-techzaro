@@ -1110,6 +1110,12 @@ class AuthController extends Controller
         // Regex check for common personal domain patterns (e.g. yahoo.*, hotmail.*, gmx.*)
         if (preg_match('/^(gmail|yahoo|hotmail|outlook|live|icloud|aol|protonmail|proton|yandex|mail|gmx|rediffmail)\./i', $domain)) {
             return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Search for a user across all tenant databases.
      * Returns ['user' => User, 'slug' => string, 'organization' => Organization] or null.
      */

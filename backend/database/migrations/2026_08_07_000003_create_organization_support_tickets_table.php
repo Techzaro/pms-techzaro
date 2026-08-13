@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::connection('mysql_master')->create('organization_support_tickets', function (Blueprint $table) {
             $table->id();
             $table->foreignId('organization_id')->constrained('organizations')->cascadeOnDelete();
-            $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->unsignedBigInteger('user_id')->nullable();
             $table->string('ticket_number', 50)->unique();
             $table->string('subject', 255);
             $table->text('message');
