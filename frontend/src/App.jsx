@@ -61,6 +61,7 @@ const SelfDeliveries = lazy(() => import("./pages/SelfDeliveries"));
 const Calender = lazy(() => import("./pages/Calender"));
 const Notifications = lazy(() => import("./pages/Notifications"));
 const NotificationSettings = lazy(() => import("./pages/NotificationSettings"));
+const Personalization = lazy(() => import("./pages/Personalization"));
 const AuditLogs = lazy(() => import("./pages/AuditLogs"));
 const UserPerformance = lazy(() => import("./pages/UserPerformance"));
 const TeamMembersReport = lazy(() => import("./pages/TeamMembersReport"));
@@ -72,6 +73,7 @@ const OrgChat = lazy(() => import("./pages/OrgChatPage"));
 const DraftCenter = lazy(() => import("./pages/DraftCenter"));
 const Templates = lazy(() => import("./pages/Templates"));
 const KnowledgeBase = lazy(() => import("./pages/KnowledgeBase"));
+const FeedbackCenter = lazy(() => import("./pages/FeedbackCenter"));
 const BrandingPage = lazy(() => import("./pages/BrandingPage"));
 const SubscriptionPage = lazy(() => import("./pages/SubscriptionPage"));
 const StoragePage = lazy(() => import("./pages/StoragePage"));
@@ -315,6 +317,7 @@ function App() {
                     <Route path="branding" element={<RoleProtectedRoute allowedRoles={["admin"]}><BrandingPage /></RoleProtectedRoute>} />
                     <Route path="subscription" element={<RoleProtectedRoute allowedRoles={["admin"]}><SubscriptionPage /></RoleProtectedRoute>} />
                     <Route path="organization-details" element={<RoleProtectedRoute allowedRoles={["admin"]}><OrganizationDetailsPage /></RoleProtectedRoute>} />
+                      
                     <Route path="storage" element={<StoragePage />} />
                     <Route path="reports/user-performance/:userId" element={<UserPerformance />} />
                     <Route path="reports/team-members/:teamId" element={<TeamMembersReport />} />
@@ -375,6 +378,7 @@ function App() {
                     <Route path="branding" element={<RoleProtectedRoute allowedRoles={["admin"]}><BrandingPage /></RoleProtectedRoute>} />
                     <Route path="subscription" element={<RoleProtectedRoute allowedRoles={["admin"]}><SubscriptionPage /></RoleProtectedRoute>} />
                     <Route path="organization-details" element={<RoleProtectedRoute allowedRoles={["admin"]}><OrganizationDetailsPage /></RoleProtectedRoute>} />
+                      <Route path="feedback" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><FeedbackCenter /></RoleProtectedRoute>} />
                     <Route path="storage" element={<StoragePage />} />
                     <Route path="reports/user-performance/:userId" element={<UserPerformance />} />
                     <Route path="reports/team-members/:teamId" element={<TeamMembersReport />} />

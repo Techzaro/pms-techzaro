@@ -28,8 +28,12 @@ import TaskNotesPopover from "../components/TaskNotesPopover";
 import AddNoteModal from "../components/AddNoteModal";
 import TransferTaskDialog from "../components/TransferTaskDialog";
 import TaskFilterBar from "../components/TaskFilterBar";
+import DynamicWidgetSection from "../components/DynamicWidgetSection";
+import DraggableStatusBadges from "../components/DraggableStatusBadges";
 import API_URL from "../config/api";
+import { usePersonalization } from "../context/PersonalizationContext";
 import { authToken, getUser, rolePath } from "../utils/auth";
+import { renderDynamicDates } from "../utils/tableDateUtils";
 import { formatDateTimeInline } from "../utils/formatDateTime";
 import "../components/ActionPopover.css";
 import "../pages/Task.css";
@@ -70,6 +74,18 @@ const STATUS_TEXT_COLORS = {
   abandoned: "#991B1B",
 };
 
+const STATUS_LABELS = {
+  pending: "Pending",
+  in_progress: "In Progress",
+  paused: "Paused",
+  submitted: "Submitted",
+  reopened: "Reopened",
+  approved: "Approved",
+  rejected: "Rejected",
+  abandon_requested: "Abandon Requested",
+  abandoned: "Abandoned",
+};
+
 const PRIORITY_COLORS = {
   High: "#FEE2E2",
   Medium: "#FEF3C7",
@@ -82,10 +98,16 @@ const PRIORITY_TEXT_COLORS = {
   Low: "#166534",
 };
 
+function formatTaskId(id) {
+  if (!id) return "#0";
+  return `#${id}`;
+}
+
 /** Main Tasks page — renders tasks assigned to the current user by others. */
 function Tasks() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isWidgetEnabled } = usePersonalization();
   const { notify } = useNotification();
   const [searchParams, setSearchParams] = useSearchParams();
   const [showTaskModal, setShowTaskModal] = useState(false);
@@ -121,6 +143,10 @@ function Tasks() {
 
   const [sortBy, setSortBy] = useState("due_date");
   const [sortOrder, setSortOrder] = useState("asc");
+
+  const handleReorder = (newItems) => {
+    setItems(newItems);
+  };
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -439,52 +465,41 @@ function Tasks() {
         />
       )}
 
-      {/* STATUS FILTERS */}
-      <div className="task-progress">
-        <p className={`DueToday ${statusFilter === "due_today" ? "active" : ""}`} onClick={() => selectStatusFilter("due_today")} style={{ cursor: "pointer" }}>
-          <GoDotFill color="#EF4444" /> Due Today ({dueTodayCount})
-        </p>
-        <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => selectStatusFilter("pending")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Pending ({pendingCount})
-        </p>
-        <p className={`InProgress ${statusFilter === "in_progress" ? "active" : ""}`} onClick={() => selectStatusFilter("in_progress")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> In Progress ({inProgressCount})
-        </p>
-        <p className={`Paused ${statusFilter === "paused" ? "active" : ""}`} onClick={() => selectStatusFilter("paused")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Paused ({pausedCount})
-        </p>
-        <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => selectStatusFilter("submitted")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Submitted ({submittedCount})
-        </p>
-        <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => selectStatusFilter("reopened")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Reopened ({reopenedCount})
-        </p>
-        <p className={`Transferred ${statusFilter === "transferred" ? "active" : ""}`} onClick={() => selectStatusFilter("transferred")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Transferred ({transferredCount})
-        </p>
-        <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => selectStatusFilter("approved")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Approved ({approvedCount})
-        </p>
-        <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Declined ({rejectedCount})
-        </p>
-        <p className={`Abandoned ${statusFilter === "abandoned" ? "active" : ""}`} onClick={() => selectStatusFilter("abandoned")} style={{ cursor: "pointer" }}>
-          <GoDotFill color="#DC2626" /> Abandoned ({abandonedCount})
-        </p>
-        <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All ({allCount})</p>
-      </div>
+      {isWidgetEnabled("tasks", "stats_cards") && (
+        <DraggableStatusBadges
+          badges={[
+            { id: "due_today", label: "Due Today", count: dueTodayCount, className: "DueToday", dotColor: "#EF4444" },
+            { id: "pending", label: "Pending", count: pendingCount, className: "Pending" },
+            { id: "in_progress", label: "In Progress", count: inProgressCount, className: "InProgress" },
+            { id: "paused", label: "Paused", count: pausedCount, className: "Paused" },
+            { id: "submitted", label: "Submitted", count: submittedCount, className: "Submitted" },
+            { id: "reopened", label: "Reopened", count: reopenedCount, className: "Reopened" },
+            { id: "transferred", label: "Transferred", count: transferredCount, className: "Transferred" },
+            { id: "approved", label: "Approved", count: approvedCount, className: "Approved" },
+            { id: "rejected", label: "Declined", count: rejectedCount, className: "Rejected" },
+            { id: "abandoned", label: "Abandoned", count: abandonedCount, className: "Abandoned", dotColor: "#DC2626" },
+            { id: "", label: "All", count: allCount, className: "All" },
+          ]}
+          activeStatus={statusFilter}
+          onSelectStatus={selectStatusFilter}
+          storageKey="pms_tasks_status_order"
+          containerClassName="task-progress"
+        />
+      )}
 
       {/* DEDICATED ACTION BAR & FILTERS */}
-      <TaskFilterBar
-        search={search}
-        onSearchChange={setSearch}
-        filters={advancedFilters}
-        onFilterChange={(key, val) => setAdvancedFilters((prev) => ({ ...prev, [key]: val }))}
-        onReset={() => {
-          setSearch("");
-          setAdvancedFilters({ user_id: "", project_id: "", status: "", start_date: "", end_date: "" });
-        }}
-      />
+      {isWidgetEnabled("tasks", "filter_bar") && (
+        <TaskFilterBar
+          search={search}
+          onSearchChange={setSearch}
+          filters={advancedFilters}
+          onFilterChange={(key, val) => setAdvancedFilters((prev) => ({ ...prev, [key]: val }))}
+          onReset={() => {
+            setSearch("");
+            setAdvancedFilters({ user_id: "", project_id: "", status: "", start_date: "", end_date: "" });
+          }}
+        />
+      )}
 
       {/* TABLE */}
       <div className="container">
@@ -495,17 +510,7 @@ function Tasks() {
           <div className="status-column">Status</div>
           <div>Progress</div>
           <div className="priority-column">Priority</div>
-          <div
-            className="date-column"
-            style={{ cursor: "pointer", userSelect: "none", display: "flex", alignItems: "center", gap: 4 }}
-            onClick={() => {
-              setSortBy("due_date");
-              setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
-            }}
-            title="Click to toggle date sort (Oldest / Newest)"
-          >
-            Start & Due Date {sortBy === "due_date" ? (sortOrder === "asc" ? "▲ (Oldest)" : "▼ (Newest)") : "↕"}
-          </div>
+          <div className="date-column">Start & Due Date</div>
           <div>Action</div>
         </div>
 
@@ -591,17 +596,7 @@ function Tasks() {
                   
                   <div className="col-due-date">
                     <div className="date-box">
-                      <div style={{ whiteSpace: "pre-line" }}>
-                        {(() => {
-                          const myPivotStart = item.assignees?.find(a => parseInt(a.id, 10) === parseInt(currentUser?.id, 10))?.pivot?.start_date;
-                          return formatDate(myPivotStart || item.start_date);
-                        })()}
-                        {"\n"}
-                        {(() => {
-                          const myPivot = item.assignees?.find(a => parseInt(a.id, 10) === parseInt(currentUser?.id, 10))?.pivot?.due_date;
-                          return formatDate(myPivot || item.end_date);
-                        })()}
-                      </div>
+                      {renderDynamicDates(item, currentUser)}
                     </div>
                   </div>
                   
@@ -611,7 +606,7 @@ function Tasks() {
                       title="View Task"
                       onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } })}
                     >
-                      <IoEyeOutline size={20} />
+                      <IoEyeOutline size={18} />
                     </button>
                     <ActionPopover
                       trigger={
@@ -753,6 +748,8 @@ function Tasks() {
         />
       )}
 
+
+
       <SubmitTaskModal
         key={`tasks-submit-${submitTaskModal.task?.id || "none"}`}
         isOpen={submitTaskModal.open}
@@ -778,6 +775,7 @@ function Tasks() {
         />
       )}
 
+      <DynamicWidgetSection storageKey="pms_tasks_widgets" sectionTitle="Tasks Widgets" />
     </DashboardLayout>
   );
 }

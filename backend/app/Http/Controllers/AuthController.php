@@ -54,6 +54,14 @@ class AuthController extends Controller
                 'password' => 'required',
             ]);
 
+            // AUTH_025: Restrict Personal Email Logins
+            if ($this->isPersonalEmail($request->email)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Login using personal email addresses is not allowed',
+                ], 403);
+            }
+
             // Rate limiting key per normalized email & IP
             $throttleKey = Str::lower(trim($request->email)) . '|' . $request->ip();
 
@@ -224,6 +232,23 @@ class AuthController extends Controller
 
             // Track last login
             $user->update(['last_login_at' => now()]);
+
+            // Log activity
+            $this->activityService->log($user->id, 'auth_login', 'Logged in to system', 'auth', $user->id, 'login');
+
+            try {
+                $this->auditService->log(
+                    module: 'auth',
+                    action: 'login',
+                    description: 'User logged in successfully',
+                    user: $user,
+                    entityType: 'User',
+                    entityId: $user->id,
+                    status: 'success'
+                );
+            } catch (\Throwable $e) {
+                \Log::error('Failed to log audit on login', ['error' => $e->getMessage()]);
+            }
 
             // Normalize role (teamlead → team_lead)
             $role = $user->role === 'teamlead' ? 'team_lead' : $user->role;
@@ -603,7 +628,7 @@ class AuthController extends Controller
             'account' => [
                 'account_age' => $user->created_at->diffForHumans(),
                 'days_since_creation' => $user->created_at->diffInDays(now()),
-                'status' => ! $user->active ? 'Resigned' : ($user->must_change_password ? 'Inactive' : 'Active'),
+                'status' => $user->status ?: ($user->active ? 'Active' : 'Inactive'),
                 'last_login' => $user->last_login_at?->toDateTimeString() ?? 'Never logged in',
             ],
             'activity_max_id' => (int) UserChange::where('user_id', $user->id)->max('id'),
@@ -1053,6 +1078,38 @@ class AuthController extends Controller
     }
 
     /**
+     * AUTH_025: Check if an email address belongs to a public personal email provider.
+     */
+    private function isPersonalEmail(string $email): bool
+    {
+        $parts = explode('@', strtolower(trim($email)));
+        if (count($parts) < 2) {
+            return false;
+        }
+        $domain = end($parts);
+
+        $personalDomains = [
+            'gmail.com', 'googlemail.com',
+            'yahoo.com', 'yahoo.co.in', 'yahoo.co.uk', 'yahoo.ca', 'ymail.com', 'rocketmail.com',
+            'hotmail.com', 'hotmail.co.uk', 'hotmail.fr', 'hotmail.de', 'live.com', 'live.co.uk', 'msn.com',
+            'outlook.com', 'outlook.co.uk',
+            'icloud.com', 'me.com', 'mac.com',
+            'aol.com', 'aim.com',
+            'protonmail.com', 'proton.me', 'pm.me',
+            'zoho.com', 'zohomail.com',
+            'yandex.com', 'yandex.ru',
+            'mail.com', 'email.com',
+            'gmx.com', 'gmx.net',
+            'rediffmail.com', 'inbox.com', 'fastmail.com', 'hushmail.com'
+        ];
+
+        if (in_array($domain, $personalDomains, true)) {
+            return true;
+        }
+
+        // Regex check for common personal domain patterns (e.g. yahoo.*, hotmail.*, gmx.*)
+        if (preg_match('/^(gmail|yahoo|hotmail|outlook|live|icloud|aol|protonmail|proton|yandex|mail|gmx|rediffmail)\./i', $domain)) {
+            return true;
      * Search for a user across all tenant databases.
      * Returns ['user' => User, 'slug' => string, 'organization' => Organization] or null.
      */

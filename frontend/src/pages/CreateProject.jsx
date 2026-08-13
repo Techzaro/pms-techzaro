@@ -5,7 +5,7 @@
  * After project creation, navigates back to the projects list.
  * If cancelled, navigates to the previous page.
  */
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import CreateProjectModal from "../components/CreateProjectModal";
 import { rolePath } from "../utils/auth";
@@ -16,6 +16,8 @@ import { rolePath } from "../utils/auth";
  */
 function CreateProject() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const teamId = searchParams.get("teamId");
 
   // Navigate back to projects list if project was created, otherwise go to previous page
   const handleClose = (created) => {
@@ -29,7 +31,7 @@ function CreateProject() {
   return (
     <DashboardLayout hideRightSidebar={true}>
       <div className="min-h-screen flex items-center justify-center">
-        <CreateProjectModal onClose={handleClose} />
+        <CreateProjectModal onClose={handleClose} initialTeamId={teamId} />
       </div>
     </DashboardLayout>
   );

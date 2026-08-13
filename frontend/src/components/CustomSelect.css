@@ -80,6 +80,11 @@
   transform: rotate(180deg);
 }
 
+.cs-wrap.cs-open {
+  position: relative;
+  z-index: 9999;
+}
+
 .cs-dropdown {
   position: absolute;
   top: calc(100% + 4px);
@@ -88,9 +93,9 @@
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  z-index: 100;
-  max-height: 200px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  z-index: 9999;
+  max-height: 220px;
   overflow-y: auto;
   scrollbar-width: thin;
 }

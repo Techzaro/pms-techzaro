@@ -55,6 +55,22 @@ function Login() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
 
+  const PERSONAL_DOMAINS = [
+    "gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.in", "yahoo.co.uk", "yahoo.ca",
+    "ymail.com", "rocketmail.com", "hotmail.com", "hotmail.co.uk", "hotmail.fr", "hotmail.de",
+    "live.com", "live.co.uk", "msn.com", "outlook.com", "outlook.co.uk", "icloud.com",
+    "me.com", "mac.com", "aol.com", "aim.com", "protonmail.com", "proton.me", "pm.me",
+    "zoho.com", "zohomail.com", "yandex.com", "yandex.ru", "mail.com", "email.com",
+    "gmx.com", "gmx.net", "rediffmail.com", "inbox.com", "fastmail.com", "hushmail.com"
+  ];
+
+  const checkIsPersonalEmail = (emailStr) => {
+    if (!emailStr || !emailStr.includes("@")) return false;
+    const domain = emailStr.split("@").pop().toLowerCase().trim();
+    if (PERSONAL_DOMAINS.includes(domain)) return true;
+    return /^(gmail|yahoo|hotmail|outlook|live|icloud|aol|protonmail|proton|yandex|mail|gmx|rediffmail)\./i.test(domain);
+  };
+
   /**
    * handleLogin — Validates form fields and sends login request to API.
    * On success: saves session and redirects based on role.
@@ -65,6 +81,8 @@ function Login() {
 
     if (!email.trim()) {
       errors.email = "Please enter your professional email address.";
+    } else if (checkIsPersonalEmail(email)) {
+      errors.email = "Login using personal email addresses is not allowed";
     }
 
     if (!password.trim()) {
@@ -107,9 +125,9 @@ function Login() {
         if (res.status === 429) {
           msg = data.message || "Too many failed login attempts. Please try again in 15 minutes.";
         } else if (res.status === 401) {
-          msg = "Incorrect email or password. Please try again.";
+          msg = data.message || "Incorrect email or password. Please try again.";
         } else if (res.status === 403) {
-          msg = data.message || "Your account has been deactivated. Please contact admin.";
+          msg = data.message || "Login using personal email addresses is not allowed";
         } else if (res.status === 422) {
           msg = data.message || "Please enter valid email and password.";
         } else if (res.status === 404) {

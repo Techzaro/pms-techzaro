@@ -36,7 +36,7 @@ function RoleProtectedRoute({ allowedRoles, children }) {
       } catch {}
       navigate(redirectUrl, { replace: true });
     }
-  }, [location.pathname, navigate]);
+  }, [location.pathname, location.search, navigate]);
 
   if (!token) {
     const loginPath = isAdminDomain() ? '/super-admin/login' : '/login';

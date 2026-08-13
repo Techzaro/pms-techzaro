@@ -2,16 +2,18 @@
 
 namespace App\Services;
 
-use Illuminate\Http\Response;
-use Illuminate\Support\Collection;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use OpenSpout\Common\Entity\Row;
 use OpenSpout\Common\Entity\Style\Style;
 use OpenSpout\Writer\XLSX\Writer;
 
 class AuditExportService
 {
-    public function exportExcel(Collection $logs): Response
+    public function exportExcel($logs): BinaryFileResponse
     {
+        if ($logs instanceof \Illuminate\Pagination\AbstractPaginator) {
+            $logs = $logs->getCollection();
+        }
         $fileName = 'audit-logs-' . now()->format('Y-m-d_H-i-s') . '.xlsx';
         $tempPath = tempnam(sys_get_temp_dir(), 'audit_export_') . '.xlsx';
 

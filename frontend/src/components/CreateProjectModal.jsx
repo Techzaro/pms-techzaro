@@ -26,7 +26,7 @@ import { useSubmit } from "../hooks/useSubmit";
 import RichTextEditor from "./RichTextEditor";
 import "./layout/CreateProjectModal.css";
 
-const CreateProjectModal = ({ onClose, restoreDraftId = null }) => {
+const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = null }) => {
   const draftSaveRef = useRef(null);
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useDraftGuard(onClose, {
     draftSaveHandler: () => draftSaveRef.current?.(),
@@ -58,8 +58,8 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null }) => {
     title: "",
     description: "",
     end_date: "",
-    team_id: "",
-    team_ids: [],
+    team_id: initialTeamId ? String(initialTeamId) : "",
+    team_ids: initialTeamId ? [Number(initialTeamId)] : [],
     assigned_users: [],
     guest_ids: [],
     priority: "Medium",
@@ -1064,86 +1064,97 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null }) => {
             </div>
 
             {/* TEAMS & MEMBERS */}
-            <div className="cp-field">
-              <label>Teams (Optional)</label>
-              <div className="cp-dropdown-wrap cp-combo-trigger" ref={teamRolesRef} onClick={() => { if (!teamRolesOpen) { setTeamRolesOpen(true); setTeamRolesSearch(""); } }}>
-                {form.team_ids.length > 0 && (
-                  <span className="cp-combo-count">{form.team_ids.length} selected</span>
-                )}
-                {form.team_ids.length === 0 && !teamRolesOpen && (
-                  <span className="cp-combo-placeholder">Select Teams</span>
-                )}
-                {teamRolesOpen && (
-                  <input
-                    type="text"
-                    className="cp-combo-input"
-                    placeholder="Search by team name..."
-                    value={teamRolesSearch}
-                    onChange={(e) => setTeamRolesSearch(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Escape") { setTeamRolesSearch(""); setTeamRolesOpen(false); }
-                      else if (e.key === "ArrowDown") {
-                        e.preventDefault();
-                        const filteredLen = teams.filter((t) => !teamRolesSearch.trim() || t.name.toLowerCase().includes(teamRolesSearch.toLowerCase())).length;
-                        setTeamHighlightedIndex((prev) => (prev < filteredLen - 1 ? prev + 1 : 0));
-                      } else if (e.key === "ArrowUp") {
-                        e.preventDefault();
-                        const filteredLen = teams.filter((t) => !teamRolesSearch.trim() || t.name.toLowerCase().includes(teamRolesSearch.toLowerCase())).length;
-                        setTeamHighlightedIndex((prev) => (prev > 0 ? prev - 1 : filteredLen - 1));
-                      } else if (e.key === "Enter") {
-                        e.preventDefault();
-                        const filteredTeams = teams.filter((t) => !teamRolesSearch.trim() || t.name.toLowerCase().includes(teamRolesSearch.toLowerCase()));
-                        const team = filteredTeams[teamHighlightedIndex];
-                        if (team) {
-                          markDirty();
-                          setForm((prev) => ({
-                            ...prev,
-                            team_ids: prev.team_ids.includes(team.id)
-                              ? prev.team_ids.filter((id) => id !== team.id)
-                              : [...prev.team_ids, team.id],
-                          }));
-                        }
-                      }
-                    }}
-                    autoFocus
-                  />
-                )}
-                <svg className={`cp-dropdown-arrow ${teamRolesOpen ? "open" : ""}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" onClick={(e) => { e.stopPropagation(); if (teamRolesOpen) { setTeamRolesOpen(false); setTeamRolesSearch(""); } else { setTeamRolesOpen(true); setTeamRolesSearch(""); } }}><polyline points="6 9 12 15 18 9" /></svg>
-                {teamRolesOpen && (
-                  <div className="cp-dropdown-menu" ref={teamListRef} onClick={(e) => e.stopPropagation()}>
-                    {teams.filter((t) => !teamRolesSearch.trim() || t.name.toLowerCase().includes(teamRolesSearch.toLowerCase())).map((team, idx) => (
-                      <label key={team.id} className={`cp-dropdown-item ${teamHighlightedIndex === idx ? "cp-dropdown-item--highlighted" : ""}`} onMouseEnter={() => setTeamHighlightedIndex(idx)}>
-                        <input
-                          type="checkbox"
-                          checked={form.team_ids.includes(team.id)}
-                          onChange={() => {
-                            markDirty();
-                            setForm((prev) => ({
-                              ...prev,
-                              team_ids: prev.team_ids.includes(team.id)
-                                ? prev.team_ids.filter((id) => id !== team.id)
-                                : [...prev.team_ids, team.id],
-                            }));
-                          }}
-                        />
-                        <span>{team.name}</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
+            {initialTeamId ? (
+              <div className="cp-field">
+                <label>Assigned Team</label>
+                <div style={{ padding: "12px 16px", borderRadius: "12px", background: "var(--bg-card-alt)", border: "1px solid var(--border-color)", color: "var(--text-heading)", fontWeight: 600, fontSize: "14px", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span>🔒 Auto-assigned to {teams.find(t => Number(t.id) === Number(initialTeamId))?.name || `Team #${initialTeamId}`}</span>
+                </div>
               </div>
-            </div>
+            ) : (
+              <>
+                <div className="cp-field">
+                  <label>Teams (Optional)</label>
+                  <div className="cp-dropdown-wrap cp-combo-trigger" ref={teamRolesRef} onClick={() => { if (!teamRolesOpen) { setTeamRolesOpen(true); setTeamRolesSearch(""); } }}>
+                    {form.team_ids.length > 0 && (
+                      <span className="cp-combo-count">{form.team_ids.length} selected</span>
+                    )}
+                    {form.team_ids.length === 0 && !teamRolesOpen && (
+                      <span className="cp-combo-placeholder">Select Teams</span>
+                    )}
+                    {teamRolesOpen && (
+                      <input
+                        type="text"
+                        className="cp-combo-input"
+                        placeholder="Search by team name..."
+                        value={teamRolesSearch}
+                        onChange={(e) => setTeamRolesSearch(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Escape") { setTeamRolesSearch(""); setTeamRolesOpen(false); }
+                          else if (e.key === "ArrowDown") {
+                            e.preventDefault();
+                            const filteredLen = teams.filter((t) => !teamRolesSearch.trim() || t.name.toLowerCase().includes(teamRolesSearch.toLowerCase())).length;
+                            setTeamHighlightedIndex((prev) => (prev < filteredLen - 1 ? prev + 1 : 0));
+                          } else if (e.key === "ArrowUp") {
+                            e.preventDefault();
+                            const filteredLen = teams.filter((t) => !teamRolesSearch.trim() || t.name.toLowerCase().includes(teamRolesSearch.toLowerCase())).length;
+                            setTeamHighlightedIndex((prev) => (prev > 0 ? prev - 1 : filteredLen - 1));
+                          } else if (e.key === "Enter") {
+                            e.preventDefault();
+                            const filteredTeams = teams.filter((t) => !teamRolesSearch.trim() || t.name.toLowerCase().includes(teamRolesSearch.toLowerCase()));
+                            const team = filteredTeams[teamHighlightedIndex];
+                            if (team) {
+                              markDirty();
+                              setForm((prev) => ({
+                                ...prev,
+                                team_ids: prev.team_ids.includes(team.id)
+                                  ? prev.team_ids.filter((id) => id !== team.id)
+                                  : [...prev.team_ids, team.id],
+                              }));
+                            }
+                          }
+                        }}
+                        autoFocus
+                      />
+                    )}
+                    <svg className={`cp-dropdown-arrow ${teamRolesOpen ? "open" : ""}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" onClick={(e) => { e.stopPropagation(); if (teamRolesOpen) { setTeamRolesOpen(false); setTeamRolesSearch(""); } else { setTeamRolesOpen(true); setTeamRolesSearch(""); } }}><polyline points="6 9 12 15 18 9" /></svg>
+                    {teamRolesOpen && (
+                      <div className="cp-dropdown-menu" ref={teamListRef} onClick={(e) => e.stopPropagation()}>
+                        {teams.filter((t) => !teamRolesSearch.trim() || t.name.toLowerCase().includes(teamRolesSearch.toLowerCase())).map((team, idx) => (
+                          <label key={team.id} className={`cp-dropdown-item ${teamHighlightedIndex === idx ? "cp-dropdown-item--highlighted" : ""}`} onMouseEnter={() => setTeamHighlightedIndex(idx)}>
+                            <input
+                              type="checkbox"
+                              checked={form.team_ids.includes(team.id)}
+                              onChange={() => {
+                                markDirty();
+                                setForm((prev) => ({
+                                  ...prev,
+                                  team_ids: prev.team_ids.includes(team.id)
+                                    ? prev.team_ids.filter((id) => id !== team.id)
+                                    : [...prev.team_ids, team.id],
+                                }));
+                              }}
+                            />
+                            <span>{team.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
 
-            <div className="cp-field">
-              <label>Team Members (Optional)</label>
-              <UserSelectDropdown
-                users={displayUsers}
-                selectedIds={form.assigned_users}
-                onChange={handleAssignedUsersChange}
-                placeholder="Click to select members"
-                viewOnly={!!form.team_id}
-              />
-            </div>
+                <div className="cp-field">
+                  <label>Team Members (Optional)</label>
+                  <UserSelectDropdown
+                    users={displayUsers}
+                    selectedIds={form.assigned_users}
+                    onChange={handleAssignedUsersChange}
+                    placeholder="Click to select members"
+                    viewOnly={!!form.team_id}
+                  />
+                </div>
+              </>
+            )}
 
             <div className="cp-field">
               <label>Guests (Optional)</label>

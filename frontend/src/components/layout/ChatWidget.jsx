@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { Plus, Calendar, CalendarDays, MessageSquare, X } from "lucide-react";
 import API_URL from "../../config/api";
 import { authToken, getCurrentRole, rolePath } from "../../utils/auth";
 import { useNotification } from "../../context/NotificationContext";
@@ -43,8 +45,10 @@ function ChatFileImage({ msgId, fileName }) {
 }
 
 function ChatWidget() {
+  const navigate = useNavigate();
   const notify = useNotification();
   const [isOpen, setIsOpen] = useState(false);
+  const [speedDialOpen, setSpeedDialOpen] = useState(false);
   const [conversations, setConversations] = useState([]);
   const [activeConversation, setActiveConversation] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -287,22 +291,73 @@ function ChatWidget() {
   };
 
   return (
-    <div className="chat-widget">
-      {/* Floating Bubble */}
+    <div
+      className="fab-speed-dial-container"
+      onMouseEnter={() => setSpeedDialOpen(true)}
+      onMouseLeave={() => setSpeedDialOpen(false)}
+    >
+      {/* Vertically Stacked Speed Dial Actions */}
+      <div className={`fab-speed-dial-actions ${speedDialOpen ? "fab-speed-dial-actions--open" : ""}`}>
+        {/* 1. Events */}
+        <button
+          type="button"
+          className="fab-action-item"
+          onClick={() => { setSpeedDialOpen(false); navigate(rolePath("calender")); }}
+          title="Events"
+        >
+          <span className="fab-action-label">Events</span>
+          <div className="fab-action-btn">
+            <Calendar size={18} />
+          </div>
+        </button>
+
+        {/* 2. Calendar */}
+        <button
+          type="button"
+          className="fab-action-item"
+          onClick={() => { setSpeedDialOpen(false); navigate(rolePath("calender")); }}
+          title="Calendar"
+        >
+          <span className="fab-action-label">Calendar</span>
+          <div className="fab-action-btn">
+            <CalendarDays size={18} />
+          </div>
+        </button>
+
+        {/* 3. Chat */}
+        <button
+          type="button"
+          className="fab-action-item"
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsOpen((prev) => !prev);
+            setSpeedDialOpen(false);
+          }}
+          title="Chat"
+        >
+          <span className="fab-action-label">Chat</span>
+          <div className="fab-action-btn">
+            <MessageSquare size={18} />
+          </div>
+        </button>
+      </div>
+
+      {/* Main Plus (+) Trigger Button */}
       <button
-        className={`chat-widget-bubble ${isOpen ? "chat-widget-bubble--open" : ""}`}
-        onClick={() => setIsOpen(!isOpen)}
-        aria-label="Toggle chat"
+        type="button"
+        className={`fab-main-btn ${(speedDialOpen || isOpen) ? "fab-main-btn--open" : ""}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (isOpen) {
+            setIsOpen(false);
+            setSpeedDialOpen(false);
+          } else {
+            setSpeedDialOpen((prev) => !prev);
+          }
+        }}
+        aria-label="Speed Dial Menu"
       >
-        {isOpen ? (
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M18 6L6 18M6 6l12 12" />
-          </svg>
-        ) : (
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
-          </svg>
-        )}
+        <Plus size={26} style={{ transition: "transform 0.3s ease", transform: (speedDialOpen || isOpen) ? "rotate(45deg)" : "rotate(0deg)" }} />
       </button>
 
       {/* Chat Panel */}
@@ -322,7 +377,19 @@ function ChatWidget() {
                       <line x1="3" y1="21" x2="10" y2="14" />
                     </svg>
                   </button>
-                  <button className="cw-new-btn" onClick={openNewChat}>+ New</button>
+                  <button
+                    type="button"
+                    className="cw-close-btn"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setIsOpen(false);
+                      setSpeedDialOpen(false);
+                    }}
+                    title="Close Chat Drawer"
+                  >
+                    <X size={18} />
+                  </button>
                 </div>
               </div>
               <div className="cw-conversation-list">
@@ -526,13 +593,26 @@ function ChatWidget() {
                 </div>
               ) : activeConversation ? (
                 <>
-                  <div className="cw-chat-header">
+                  <div className="cw-chat-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div>
                       <h4>{activeConversation.subject || activeConversation.project?.title || "Conversation"}</h4>
                       <span className="cw-participants">
                         {activeConversation.participants?.map((p) => p.name).join(", ")}
                       </span>
                     </div>
+                    <button
+                      type="button"
+                      className="cw-close-btn"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setIsOpen(false);
+                        setSpeedDialOpen(false);
+                      }}
+                      title="Close Chat Drawer"
+                    >
+                      <X size={18} />
+                    </button>
                   </div>
                   <div className="cw-messages">
                     {messages.length === 0 && (

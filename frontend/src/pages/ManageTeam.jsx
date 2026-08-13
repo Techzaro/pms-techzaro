@@ -28,6 +28,7 @@ import {
   MdGroup,
   MdPersonAdd,
   MdCreateNewFolder,
+  MdCalendarToday,
 } from "react-icons/md";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
@@ -56,6 +57,12 @@ const AVATAR_COLORS = [
   "#06b6d4",
   "#f97316",
 ];
+
+function formatDate(dateStr) {
+  if (!dateStr) return "N/A";
+  const d = new Date(dateStr);
+  return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+}
 
 /** Extracts up to 2 initials from a name */
 function getInitials(name) {
@@ -92,6 +99,8 @@ function ManageTeam() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [timeFilter, setTimeFilter] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [sortOption, setSortOption] = useState("newest");
   const [selectedTeamFilter, setSelectedTeamFilter] = useState(searchParams.get("selectedTeam") || "");
 
@@ -156,7 +165,17 @@ function ManageTeam() {
     const token = authToken();
     if (!token) return;
     try {
-      const response = await fetch(`${API_URL}/teams`, {
+      let url = `${API_URL}/teams`;
+      const queryParams = [];
+      if (timeFilter && timeFilter !== "custom") {
+        queryParams.push(`days=${timeFilter}`);
+      } else if (timeFilter === "custom" && startDate && endDate) {
+        queryParams.push(`start_date=${startDate}`, `end_date=${endDate}`);
+      }
+      if (queryParams.length > 0) {
+        url += `?${queryParams.join("&")}`;
+      }
+      const response = await fetch(url, {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         skipLoader: true,
       });
@@ -367,8 +386,12 @@ function ManageTeam() {
   };
 
   // Create a new team with name, description, and selected members
-  const handleCreateTeam = async (e) => {
-    e.preventDefault();
+  const handleCreateTeam = async (e, isDraft = false) => {
+    if (e) e.preventDefault();
+    if (!selectedMemberIds || selectedMemberIds.length === 0) {
+      notify.error("At least one team member is required.");
+      return;
+    }
     await run(async () => {
       const token = authToken();
       const response = await fetch(`${API_URL}/teams`, {
@@ -378,12 +401,20 @@ function ManageTeam() {
           Accept: "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ name: teamName, description: teamDescription, member_ids: selectedMemberIds, leader_id: selectedLeaderId }),
+        body: JSON.stringify({
+          name: teamName,
+          description: teamDescription,
+          member_ids: selectedMemberIds,
+          leader_id: selectedLeaderId,
+          team_lead_id: selectedLeaderId,
+          status: isDraft ? "draft" : "active",
+          is_draft: isDraft,
+        }),
         _notifHandled: true,
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Failed to create team");
-      showSuccessMessage("Team", "created");
+      showSuccessMessage("Team", isDraft ? "saved as draft" : "created");
       fetchTeams();
       closeModal();
     });
@@ -421,15 +452,20 @@ function ManageTeam() {
     setTeamName(team.name);
     setTeamDescription(team.description || "");
     setSelectedMemberIds(team.members.map((m) => m.id));
+    setSelectedLeaderId(team.leader_id || null);
     setAddMemberTeamId(null);
     setIsMemberDropdownOpen(false);
     setIsUserDropdownOpen(false);
     setIsModalOpen(true);
   };
 
-  // Update an existing team's name, description, and member list
+  // Update an existing team's name, description, leader, and member list
   const handleUpdateTeam = async (e) => {
     e.preventDefault();
+    if (!selectedMemberIds || selectedMemberIds.length === 0) {
+      notify.error("At least one team member is required.");
+      return;
+    }
     await run(async () => {
       const token = authToken();
       const response = await fetch(`${API_URL}/teams/${editTeamId}`, {
@@ -439,7 +475,7 @@ function ManageTeam() {
           Accept: "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ name: teamName, description: teamDescription, member_ids: selectedMemberIds }),
+        body: JSON.stringify({ name: teamName, description: teamDescription, member_ids: selectedMemberIds, leader_id: selectedLeaderId, team_lead_id: selectedLeaderId }),
         _notifHandled: true,
       });
       const data = await response.json();
@@ -536,12 +572,30 @@ function ManageTeam() {
               </span>
             </div>
           )}
-          <select className="reports-filter" value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}>
+          <select className="reports-filter" value={timeFilter} onChange={(e) => { setTimeFilter(e.target.value); setPage(1); }}>
             <option value="">All Time</option>
             <option value="7">Last 7 Days</option>
             <option value="30">Last 30 Days</option>
             <option value="180">Last 6 Months</option>
+            <option value="custom">Custom Range</option>
           </select>
+          {timeFilter === "custom" && (
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
+                style={{ padding: "6px 10px", borderRadius: "8px", border: "1px solid var(--border-color)", fontSize: "13px", background: "var(--bg-card)", color: "var(--text-primary)" }}
+              />
+              <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>to</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
+                style={{ padding: "6px 10px", borderRadius: "8px", border: "1px solid var(--border-color)", fontSize: "13px", background: "var(--bg-card)", color: "var(--text-primary)" }}
+              />
+            </div>
+          )}
           <div className="mt-sort-box">
             <span>Sort by</span>
             <MdExpandMore size={18} />
@@ -575,7 +629,13 @@ function ManageTeam() {
                       <div className="mt-team-icon">
                         <MdGroup size={24} />
                       </div>
-                      <h3 className="mt-team-name">{team.name}</h3>
+                      <div>
+                        <h3 className="mt-team-name">{team.name}</h3>
+                        <span style={{ fontSize: "12px", color: "var(--text-secondary)", display: "inline-flex", alignItems: "center", gap: "4px", marginTop: "2px" }}>
+                          <MdCalendarToday size={13} style={{ color: "var(--color-primary)" }} />
+                          Created {formatDate(team.created_at)}
+                        </span>
+                      </div>
                     </div>
                     <div className="mt-card-actions">
                       <button className="mt-icon-btn mt-icon-edit" title="Edit Team" onClick={() => openEditTeamModal(team)}>
@@ -981,7 +1041,7 @@ function ManageTeam() {
                     )}
                   </div>
 
-                  {!editTeamId && selectedMemberIds.length > 0 && (
+                  {selectedMemberIds.length > 0 && (
                     <div style={{ width: "100%", marginBottom: "20px" }}>
                       <label className="mt-field-label">Select Team Lead (Optional)</label>
                       <select
@@ -1014,6 +1074,17 @@ function ManageTeam() {
                     <button type="button" className="mt-btn-cancel" onClick={handleTeamClose}>
                       Cancel
                     </button>
+                    {!editTeamId && (
+                      <button
+                        type="button"
+                        className="mt-btn-cancel"
+                        style={{ border: "1px solid var(--border-color)", background: "var(--bg-hover)", color: "var(--text-primary)" }}
+                        onClick={(e) => handleCreateTeam(e, true)}
+                        disabled={submitting}
+                      >
+                        Save as Draft
+                      </button>
+                    )}
                     <LoadingButton type="submit" className="mt-btn-primary" loading={submitting}>
                       {editTeamId ? "Update Team" : "Create Team"}
                     </LoadingButton>

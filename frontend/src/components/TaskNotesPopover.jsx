@@ -6,7 +6,22 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { StickyNote, Pencil, Check, X } from "lucide-react";
+import { StickyNote, Pencil, Trash2, Check, X } from "lucide-react";
+
+  const handleDeleteNote = async (noteId) => {
+    if (!window.confirm("Are you sure you want to delete this note?")) return;
+    const token = authToken();
+    try {
+      const res = await fetch(`${endpoint}/${noteId}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setNotes(data.notes || []);
+      }
+    } catch {}
+  };
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import "./TaskNotesPopover.css";
@@ -231,9 +246,14 @@ const TaskNotesPopover = ({ taskId, itemType = "task" }) => {
                     ) : (
                       <>
                         <p className="tnp-note-text">{n.note}</p>
-                        <button className="tnp-edit-icon" title="Edit note" onClick={() => handleEditStart(n)}>
-                          <Pencil size={12} />
-                        </button>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px", marginLeft: "auto" }}>
+                          <button className="tnp-edit-icon" title="Edit note" onClick={() => handleEditStart(n)}>
+                            <Pencil size={12} />
+                          </button>
+                          <button className="tnp-edit-icon" title="Delete note" onClick={() => handleDeleteNote(n.id)} style={{ color: "#ef4444" }}>
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
                       </>
                     )}
                   </div>

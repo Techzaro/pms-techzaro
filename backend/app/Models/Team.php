@@ -21,7 +21,9 @@ class Team extends Model
         'name',
         'description',
         'leader_id',
-        'created_by'
+        'created_by',
+        'status',
+        'is_draft',
     ];
 
     /** Projects owned by this team. */

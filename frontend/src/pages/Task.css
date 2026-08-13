@@ -94,9 +94,17 @@
 
 .task-progress {
   display: flex;
-  gap: 4px;
-  margin-bottom: 30px;
+  gap: 8px;
+  margin-bottom: 24px;
   flex-wrap: wrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+  cursor: grab;
+  user-select: none;
+}
+.task-progress:active {
+  cursor: grabbing;
 }
 
 .task-progress p {
@@ -1040,4 +1048,48 @@
 
 .task-table .taskby-row:last-child td {
   border-bottom: none;
+}
+
+/* ===== TABLE CONTAINERS Z-INDEX & STACKING CONTEXT ===== */
+.pd-table-wrap,
+.table-container,
+.task-table-wrap,
+.deliveries-table-container {
+  position: relative;
+  z-index: 10;
+  overflow-x: auto;
+}
+
+/* ===== RELIABLE COLUMN RESIZING & FIXED TABLE LAYOUT ===== */
+table,
+.pd-table,
+.task-table,
+.projects-table,
+.deliveries-table {
+  table-layout: fixed !important;
+  width: 100% !important;
+}
+
+th,
+.table-header > div,
+.table-header1 > div,
+.table-header-compact > div,
+.all-tasks-header > div,
+.up-table-header > div,
+.deliveries-table-header > div,
+.ptt-header > div,
+.projects-table-header > div {
+  position: relative !important;
+  box-sizing: border-box !important;
+}
+
+/* Method 1: Inner Div Resize Wrapper Styling */
+.resize-wrapper {
+  display: block !important;
+  resize: horizontal !important;
+  overflow: hidden !important;
+  width: max-content !important;
+  min-width: 120px !important;
+  padding-right: 12px !important;
+  box-sizing: border-box !important;
 }

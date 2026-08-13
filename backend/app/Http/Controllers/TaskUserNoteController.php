@@ -66,18 +66,19 @@ class TaskUserNoteController extends Controller
      */
     public function destroy(Task $task, TaskUserNote $note)
     {
-        if ((int) $note->user_id !== (int) auth()->id()) {
+        $user = auth()->user();
+        if ((int) $note->user_id !== (int) $user->id && ! in_array($user->role, ['admin', 'manager'])) {
             return response()->json(['success' => false, 'message' => 'Forbidden.'], 403);
         }
 
         $note->delete();
 
         $notes = TaskUserNote::where('task_id', $task->id)
-            ->where('user_id', auth()->id())
+            ->where('user_id', $user->id)
             ->orderBy('created_at', 'desc')
             ->get(['id', 'note', 'created_at']);
 
-        return response()->json(['notes' => $notes]);
+        return response()->json(['success' => true, 'message' => 'Note deleted successfully', 'notes' => $notes]);
     }
 
     /**

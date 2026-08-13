@@ -25,8 +25,22 @@ import { useApiQuery } from "../hooks/useApi";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRelativeTime } from "../hooks/useRelativeTime";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
+import { usePersonalization } from "../context/PersonalizationContext";
+import CalendarEventsWidget from "../components/CalendarEventsWidget";
+import DynamicWidgetSection from "../components/DynamicWidgetSection";
+import { X, Plus, RotateCcw, GripVertical } from "lucide-react";
 import { IoPerson, IoPeople } from "react-icons/io5";
 import "./Admin.css";
+
+const ALL_DASHBOARD_WIDGETS = [
+  { id: "summary_cards", title: "Summary Metric Cards", icon: "📊", desc: "Key performance indicator cards at the top of the dashboard." },
+  { id: "today_tasks", title: "Today's Tasks & Workload", icon: "📋", desc: "Carousel list of tasks assigned or due today." },
+  { id: "active_projects", title: "Active Projects Slider", icon: "🚀", desc: "Active project cards slider with progress status." },
+  { id: "activity_feed", title: "Today's Activity Feed", icon: "⚡", desc: "Real-time timeline feed of recent system actions." },
+  { id: "calendar_events", title: "Calendar & Upcoming Events", icon: "📅", desc: "Mini monthly calendar & list of upcoming schedule." },
+];
+
+const DEFAULT_DASHBOARD_LAYOUT = ["summary_cards", "today_tasks", "active_projects", "activity_feed", "calendar_events"];
 
 /** Extracts up to 2 initials from a name string (e.g. "John Doe" → "JD") */
 const getInitials = (name) => {
@@ -324,13 +338,71 @@ const ProjectCard = memo(function ProjectCard({ project, cardWidth, navigate, ge
  */
 function Admin() {
   const navigate = useNavigate();
+  const { isWidgetEnabled } = usePersonalization();
   const [greeting, setGreeting] = useState("Welcome");
   const [modalOpen, setModalOpen] = useState(false);
   const currentRole = getCurrentRole() || "member";
   const isAdminManager = currentRole === "admin" || currentRole === "manager";
 
+  const isWidgetActive = (id) => isWidgetEnabled("dashboard", id);
+
   // Dashboard mode toggle: "my" = My Dashboard, "user" = User Dashboard
   const [dashboardMode, setDashboardMode] = useState(() => isAdminManager ? "user" : "my");
+
+  const DEFAULT_SECTION_ORDER = ["summary_cards", "today_tasks", "active_projects", "activity_feed", "custom_widgets"];
+
+  const [dashboardSectionOrder, setDashboardSectionOrder] = useState(() => {
+    try {
+      const saved = localStorage.getItem("pms_admin_dashboard_global_section_order");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const missing = DEFAULT_SECTION_ORDER.filter(s => !parsed.includes(s));
+          return [...parsed, ...missing];
+        }
+      }
+    } catch {}
+    return DEFAULT_SECTION_ORDER;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("pms_admin_dashboard_global_section_order", JSON.stringify(dashboardSectionOrder));
+    } catch {}
+  }, [dashboardSectionOrder]);
+
+  const [draggedSecIndex, setDraggedSecIndex] = useState(null);
+  const [dragOverSecIndex, setDragOverSecIndex] = useState(null);
+
+  const handleSecDragStart = (e, index) => {
+    setDraggedSecIndex(index);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleSecDragOver = (e, index) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragOverSecIndex !== index) {
+      setDragOverSecIndex(index);
+    }
+  };
+
+  const handleSecDrop = (e, targetIndex) => {
+    e.preventDefault();
+    if (draggedSecIndex === null || draggedSecIndex === targetIndex) {
+      setDraggedSecIndex(null);
+      setDragOverSecIndex(null);
+      return;
+    }
+    setDashboardSectionOrder((prev) => {
+      const updated = [...prev];
+      const [removed] = updated.splice(draggedSecIndex, 1);
+      updated.splice(targetIndex, 0, removed);
+      return updated;
+    });
+    setDraggedSecIndex(null);
+    setDragOverSecIndex(null);
+  };
 
   // Track which activity items have been viewed (persisted in sessionStorage)
   const [viewedActivities, setViewedActivities] = useState(() => {
@@ -638,7 +710,7 @@ function Admin() {
   }, [todayWorkload.length, PROJECTS_PER_VIEW, GAP]);
 
   return (
-    <DashboardLayout>
+    <DashboardLayout hideRightSidebar={true}>
           <Breadcrumb items={[{ label: "Dashboard" }]} />
           <div className="welcome-box" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div>
@@ -665,321 +737,435 @@ function Admin() {
               </button>
             </div>
           </div>
-          <div className="summary-cards-grid"
-            style={{
-              display: "grid",
-              gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fit, minmax(100px, 1fr))",
-              gap: isMobile ? "10px" : "20px",
-            }}
-          >
-            {summaryCards.map((card) => (
-              <SummaryCard key={card.title} card={card} onClick={handleSummaryCardClick} />
-            ))}
-          </div>
-          <br />
-          <div className="workload-card">
-            <div className="workload-card-header">
-              <h3 style={{fontSize: "22px", fontWeight: "700", color: "var(--text-heading)"}}>Today's Tasks</h3>
-              <button className="workload-view-btn" onClick={() => {
-                const isOutgoing = dashboardMode === "user";
-                navigate(rolePath(isOutgoing ? "taskby" : "tasks"));
-              }}>View All Tasks</button>
-            </div>
-            {todayWorkload.length === 0 ? (
-              <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>No tasks due today</p>
-            ) : (
-              <>
-                <div ref={taskSliderRef} style={{ overflow: "hidden" }}>
-                  <div style={{
-                    display: "flex", gap: `${GAP}px`, transition: "transform 0.3s ease",
-                    transform: `translateX(-${taskSlide * (taskCardWidth + GAP)}px)`,
-                  }}>
-                    {todayWorkload.map((item, index) => (
-                      <WorkloadItem
-                        key={`${item.id}-${index}`}
-                        item={item}
-                        navigate={navigate}
-                        getInitials={getInitials}
-                        rolePath={rolePath}
-                        cardWidth={taskCardWidth}
-                        getProgressColor={getProgressColor}
-                        PROJECTS_PER_VIEW={PROJECTS_PER_VIEW}
-                        GAP={GAP}
-                        currentRole={currentRole}
-                        dashboardMode={dashboardMode}
-                      />
-                    ))}
-                  </div>
-                </div>
-                {todayWorkload.length > PROJECTS_PER_VIEW && (
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "16px", marginTop: "20px" }}>
-                    <button
-                      onClick={() => setTaskSlide((s) => Math.max(0, s - 1))}
-                      disabled={taskSlide === 0}
-                      style={{
-                        background: "transparent", border: "none",
-                        color: taskSlide === 0 ? "var(--border-medium)" : "var(--text-dark)",
-                        cursor: taskSlide === 0 ? "default" : "pointer",
-                        fontSize: "24px", fontWeight: 700, padding: "4px 8px", lineHeight: 1,
-                      }}
-                    >
-                      &lt;
-                    </button>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      {Array.from({ length: totalTaskSlides + 1 }).map((_, i) => (
-                        <button
-                          key={i}
-                          onClick={() => setTaskSlide(i)}
-                          style={{
-                            width: i === taskSlide ? "28px" : "10px", height: "10px",
-                            borderRadius: "5px", border: "none",
-                            background: i === taskSlide ? "var(--text-dark)" : "var(--border-medium)",
-                            cursor: "pointer", transition: "all 0.2s", padding: 0,
-                          }}
-                        />
-                      ))}
-                    </div>
-                    <button
-                      onClick={() => setTaskSlide((s) => Math.min(totalTaskSlides, s + 1))}
-                      disabled={taskSlide >= totalTaskSlides}
-                      style={{
-                        background: "transparent", border: "none",
-                        color: taskSlide >= totalTaskSlides ? "var(--border-medium)" : "var(--text-dark)",
-                        cursor: taskSlide >= totalTaskSlides ? "default" : "pointer",
-                        fontSize: "24px", fontWeight: 700, padding: "4px 8px", lineHeight: 1,
-                      }}
-                    >
-                      &gt;
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-          {/* Only show extra sections in the default mode for each role */}
-          {/* admin/manager: show on "user" mode; teamlead/member: show on "my" mode */}
-          {(isAdminManager ? dashboardMode === "user" : dashboardMode === "my") && (<>
-          <div className="active-projects-section" style={{
-            background: "var(--bg-card)", borderRadius: "20px", padding: "24px",
-            boxShadow: "var(--shadow-sm)", marginBottom: "30px", overflow: "hidden",
-          }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
-              <h3 style={{ margin: 0, fontSize: "22px", fontWeight: "700", color: "var(--text-heading)" }}>Active Projects</h3>
-              <button
-                className="workload-view-btn"
-                onClick={() => navigate(`${rolePath("projects")}?filter=active`)}
-              >
-                View All Projects
-              </button>
-            </div>
-            {activeProjects.length === 0 ? (
-              <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>No active projects</p>
-            ) : (
-              <>
-                <div ref={sliderRef} style={{ overflow: "hidden" }}>
-                  <div style={{
-                    display: "flex", gap: `${GAP}px`, transition: "transform 0.3s ease",
-                    transform: `translateX(-${projectSlide * (cardWidth + GAP)}px)`,
-                  }}>
-                    {activeProjects.map((project, index) => (
-                      <ProjectCard
-                        key={project.id || index}
-                        project={project}
-                        cardWidth={cardWidth}
-                        navigate={navigate}
-                        getProgressColor={getProgressColor}
-                        rolePath={rolePath}
-                        PROJECTS_PER_VIEW={PROJECTS_PER_VIEW}
-                        GAP={GAP}
-                      />
-                    ))}
-                  </div>
-                </div>
-                {activeProjects.length > PROJECTS_PER_VIEW && (
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "16px", marginTop: "24px" }}>
-                    <button
-                      onClick={() => setProjectSlide((s) => Math.max(0, s - 1))}
-                      disabled={projectSlide === 0}
-                      style={{
-                        background: "transparent", border: "none",
-                        color: projectSlide === 0 ? "var(--border-medium)" : "var(--text-dark)",
-                        cursor: projectSlide === 0 ? "default" : "pointer",
-                        fontSize: "24px", fontWeight: 700, padding: "4px 8px", lineHeight: 1,
-                      }}
-                    >
-                      &lt;
-                    </button>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      {Array.from({ length: totalProjectSlides + 1 }).map((_, i) => (
-                        <button
-                          key={i}
-                          onClick={() => setProjectSlide(i)}
-                          style={{
-                            width: i === projectSlide ? "28px" : "10px", height: "10px",
-                            borderRadius: "5px", border: "none",
-                            background: i === projectSlide ? "var(--text-dark)" : "var(--border-medium)",
-                            cursor: "pointer", transition: "all 0.2s", padding: 0,
-                          }}
-                        />
-                      ))}
-                    </div>
-                    <button
-                      onClick={() => setProjectSlide((s) => Math.min(totalProjectSlides, s + 1))}
-                      disabled={projectSlide >= totalProjectSlides}
-                      style={{
-                        background: "transparent", border: "none",
-                        color: projectSlide >= totalProjectSlides ? "var(--border-medium)" : "var(--text-dark)",
-                        cursor: projectSlide >= totalProjectSlides ? "default" : "pointer",
-                        fontSize: "24px", fontWeight: 700, padding: "4px 8px", lineHeight: 1,
-                      }}
-                    >
-                      &gt;
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-          </>)}
 
-          {/* TODAY'S ACTIVITY */}
-          {(isAdminManager ? dashboardMode === "user" : dashboardMode === "my") && (<>
-          <div className="today-activity-section" style={{ background: "var(--bg-card)", borderRadius: "20px", padding: "24px", boxShadow: "var(--shadow-sm)", marginBottom: "30px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-              <h3 style={{ margin: 0,fontSize: "22px", fontWeight: "700", color: "var(--text-heading)"}}>Today's Activity</h3>
-              <button
-                onClick={() => setPastActivityOpen(!pastActivityOpen)}
-                style={{ background: "transparent", border: "none", color: "var(--color-primary)", fontWeight: "600", cursor: "pointer", fontSize: "14px" }}
-              >
-                {pastActivityOpen ? "Hide Past" : "Past Activities"}
-              </button>
-            </div>
-            {completedToday.length === 0 ? (
-              <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>No activity today</p>
-            ) : (
-              completedToday.map((item, index) => {
-                const cfg = activityActionConfig[item.action] || activityActionConfig.submitted;
-                const isViewed = viewedActivities.includes(item.id);
-                return (
+          {dashboardSectionOrder.map((secKey, index) => {
+            const isDragOver = dragOverSecIndex === index;
+            const isDragging = draggedSecIndex === index;
+
+            const sectionWrapperStyle = {
+              marginBottom: "30px",
+              borderRadius: "20px",
+              border: isDragOver ? "2px dashed #4f46e5" : "none",
+              opacity: isDragging ? 0.4 : 1,
+              transition: "border 0.15s ease, opacity 0.15s ease",
+              position: "relative"
+            };
+
+            const DragGripHeader = ({ title }) => (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span
+                  draggable={true}
+                  onDragStart={(e) => handleSecDragStart(e, index)}
+                  onDragEnd={() => { setDraggedSecIndex(null); setDragOverSecIndex(null); }}
+                  title="Drag handle to reorder section on dashboard canvas"
+                  style={{
+                    cursor: "grab",
+                    color: "var(--text-secondary, #94a3b8)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    padding: "4px 2px"
+                  }}
+                >
+                  <GripVertical size={20} />
+                </span>
+                <h3 style={{ margin: 0, fontSize: "22px", fontWeight: "700", color: "var(--text-heading)" }}>{title}</h3>
+              </div>
+            );
+
+            if (secKey === "summary_cards") {
+              if (!isWidgetEnabled("dashboard", "summary_cards")) return null;
+              return (
+                <div
+                  key="summary_cards"
+                  draggable={false}
+                  onDragOver={(e) => handleSecDragOver(e, index)}
+                  onDrop={(e) => handleSecDrop(e, index)}
+                  style={sectionWrapperStyle}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                    <span
+                      draggable={true}
+                      onDragStart={(e) => handleSecDragStart(e, index)}
+                      onDragEnd={() => { setDraggedSecIndex(null); setDragOverSecIndex(null); }}
+                      title="Drag handle to reorder section on dashboard canvas"
+                      style={{ cursor: "grab", color: "var(--text-secondary, #94a3b8)", display: "inline-flex", alignItems: "center" }}
+                    >
+                      <GripVertical size={20} />
+                    </span>
+                    <span style={{ fontSize: "14px", fontWeight: "600", color: "var(--text-secondary)" }}>Metrics Overview</span>
+                  </div>
                   <div
-                    key={item.id || index}
-                    className={`activity-item ${isViewed ? "activity-item--read" : "activity-item--unread"}`}
-                    onClick={() => {
-                      markActivityViewed(item.id);
-                      const from = getActivityFrom(item);
-                      const dest = getActivityDestination(item);
-                      navigate(`${dest}${dest.includes("?") ? "&" : "?"}from=${from}`, { state: { from } });
+                    className="summary-cards-grid"
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fit, minmax(100px, 1fr))",
+                      gap: isMobile ? "10px" : "20px",
                     }}
                   >
-                    <div style={{ display: "flex", alignItems: "center", gap: "14px", flex: 1, minWidth: 0 }}>
-                      <div className="activity-icon-circle" style={{
-                        width: "40px",
-                        height: "40px",
-                        borderRadius: "50%",
-                        background: cfg.bg,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                      }}>
-                        <span style={{ fontSize: "16px", color: cfg.color }}>{cfg.icon}</span>
-                      </div>
-                      <div style={{ minWidth: 0 }}>
-                        <p className="activity-text" style={{ margin: 0, fontSize: "14px", lineHeight: "1.4" }}>
-                          {getActivityMessage(item)}
-                        </p>
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0, marginLeft: "12px" }}>
-                      <div
-                        title={item.actor_name}
-                        style={{
-                          width: "28px",
-                          height: "28px",
-                          borderRadius: "50%",
-                          background: "var(--text-primary)",
-                          color: "#fff",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontSize: "10px",
-                          fontWeight: 600,
-                          cursor: "pointer",
-                          border: "2px solid var(--bg-card)",
-                        }}
-                      >
-                        {getInitials(item.actor_name)}
-                      </div>
-                      <span className="activity-time" style={{ fontSize: "13px", whiteSpace: "nowrap" }}>
-                        {timeAgo(item.created_at)}
-                      </span>
-                    </div>
+                    {summaryCards.map((card) => (
+                      <SummaryCard key={card.title} card={card} onClick={handleSummaryCardClick} />
+                    ))}
                   </div>
-                );
-              })
-            )}
-          </div>
+                </div>
+              );
+            }
 
-          {/* PAST ACTIVITY (expandable) */}
-          {pastActivityOpen && (
-            <div className="past-activity-section" style={{ background: "var(--bg-card)", borderRadius: "20px", padding: "24px", boxShadow: "var(--shadow-sm)", marginBottom: "30px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-                <h3 style={{ margin: 0, fontSize: "20px", fontWeight: "600", color: "var(--text-heading)" }}>Past Activity</h3>
-                <button
-                  onClick={() => setPastActivityOpen(false)}
-                  style={{ background: "transparent", border: "none", color: "var(--color-primary)", fontWeight: "600", cursor: "pointer", fontSize: "14px" }}
+            if (secKey === "today_tasks") {
+              if (!isWidgetEnabled("dashboard", "today_tasks")) return null;
+              return (
+                <div
+                  key="today_tasks"
+                  draggable={false}
+                  onDragOver={(e) => handleSecDragOver(e, index)}
+                  onDrop={(e) => handleSecDrop(e, index)}
+                  style={sectionWrapperStyle}
                 >
-                  Collapse
-                </button>
-              </div>
-              {pastLoading ? (
-                <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>Loading past activities...</p>
-              ) : (pastActivityData?.data || []).length === 0 ? (
-                <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>No past activities</p>
-              ) : (
-                (pastActivityData?.data || []).map((group, gi) => (
-                  <div key={group.date} style={{ marginBottom: gi < (pastActivityData?.data || []).length - 1 ? "24px" : "0" }}>
-                    <h4 style={{ margin: "0 0 12px 0", fontSize: "15px", fontWeight: "600", color: "var(--text-dark)", borderBottom: "1px solid var(--border-light)", paddingBottom: "8px" }}>
-                      {group.label}
-                    </h4>
-                    {group.activities.map((item, index) => {
-                      const cfg = activityActionConfig[item.action] || activityActionConfig.submitted;
-                      const isViewed = viewedActivities.includes(item.id);
-                      return (
-                        <div
-                          key={item.id || index}
-                          className={`activity-item ${isViewed ? "activity-item--read" : "activity-item--unread"}`}
-                          onClick={() => {
-                            markActivityViewed(item.id);
-                            const from = getActivityFrom(item);
-                            const dest = getActivityDestination(item);
-                            navigate(`${dest}${dest.includes("?") ? "&" : "?"}from=${from}`, { state: { from } });
-                          }}
-                        >
-                          <div className="activity-icon-circle" style={{
-                            width: "36px", height: "36px", borderRadius: "50%",
-                            background: cfg.bg, display: "flex", alignItems: "center",
-                            justifyContent: "center", flexShrink: 0,
+                  <div className="workload-card" style={{ marginBottom: 0 }}>
+                    <div className="workload-card-header">
+                      <DragGripHeader title="Today's Tasks" />
+                      <button className="workload-view-btn" onClick={() => {
+                        const isOutgoing = dashboardMode === "user";
+                        navigate(rolePath(isOutgoing ? "taskby" : "tasks"));
+                      }}>View All Tasks</button>
+                    </div>
+                    {todayWorkload.length === 0 ? (
+                      <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>No tasks due today</p>
+                    ) : (
+                      <>
+                        <div ref={taskSliderRef} style={{ overflow: "hidden" }}>
+                          <div style={{
+                            display: "flex", gap: `${GAP}px`, transition: "transform 0.3s ease",
+                            transform: `translateX(-${taskSlide * (taskCardWidth + GAP)}px)`,
                           }}>
-                            <span style={{ fontSize: "14px", color: cfg.color }}>{cfg.icon}</span>
+                            {todayWorkload.map((item, idx) => (
+                              <WorkloadItem
+                                key={`${item.id}-${idx}`}
+                                item={item}
+                                navigate={navigate}
+                                getInitials={getInitials}
+                                rolePath={rolePath}
+                                cardWidth={taskCardWidth}
+                                getProgressColor={getProgressColor}
+                                PROJECTS_PER_VIEW={PROJECTS_PER_VIEW}
+                                GAP={GAP}
+                                currentRole={currentRole}
+                                dashboardMode={dashboardMode}
+                              />
+                            ))}
                           </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <p className="activity-text" style={{ margin: 0, fontSize: "14px", lineHeight: "1.4" }}>
-                              {getActivityMessage(item)}
-                            </p>
-                          </div>
-                          <span className="activity-time" style={{ fontSize: "13px", whiteSpace: "nowrap" }}>
-                            {formatExactTime(item.created_at)}
-                          </span>
                         </div>
-                      );
-                    })}
+                        {todayWorkload.length > PROJECTS_PER_VIEW && (
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "16px", marginTop: "20px" }}>
+                            <button
+                              onClick={() => setTaskSlide((s) => Math.max(0, s - 1))}
+                              disabled={taskSlide === 0}
+                              style={{
+                                background: "transparent", border: "none",
+                                color: taskSlide === 0 ? "var(--border-medium)" : "var(--text-dark)",
+                                cursor: taskSlide === 0 ? "default" : "pointer",
+                                fontSize: "24px", fontWeight: 700, padding: "4px 8px", lineHeight: 1,
+                              }}
+                            >
+                              &lt;
+                            </button>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                              {Array.from({ length: totalTaskSlides + 1 }).map((_, i) => (
+                                <button
+                                  key={i}
+                                  onClick={() => setTaskSlide(i)}
+                                  style={{
+                                    width: i === taskSlide ? "28px" : "10px", height: "10px",
+                                    borderRadius: "5px", border: "none",
+                                    background: i === taskSlide ? "var(--text-dark)" : "var(--border-medium)",
+                                    cursor: "pointer", transition: "all 0.2s", padding: 0,
+                                  }}
+                                />
+                              ))}
+                            </div>
+                            <button
+                              onClick={() => setTaskSlide((s) => Math.min(totalTaskSlides, s + 1))}
+                              disabled={taskSlide >= totalTaskSlides}
+                              style={{
+                                background: "transparent", border: "none",
+                                color: taskSlide >= totalTaskSlides ? "var(--border-medium)" : "var(--text-dark)",
+                                cursor: taskSlide >= totalTaskSlides ? "default" : "pointer",
+                                fontSize: "24px", fontWeight: 700, padding: "4px 8px", lineHeight: 1,
+                              }}
+                            >
+                              &gt;
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
-                ))
-              )}
-            </div>
-          )}
-          </>)}
+                </div>
+              );
+            }
+
+            if (secKey === "active_projects") {
+              const showExtra = isAdminManager ? dashboardMode === "user" : dashboardMode === "my";
+              if (!showExtra || !isWidgetEnabled("dashboard", "active_projects")) return null;
+              return (
+                <div
+                  key="active_projects"
+                  draggable={false}
+                  onDragOver={(e) => handleSecDragOver(e, index)}
+                  onDrop={(e) => handleSecDrop(e, index)}
+                  style={sectionWrapperStyle}
+                >
+                  <div className="active-projects-section" style={{
+                    background: "var(--bg-card)", borderRadius: "20px", padding: "24px",
+                    boxShadow: "var(--shadow-sm)", marginBottom: 0, overflow: "hidden"
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
+                      <DragGripHeader title="Active Projects" />
+                      <button
+                        className="workload-view-btn"
+                        onClick={() => navigate(`${rolePath("projects")}?filter=active`)}
+                      >
+                        View All Projects
+                      </button>
+                    </div>
+                    {activeProjects.length === 0 ? (
+                      <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>No active projects</p>
+                    ) : (
+                      <>
+                        <div ref={sliderRef} style={{ overflow: "hidden" }}>
+                          <div style={{
+                            display: "flex", gap: `${GAP}px`, transition: "transform 0.3s ease",
+                            transform: `translateX(-${projectSlide * (cardWidth + GAP)}px)`,
+                          }}>
+                            {activeProjects.map((project, idx) => (
+                              <ProjectCard
+                                key={project.id || idx}
+                                project={project}
+                                cardWidth={cardWidth}
+                                navigate={navigate}
+                                getProgressColor={getProgressColor}
+                                rolePath={rolePath}
+                                PROJECTS_PER_VIEW={PROJECTS_PER_VIEW}
+                                GAP={GAP}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        {activeProjects.length > PROJECTS_PER_VIEW && (
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "16px", marginTop: "24px" }}>
+                            <button
+                              onClick={() => setProjectSlide((s) => Math.max(0, s - 1))}
+                              disabled={projectSlide === 0}
+                              style={{
+                                background: "transparent", border: "none",
+                                color: projectSlide === 0 ? "var(--border-medium)" : "var(--text-dark)",
+                                cursor: projectSlide === 0 ? "default" : "pointer",
+                                fontSize: "24px", fontWeight: 700, padding: "4px 8px", lineHeight: 1,
+                              }}
+                            >
+                              &lt;
+                            </button>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                              {Array.from({ length: totalProjectSlides + 1 }).map((_, i) => (
+                                <button
+                                  key={i}
+                                  onClick={() => setProjectSlide(i)}
+                                  style={{
+                                    width: i === projectSlide ? "28px" : "10px", height: "10px",
+                                    borderRadius: "5px", border: "none",
+                                    background: i === projectSlide ? "var(--text-dark)" : "var(--border-medium)",
+                                    cursor: "pointer", transition: "all 0.2s", padding: 0,
+                                  }}
+                                />
+                              ))}
+                            </div>
+                            <button
+                              onClick={() => setProjectSlide((s) => Math.min(totalProjectSlides, s + 1))}
+                              disabled={projectSlide >= totalProjectSlides}
+                              style={{
+                                background: "transparent", border: "none",
+                                color: projectSlide >= totalProjectSlides ? "var(--border-medium)" : "var(--text-dark)",
+                                cursor: projectSlide >= totalProjectSlides ? "default" : "pointer",
+                                fontSize: "24px", fontWeight: 700, padding: "4px 8px", lineHeight: 1,
+                              }}
+                            >
+                              &gt;
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            }
+
+            if (secKey === "activity_feed") {
+              const showExtra = isAdminManager ? dashboardMode === "user" : dashboardMode === "my";
+              if (!showExtra || !isWidgetActive("activity_feed")) return null;
+              return (
+                <div
+                  key="activity_feed"
+                  draggable={false}
+                  onDragOver={(e) => handleSecDragOver(e, index)}
+                  onDrop={(e) => handleSecDrop(e, index)}
+                  style={sectionWrapperStyle}
+                >
+                  <div className="today-activity-section" style={{ background: "var(--bg-card)", borderRadius: "20px", padding: "24px", boxShadow: "var(--shadow-sm)", marginBottom: pastActivityOpen ? "30px" : 0, position: "relative" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+                      <DragGripHeader title="Today's Activity" />
+                      <div>
+                        <button
+                          onClick={() => setPastActivityOpen(!pastActivityOpen)}
+                          style={{ background: "transparent", border: "none", color: "var(--color-primary)", fontWeight: "600", cursor: "pointer", fontSize: "14px" }}
+                        >
+                          {pastActivityOpen ? "Hide Past" : "Past Activities"}
+                        </button>
+                      </div>
+                    </div>
+                    {completedToday.length === 0 ? (
+                      <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>No activity today</p>
+                    ) : (
+                      completedToday.map((item, idx) => {
+                        const cfg = activityActionConfig[item.action] || activityActionConfig.submitted;
+                        const isViewed = viewedActivities.includes(item.id);
+                        return (
+                          <div
+                            key={item.id || idx}
+                            className={`activity-item ${isViewed ? "activity-item--read" : "activity-item--unread"}`}
+                            onClick={() => {
+                              markActivityViewed(item.id);
+                              const from = getActivityFrom(item);
+                              const dest = getActivityDestination(item);
+                              navigate(`${dest}${dest.includes("?") ? "&" : "?"}from=${from}`, { state: { from } });
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: "14px", flex: 1, minWidth: 0 }}>
+                              <div className="activity-icon-circle" style={{
+                                width: "40px", height: "40px", borderRadius: "50%",
+                                background: cfg.bg, display: "flex", alignItems: "center",
+                                justifyContent: "center", flexShrink: 0,
+                              }}>
+                                <span style={{ fontSize: "16px", color: cfg.color }}>{cfg.icon}</span>
+                              </div>
+                              <div style={{ minWidth: 0 }}>
+                                <p className="activity-text" style={{ margin: 0, fontSize: "14px", lineHeight: "1.4" }}>
+                                  {getActivityMessage(item)}
+                                </p>
+                              </div>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0, marginLeft: "12px" }}>
+                              <div
+                                title={item.actor_name}
+                                style={{
+                                  width: "28px", height: "28px", borderRadius: "50%",
+                                  background: "var(--text-primary)", color: "#fff",
+                                  display: "flex", alignItems: "center", justifyContent: "center",
+                                  fontSize: "10px", fontWeight: 600, cursor: "pointer",
+                                  border: "2px solid var(--bg-card)",
+                                }}
+                              >
+                                {getInitials(item.actor_name)}
+                              </div>
+                              <span className="activity-time" style={{ fontSize: "13px", whiteSpace: "nowrap" }}>
+                                {timeAgo(item.created_at)}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {pastActivityOpen && (
+                    <div className="past-activity-section" style={{ background: "var(--bg-card)", borderRadius: "20px", padding: "24px", boxShadow: "var(--shadow-sm)", marginTop: "20px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+                        <h3 style={{ margin: 0, fontSize: "20px", fontWeight: "600", color: "var(--text-heading)" }}>Past Activity</h3>
+                        <button
+                          onClick={() => setPastActivityOpen(false)}
+                          style={{ background: "transparent", border: "none", color: "var(--color-primary)", fontWeight: "600", cursor: "pointer", fontSize: "14px" }}
+                        >
+                          Collapse
+                        </button>
+                      </div>
+                      {pastLoading ? (
+                        <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>Loading past activities...</p>
+                      ) : (pastActivityData?.data || []).length === 0 ? (
+                        <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>No past activities</p>
+                      ) : (
+                        (pastActivityData?.data || []).map((group, gi) => (
+                          <div key={group.date} style={{ marginBottom: gi < (pastActivityData?.data || []).length - 1 ? "24px" : "0" }}>
+                            <h4 style={{ margin: "0 0 12px 0", fontSize: "15px", fontWeight: "600", color: "var(--text-dark)", borderBottom: "1px solid var(--border-light)", paddingBottom: "8px" }}>
+                              {group.label}
+                            </h4>
+                            {group.activities.map((item, idx) => {
+                              const cfg = activityActionConfig[item.action] || activityActionConfig.submitted;
+                              const isViewed = viewedActivities.includes(item.id);
+                              return (
+                                <div
+                                  key={item.id || idx}
+                                  className={`activity-item ${isViewed ? "activity-item--read" : "activity-item--unread"}`}
+                                  onClick={() => {
+                                    markActivityViewed(item.id);
+                                    const from = getActivityFrom(item);
+                                    const dest = getActivityDestination(item);
+                                    navigate(`${dest}${dest.includes("?") ? "&" : "?"}from=${from}`, { state: { from } });
+                                  }}
+                                >
+                                  <div className="activity-icon-circle" style={{
+                                    width: "36px", height: "36px", borderRadius: "50%",
+                                    background: cfg.bg, display: "flex", alignItems: "center",
+                                    justifyContent: "center", flexShrink: 0,
+                                  }}>
+                                    <span style={{ fontSize: "14px", color: cfg.color }}>{cfg.icon}</span>
+                                  </div>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <p className="activity-text" style={{ margin: 0, fontSize: "14px", lineHeight: "1.4" }}>
+                                      {getActivityMessage(item)}
+                                    </p>
+                                  </div>
+                                  <span className="activity-time" style={{ fontSize: "13px", whiteSpace: "nowrap" }}>
+                                    {formatExactTime(item.created_at)}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            if (secKey === "custom_widgets") {
+              return (
+                <div
+                  key="custom_widgets"
+                  draggable={false}
+                  onDragOver={(e) => handleSecDragOver(e, index)}
+                  onDrop={(e) => handleSecDrop(e, index)}
+                  style={sectionWrapperStyle}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                    <span
+                      draggable={true}
+                      onDragStart={(e) => handleSecDragStart(e, index)}
+                      onDragEnd={() => { setDraggedSecIndex(null); setDragOverSecIndex(null); }}
+                      title="Drag handle to reorder section on dashboard canvas"
+                      style={{ cursor: "grab", color: "var(--text-secondary, #94a3b8)", display: "inline-flex", alignItems: "center" }}
+                    >
+                      <GripVertical size={20} />
+                    </span>
+                    <span style={{ fontSize: "14px", fontWeight: "600", color: "var(--text-secondary)" }}>Custom Widgets & Notes</span>
+                  </div>
+                  <DynamicWidgetSection storageKey="pms_dashboard_widgets" sectionTitle="Dashboard Widgets" />
+                </div>
+              );
+            }
+
+            return null;
+          })}
 
     </DashboardLayout>
   );

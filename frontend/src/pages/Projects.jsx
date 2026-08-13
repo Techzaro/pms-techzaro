@@ -22,11 +22,15 @@ import SmartDragHandle from "../components/SmartDragHandle";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { StickyNote, Trash2 } from "lucide-react";
 import ActionPopover from "../components/ActionPopover";
-import ConfirmModal from "../components/ConfirmModal";
+import ConfirmModal from "../components/ConfirmationDialog";
+import DynamicWidgetSection from "../components/DynamicWidgetSection";
+import DraggableStatusBadges from "../components/DraggableStatusBadges";
 
 import { GoDotFill } from "react-icons/go";
 import API_URL from "../config/api";
+import { usePersonalization } from "../context/PersonalizationContext";
 import { authToken, getCurrentRole, rolePath, getUser } from "../utils/auth";
+import { renderDynamicDates } from "../utils/tableDateUtils";
 import { publish } from "../utils/eventBus";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
@@ -80,6 +84,7 @@ const STATUS_TEXT_COLORS = {
 function Projects() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isWidgetEnabled } = usePersonalization();
   const notify = useNotification();
   const [searchParams, setSearchParams] = useSearchParams();
   const [projects, setProjects] = useState([]);
@@ -97,7 +102,22 @@ function Projects() {
   const [expandedDesc, setExpandedDesc] = useState({});
   const [overflowDetected, setOverflowDetected] = useState({});
   const descEls = useRef({});
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(() => {
+    const queryPage = searchParams.get("page");
+    if (queryPage && !isNaN(Number(queryPage))) return Math.max(1, Number(queryPage));
+    const saved = sessionStorage.getItem("projects_current_page");
+    return saved ? Math.max(1, Number(saved)) : 1;
+  });
+
+  const handlePageChange = useCallback((newPage) => {
+    setPage(newPage);
+    sessionStorage.setItem("projects_current_page", String(newPage));
+    setSearchParams((prev) => {
+      prev.set("page", String(newPage));
+      return prev;
+    }, { replace: true });
+  }, [setSearchParams]);
+
   const [showAll, setShowAll] = useState(false);
   const [viewMode, setViewMode] = useState("card");
   const [orderedProjects, setOrderedProjects] = useState([]);
@@ -142,15 +162,31 @@ function Projects() {
   const currentRole = getCurrentRole();
   const isAdminOrManager = ["admin", "manager"].includes(String(currentRole || "").toLowerCase());
 
-  /** Fetch all projects from the API, applying the current status filter. */
+  /** Fetch all projects from the API, applying current status and date range filters. */
   const fetchProjects = async () => {
     try {
       setLoading(true);
       const token = authToken();
-      const query = statusFilter === "active" ? "?filter=active" : "";
+      const params = new URLSearchParams();
+
+      if (statusFilter === "active") {
+        params.append("filter", "active");
+      } else if (statusFilter) {
+        params.append("status", statusFilter);
+      }
+
+      if (timeFilter && timeFilter !== "custom") {
+        params.append("days", timeFilter);
+        params.append("time_filter", timeFilter);
+      } else if (timeFilter === "custom") {
+        if (startDate) params.append("start_date", startDate);
+        if (endDate) params.append("end_date", endDate);
+      }
+
+      const queryString = params.toString() ? `?${params.toString()}` : "";
 
       const response = await fetch(
-        `${API_URL}/projects${query}`,
+        `${API_URL}/projects${queryString}`,
         {
           method: "GET",
           headers: {
@@ -178,7 +214,7 @@ function Projects() {
 
   useEffect(() => {
     fetchProjects();
-  }, [statusFilter]);
+  }, [statusFilter, timeFilter, startDate, endDate]);
 
   // Handle draft restoration from DraftCenter
   useEffect(() => {
@@ -344,23 +380,34 @@ function Projects() {
 
     // Timeframe / Days & Custom Date range filtering
     if (timeFilter) {
-      const createdTime = project.created_at ? new Date(project.created_at).getTime() : (project.start_date ? new Date(project.start_date).getTime() : null);
-      if (!createdTime) return false;
+      const projectDates = [
+        project.created_at ? new Date(project.created_at).getTime() : null,
+        project.start_date ? new Date(project.start_date.includes("T") ? project.start_date : project.start_date + "T00:00:00").getTime() : null,
+        project.active_deadline ? new Date(project.active_deadline.includes("T") ? project.active_deadline : project.active_deadline + "T23:59:59").getTime() : null,
+        project.end_date ? new Date(project.end_date.includes("T") ? project.end_date : project.end_date + "T23:59:59").getTime() : null,
+      ].filter(d => d !== null && !isNaN(d));
+
+      if (projectDates.length === 0) return false;
+
+      const maxDate = Math.max(...projectDates);
+      const minDate = Math.min(...projectDates);
 
       if (timeFilter === "custom") {
         if (startDate) {
-          const startMs = new Date(startDate).setHours(0, 0, 0, 0);
-          if (createdTime < startMs) return false;
+          const [sY, sM, sD] = startDate.split("-").map(Number);
+          const startMs = new Date(sY, sM - 1, sD, 0, 0, 0, 0).getTime();
+          if (maxDate < startMs) return false;
         }
         if (endDate) {
-          const endMs = new Date(endDate).setHours(23, 59, 59, 999);
-          if (createdTime > endMs) return false;
+          const [eY, eM, eD] = endDate.split("-").map(Number);
+          const endMs = new Date(eY, eM - 1, eD, 23, 59, 59, 999).getTime();
+          if (minDate > endMs) return false;
         }
       } else {
         const days = parseInt(timeFilter, 10);
         if (!isNaN(days) && days > 0) {
           const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-          if (createdTime < cutoff) return false;
+          if (maxDate < cutoff) return false;
         }
       }
     }
@@ -377,6 +424,13 @@ function Projects() {
 
   const totalPages = showAll ? 1 : Math.ceil(filteredProjects.length / itemsPerPage);
   const paginatedProjects = showAll ? filteredProjects : filteredProjects.slice((page - 1) * itemsPerPage, page * itemsPerPage);
+
+  useEffect(() => {
+    if (totalPages > 0 && page > totalPages) {
+      setPage(totalPages);
+      sessionStorage.setItem("projects_current_page", String(totalPages));
+    }
+  }, [totalPages, page]);
 
   const breadcrumbs = [
     { label: "Projects" },
@@ -457,30 +511,28 @@ function Projects() {
         </div>
 
         {/* STATUS FILTERS */}
-        <div className="task-progress">
-          <p className={`DueToday ${statusFilter === "due_today" ? "active" : ""}`} onClick={() => selectStatusFilter("due_today")} style={{ cursor: "pointer" }}>
-            <GoDotFill color="#EF4444" /> Due Today ({dueTodayCount})
-          </p>
-          <p className={`Active ${statusFilter === "active" ? "active" : ""}`} onClick={() => selectStatusFilter("active")} style={{ cursor: "pointer" }}>
-            <GoDotFill color="#22C55E" /> Active Projects ({activeCount})
-          </p>
-          <p className={`InProgress ${statusFilter === "In-progress" ? "active" : ""}`} onClick={() => selectStatusFilter("In-progress")} style={{ cursor: "pointer" }}>
-            <GoDotFill color="#3B82F6" /> In Progress ({inProgressCount})
-          </p>
-          <p className={`Planning ${statusFilter === "Planning" ? "active" : ""}`} onClick={() => selectStatusFilter("Planning")} style={{ cursor: "pointer" }}>
-            <GoDotFill color="#8B5CF6" /> Planning ({planningCount})
-          </p>
-          <p className={`Paused ${statusFilter === "Pause" ? "active" : ""}`} onClick={() => selectStatusFilter("Pause")} style={{ cursor: "pointer" }}>
-            <GoDotFill color="#F59E0B" /> Pause ({pauseCount})
-          </p>
-          <p className={`Completed ${statusFilter === "Completed" ? "active" : ""}`} onClick={() => selectStatusFilter("Completed")} style={{ cursor: "pointer" }}>
-            <GoDotFill color="#22C55E" /> Completed ({completedCount})
-          </p>
-          <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All ({allCount})</p>
-        </div>
+        {isWidgetEnabled("projects", "overview_cards") && (
+          <DraggableStatusBadges
+            badges={[
+              { id: "due_today", label: "Due Today", count: dueTodayCount, className: "DueToday", dotColor: "#EF4444" },
+              { id: "active", label: "Active Projects", count: activeCount, className: "Active", dotColor: "#22C55E" },
+              { id: "In-progress", label: "In Progress", count: inProgressCount, className: "InProgress", dotColor: "#3B82F6" },
+              { id: "Planning", label: "Planning", count: planningCount, className: "Planning", dotColor: "#8B5CF6" },
+              { id: "Pause", label: "Pause", count: pauseCount, className: "Paused", dotColor: "#F59E0B" },
+              { id: "Completed", label: "Completed", count: completedCount, className: "Completed", dotColor: "#22C55E" },
+              { id: "", label: "All", count: allCount, className: "All" },
+            ]}
+            activeStatus={statusFilter}
+            onSelectStatus={selectStatusFilter}
+            storageKey="pms_projects_status_order"
+            containerClassName="task-progress"
+          />
+        )}
 
         {/* PROJECTS */}
-        {viewMode === "card" ? (
+        {isWidgetEnabled("projects", "project_list") && (
+          <>
+            {viewMode === "card" ? (
           <div className="projects-container">
             {loading ? (
               <div className="loading-text">Loading projects...</div>
@@ -609,11 +661,15 @@ function Projects() {
                       <div className="project-card-actions-right">
                         <ActionPopover
                           trigger={
-                            <button className="action-icon-btn action-view action-trigger-lg" title="Actions" style={{ width: 38, height: 38 }}>
-                              <IoEyeOutline size={26} />
+                            <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
+                              <IoEyeOutline size={18} />
                             </button>
                           }
-                          onTriggerClick={() => { sessionStorage.setItem('projectIds', JSON.stringify(filteredProjects.map(p => p.id))); navigate(rolePath(`projects/project-details/${project.id}`)); }}
+                          onTriggerClick={() => {
+                            sessionStorage.setItem('projects_current_page', String(page));
+                            sessionStorage.setItem('projectIds', JSON.stringify(filteredProjects.map(p => p.id)));
+                            navigate(rolePath(`projects/project-details/${project.id}`));
+                          }}
                         >
                           {isAdminOrManager && (
                             <button className="action-icon-btn action-edit" title="Edit Project" onClick={async () => {
@@ -715,11 +771,7 @@ function Projects() {
 
                     <div className="col-due-date">
                       <div className="date-box">
-                        <div style={{ whiteSpace: "pre-line" }}>
-                          {formatDateTimeInline(project.start_date)}
-                          {"\n"}
-                          {formatDateTimeInline(project.end_date)}
-                        </div>
+                        {renderDynamicDates(project, currentUser)}
                       </div>
                     </div>
 
@@ -727,10 +779,14 @@ function Projects() {
                       <ActionPopover
                         trigger={
                           <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
-                            <IoEyeOutline size={20} />
+                            <IoEyeOutline size={18} />
                           </button>
                         }
-                        onTriggerClick={() => { sessionStorage.setItem('projectIds', JSON.stringify(filteredProjects.map(p => p.id))); navigate(rolePath(`projects/project-details/${project.id}`)); }}
+                        onTriggerClick={() => {
+                          sessionStorage.setItem('projects_current_page', String(page));
+                          sessionStorage.setItem('projectIds', JSON.stringify(filteredProjects.map(p => p.id)));
+                          navigate(rolePath(`projects/project-details/${project.id}`));
+                        }}
                       >
                         {isAdminOrManager && (
                           <button className="action-icon-btn action-edit" title="Edit Project" onClick={async () => {
@@ -772,11 +828,13 @@ function Projects() {
           <Pagination
             currentPage={page}
             totalPages={totalPages}
-            onPageChange={setPage}
+            onPageChange={handlePageChange}
             itemsPerPage={itemsPerPage}
-            onItemsPerPageChange={(val) => { setItemsPerPage(val); setPage(1); }}
+            onItemsPerPageChange={(val) => { setItemsPerPage(val); handlePageChange(1); }}
           />
         )}
+      </>
+    )}
       </div>
 
       {showModal && (
@@ -813,6 +871,7 @@ function Projects() {
         cancelText="Cancel"
         danger
       />
+      <DynamicWidgetSection storageKey="pms_projects_widgets" sectionTitle="Projects Widgets" />
     </DashboardLayout>
   );
 }

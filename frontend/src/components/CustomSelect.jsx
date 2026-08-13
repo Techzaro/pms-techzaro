@@ -3,20 +3,48 @@
  * Combobox-style custom dropdown. Click input → search mode. Click arrow → toggle dropdown.
  */
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import "./CustomSelect.css";
 
 const CustomSelect = ({ value, onChange, options, placeholder = "Select...", name }) => {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 0 });
   const ref = useRef(null);
   const inputRef = useRef(null);
   const listRef = useRef(null);
 
+  const updatePos = useCallback(() => {
+    if (ref.current) {
+      const rect = ref.current.getBoundingClientRect();
+      setDropdownPos({
+        top: rect.bottom + 4,
+        left: rect.left,
+        width: rect.width,
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      updatePos();
+      window.addEventListener("scroll", updatePos, true);
+      window.addEventListener("resize", updatePos);
+      return () => {
+        window.removeEventListener("scroll", updatePos, true);
+        window.removeEventListener("resize", updatePos);
+      };
+    }
+  }, [open, updatePos]);
+
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) {
+      if (
+        ref.current && !ref.current.contains(e.target) &&
+        listRef.current && !listRef.current.contains(e.target)
+      ) {
         setOpen(false);
         setSearch("");
       }
@@ -142,24 +170,36 @@ const CustomSelect = ({ value, onChange, options, placeholder = "Select...", nam
           <polyline points="6 9 12 15 18 9" />
         </svg>
       </div>
-      {open && (
-        <div className="cs-dropdown" ref={listRef}>
-          {filtered.length === 0 ? (
-            <div className="cs-empty">No matches found</div>
-          ) : (
-            filtered.map((opt, idx) => (
-              <div
-                key={opt.value}
-                className={`cs-option ${String(opt.value) === String(value) ? "cs-selected" : ""} ${idx === highlightedIndex ? "cs-highlighted" : ""}`}
-                onClick={() => handleSelect(opt.value)}
-                onMouseEnter={() => setHighlightedIndex(idx)}
-              >
-                {opt.label}
-              </div>
-            ))
-          )}
-        </div>
-      )}
+      {open &&
+        createPortal(
+          <div
+            className="cs-dropdown"
+            ref={listRef}
+            style={{
+              position: "fixed",
+              top: `${dropdownPos.top}px`,
+              left: `${dropdownPos.left}px`,
+              width: `${dropdownPos.width}px`,
+              zIndex: 99999,
+            }}
+          >
+            {filtered.length === 0 ? (
+              <div className="cs-empty">No matches found</div>
+            ) : (
+              filtered.map((opt, idx) => (
+                <div
+                  key={opt.value}
+                  className={`cs-option ${String(opt.value) === String(value) ? "cs-selected" : ""} ${idx === highlightedIndex ? "cs-highlighted" : ""}`}
+                  onClick={() => handleSelect(opt.value)}
+                  onMouseEnter={() => setHighlightedIndex(idx)}
+                >
+                  {opt.label}
+                </div>
+              ))
+            )}
+          </div>,
+          document.body
+        )}
       <input type="hidden" name={name} value={value || ""} />
     </div>
   );

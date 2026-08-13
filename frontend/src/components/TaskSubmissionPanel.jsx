@@ -13,6 +13,7 @@ import AbandonModal from "./AbandonModal";
 import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
 import { formatDateTime } from "../utils/formatDateTime";
+import { notify } from "../utils/notify";
 
 const API_BASE = API_URL.replace(/\/api\/?$/, "");
 
@@ -124,6 +125,7 @@ function TaskSubmissionPanel({
   acting,
   setActing,
   hideTimeline,
+  onEditSubmissionClick,
 }) {
   const latestSubmission = task.latest_submission || task.latestSubmission;
   const workflowEvents = task.workflow_events || task.workflowEvents || [];
@@ -330,9 +332,23 @@ function TaskSubmissionPanel({
       )}
 
       {/* Submission details */}
-      {(status === "submitted" || status === "approved" || status === "rejected" || status === "in_progress") && latestSubmission && (
+      {/* Submission details */}
+      {(status === "submitted" || status === "submitted_late" || status === "approved" || status === "rejected" || status === "in_progress" || status === "reopened") && latestSubmission && (
         <div className="td-card td-submission-card">
-          <h3 className="td-card-title">Submission Details</h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+            <h3 className="td-card-title" style={{ margin: 0 }}>Submission Details</h3>
+            {!task.has_edited_submission &&
+              ((latestSubmission.submitted_by || latestSubmission.submittedBy)?.id === currentUser?.id || latestSubmission.submitted_by === currentUser?.id) && (
+                <button
+                  type="button"
+                  className="td-review-btn"
+                  onClick={() => onEditSubmissionClick && onEditSubmissionClick()}
+                  style={{ padding: "4px 12px", fontSize: "12px", background: "#6366f1", color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer" }}
+                >
+                  Edit Submission
+                </button>
+              )}
+          </div>
           <div className="td-submission-grid">
             <div className="td-submission-item">
               <span className="td-submission-label">Submitted By</span>
@@ -430,10 +446,23 @@ function TaskSubmissionPanel({
                     <span className="td-submission-label">Links ({links.length})</span>
                     <div className="td-attachments-list">
                       {links.map((att) => (
-                        <a key={att.id} className="td-submission-file-link" href={att.url} target="_blank" rel="noopener noreferrer">
-                          <ExternalLink size={16} />
-                          <span>{att.original_name || att.url}</span>
-                        </a>
+                        <div key={att.id} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <a className="td-submission-file-link" href={att.url} target="_blank" rel="noopener noreferrer" style={{ flex: 1 }}>
+                            <ExternalLink size={16} />
+                            <span>{att.original_name || att.url}</span>
+                          </a>
+                          <button
+                            type="button"
+                            className="td-review-btn"
+                            style={{ padding: "4px 8px", fontSize: "11px", height: "auto", border: "1px solid #D1D5DB" }}
+                            onClick={() => {
+                              navigator.clipboard.writeText(att.url);
+                              notify.success("Link copied to clipboard!");
+                            }}
+                          >
+                            Copy Link
+                          </button>
+                        </div>
                       ))}
                     </div>
                   </div>

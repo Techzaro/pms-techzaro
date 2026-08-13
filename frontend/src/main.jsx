@@ -14,6 +14,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import { LoadingProvider } from './context/LoadingContext.jsx'
 import { NotificationProvider } from './context/NotificationContext.jsx'
 import { ThemeProvider } from './context/ThemeContext.jsx'
+import { PersonalizationProvider } from './context/PersonalizationContext.jsx'
 import LoadingSpinner from './components/LoadingSpinner.jsx'
 import ToastContainer from './components/Toast.jsx'
 import { queryClient } from './lib/queryClient.js'
@@ -63,9 +64,11 @@ createRoot(document.getElementById('root')).render(
       <ThemeProvider>
         <NotificationProvider>
           <LoadingProvider>
-            <LoadingSpinner />
-            <ToastContainer />
-            <App />
+            <PersonalizationProvider>
+              <LoadingSpinner />
+              <ToastContainer />
+              <App />
+            </PersonalizationProvider>
           </LoadingProvider>
         </NotificationProvider>
       </ThemeProvider>

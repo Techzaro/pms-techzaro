@@ -59,16 +59,69 @@ class NotificationMail extends Mailable
         };
     }
 
+    public function getRolePath(string $role): string
+    {
+        return match (strtolower($role)) {
+            'admin' => 'admin',
+            'manager' => 'manager',
+            'team_lead', 'teamlead' => 'team-lead',
+            'guest' => 'guest',
+            default => 'member',
+        };
+    }
+
+    public function resolveEntityUrl(): string
+    {
+        $role = $this->getRolePath($this->notification->user->role ?? 'member');
+        if ($this->notification->link) {
+            return $this->frontendUrl . '/' . ltrim($this->notification->link, '/');
+        }
+
+        if (!$this->entity) {
+            return $this->frontendUrl;
+        }
+
+        return match ($this->notification->related_module) {
+            'task' => "{$this->frontendUrl}/{$role}/tasks/task-details/{$this->entity->id}",
+            'project' => "{$this->frontendUrl}/{$role}/projects/project-details/{$this->entity->id}",
+            'deliverable' => "{$this->frontendUrl}/{$role}/deliverables/deliverable-details/{$this->entity->id}",
+            default => $this->frontendUrl,
+        };
+    }
+
+    public function resolveProjectUrl(): ?string
+    {
+        $role = $this->getRolePath($this->notification->user->role ?? 'member');
+        $projectId = null;
+        if ($this->notification->related_module === 'project') {
+            $projectId = $this->entity->id ?? null;
+        } elseif (isset($this->entity->project_id)) {
+            $projectId = $this->entity->project_id;
+        } elseif (isset($this->entity->project->id)) {
+            $projectId = $this->entity->project->id;
+        }
+
+        return $projectId ? "{$this->frontendUrl}/{$role}/projects/project-details/{$projectId}" : null;
+    }
+
     private function buildDeliverableContext(Notification $notification): array
     {
         $changes = $notification->changes ?? [];
         $sender = $notification->sender;
+        $role = $this->getRolePath($notification->user->role ?? 'member');
+
+        $projectId = $this->entity->project_id ?? ($this->entity->project->id ?? null);
+        $taskId = $this->entity->task_id ?? ($this->entity->task->id ?? null);
+        $deliverableId = $this->entity->id ?? null;
 
         return [
             'userName' => $notification->user->name ?? '',
             'projectName' => $changes['project_name'] ?? ($this->entity->project->title ?? ''),
+            'projectUrl' => $projectId ? "{$this->frontendUrl}/{$role}/projects/project-details/{$projectId}" : null,
             'taskName' => $changes['task_name'] ?? ($this->entity->task->title ?? ''),
+            'taskUrl' => $taskId ? "{$this->frontendUrl}/{$role}/tasks/task-details/{$taskId}" : null,
             'deliverableName' => $changes['deliverable_name'] ?? ($this->entity->title ?? ''),
+            'deliverableUrl' => $deliverableId ? "{$this->frontendUrl}/{$role}/deliverables/deliverable-details/{$deliverableId}" : null,
             'deliverableDescription' => $changes['deliverable_description'] ?? ($this->entity->description ?? ''),
             'addedByName' => $sender->name ?? 'System',
             'addedAt' => $notification->created_at ? $notification->created_at->format('d M Y, g:i A') : now()->format('d M Y, g:i A'),
@@ -91,9 +144,14 @@ class NotificationMail extends Mailable
             ? 'emails.deliverable-added'
             : 'emails.notification';
 
+        $withData = array_merge($this->deliverableContext, [
+            'entityUrl' => $this->resolveEntityUrl(),
+            'projectUrl' => $this->resolveProjectUrl(),
+        ]);
+
         return new Content(
             view: $view,
-            with: $this->deliverableContext,
+            with: $withData,
         );
     }
 }

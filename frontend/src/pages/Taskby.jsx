@@ -29,8 +29,11 @@ import TaskNotesPopover from "../components/TaskNotesPopover";
 import AddNoteModal from "../components/AddNoteModal";
 import ConfirmModal from "../components/ConfirmModal";
 import TaskFilterBar from "../components/TaskFilterBar";
+import DynamicWidgetSection from "../components/DynamicWidgetSection";
+import DraggableStatusBadges from "../components/DraggableStatusBadges";
 import API_URL from "../config/api";
 import { authToken, rolePath, getUser } from "../utils/auth";
+import { renderDynamicDates } from "../utils/tableDateUtils";
 import { formatDateTimeInline } from "../utils/formatDateTime";
 import { useNotification } from "../context/NotificationContext";
 import "../components/ActionPopover.css";
@@ -74,6 +77,7 @@ const PRIORITY_TEXT_COLORS = {
 
 /** Main Taskby page — renders tasks assigned by the current user. */
 const Taskby = () => {
+  const currentUser = getUser();
   const navigate = useNavigate();
   const notify = useNotification();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -402,39 +406,25 @@ const Taskby = () => {
         <CreateTaskModal onClose={handleModalClose} />
       )}
 
-      <div className="task-progress">
-        <p className={`DueToday ${statusFilter === "due_today" ? "active" : ""}`} onClick={() => selectStatusFilter("due_today")} style={{ cursor: "pointer" }}>
-          <GoDotFill color="#EF4444" /> Due Today ({dueTodayCount})
-        </p>
-        <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => selectStatusFilter("pending")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Pending ({pendingCount})
-        </p>
-        <p className={`InProgress ${statusFilter === "in_progress" ? "active" : ""}`} onClick={() => selectStatusFilter("in_progress")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> In Progress ({inProgressCount})
-        </p>
-        <p className={`Paused ${statusFilter === "paused" ? "active" : ""}`} onClick={() => selectStatusFilter("paused")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Paused ({pausedCount})
-        </p>
-        <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => selectStatusFilter("submitted")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Submitted ({submittedCount})
-        </p>
-        <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => selectStatusFilter("reopened")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Reopened ({reopenedCount})
-        </p>
-        <p className={`Transferred ${statusFilter === "transferred" ? "active" : ""}`} onClick={() => selectStatusFilter("transferred")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Transferred ({transferredCount})
-        </p>
-        <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => selectStatusFilter("approved")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Approved ({approvedCount})
-        </p>
-        <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Declined ({rejectedCount})
-        </p>
-        <p className={`Abandoned ${statusFilter === "abandoned" ? "active" : ""}`} onClick={() => selectStatusFilter("abandoned")} style={{ cursor: "pointer" }}>
-          <GoDotFill color="#DC2626" /> Abandoned ({abandonedCount})
-        </p>
-        <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All ({allCount})</p>
-      </div>
+      <DraggableStatusBadges
+        badges={[
+          { id: "due_today", label: "Due Today", count: dueTodayCount, className: "DueToday", dotColor: "#EF4444" },
+          { id: "pending", label: "Pending", count: pendingCount, className: "Pending" },
+          { id: "in_progress", label: "In Progress", count: inProgressCount, className: "InProgress" },
+          { id: "paused", label: "Paused", count: pausedCount, className: "Paused" },
+          { id: "submitted", label: "Submitted", count: submittedCount, className: "Submitted" },
+          { id: "reopened", label: "Reopened", count: reopenedCount, className: "Reopened" },
+          { id: "transferred", label: "Transferred", count: transferredCount, className: "Transferred" },
+          { id: "approved", label: "Approved", count: approvedCount, className: "Approved" },
+          { id: "rejected", label: "Declined", count: rejectedCount, className: "Rejected" },
+          { id: "abandoned", label: "Abandoned", count: abandonedCount, className: "Abandoned", dotColor: "#DC2626" },
+          { id: "", label: "All", count: allCount, className: "All" },
+        ]}
+        activeStatus={statusFilter}
+        onSelectStatus={selectStatusFilter}
+        storageKey="pms_taskby_status_order"
+        containerClassName="task-progress"
+      />
 
       {/* DEDICATED ACTION BAR & FILTERS */}
       <TaskFilterBar
@@ -457,17 +447,7 @@ const Taskby = () => {
           <div className="status-column">Status</div>
           <div>Progress</div>
           <div className="priority-column">Priority</div>
-          <div
-            className="date-column"
-            style={{ cursor: "pointer", userSelect: "none", display: "flex", alignItems: "center", gap: 4 }}
-            onClick={() => {
-              setSortBy("due_date");
-              setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
-            }}
-            title="Click to toggle date sort (Oldest / Newest)"
-          >
-            Start & Due Date {sortBy === "due_date" ? (sortOrder === "asc" ? "▲ (Oldest)" : "▼ (Newest)") : "↕"}
-          </div>
+          <div className="date-column">Start & Due Date</div>
           <div>Action</div>
         </div>
 
@@ -568,15 +548,7 @@ const Taskby = () => {
 
                     <div className="col-due-date">
                       <div className="date-box">
-                        <div style={{ whiteSpace: "pre-line" }}>
-                          {item.assignees?.[0]?.pivot?.start_date
-                            ? formatDate(item.assignees[0].pivot.start_date)
-                            : formatDate(item.start_date)}
-                          {"\n"}
-                          {item.assignees?.[0]?.pivot?.due_date
-                            ? formatDate(item.assignees[0].pivot.due_date)
-                            : formatDate(item.end_date)}
-                        </div>
+                        {renderDynamicDates(item, currentUser)}
                       </div>
                     </div>
 
@@ -586,7 +558,7 @@ const Taskby = () => {
                         title="View Task"
                         onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } })}
                       >
-                        <IoEyeOutline size={20} />
+                        <IoEyeOutline size={18} />
                       </button>
                       <ActionPopover
                         trigger={
@@ -778,6 +750,7 @@ const Taskby = () => {
         onSuccess={fetchTasks}
       />
 
+      <DynamicWidgetSection storageKey="pms_taskby_widgets" sectionTitle="Subtasks Widgets" />
     </DashboardLayout>
   );
 };

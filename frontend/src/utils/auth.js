@@ -69,48 +69,113 @@ function _migrateIfNeeded() {
   return true;
 }
 
-/* ───── current role (tab-scoped) ───── */
+/* ───── current role (tab-scoped with localStorage backup) ───── */
 
 export function getCurrentRole() {
-  return sessionStorage.getItem("currentRole") || "";
+  let role = sessionStorage.getItem("currentRole");
+  if (!role) {
+    role = localStorage.getItem("lastActiveRole") || "";
+  }
+  if (!role) {
+    for (const r of ROLES) {
+      const s = _getSessions(r);
+      const keys = Object.keys(s);
+      if (keys.length > 0) {
+        const validKey = keys.find(k => !s[k].expiresAt || Date.now() <= s[k].expiresAt);
+        if (validKey) {
+          role = r;
+          try { sessionStorage.setItem("currentRole", role); } catch {}
+          break;
+        }
+      }
+    }
+  }
+  return role || "";
 }
 
 export function setCurrentRole(role) {
-  sessionStorage.setItem("currentRole", role);
+  try { sessionStorage.setItem("currentRole", role); } catch {}
+  if (role) {
+    try { localStorage.setItem("lastActiveRole", role); } catch {}
+  } else {
+    try { localStorage.removeItem("lastActiveRole"); } catch {}
+  }
 }
 
-/* ───── session ID (tab-scoped) ───── */
+/* ───── session ID (tab-scoped with localStorage backup) ───── */
 
 export function getSessionId() {
-  return sessionStorage.getItem("sessionId") || "";
+  let sid = sessionStorage.getItem("sessionId");
+  if (!sid) {
+    sid = localStorage.getItem("lastActiveSessionId") || "";
+    if (sid) {
+      try { sessionStorage.setItem("sessionId", sid); } catch {}
+    }
+  }
+  return sid || "";
 }
 
 export function setSessionId(id) {
-  sessionStorage.setItem("sessionId", id);
+  try { sessionStorage.setItem("sessionId", id); } catch {}
+  if (id) {
+    try { localStorage.setItem("lastActiveSessionId", id); } catch {}
+  } else {
+    try { localStorage.removeItem("lastActiveSessionId"); } catch {}
+  }
 }
 
 /* ───── token ───── */
 
 export function getToken(role) {
-  const r = role || getCurrentRole();
-  const sid = getSessionId();
+  let r = role || getCurrentRole();
+  if (!r) return "";
+
+  let sid = getSessionId();
 
   // Try to migrate old tabs on first access
   if (!sid && r) {
     const migrated = _migrateIfNeeded();
     if (!migrated) return "";
+    sid = getSessionId();
   }
 
-  const finalSid = getSessionId();
-  if (!finalSid) return "";
+  let sessions = _getSessions(r);
+  let sess = sid ? sessions[sid] : null;
 
-  const sessions = _getSessions(r);
-  const sess = sessions[finalSid];
+  // Fallback: if session not found or expired, look for any active valid session for current or alternative roles
+  if (!sess || (sess.expiresAt && Date.now() > sess.expiresAt)) {
+    const validSid = Object.keys(sessions).find(k => {
+      const s = sessions[k];
+      return s && s.token && (!s.expiresAt || Date.now() <= s.expiresAt);
+    });
+    if (validSid) {
+      sid = validSid;
+      setSessionId(sid);
+      sess = sessions[sid];
+    } else {
+      for (const altRole of ROLES) {
+        const altSessions = _getSessions(altRole);
+        const altSid = Object.keys(altSessions).find(k => {
+          const s = altSessions[k];
+          return s && s.token && (!s.expiresAt || Date.now() <= s.expiresAt);
+        });
+        if (altSid) {
+          r = altRole;
+          setCurrentRole(r);
+          setSessionId(altSid);
+          sessions = altSessions;
+          sess = sessions[altSid];
+          break;
+        }
+      }
+    }
+  }
+
   if (!sess) return "";
 
-  // Check expiration (24h for rememberMe, 3h default)
+  // Check expiration
   if (sess.expiresAt && Date.now() > sess.expiresAt) {
-    delete sessions[finalSid];
+    delete sessions[sid];
     _setSessions(r, sessions);
     sessionStorage.removeItem("sessionId");
     return "";
@@ -149,24 +214,53 @@ export function removeToken(role) {
 /* ───── user object ───── */
 
 export function getUser(role) {
-  const r = role || getCurrentRole();
-  const sid = getSessionId();
+  let r = role || getCurrentRole();
+  if (!r) return null;
+
+  let sid = getSessionId();
 
   // Try to migrate old tabs on first access
   if (!sid && r) {
     const migrated = _migrateIfNeeded();
     if (!migrated) return null;
+    sid = getSessionId();
   }
 
-  const finalSid = getSessionId();
-  if (!finalSid) return null;
+  let sessions = _getSessions(r);
+  let sess = sid ? sessions[sid] : null;
 
-  const sessions = _getSessions(r);
-  const sess = sessions[finalSid];
+  if (!sess || (sess.expiresAt && Date.now() > sess.expiresAt)) {
+    const validSid = Object.keys(sessions).find(k => {
+      const s = sessions[k];
+      return s && s.user && (!s.expiresAt || Date.now() <= s.expiresAt);
+    });
+    if (validSid) {
+      sid = validSid;
+      setSessionId(sid);
+      sess = sessions[sid];
+    } else {
+      for (const altRole of ROLES) {
+        const altSessions = _getSessions(altRole);
+        const altSid = Object.keys(altSessions).find(k => {
+          const s = altSessions[k];
+          return s && s.user && (!s.expiresAt || Date.now() <= s.expiresAt);
+        });
+        if (altSid) {
+          r = altRole;
+          setCurrentRole(r);
+          setSessionId(altSid);
+          sessions = altSessions;
+          sess = sessions[altSid];
+          break;
+        }
+      }
+    }
+  }
+
   if (!sess) return null;
 
   if (sess.expiresAt && Date.now() > sess.expiresAt) {
-    delete sessions[finalSid];
+    delete sessions[sid];
     _setSessions(r, sessions);
     sessionStorage.removeItem("sessionId");
     return null;

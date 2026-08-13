@@ -211,9 +211,29 @@ function AuditLogs() {
               </div>
 
               <div className="audit-date-range">
-                <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} title="From date" />
+                <input
+                  type="date"
+                  value={dateFrom}
+                  max={dateTo || undefined}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setDateFrom(val);
+                    if (dateTo && val > dateTo) setDateTo(val);
+                  }}
+                  title="From date"
+                />
                 <span className="audit-date-sep">to</span>
-                <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} title="To date" />
+                <input
+                  type="date"
+                  value={dateTo}
+                  min={dateFrom || undefined}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setDateTo(val);
+                    if (dateFrom && val < dateFrom) setDateFrom(val);
+                  }}
+                  title="To date"
+                />
               </div>
 
               <select value={moduleFilter} onChange={(e) => setModuleFilter(e.target.value)}>
@@ -348,17 +368,34 @@ function AuditLogs() {
                   </table>
                 </div>
 
-                {lastPage > 1 && (
-                  <div className="audit-pagination">
-                    <button className="audit-page-btn" disabled={page <= 1} onClick={() => handlePageChange(page - 1)}>
-                      Previous
-                    </button>
-                    <span className="audit-page-info">Page {page} of {lastPage}</span>
-                    <button className="audit-page-btn" disabled={page >= lastPage} onClick={() => handlePageChange(page + 1)}>
-                      Next
-                    </button>
+                  <div className="audit-pagination" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", marginTop: "16px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "var(--text-secondary)" }}>
+                      <span>Rows per page:</span>
+                      <select
+                        value={perPage}
+                        onChange={(e) => { setPerPage(Number(e.target.value)); setPage(1); }}
+                        style={{ padding: "4px 8px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", color: "var(--text-primary)", fontSize: "13px", cursor: "pointer" }}
+                      >
+                        <option value={10}>10</option>
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                        <option value={500}>500</option>
+                        <option value={1000}>1000</option>
+                      </select>
+                    </div>
+                    {lastPage > 1 && (
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <button className="audit-page-btn" disabled={page <= 1} onClick={() => handlePageChange(page - 1)}>
+                          Previous
+                        </button>
+                        <span className="audit-page-info">Page {page} of {lastPage}</span>
+                        <button className="audit-page-btn" disabled={page >= lastPage} onClick={() => handlePageChange(page + 1)}>
+                          Next
+                        </button>
+                      </div>
+                    )}
                   </div>
-                )}
               </>
             )}
           </div>

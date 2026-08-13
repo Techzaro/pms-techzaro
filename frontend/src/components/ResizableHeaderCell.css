@@ -1,0 +1,51 @@
+/* Resizable Header Cell Styles */
+.resizable-header-cell {
+  position: relative !important;
+  box-sizing: border-box !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.resize-wrapper {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.col-resizer-handle {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  width: 7px;
+  cursor: col-resize !important;
+  z-index: 30;
+  user-select: none;
+  background-color: transparent;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.col-resizer-handle:hover,
+.col-resizer-handle.active,
+.resizable-header-cell:hover .col-resizer-handle {
+  background-color: var(--color-primary, #3b82f6);
+  opacity: 0.8;
+}
+
+.col-resizer-handle.active {
+  background-color: var(--color-primary-dark, #2563eb);
+  opacity: 1;
+}
+
+/* Method 1 Inner Div Resize Styling */
+th > .resize-wrapper,
+.table-header1 > div > .resize-wrapper,
+.table-header-compact > div > .resize-wrapper,
+.deliveries-table-header > div > .resize-wrapper,
+.ptt-header > div > .resize-wrapper,
+.up-table-header > div > .resize-wrapper {
+  display: block;
+  box-sizing: border-box;
+}

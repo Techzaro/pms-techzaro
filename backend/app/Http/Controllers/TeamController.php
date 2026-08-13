@@ -31,9 +31,25 @@ class TeamController extends Controller
         private AuditService $auditService
     ) {}
 
-    public function index()
+    public function index(Request $request)
     {
-        $teams = Team::with(['leader:id,name,department', 'members:id,name,role,department'])->orderBy('created_at', 'desc')->get();
+        $query = Team::with(['leader:id,name,department', 'members:id,name,role,department']);
+
+        $days = $request->query('days') ?? $request->query('time_filter');
+        if ($days && is_numeric($days) && (int) $days > 0) {
+            $query->where('created_at', '>=', now()->subDays((int) $days));
+        }
+
+        $startDate = $request->query('start_date');
+        $endDate = $request->query('end_date');
+        if ($startDate && $endDate) {
+            $query->whereBetween('created_at', [
+                date('Y-m-d 00:00:00', strtotime($startDate)),
+                date('Y-m-d 23:59:59', strtotime($endDate))
+            ]);
+        }
+
+        $teams = $query->orderBy('created_at', 'desc')->get();
         return response()->json($teams);
     }
 
@@ -65,7 +81,7 @@ class TeamController extends Controller
     }
 
     /**
-     * Create a new team with optional initial members.
+     * Create a new team with mandatory initial members.
      *
      * Performer:  activity + confirmation email
      * Each member: activity ("You were added...") + notification + email
@@ -75,23 +91,33 @@ class TeamController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string|max:1000',
-            'member_ids' => 'nullable|array',
+            'member_ids' => 'required|array|min:1',
             'member_ids.*' => 'integer|exists:users,id',
             'leader_id' => 'nullable|integer|exists:users,id',
+            'team_lead_id' => 'nullable|integer|exists:users,id',
+            'status' => 'nullable|string|max:50',
+            'is_draft' => 'nullable|boolean',
+        ], [
+            'member_ids.required' => 'At least one team member is required.',
+            'member_ids.min' => 'At least one team member is required.',
         ]);
 
         $user = $request->user();
-        $leaderId = $validated['leader_id'] ?? null;
+        $leaderId = $validated['leader_id'] ?? $validated['team_lead_id'] ?? null;
 
         if ($leaderId && !empty($validated['member_ids']) && !in_array((int) $leaderId, array_map('intval', $validated['member_ids']))) {
             return response()->json(['message' => 'Team leader must be one of the team members.'], 422);
         }
+
+        $isDraft = (isset($validated['status']) && strtolower($validated['status']) === 'draft') || !empty($validated['is_draft']);
 
         $team = Team::create([
             'name' => $validated['name'],
             'description' => $validated['description'] ?? null,
             'leader_id' => $leaderId,
             'created_by' => $user->id,
+            'status' => $isDraft ? 'draft' : ($validated['status'] ?? 'active'),
+            'is_draft' => $isDraft,
         ]);
 
         if (!empty($validated['member_ids'])) {
@@ -177,7 +203,7 @@ class TeamController extends Controller
     }
 
     /**
-     * Update a team's name, description, and member list.
+     * Update a team's name, description, leader, and member list.
      *
      * Detects what changed and sends personalized messages to each recipient role.
      */
@@ -186,8 +212,13 @@ class TeamController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string|max:1000',
-            'member_ids' => 'nullable|array',
+            'member_ids' => 'required|array|min:1',
             'member_ids.*' => 'integer|exists:users,id',
+            'leader_id' => 'nullable|integer|exists:users,id',
+            'team_lead_id' => 'nullable|integer|exists:users,id',
+        ], [
+            'member_ids.required' => 'At least one team member is required.',
+            'member_ids.min' => 'At least one team member is required.',
         ]);
 
         $user = $request->user();
@@ -195,19 +226,27 @@ class TeamController extends Controller
         $oldName = $team->name;
         $oldDescription = $team->description;
         $oldMemberIds = $team->members()->pluck('users.id')->toArray();
+        $oldLeaderId = $team->leader_id;
+
+        $newLeaderId = $validated['leader_id'] ?? $validated['team_lead_id'] ?? $oldLeaderId;
 
         $nameChanged = $oldName !== $validated['name'];
         $descriptionChanged = ($oldDescription ?? '') !== ($validated['description'] ?? '');
+        $leaderChanged = (int) $oldLeaderId !== (int) $newLeaderId;
 
         $team->update([
             'name' => $validated['name'],
             'description' => $validated['description'] ?? null,
+            'leader_id' => $newLeaderId,
         ]);
 
         $newMemberIds = [];
         $removedMemberIds = [];
         if (isset($validated['member_ids'])) {
             $uniqueIds = array_unique($validated['member_ids']);
+            if ($newLeaderId && !in_array((int)$newLeaderId, array_map('intval', $uniqueIds))) {
+                $uniqueIds[] = (int) $newLeaderId;
+            }
             $team->members()->sync($uniqueIds);
 
             $newMemberIds = array_values(array_diff($uniqueIds, $oldMemberIds));
