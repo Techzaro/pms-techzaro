@@ -9,13 +9,18 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('activities', function (Blueprint $table) {
-            $table->string('action')->after('activity_type')->nullable();
-            $table->string('entity_name')->after('related_id')->nullable();
-            $table->foreignId('related_user_id')->after('entity_name')->nullable()->constrained('users')->nullOnDelete();
-            $table->json('metadata')->after('related_user_id')->nullable();
-
-            $table->index(['user_id', 'created_at', 'action']);
-            $table->index('related_user_id');
+            if (!Schema::hasColumn('activities', 'action')) {
+                $table->string('action')->nullable();
+            }
+            if (!Schema::hasColumn('activities', 'entity_name')) {
+                $table->string('entity_name')->nullable();
+            }
+            if (!Schema::hasColumn('activities', 'related_user_id')) {
+                $table->foreignId('related_user_id')->nullable()->constrained('users')->nullOnDelete();
+            }
+            if (!Schema::hasColumn('activities', 'metadata')) {
+                $table->json('metadata')->nullable();
+            }
         });
     }
 

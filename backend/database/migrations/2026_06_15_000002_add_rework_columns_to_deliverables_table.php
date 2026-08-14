@@ -9,11 +9,21 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('deliverables', function (Blueprint $table) {
-            $table->text('rework_comment')->nullable()->after('reopen_file_name');
-            $table->text('rework_instructions')->nullable()->after('rework_comment');
-            $table->date('rework_new_deadline')->nullable()->after('rework_instructions');
-            $table->string('rework_file_path')->nullable()->after('rework_new_deadline');
-            $table->string('rework_file_name')->nullable()->after('rework_file_path');
+            if (!Schema::hasColumn('deliverables', 'rework_comment')) {
+                $table->text('rework_comment')->nullable();
+            }
+            if (!Schema::hasColumn('deliverables', 'rework_instructions')) {
+                $table->text('rework_instructions')->nullable();
+            }
+            if (!Schema::hasColumn('deliverables', 'rework_new_deadline')) {
+                $table->date('rework_new_deadline')->nullable();
+            }
+            if (!Schema::hasColumn('deliverables', 'rework_file_path')) {
+                $table->string('rework_file_path')->nullable();
+            }
+            if (!Schema::hasColumn('deliverables', 'rework_file_name')) {
+                $table->string('rework_file_name')->nullable();
+            }
         });
     }
 

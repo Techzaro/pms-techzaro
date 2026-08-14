@@ -9,9 +9,11 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('task_comments', function (Blueprint $table) {
-            $table->foreignId('deliverable_id')->nullable()->after('task_id')->constrained()->nullOnDelete();
-            $table->index('deliverable_id');
-            $table->index(['deliverable_id', 'created_at']);
+            if (!Schema::hasColumn('task_comments', 'deliverable_id')) {
+                $table->foreignId('deliverable_id')->nullable()->constrained()->nullOnDelete();
+                $table->index('deliverable_id');
+                $table->index(['deliverable_id', 'created_at']);
+            }
         });
     }
 

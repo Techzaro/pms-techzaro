@@ -9,12 +9,24 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('deliverables', function (Blueprint $table) {
-            $table->timestamp('submitted_at')->nullable()->after('status');
-            $table->timestamp('approved_at')->nullable()->after('submitted_at');
-            $table->timestamp('rejected_at')->nullable()->after('approved_at');
-            $table->text('rejection_comment')->nullable()->after('rejected_at');
-            $table->foreignId('approved_by')->nullable()->constrained('users')->nullOnDelete()->after('rejection_comment');
-            $table->foreignId('rejected_by')->nullable()->constrained('users')->nullOnDelete()->after('approved_by');
+            if (!Schema::hasColumn('deliverables', 'submitted_at')) {
+                $table->timestamp('submitted_at')->nullable()->after('status');
+            }
+            if (!Schema::hasColumn('deliverables', 'approved_at')) {
+                $table->timestamp('approved_at')->nullable();
+            }
+            if (!Schema::hasColumn('deliverables', 'rejected_at')) {
+                $table->timestamp('rejected_at')->nullable();
+            }
+            if (!Schema::hasColumn('deliverables', 'rejection_comment')) {
+                $table->text('rejection_comment')->nullable();
+            }
+            if (!Schema::hasColumn('deliverables', 'approved_by')) {
+                $table->foreignId('approved_by')->nullable()->constrained('users')->nullOnDelete();
+            }
+            if (!Schema::hasColumn('deliverables', 'rejected_by')) {
+                $table->foreignId('rejected_by')->nullable()->constrained('users')->nullOnDelete();
+            }
         });
     }
 

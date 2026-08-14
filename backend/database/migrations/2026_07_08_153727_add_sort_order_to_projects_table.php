@@ -10,7 +10,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('projects', function (Blueprint $table) {
-            $table->integer('sort_order')->default(0)->after('status');
+            if (!Schema::hasColumn('projects', 'sort_order')) {
+                $table->integer('sort_order')->default(0)->after('status');
+            }
         });
         DB::statement('UPDATE projects SET sort_order = id WHERE sort_order = 0');
     }

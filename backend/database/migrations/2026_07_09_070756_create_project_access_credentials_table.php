@@ -11,16 +11,18 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('project_access_credentials', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('project_id')->constrained()->cascadeOnDelete();
-            $table->string('website_name');
-            $table->string('website_url')->nullable();
-            $table->string('username');
-            $table->text('password');
-            $table->foreignId('created_by')->constrained('users');
-            $table->timestamps();
-        });
+        if (!Schema::hasTable('project_access_credentials')) {
+            Schema::create('project_access_credentials', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('project_id')->constrained()->cascadeOnDelete();
+                $table->string('website_name');
+                $table->string('website_url')->nullable();
+                $table->string('username');
+                $table->text('password');
+                $table->foreignId('created_by')->constrained('users');
+                $table->timestamps();
+            });
+        }
     }
 
     /**

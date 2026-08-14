@@ -9,10 +9,18 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('drafts', function (Blueprint $table) {
-            $table->boolean('is_returned')->default(false)->after('is_important');
-            $table->foreignId('returned_from_user_id')->nullable()->after('is_returned')->constrained('users')->nullOnDelete();
-            $table->timestamp('returned_at')->nullable()->after('returned_from_user_id');
-            $table->text('return_reason')->nullable()->after('returned_at');
+            if (!Schema::hasColumn('drafts', 'is_returned')) {
+                $table->boolean('is_returned')->default(false);
+            }
+            if (!Schema::hasColumn('drafts', 'returned_from_user_id')) {
+                $table->foreignId('returned_from_user_id')->nullable()->constrained('users')->nullOnDelete();
+            }
+            if (!Schema::hasColumn('drafts', 'returned_at')) {
+                $table->timestamp('returned_at')->nullable();
+            }
+            if (!Schema::hasColumn('drafts', 'return_reason')) {
+                $table->text('return_reason')->nullable();
+            }
         });
     }
 

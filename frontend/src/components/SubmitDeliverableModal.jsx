@@ -62,7 +62,6 @@ function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess, sub
       const clipboardFiles = e.clipboardData?.files;
       if (clipboardFiles && clipboardFiles.length > 0) {
         const newFiles = Array.from(clipboardFiles);
-        setIsDirty(true);
         setFiles((prev) => [...prev, ...newFiles]);
         notify.success(`Pasted ${newFiles.length} file(s) from clipboard`);
       }
@@ -72,7 +71,7 @@ function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess, sub
     return () => {
       window.removeEventListener("paste", handlePaste);
     };
-  }, [isOpen, setIsDirty]);
+  }, [isOpen]);
 
   /** Appends newly selected files to the existing file list */
   const handleFileSelect = (e) => {

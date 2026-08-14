@@ -8,14 +8,16 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('deliverable_files', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('deliverable_id')->constrained()->cascadeOnDelete();
-            $table->string('name');
-            $table->string('url')->nullable();
-            $table->unsignedInteger('sort_order')->default(0);
-            $table->timestamps();
-        });
+        if (!Schema::hasTable('deliverable_files')) {
+            Schema::create('deliverable_files', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('deliverable_id')->constrained()->cascadeOnDelete();
+                $table->string('name');
+                $table->string('url')->nullable();
+                $table->unsignedInteger('sort_order')->default(0);
+                $table->timestamps();
+            });
+        }
     }
 
     public function down(): void

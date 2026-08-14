@@ -21,7 +21,10 @@ class TemplateController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $user = $request->user();
+        $user = $request->user() ?: auth()->user();
+        if (!$user) {
+            return response()->json([]);
+        }
 
         // Accessible project IDs for project_team filtering
         $userProjectIds = Project::where(function ($q) use ($user) {

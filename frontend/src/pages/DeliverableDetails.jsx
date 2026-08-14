@@ -514,7 +514,7 @@ function SubtaskDetails() {
   if (!subtask) return <DashboardLayout hideRightSidebar><div className="td-loading td-error">This subtask has been deleted. Redirecting...</div></DashboardLayout>;
 
   const ss = statusBgColor(subtask.status);
-  const workflowEvents = subtask.workflow_events || [];
+  const workflowEvents = Array.isArray(subtask.workflow_events) ? subtask.workflow_events : [];
   const canSubmit = isAssignee && ["rejected", "in_progress", "paused"].includes(subtask.status);
   const isAssignerLocked = !!subtask.assigner_paused;
   const canAssignerPause = readOnly ? false : (isCreator && !subtask.assigner_paused && ["pending", "in_progress", "reopened", "paused"].includes(subtask.status));
@@ -757,12 +757,12 @@ function SubtaskDetails() {
                           )}
 
                           {/* Labels/Tags */}
-                          {((subtask.labels && subtask.labels.length > 0) || (subtask.tags && subtask.tags.length > 0)) && (
+                          {((Array.isArray(subtask.labels) && subtask.labels.length > 0) || (Array.isArray(subtask.tags) && subtask.tags.length > 0)) && (
                             <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                              {(subtask.labels || []).map((l, i) => (
+                              {(Array.isArray(subtask.labels) ? subtask.labels : []).map((l, i) => (
                                 <span key={`l-${i}`} className="td-label-tag">{l}</span>
                               ))}
-                              {(subtask.tags || []).map((t, i) => (
+                              {(Array.isArray(subtask.tags) ? subtask.tags : []).map((t, i) => (
                                 <span key={`t-${i}`} className="td-label-tag td-label-tag--alt">{t}</span>
                               ))}
                             </div>

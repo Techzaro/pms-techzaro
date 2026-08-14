@@ -9,11 +9,15 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('tasks', function (Blueprint $table) {
-            $table->boolean('allow_transfer')->default(true)->after('delegation_count');
+            if (!Schema::hasColumn('tasks', 'allow_transfer')) {
+                $table->boolean('allow_transfer')->default(true);
+            }
         });
 
         Schema::table('deliverables', function (Blueprint $table) {
-            $table->boolean('allow_transfer')->default(true)->after('delegation_count');
+            if (!Schema::hasColumn('deliverables', 'allow_transfer')) {
+                $table->boolean('allow_transfer')->default(true);
+            }
         });
     }
 

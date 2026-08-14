@@ -314,10 +314,12 @@ function App() {
                     <Route path="notifications" element={<Notifications />} />
                     <Route path="settings/notifications" element={<NotificationSettings />} />
                     <Route path="audit-logs" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><AuditLogs /></RoleProtectedRoute>} />
+                    <Route path="feedback" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><FeedbackCenter /></RoleProtectedRoute>} />
                     <Route path="branding" element={<RoleProtectedRoute allowedRoles={["admin"]}><BrandingPage /></RoleProtectedRoute>} />
                     <Route path="subscription" element={<RoleProtectedRoute allowedRoles={["admin"]}><SubscriptionPage /></RoleProtectedRoute>} />
                     <Route path="organization-details" element={<RoleProtectedRoute allowedRoles={["admin"]}><OrganizationDetailsPage /></RoleProtectedRoute>} />
-                      
+                    <Route path="settings/personalization" element={<Personalization />} />
+                    <Route path="personalization" element={<Personalization />} />
                     <Route path="storage" element={<StoragePage />} />
                     <Route path="reports/user-performance/:userId" element={<UserPerformance />} />
                     <Route path="reports/team-members/:teamId" element={<TeamMembersReport />} />
@@ -378,7 +380,9 @@ function App() {
                     <Route path="branding" element={<RoleProtectedRoute allowedRoles={["admin"]}><BrandingPage /></RoleProtectedRoute>} />
                     <Route path="subscription" element={<RoleProtectedRoute allowedRoles={["admin"]}><SubscriptionPage /></RoleProtectedRoute>} />
                     <Route path="organization-details" element={<RoleProtectedRoute allowedRoles={["admin"]}><OrganizationDetailsPage /></RoleProtectedRoute>} />
-                      <Route path="feedback" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><FeedbackCenter /></RoleProtectedRoute>} />
+                    <Route path="feedback" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><FeedbackCenter /></RoleProtectedRoute>} />
+                    <Route path="settings/personalization" element={<Personalization />} />
+                    <Route path="personalization" element={<Personalization />} />
                     <Route path="storage" element={<StoragePage />} />
                     <Route path="reports/user-performance/:userId" element={<UserPerformance />} />
                     <Route path="reports/team-members/:teamId" element={<TeamMembersReport />} />

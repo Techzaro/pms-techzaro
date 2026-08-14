@@ -65,13 +65,18 @@ class UserController extends Controller
         $status = $request->query('status');
         $search = $request->query('search');
 
-        $query = User::select(
-            'id', 'name', 'avatar', 'email', 'role', 'active', 'status', 'deletion_requested', 'deletion_requested_by',
+        $selectColumns = [
+            'id', 'name', 'avatar', 'email', 'role', 'active', 'deletion_requested', 'deletion_requested_by',
             'department', 'designation', 'employee_code', 'contact_no', 'sort_order', 'must_change_password',
             'personal_email', 'professional_email', 'company_name', 'phone_number', 'last_login_at', 'created_at',
             'father_name', 'id_card_number', 'present_address', 'permanent_address', 'gross_salary',
             'bank_name', 'bank_account_number', 'bank_account_title'
-        );
+        ];
+        if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'status')) {
+            $selectColumns[] = 'status';
+        }
+
+        $query = User::select($selectColumns);
 
         if ($role) {
             $normalizedRole = $role === 'teamlead' ? 'team_lead' : $role;
@@ -170,13 +175,20 @@ class UserController extends Controller
                 'other_document_names' => 'nullable|array',
                 'other_document_names.*' => 'nullable|string|max:255',
                 'avatar' => 'nullable|image|mimes:jpeg,jpg,png,webp|max:5120',
+                'password_type' => 'nullable|string|in:auto,manual',
+                'password' => $request->input('password_type') === 'manual' ? 'required|string|min:6|max:255' : 'nullable|string|max:255',
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             Log::error('User create validation failed', ['errors' => $e->errors()]);
             throw $e;
         }
 
-        $plainPassword = Str::random(10);
+        $passwordType = $request->input('password_type', 'auto');
+        if ($passwordType === 'manual' && $request->filled('password')) {
+            $plainPassword = $request->input('password');
+        } else {
+            $plainPassword = Str::random(10);
+        }
         $role = $request->input('role') === 'teamlead' ? 'team_lead' : ($request->input('role') ?: 'member');
 
         $authUser = $request->user();

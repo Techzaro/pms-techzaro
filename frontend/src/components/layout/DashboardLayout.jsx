@@ -9,11 +9,10 @@
  * This replaces 20+ independent page polls with ONE app-level poll.
  */
 
-import { useState, useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { Outlet } from "react-router-dom";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
-import RightSidebar from "./RightSidebar";
 import ChatWidget from "./ChatWidget";
 import StorageNotificationBanner from "../StorageNotificationBanner";
 import { authToken } from "../../utils/auth";
@@ -24,12 +23,7 @@ import "./DashboardLayout.css";
 
 const POLL_INTERVAL = 20000; // 20 seconds
 
-/**
- * @param {{ hideRightSidebar?: boolean }} props
- */
-function DashboardLayout({ hideRightSidebar = false, children }) {
-  const [rightOpen, setRightOpen] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
+function DashboardLayout({ children }) {
   const prevCountRef = useRef(null);
 
   // Immediate layout check: if no token exists, immediately redirect to login & replace history
@@ -40,13 +34,6 @@ function DashboardLayout({ hideRightSidebar = false, children }) {
       } catch {}
       window.location.replace("/login?message=" + encodeURIComponent("Session expired. Please log in."));
     }
-  }, []);
-
-  // Sync modal-open state from child modals (e.g., CreateSubtaskTask)
-  useEffect(() => {
-    const handler = (e) => setModalOpen(e.detail.open);
-    window.addEventListener("modal-state", handler);
-    return () => window.removeEventListener("modal-state", handler);
   }, []);
 
   // Single global lightweight poll: check unread-count every 20s
@@ -109,35 +96,15 @@ function DashboardLayout({ hideRightSidebar = false, children }) {
       <Header />
       <StorageNotificationBanner />
 
-      <div className={`main-layout${hideRightSidebar ? " main-layout--no-right" : ""}`}>
-
+      <div className="main-layout main-layout--no-right">
         <Sidebar />
 
         <div className="dashboard-content">
           {children || <Outlet />}
         </div>
-
-        {!hideRightSidebar && <RightSidebar isOpen={rightOpen} onClose={() => setRightOpen(false)} />}
       </div>
 
-      {!hideRightSidebar && !modalOpen && (
-        <button
-          className={`right-toggle${rightOpen ? " right-toggle--open" : ""}`}
-          onClick={() => setRightOpen((prev) => !prev)}
-          aria-label="Toggle right sidebar"
-        >
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            {rightOpen ? (
-              <path d="M7 4L13 10L7 16" />
-            ) : (
-              <path d="M13 4L7 10L13 16" />
-            )}
-          </svg>
-        </button>
-      )}
-
       <ChatWidget />
-
     </div>
   );
 }

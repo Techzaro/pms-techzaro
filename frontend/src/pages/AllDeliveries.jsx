@@ -193,34 +193,42 @@ function AllDeliveries() {
   const pendingStatuses = ["pending", "planned", "Planning", "Planned"];
   const inProgressStatuses = ["in_progress", "In Progress", "In-progress"];
 
-  const allCount = useMemo(() => baseItems.length, [baseItems]);
-  const dueTodayCount = useMemo(() => baseItems.filter((i) => { const d = i.due_date ? new Date(i.due_date) : null; return d && d.toDateString() === new Date().toDateString(); }).length, [baseItems]);
-  const pendingCount = useMemo(() => baseItems.filter((i) => pendingStatuses.includes(i.status)).length, [baseItems]);
-  const inProgressCount = useMemo(() => baseItems.filter((i) => inProgressStatuses.includes(i.status)).length, [baseItems]);
-  const pausedCount = useMemo(() => baseItems.filter((i) => i.status === "paused").length, [baseItems]);
-  const submittedCount = useMemo(() => baseItems.filter((i) => i.status === "submitted").length, [baseItems]);
-  const reopenedCount = useMemo(() => baseItems.filter((i) => i.status === "reopened").length, [baseItems]);
-  const transferredCount = useMemo(() => baseItems.filter((i) => i.delegation_chain && i.delegation_chain.length > 0).length, [baseItems]);
-  const approvedCount = useMemo(() => baseItems.filter((i) => i.status === "approved").length, [baseItems]);
-  const rejectedCount = useMemo(() => baseItems.filter((i) => i.status === "rejected").length, [baseItems]);
-  const abandonedCount = useMemo(() => baseItems.filter((i) => i.status === "abandoned" || i.status === "abandon_requested").length, [baseItems]);
+  const safeBaseItems = Array.isArray(baseItems) ? baseItems : [];
+
+  const allCount = useMemo(() => safeBaseItems.length, [safeBaseItems]);
+  const dueTodayCount = useMemo(() => safeBaseItems.filter((i) => {
+    if (!i || !i.due_date) return false;
+    const d = new Date(i.due_date);
+    return !isNaN(d.getTime()) && d.toDateString() === new Date().toDateString();
+  }).length, [safeBaseItems]);
+  const pendingCount = useMemo(() => safeBaseItems.filter((i) => i && pendingStatuses.includes(i.status)).length, [safeBaseItems]);
+  const inProgressCount = useMemo(() => safeBaseItems.filter((i) => i && inProgressStatuses.includes(i.status)).length, [safeBaseItems]);
+  const pausedCount = useMemo(() => safeBaseItems.filter((i) => i && i.status === "paused").length, [safeBaseItems]);
+  const submittedCount = useMemo(() => safeBaseItems.filter((i) => i && i.status === "submitted").length, [safeBaseItems]);
+  const reopenedCount = useMemo(() => safeBaseItems.filter((i) => i && i.status === "reopened").length, [safeBaseItems]);
+  const transferredCount = useMemo(() => safeBaseItems.filter((i) => i && Array.isArray(i.delegation_chain) && i.delegation_chain.length > 0).length, [safeBaseItems]);
+  const approvedCount = useMemo(() => safeBaseItems.filter((i) => i && i.status === "approved").length, [safeBaseItems]);
+  const rejectedCount = useMemo(() => safeBaseItems.filter((i) => i && i.status === "rejected").length, [safeBaseItems]);
+  const abandonedCount = useMemo(() => safeBaseItems.filter((i) => i && (i.status === "abandoned" || i.status === "abandon_requested")).length, [safeBaseItems]);
 
   const searchFilteredItems = useMemo(() => debouncedSearch
-    ? baseItems.filter((item) => {
+    ? safeBaseItems.filter((item) => {
+        if (!item) return false;
         const q = debouncedSearch.toLowerCase();
         const titleMatch = (item.title || "").toLowerCase().includes(q);
         const assigneeMatch = (item.assignee?.name || "").toLowerCase().includes(q);
         const creatorMatch = (item.creator?.name || "").toLowerCase().includes(q);
         return titleMatch || assigneeMatch || creatorMatch;
       })
-    : baseItems, [baseItems, debouncedSearch]);
+    : safeBaseItems, [safeBaseItems, debouncedSearch]);
   const filteredItems = useMemo(() => statusFilter && statusFilter !== "due_today"
     ? searchFilteredItems.filter((item) => {
+        if (!item) return false;
         if (statusFilter === "pending") {
           return pendingStatuses.includes(item.status);
         }
         if (statusFilter === "transferred") {
-          return item.delegation_chain && item.delegation_chain.length > 0;
+          return Array.isArray(item.delegation_chain) && item.delegation_chain.length > 0;
         }
         if (statusFilter === "abandoned") {
           return item.status === "abandoned" || item.status === "abandon_requested";

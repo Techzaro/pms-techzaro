@@ -9,7 +9,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('deliverables', function (Blueprint $table) {
-            $table->unsignedInteger('sort_order')->default(0)->after('status');
+            if (!Schema::hasColumn('deliverables', 'sort_order')) {
+                $table->unsignedInteger('sort_order')->default(0)->after('status');
+            }
         });
     }
 

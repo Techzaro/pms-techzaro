@@ -8,21 +8,23 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('submission_attachments', function (Blueprint $table) {
-            $table->id();
-            $table->unsignedBigInteger('submission_id');
-            $table->string('submission_type', 32)->comment('task or deliverable');
-            $table->string('file_name')->nullable();
-            $table->string('original_name')->nullable();
-            $table->string('file_path')->nullable();
-            $table->string('file_type')->nullable()->comment('mime type');
-            $table->unsignedBigInteger('file_size')->nullable();
-            $table->enum('attachment_type', ['file', 'image', 'link'])->default('file');
-            $table->string('url')->nullable()->comment('external link URL or local file path');
-            $table->timestamps();
+        if (!Schema::hasTable('submission_attachments')) {
+            Schema::create('submission_attachments', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('submission_id');
+                $table->string('submission_type', 32)->comment('task or deliverable');
+                $table->string('file_name')->nullable();
+                $table->string('original_name')->nullable();
+                $table->string('file_path')->nullable();
+                $table->string('file_type')->nullable()->comment('mime type');
+                $table->unsignedBigInteger('file_size')->nullable();
+                $table->enum('attachment_type', ['file', 'image', 'link'])->default('file');
+                $table->string('url')->nullable()->comment('external link URL or local file path');
+                $table->timestamps();
 
-            $table->index(['submission_id', 'submission_type']);
-        });
+                $table->index(['submission_id', 'submission_type']);
+            });
+        }
     }
 
     public function down(): void

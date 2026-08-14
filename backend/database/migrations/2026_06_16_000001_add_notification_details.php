@@ -9,10 +9,18 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('notifications', function (Blueprint $table) {
-            $table->foreignId('sender_user_id')->nullable()->after('user_id')->constrained('users')->cascadeOnDelete();
-            $table->string('related_module')->nullable()->after('type');
-            $table->unsignedBigInteger('related_id')->nullable()->after('related_module');
-            $table->string('title')->nullable()->after('message');
+            if (!Schema::hasColumn('notifications', 'sender_user_id')) {
+                $table->foreignId('sender_user_id')->nullable()->after('user_id')->constrained('users')->cascadeOnDelete();
+            }
+            if (!Schema::hasColumn('notifications', 'related_module')) {
+                $table->string('related_module')->nullable();
+            }
+            if (!Schema::hasColumn('notifications', 'related_id')) {
+                $table->unsignedBigInteger('related_id')->nullable();
+            }
+            if (!Schema::hasColumn('notifications', 'title')) {
+                $table->string('title')->nullable();
+            }
         });
     }
 

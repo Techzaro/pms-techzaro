@@ -9,8 +9,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('user_email_preferences', function (Blueprint $table) {
-            $table->boolean('browser_notifications')->default(true)->after('system_notifications');
-            $table->boolean('mobile_push_notifications')->default(true)->after('browser_notifications');
+            if (!Schema::hasColumn('user_email_preferences', 'browser_notifications')) {
+                $table->boolean('browser_notifications')->default(true);
+            }
+            if (!Schema::hasColumn('user_email_preferences', 'mobile_push_notifications')) {
+                $table->boolean('mobile_push_notifications')->default(true);
+            }
         });
     }
 

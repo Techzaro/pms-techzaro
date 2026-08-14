@@ -250,12 +250,7 @@ function Login() {
       <div className="login-page">
         <div className="login-left">
           <div className="overlay">
-            <img
-              src="https://cdn-icons-png.flaticon.com/512/5968/5968705.png"
-              alt="Techxaro Logo"
-              className="logo"
-            />
-            <h1>TECHXARO PMS</h1>
+            <h1>TECHXARO ONE</h1>
             <p>Manage Projects, Teams & Tasks Professionally</p>
           </div>
         </div>
@@ -309,12 +304,7 @@ function Login() {
     <div className="login-page">
       <div className="login-left">
         <div className="overlay">
-          <img
-            src="https://cdn-icons-png.flaticon.com/512/5968/5968705.png"
-            alt="Techxaro Logo"
-            className="logo"
-          />
-          <h1>TECHXARO PMS</h1>
+          <h1>TECHXARO ONE</h1>
           <p>Manage Projects, Teams & Tasks Professionally</p>
         </div>
       </div>

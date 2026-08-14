@@ -8,16 +8,18 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('task_access_credentials', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('task_id')->constrained()->cascadeOnDelete();
-            $table->string('website_name');
-            $table->string('website_url')->nullable();
-            $table->string('username');
-            $table->text('password');
-            $table->foreignId('created_by')->constrained('users');
-            $table->timestamps();
-        });
+        if (!Schema::hasTable('task_access_credentials')) {
+            Schema::create('task_access_credentials', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('task_id')->constrained()->cascadeOnDelete();
+                $table->string('website_name');
+                $table->string('website_url')->nullable();
+                $table->string('username');
+                $table->text('password');
+                $table->foreignId('created_by')->constrained('users');
+                $table->timestamps();
+            });
+        }
     }
 
     public function down(): void

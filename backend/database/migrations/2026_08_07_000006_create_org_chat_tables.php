@@ -10,30 +10,34 @@ return new class extends Migration
 
     public function up(): void
     {
-        Schema::connection('mysql_master')->create('org_chat_conversations', function (Blueprint $table) {
-            $table->id();
-            $table->string('subject')->nullable();
-            $table->unsignedBigInteger('organization_id');
-            $table->unsignedBigInteger('created_by_user_id')->nullable();
-            $table->timestamps();
+        if (!Schema::connection('mysql_master')->hasTable('org_chat_conversations')) {
+            Schema::connection('mysql_master')->create('org_chat_conversations', function (Blueprint $table) {
+                $table->id();
+                $table->string('subject')->nullable();
+                $table->unsignedBigInteger('organization_id');
+                $table->unsignedBigInteger('created_by_user_id')->nullable();
+                $table->timestamps();
 
-            $table->index('organization_id');
-        });
+                $table->index('organization_id');
+            });
+        }
 
-        Schema::connection('mysql_master')->create('org_chat_messages', function (Blueprint $table) {
-            $table->id();
-            $table->unsignedBigInteger('conversation_id');
-            $table->unsignedBigInteger('user_id')->nullable();
-            $table->unsignedBigInteger('organization_id')->nullable();
-            $table->text('body');
-            $table->string('file_path')->nullable();
-            $table->string('file_name')->nullable();
-            $table->timestamps();
+        if (!Schema::connection('mysql_master')->hasTable('org_chat_messages')) {
+            Schema::connection('mysql_master')->create('org_chat_messages', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('conversation_id');
+                $table->unsignedBigInteger('user_id')->nullable();
+                $table->unsignedBigInteger('organization_id')->nullable();
+                $table->text('body');
+                $table->string('file_path')->nullable();
+                $table->string('file_name')->nullable();
+                $table->timestamps();
 
-            $table->index('conversation_id');
-            $table->index('user_id');
-            $table->index('organization_id');
-        });
+                $table->index('conversation_id');
+                $table->index('user_id');
+                $table->index('organization_id');
+            });
+        }
     }
 
     public function down(): void

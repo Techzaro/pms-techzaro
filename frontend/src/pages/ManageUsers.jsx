@@ -125,6 +125,8 @@ function ManageUsers() {
     techxaroRegulations: null,
     otherDocument: [],
     avatar: null,
+    passwordType: "auto",
+    password: "",
   });
   const [loading, setLoading] = useState(false);
   const [savingUserId, setSavingUserId] = useState(null);
@@ -448,6 +450,8 @@ function ManageUsers() {
       offerLetter: null,
       techxaroRegulations: null,
       otherDocument: [],
+      passwordType: "auto",
+      password: "",
     });
     setAddErrors({});
     setIsAddModalOpen(true);
@@ -564,6 +568,8 @@ function ManageUsers() {
       avatar: null,
       _existingAvatar: null,
       remove_avatar: false,
+      passwordType: "auto",
+      password: "",
     });
   };
 
@@ -1511,6 +1517,12 @@ function ManageUsers() {
     if (!editingUser || newUser.professionalEmailPassword) {
       formData.append("professional_email_password", newUser.professionalEmailPassword || "");
     }
+    if (!editingUser) {
+      formData.append("password_type", newUser.passwordType || "auto");
+      if (newUser.passwordType === "manual" && newUser.password) {
+        formData.append("password", newUser.password);
+      }
+    }
     formData.append("department", finalDepartment || "");
     formData.append("designation", finalDesignation || "");
     formData.append("hired_for", newUser.hiredFor);
@@ -2242,6 +2254,61 @@ function ManageUsers() {
                     </div>
                   )}
                 </div>
+
+                {/* ===== Password Generation ===== */}
+                {!editingUser && (
+                  <>
+                    <h3 className="form-section-title">Password Generation</h3>
+                    <div className="user-form-grid">
+                      <div className="form-row" style={{ gridColumn: "1 / -1" }}>
+                        <label>Account Password Mode</label>
+                        <div style={{ display: "flex", gap: "20px", marginTop: "8px", alignItems: "center" }}>
+                          <label style={{ display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer", fontWeight: "normal", fontSize: "14px" }}>
+                            <input
+                              type="radio"
+                              name="passwordType"
+                              value="auto"
+                              checked={newUser.passwordType !== "manual"}
+                              onChange={() => {
+                                setNewUser((prev) => ({ ...prev, passwordType: "auto" }));
+                                markDirty();
+                              }}
+                            />
+                            Auto-generated password
+                          </label>
+                          <label style={{ display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer", fontWeight: "normal", fontSize: "14px" }}>
+                            <input
+                              type="radio"
+                              name="passwordType"
+                              value="manual"
+                              checked={newUser.passwordType === "manual"}
+                              onChange={() => {
+                                setNewUser((prev) => ({ ...prev, passwordType: "manual" }));
+                                markDirty();
+                              }}
+                            />
+                            Manually generated password
+                          </label>
+                        </div>
+                      </div>
+                      {newUser.passwordType === "manual" && (
+                        <div className="form-row">
+                          <label htmlFor="userPassword">Initial Account Password *</label>
+                          <input
+                            type="text"
+                            id="userPassword"
+                            name="password"
+                            value={newUser.password || ""}
+                            onChange={handleChange}
+                            placeholder="Enter initial password (min 6 characters)"
+                            className={addErrors.password ? "field-error" : ""}
+                          />
+                          {addErrors.password && <span className="field-error-text">{addErrors.password}</span>}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
 
                 {/* ===== Employment Details ===== */}
                 <h3 className="form-section-title">Employment Details</h3>

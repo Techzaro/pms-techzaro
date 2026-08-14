@@ -9,7 +9,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('task_user', function (Blueprint $table) {
-            $table->dateTime('start_date')->nullable()->after('due_date');
+            if (!Schema::hasColumn('task_user', 'start_date')) {
+                $table->dateTime('start_date')->nullable();
+            }
         });
     }
 

@@ -106,6 +106,7 @@ function Deliveries() {
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
   const [actingId, setActingId] = useState(null);
+  const [actingType, setActingType] = useState(null);
   const [perPage, setPerPage] = useState(10);
   const ITEMS_PER_PAGE = perPage;
 
@@ -362,19 +363,24 @@ function Deliveries() {
   const inProgressStatuses = ["in_progress", "In Progress", "In-progress"];
 
   const allCount = displayItems.length;
-  const dueTodayCount = displayItems.filter((i) => { const d = i.due_date ? new Date(i.due_date) : null; return d && d.toDateString() === new Date().toDateString(); }).length;
-  const pendingCount = displayItems.filter((i) => pendingStatuses.includes(i.status)).length;
-  const inProgressCount = displayItems.filter((i) => inProgressStatuses.includes(i.status)).length;
-  const pausedCount = displayItems.filter((i) => i.status === "paused").length;
-  const submittedCount = displayItems.filter((i) => i.status === "submitted").length;
-  const reopenedCount = displayItems.filter((i) => i.status === "reopened").length;
-  const transferredCount = displayItems.filter((i) => i.delegation_chain && i.delegation_chain.length > 0).length;
-  const approvedCount = displayItems.filter((i) => i.status === "approved").length;
-  const rejectedCount = displayItems.filter((i) => i.status === "rejected").length;
-  const abandonedCount = displayItems.filter((i) => i.status === "abandoned" || i.status === "abandon_requested").length;
+  const dueTodayCount = displayItems.filter((i) => {
+    if (!i || !i.due_date) return false;
+    const d = new Date(i.due_date);
+    return !isNaN(d.getTime()) && d.toDateString() === new Date().toDateString();
+  }).length;
+  const pendingCount = displayItems.filter((i) => i && pendingStatuses.includes(i.status)).length;
+  const inProgressCount = displayItems.filter((i) => i && inProgressStatuses.includes(i.status)).length;
+  const pausedCount = displayItems.filter((i) => i && i.status === "paused").length;
+  const submittedCount = displayItems.filter((i) => i && i.status === "submitted").length;
+  const reopenedCount = displayItems.filter((i) => i && i.status === "reopened").length;
+  const transferredCount = displayItems.filter((i) => i && Array.isArray(i.delegation_chain) && i.delegation_chain.length > 0).length;
+  const approvedCount = displayItems.filter((i) => i && i.status === "approved").length;
+  const rejectedCount = displayItems.filter((i) => i && i.status === "rejected").length;
+  const abandonedCount = displayItems.filter((i) => i && (i.status === "abandoned" || i.status === "abandon_requested")).length;
 
   const searchFilteredItems = debouncedSearch
     ? displayItems.filter((item) => {
+        if (!item) return false;
         const q = debouncedSearch.toLowerCase();
         const titleMatch = (item.title || "").toLowerCase().includes(q);
         const assigneeMatch = (item.assignee?.name || "").toLowerCase().includes(q);
@@ -383,11 +389,12 @@ function Deliveries() {
     : displayItems;
   const filteredItems = statusFilter && statusFilter !== "due_today"
     ? searchFilteredItems.filter((item) => {
+        if (!item) return false;
         if (statusFilter === "pending") {
           return pendingStatuses.includes(item.status);
         }
         if (statusFilter === "transferred") {
-          return item.delegation_chain && item.delegation_chain.length > 0;
+          return Array.isArray(item.delegation_chain) && item.delegation_chain.length > 0;
         }
         if (statusFilter === "abandoned") {
           return item.status === "abandoned" || item.status === "abandon_requested";

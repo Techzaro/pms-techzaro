@@ -9,14 +9,30 @@ return new class extends Migration
     public function up(): void
     {
         Schema::connection('mysql_master')->table('organizations', function (Blueprint $table) {
-            $table->string('storage_s3_bucket')->nullable()->after('storage_s3_prefix');
-            $table->string('storage_s3_region')->default('us-east-1')->after('storage_s3_bucket');
-            $table->string('storage_s3_access_key')->nullable()->after('storage_s3_region');
-            $table->string('storage_s3_secret_key')->nullable()->after('storage_s3_access_key');
-            $table->integer('storage_cleanup_months')->default(6)->after('storage_s3_secret_key');
-            $table->integer('storage_large_file_threshold_mb')->default(500)->after('storage_cleanup_months');
-            $table->boolean('storage_auto_cleanup')->default(true)->after('storage_large_file_threshold_mb');
-            $table->integer('custom_max_storage_gb')->nullable()->after('storage_auto_cleanup');
+            if (!Schema::connection('mysql_master')->hasColumn('organizations', 'storage_s3_bucket')) {
+                $table->string('storage_s3_bucket')->nullable();
+            }
+            if (!Schema::connection('mysql_master')->hasColumn('organizations', 'storage_s3_region')) {
+                $table->string('storage_s3_region')->default('us-east-1');
+            }
+            if (!Schema::connection('mysql_master')->hasColumn('organizations', 'storage_s3_access_key')) {
+                $table->string('storage_s3_access_key')->nullable();
+            }
+            if (!Schema::connection('mysql_master')->hasColumn('organizations', 'storage_s3_secret_key')) {
+                $table->string('storage_s3_secret_key')->nullable();
+            }
+            if (!Schema::connection('mysql_master')->hasColumn('organizations', 'storage_cleanup_months')) {
+                $table->integer('storage_cleanup_months')->default(6);
+            }
+            if (!Schema::connection('mysql_master')->hasColumn('organizations', 'storage_large_file_threshold_mb')) {
+                $table->integer('storage_large_file_threshold_mb')->default(500);
+            }
+            if (!Schema::connection('mysql_master')->hasColumn('organizations', 'storage_auto_cleanup')) {
+                $table->boolean('storage_auto_cleanup')->default(true);
+            }
+            if (!Schema::connection('mysql_master')->hasColumn('organizations', 'custom_max_storage_gb')) {
+                $table->integer('custom_max_storage_gb')->nullable();
+            }
         });
     }
 

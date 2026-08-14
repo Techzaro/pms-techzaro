@@ -9,13 +9,27 @@ return new class extends Migration
     public function up(): void
     {
         Schema::connection('mysql_master')->table('organizations', function (Blueprint $table) {
-            $table->boolean('storage_auto_delete')->default(false)->after('settings');
-            $table->boolean('storage_overwrite')->default(true)->after('storage_auto_delete');
-            $table->integer('storage_warn_threshold')->default(80)->after('storage_overwrite');
-            $table->integer('storage_critical_threshold')->default(90)->after('storage_warn_threshold');
-            $table->integer('storage_pin_threshold')->default(95)->after('storage_critical_threshold');
-            $table->string('storage_driver')->default('local')->after('storage_pin_threshold');
-            $table->string('storage_s3_prefix')->nullable()->after('storage_driver');
+            if (!Schema::connection('mysql_master')->hasColumn('organizations', 'storage_auto_delete')) {
+                $table->boolean('storage_auto_delete')->default(false)->after('settings');
+            }
+            if (!Schema::connection('mysql_master')->hasColumn('organizations', 'storage_overwrite')) {
+                $table->boolean('storage_overwrite')->default(true);
+            }
+            if (!Schema::connection('mysql_master')->hasColumn('organizations', 'storage_warn_threshold')) {
+                $table->integer('storage_warn_threshold')->default(80);
+            }
+            if (!Schema::connection('mysql_master')->hasColumn('organizations', 'storage_critical_threshold')) {
+                $table->integer('storage_critical_threshold')->default(90);
+            }
+            if (!Schema::connection('mysql_master')->hasColumn('organizations', 'storage_pin_threshold')) {
+                $table->integer('storage_pin_threshold')->default(95);
+            }
+            if (!Schema::connection('mysql_master')->hasColumn('organizations', 'storage_driver')) {
+                $table->string('storage_driver')->default('local');
+            }
+            if (!Schema::connection('mysql_master')->hasColumn('organizations', 'storage_s3_prefix')) {
+                $table->string('storage_s3_prefix')->nullable();
+            }
         });
     }
 

@@ -9,7 +9,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('deliverables', function (Blueprint $table) {
-            $table->dateTime('start_date')->nullable()->after('priority');
+            if (!Schema::hasColumn('deliverables', 'start_date')) {
+                $table->dateTime('start_date')->nullable()->after('priority');
+            }
         });
     }
 

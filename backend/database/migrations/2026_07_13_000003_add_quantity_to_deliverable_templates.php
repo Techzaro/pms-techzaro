@@ -9,7 +9,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('deliverable_templates', function (Blueprint $table) {
-            $table->unsignedInteger('quantity')->default(1)->after('description');
+            if (!Schema::hasColumn('deliverable_templates', 'quantity')) {
+                $table->unsignedInteger('quantity')->default(1)->after('description');
+            }
         });
     }
 
