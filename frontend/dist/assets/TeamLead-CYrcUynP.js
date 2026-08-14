@@ -1,0 +1,1 @@
+import{Ut as e}from"./index-BNYGD6CX.js";import t from"./Admin-CftQsy40.js";var n=e();function r(){return(0,n.jsx)(t,{})}export{r as default};

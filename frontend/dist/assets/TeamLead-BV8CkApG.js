@@ -1,1 +1,0 @@
-import{Ut as e}from"./index-BCPqU20f.js";import t from"./Admin-B7sWv90d.js";var n=e();function r(){return(0,n.jsx)(t,{})}export{r as default};
