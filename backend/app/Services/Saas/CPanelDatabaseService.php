@@ -28,34 +28,35 @@ class CPanelDatabaseService
 
     public function createDatabase(string $databaseName): void
     {
-        $dbName = $this->stripCpanelPrefix($databaseName);
+        // Ensure cPanel gets the full DB name with prefix (techxaro_...)
+        $dbName = $this->ensureCpanelPrefix($databaseName);
 
         $result = $this->apiCall('Mysql/create_database', ['name' => $dbName]);
 
         if (!$result) {
-            throw new \RuntimeException("cPanel: Failed to create database {$databaseName}");
+            throw new \RuntimeException("cPanel: Failed to create database {$dbName}");
         }
 
-        Log::info("cPanel: Created database {$databaseName} (api name: {$dbName})");
+        Log::info("cPanel: Created database {$dbName}");
     }
 
     public function dropDatabase(string $databaseName): void
     {
-        $dbName = $this->stripCpanelPrefix($databaseName);
+        $dbName = $this->ensureCpanelPrefix($databaseName);
 
         $result = $this->apiCall('Mysql/delete_database', ['name' => $dbName]);
 
         if (!$result) {
-            Log::warning("cPanel: Failed to drop database {$databaseName} (may not exist)");
+            Log::warning("cPanel: Failed to drop database {$dbName} (may not exist)");
         } else {
-            Log::info("cPanel: Dropped database {$databaseName}");
+            Log::info("cPanel: Dropped database {$dbName}");
         }
     }
 
     public function grantAllPrivileges(string $databaseName, string $user): void
     {
-        $dbName = $this->stripCpanelPrefix($databaseName);
-        $userName = $this->stripCpanelPrefix($user);
+        $dbName = $this->ensureCpanelPrefix($databaseName);
+        $userName = $this->ensureCpanelPrefix($user);
 
         $result = $this->apiCall('Mysql/set_privileges_on_database', [
             'database'   => $dbName,
@@ -64,15 +65,15 @@ class CPanelDatabaseService
         ]);
 
         if (!$result) {
-            Log::warning("cPanel: Failed to grant privileges on {$databaseName} to {$user}");
+            Log::warning("cPanel: Failed to grant privileges on {$dbName} to {$user}");
         } else {
-            Log::info("cPanel: Granted ALL PRIVILEGES on {$databaseName} to {$user}");
+            Log::info("cPanel: Granted ALL PRIVILEGES on {$dbName} to {$user}");
         }
     }
 
     public function databaseExists(string $databaseName): bool
     {
-        $dbName = $this->stripCpanelPrefix($databaseName);
+        $dbName = $this->ensureCpanelPrefix($databaseName);
 
         $result = $this->apiCall('Mysql/list_databases', []);
 
@@ -90,10 +91,13 @@ class CPanelDatabaseService
         return false;
     }
 
-    protected function stripCpanelPrefix(string $name): string
+    /**
+     * Ensures the full cPanel database name includes the username prefix.
+     */
+    protected function ensureCpanelPrefix(string $name): string
     {
-        if ($this->cpanelPrefix && str_starts_with($name, $this->cpanelPrefix)) {
-            return substr($name, strlen($this->cpanelPrefix));
+        if ($this->cpanelPrefix && !str_starts_with($name, $this->cpanelPrefix)) {
+            return $this->cpanelPrefix . $name;
         }
 
         return $name;
