@@ -36,45 +36,10 @@ copy "%BACKEND_DIR%\composer.lock" "%DEPLOY_DIR%\api\" /Y
 echo [4/5] Copying .env file...
 copy "%BACKEND_DIR%\.env.production" "%DEPLOY_DIR%\api\.env" /Y
 
-echo [5/5] Fixing index.php paths...
-echo Fixing api/public/index.php...
-(
-echo ^<?php
-echo.
-echo use Illuminate\Http\Request;
-echo.
-echo define('LARAVEL_START', microtime^(true^)^);
-echo.
-echo // Handle CORS at PHP level
-echo $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-echo if ($origin ^&^& preg_match('/\.techxaro\.com$/', $origin^)^) {
-echo     header('Access-Control-Allow-Origin: ' . $origin^);
-echo     header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS'^);
-echo     header('Access-Control-Allow-Headers: Authorization, Content-Type, Accept, X-Tenant-ID, X-Requested-With, X-XSRF-TOKEN'^);
-echo     header('Access-Control-Allow-Credentials: true'^);
-echo     header('Access-Control-Max-Age: 86400'^);
-echo.
-echo     if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS'^) {
-echo         http_response_code(204^);
-echo         exit;
-echo     }
-echo }
-echo.
-echo // Determine if the application is in maintenance mode...
-echo if ^(file_exists^($maintenance = __DIR__ . '/../../storage/framework/maintenance.php'^)^) {
-echo     require $maintenance;
-echo }
-echo.
-echo // Register the Composer autoloader...
-echo require __DIR__ . '/../../vendor/autoload.php';
-echo.
-echo // Bootstrap Laravel and handle the request...
-echo $app = require_once __DIR__ . '/../../bootstrap/app.php';
-echo.
-echo $app-^>handleRequest^(Request::capture^(^)^);
-echo.
-echo ?^>
-) > "%DEPLOY_DIR%\api\public\index.php"
+echo [5/6] Copying .htaccess to root...
+copy "frontend\.htaccess" "%DEPLOY_DIR%\.htaccess" /Y
+
+echo [6/6] Done...
 
 echo.
 echo ========================================
