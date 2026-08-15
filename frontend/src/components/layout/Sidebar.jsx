@@ -559,13 +559,15 @@ function Sidebar() {
                 >
                   Personalization
                 </Link>
-                <Link
-                  to={rolePath("organization-details")}
-                  className={`sidebar-sub-link ${isActive("organization-details") ? "active" : ""}`}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  Organization Details
-                </Link>
+                {(user.role === "admin") && (
+                  <Link
+                    to={rolePath("organization-details")}
+                    className={`sidebar-sub-link ${isActive("organization-details") ? "active" : ""}`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Organization Details
+                  </Link>
+                )}
                 {(user.role === "admin") && (
                   <Link
                     to={rolePath("branding")}

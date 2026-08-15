@@ -84,14 +84,14 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        <StatCard title="Organizations" value={stats?.total_organizations || 0} icon={Building2} color="blue" />
-        <StatCard title="Active Orgs" value={stats?.active_organizations || 0} icon={CheckCircle2} color="green" />
-        <StatCard title="Trial Orgs" value={stats?.trial_organizations || 0} icon={Clock} color="purple" />
-        <StatCard title="Suspended" value={stats?.suspended_organizations || 0} icon={AlertTriangle} color="red" />
-        <StatCard title="Modules" value={stats?.total_modules || 0} icon={Puzzle} color="amber" />
-        <StatCard title="Plans" value={stats?.total_plans || 0} icon={CreditCard} color="blue" />
-        <StatCard title="Total Users" value={stats?.total_users || 0} icon={Users} color="purple" />
-        <StatCard title="Total Projects" value={stats?.total_projects || 0} icon={FolderKanban} color="cyan" />
+        <StatCard title="Organizations" value={stats?.total_organizations || 0} icon={Building2} color="blue" onClick={() => navigate('/super-admin/organizations')} />
+        <StatCard title="Active Orgs" value={stats?.active_organizations || 0} icon={CheckCircle2} color="green" onClick={() => navigate('/super-admin/organizations')} />
+        <StatCard title="Trial Orgs" value={stats?.trial_organizations || 0} icon={Clock} color="purple" onClick={() => navigate('/super-admin/organizations')} />
+        <StatCard title="Suspended" value={stats?.suspended_organizations || 0} icon={AlertTriangle} color="red" onClick={() => navigate('/super-admin/organizations')} />
+        <StatCard title="Modules" value={stats?.total_modules || 0} icon={Puzzle} color="amber" onClick={() => navigate('/super-admin/modules')} />
+        <StatCard title="Plans" value={stats?.total_plans || 0} icon={CreditCard} color="blue" onClick={() => navigate('/super-admin/plans')} />
+        <StatCard title="Total Users" value={stats?.total_users || 0} icon={Users} color="purple" onClick={() => navigate('/super-admin/organizations')} />
+        <StatCard title="Total Projects" value={stats?.total_projects || 0} icon={FolderKanban} color="cyan" onClick={() => navigate('/super-admin/organizations')} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

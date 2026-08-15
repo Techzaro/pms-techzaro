@@ -321,7 +321,7 @@ function ManageUsers() {
     const role = getCurrentRole();
     const token = authToken();
     if (!token || (role !== "admin" && role !== "manager")) {
-      navigate("/");
+      navigate(rolePath("dashboard"));
       return;
     }
     const user = getUser();

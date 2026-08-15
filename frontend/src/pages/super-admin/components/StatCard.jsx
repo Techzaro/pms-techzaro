@@ -9,13 +9,14 @@ const colorMap = {
   cyan: { bg: 'rgba(6,182,212,0.1)', text: '#06b6d4' },
 };
 
-export default function StatCard({ title, value, icon: Icon, color = 'blue', change, changeLabel }) {
+export default function StatCard({ title, value, icon: Icon, color = 'blue', change, changeLabel, onClick }) {
   const TrendIcon = change > 0 ? TrendingUp : change < 0 ? TrendingDown : Minus;
   const c = colorMap[color] || colorMap.blue;
 
   return (
-    <div className="rounded-xl p-5 hover:shadow-md transition-shadow"
-      style={{ background: 'var(--bg-card)', border: '1px solid var(--border-light)' }}>
+    <div className={`rounded-xl p-5 hover:shadow-md transition-shadow ${onClick ? 'cursor-pointer' : ''}`}
+      style={{ background: 'var(--bg-card)', border: '1px solid var(--border-light)' }}
+      onClick={onClick}>
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{title}</p>

@@ -66,12 +66,18 @@ class UserController extends Controller
         $search = $request->query('search');
 
         $selectColumns = [
-            'id', 'name', 'avatar', 'email', 'role', 'active', 'deletion_requested', 'deletion_requested_by',
+            'id', 'name', 'avatar', 'email', 'role', 'active',
             'department', 'designation', 'employee_code', 'contact_no', 'sort_order', 'must_change_password',
             'personal_email', 'professional_email', 'company_name', 'phone_number', 'last_login_at', 'created_at',
             'father_name', 'id_card_number', 'present_address', 'permanent_address', 'gross_salary',
             'bank_name', 'bank_account_number', 'bank_account_title'
         ];
+        if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'deletion_requested')) {
+            $selectColumns[] = 'deletion_requested';
+        }
+        if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'deletion_requested_by')) {
+            $selectColumns[] = 'deletion_requested_by';
+        }
         if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'status')) {
             $selectColumns[] = 'status';
         }
@@ -767,8 +773,12 @@ class UserController extends Controller
             return response()->json(['success' => false, 'message' => 'Managers cannot request deletion of administrators or managers.'], 403);
         }
 
-        $user->deletion_requested = true;
-        $user->deletion_requested_by = $authUser->id;
+        if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'deletion_requested')) {
+            $user->deletion_requested = true;
+        }
+        if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'deletion_requested_by')) {
+            $user->deletion_requested_by = $authUser->id;
+        }
         $user->save();
 
         Cache::forget('all_users_list');
