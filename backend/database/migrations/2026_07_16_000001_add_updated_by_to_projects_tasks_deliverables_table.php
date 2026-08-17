@@ -9,15 +9,21 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('projects', function (Blueprint $table) {
-            $table->foreignId('updated_by')->nullable()->after('created_by')->constrained('users')->nullOnDelete();
+            if (!Schema::hasColumn('projects', 'updated_by')) {
+                $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
+            }
         });
 
         Schema::table('tasks', function (Blueprint $table) {
-            $table->foreignId('updated_by')->nullable()->after('assigned_by')->constrained('users')->nullOnDelete();
+            if (!Schema::hasColumn('tasks', 'updated_by')) {
+                $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
+            }
         });
 
         Schema::table('deliverables', function (Blueprint $table) {
-            $table->foreignId('updated_by')->nullable()->after('created_by')->constrained('users')->nullOnDelete();
+            if (!Schema::hasColumn('deliverables', 'updated_by')) {
+                $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
+            }
         });
     }
 

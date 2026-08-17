@@ -52,6 +52,7 @@ function Chat() {
   const [sending, setSending] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
   const [users, setUsers] = useState([]);
+  const [organizations, setOrganizations] = useState([]);
   const [projects, setProjects] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [subtasks, setSubtasks] = useState([]);
@@ -62,6 +63,7 @@ function Chat() {
   const [linkTask, setLinkTask] = useState(false);
   const [linkSubtask, setLinkSubtask] = useState(false);
   const [selectedUsers, setSelectedUsers] = useState([]);
+  const [selectedOrg, setSelectedOrg] = useState(null);
   const [chatSubject, setChatSubject] = useState("");
   const [participantSearch, setParticipantSearch] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
@@ -186,6 +188,7 @@ function Chat() {
     setSelectedProject("");
     setSelectedTask("");
     setSelectedSubtask("");
+    setSelectedOrg(null);
     try {
       const token = authToken();
       const [usersRes, itemsRes] = await Promise.all([
@@ -199,6 +202,7 @@ function Chat() {
         setProjects(itemsData.projects || []);
         setTasks(itemsData.tasks || []);
         setSubtasks(itemsData.deliverables || []);
+        setOrganizations(itemsData.organizations || []);
       }
     } catch (err) {
       notify.error("Failed to load data");
@@ -206,8 +210,8 @@ function Chat() {
   };
 
   const handleCreateConversation = async () => {
-    if (selectedUsers.length === 0) {
-      notify.error("Please select at least one participant");
+    if (selectedUsers.length === 0 && !selectedOrg) {
+      notify.error("Please select at least one participant or an organization");
       return;
     }
     try {
@@ -223,6 +227,7 @@ function Chat() {
           project_id: linkProject && selectedProject ? selectedProject : null,
           task_id: linkTask && selectedTask ? selectedTask : null,
           deliverable_id: linkSubtask && selectedSubtask ? selectedSubtask : null,
+          org_id: selectedOrg || null,
           participant_ids: selectedUsers,
           subject: chatSubject || null,
           message: newMessage || "Conversation started",
@@ -240,6 +245,7 @@ function Chat() {
         setLinkTask(false);
         setLinkSubtask(false);
         setSelectedUsers([]);
+        setSelectedOrg(null);
         fetchConversations();
         if (data.conversation) {
           navigate(rolePath(`chat/${data.conversation.id}`));
@@ -285,10 +291,10 @@ function Chat() {
               >
                 <div className="conversation-info">
                   <div className="conversation-subject">
-                    {conv.subject || conv.project?.title || conv.task?.title || conv.deliverable?.title || "Untitled"}
+                    {conv.subject || conv.organization?.name || conv.project?.title || conv.task?.title || conv.deliverable?.title || "Untitled"}
                   </div>
                   <div className="conversation-project">
-                    {[conv.project?.title, conv.task?.title, conv.deliverable?.title].filter(Boolean).join(" / ")}
+                    {[conv.organization?.name, conv.project?.title, conv.task?.title, conv.deliverable?.title].filter(Boolean).join(" / ")}
                   </div>
                   {conv.latest_message && (
                     <div className="conversation-preview">
@@ -371,6 +377,24 @@ function Chat() {
                   value={participantSearch}
                   onChange={(e) => setParticipantSearch(e.target.value)}
                 />
+                {organizations.length > 0 && (
+                  <div className="org-section" style={{ marginBottom: 12, padding: "8px 0", borderTop: "1px solid #eee" }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: "#666", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6, display: "block" }}>Organizations</label>
+                    {organizations
+                      .filter((o) => o.name.toLowerCase().includes(participantSearch.toLowerCase()))
+                      .map((o) => (
+                      <label key={`org-${o.id}`} className="checkbox-label">
+                        <input
+                          type="radio"
+                          name="org-participant"
+                          checked={selectedOrg === o.id}
+                          onChange={() => setSelectedOrg(selectedOrg === o.id ? null : o.id)}
+                        />
+                        {o.name}
+                      </label>
+                    ))}
+                  </div>
+                )}
                 <div className="user-checkboxes">
                   {users
                     .filter((u) => u.name.toLowerCase().includes(participantSearch.toLowerCase()))
@@ -405,9 +429,10 @@ function Chat() {
             <>
               <div className="chat-header">
                 <div>
-                  <h3>{activeConversation.subject || activeConversation.project?.title || activeConversation.task?.title || activeConversation.deliverable?.title || "Conversation"}</h3>
+                  <h3>{activeConversation.subject || activeConversation.organization?.name || activeConversation.project?.title || activeConversation.task?.title || activeConversation.deliverable?.title || "Conversation"}</h3>
                   <span className="chat-participants">
                     {activeConversation.participants?.map((p) => p.name).join(", ")}
+                    {activeConversation.organization?.name && (activeConversation.participants?.length > 0 ? " • " : "") + activeConversation.organization?.name}
                   </span>
                 </div>
               </div>

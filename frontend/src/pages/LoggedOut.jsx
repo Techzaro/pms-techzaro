@@ -33,7 +33,7 @@ function LoggedOut() {
           <div className="loggedout-divider"></div>
 
           <div className="button-area">
-            <Link to="/" className="loggedout-btn-link">
+            <Link to="/login" className="loggedout-btn-link">
               Login Again
             </Link>
           </div>

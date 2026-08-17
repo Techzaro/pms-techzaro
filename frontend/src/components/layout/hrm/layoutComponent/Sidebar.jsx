@@ -373,7 +373,7 @@ function Sidebar() {
         <div>
           {/* Main Landing Link */}
           <Link
-            to={isMemberRole ? rolePath("hrm/member-dashboard") : rolePath("HRM")}
+            to={isMemberRole ? rolePath("hrm/member-dashboard") : rolePath("hrm")}
             className={`sidebar-link ${!isMemberRole && (isActive("HRM") || isActive("hrm")) ? "active" : ""}`}
             onClick={(e) => e.stopPropagation()}
           >

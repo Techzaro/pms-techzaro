@@ -9,11 +9,21 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('tasks', function (Blueprint $table) {
-            $table->timestamp('work_started_at')->nullable()->after('assigner_paused_by');
-            $table->unsignedInteger('total_work_seconds')->default(0)->after('work_started_at');
-            $table->string('timer_state', 16)->default('idle')->after('total_work_seconds');
-            $table->timestamp('last_timer_event_at')->nullable()->after('timer_state');
-            $table->timestamp('work_completed_at')->nullable()->after('last_timer_event_at');
+            if (!Schema::hasColumn('tasks', 'work_started_at')) {
+                $table->timestamp('work_started_at')->nullable();
+            }
+            if (!Schema::hasColumn('tasks', 'total_work_seconds')) {
+                $table->unsignedInteger('total_work_seconds')->default(0);
+            }
+            if (!Schema::hasColumn('tasks', 'timer_state')) {
+                $table->string('timer_state', 16)->default('idle');
+            }
+            if (!Schema::hasColumn('tasks', 'last_timer_event_at')) {
+                $table->timestamp('last_timer_event_at')->nullable();
+            }
+            if (!Schema::hasColumn('tasks', 'work_completed_at')) {
+                $table->timestamp('work_completed_at')->nullable();
+            }
         });
     }
 

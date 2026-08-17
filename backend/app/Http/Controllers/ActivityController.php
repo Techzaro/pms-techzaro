@@ -59,24 +59,44 @@ class ActivityController extends Controller
     }
 
     /**
-     * Get activities for the logged-in user with optional date filter.
+     * Get activities for the logged-in user with optional module, action, date, search filters and pagination.
      *
-     * @param  Request  $request  The incoming HTTP request with optional 'date', 'limit', and 'offset' parameters.
+     * @param  Request  $request  The incoming HTTP request with filter parameters.
      * @return JsonResponse JSON response with paginated activities and total count.
      */
     public function index(Request $request)
     {
         $user = $request->user();
         $date = $request->input('date');
-        $limit = $request->input('limit', 50);
-        $offset = $request->input('offset', 0);
+        $module = $request->input('module');
+        $action = $request->input('action');
+        $dateFrom = $request->input('date_from') ?: $request->input('start_date');
+        $dateTo = $request->input('date_to') ?: $request->input('end_date');
+        $search = $request->input('search');
 
-        $activities = $this->activityService->getActivities($user->id, $date, $limit, $offset);
-        $total = $this->activityService->getActivityCount($user->id, $date);
+        $perPage = (int) ($request->input('per_page') ?: $request->input('limit') ?: 50);
+        $page = (int) ($request->input('page') ?: 1);
+        $offset = (int) ($request->input('offset') ?: (($page - 1) * $perPage));
+
+        $userId = in_array($user->role, ['admin', 'manager']) && $request->has('user_id')
+            ? (int) $request->input('user_id')
+            : $user->id;
+
+        $activities = $this->activityService->getActivities(
+            $userId, $date, $perPage, $offset, $module, $action, $dateFrom, $dateTo, $search
+        );
+        $total = $this->activityService->getActivityCount(
+            $userId, $date, $module, $action, $dateFrom, $dateTo, $search
+        );
+
+        $lastPage = max(1, (int) ceil($total / $perPage));
 
         return response()->json([
             'data' => $activities,
             'total' => $total,
+            'per_page' => $perPage,
+            'current_page' => $page,
+            'last_page' => $lastPage,
         ]);
     }
 }

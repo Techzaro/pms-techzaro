@@ -22,10 +22,10 @@ return new class extends Migration
                 $table->string('priority', 32)->default('Medium')->after('budget');
             }
             if (!Schema::hasColumn('projects', 'goals_checklist')) {
-                $table->json('goals_checklist')->nullable()->after('goals');
+                $table->json('goals_checklist')->nullable();
             }
             if (!Schema::hasColumn('projects', 'sidebar_notes')) {
-                $table->text('sidebar_notes')->nullable()->after('goals_checklist');
+                $table->text('sidebar_notes')->nullable();
             }
         });
 

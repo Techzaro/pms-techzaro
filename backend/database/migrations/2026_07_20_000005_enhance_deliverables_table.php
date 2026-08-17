@@ -9,40 +9,86 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('deliverables', function (Blueprint $table) {
-            $table->unsignedInteger('estimated_hours')->nullable()->after('priority');
-            $table->unsignedInteger('estimated_minutes')->nullable()->after('estimated_hours');
-            $table->json('labels')->nullable()->after('estimated_minutes');
-            $table->json('tags')->nullable()->after('labels');
-            $table->json('followers')->nullable()->after('tags');
-            $table->json('dependencies')->nullable()->after('followers');
-            $table->foreignId('acknowledged_by')->nullable()->constrained('users')->nullOnDelete()->after('sort_order');
-            $table->timestamp('acknowledged_at')->nullable()->after('acknowledged_by');
-            $table->foreignId('paused_by')->nullable()->constrained('users')->nullOnDelete()->after('acknowledged_at');
-            $table->timestamp('paused_at')->nullable()->after('paused_by');
-            $table->boolean('assigner_paused')->default(false)->after('paused_at');
-            $table->timestamp('assigner_paused_at')->nullable()->after('assigner_paused');
-            $table->foreignId('assigner_paused_by')->nullable()->constrained('users')->nullOnDelete()->after('assigner_paused_at');
-            $table->timestamp('work_started_at')->nullable()->after('assigner_paused_by');
-            $table->unsignedInteger('total_work_seconds')->default(0)->after('work_started_at');
-            $table->unsignedInteger('elapsed_seconds')->default(0)->after('total_work_seconds');
-            $table->unsignedInteger('pause_count')->default(0)->after('elapsed_seconds');
-            $table->unsignedInteger('total_pause_seconds')->default(0)->after('pause_count');
-            $table->unsignedInteger('resume_count')->default(0)->after('total_pause_seconds');
-            $table->string('timer_state', 16)->default('idle')->after('resume_count');
-            $table->timestamp('last_timer_event_at')->nullable()->after('timer_state');
-            $table->timestamp('work_completed_at')->nullable()->after('last_timer_event_at');
+            if (!Schema::hasColumn('deliverables', 'estimated_hours')) {
+                $table->unsignedInteger('estimated_hours')->nullable();
+            }
+            if (!Schema::hasColumn('deliverables', 'estimated_minutes')) {
+                $table->unsignedInteger('estimated_minutes')->nullable();
+            }
+            if (!Schema::hasColumn('deliverables', 'labels')) {
+                $table->json('labels')->nullable();
+            }
+            if (!Schema::hasColumn('deliverables', 'tags')) {
+                $table->json('tags')->nullable();
+            }
+            if (!Schema::hasColumn('deliverables', 'followers')) {
+                $table->json('followers')->nullable();
+            }
+            if (!Schema::hasColumn('deliverables', 'dependencies')) {
+                $table->json('dependencies')->nullable();
+            }
+            if (!Schema::hasColumn('deliverables', 'acknowledged_by')) {
+                $table->foreignId('acknowledged_by')->nullable()->constrained('users')->nullOnDelete();
+            }
+            if (!Schema::hasColumn('deliverables', 'acknowledged_at')) {
+                $table->timestamp('acknowledged_at')->nullable();
+            }
+            if (!Schema::hasColumn('deliverables', 'paused_by')) {
+                $table->foreignId('paused_by')->nullable()->constrained('users')->nullOnDelete();
+            }
+            if (!Schema::hasColumn('deliverables', 'paused_at')) {
+                $table->timestamp('paused_at')->nullable();
+            }
+            if (!Schema::hasColumn('deliverables', 'assigner_paused')) {
+                $table->boolean('assigner_paused')->default(false);
+            }
+            if (!Schema::hasColumn('deliverables', 'assigner_paused_at')) {
+                $table->timestamp('assigner_paused_at')->nullable();
+            }
+            if (!Schema::hasColumn('deliverables', 'assigner_paused_by')) {
+                $table->foreignId('assigner_paused_by')->nullable()->constrained('users')->nullOnDelete();
+            }
+            if (!Schema::hasColumn('deliverables', 'work_started_at')) {
+                $table->timestamp('work_started_at')->nullable();
+            }
+            if (!Schema::hasColumn('deliverables', 'total_work_seconds')) {
+                $table->unsignedInteger('total_work_seconds')->default(0);
+            }
+            if (!Schema::hasColumn('deliverables', 'elapsed_seconds')) {
+                $table->unsignedInteger('elapsed_seconds')->default(0);
+            }
+            if (!Schema::hasColumn('deliverables', 'pause_count')) {
+                $table->unsignedInteger('pause_count')->default(0);
+            }
+            if (!Schema::hasColumn('deliverables', 'total_pause_seconds')) {
+                $table->unsignedInteger('total_pause_seconds')->default(0);
+            }
+            if (!Schema::hasColumn('deliverables', 'resume_count')) {
+                $table->unsignedInteger('resume_count')->default(0);
+            }
+            if (!Schema::hasColumn('deliverables', 'timer_state')) {
+                $table->string('timer_state', 16)->default('idle');
+            }
+            if (!Schema::hasColumn('deliverables', 'last_timer_event_at')) {
+                $table->timestamp('last_timer_event_at')->nullable();
+            }
+            if (!Schema::hasColumn('deliverables', 'work_completed_at')) {
+                $table->timestamp('work_completed_at')->nullable();
+            }
         });
 
-        Schema::create('deliverable_user', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('deliverable_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->timestamp('due_date')->nullable();
-            $table->string('status', 32)->default('pending');
-            $table->timestamp('submitted_at')->nullable();
-            $table->timestamps();
-            $table->unique(['deliverable_id', 'user_id']);
-        });
+        if (!Schema::hasTable('deliverable_user')) {
+            Schema::create('deliverable_user', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('deliverable_id')->constrained()->cascadeOnDelete();
+                $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+                $table->timestamp('due_date')->nullable();
+                $table->string('status', 32)->default('pending');
+                $table->timestamp('submitted_at')->nullable();
+                $table->timestamps();
+                $table->unique(['deliverable_id', 'user_id']);
+            });
+        }
     }
 
     public function down(): void

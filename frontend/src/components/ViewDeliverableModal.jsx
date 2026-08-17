@@ -196,6 +196,33 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
                       <span className="vd-detail-value">{formatDateTime(subtask.reopen_new_deadline)}</span>
                     </div>
                   )}
+                  {subtask.reopen_link && (
+                    <div className="vd-detail-item" style={{ marginTop: "12px" }}>
+                      <span className="vd-detail-label">Attached Link</span>
+                      <a href={subtask.reopen_link} target="_blank" rel="noopener noreferrer" style={{ color: "#6366f1", textDecoration: "underline", wordBreak: "break-all" }}>
+                        {subtask.reopen_link}
+                      </a>
+                    </div>
+                  )}
+                  {subtask.reopen_file_name && (
+                    <div className="vd-detail-item" style={{ marginTop: "12px" }}>
+                      <span className="vd-detail-label">Attached Files / Screenshots</span>
+                      <div style={{ marginTop: "6px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                        {(subtask.reopen_file_name || "").split(",").map((name, idx) => {
+                          const cleanName = name.trim();
+                          const paths = (subtask.reopen_file_path || "").split(",").map((p) => p.trim());
+                          const path = paths[idx] || paths[0] || cleanName;
+                          return (
+                            <a key={idx} className="vd-file-link" href={fileUrl(path) || `${API_BASE}/storage/${path}`} target="_blank" rel="noopener noreferrer" download={cleanName}>
+                              <FileText size={16} />
+                              <span>{cleanName}</span>
+                              <Download size={14} style={{ marginLeft: "auto" }} />
+                            </a>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -205,14 +232,17 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
                   <div className="vd-section">
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                       <h3 className="vd-section-title" style={{ margin: 0 }}>Submission Notes</h3>
-                      <button
-                        type="button"
-                        className="task-add-phase-btn"
-                        onClick={() => setEditModalOpen(true)}
-                        style={{ padding: "4px 12px", fontSize: 12, cursor: "pointer", background: "#6366f1", color: "#fff", border: "none", borderRadius: 6 }}
-                      >
-                        Edit Submission
-                      </button>
+                      {!subtask.has_edited_submission &&
+                        ((submission.submitted_by || submission.submittedBy)?.id === getUser()?.id || submission.submitted_by === getUser()?.id) && (
+                          <button
+                            type="button"
+                            className="task-add-phase-btn"
+                            onClick={() => setEditModalOpen(true)}
+                            style={{ padding: "4px 12px", fontSize: 12, cursor: "pointer", background: "#6366f1", color: "#fff", border: "none", borderRadius: 6 }}
+                          >
+                            Edit Submission
+                          </button>
+                        )}
                     </div>
                     <p className="vd-text">{submission.comment || "—"}</p>
                   </div>
@@ -254,10 +284,23 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
                       <h3 className="vd-section-title">Links ({viewLinks.length})</h3>
                       <div className="vd-file-list">
                         {viewLinks.map((att) => (
-                          <a key={att.id} className="vd-file-link" href={att.url} target="_blank" rel="noopener noreferrer">
-                            <ExternalLink size={16} />
-                            <span className="vd-file-name">{att.original_name || att.url}</span>
-                          </a>
+                          <div key={att.id} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <a className="vd-file-link" href={att.url} target="_blank" rel="noopener noreferrer" style={{ flex: 1 }}>
+                              <ExternalLink size={16} />
+                              <span className="vd-file-name">{att.original_name || att.url}</span>
+                            </a>
+                            <button
+                              type="button"
+                              className="vd-close-btn"
+                              style={{ padding: "4px 8px", fontSize: "11px", height: "auto" }}
+                              onClick={() => {
+                                navigator.clipboard.writeText(att.url);
+                                notify.success("Link copied to clipboard!");
+                              }}
+                            >
+                              Copy Link
+                            </button>
+                          </div>
                         ))}
                       </div>
                     </div>

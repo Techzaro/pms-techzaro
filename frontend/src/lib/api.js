@@ -5,7 +5,7 @@
  */
 
 import API_URL from "../config/api";
-import { authToken } from "../utils/auth";
+import { authToken, getTenantSlug } from "../utils/auth";
 import { notify } from "../utils/notify";
 
 /**
@@ -23,9 +23,11 @@ async function apiFetch(path, options = {}) {
   if (!token && !options.skipAuth) return null;
 
   const url = `${API_URL}${path}`;
+  const tenantSlug = getTenantSlug();
   const headers = {
     Accept: "application/json",
     Authorization: `Bearer ${token}`,
+    ...(tenantSlug ? { "X-Tenant-ID": tenantSlug } : {}),
     ...options.headers,
   };
 
@@ -74,7 +76,17 @@ export const api = {
    * @returns {Promise<Object>} Response data
    */
   get: (path, params) => {
-    const qs = params ? "?" + new URLSearchParams(params).toString() : "";
+    let qs = "";
+    if (params && typeof params === "object") {
+      const cleanParams = new URLSearchParams();
+      Object.entries(params).forEach(([key, val]) => {
+        if (val !== undefined && val !== null && val !== "") {
+          cleanParams.append(key, val);
+        }
+      });
+      const str = cleanParams.toString();
+      if (str) qs = "?" + str;
+    }
     return apiFetch(`${path}${qs}`);
   },
   /**

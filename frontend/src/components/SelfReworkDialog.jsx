@@ -5,12 +5,12 @@
  * and requests improvements before final approval.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
-import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import useUnsavedChanges from "../hooks/useUnsavedChanges";
 import { notify } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
 import LoadingButton from "./LoadingButton";
@@ -25,9 +25,6 @@ import { toDatetimeLocal, toUTCIso } from "../utils/formatDateTime";
  * @param {Function} onReworkSuccess - Callback after successful rework, receives updated deliverable.
  */
 function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
-  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
-  useEscapeKey(isOpen, handleClose);
-
   const [comment, setComment] = useState("");
   const [instructions, setInstructions] = useState("");
   const [newDeadline, setNewDeadline] = useState("");
@@ -35,6 +32,11 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
   const [files, setFiles] = useState([]);
   const { submitting, run } = useSubmit();
   const fileInputRef = useRef(null);
+
+  const initialValues = useMemo(() => ({ comment: "", instructions: "", newDeadline: "", link: "", files: [] }), []);
+  const currentValues = useMemo(() => ({ comment, instructions, newDeadline, link, files }), [comment, instructions, newDeadline, link, files]);
+  const { isDirty, handleClose, markSaved, resetBaseline, ConfirmDialog } = useUnsavedChanges(initialValues, currentValues, onClose);
+  useEscapeKey(isOpen, handleClose);
 
   useEffect(() => {
     if (isOpen) {
@@ -78,6 +80,7 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
 
         const data = await res.json();
         if (res.ok) {
+          markSaved();
           onReworkSuccess(data.deliverable);
           onClose();
         } else {
@@ -106,7 +109,7 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
               className="rd-textarea"
               placeholder="Explain what needs to be improved..."
               value={comment}
-              onChange={(e) => { setComment(e.target.value); setIsDirty(true); }}
+              onChange={(e) => { setComment(e.target.value); }}
               rows={3}
             />
           </div>
@@ -117,7 +120,7 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
               className="rd-textarea"
               placeholder="Provide specific instructions for resubmission..."
               value={instructions}
-              onChange={(e) => { setInstructions(e.target.value); setIsDirty(true); }}
+              onChange={(e) => { setInstructions(e.target.value); }}
               rows={3}
             />
           </div>
@@ -129,7 +132,7 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
               className="rd-input"
               placeholder="https://example.com/ref-link"
               value={link}
-              onChange={(e) => { setLink(e.target.value); setIsDirty(true); }}
+              onChange={(e) => { setLink(e.target.value); }}
             />
           </div>
 
@@ -140,7 +143,7 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
               className="rd-input"
               value={newDeadline}
               min={new Date().toISOString().slice(0, 16)}
-              onChange={(e) => { setNewDeadline(e.target.value); setIsDirty(true); }}
+              onChange={(e) => { setNewDeadline(e.target.value); }}
             />
           </div>
 
@@ -150,7 +153,7 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
               className="rd-dropzone"
               onClick={() => fileInputRef.current?.click()}
               onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files.length) { setFiles((prev) => [...prev, ...Array.from(e.dataTransfer.files)]); setIsDirty(true); } }}
+              onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files.length) { setFiles((prev) => [...prev, ...Array.from(e.dataTransfer.files)]); } }}
             >
               {files.length > 0 ? (
                 <div className="rd-files-list" style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%" }}>
@@ -171,7 +174,7 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
               ref={fileInputRef}
               multiple
               style={{ display: "none" }}
-              onChange={(e) => { if (e.target.files.length) { setFiles((prev) => [...prev, ...Array.from(e.target.files)]); setIsDirty(true); } }}
+              onChange={(e) => { if (e.target.files.length) { setFiles((prev) => [...prev, ...Array.from(e.target.files)]); } }}
             />
           </div>
         </div>

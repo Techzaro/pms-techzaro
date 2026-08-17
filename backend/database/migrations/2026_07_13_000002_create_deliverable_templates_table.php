@@ -8,18 +8,24 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('deliverable_templates', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('task_id')->constrained()->cascadeOnDelete();
-            $table->string('title');
-            $table->text('description')->nullable();
-            $table->unsignedInteger('sort_order')->default(0);
-            $table->timestamps();
-        });
+        if (!Schema::hasTable('deliverable_templates')) {
+            Schema::create('deliverable_templates', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('task_id')->constrained()->cascadeOnDelete();
+                $table->string('title');
+                $table->text('description')->nullable();
+                $table->unsignedInteger('sort_order')->default(0);
+                $table->timestamps();
+            });
+        }
 
         Schema::table('tasks', function (Blueprint $table) {
-            $table->json('recurrence_settings')->nullable()->after('task_type');
-            $table->string('recurrence_status')->default('active')->after('recurrence_settings');
+            if (!Schema::hasColumn('tasks', 'recurrence_settings')) {
+                $table->json('recurrence_settings')->nullable();
+            }
+            if (!Schema::hasColumn('tasks', 'recurrence_status')) {
+                $table->string('recurrence_status')->default('active');
+            }
         });
     }
 

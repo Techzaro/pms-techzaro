@@ -71,4 +71,10 @@ class Notification extends Model
     {
         return $this->belongsTo(User::class, 'sender_user_id');
     }
+
+    /** Comments left on this notification/activity */
+    public function comments()
+    {
+        return $this->hasMany(NotificationComment::class)->oldest();
+    }
 }

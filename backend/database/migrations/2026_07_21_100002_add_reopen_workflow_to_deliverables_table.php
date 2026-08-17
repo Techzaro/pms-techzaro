@@ -9,9 +9,15 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('deliverables', function (Blueprint $table) {
-            $table->integer('reopen_count')->default(0)->after('reopen_file_name');
-            $table->text('reopen_reason')->nullable()->after('reopen_count');
-            $table->integer('submission_count')->default(0)->after('reopen_reason');
+            if (!Schema::hasColumn('deliverables', 'reopen_count')) {
+                $table->integer('reopen_count')->default(0);
+            }
+            if (!Schema::hasColumn('deliverables', 'reopen_reason')) {
+                $table->text('reopen_reason')->nullable();
+            }
+            if (!Schema::hasColumn('deliverables', 'submission_count')) {
+                $table->integer('submission_count')->default(0);
+            }
         });
     }
 

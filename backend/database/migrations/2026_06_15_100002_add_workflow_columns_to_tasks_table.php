@@ -9,19 +9,45 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('tasks', function (Blueprint $table) {
-            $table->timestamp('submitted_at')->nullable()->after('status');
-            $table->timestamp('approved_at')->nullable()->after('submitted_at');
-            $table->timestamp('rejected_at')->nullable()->after('approved_at');
-            $table->text('rejection_comment')->nullable()->after('rejected_at');
-            $table->foreignId('approved_by')->nullable()->constrained('users')->nullOnDelete()->after('rejection_comment');
-            $table->foreignId('rejected_by')->nullable()->constrained('users')->nullOnDelete()->after('approved_by');
-            $table->timestamp('reopened_at')->nullable()->after('rejected_by');
-            $table->foreignId('reopened_by')->nullable()->constrained('users')->nullOnDelete()->after('reopened_at');
-            $table->text('reopen_comment')->nullable()->after('reopened_by');
-            $table->text('reopen_instructions')->nullable()->after('reopen_comment');
-            $table->date('reopen_new_deadline')->nullable()->after('reopen_instructions');
-            $table->string('reopen_file_path')->nullable()->after('reopen_new_deadline');
-            $table->string('reopen_file_name')->nullable()->after('reopen_file_path');
+            if (!Schema::hasColumn('tasks', 'submitted_at')) {
+                $table->timestamp('submitted_at')->nullable();
+            }
+            if (!Schema::hasColumn('tasks', 'approved_at')) {
+                $table->timestamp('approved_at')->nullable();
+            }
+            if (!Schema::hasColumn('tasks', 'rejected_at')) {
+                $table->timestamp('rejected_at')->nullable();
+            }
+            if (!Schema::hasColumn('tasks', 'rejection_comment')) {
+                $table->text('rejection_comment')->nullable();
+            }
+            if (!Schema::hasColumn('tasks', 'approved_by')) {
+                $table->foreignId('approved_by')->nullable()->constrained('users')->nullOnDelete();
+            }
+            if (!Schema::hasColumn('tasks', 'rejected_by')) {
+                $table->foreignId('rejected_by')->nullable()->constrained('users')->nullOnDelete();
+            }
+            if (!Schema::hasColumn('tasks', 'reopened_at')) {
+                $table->timestamp('reopened_at')->nullable();
+            }
+            if (!Schema::hasColumn('tasks', 'reopened_by')) {
+                $table->foreignId('reopened_by')->nullable()->constrained('users')->nullOnDelete();
+            }
+            if (!Schema::hasColumn('tasks', 'reopen_comment')) {
+                $table->text('reopen_comment')->nullable();
+            }
+            if (!Schema::hasColumn('tasks', 'reopen_instructions')) {
+                $table->text('reopen_instructions')->nullable();
+            }
+            if (!Schema::hasColumn('tasks', 'reopen_new_deadline')) {
+                $table->date('reopen_new_deadline')->nullable();
+            }
+            if (!Schema::hasColumn('tasks', 'reopen_file_path')) {
+                $table->string('reopen_file_path')->nullable();
+            }
+            if (!Schema::hasColumn('tasks', 'reopen_file_name')) {
+                $table->string('reopen_file_name')->nullable();
+            }
         });
     }
 

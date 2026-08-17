@@ -9,7 +9,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('user_email_preferences', function (Blueprint $table) {
-            $table->boolean('team_notifications')->default(true)->after('event_notifications');
+            if (!Schema::hasColumn('user_email_preferences', 'team_notifications')) {
+                $table->boolean('team_notifications')->default(true);
+            }
         });
     }
 

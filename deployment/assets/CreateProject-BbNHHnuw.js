@@ -1,0 +1,1 @@
+import{h as e}from"./auth-BEjOAGtg.js";import{Et as t,Mt as n,b as r,t as i}from"./index-DTg4FuY1.js";var a=n();function o(){let n=t();return(0,a.jsx)(i,{hideRightSidebar:!0,children:(0,a.jsx)(`div`,{className:`min-h-screen flex items-center justify-center`,children:(0,a.jsx)(r,{onClose:t=>{n(t?e(`projects`):-1)}})})})}export{o as default};

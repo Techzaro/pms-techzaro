@@ -34,6 +34,9 @@ use App\Http\Controllers\HrmPerformanceController;
 use App\Http\Controllers\HrmApplicationHistoryController;
 
 use App\Http\Controllers\NotificationSettingController;
+use App\Http\Controllers\FeedbackController;
+use App\Http\Controllers\OrganizationSettingsController;
+use App\Http\Controllers\OrganizationOrgController;
 
 /*
 | Public Routes
@@ -94,6 +97,48 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/notification-settings', [NotificationSettingController::class, 'update']);
     Route::post('/notification-settings', [NotificationSettingController::class, 'update']);
     Route::post('/notification-settings/test-webhook', [NotificationSettingController::class, 'testWebhook']);
+
+    // Organization settings (branding, subscription, email policy)
+    Route::get('/organization-settings/email-policy', [OrganizationSettingsController::class, 'getEmailPolicy']);
+    Route::put('/organization-settings/email-policy', [OrganizationSettingsController::class, 'updateEmailPolicy']);
+    Route::get('/organization-settings/branding', [OrganizationSettingsController::class, 'getBranding']);
+    Route::put('/organization-settings/branding', [OrganizationSettingsController::class, 'updateBranding']);
+    Route::get('/organization-settings/subscription', [OrganizationSettingsController::class, 'getSubscription']);
+    Route::get('/organization-settings/subscription-history', [OrganizationSettingsController::class, 'getSubscriptionHistory']);
+    Route::get('/organization-settings/details', [OrganizationSettingsController::class, 'getOrganizationDetails']);
+    Route::get('/organization-settings/billing-history', [OrganizationSettingsController::class, 'getBillingHistory']);
+    Route::put('/organization-settings/timezone', [OrganizationSettingsController::class, 'updateTimezone']);
+
+    // Organization Storage Management
+    Route::get('/organization/storage', [OrganizationOrgController::class, 'getStorageUsage']);
+    Route::get('/organization/storage/summary', [OrganizationOrgController::class, 'getStorageSummary']);
+    Route::get('/organization/storage/large-files', [OrganizationOrgController::class, 'getLargeFiles']);
+    Route::post('/organization/storage/track', [OrganizationOrgController::class, 'trackStorageUsage']);
+    Route::delete('/organization/storage/old-files', [OrganizationOrgController::class, 'deleteOldFiles']);
+    Route::delete('/organization/storage/large-files', [OrganizationOrgController::class, 'deleteLargeFiles']);
+    Route::delete('/organization/storage/{id}', [OrganizationOrgController::class, 'deleteStorageRecord']);
+
+    // Storage Notifications
+    Route::get('/organization/storage/notifications', [OrganizationOrgController::class, 'getStorageNotifications']);
+    Route::post('/organization/storage/notifications/{notifId}/read', [OrganizationOrgController::class, 'markNotificationRead']);
+    Route::post('/organization/storage/notifications/{notifId}/dismiss', [OrganizationOrgController::class, 'dismissNotification']);
+    Route::post('/organization/storage/notifications/dismiss-all', [OrganizationOrgController::class, 'dismissAllNotifications']);
+
+    // Storage Preferences
+    Route::get('/organization/storage/preferences', [OrganizationOrgController::class, 'getStoragePreferences']);
+    Route::put('/organization/storage/preferences', [OrganizationOrgController::class, 'updateStoragePreferences']);
+
+    // Organization Billing
+    Route::get('/organization/billing/invoices', [OrganizationOrgController::class, 'getBillingInvoices']);
+    Route::post('/organization/billing/generate-invoice', [OrganizationOrgController::class, 'generateInvoice']);
+
+    // Organization Support Tickets
+    Route::get('/organization/support/tickets', [OrganizationOrgController::class, 'getSupportTickets']);
+    Route::get('/organization/support/unread-count', [OrganizationOrgController::class, 'getUnreadSupportCount']);
+    Route::post('/organization/support/tickets', [OrganizationOrgController::class, 'createSupportTicket']);
+    Route::get('/organization/support/tickets/{ticketId}', [OrganizationOrgController::class, 'getSupportTicketDetail']);
+    Route::post('/organization/support/tickets/{ticketId}/reply', [OrganizationOrgController::class, 'replySupportTicket']);
+    Route::post('/organization/support/tickets/{ticketId}/close', [OrganizationOrgController::class, 'closeSupportTicket']);
 
     // Self-service document management
     Route::put('/auth/my-document/rename', [\App\Http\Controllers\UserController::class, 'renameMyDocument']);
@@ -174,9 +219,13 @@ Route::middleware('auth:sanctum')->group(function () {
         // Reorder users list
         Route::post('/users/reorder', [UserController::class, 'reorder']);
 
+        // Request user deletion (for Manager role)
+        Route::post('/users/{user}/request-deletion', [UserController::class, 'requestDeletion']);
+
         // Guest (Client Portal) management
         Route::post('/guests', [UserController::class, 'storeGuest']);
         Route::put('/guests/{user}', [UserController::class, 'updateGuest']);
+        Route::delete('/guests/{user}', [UserController::class, 'destroyGuest']);
         Route::post('/guests/{user}/resend-invitation', [UserController::class, 'resendInvitation']);
         Route::post('/guests/{user}/reset-password', [UserController::class, 'resetGuestPassword']);
         Route::put('/guests/{user}/toggle-status', [UserController::class, 'toggleGuestStatus']);
@@ -214,6 +263,15 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Member/Team Lead: view own team(s)
     Route::get('/my-team', [TeamController::class, 'myTeam']);
+
+    /*
+    | User Feedback & Product Improvement Routes
+    */
+    Route::post('/feedback', [FeedbackController::class, 'store']);
+    Route::get('/feedback', [FeedbackController::class, 'index']);
+    Route::get('/feedback/{id}', [FeedbackController::class, 'show']);
+    Route::patch('/feedback/{id}', [FeedbackController::class, 'update']);
+    Route::post('/feedback/{id}/notes', [FeedbackController::class, 'addNote']);
 
     /*
     | Team Management Routes
@@ -334,6 +392,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/tasks/{task}/timer', [TaskController::class, 'timer']); // Get live timer state
     Route::get('/tasks/{task}/timer-sessions', [TaskController::class, 'timerSessions']); // Get pause session history
     Route::get('/tasks/{task}/latest-submission', [TaskController::class, 'latestSubmission']); // Get latest submission
+    Route::match(['put', 'post'], '/tasks/submissions/{submission}', [TaskController::class, 'updateSubmission']); // Edit submission
     Route::post('/tasks/{task}/approve', [TaskController::class, 'approve'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Approve submitted task
     Route::post('/tasks/{task}/reject', [TaskController::class, 'reject'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Reject submitted task
     Route::post('/tasks/{task}/reopen', [TaskController::class, 'reopen'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Reopen rejected task
@@ -417,14 +476,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/self-deliverables', [DeliverableController::class, 'mySelfDeliverables']); // Deliverables I created for myself
     Route::post('/deliverables/reorder', [DeliverableController::class, 'reorder']); // Reorder deliverables
 
-    // Create routes (all authenticated users)
-    Route::post('/projects/{project}/deliverables', [DeliverableController::class, 'store']); // Create deliverable (project-scoped)
-    Route::post('/deliverables', [DeliverableController::class, 'storeStandalone']); // Create deliverable (no project, task_id required)
-
-    // Write routes (admin, manager, team lead only)
-    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager,team_lead')->group(function () {
+    // Deliverable creation and update routes (all authenticated non-guest users)
+    Route::middleware(\App\Http\Middleware\EnsureNotGuest::class)->group(function () {
+        Route::post('/projects/{project}/deliverables', [DeliverableController::class, 'store']); // Create deliverable (project-scoped)
+        Route::post('/deliverables', [DeliverableController::class, 'storeStandalone']); // Create deliverable (no project, task_id required)
         Route::put('/deliverables/{deliverable}', [DeliverableController::class, 'update']); // Update deliverable
         Route::delete('/deliverables/{deliverable}', [DeliverableController::class, 'destroy']); // Delete deliverable
+    });
+
+    // Deliverable review routes (admin, manager, team lead only)
+    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager,team_lead')->group(function () {
         Route::post('/deliverables/{deliverable}/approve', [DeliverableController::class, 'approve']); // Approve deliverable
         Route::post('/deliverables/{deliverable}/reject', [DeliverableController::class, 'reject']); // Reject deliverable
         Route::post('/deliverables/{deliverable}/reopen', [DeliverableController::class, 'reopen']); // Reopen deliverable
@@ -483,6 +544,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/notifications/latest', [\App\Http\Controllers\NotificationController::class, 'latest']); // Get latest unread for desktop notifications
     Route::post('/notifications/{notification}/read', [\App\Http\Controllers\NotificationController::class, 'markAsRead']); // Mark notification as read
     Route::post('/notifications/read-all', [\App\Http\Controllers\NotificationController::class, 'markAllAsRead']); // Mark all as read
+    Route::get('/notifications/{notification}/comments', [\App\Http\Controllers\NotificationController::class, 'getComments']); // List comments on a notification
+    Route::post('/notifications/{notification}/comments', [\App\Http\Controllers\NotificationController::class, 'storeComment']); // Add comment to a notification
 
     // Device tokens for push notifications (all authenticated users)
     Route::post('/device-tokens', [\App\Http\Controllers\DeviceTokenController::class, 'store']); // Register device token
@@ -501,12 +564,24 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/messages/{message}/file', [ChatController::class, 'downloadFile']); // Download message attachment
 
     /*
+    | Org Chat Routes
+    | Organization <-> Super Admin messaging.
+    */
+    Route::get('/org-chat/conversations', [\App\Http\Controllers\OrgChatController::class, 'orgIndex']);
+    Route::get('/org-chat/unread-count', [\App\Http\Controllers\OrgChatController::class, 'orgUnreadCount']);
+    Route::get('/org-chat/conversations/{conversationId}', [\App\Http\Controllers\OrgChatController::class, 'orgShow']);
+    Route::post('/org-chat/conversations/{conversationId}/messages', [\App\Http\Controllers\OrgChatController::class, 'orgSend']);
+    Route::get('/org-chat/messages/{messageId}/file', [\App\Http\Controllers\OrgChatController::class, 'downloadFile']);
+
+    /*
     | Activity Routes
     | Track user activities and work logs.
     */
     Route::get('/activities/today', [ActivityController::class, 'today']); // Today's activities
     Route::get('/activities/past', [ActivityController::class, 'past']); // Past activities
     Route::get('/activities', [ActivityController::class, 'index']); // All activities
+    Route::get('/tasks/{task}/unified-activity', [TaskController::class, 'unifiedActivity']);
+    Route::get('/projects/{project}/unified-activity', [ProjectController::class, 'unifiedActivity']);
 
     /*
     | My Activity (all authenticated users)

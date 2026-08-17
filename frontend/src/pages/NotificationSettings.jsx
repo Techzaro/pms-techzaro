@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import API_URL from '../config/api';
-import { authToken } from '../utils/auth';
+import { useState, useEffect } from 'react';
+import api from '../lib/api';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import Breadcrumb from '../components/Breadcrumb';
 import './NotificationSettings.css';
@@ -34,20 +33,13 @@ export default function NotificationSettings() {
 
   const fetchPreferences = async () => {
     try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/notification-settings`, {
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const data = await res.json();
-      if (data?.success) {
-        if (data.preferences) {
-          setPreferences(data.preferences);
+      const response = await api.get('/notification-settings');
+      if (response?.success) {
+        if (response.preferences) {
+          setPreferences(response.preferences);
         }
-        if (data.webhooks) {
-          setWebhooks(data.webhooks);
+        if (response.webhooks) {
+          setWebhooks(response.webhooks);
         }
       }
     } catch (err) {
@@ -85,18 +77,11 @@ export default function NotificationSettings() {
     setSaving(true);
     setMessage('');
     try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/notification-settings`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ preferences, webhooks }),
-      });
-      const data = await res.json();
-      if (data?.success) {
+      const response = await api.put(
+        '/notification-settings',
+        { preferences, webhooks }
+      );
+      if (response?.success) {
         setMessage('Notification preferences & webhooks saved successfully!');
       } else {
         setMessage('Failed to save preferences.');

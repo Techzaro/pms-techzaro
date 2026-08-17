@@ -55,6 +55,9 @@ function Login() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
 
+  // Note: email policy (allowing/disallowing personal emails) is enforced by the server
+  // based on organization settings. Client-side blocking removed so server decides.
+
   /**
    * handleLogin — Validates form fields and sends login request to API.
    * On success: saves session and redirects based on role.
@@ -64,7 +67,7 @@ function Login() {
     const errors = { email: "", password: "", form: "" };
 
     if (!email.trim()) {
-      errors.email = "Please enter your professional email address.";
+      errors.email = "Please enter your email address.";
     }
 
     if (!password.trim()) {
@@ -107,11 +110,13 @@ function Login() {
         if (res.status === 429) {
           msg = data.message || "Too many failed login attempts. Please try again in 15 minutes.";
         } else if (res.status === 401) {
-          msg = "Incorrect email or password. Please try again.";
+          msg = data.message || "Incorrect email or password. Please try again.";
         } else if (res.status === 403) {
-          msg = data.message || "Your account has been deactivated. Please contact admin.";
+          msg = data.message || "Login using personal email addresses is not allowed";
         } else if (res.status === 422) {
           msg = data.message || "Please enter valid email and password.";
+        } else if (res.status === 404) {
+          msg = data.message || "Organization does not exist. Please contact administration.";
         } else {
           msg = data.message || "Something went wrong. Please try again.";
         }
@@ -121,6 +126,10 @@ function Login() {
 
       if (data.success) {
         saveSession(data.role, data.token, data.user || {}, rememberMe, data.expires_at);
+
+        if (data.tenant_slug) {
+          localStorage.setItem("tenant_slug", data.tenant_slug);
+        }
 
         if (data.must_change_password) {
           setMustChangePassword(true);
@@ -135,20 +144,27 @@ function Login() {
   };
 
   /**
-   * redirectToDashboard — Navigates to the appropriate dashboard based on user role.
-   * Uses window.location.href for full page reload to ensure clean session state.
+   * redirectToDashboard — Navigates to the user's organization dashboard.
+   * Uses tenant_slug from login response to build /org/{slug}/dashboard.
+   * Preserves ?redirect= parameter for post-login redirect.
    */
   const redirectToDashboard = (role) => {
-    if (role === "admin") {
-      window.location.href = "/admin/dashboard";
-    } else if (role === "manager") {
-      window.location.href = "/manager/dashboard";
-    } else if (role === "teamlead" || role === "team_lead") {
-      window.location.href = "/teamlead/dashboard";
-    } else if (role === "guest") {
-      window.location.href = "/guest/dashboard";
+    const slug = localStorage.getItem("tenant_slug") || "";
+    const searchParams = new URLSearchParams(window.location.search);
+    const redirectPath = searchParams.get("redirect");
+
+    // If there's a safe internal redirect path, use it
+    if (redirectPath && redirectPath.startsWith('/org/')) {
+      window.location.href = redirectPath;
+      return;
+    }
+
+    // Default: go to org dashboard
+    if (slug) {
+      window.location.href = `/org/${slug}/dashboard`;
     } else {
-      window.location.href = "/member/dashboard";
+      // Fallback: no slug available (shouldn't happen for valid login)
+      window.location.href = "/login";
     }
   };
 
@@ -176,6 +192,7 @@ function Login() {
       setChangingPassword(true);
 
       const token = authToken();
+      const tenantSlug = localStorage.getItem("tenant_slug") || "";
 
       const res = await fetch(`${API_URL}/user/first-time-change-password`, {
         method: "PUT",
@@ -183,6 +200,7 @@ function Login() {
           "Content-Type": "application/json",
           "Accept": "application/json",
           "Authorization": `Bearer ${token}`,
+          ...(tenantSlug ? { "X-Tenant-ID": tenantSlug } : {}),
         },
         body: JSON.stringify({
           new_password: newPassword,
@@ -196,14 +214,29 @@ function Login() {
         throw new Error(data.message || "Failed to change password. Please try again.");
       }
 
-      clearAllSessions();
-
-      showSuccessMessage("Password", "changed");
-      setMustChangePassword(false);
-      setNewPassword("");
-      setConfirmPassword("");
-      setEmail("");
-      setPassword("");
+      // If backend issued a new token, keep the session by saving it; otherwise clear sessions and ask to re-login.
+      if (data.token) {
+        saveSession(data.role || 'member', data.token, data.user || {}, rememberMe, data.expires_at);
+        if (data.tenant_slug) {
+          localStorage.setItem('tenant_slug', data.tenant_slug);
+        }
+        showSuccessMessage('Password', 'changed');
+        setMustChangePassword(false);
+        setNewPassword('');
+        setConfirmPassword('');
+        setEmail('');
+        setPassword('');
+        // Redirect to dashboard using saved role
+        redirectToDashboard(data.role || 'member');
+      } else {
+        clearAllSessions();
+        showSuccessMessage("Password", "changed");
+        setMustChangePassword(false);
+        setNewPassword("");
+        setConfirmPassword("");
+        setEmail("");
+        setPassword("");
+      }
 
     } catch (error) {
       notify.error(error.message || "Failed to change password. Please try again.");
@@ -217,12 +250,7 @@ function Login() {
       <div className="login-page">
         <div className="login-left">
           <div className="overlay">
-            <img
-              src="https://cdn-icons-png.flaticon.com/512/5968/5968705.png"
-              alt="Techxaro Logo"
-              className="logo"
-            />
-            <h1>TECHXARO PMS</h1>
+            <h1>TECHXARO ONE</h1>
             <p>Manage Projects, Teams & Tasks Professionally</p>
           </div>
         </div>
@@ -276,12 +304,7 @@ function Login() {
     <div className="login-page">
       <div className="login-left">
         <div className="overlay">
-          <img
-            src="https://cdn-icons-png.flaticon.com/512/5968/5968705.png"
-            alt="Techxaro Logo"
-            className="logo"
-          />
-          <h1>TECHXARO PMS</h1>
+          <h1>TECHXARO ONE</h1>
           <p>Manage Projects, Teams & Tasks Professionally</p>
         </div>
       </div>
@@ -295,7 +318,7 @@ function Login() {
 
           <input
             type="email"
-            placeholder="Enter Professional Email"
+              placeholder="Enter Email"
             value={email}
             onChange={(e) => { setEmail(e.target.value); setFieldErrors(prev => ({ ...prev, email: "", form: "" })); }}
             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); document.getElementById("login-password")?.focus(); } }}

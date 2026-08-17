@@ -9,13 +9,27 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('deliverables', function (Blueprint $table) {
-            $table->timestamp('reopened_at')->nullable()->after('rejected_by');
-            $table->foreignId('reopened_by')->nullable()->constrained('users')->nullOnDelete()->after('reopened_at');
-            $table->text('reopen_comment')->nullable()->after('reopened_by');
-            $table->text('reopen_instructions')->nullable()->after('reopen_comment');
-            $table->date('reopen_new_deadline')->nullable()->after('reopen_instructions');
-            $table->string('reopen_file_path')->nullable()->after('reopen_new_deadline');
-            $table->string('reopen_file_name')->nullable()->after('reopen_file_path');
+            if (!Schema::hasColumn('deliverables', 'reopened_at')) {
+                $table->timestamp('reopened_at')->nullable()->after('rejected_by');
+            }
+            if (!Schema::hasColumn('deliverables', 'reopened_by')) {
+                $table->foreignId('reopened_by')->nullable()->constrained('users')->nullOnDelete();
+            }
+            if (!Schema::hasColumn('deliverables', 'reopen_comment')) {
+                $table->text('reopen_comment')->nullable();
+            }
+            if (!Schema::hasColumn('deliverables', 'reopen_instructions')) {
+                $table->text('reopen_instructions')->nullable();
+            }
+            if (!Schema::hasColumn('deliverables', 'reopen_new_deadline')) {
+                $table->date('reopen_new_deadline')->nullable();
+            }
+            if (!Schema::hasColumn('deliverables', 'reopen_file_path')) {
+                $table->string('reopen_file_path')->nullable();
+            }
+            if (!Schema::hasColumn('deliverables', 'reopen_file_name')) {
+                $table->string('reopen_file_name')->nullable();
+            }
         });
     }
 

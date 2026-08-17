@@ -9,8 +9,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('task_user', function (Blueprint $table) {
-            $table->string('status', 32)->nullable()->default('pending')->after('due_date');
-            $table->timestamp('submitted_at')->nullable()->after('status');
+            if (!Schema::hasColumn('task_user', 'status')) {
+                $table->string('status', 32)->nullable()->default('pending');
+            }
+            if (!Schema::hasColumn('task_user', 'submitted_at')) {
+                $table->timestamp('submitted_at')->nullable();
+            }
         });
     }
 

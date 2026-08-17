@@ -10,6 +10,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
+import DraggableStatusBadges from "../components/DraggableStatusBadges";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { GoDotFill } from "react-icons/go";
@@ -24,6 +25,7 @@ import ConfirmModal from "../components/ConfirmModal";
 import CreateDeliverableModel from "../components/layout/CreateDeliverableModel";
 import { formatDateTimeInline } from "../utils/formatDateTime";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
+import { renderDynamicDates } from "../utils/tableDateUtils";
 import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
 import ActionPopover from "../components/ActionPopover";
@@ -87,7 +89,8 @@ function DeliveriesByYou() {
   const [showAll, setShowAll] = useState(false);
   const [actingId, setActingId] = useState(null);
   const [actingType, setActingType] = useState(null);
-  const ITEMS_PER_PAGE = 10;
+  const [perPage, setPerPage] = useState(10);
+  const ITEMS_PER_PAGE = perPage;
 
   // Debounce search input
   useEffect(() => {
@@ -108,8 +111,14 @@ function DeliveriesByYou() {
     })
       .then((res) => (res.ok ? res.json() : { data: [] }))
       .then((data) => {
-        const items = data?.data;
-        setSubtasks(Array.isArray(items) ? items : (Array.isArray(items?.data) ? items.data : []));
+        let raw = data?.data;
+        if (raw && typeof raw === "object" && !Array.isArray(raw) && Array.isArray(raw.data)) {
+          raw = raw.data;
+        }
+        if (!Array.isArray(raw)) {
+          raw = Array.isArray(data?.deliverables) ? data.deliverables : (Array.isArray(data) ? data : []);
+        }
+        setSubtasks(raw);
       })
       .catch(() => setSubtasks([]))
       .finally(() => setLoading(false));
@@ -361,7 +370,9 @@ function DeliveriesByYou() {
     return map[status] || status;
   };
 
-  const displayItems = orderedSubtasks.length ? orderedSubtasks : subtasks;
+  const safeSubtasks = Array.isArray(subtasks) ? subtasks : [];
+  const safeOrderedSubtasks = Array.isArray(orderedSubtasks) ? orderedSubtasks : [];
+  const displayItems = safeOrderedSubtasks.length ? safeOrderedSubtasks : safeSubtasks;
   const currentUser = getUser();
   const canCreateSubtask = currentUser && ["admin", "manager", "team_lead"].includes(currentUser.role);
 
@@ -369,19 +380,24 @@ function DeliveriesByYou() {
   const inProgressStatuses = ["in_progress", "In Progress", "In-progress"];
 
   const allCount = displayItems.length;
-  const dueTodayCount = displayItems.filter((i) => { const d = i.due_date ? new Date(i.due_date) : null; return d && d.toDateString() === new Date().toDateString(); }).length;
-  const pendingCount = displayItems.filter((i) => pendingStatuses.includes(i.status)).length;
-  const inProgressCount = displayItems.filter((i) => inProgressStatuses.includes(i.status)).length;
-  const pausedCount = displayItems.filter((i) => i.status === "paused").length;
-  const submittedCount = displayItems.filter((i) => i.status === "submitted").length;
-  const reopenedCount = displayItems.filter((i) => i.status === "reopened").length;
-  const transferredCount = displayItems.filter((i) => i.delegation_chain && i.delegation_chain.length > 0).length;
-  const approvedCount = displayItems.filter((i) => i.status === "approved").length;
-  const rejectedCount = displayItems.filter((i) => i.status === "rejected").length;
-  const abandonedCount = displayItems.filter((i) => i.status === "abandoned" || i.status === "abandon_requested").length;
+  const dueTodayCount = displayItems.filter((i) => {
+    if (!i || !i.due_date) return false;
+    const d = new Date(i.due_date);
+    return !isNaN(d.getTime()) && d.toDateString() === new Date().toDateString();
+  }).length;
+  const pendingCount = displayItems.filter((i) => i && pendingStatuses.includes(i.status)).length;
+  const inProgressCount = displayItems.filter((i) => i && inProgressStatuses.includes(i.status)).length;
+  const pausedCount = displayItems.filter((i) => i && i.status === "paused").length;
+  const submittedCount = displayItems.filter((i) => i && i.status === "submitted").length;
+  const reopenedCount = displayItems.filter((i) => i && i.status === "reopened").length;
+  const transferredCount = displayItems.filter((i) => i && Array.isArray(i.delegation_chain) && i.delegation_chain.length > 0).length;
+  const approvedCount = displayItems.filter((i) => i && i.status === "approved").length;
+  const rejectedCount = displayItems.filter((i) => i && i.status === "rejected").length;
+  const abandonedCount = displayItems.filter((i) => i && (i.status === "abandoned" || i.status === "abandon_requested")).length;
 
   const searchFilteredItems = debouncedSearch
     ? displayItems.filter((item) => {
+        if (!item) return false;
         const q = debouncedSearch.toLowerCase();
         const titleMatch = (item.title || "").toLowerCase().includes(q);
         const assigneeMatch = (item.assignee?.name || "").toLowerCase().includes(q);
@@ -390,11 +406,12 @@ function DeliveriesByYou() {
     : displayItems;
   const filteredItems = statusFilter && statusFilter !== "due_today"
     ? searchFilteredItems.filter((item) => {
+        if (!item) return false;
         if (statusFilter === "pending") {
           return pendingStatuses.includes(item.status);
         }
         if (statusFilter === "transferred") {
-          return item.delegation_chain && item.delegation_chain.length > 0;
+          return Array.isArray(item.delegation_chain) && item.delegation_chain.length > 0;
         }
         if (statusFilter === "abandoned") {
           return item.status === "abandoned" || item.status === "abandon_requested";
@@ -403,10 +420,11 @@ function DeliveriesByYou() {
       })
     : searchFilteredItems;
 
-  const subtaskIds = filteredItems.map((item) => item.id);
+  const safeFilteredItems = Array.isArray(filteredItems) ? filteredItems : [];
+  const subtaskIds = safeFilteredItems.map((item) => item.id);
 
-  const totalPages = showAll ? 1 : Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
-  const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+  const totalPages = showAll ? 1 : Math.max(1, Math.ceil(safeFilteredItems.length / (ITEMS_PER_PAGE || 10)));
+  const paginatedItems = showAll ? safeFilteredItems : safeFilteredItems.slice((page - 1) * (ITEMS_PER_PAGE || 10), page * (ITEMS_PER_PAGE || 10));
 
   const breadcrumbs = [
     { label: "Subtasks", path: rolePath("deliveries") },
@@ -437,39 +455,25 @@ function DeliveriesByYou() {
           </div>
         </div>
 
-        <div className="task-progress">
-          <p className={`DueToday ${statusFilter === "due_today" ? "active" : ""}`} onClick={() => selectStatusFilter("due_today")} style={{ cursor: "pointer" }}>
-            <GoDotFill color="#EF4444" /> Due Today ({dueTodayCount})
-          </p>
-          <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => selectStatusFilter("pending")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Pending ({pendingCount})
-          </p>
-          <p className={`InProgress ${statusFilter === "in_progress" ? "active" : ""}`} onClick={() => selectStatusFilter("in_progress")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> In Progress ({inProgressCount})
-          </p>
-          <p className={`Paused ${statusFilter === "paused" ? "active" : ""}`} onClick={() => selectStatusFilter("paused")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Paused ({pausedCount})
-          </p>
-          <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => selectStatusFilter("submitted")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Submitted ({submittedCount})
-          </p>
-          <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => selectStatusFilter("reopened")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Reopened ({reopenedCount})
-          </p>
-          <p className={`Transferred ${statusFilter === "transferred" ? "active" : ""}`} onClick={() => selectStatusFilter("transferred")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Transferred ({transferredCount})
-          </p>
-          <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => selectStatusFilter("approved")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Approved ({approvedCount})
-          </p>
-          <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Declined ({rejectedCount})
-          </p>
-          <p className={`Abandoned ${statusFilter === "abandoned" ? "active" : ""}`} onClick={() => selectStatusFilter("abandoned")} style={{ cursor: "pointer" }}>
-            <GoDotFill color="#DC2626" /> Abandoned ({abandonedCount})
-          </p>
-          <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All ({allCount})</p>
-        </div>
+        <DraggableStatusBadges
+          badges={[
+            { id: "due_today", label: "Due Today", count: dueTodayCount, className: "DueToday", dotColor: "#EF4444" },
+            { id: "pending", label: "Pending", count: pendingCount, className: "Pending" },
+            { id: "in_progress", label: "In Progress", count: inProgressCount, className: "InProgress" },
+            { id: "paused", label: "Paused", count: pausedCount, className: "Paused" },
+            { id: "submitted", label: "Submitted", count: submittedCount, className: "Submitted" },
+            { id: "reopened", label: "Reopened", count: reopenedCount, className: "Reopened" },
+            { id: "transferred", label: "Transferred", count: transferredCount, className: "Transferred" },
+            { id: "approved", label: "Approved", count: approvedCount, className: "Approved" },
+            { id: "rejected", label: "Declined", count: rejectedCount, className: "Rejected" },
+            { id: "abandoned", label: "Abandoned", count: abandonedCount, className: "Abandoned", dotColor: "#DC2626" },
+            { id: "", label: "All", count: allCount, className: "All" },
+          ]}
+          activeStatus={statusFilter}
+          onSelectStatus={selectStatusFilter}
+          storageKey="pms_deliveries_by_you_status_order"
+          containerClassName="task-progress"
+        />
 
         <div className="delivery-serach-bar">
           <IoSearchOutline fontSize={"20px"} />
@@ -485,7 +489,7 @@ function DeliveriesByYou() {
             <div>Task</div>
             <div>Status</div>
             <div>Start & Due Date</div>
-            <div>Action</div>
+            <div style={{ textAlign: "center" }}>Action</div>
           </div>
 
           {loading ? (
@@ -551,10 +555,10 @@ function DeliveriesByYou() {
                     </div>
                     <div>
                       <div className="date-box">
-                        <div style={{ whiteSpace: "pre-line" }}>{formatDateTimeInline(item.start_date)}{"\n"}{formatDateTimeInline(item.due_date)}</div>
+                        {renderDynamicDates(item, currentUser)}
                       </div>
                     </div>
-                    <div>
+                    <div className="col-action" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%" }}>
                       <ActionPopover
                         trigger={
                           <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
@@ -626,8 +630,14 @@ function DeliveriesByYou() {
         </div>
       </div>
 
-      {!showAll && totalPages > 1 && (
-        <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+      {!showAll && (
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          itemsPerPage={perPage}
+          onItemsPerPageChange={(val) => { setPerPage(val); setPage(1); }}
+        />
       )}
 
       {showCreateModal && (

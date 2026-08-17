@@ -240,4 +240,73 @@ class NotificationController extends Controller
 
         return response()->json(['success' => true, 'message' => 'All notifications marked as read']);
     }
+
+    /**
+     * Get comments for a specific notification.
+     */
+    public function getComments(Request $request, Notification $notification): JsonResponse
+    {
+        $comments = $notification->comments()
+            ->with('user:id,name,avatar,role')
+            ->get()
+            ->map(function ($c) {
+                return [
+                    'id' => $c->id,
+                    'notification_id' => $c->notification_id,
+                    'user_id' => $c->user_id,
+                    'comment' => $c->comment,
+                    'created_at' => $c->created_at?->diffForHumans(),
+                    'created_at_raw' => $c->created_at?->format('Y-m-d\TH:i:s'),
+                    'user' => $c->user ? [
+                        'id' => $c->user->id,
+                        'name' => $c->user->name,
+                        'avatar' => $c->user->avatar,
+                        'role' => $c->user->role,
+                    ] : null,
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'comments' => $comments,
+        ]);
+    }
+
+    /**
+     * Store a comment on a notification activity.
+     */
+    public function storeComment(Request $request, Notification $notification): JsonResponse
+    {
+        $validated = $request->validate([
+            'comment' => 'required|string|max:2000',
+        ]);
+
+        $user = $request->user();
+
+        $comment = $notification->comments()->create([
+            'user_id' => $user->id,
+            'comment' => trim($validated['comment']),
+        ]);
+
+        $comment->load('user:id,name,avatar,role');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Comment posted successfully.',
+            'comment' => [
+                'id' => $comment->id,
+                'notification_id' => $comment->notification_id,
+                'user_id' => $comment->user_id,
+                'comment' => $comment->comment,
+                'created_at' => $comment->created_at?->diffForHumans(),
+                'created_at_raw' => $comment->created_at?->format('Y-m-d\TH:i:s'),
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'avatar' => $user->avatar,
+                    'role' => $user->role,
+                ],
+            ],
+        ], 201);
+    }
 }

@@ -689,8 +689,19 @@ function MyProfile() {
               <h3>Account Status</h3>
               <div className="status-list">
                 <div className="status-item">
-                  <span className={`status-dot ${user.active ? "dot-active" : "dot-inactive"}`}></span>
-                  <span className="status-text">{user.active ? "Active" : "Resigned"}</span>
+                  {(() => {
+                    const st = String(user?.status || (user?.active ? "Active" : "Resigned")).toLowerCase();
+                    const colorClass = st === "resigned" ? "text-red-500" : st === "inactive" ? "text-yellow-500" : "text-green-500";
+                    const colorStyle = st === "resigned" ? "#ef4444" : st === "inactive" ? "#f59e0b" : "#10b981";
+                    return (
+                      <>
+                        <span className={`status-dot ${st === "active" ? "dot-active" : "dot-inactive"}`} style={{ backgroundColor: colorStyle }}></span>
+                        <span className={`status-text ${colorClass}`} style={{ color: colorStyle, fontWeight: 600 }}>
+                          {user?.status || (user?.active ? "Active" : "Resigned")}
+                        </span>
+                      </>
+                    );
+                  })()}
                 </div>
                 <div className="status-item">
                   <span className="status-icon">

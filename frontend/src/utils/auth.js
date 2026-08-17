@@ -69,48 +69,113 @@ function _migrateIfNeeded() {
   return true;
 }
 
-/* ───── current role (tab-scoped) ───── */
+/* ───── current role (tab-scoped with localStorage backup) ───── */
 
 export function getCurrentRole() {
-  return sessionStorage.getItem("currentRole") || "";
+  let role = sessionStorage.getItem("currentRole");
+  if (!role) {
+    role = localStorage.getItem("lastActiveRole") || "";
+  }
+  if (!role) {
+    for (const r of ROLES) {
+      const s = _getSessions(r);
+      const keys = Object.keys(s);
+      if (keys.length > 0) {
+        const validKey = keys.find(k => !s[k].expiresAt || Date.now() <= s[k].expiresAt);
+        if (validKey) {
+          role = r;
+          try { sessionStorage.setItem("currentRole", role); } catch {}
+          break;
+        }
+      }
+    }
+  }
+  return role || "";
 }
 
 export function setCurrentRole(role) {
-  sessionStorage.setItem("currentRole", role);
+  try { sessionStorage.setItem("currentRole", role); } catch {}
+  if (role) {
+    try { localStorage.setItem("lastActiveRole", role); } catch {}
+  } else {
+    try { localStorage.removeItem("lastActiveRole"); } catch {}
+  }
 }
 
-/* ───── session ID (tab-scoped) ───── */
+/* ───── session ID (tab-scoped with localStorage backup) ───── */
 
 export function getSessionId() {
-  return sessionStorage.getItem("sessionId") || "";
+  let sid = sessionStorage.getItem("sessionId");
+  if (!sid) {
+    sid = localStorage.getItem("lastActiveSessionId") || "";
+    if (sid) {
+      try { sessionStorage.setItem("sessionId", sid); } catch {}
+    }
+  }
+  return sid || "";
 }
 
 export function setSessionId(id) {
-  sessionStorage.setItem("sessionId", id);
+  try { sessionStorage.setItem("sessionId", id); } catch {}
+  if (id) {
+    try { localStorage.setItem("lastActiveSessionId", id); } catch {}
+  } else {
+    try { localStorage.removeItem("lastActiveSessionId"); } catch {}
+  }
 }
 
 /* ───── token ───── */
 
 export function getToken(role) {
-  const r = role || getCurrentRole();
-  const sid = getSessionId();
+  let r = role || getCurrentRole();
+  if (!r) return "";
+
+  let sid = getSessionId();
 
   // Try to migrate old tabs on first access
   if (!sid && r) {
     const migrated = _migrateIfNeeded();
     if (!migrated) return "";
+    sid = getSessionId();
   }
 
-  const finalSid = getSessionId();
-  if (!finalSid) return "";
+  let sessions = _getSessions(r);
+  let sess = sid ? sessions[sid] : null;
 
-  const sessions = _getSessions(r);
-  const sess = sessions[finalSid];
+  // Fallback: if session not found or expired, look for any active valid session for current or alternative roles
+  if (!sess || (sess.expiresAt && Date.now() > sess.expiresAt)) {
+    const validSid = Object.keys(sessions).find(k => {
+      const s = sessions[k];
+      return s && s.token && (!s.expiresAt || Date.now() <= s.expiresAt);
+    });
+    if (validSid) {
+      sid = validSid;
+      setSessionId(sid);
+      sess = sessions[sid];
+    } else {
+      for (const altRole of ROLES) {
+        const altSessions = _getSessions(altRole);
+        const altSid = Object.keys(altSessions).find(k => {
+          const s = altSessions[k];
+          return s && s.token && (!s.expiresAt || Date.now() <= s.expiresAt);
+        });
+        if (altSid) {
+          r = altRole;
+          setCurrentRole(r);
+          setSessionId(altSid);
+          sessions = altSessions;
+          sess = sessions[altSid];
+          break;
+        }
+      }
+    }
+  }
+
   if (!sess) return "";
 
-  // Check expiration (24h for rememberMe, 3h default)
+  // Check expiration
   if (sess.expiresAt && Date.now() > sess.expiresAt) {
-    delete sessions[finalSid];
+    delete sessions[sid];
     _setSessions(r, sessions);
     sessionStorage.removeItem("sessionId");
     return "";
@@ -149,24 +214,53 @@ export function removeToken(role) {
 /* ───── user object ───── */
 
 export function getUser(role) {
-  const r = role || getCurrentRole();
-  const sid = getSessionId();
+  let r = role || getCurrentRole();
+  if (!r) return null;
+
+  let sid = getSessionId();
 
   // Try to migrate old tabs on first access
   if (!sid && r) {
     const migrated = _migrateIfNeeded();
     if (!migrated) return null;
+    sid = getSessionId();
   }
 
-  const finalSid = getSessionId();
-  if (!finalSid) return null;
+  let sessions = _getSessions(r);
+  let sess = sid ? sessions[sid] : null;
 
-  const sessions = _getSessions(r);
-  const sess = sessions[finalSid];
+  if (!sess || (sess.expiresAt && Date.now() > sess.expiresAt)) {
+    const validSid = Object.keys(sessions).find(k => {
+      const s = sessions[k];
+      return s && s.user && (!s.expiresAt || Date.now() <= s.expiresAt);
+    });
+    if (validSid) {
+      sid = validSid;
+      setSessionId(sid);
+      sess = sessions[sid];
+    } else {
+      for (const altRole of ROLES) {
+        const altSessions = _getSessions(altRole);
+        const altSid = Object.keys(altSessions).find(k => {
+          const s = altSessions[k];
+          return s && s.user && (!s.expiresAt || Date.now() <= s.expiresAt);
+        });
+        if (altSid) {
+          r = altRole;
+          setCurrentRole(r);
+          setSessionId(altSid);
+          sessions = altSessions;
+          sess = sessions[altSid];
+          break;
+        }
+      }
+    }
+  }
+
   if (!sess) return null;
 
   if (sess.expiresAt && Date.now() > sess.expiresAt) {
-    delete sessions[finalSid];
+    delete sessions[sid];
     _setSessions(r, sessions);
     sessionStorage.removeItem("sessionId");
     return null;
@@ -291,6 +385,25 @@ export function clearAllSessions() {
   localStorage.removeItem("userId");
   localStorage.removeItem("name");
   localStorage.removeItem("email");
+  localStorage.removeItem("tenant_slug");
+}
+
+export function getTenantSlug() {
+  return localStorage.getItem("tenant_slug") || "";
+}
+
+export function clearTenantSlug() {
+  localStorage.removeItem("tenant_slug");
+}
+
+/* ───── stored email fallback (for super-admin / cross-role use) ── */
+
+export function setStoredEmail(role, email) {
+  if (role && email) localStorage.setItem(`stored_email_${role}`, email);
+}
+
+export function getStoredEmail(role) {
+  return localStorage.getItem(`stored_email_${role}`) || "";
 }
 
 /**
@@ -359,23 +472,21 @@ export function getDisplayUser() {
 
 /* ───── role-prefixed path helper ───── */
 
-const ROLE_URL_MAP = {
-  admin: "admin",
-  manager: "manager",
-  team_lead: "teamlead",
-  teamlead: "teamlead",
-  member: "member",
-  guest: "guest",
-};
-
+/**
+ * Generate a path under the current organization: /org/{slug}/{page}
+ * Falls back to /login if no slug is available.
+ * This replaces the old role-based /{role}/{page} pattern.
+ */
 export function rolePath(page = "") {
-  const role = getCurrentRole() || "member";
-  const urlRole = ROLE_URL_MAP[role] || "member";
-  return page ? `/${urlRole}/${page}` : `/${urlRole}/dashboard`;
+  const slug = localStorage.getItem("tenant_slug") || "";
+  if (!slug) return page ? `/login` : `/login`;
+  return page ? `/org/${slug}/${page}` : `/org/${slug}/dashboard`;
 }
 
 export function getUrlRole() {
-  return ROLE_URL_MAP[getCurrentRole()] || "member";
+  const path = window.location.pathname;
+  const match = path.match(/^\/org\/([a-z0-9\-]+)(?:\/|$)/);
+  return match ? match[1] : "";
 }
 
 /* ───── role display normalization ───── */
@@ -385,4 +496,144 @@ export function normalizeRole(role) {
   if (role === "team_lead" || role === "teamlead") return "Team Lead";
   if (role === "guest") return "Guest";
   return role.charAt(0).toUpperCase() + role.slice(1);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SUPER ADMIN SESSION MANAGEMENT
+   Completely separate from PMS session management.
+   Uses its own storage keys to ensure security isolation.
+   ═══════════════════════════════════════════════════════════════ */
+
+const SUPER_ADMIN_STORAGE_KEY = "sessions_super_admin";
+const SUPER_ADMIN_ROLE_KEY = "superAdminRole";
+const SUPER_ADMIN_SESSION_KEY = "superAdminSessionId";
+
+function _getSuperAdminSessions() {
+  try {
+    return JSON.parse(localStorage.getItem(SUPER_ADMIN_STORAGE_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+
+function _setSuperAdminSessions(sessions) {
+  localStorage.setItem(SUPER_ADMIN_STORAGE_KEY, JSON.stringify(sessions));
+}
+
+export function getSuperAdminRole() {
+  return sessionStorage.getItem(SUPER_ADMIN_ROLE_KEY) || "super_admin";
+}
+
+export function setSuperAdminRole(role) {
+  sessionStorage.setItem(SUPER_ADMIN_ROLE_KEY, role);
+}
+
+export function getSuperAdminSessionId() {
+  return sessionStorage.getItem(SUPER_ADMIN_SESSION_KEY) || "";
+}
+
+export function setSuperAdminSessionId(id) {
+  sessionStorage.setItem(SUPER_ADMIN_SESSION_KEY, id);
+}
+
+export function getSuperAdminToken() {
+  const sid = getSuperAdminSessionId();
+  if (!sid) return "";
+
+  const sessions = _getSuperAdminSessions();
+  const sess = sessions[sid];
+  if (!sess) return "";
+
+  if (sess.expiresAt && Date.now() > sess.expiresAt) {
+    delete sessions[sid];
+    _setSuperAdminSessions(sessions);
+    sessionStorage.removeItem(SUPER_ADMIN_SESSION_KEY);
+    return "";
+  }
+
+  return sess.token || "";
+}
+
+export function getSuperAdminUser() {
+  const sid = getSuperAdminSessionId();
+  if (!sid) return null;
+
+  const sessions = _getSuperAdminSessions();
+  const sess = sessions[sid];
+  if (!sess) return null;
+
+  if (sess.expiresAt && Date.now() > sess.expiresAt) {
+    delete sessions[sid];
+    _setSuperAdminSessions(sessions);
+    sessionStorage.removeItem(SUPER_ADMIN_SESSION_KEY);
+    return null;
+  }
+
+  return sess.user || null;
+}
+
+export function saveSuperAdminSession(token, user, rememberMe = false, expiresAt = null) {
+  const sessions = _getSuperAdminSessions();
+  const sid = "sess_sa_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+
+  const durationMs = rememberMe ? 24 * 60 * 60 * 1000 : 3 * 60 * 60 * 1000;
+  const calculatedExpiry = expiresAt ? new Date(expiresAt).getTime() : Date.now() + durationMs;
+
+  sessions[sid] = {
+    token,
+    user,
+    rememberMe: Boolean(rememberMe),
+    expiresAt: calculatedExpiry,
+    createdAt: Date.now(),
+  };
+  _setSuperAdminSessions(sessions);
+
+  setSuperAdminRole("super_admin");
+  setSuperAdminSessionId(sid);
+
+  return true;
+}
+
+export function clearSuperAdminSession() {
+  const sid = getSuperAdminSessionId();
+
+  if (sid) {
+    const sessions = _getSuperAdminSessions();
+    if (sessions[sid]) {
+      delete sessions[sid];
+      _setSuperAdminSessions(sessions);
+    }
+    sessionStorage.removeItem(SUPER_ADMIN_SESSION_KEY);
+  }
+
+  sessionStorage.removeItem(SUPER_ADMIN_ROLE_KEY);
+}
+
+export function superAdminAuthToken() {
+  return getSuperAdminToken();
+}
+
+export async function logoutSuperAdmin() {
+  const sid = getSuperAdminSessionId();
+  const sessions = _getSuperAdminSessions();
+  const token = sid ? sessions[sid]?.token : null;
+
+  if (token) {
+    try {
+      const rawUrl = import.meta.env.VITE_API_URL || "";
+      const apiUrl = rawUrl.replace(/\/+$/g, "");
+      await fetch(`${apiUrl}/super-admin/logout`, {
+        method: "POST",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+    } catch { /* ignore network error during logout */ }
+  }
+
+  clearSuperAdminSession();
+
+  try {
+    window.history.replaceState(null, "", "/super-admin/login");
+  } catch {}
+  window.location.replace("/super-admin/login");
 }

@@ -9,8 +9,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('tasks', function (Blueprint $table) {
-            $table->timestamp('paused_at')->nullable()->after('acknowledged_by');
-            $table->foreignId('paused_by')->nullable()->after('paused_at')->constrained('users')->nullOnDelete();
+            if (!Schema::hasColumn('tasks', 'paused_at')) {
+                $table->timestamp('paused_at')->nullable();
+            }
+            if (!Schema::hasColumn('tasks', 'paused_by')) {
+                $table->foreignId('paused_by')->nullable()->constrained('users')->nullOnDelete();
+            }
         });
     }
 

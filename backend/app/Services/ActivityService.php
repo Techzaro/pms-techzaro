@@ -102,21 +102,97 @@ class ActivityService
     }
 
     /**
-     * Retrieve activities for a user with optional date filter and pagination.
-     *
-     * @param int         $userId  ID of the user
-     * @param string|null $date    Optional date string (Y-m-d) to filter by
-     * @param int         $limit   Maximum number of results
-     * @param int         $offset  Number of results to skip
-     *
-     * @return \Illuminate\Database\Eloquent\Collection
+     * Retrieve activities for a user with optional date, module, action, search filters and pagination.
      */
-    public function getActivities(int $userId, ?string $date = null, int $limit = 50, int $offset = 0)
-    {
-        $query = Activity::where('user_id', $userId);
+    public function getActivities(
+        int $userId,
+        ?string $date = null,
+        int $limit = 50,
+        int $offset = 0,
+        ?string $module = null,
+        ?string $action = null,
+        ?string $dateFrom = null,
+        ?string $dateTo = null,
+        ?string $search = null
+    ) {
+        $query = Activity::query();
+        if ($userId > 0) {
+            $query->where('user_id', $userId);
+        }
 
         if ($date) {
             $query->whereDate('created_at', $date);
+        }
+        if ($dateFrom) {
+            $query->whereDate('created_at', '>=', $dateFrom);
+        }
+        if ($dateTo) {
+            $query->whereDate('created_at', '<=', $dateTo);
+        }
+        if ($module) {
+            $cleanModule = strtolower(trim($module));
+            $moduleVariants = [
+                'user' => ['user', 'User', 'users', 'Users', 'user_management'],
+                'users' => ['user', 'User', 'users', 'Users', 'user_management'],
+                'user_management' => ['user', 'User', 'users', 'Users', 'user_management'],
+                'auth' => ['auth', 'Auth', 'authentication'],
+                'task' => ['task', 'Task', 'tasks', 'Tasks', 'task_management'],
+                'tasks' => ['task', 'Task', 'tasks', 'Tasks', 'task_management'],
+                'task_management' => ['task', 'Task', 'tasks', 'Tasks', 'task_management'],
+                'project' => ['project', 'Project', 'projects', 'Projects', 'project_management'],
+                'projects' => ['project', 'Project', 'projects', 'Projects', 'project_management'],
+                'project_management' => ['project', 'Project', 'projects', 'Projects', 'project_management'],
+                'deliverable' => ['deliverable', 'Deliverable', 'deliverables', 'subtask', 'deliverable_management'],
+                'deliverables' => ['deliverable', 'Deliverable', 'deliverables', 'subtask', 'deliverable_management'],
+                'subtask' => ['deliverable', 'Deliverable', 'deliverables', 'subtask', 'deliverable_management'],
+                'deliverable_management' => ['deliverable', 'Deliverable', 'deliverables', 'subtask', 'deliverable_management'],
+                'team' => ['team', 'Team', 'teams', 'team_management'],
+                'teams' => ['team', 'Team', 'teams', 'team_management'],
+                'event' => ['event', 'Event', 'events'],
+                'events' => ['event', 'Event', 'events'],
+            ];
+            $allowedModules = $moduleVariants[$cleanModule] ?? [$module, strtolower($module), ucfirst($module)];
+
+            $query->where(function ($q) use ($allowedModules) {
+                $q->whereIn('related_module', $allowedModules)
+                  ->orWhereIn('activity_type', $allowedModules);
+            });
+        }
+
+        if ($action) {
+            $cleanAction = strtolower(trim($action));
+            $actionVariants = [
+                'create' => ['create', 'Create', 'created', 'Created', 'deliverable_created', 'task_created'],
+                'created' => ['create', 'Create', 'created', 'Created', 'deliverable_created', 'task_created'],
+                'update' => ['update', 'Update', 'updated', 'Updated', 'status_change', 'status'],
+                'updated' => ['update', 'Update', 'updated', 'Updated', 'status_change', 'status'],
+                'delete' => ['delete', 'Delete', 'deleted', 'Deleted'],
+                'deleted' => ['delete', 'Delete', 'deleted', 'Deleted'],
+                'approve' => ['approve', 'Approve', 'approved', 'Approved'],
+                'approved' => ['approve', 'Approve', 'approved', 'Approved'],
+                'reject' => ['reject', 'Reject', 'rejected', 'Rejected', 'declined', 'Declined'],
+                'rejected' => ['reject', 'Reject', 'rejected', 'Rejected', 'declined', 'Declined'],
+                'submit' => ['submit', 'Submit', 'submitted', 'Submitted'],
+                'submitted' => ['submit', 'Submit', 'submitted', 'Submitted'],
+                'login' => ['login', 'Login', 'auth_login'],
+                'auth_login' => ['login', 'Login', 'auth_login'],
+                'logout' => ['logout', 'Logout'],
+            ];
+            $allowedActions = $actionVariants[$cleanAction] ?? [$action, strtolower($action), ucfirst($action)];
+
+            $query->where(function ($q) use ($allowedActions) {
+                $q->whereIn('action', $allowedActions)
+                  ->orWhereIn('activity_type', $allowedActions);
+            });
+        }
+        if ($search) {
+            $cleanSearch = trim($search);
+            $query->where(function ($q) use ($cleanSearch) {
+                $q->where('description', 'like', '%'.$cleanSearch.'%')
+                    ->orWhere('entity_name', 'like', '%'.$cleanSearch.'%')
+                    ->orWhere('action', 'like', '%'.$cleanSearch.'%')
+                    ->orWhere('related_module', 'like', '%'.$cleanSearch.'%');
+            });
         }
 
         return $query->latest()
@@ -126,19 +202,95 @@ class ActivityService
     }
 
     /**
-     * Count activities for a user, optionally filtered by date.
-     *
-     * @param int         $userId ID of the user
-     * @param string|null $date   Optional date string (Y-m-d) to filter by
-     *
-     * @return int
+     * Count activities for a user, optionally filtered by date, module, action, search.
      */
-    public function getActivityCount(int $userId, ?string $date = null): int
-    {
-        $query = Activity::where('user_id', $userId);
+    public function getActivityCount(
+        int $userId,
+        ?string $date = null,
+        ?string $module = null,
+        ?string $action = null,
+        ?string $dateFrom = null,
+        ?string $dateTo = null,
+        ?string $search = null
+    ): int {
+        $query = Activity::query();
+        if ($userId > 0) {
+            $query->where('user_id', $userId);
+        }
 
         if ($date) {
             $query->whereDate('created_at', $date);
+        }
+        if ($dateFrom) {
+            $query->whereDate('created_at', '>=', $dateFrom);
+        }
+        if ($dateTo) {
+            $query->whereDate('created_at', '<=', $dateTo);
+        }
+        if ($module) {
+            $cleanModule = strtolower(trim($module));
+            $moduleVariants = [
+                'user' => ['user', 'User', 'users', 'Users', 'user_management'],
+                'users' => ['user', 'User', 'users', 'Users', 'user_management'],
+                'user_management' => ['user', 'User', 'users', 'Users', 'user_management'],
+                'auth' => ['auth', 'Auth', 'authentication'],
+                'task' => ['task', 'Task', 'tasks', 'Tasks', 'task_management'],
+                'tasks' => ['task', 'Task', 'tasks', 'Tasks', 'task_management'],
+                'task_management' => ['task', 'Task', 'tasks', 'Tasks', 'task_management'],
+                'project' => ['project', 'Project', 'projects', 'Projects', 'project_management'],
+                'projects' => ['project', 'Project', 'projects', 'Projects', 'project_management'],
+                'project_management' => ['project', 'Project', 'projects', 'Projects', 'project_management'],
+                'deliverable' => ['deliverable', 'Deliverable', 'deliverables', 'subtask', 'deliverable_management'],
+                'deliverables' => ['deliverable', 'Deliverable', 'deliverables', 'subtask', 'deliverable_management'],
+                'subtask' => ['deliverable', 'Deliverable', 'deliverables', 'subtask', 'deliverable_management'],
+                'deliverable_management' => ['deliverable', 'Deliverable', 'deliverables', 'subtask', 'deliverable_management'],
+                'team' => ['team', 'Team', 'teams', 'team_management'],
+                'teams' => ['team', 'Team', 'teams', 'team_management'],
+                'event' => ['event', 'Event', 'events'],
+                'events' => ['event', 'Event', 'events'],
+            ];
+            $allowedModules = $moduleVariants[$cleanModule] ?? [$module, strtolower($module), ucfirst($module)];
+
+            $query->where(function ($q) use ($allowedModules) {
+                $q->whereIn('related_module', $allowedModules)
+                  ->orWhereIn('activity_type', $allowedModules);
+            });
+        }
+
+        if ($action) {
+            $cleanAction = strtolower(trim($action));
+            $actionVariants = [
+                'create' => ['create', 'Create', 'created', 'Created', 'deliverable_created', 'task_created'],
+                'created' => ['create', 'Create', 'created', 'Created', 'deliverable_created', 'task_created'],
+                'update' => ['update', 'Update', 'updated', 'Updated', 'status_change', 'status'],
+                'updated' => ['update', 'Update', 'updated', 'Updated', 'status_change', 'status'],
+                'delete' => ['delete', 'Delete', 'deleted', 'Deleted'],
+                'deleted' => ['delete', 'Delete', 'deleted', 'Deleted'],
+                'approve' => ['approve', 'Approve', 'approved', 'Approved'],
+                'approved' => ['approve', 'Approve', 'approved', 'Approved'],
+                'reject' => ['reject', 'Reject', 'rejected', 'Rejected', 'declined', 'Declined'],
+                'rejected' => ['reject', 'Reject', 'rejected', 'Rejected', 'declined', 'Declined'],
+                'submit' => ['submit', 'Submit', 'submitted', 'Submitted'],
+                'submitted' => ['submit', 'Submit', 'submitted', 'Submitted'],
+                'login' => ['login', 'Login', 'auth_login'],
+                'auth_login' => ['login', 'Login', 'auth_login'],
+                'logout' => ['logout', 'Logout'],
+            ];
+            $allowedActions = $actionVariants[$cleanAction] ?? [$action, strtolower($action), ucfirst($action)];
+
+            $query->where(function ($q) use ($allowedActions) {
+                $q->whereIn('action', $allowedActions)
+                  ->orWhereIn('activity_type', $allowedActions);
+            });
+        }
+        if ($search) {
+            $cleanSearch = trim($search);
+            $query->where(function ($q) use ($cleanSearch) {
+                $q->where('description', 'like', '%'.$cleanSearch.'%')
+                    ->orWhere('entity_name', 'like', '%'.$cleanSearch.'%')
+                    ->orWhere('action', 'like', '%'.$cleanSearch.'%')
+                    ->orWhere('related_module', 'like', '%'.$cleanSearch.'%');
+            });
         }
 
         return $query->count();

@@ -377,16 +377,20 @@
 /* ==================== RESPONSIVE ==================== */
 
 @media (max-width: 900px) {
+  .user-profile-container,
+  .profile,
   .profile-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
   }
 
   .profile-avatar-center {
-    display: none;
+    display: none !important;
   }
 
   .profile-right {
-    position: static;
+    position: static !important;
+    width: 100% !important;
   }
 }
 

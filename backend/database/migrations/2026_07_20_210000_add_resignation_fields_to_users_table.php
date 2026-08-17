@@ -9,9 +9,15 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->timestamp('resigned_at')->nullable()->after('last_login_at');
-            $table->foreignId('resigned_by')->nullable()->after('resigned_at')->constrained('users')->nullOnDelete();
-            $table->text('resignation_notes')->nullable()->after('resigned_by');
+            if (!Schema::hasColumn('users', 'resigned_at')) {
+                $table->timestamp('resigned_at')->nullable();
+            }
+            if (!Schema::hasColumn('users', 'resigned_by')) {
+                $table->foreignId('resigned_by')->nullable()->constrained('users')->nullOnDelete();
+            }
+            if (!Schema::hasColumn('users', 'resignation_notes')) {
+                $table->text('resignation_notes')->nullable();
+            }
         });
     }
 

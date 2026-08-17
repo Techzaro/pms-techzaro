@@ -9,7 +9,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('task_user', function (Blueprint $table) {
-            $table->timestamp('due_date')->nullable()->after('user_id');
+            if (!Schema::hasColumn('task_user', 'due_date')) {
+                $table->timestamp('due_date')->nullable()->after('user_id');
+            }
         });
     }
 

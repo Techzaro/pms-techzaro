@@ -9,7 +9,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('deliverable_templates', function (Blueprint $table) {
-            $table->boolean('combined')->default(false)->after('quantity');
+            if (!Schema::hasColumn('deliverable_templates', 'combined')) {
+                $table->boolean('combined')->default(false);
+            }
         });
     }
 

@@ -418,25 +418,11 @@ class DashboardController extends Controller
             ->latest()
             ->get();
 
-        $allUserIds = [];
-        foreach ($projects as $project) {
-            $ids = $this->normalizeAssignedUserIds($project->assigned_users);
-            foreach ($ids as $id) {
-                $allUserIds[$id] = $id;
-            }
-        }
-        $allUsers = ! empty($allUserIds)
-            ? User::whereIn('id', $allUserIds)->select('id', 'name')->get()->keyBy('id')
-            : collect();
-
-        return $projects->map(function ($project) use ($allUsers) {
+        return $projects->map(function ($project) {
             $total = $project->total_tasks ?? 0;
             $done = $project->completed_tasks ?? 0;
             $progress = $total > 0 ? (int) round(($done / $total) * 100) : 0;
-            $assignedUserIds = $this->normalizeAssignedUserIds($project->assigned_users);
-            $assignedUsers = ! empty($assignedUserIds)
-                ? collect($assignedUserIds)->map(fn ($id) => $allUsers->get($id))->filter()
-                : collect();
+            $members = $project->getMembers();
 
             return [
                 'id' => $project->id, 'name' => $project->title, 'client' => $project->client_name,
@@ -446,7 +432,8 @@ class DashboardController extends Controller
                 'end_date' => $project->end_date?->format('Y-m-d'),
                 'deadline' => $project->end_date?->format('M d, Y h:i A'),
                 'team' => $project->team?->name,
-                'assigned_users' => $assignedUsers->toArray(),
+                'assigned_users' => $members->map(fn ($m) => ['id' => $m->id, 'name' => $m->name])->toArray(),
+                'members_count' => $members->count(),
             ];
         })->toArray();
     }

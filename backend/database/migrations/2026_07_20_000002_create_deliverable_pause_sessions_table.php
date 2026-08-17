@@ -8,19 +8,21 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('deliverable_pause_sessions', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('deliverable_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->string('reason', 64)->default('Other');
-            $table->text('reason_detail')->nullable();
-            $table->timestamp('paused_at');
-            $table->timestamp('resumed_at')->nullable();
-            $table->unsignedInteger('duration_seconds')->default(0);
-            $table->foreignId('resumed_by')->nullable()->constrained('users')->nullOnDelete();
-            $table->boolean('is_auto_paused')->default(false);
-            $table->timestamps();
-        });
+        if (!Schema::hasTable('deliverable_pause_sessions')) {
+            Schema::create('deliverable_pause_sessions', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('deliverable_id')->constrained()->cascadeOnDelete();
+                $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+                $table->string('reason', 64)->default('Other');
+                $table->text('reason_detail')->nullable();
+                $table->timestamp('paused_at');
+                $table->timestamp('resumed_at')->nullable();
+                $table->unsignedInteger('duration_seconds')->default(0);
+                $table->foreignId('resumed_by')->nullable()->constrained('users')->nullOnDelete();
+                $table->boolean('is_auto_paused')->default(false);
+                $table->timestamps();
+            });
+        }
     }
 
     public function down(): void

@@ -142,8 +142,10 @@ html.dark {
   --color-gray-bg: #334155;
 }
 
-html {
+html, body, #root {
+  max-width: 100vw;
   overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 body {
@@ -158,6 +160,7 @@ body {
   *::before,
   *::after {
     border-width: 0;
+    box-sizing: border-box;
   }
 }
 
@@ -168,4 +171,187 @@ img {
 
 input, button, select, textarea {
   font-family: inherit;
+  max-width: 100%;
 }
+
+/* Global Responsive Table Container Utilities */
+.table-responsive-wrapper,
+.tasks-table-container,
+.projects-table-container,
+.deliveries-table-container,
+.manage-user-table-container,
+.dc-table-wrapper,
+.erm-table-card,
+.audit-table-wrapper,
+.history-table-wrapper,
+.table-container {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 768px) {
+  /* Global Page Container Padding & Spacing */
+  .dashboard-content,
+  .main-layout,
+  .tasks-page,
+  .projects-page,
+  .deliveries-page,
+  .manage-users-page,
+  .user-profile-page,
+  .reports-page,
+  .knowledge-base-page,
+  .templates-page,
+  .history-page,
+  .audit-logs-page {
+    padding: 10px !important;
+    padding-bottom: 84px !important;
+  }
+
+  /* Grid Gap Optimizations */
+  .dashboard-cards,
+  .summary-cards,
+  .projects-grid,
+  .dashboard-sections,
+  .task-grid-2,
+  .cp-grid-2,
+  .task-deadline-grid,
+  .cp-deadline-grid {
+    gap: 10px !important;
+  }
+
+  /* Strict Single Column Collapses for Multi-Column Layouts */
+  .task-body,
+  .cp-body,
+  .task-details-grid,
+  .project-details-grid,
+  .user-profile-container,
+  .profile-layout,
+  .profile {
+    grid-template-columns: 1fr !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+
+  /* Typography Scaling */
+  h1 {
+    font-size: 20px !important;
+    line-height: 1.3 !important;
+  }
+
+  h2 {
+    font-size: 18px !important;
+    line-height: 1.3 !important;
+  }
+
+  h3 {
+    font-size: 16px !important;
+    line-height: 1.3 !important;
+  }
+
+  /* 44px Minimum Touch Targets for Accessibility (Apple/Google Standard) */
+  input[type="text"],
+  input[type="number"],
+  input[type="email"],
+  input[type="password"],
+  input[type="date"],
+  input[type="datetime-local"],
+  select,
+  .form-control,
+  .task-checkbox-trigger,
+  .cp-checkbox-trigger,
+  .custom-select-trigger {
+    min-height: 44px !important;
+    font-size: 14px !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Full-Screen Mobile Modals (App-Like Full Screen View) */
+  .task-overlay,
+  .cp-overlay,
+  .modal-overlay,
+  .confirm-modal-overlay,
+  .add-note-overlay,
+  .assigner-view-overlay,
+  .audit-log-modal-overlay,
+  .draft-detail-overlay {
+    padding: 0 !important;
+  }
+
+  .task-modal,
+  .cp-modal,
+  .modal-card,
+  .modal-content,
+  .confirm-modal-content,
+  .assigner-view-modal,
+  .audit-log-modal-card,
+  .draft-detail-card {
+    width: 100vw !important;
+    height: 100vh !important;
+    max-width: 100vw !important;
+    max-height: 100vh !important;
+    border-radius: 0 !important;
+    border: none !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .task-footer,
+  .cp-footer,
+  .modal-footer {
+    position: sticky !important;
+    bottom: 0 !important;
+    z-index: 20 !important;
+    background: var(--bg-card) !important;
+    padding: 12px 16px !important;
+    border-top: 1px solid var(--border-color) !important;
+    width: 100% !important;
+    margin-top: auto !important;
+  }
+
+  /* Sticky First Column for Intelligent Data Tables */
+  .manage-user-table,
+  .audit-table,
+  .erm-table,
+  .dc-table,
+  table.tasks-table,
+  table.projects-table {
+    min-width: 620px;
+  }
+
+  .manage-user-table th:first-child,
+  .manage-user-table td:first-child,
+  .audit-table th:first-child,
+  .audit-table td:first-child,
+  .erm-table th:first-child,
+  .erm-table td:first-child,
+  .dc-table th:first-child,
+  .dc-table td:first-child,
+  table.tasks-table th:first-child,
+  table.tasks-table td:first-child,
+  table.projects-table th:first-child,
+  table.projects-table td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: var(--bg-card);
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.06);
+  }
+}
+
+/* Disable hover tooltips on touch devices */
+@media (hover: none) {
+  [title] {
+    pointer-events: auto;
+  }
+
+  .tooltip,
+  .hover-popup {
+    display: none !important;
+  }
+}
+

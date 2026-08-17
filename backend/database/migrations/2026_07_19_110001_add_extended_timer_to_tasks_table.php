@@ -9,10 +9,18 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('tasks', function (Blueprint $table) {
-            $table->unsignedInteger('elapsed_seconds')->default(0)->after('total_work_seconds');
-            $table->unsignedInteger('pause_count')->default(0)->after('elapsed_seconds');
-            $table->unsignedInteger('total_pause_seconds')->default(0)->after('pause_count');
-            $table->unsignedInteger('resume_count')->default(0)->after('total_pause_seconds');
+            if (!Schema::hasColumn('tasks', 'elapsed_seconds')) {
+                $table->unsignedInteger('elapsed_seconds')->default(0);
+            }
+            if (!Schema::hasColumn('tasks', 'pause_count')) {
+                $table->unsignedInteger('pause_count')->default(0);
+            }
+            if (!Schema::hasColumn('tasks', 'total_pause_seconds')) {
+                $table->unsignedInteger('total_pause_seconds')->default(0);
+            }
+            if (!Schema::hasColumn('tasks', 'resume_count')) {
+                $table->unsignedInteger('resume_count')->default(0);
+            }
         });
     }
 

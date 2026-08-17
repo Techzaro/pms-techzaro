@@ -9,13 +9,27 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('task_submissions', function (Blueprint $table) {
-            $table->integer('version_number')->default(1)->after('file_name');
-            $table->string('status', 32)->default('pending')->after('version_number');
-            $table->foreignId('approved_by')->nullable()->constrained('users')->nullOnDelete()->after('status');
-            $table->timestamp('approved_at')->nullable()->after('approved_by');
-            $table->foreignId('reopened_by')->nullable()->constrained('users')->nullOnDelete()->after('approved_at');
-            $table->timestamp('reopened_at')->nullable()->after('reopened_by');
-            $table->text('reopen_reason')->nullable()->after('reopened_at');
+            if (!Schema::hasColumn('task_submissions', 'version_number')) {
+                $table->integer('version_number')->default(1);
+            }
+            if (!Schema::hasColumn('task_submissions', 'status')) {
+                $table->string('status', 32)->default('pending');
+            }
+            if (!Schema::hasColumn('task_submissions', 'approved_by')) {
+                $table->foreignId('approved_by')->nullable()->constrained('users')->nullOnDelete();
+            }
+            if (!Schema::hasColumn('task_submissions', 'approved_at')) {
+                $table->timestamp('approved_at')->nullable();
+            }
+            if (!Schema::hasColumn('task_submissions', 'reopened_by')) {
+                $table->foreignId('reopened_by')->nullable()->constrained('users')->nullOnDelete();
+            }
+            if (!Schema::hasColumn('task_submissions', 'reopened_at')) {
+                $table->timestamp('reopened_at')->nullable();
+            }
+            if (!Schema::hasColumn('task_submissions', 'reopen_reason')) {
+                $table->text('reopen_reason')->nullable();
+            }
         });
     }
 

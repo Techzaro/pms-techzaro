@@ -7,14 +7,14 @@
  *
  * Also renders a hover dropdown on the logo/text ("app switcher") that
  * lets the user jump from the PMS portal into the HRM portal. The HRM
- * target is role-aware: members/team leads go straight to their limited
- * HRM dashboard (/:role/hrm/member-dashboard), everyone else goes to the
- * full HRM app (/:role/hrm). See utils/hrmNavigation.js for the mapping.
+ * target is role-aware and remains scoped to the current organization slug:
+ * members/team leads go to /org/:slug/hrm/member-dashboard, while other
+ * roles go to /org/:slug/hrm. See utils/hrmNavigation.js for the mapping.
  */
 
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import { MdKeyboardArrowDown, MdNotifications, MdPerson, MdHistory, MdLogout, MdLock, MdDarkMode, MdLightMode, MdBusinessCenter, MdApps } from "react-icons/md";
-import { useNavigate, Link } from "react-router-dom";
+import { MdKeyboardArrowDown, MdNotifications, MdPerson, MdHistory, MdLogout, MdLock, MdDarkMode, MdLightMode, MdBusinessCenter, MdApps, MdFeedback } from "react-icons/md";
+import { useNavigate } from "react-router-dom";
 
 import API_URL from "../../config/api";
 import { authToken, getCurrentRole, getUser, setUser, clearSession, logoutUser, getToken, rolePath, normalizeRole } from "../../utils/auth";
@@ -25,11 +25,13 @@ import { initFirebase } from "../../utils/firebase";
 import { formatDateTimeInline } from "../../utils/formatDateTime";
 import { getNotificationDestination } from "../../utils/navigation";
 import { useTheme } from "../../context/ThemeContext.jsx";
+import { useOrgBranding } from "../../hooks/useOrgBranding";
 import "./Header.css";
 
 import CreateTaskModal from "../CreateTaskModal";
 import CreateProjectModal from "../CreateProjectModal";
 import CreateDeliverableModel from "./CreateDeliverableModel";
+import FeedbackModal from "../FeedbackModal";
 
 /**
  * Header component – renders the top navigation bar.
@@ -45,6 +47,7 @@ function Header() {
   const profileMenuRef = useRef(null);
   const logoSwitcherRef = useRef(null);
   const { theme, toggleTheme } = useTheme();
+  const { data: branding } = useOrgBranding();
 
   // ── HRM navigation target (role-aware) ──
   // Members/team leads → /:role/hrm/member-dashboard
@@ -56,6 +59,7 @@ function Header() {
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [showSubtaskModal, setShowSubtaskModal] = useState(false);
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isSmallScreen, setIsSmallScreen] = useState(window.innerWidth <= 1200);
   const [notifications, setNotifications] = useState([]);
@@ -608,12 +612,16 @@ function Header() {
             style={{ position: "relative", display: "flex", alignItems: "center", cursor: "pointer", userSelect: "none", WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
           >
             <div className="logo-box">
-              <b>TX</b>
+              {branding?.logo_url ? (
+                <img src={branding.logo_url} alt="Logo" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "14px" }} />
+              ) : (
+                <b>{(branding?.subtitle || "TX").substring(0, 2).toUpperCase()}</b>
+              )}
             </div>
 
             <div className={"logo-text" + (showFullLogo || isSmallScreen ? "" : " logo-text--hidden")}>
-              <h3>Techxaro</h3>
-              <span>PMS Portal</span>
+              <h3>{branding?.subtitle || "PMS Portal"}</h3>
+              <span>{branding?.org_name || "Organization"}</span>
             </div>
 
             <MdKeyboardArrowDown
@@ -816,11 +824,13 @@ function Header() {
           {getCurrentRole() !== "guest" && (
           <button
             className="task-btn1"
+            title="Create Task"
             onClick={() =>
               setShowTaskModal(true)
             }
           >
-            + Task
+            <span className="quick-btn-full">+ Task</span>
+            <span className="quick-btn-short">+T</span>
           </button>
           )}
 
@@ -828,17 +838,30 @@ function Header() {
           <button
             className="task-btn1"
             style={{ background: "#7c3aed" }}
+            title="Create Subtask"
             onClick={() =>
               setShowSubtaskModal(true)
             }
           >
-            + Subtask
+            <span className="quick-btn-full">+ Subtask</span>
+            <span className="quick-btn-short">+S</span>
           </button>
           )}
 
           {/* Quick-create project button – visible to admin/manager only */}
 
-        
+          {["admin", "manager"].includes(getCurrentRole()) && (
+          <button
+            className="project-btn"
+            title="Create Project"
+            onClick={() =>
+              setShowProjectModal(true)
+            }
+          >
+            <span className="quick-btn-full">+ Project</span>
+            <span className="quick-btn-short">+P</span>
+          </button>
+          )}
           {/* Enable desktop notifications button - only shows when permission not granted */}
           {notifPermission !== 'granted' && 'Notification' in window && (
             <button
@@ -955,8 +978,12 @@ function Header() {
                   <MdHistory size={20} />
                   <span>My Activity</span>
                 </button>
+                <button className={`hmc-menu-item${profileHighlightIndex === 3 ? ' hmc-menu-item--highlighted' : ''}`} onClick={() => { setIsProfileOpen(false); setIsFeedbackOpen(true); }} onMouseEnter={() => setProfileHighlightIndex(3)}>
+                  <MdFeedback size={20} />
+                  <span>Feedback</span>
+                </button>
                 <div className="hmc-logout-wrap">
-                  <button className={`hmc-logout-btn${profileHighlightIndex === 3 ? ' hmc-menu-item--highlighted' : ''}`} onMouseEnter={() => setProfileHighlightIndex(3)} onClick={() => logoutUser()}>
+                  <button className={`hmc-logout-btn${profileHighlightIndex === 4 ? ' hmc-menu-item--highlighted' : ''}`} onMouseEnter={() => setProfileHighlightIndex(4)} onClick={() => logoutUser()}>
                     <MdLogout size={18} />
                     <span>Logout</span>
                   </button>
@@ -1037,6 +1064,11 @@ function Header() {
           onClose={() => setShowSubtaskModal(false)}
         />
       )}
+
+      <FeedbackModal
+        isOpen={isFeedbackOpen}
+        onClose={() => setIsFeedbackOpen(false)}
+      />
 
     </>
   );

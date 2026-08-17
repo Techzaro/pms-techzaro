@@ -104,7 +104,8 @@ class AuditLogController extends Controller
             'sort_order' => 'nullable|string|in:asc,desc',
         ]);
 
-        $logs = $this->auditService->getLogs($filters, 10000);
+        $paginator = $this->auditService->getLogs($filters, 10000);
+        $logs = $paginator instanceof \Illuminate\Pagination\AbstractPaginator ? $paginator->getCollection() : $paginator;
 
         return $this->exportService->exportExcel($logs);
     }

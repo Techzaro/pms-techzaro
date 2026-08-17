@@ -11,6 +11,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
+import DraggableStatusBadges from "../components/DraggableStatusBadges";
 import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
@@ -28,6 +29,7 @@ import TaskNotesPopover from "../components/TaskNotesPopover";
 import AddNoteModal from "../components/AddNoteModal";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
+import { renderDynamicDates } from "../utils/tableDateUtils";
 import { formatDateTime } from "../utils/formatDateTime";
 import "../components/ActionPopover.css";
 import "../pages/Task.css";
@@ -363,36 +365,24 @@ function GuestTasks() {
       </div>
 
       {/* STATUS FILTERS */}
-      <div className="task-progress">
-        <p className={`DueToday ${statusFilter === "due_today" ? "active" : ""}`} onClick={() => selectStatusFilter("due_today")} style={{ cursor: "pointer" }}>
-          <GoDotFill color="#EF4444" /> Due Today ({dueTodayCount})
-        </p>
-        <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => selectStatusFilter("pending")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Pending ({pendingCount})
-        </p>
-        <p className={`InProgress ${statusFilter === "in_progress" ? "active" : ""}`} onClick={() => selectStatusFilter("in_progress")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> In Progress ({inProgressCount})
-        </p>
-        <p className={`Paused ${statusFilter === "paused" ? "active" : ""}`} onClick={() => selectStatusFilter("paused")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Paused ({pausedCount})
-        </p>
-        <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => selectStatusFilter("submitted")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Submitted ({submittedCount})
-        </p>
-        <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => selectStatusFilter("reopened")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Reopened ({reopenedCount})
-        </p>
-        <p className={`Transferred ${statusFilter === "transferred" ? "active" : ""}`} onClick={() => selectStatusFilter("transferred")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Transferred ({transferredCount})
-        </p>
-        <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => selectStatusFilter("approved")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Approved ({approvedCount})
-        </p>
-        <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Declined ({rejectedCount})
-        </p>
-        <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All ({allCount})</p>
-      </div>
+      <DraggableStatusBadges
+        badges={[
+          { id: "due_today", label: "Due Today", count: dueTodayCount, className: "DueToday", dotColor: "#EF4444" },
+          { id: "pending", label: "Pending", count: pendingCount, className: "Pending" },
+          { id: "in_progress", label: "In Progress", count: inProgressCount, className: "InProgress" },
+          { id: "paused", label: "Paused", count: pausedCount, className: "Paused" },
+          { id: "submitted", label: "Submitted", count: submittedCount, className: "Submitted" },
+          { id: "reopened", label: "Reopened", count: reopenedCount, className: "Reopened" },
+          { id: "transferred", label: "Transferred", count: transferredCount, className: "Transferred" },
+          { id: "approved", label: "Approved", count: approvedCount, className: "Approved" },
+          { id: "rejected", label: "Declined", count: rejectedCount, className: "Rejected" },
+          { id: "", label: "All", count: allCount, className: "All" },
+        ]}
+        activeStatus={statusFilter}
+        onSelectStatus={selectStatusFilter}
+        storageKey="pms_guest_tasks_status_order"
+        containerClassName="task-progress"
+      />
 
       {/* SEARCH BAR */}
       <div className="tasks-search-bar">
@@ -497,17 +487,7 @@ function GuestTasks() {
 
                   <div className="col-due-date">
                     <div className="date-box">
-                      <div style={{ whiteSpace: "pre-line" }}>
-                        {(() => {
-                          const myPivotStart = item.assignees?.find(a => parseInt(a.id, 10) === parseInt(currentUser?.id, 10))?.pivot?.start_date;
-                          return formatDate(myPivotStart || item.start_date);
-                        })()}
-                        {"\n"}
-                        {(() => {
-                          const myPivot = item.assignees?.find(a => parseInt(a.id, 10) === parseInt(currentUser?.id, 10))?.pivot?.due_date;
-                          return formatDate(myPivot || item.end_date);
-                        })()}
-                      </div>
+                      {renderDynamicDates(item, currentUser)}
                     </div>
                   </div>
 

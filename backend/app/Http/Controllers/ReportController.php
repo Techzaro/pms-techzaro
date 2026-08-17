@@ -35,10 +35,12 @@ class ReportController extends Controller
     public function teamPerformance(Request $request)
     {
         $user = $request->user();
-        $timeFilter = $request->query('period', 'all');
-        $cacheKey = "report_team_perf_{$user->id}_{$timeFilter}";
+        $timeFilter = $request->input('time_filter', $request->input('period', 'all'));
+        $startDate = $request->input('start_date', $request->input('startDate', ''));
+        $endDate = $request->input('end_date', $request->input('endDate', ''));
+        $cacheKey = "report_team_perf_{$user->id}_{$timeFilter}_{$startDate}_{$endDate}";
 
-        return Cache::remember($cacheKey, 300, function () use ($user, $timeFilter) {
+        return Cache::remember($cacheKey, 300, function () use ($user, $timeFilter, $startDate, $endDate) {
             $isTeamLead = $user->role === 'team_lead' || $user->role === 'teamlead';
 
             $query = User::select('id', 'name', 'email', 'role')
@@ -148,7 +150,7 @@ class ReportController extends Controller
     public function userPerformance(Request $request, User $user)
     {
         $requestingUser = $request->user();
-        $timeFilter = $request->query('period', 'all');
+        $timeFilter = $request->input('time_filter', $request->input('period', 'all'));
         $isTeamLeadViewingMember = ($requestingUser->role === 'team_lead' || $requestingUser->role === 'teamlead')
             && $requestingUser->id !== $user->id;
 
@@ -672,7 +674,7 @@ class ReportController extends Controller
     public function summaryCards(Request $request)
     {
         $user = $request->user();
-        $timeFilter = $request->query('period', 'all');
+        $timeFilter = $request->input('time_filter', $request->input('period', 'all'));
         $view = $request->query('view', 'self'); // 'self' or 'team'
         $role = $user->role === 'teamlead' ? 'team_lead' : $user->role;
 
@@ -712,11 +714,13 @@ class ReportController extends Controller
                 break;
         }
         if ($timeFilter !== 'all') {
-            $this->applyTimeFilter($taskQuery, $timeFilter, 'tasks');
+            $taskQuery = $this->applyTimeFilter($taskQuery, $timeFilter, 'tasks');
         }
         $taskStats = $taskQuery->selectRaw("
             COUNT(*) as total_assigned,
-            SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved,
+            SUM(CASE WHEN status IN ('approved', 'completed', 'done') THEN 1 ELSE 0 END) as approved,
+            SUM(CASE WHEN status IN ('submitted', 'reopened', 'in_review') THEN 1 ELSE 0 END) as in_review,
+            SUM(CASE WHEN status IN ('pending', 'in_progress', 'paused') THEN 1 ELSE 0 END) as in_progress,
             SUM(CASE WHEN end_date < NOW() AND status NOT IN ('completed','done','abandoned','approved') THEN 1 ELSE 0 END) as overdue,
             SUM(CASE WHEN `priority` = 'high' THEN 1 ELSE 0 END) as p_high,
             SUM(CASE WHEN `priority` = 'medium' THEN 1 ELSE 0 END) as p_medium,
@@ -726,6 +730,8 @@ class ReportController extends Controller
         // Use task-only stats
         $totalAssigned = (int) $taskStats->total_assigned;
         $approved = (int) $taskStats->approved;
+        $inReview = (int) $taskStats->in_review;
+        $inProgress = (int) $taskStats->in_progress;
         $pending = max($totalAssigned - $approved, 0);
         $overdue = (int) $taskStats->overdue;
         $highPriority = (int) $taskStats->p_high;
@@ -735,6 +741,8 @@ class ReportController extends Controller
         return response()->json([
             'total_assigned' => $totalAssigned,
             'approved' => $approved,
+            'in_review' => $inReview,
+            'in_progress' => $inProgress,
             'pending' => $pending,
             'overdue' => $overdue,
             'high_priority' => $highPriority,
@@ -754,7 +762,7 @@ class ReportController extends Controller
     public function userPerformanceTable(Request $request)
     {
         $user = $request->user();
-        $timeFilter = $request->query('period', 'all');
+        $timeFilter = $request->input('time_filter', $request->input('period', 'all'));
 
         // For team_lead, only show members from their teams
         if ($user->role === 'team_lead' || $user->role === 'teamlead') {
@@ -782,7 +790,7 @@ class ReportController extends Controller
             ->leftJoin('tasks', 'tasks.id', '=', 'task_user.task_id');
 
         if ($timeFilter !== 'all') {
-            $this->applyTimeFilter($taskQuery, $timeFilter, 'users');
+            $taskQuery = $this->applyTimeFilter($taskQuery, $timeFilter, 'tasks');
         }
 
         // Filter by team members for team_lead
@@ -841,10 +849,12 @@ class ReportController extends Controller
      */
     public function companyEmployeesReport(Request $request)
     {
-        $timeFilter = $request->query('period', 'all');
-        $cacheKey = "report_company_employees_{$timeFilter}";
+        $timeFilter = $request->input('time_filter', $request->input('period', 'all'));
+        $startDate = $request->input('start_date', $request->input('startDate', ''));
+        $endDate = $request->input('end_date', $request->input('endDate', ''));
+        $cacheKey = "report_company_employees_{$timeFilter}_{$startDate}_{$endDate}";
 
-        $data = Cache::remember($cacheKey, 300, function () use ($timeFilter) {
+        $data = Cache::remember($cacheKey, 300, function () use ($timeFilter, $startDate, $endDate) {
         $allUsers = User::where('active', true)->select('id', 'name', 'role')->orderBy('name')->get();
         $totalEmployees = $allUsers->count();
 
@@ -856,7 +866,7 @@ class ReportController extends Controller
             ->leftJoin('tasks', 'tasks.id', '=', 'task_user.task_id');
 
         if ($timeFilter !== 'all') {
-            $this->applyTimeFilter($taskQuery, $timeFilter, 'users');
+            $taskQuery = $this->applyTimeFilter($taskQuery, $timeFilter, 'tasks');
         }
 
         $taskStats = $taskQuery->addSelect(DB::raw("
@@ -971,17 +981,42 @@ class ReportController extends Controller
      * Apply a time period filter to a query.
      *
      * @param  Builder|\Illuminate\Database\Query\Builder  $query  The query to filter.
-     * @param  string  $period  The period filter: 'today', 'week', 'month', or 'all'.
+     * @param  string  $period  The period filter: 'today', 'week', 'month', '30', 'custom', or 'all'.
+     * @param  string  $table  The table name alias (default 'tasks').
      * @return mixed The filtered query.
      */
-    private function applyTimeFilter($query, string $period, string $table = '')
+    private function applyTimeFilter($query, string $period, string $table = 'tasks', ?string $startDate = null, ?string $endDate = null)
     {
-        $col = $table ? "{$table}.created_at" : 'created_at';
-        return match ($period) {
+        $rawPeriod = request('period') ?: request('time_filter') ?: $period;
+        $cleanPeriod = strtolower(trim((string) $rawPeriod));
+        $startDate = $startDate ?: request('startDate') ?: request('start_date');
+        $endDate = $endDate ?: request('endDate') ?: request('end_date');
+
+        $col = $table && $table !== 'users' ? "{$table}.created_at" : 'tasks.created_at';
+
+        if ($cleanPeriod === 'custom' || ($startDate && $endDate)) {
+            if ($startDate && $endDate) {
+                return $query->whereBetween($col, [
+                    \Carbon\Carbon::parse($startDate)->startOfDay(),
+                    \Carbon\Carbon::parse($endDate)->endOfDay(),
+                ]);
+            } elseif ($startDate) {
+                return $query->where($col, '>=', \Carbon\Carbon::parse($startDate)->startOfDay());
+            } elseif ($endDate) {
+                return $query->where($col, '<=', \Carbon\Carbon::parse($endDate)->endOfDay());
+            }
+        }
+
+        return match ($cleanPeriod) {
             'today' => $query->whereDate($col, today()),
-            'week' => $query->where($col, '>=', now()->startOfWeek()),
-            'month' => $query->where($col, '>=', now()->startOfMonth()),
-            default => $query,
+            '7', 'week', '7days' => $query->where($col, '>=', \Carbon\Carbon::now()->subDays(7)),
+            '30', 'month', '30days' => $query->where($col, '>=', \Carbon\Carbon::now()->subDays(30)),
+            '90', '3months', '90days' => $query->where($col, '>=', \Carbon\Carbon::now()->subMonths(3)),
+            '180', '6months', '180days' => $query->where($col, '>=', \Carbon\Carbon::now()->subMonths(6)),
+            'year', '365' => $query->where($col, '>=', \Carbon\Carbon::now()->subYears(1)),
+            default => is_numeric($cleanPeriod) && (int) $cleanPeriod > 0
+                ? $query->where($col, '>=', \Carbon\Carbon::now()->subDays((int) $cleanPeriod))
+                : $query,
         };
     }
 

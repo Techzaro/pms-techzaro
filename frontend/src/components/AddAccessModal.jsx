@@ -103,7 +103,7 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!websiteName.trim() || !username.trim() || !password.trim() || assignedUserIds.length === 0) {
+    if (!username.trim() || !password.trim() || assignedUserIds.length === 0) {
       setError("Please fill all required fields and assign at least one user.");
       return;
     }
@@ -171,13 +171,12 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
 
           <div className="aam-field">
             <label>
-              <Globe size={14} /> Website Name *
+              <Globe size={14} /> Website Name
             </label>
             <select
               className="aam-select"
               value={websiteName}
               onChange={(e) => { setIsDirty(true); setWebsiteName(e.target.value); }}
-              required
             >
               <option value="">Select website</option>
               {files

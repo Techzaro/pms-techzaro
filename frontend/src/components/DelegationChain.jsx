@@ -110,7 +110,10 @@ function DelegationChain({ task, delegationChain = [], approvalChain = [], onTas
     return map[status] || "var(--bg-hover)";
   };
 
-  if (!delegationChain.length && !isDelegatedToMe) return null;
+  const safeDelegationChain = Array.isArray(delegationChain) ? delegationChain : [];
+  const safeApprovalChain = Array.isArray(approvalChain) ? approvalChain : [];
+
+  if (!safeDelegationChain.length && !isDelegatedToMe) return null;
 
   return (
     <div className="td-card td-submission-card" style={{ marginBottom: "16px" }}>
@@ -159,8 +162,8 @@ function DelegationChain({ task, delegationChain = [], approvalChain = [], onTas
           <h3 className="td-card-title">Transfer Chain</h3>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
-        {delegationChain.map((entry, idx) => {
-          const isLast = idx === delegationChain.length - 1;
+        {safeDelegationChain.map((entry, idx) => {
+          const isLast = idx === safeDelegationChain.length - 1;
           const canRevoke = entry.status === 'pending';
           const isDelegator = entry.delegated_by === currentUser?.id;
 
@@ -232,12 +235,12 @@ function DelegationChain({ task, delegationChain = [], approvalChain = [], onTas
       </div>
 
       {/* Approval chain */}
-      {approvalChain.length > 0 && (
+      {safeApprovalChain.length > 0 && (
         <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid var(--border)" }}>
           <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "8px" }}>
             Approval Route (reversed chain):
           </div>
-          {approvalChain.map((approver, idx) => (
+          {safeApprovalChain.map((approver, idx) => (
             <div key={idx} style={{ fontSize: "12px", color: "var(--text-heading)", marginBottom: "4px" }}>
               Level {approver.level}: <strong>{approver.approver_name}</strong>
               <span className="badge" style={{

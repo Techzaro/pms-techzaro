@@ -119,6 +119,8 @@
   color: var(--text-secondary);
   line-height: 1.6;
   white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .vd-file-link {

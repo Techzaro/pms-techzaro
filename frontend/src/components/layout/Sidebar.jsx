@@ -13,7 +13,8 @@
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import API_URL from "../../config/api";
-import { authToken, getCurrentRole, getUser, setUser, rolePath, getUrlRole } from "../../utils/auth";
+import { authToken, getCurrentRole, getUser, setUser, rolePath, getUrlRole, getTenantSlug } from "../../utils/auth";
+import { useOrgBranding } from "../../hooks/useOrgBranding";
 
 import {
   MdDashboard,
@@ -30,6 +31,8 @@ import {
   MdEditNote,
   MdDifference,
   MdMenuBook,
+  MdChat,
+  MdStorage,
 } from "react-icons/md";
 
 import "./Sidebar.css";
@@ -38,6 +41,7 @@ import "./Sidebar.css";
  * Sidebar navigation component.
  */
 function Sidebar() {
+  const { data: branding } = useOrgBranding();
 
   // ── Viewport mode state ──
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -85,8 +89,8 @@ function Sidebar() {
   });
 
   const location = useLocation();
-  const { role: urlRole } = useParams();
-  const rolePrefix = `/${urlRole}`;
+  const { slug } = useParams();
+  const rolePrefix = `/org/${slug}`;
 
   // ── Route-matching helpers ──
   /** Exact match for a given page slug. */
@@ -190,7 +194,10 @@ function Sidebar() {
 
     const isSettingsRoute =
       isActive("audit-logs") ||
-      isActive("settings/notifications");
+      isActive("settings/notifications") ||
+      isActive("settings/personalization") ||
+      isActive("branding") ||
+      isActive("subscription");
 
     if (isSettingsRoute) {
       setSettingsOpen(true);
@@ -384,15 +391,6 @@ function Sidebar() {
           </div>
           )}
 
-          {/* Calendar link */}
-          <Link
-            to={rolePath("calender")}
-            className={`sidebar-link ${isActiveOrStart("calender") ? "active" : ""}`}
-          >
-            <MdCalendarToday />
-            Calendar
-          </Link>
-
           {/* Drafts link */}
           <Link
             to={rolePath("drafts")}
@@ -512,7 +510,7 @@ function Sidebar() {
           )}
 
           {/* Settings dropdown – click to toggle like Tasks */}
-          <div className={`sidebar-dropdown-group ${settingsOpen || isActive("audit-logs") || isActive("settings/notifications") ? "open active" : ""}`}>
+          <div className={`sidebar-dropdown-group ${settingsOpen || isActive("audit-logs") || isActive("settings/notifications") || isActive("branding") || isActive("subscription") || isActive("organization-details") ? "open active" : ""}`}>
             <div
               className="sidebar-dropdown-header"
               onClick={() => setSettingsOpen((p) => !p)}
@@ -538,6 +536,15 @@ function Sidebar() {
                     Application Logs
                   </Link>
                 )}
+                {(user.role === "admin" || user.role === "manager") && (
+                  <Link
+                    to={rolePath("feedback")}
+                    className={`sidebar-sub-link ${isActive("feedback") ? "active" : ""}`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    User Feedback
+                  </Link>
+                )}
                 <Link
                   to={rolePath("settings/notifications")}
                   className={`sidebar-sub-link ${isActive("settings/notifications") ? "active" : ""}`}
@@ -545,6 +552,31 @@ function Sidebar() {
                 >
                   Notification Preferences
                 </Link>
+                <Link
+                  to={rolePath("settings/personalization")}
+                  className={`sidebar-sub-link ${isActive("settings/personalization") ? "active" : ""}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Personalization
+                </Link>
+                {(user.role === "admin") && (
+                  <Link
+                    to={rolePath("organization-details")}
+                    className={`sidebar-sub-link ${isActive("organization-details") ? "active" : ""}`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Organization Details
+                  </Link>
+                )}
+                {(user.role === "admin") && (
+                  <Link
+                    to={rolePath("branding")}
+                    className={`sidebar-sub-link ${isActive("branding") ? "active" : ""}`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Branding
+                  </Link>
+                )}
               </div>
             )}
           </div>
