@@ -10,7 +10,7 @@
  */
 
 import { useEffect, useLayoutEffect, useRef } from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
 import ChatWidget from "./ChatWidget";
@@ -18,6 +18,7 @@ import StorageNotificationBanner from "../StorageNotificationBanner";
 import { authToken } from "../../utils/auth";
 import { publish } from "../../utils/eventBus";
 import API_URL from "../../config/api";
+import { useOrgBranding } from "../../hooks/useOrgBranding";
 
 import "./DashboardLayout.css";
 
@@ -25,6 +26,13 @@ const POLL_INTERVAL = 20000; // 20 seconds
 
 function DashboardLayout({ children }) {
   const prevCountRef = useRef(null);
+  const location = useLocation();
+  const { data: branding } = useOrgBranding();
+
+  useEffect(() => {
+    const organizationName = branding?.org_name?.trim();
+    document.title = organizationName ? `${organizationName} | PMS` : "PMS Portal";
+  }, [branding?.org_name, location.pathname]);
 
   // Immediate layout check: if no token exists, immediately redirect to login & replace history
   useLayoutEffect(() => {

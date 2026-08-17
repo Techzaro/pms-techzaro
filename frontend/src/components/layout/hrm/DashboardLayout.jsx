@@ -10,7 +10,7 @@
  */
 
 import { useState, useEffect, useRef } from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import Header from "./layoutComponent/Header";
 import Sidebar from "./layoutComponent/Sidebar";
 import RightSidebar from "../RightSidebar";
@@ -18,6 +18,7 @@ import ChatWidget from "../ChatWidget";
 import { authToken } from "../../../utils/auth";
 import { publish } from "../../../utils/eventBus";
 import API_URL from "../../../config/api";
+import { useOrgBranding } from "../../../hooks/useOrgBranding";
 
 import "./DashboardLayout.css";
 
@@ -30,6 +31,13 @@ function DashboardLayout({ hideRightSidebar = false }) {
   const [rightOpen, setRightOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const prevCountRef = useRef(null);
+  const location = useLocation();
+  const { data: branding } = useOrgBranding();
+
+  useEffect(() => {
+    const organizationName = branding?.org_name?.trim();
+    document.title = organizationName ? `${organizationName} | HRM` : "HRM Portal";
+  }, [branding?.org_name, location.pathname]);
 
   // Sync modal-open state from child modals (e.g., CreateSubtaskTask)
   useEffect(() => {
