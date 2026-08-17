@@ -37,19 +37,24 @@
   height: 30px;
   border-radius: 8px;
   font-size: 14px;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.ap-popover-content .action-icon-btn:hover {
+  background: var(--bg-hover, #e2e8f0) !important;
+  opacity: 0.9;
 }
 
 .ap-popover-item {
   display: inline-flex;
+  border-radius: 6px;
+  transition: background 0.15s ease;
 }
 
+.ap-popover-item:hover,
 .ap-popover-item--highlighted {
-  background: #4a4a4a !important;
-  color: #fff !important;
+  background: var(--bg-hover, #f1f5f9) !important;
   border-radius: 6px;
-}
-.ap-popover-item--highlighted * {
-  color: #fff !important;
 }
 
 /* Standardized Soft-Button Eye (View) Action Button UI */

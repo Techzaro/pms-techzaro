@@ -28,19 +28,21 @@ import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { usePersonalization } from "../context/PersonalizationContext";
 import CalendarEventsWidget from "../components/CalendarEventsWidget";
 import DynamicWidgetSection from "../components/DynamicWidgetSection";
-import { X, Plus, RotateCcw, GripVertical } from "lucide-react";
+import { X, Plus, RotateCcw, GripVertical, Pin, Trash2, ArrowUpRight } from "lucide-react";
+import { usePinnedTasks, togglePinTask } from "../utils/pinnedTasks";
 import { IoPerson, IoPeople } from "react-icons/io5";
 import "./Admin.css";
 
 const ALL_DASHBOARD_WIDGETS = [
   { id: "summary_cards", title: "Summary Metric Cards", icon: "📊", desc: "Key performance indicator cards at the top of the dashboard." },
+  { id: "pinned_tasks", title: "Pinned Tasks & Reminders", icon: "📌", desc: "Tasks pinned directly to your dashboard for quick access." },
   { id: "today_tasks", title: "Today's Tasks & Workload", icon: "📋", desc: "Carousel list of tasks assigned or due today." },
   { id: "active_projects", title: "Active Projects Slider", icon: "🚀", desc: "Active project cards slider with progress status." },
   { id: "activity_feed", title: "Today's Activity Feed", icon: "⚡", desc: "Real-time timeline feed of recent system actions." },
   { id: "calendar_events", title: "Calendar & Upcoming Events", icon: "📅", desc: "Mini monthly calendar & list of upcoming schedule." },
 ];
 
-const DEFAULT_DASHBOARD_LAYOUT = ["summary_cards", "today_tasks", "active_projects", "activity_feed", "calendar_events"];
+const DEFAULT_DASHBOARD_LAYOUT = ["summary_cards", "pinned_tasks", "today_tasks", "active_projects", "activity_feed", "calendar", "events"];
 
 /** Extracts up to 2 initials from a name string (e.g. "John Doe" → "JD") */
 const getInitials = (name) => {
@@ -456,6 +458,7 @@ function Admin() {
 
   // Tick every second to update relative time displays (e.g. "5 min ago")
   const tick = useRelativeTime();
+  const [pinnedTasks] = usePinnedTasks();
 
   // Extract summary data from dashboard response
   const summaryData = dashboard?.summary || {};
@@ -463,10 +466,11 @@ function Admin() {
   // Build summary card configs from API data
   const summaryCards = useMemo(() => [
     { title: "Active Projects", value: String(summaryData.active_projects ?? 0), icon: "/Vector-5.svg", valueColor: "var(--color-blue)", bgColor: "var(--color-blue-bg)", filter: "active-projects" },
+    { title: "In Progress Tasks", value: String(summaryData.in_progress_tasks ?? summaryData.in_progress ?? 0), icon: "/Vector-3.svg", valueColor: "#2563EB", bgColor: "#EFF6FF", filter: "in-progress-tasks" },
     { title: "Tasks Due Today", value: String(summaryData.tasks_due_today ?? 0), icon: "/Vector-1%20(3).svg", valueColor: "var(--color-danger)", bgColor: "var(--color-danger-bg)", filter: "tasks-due-today" },
     { title: "Approved Tasks", value: String(summaryData.approved_tasks ?? 0), icon: "/Vector-2.svg", valueColor: "var(--color-success)", bgColor: "var(--color-success-bg)", filter: "approved-tasks" },
     { title: "Pending Tasks", value: String(summaryData.pending_tasks ?? 0), icon: "/Vector-3.svg", valueColor: "var(--color-warning)", bgColor: "var(--color-warning-bg)", filter: "pending-tasks" },
-  ], [summaryData.active_projects, summaryData.tasks_due_today, summaryData.approved_tasks, summaryData.pending_tasks]);
+  ], [summaryData.active_projects, summaryData.in_progress_tasks, summaryData.in_progress, summaryData.tasks_due_today, summaryData.approved_tasks, summaryData.pending_tasks]);
 
   // Navigate to filtered list when a summary card is clicked
   // For all roles: "my" = incoming (tasks), "user" = outgoing (taskby)
@@ -476,7 +480,8 @@ function Admin() {
     } else {
       const isOutgoing = dashboardMode === "user";
       const basePath = rolePath(isOutgoing ? "taskby" : "tasks");
-      if (card.filter === "tasks-due-today") navigate(`${basePath}?status=due_today`);
+      if (card.filter === "in-progress-tasks") navigate(`${basePath}?status=in_progress`);
+      else if (card.filter === "tasks-due-today") navigate(`${basePath}?status=due_today`);
       else if (card.filter === "approved-tasks") navigate(`${basePath}?status=approved`);
       else if (card.filter === "pending-tasks") navigate(`${basePath}?status=pending`);
     }
@@ -805,6 +810,95 @@ function Admin() {
                     {summaryCards.map((card) => (
                       <SummaryCard key={card.title} card={card} onClick={handleSummaryCardClick} />
                     ))}
+                  </div>
+                </div>
+              );
+            }
+
+            if (secKey === "pinned_tasks") {
+              if (!isWidgetActive("pinned_tasks")) return null;
+              return (
+                <div
+                  key="pinned_tasks"
+                  draggable={false}
+                  onDragOver={(e) => handleSecDragOver(e, index)}
+                  onDrop={(e) => handleSecDrop(e, index)}
+                  style={sectionWrapperStyle}
+                >
+                  <div className="pinned-tasks-section" style={{ background: "var(--bg-card, #ffffff)", borderRadius: "20px", padding: "24px", boxShadow: "var(--shadow-sm, 0 4px 14px rgba(0,0,0,0.03))", position: "relative" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                      <DragGripHeader title={`Pinned Tasks (${pinnedTasks.length})`} />
+                      <button
+                        className="workload-view-btn"
+                        onClick={() => navigate(rolePath("tasks"))}
+                        style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "13px", color: "var(--color-primary, #4f46e5)", background: "transparent", border: "none", cursor: "pointer", fontWeight: 600 }}
+                      >
+                        All Tasks <ArrowUpRight size={14} />
+                      </button>
+                    </div>
+
+                    {pinnedTasks.length === 0 ? (
+                      <div style={{ padding: "24px 16px", textAlign: "center", background: "var(--bg-card-subtle, #f8fafc)", borderRadius: "14px", border: "1px dashed var(--border-color, #e2e8f0)" }}>
+                        <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#eef2ff", color: "#4f46e5", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: "8px" }}>
+                          <Pin size={20} />
+                        </div>
+                        <h4 style={{ margin: "0 0 4px 0", fontSize: "15px", fontWeight: 700, color: "var(--text-heading)" }}>No tasks pinned yet</h4>
+                        <p style={{ margin: 0, fontSize: "13px", color: "var(--text-secondary)" }}>
+                          Pin any task from Task Details or Task Lists to keep it pinned to your dashboard.
+                        </p>
+                      </div>
+                    ) : (
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "14px" }}>
+                        {pinnedTasks.map((t) => (
+                          <div
+                            key={t.id}
+                            style={{
+                              background: "var(--bg-card-subtle, #f8fafc)",
+                              border: "1px solid var(--border-color, #e2e8f0)",
+                              borderRadius: "14px",
+                              padding: "14px 16px",
+                              display: "flex",
+                              flexDirection: "column",
+                              justifyContent: "space-between",
+                              gap: "10px",
+                              transition: "transform 0.15s ease, box-shadow 0.15s ease",
+                            }}
+                          >
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
+                              <div>
+                                <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase" }}>
+                                  #{t.id} {t.project_title ? `• ${t.project_title}` : ""}
+                                </span>
+                                <h4
+                                  onClick={() => navigate(rolePath(`tasks/task-details/${t.id}`))}
+                                  style={{ margin: "4px 0 0 0", fontSize: "14px", fontWeight: 700, color: "var(--text-heading)", cursor: "pointer", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
+                                  title={t.title}
+                                >
+                                  {t.title}
+                                </h4>
+                              </div>
+                              <button
+                                onClick={() => togglePinTask(t)}
+                                title="Unpin from Dashboard"
+                                style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer", padding: "2px", borderRadius: "4px" }}
+                              >
+                                <X size={16} />
+                              </button>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: "12px", paddingTop: "8px", borderTop: "1px solid var(--border-color, #e2e8f0)" }}>
+                              <span style={{ padding: "2px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, textTransform: "capitalize", background: t.status === "approved" ? "#DCFCE7" : t.status === "submitted" ? "#FEF3C7" : "#EFF6FF", color: t.status === "approved" ? "#15803D" : t.status === "submitted" ? "#B45309" : "#1D4ED8" }}>
+                                {t.status?.replace("_", " ")}
+                              </span>
+                              {t.end_date && (
+                                <span style={{ fontSize: "11px", color: "var(--text-secondary)" }}>
+                                  Due: {new Date(t.end_date).toLocaleDateString()}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               );

@@ -1,6 +1,39 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Plus, X, GripVertical, RotateCcw, Search, Maximize2, Minimize2 } from "lucide-react";
-import CalendarEventsWidget from "./CalendarEventsWidget";
+import { Plus, X, GripVertical, RotateCcw, Search, Maximize2, Minimize2, Pin } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import CalendarEventsWidget, { CalendarWidget, EventsWidget } from "./CalendarEventsWidget";
+import { usePinnedTasks, togglePinTask } from "../utils/pinnedTasks";
+import { rolePath } from "../utils/auth";
+
+function PinnedTasksSubWidget() {
+  const [pinnedTasks] = usePinnedTasks();
+  const navigate = useNavigate();
+
+  if (pinnedTasks.length === 0) {
+    return (
+      <div style={{ padding: "16px 8px", textAlign: "center" }}>
+        <p style={{ margin: 0, fontSize: "13px", color: "var(--text-secondary)" }}>
+          No pinned tasks. Click "Pin to Dashboard" on any task to show it here.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "200px", overflowY: "auto" }}>
+      {pinnedTasks.map((t) => (
+        <div key={t.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", borderRadius: "8px", background: "var(--bg-card-subtle, #f8fafc)", border: "1px solid var(--border-color, #e2e8f0)" }}>
+          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-heading)", cursor: "pointer" }} onClick={() => navigate(rolePath(`tasks/task-details/${t.id}`))}>
+            #{t.id} - {t.title}
+          </span>
+          <button onClick={() => togglePinTask(t)} style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer" }} title="Unpin">
+            <X size={14} />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /**
  * DynamicWidgetSection.jsx
@@ -140,9 +173,9 @@ function WidgetCardItem({
             <GripVertical size={18} />
           </span>
 
-          {w.type === "calendar_events" ? (
+          {w.type === "calendar_events" || w.type === "calendar" || w.type === "events" ? (
             <h4 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "var(--text-heading)" }}>
-              📅 {w.title || "Calendar & Events"}
+              {w.type === "calendar" ? "📅 " : w.type === "events" ? "🗓️ " : "📅 "}{w.title || (w.type === "calendar" ? "Calendar Widget" : w.type === "events" ? "Events Widget" : "Calendar & Events")}
             </h4>
           ) : (
             <div style={{ display: "flex", alignItems: "center", gap: "6px", flex: 1 }}>
@@ -186,8 +219,14 @@ function WidgetCardItem({
       </div>
 
       {/* Widget Body */}
-      {w.type === "calendar_events" ? (
+      {w.type === "calendar" ? (
+        <CalendarWidget />
+      ) : w.type === "events" ? (
+        <EventsWidget />
+      ) : w.type === "calendar_events" ? (
         <CalendarEventsWidget />
+      ) : w.type === "pinned_tasks" ? (
+        <PinnedTasksSubWidget />
       ) : (
         <textarea
           value={w.content || ""}
@@ -275,11 +314,25 @@ export default function DynamicWidgetSection({ storageKey = "pms_dashboard_widge
   };
 
   const handleAddWidget = (type, title = "") => {
-    if (type === "calendar_events") {
+    if (type === "calendar") {
+      if (!widgets.some((w) => w.type === "calendar")) {
+        setWidgets((prev) => [
+          ...prev,
+          { id: `cal_${Date.now()}`, type: "calendar", title: "Calendar Widget", width: "100%", height: 320 }
+        ]);
+      }
+    } else if (type === "events") {
+      if (!widgets.some((w) => w.type === "events")) {
+        setWidgets((prev) => [
+          ...prev,
+          { id: `ev_${Date.now()}`, type: "events", title: "Events Widget", width: "100%", height: 320 }
+        ]);
+      }
+    } else if (type === "calendar_events") {
       if (!widgets.some((w) => w.type === "calendar_events")) {
         setWidgets((prev) => [
           ...prev,
-          { id: `cal_${Date.now()}`, type: "calendar_events", title: "Calendar & Events", width: "100%", height: 380 }
+          { id: `calev_${Date.now()}`, type: "calendar_events", title: "Calendar & Events", width: "100%", height: 380 }
         ]);
       }
     } else {
@@ -319,8 +372,11 @@ export default function DynamicWidgetSection({ storageKey = "pms_dashboard_widge
 
   // Predefined widgets
   const predefinedWidgets = [
-    { type: "calendar_events", title: "Calendar & Events", desc: "Mini monthly calendar and schedule list" },
-    { type: "notes", title: "Notes", desc: "Custom card with editable title and notes" }
+    { type: "pinned_tasks", title: "Pinned Tasks & Reminders", desc: "View and access your pinned dashboard tasks" },
+    { type: "calendar", title: "Calendar Widget", desc: "Mini monthly calendar grid & schedule navigator" },
+    { type: "events", title: "Events Widget", desc: "Upcoming events schedule and attendee assignments" },
+    { type: "calendar_events", title: "Calendar & Events (Combined)", desc: "Combined mini calendar and schedule view" },
+    { type: "notes", title: "Notes Widget", desc: "Custom card with editable title and notes" }
   ];
 
   const searchTrimmed = searchTerm.trim().toLowerCase();

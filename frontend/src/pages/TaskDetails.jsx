@@ -35,7 +35,9 @@ import {
   X,
   XCircle,
   StickyNote,
+  Pin,
 } from "lucide-react";
+import { usePinnedTasks, togglePinTask, isTaskPinned } from "../utils/pinnedTasks";
 import { IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
 import DashboardLayout from "../components/layout/DashboardLayout";
@@ -58,6 +60,7 @@ import AddAccessModal from "../components/AddAccessModal";
 import AddNoteModal from "../components/AddNoteModal";
 import TaskDiscussion from "../components/TaskDiscussion";
 import UnifiedActivityFeed from "../components/UnifiedActivityFeed";
+import AbandonModal from "../components/AbandonModal";
 import CreateDeliverableModel from "../components/layout/CreateDeliverableModel";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
@@ -272,8 +275,8 @@ function TaskDetails() {
   const notify = useNotification();
   const taskIds = location.state?.taskIds || [];
   const sourcePages = {
-    tasks: { label: "My Tasks", path: rolePath("tasks") },
-    taskby: { label: "Tasks Assigned By You", path: rolePath("taskby") },
+    tasks: { label: "Assigned To You", path: rolePath("tasks") },
+    taskby: { label: "Assigned By You", path: rolePath("taskby") },
     "self-tasks": { label: "Self Tasks", path: rolePath("self-tasks") },
     "all-tasks": { label: "All Tasks", path: rolePath("all-tasks") },
   };
@@ -410,6 +413,8 @@ function TaskDetails() {
   const transferorHasApproved = task?.transferor_has_approved ?? false;
   const hasPendingDelegation = task?.pending_delegation && task.pending_delegation.delegated_to === currentUser?.id;
   const isDelegatee = task?.is_delegatee ?? false;
+  const isNextApprover = task?.is_next_approver ?? false;
+  const canApprove = readOnly ? false : (task?.can_approve ?? (isAdminOrManager || isCreator || isNextApprover));
 
   const { submitting: acknowledging, run: runAcknowledge } = useSubmit();
   const { submitting: pausing, run: runPause } = useSubmit();
@@ -422,6 +427,10 @@ function TaskDetails() {
   const { submitting: revoking, run: runRevoke } = useSubmit();
   const { submitting: approvingTask, run: runApproveTask } = useSubmit();
   const { submitting: rejectingTask, run: runRejectTask } = useSubmit();
+  const [abandonModalOpen, setAbandonModalOpen] = useState(false);
+  const { submitting: abandoningTask, run: runAbandonTask } = useSubmit();
+  const [pinnedTasks] = usePinnedTasks();
+  const isPinned = isTaskPinned(task?.id);
 
   const { workDisplay, workSeconds, elapsedDisplay, elapsedSeconds, pauseDisplay, pauseSeconds, pauseCount, state: timerState } = useWorkTimer(task?.timer);
 
@@ -782,16 +791,18 @@ function TaskDetails() {
 
   const handleTaskActionSuccess = (updatedTask, options = {}) => {
     setTask((prev) => ({ ...prev, ...updatedTask }));
-    const statusActions = {
-      submitted: "submitted",
-      approved: "approved",
-      rejected: "rejected",
-      reopened: "reopened",
-    };
-    const action = options.isTransfer
-      ? "transferred"
-      : statusActions[updatedTask?.status] || "updated";
-    showSuccessMessage("Task", action);
+    if (!options.skipToast) {
+      const statusActions = {
+        submitted: "submitted",
+        approved: "approved",
+        rejected: "rejected",
+        reopened: "reopened",
+      };
+      const action = options.isTransfer
+        ? "transferred"
+        : statusActions[updatedTask?.status] || "updated";
+      showSuccessMessage("Task", action);
+    }
     publish('task:updated', updatedTask);
     publish('data:changed', { type: 'task', action: 'updated' });
   };
@@ -1010,7 +1021,7 @@ function TaskDetails() {
         const data = await res.json();
         if (res.ok) {
           setTask(data.task);
-          publish('task:updated', { id: taskId, status: 'in_progress' });
+          publish('task:updated', { id: taskId, status: 'approved' });
           publish('data:changed', { type: 'task', action: 'updated' });
           showSuccessMessage("Task", "approved");
         } else {
@@ -1018,6 +1029,32 @@ function TaskDetails() {
         }
       } catch {
         notify.error("Failed to approve task.");
+      }
+    });
+  };
+
+  const handleAbandonTask = async (reason) => {
+    await runAbandonTask(async () => {
+      try {
+        const token = authToken();
+        const res = await fetch(`${API_URL}/tasks/${taskId}/abandon`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ reason }),
+          _notifHandled: true,
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setAbandonModalOpen(false);
+          setTask(data.task || { ...task, status: "abandoned" });
+          publish('task:updated', { id: taskId, status: 'abandoned' });
+          publish('data:changed', { type: 'task', action: 'updated' });
+          showSuccessMessage("Task", "abandoned");
+        } else {
+          notify.error(data.message || "Failed to abandon task.");
+        }
+      } catch {
+        notify.error("Failed to abandon task.");
       }
     });
   };
@@ -1208,6 +1245,50 @@ function TaskDetails() {
                     >
                       <LuSend size={15} />
                       {task.status === "reopened" ? "Resubmit Task" : "Submit Task"}
+                    </button>
+                  )}
+                  {canApprove && (task?.status === "submitted" || task?.status === "reopened") && (
+                    <button
+                      className="td-btn-success"
+                      style={{ background: "#16a34a", color: "#ffffff", border: "none", fontWeight: 600, padding: "8px 16px", borderRadius: "8px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                      disabled={approvingTask}
+                      onClick={handleTaskApprove}
+                    >
+                      <CheckCircle2 size={15} />
+                      {approvingTask ? "Approving..." : "Approve Task"}
+                    </button>
+                  )}
+                  {task?.status !== "abandoned" && task?.status !== "approved" && (
+                    <button
+                      className="td-btn-danger"
+                      style={{ background: "#dc2626", color: "#ffffff", border: "none", fontWeight: 600, padding: "8px 16px", borderRadius: "8px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                      onClick={() => setAbandonModalOpen(true)}
+                    >
+                      <Trash2 size={15} />
+                      Abandon Task
+                    </button>
+                  )}
+                  {task && (
+                    <button
+                      className="td-btn-secondary"
+                      onClick={() => togglePinTask(task)}
+                      title={isPinned ? "Unpin from Dashboard" : "Pin to Dashboard"}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        background: isPinned ? "#EEF2FF" : "var(--bg-card-alt, #f8fafc)",
+                        color: isPinned ? "#4F46E5" : "var(--text-secondary, #475569)",
+                        border: `1px solid ${isPinned ? "#6366F1" : "var(--border-color, #cbd5e1)"}`,
+                        padding: "8px 14px",
+                        borderRadius: "8px",
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      <Pin size={15} style={{ fill: isPinned ? "currentColor" : "none" }} />
+                      {isPinned ? "Pinned to Dashboard" : "Pin to Dashboard"}
                     </button>
                   )}
                   {isTransferor && task?.status === "submitted" && !transferorHasApproved && (
@@ -1766,8 +1847,9 @@ function TaskDetails() {
         isEdit={isEditingTaskSubmission}
         existingSubmission={task?.latest_submission || task?.latestSubmission}
         onSubmitSuccess={(updatedTask) => {
+          setTaskSubmitModalOpen(false);
           setIsEditingTaskSubmission(false);
-          handleTaskActionSuccess(updatedTask);
+          handleTaskActionSuccess(updatedTask, { skipToast: true });
         }}
       />
 
@@ -1842,6 +1924,16 @@ function TaskDetails() {
         onClose={() => setTransferDialog(false)}
         task={task}
         onTransferSuccess={handleTaskActionSuccess}
+      />
+
+      <AbandonModal
+        isOpen={abandonModalOpen}
+        onClose={() => setAbandonModalOpen(false)}
+        title="Abandon Task"
+        subtitle={task?.title}
+        actionLabel="Abandon Task"
+        onSubmit={handleAbandonTask}
+        loading={abandoningTask}
       />
 
       {showCreateSubtaskModal && (

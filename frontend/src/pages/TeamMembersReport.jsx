@@ -109,11 +109,25 @@ function TeamMembersReport() {
               </div>
               <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700, color: "var(--text-heading)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{isLoading ? "Loading..." : team?.name || "Team"}</h1>
               {canExport && (
-                <button className="up-export-btn" style={{ flexShrink: 0 }} onClick={() => setShowExportModal(true)}>
+                <button
+                  className="up-export-btn"
+                  style={{
+                    flexShrink: 0,
+                    background: "var(--color-primary, #4f46e5)",
+                    color: "#ffffff",
+                    fontWeight: 700,
+                    padding: "10px 18px",
+                    borderRadius: "8px",
+                    border: "none",
+                    boxShadow: "0 2px 8px rgba(79, 70, 229, 0.25)",
+                    cursor: "pointer"
+                  }}
+                  onClick={() => setShowExportModal(true)}
+                >
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M8 2v8M4 6l4 4 4-4M2 14h12" />
                   </svg>
-                  Export Report
+                  Export Team Report
                 </button>
               )}
             </div>
@@ -271,13 +285,11 @@ function TeamMembersReport() {
         </div>
       </div>
 
-      {team && (
-        <TeamExportReport
-          isOpen={showExportModal}
-          onClose={() => setShowExportModal(false)}
-          team={team}
-        />
-      )}
+      <TeamExportReport
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        team={team || { id: "all", name: "Team Members" }}
+      />
     </DashboardLayout>
   );
 }

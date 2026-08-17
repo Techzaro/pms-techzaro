@@ -131,7 +131,9 @@ function SubmitTaskModal({ isOpen, onClose, task, existingSubmission = null, isE
 
         const data = await res.json();
         if (res.ok) {
-          onSubmitSuccess(data.task);
+          notify.success(isEdit ? "Submission updated successfully!" : "Task submitted successfully!");
+          setIsDirty(false);
+          if (onSubmitSuccess) onSubmitSuccess(data.task);
           onClose();
         } else {
           notify.error(data.message || "Failed to submit task.");

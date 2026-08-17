@@ -24,6 +24,7 @@ import {
   MdPerson,
   MdPeople,
   MdCalendarToday,
+  MdEvent,
   MdBarChart,
   MdKeyboardArrowDown,
   MdHistory,
@@ -409,6 +410,26 @@ function Sidebar() {
           >
             <MdDifference />
             <span>Templates</span>
+          </Link>
+
+          {/* Calendar link */}
+          <Link
+            to={rolePath("calendar")}
+            className={`sidebar-link ${isActive("calendar") || isActive("calender") ? "active" : ""}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <MdCalendarToday />
+            <span>Calendar</span>
+          </Link>
+
+          {/* Events link */}
+          <Link
+            to={rolePath("events")}
+            className={`sidebar-link ${isActive("events") ? "active" : ""}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <MdEvent />
+            <span>Events</span>
           </Link>
 
           <hr />
