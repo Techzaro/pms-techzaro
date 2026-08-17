@@ -8,8 +8,9 @@ class HrmApplicationField extends Model
     protected $casts = [ 'options' => 'array', 'is_required' => 'boolean' ];
     protected static function booted() {
         static::addGlobalScope('organization', function (Builder $builder) {
-            if (auth()->check() && auth()->user()->organization_id) {
-                $builder->where('organization_id', auth()->user()->organization_id);
+            $organizationId = request()?->attributes->get('currentOrganization')?->id;
+            if ($organizationId) {
+                $builder->where('organization_id', $organizationId);
             }
         });
     }

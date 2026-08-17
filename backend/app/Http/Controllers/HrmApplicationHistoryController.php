@@ -7,6 +7,8 @@ use App\Models\HrmMemberRequest;
 use App\Models\HrmRequestHistory;
 
 use App\Models\User;
+use App\Models\HrmRequestApproval;
+use App\Services\NotificationService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -17,12 +19,19 @@ class HrmApplicationHistoryController extends Controller
         return $request->user();
     }
 
+    private function organizationId(Request $request, User $user): int
+    {
+        return (int) ($request->attributes->get('currentOrganization')?->id
+            ?? $user->organization_id
+            ?? 1);
+    }
+
     public function index(Request $request)
     {
         $user = $this->resolveAuth($request);
         if (!$user) return response()->json(['success' => false, 'message' => 'Unauthenticated.'], 401);
 
-        $orgId = $user->organization_id ?? 1;
+        $orgId = $this->organizationId($request, $user);
 
         $query = HrmMemberRequest::with(['employee:id,name,email,department,role'])
             ->where('organization_id', $orgId);
@@ -167,7 +176,7 @@ class HrmApplicationHistoryController extends Controller
         $user = $this->resolveAuth($request);
         if (!$user) return response()->json(['success' => false, 'message' => 'Unauthenticated.'], 401);
 
-        $orgId = $user->organization_id ?? 1;
+        $orgId = $this->organizationId($request, $user);
 
         $record = HrmMemberRequest::with(['employee', 'fields', 'history.performedBy', 'approvals'])
             ->where('organization_id', $orgId)
@@ -210,7 +219,7 @@ class HrmApplicationHistoryController extends Controller
             'comments' => 'nullable|string'
         ]);
 
-        $orgId = $user->organization_id ?? 1;
+        $orgId = $this->organizationId($request, $user);
         $record = HrmMemberRequest::with(['approvals', 'employee'])->where('organization_id', $orgId)->where('id', $id)->first();
         if (!$record) return response()->json(['success' => false, 'message' => 'Not found.'], 404);
 
@@ -293,7 +302,7 @@ class HrmApplicationHistoryController extends Controller
         $record->save();
 
         HrmRequestHistory::create([
-            'organization_id' => $user->organization_id ?? 1,
+            'organization_id' => $this->organizationId($request, $user),
             'request_id' => $record->id,
             'performed_by' => $user->id,
             'action' => 'Status Updated',
@@ -302,18 +311,47 @@ class HrmApplicationHistoryController extends Controller
             'comments' => $request->comments,
         ]);
 
+        // All PMS and HRM headers read the shared notifications table. Using
+        // NotificationService here also gives both layouts the same deep link.
         try {
-            DB::table('hrm_notifications')->insert([
-                'user_id' => $record->employee_id,
-                'type' => 'Application Update',
-                'title' => "Application {$newStatus}",
-                'message' => "Your application '{$record->title}' has been {$newStatus} by HR.",
-                'is_read' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
+            app(NotificationService::class)->notifyMultiple(
+                [(int) $record->employee_id],
+                (int) $user->id,
+                'hrm_application_response',
+                'hrm_member_request',
+                (int) $record->id,
+                "Application {$newStatus}",
+                "Your application '{$record->title}' has been {$newStatus} by {$user->name}.",
+                '/hrm/applications?id=' . $record->id,
+                ['old_status' => $oldStatus, 'new_status' => $newStatus]
+            );
+
+            // An approval can advance a multi-step workflow. Notify the next
+            // pending approver immediately instead of waiting for a refresh.
+            if ($newStatus === 'Approved' && $record->status === 'Under Review') {
+                $nextStep = HrmRequestApproval::where('request_id', $record->id)
+                    ->where('status', 'Pending')
+                    ->orderBy('step_order')
+                    ->first();
+                $nextApproverIds = $this->resolveApprovalRecipientIds($nextStep, $record);
+                if (!empty($nextApproverIds)) {
+                    app(NotificationService::class)->notifyMultiple(
+                        $nextApproverIds,
+                        (int) $user->id,
+                        'hrm_application_approval',
+                        'hrm_member_request',
+                        (int) $record->id,
+                        'Application Requires Your Approval',
+                        "Application '{$record->title}' is ready for your approval.",
+                        '/hrm/applications?id=' . $record->id
+                    );
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Application status saved but live notification failed', [
+                'request_id' => $record->id,
+                'error' => $e->getMessage(),
             ]);
-        } catch (\Exception $e) {
-            // Notifications table might be missing or have different columns
         }
 
         return response()->json([
@@ -332,7 +370,7 @@ class HrmApplicationHistoryController extends Controller
             'comments' => 'nullable|string',
         ]);
 
-        $orgId = $user->organization_id ?? 1;
+        $orgId = $this->organizationId($request, $user);
         $record = HrmMemberRequest::with(['approvals', 'employee', 'fields'])->where('organization_id', $orgId)->where('id', $id)->first();
         if (!$record) return response()->json(['success' => false, 'message' => 'Not found.'], 404);
 
@@ -421,7 +459,7 @@ class HrmApplicationHistoryController extends Controller
         $record->save();
 
         HrmRequestHistory::create([
-            'organization_id' => $user->organization_id ?? 1,
+            'organization_id' => $this->organizationId($request, $user),
             'request_id' => $record->id,
             'performed_by' => $user->id,
             'action' => 'Application Updated & Resubmitted',
@@ -432,28 +470,70 @@ class HrmApplicationHistoryController extends Controller
 
         try {
             $pendingStep = $record->approvals->where('status', 'Pending')->sortBy('step_order')->first();
-            $targetUserId = null;
-            if ($pendingStep && $pendingStep->approver_type === 'User') {
-                $targetUserId = $pendingStep->approver_id;
+            $recipientIds = $this->resolveApprovalRecipientIds($pendingStep, $record);
+            if (!empty($recipientIds)) {
+                app(NotificationService::class)->notifyMultiple(
+                    $recipientIds,
+                    (int) $user->id,
+                    'hrm_application_approval',
+                    'hrm_member_request',
+                    (int) $record->id,
+                    "Application Updated for Request #{$record->request_number}",
+                    "{$user->name} has updated and resubmitted their application '{$record->title}'.",
+                    '/hrm/applications?id=' . $record->id,
+                    ['old_status' => $oldStatus, 'new_status' => $newStatus]
+                );
             }
-            if ($targetUserId) {
-                DB::table('hrm_notifications')->insert([
-                    'user_id' => $targetUserId,
-                    'type' => 'Application Resubmitted',
-                    'title' => "Application Updated for Request #{$record->request_number}",
-                    'message' => "{$user->name} has updated and resubmitted their application '{$record->title}'.",
-                    'is_read' => 0,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-            }
-        } catch (\Exception $e) {}
+        } catch (\Throwable $e) {
+            Log::warning('Application resubmitted but approver notification failed', [
+                'request_id' => $record->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         return response()->json([
             'success' => true,
             'message' => 'Application updated and resubmitted successfully.',
             'data' => $record
         ]);
+    }
+
+    /** Resolve a workflow step to the concrete tenant user IDs to notify. */
+    private function resolveApprovalRecipientIds(?HrmRequestApproval $step, HrmMemberRequest $record): array
+    {
+        if (!$step) return [];
+
+        if ($step->approver_type === 'User') {
+            return User::whereKey((int) $step->approver_id)
+                ->where('active', true)
+                ->pluck('id')->map(fn ($id) => (int) $id)->all();
+        }
+
+        $roleMap = [
+            'Manager' => 'manager',
+            'Team Lead' => 'team_lead',
+            'HR Manager' => 'hr_manager',
+            'Organization Owner' => 'owner',
+            'Admin' => 'admin',
+        ];
+        $configured = (string) $step->approver_id;
+        $mappedRole = $roleMap[$configured] ?? $configured;
+
+        $query = User::where('active', true)->where(function ($q) use ($configured, $mappedRole) {
+            $q->where('role', $mappedRole)
+                ->orWhere('role', $configured)
+                ->orWhere('designation', $configured);
+        });
+
+        $department = $record->employee?->department;
+        if ($department && !in_array($configured, ['Admin', 'Organization Owner', 'HR Manager'], true)) {
+            $departmentIds = (clone $query)->where('department', $department)->pluck('id');
+            if ($departmentIds->isNotEmpty()) {
+                return $departmentIds->map(fn ($id) => (int) $id)->all();
+            }
+        }
+
+        return $query->pluck('id')->map(fn ($id) => (int) $id)->all();
     }
 
 }

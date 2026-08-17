@@ -198,13 +198,11 @@ export function showDesktopNotification(notification) {
   const senderName = notification.sender?.name || '';
 
   const baseUrl = window.location.origin;
-  let url = `${window.location.pathname}`;
+  let url = `${window.location.href}`;
 
-  if (notification.link) {
-    const cleanLink = notification.link.replace(/^\//, '');
-    const pathParts = window.location.pathname.split('/').filter(Boolean);
-    const role = pathParts[0] || 'admin';
-    url = `${baseUrl}/${role}/${cleanLink}`;
+  if (notification.link || notification.related_id) {
+    const destination = getNotificationDestination(notification);
+    url = new URL(destination, baseUrl).toString();
   }
 
   console.log('[PMS Notifications] Showing desktop notification:', { title, body, url });
@@ -222,3 +220,4 @@ export function showDesktopNotification(notification) {
 
   return n;
 }
+import { getNotificationDestination } from "./navigation";

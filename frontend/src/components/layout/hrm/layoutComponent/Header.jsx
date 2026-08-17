@@ -660,7 +660,7 @@ function Header() {
                 </div>
 
                 <Link
-                  to="/admin/dashboard"
+                  to={rolePath("dashboard")}
                   onClick={(e) => { e.stopPropagation(); setShowAppSwitcher(false); }}
                   style={{
                     display: "flex",

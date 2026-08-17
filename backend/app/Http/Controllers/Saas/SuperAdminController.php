@@ -456,6 +456,11 @@ class SuperAdminController extends Controller
             'custom_max_storage_gb'=> 'nullable|integer|min:1',
         ]);
 
+        // Store one canonical value everywhere. A copied email can contain
+        // whitespace or uppercase characters, which made the first login for
+        // later tenants depend on an unreliable cross-database scan.
+        $validated['admin_email'] = Str::lower(trim($validated['admin_email']));
+
         // Use custom slug or auto-generate from name
         $slug = !empty($validated['slug']) ? Str::slug($validated['slug']) : Str::slug($validated['name']);
         $originalSlug = $slug;
@@ -505,6 +510,7 @@ class SuperAdminController extends Controller
                 'status'          => 'trial',
                 'timezone'        => 'Asia/Karachi',
                 'email_policy'    => $validated['email_policy'] ?? 'standard',
+                'admin_email'     => $validated['admin_email'],
                 'trial_ends_at'   => now()->addMinutes($trialMinutes),
             ]);
 
@@ -1138,6 +1144,10 @@ class SuperAdminController extends Controller
         $pdo->exec("SET FOREIGN_KEY_CHECKS = 1");
         $pdo->exec("SET UNIQUE_CHECKS = 1");
         $pdo = null;
+
+        // The schema snapshot contains the PMS core but predates the HRM
+        // module. Apply tenant-scoped HRM migrations before creating the admin.
+        $this->dbService->runHrmMigrations($dbName);
     }
 
     /**

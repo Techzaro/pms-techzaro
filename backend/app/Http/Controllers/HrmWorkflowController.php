@@ -14,6 +14,13 @@ class HrmWorkflowController extends Controller
         return $request->user();
     }
 
+    private function organizationId(Request $request, User $user): int
+    {
+        return (int) ($request->attributes->get('currentOrganization')?->id
+            ?? $user->organization_id
+            ?? 1);
+    }
+
     public function index(Request $request)
     {
         $user = $this->resolveAuth($request);
@@ -22,7 +29,7 @@ class HrmWorkflowController extends Controller
         $department = $request->query('department');
         
         $query = HrmWorkflow::with(['steps'])
-            ->where('organization_id', $user->organization_id ?? 1);
+            ->where('organization_id', $this->organizationId($request, $user));
 
         if ($department) {
             $query->where('department', $department);
@@ -45,7 +52,7 @@ class HrmWorkflowController extends Controller
         $user = $this->resolveAuth($request);
         if (!$user) return response()->json(['success' => false, 'message' => 'Unauthenticated.'], 401);
 
-        $orgId = $user->organization_id ?? 1;
+        $orgId = $this->organizationId($request, $user);
 
         // Get all workflow steps for this organization
         $workflows = HrmWorkflow::with(['steps'])
@@ -62,12 +69,24 @@ class HrmWorkflowController extends Controller
                     break 2;
                 }
                 // Match by Role (e.g. "admin", "manager")
-                if ($step->approver_type === 'Role' && strtolower($step->approver_id) === strtolower($user->role ?? '')) {
+                $roleLabels = [
+                    'admin' => 'admin',
+                    'owner' => 'organization owner',
+                    'manager' => 'manager',
+                    'team_lead' => 'team lead',
+                    'hr_manager' => 'hr manager',
+                ];
+                $userRoleLabel = $roleLabels[$user->role] ?? strtolower($user->role ?? '');
+
+                if ($step->approver_type === 'Role' && strtolower($step->approver_id) === $userRoleLabel) {
                     $isApprover = true;
                     break 2;
                 }
                 // Match by Designation (e.g. "Software Engineer", "HR Manager")
-                if ($step->approver_type === 'Designation' && strtolower($step->approver_id) === strtolower($user->designation ?? '')) {
+                if ($step->approver_type === 'Designation' && in_array(strtolower($step->approver_id), [
+                    strtolower($user->designation ?? ''),
+                    $userRoleLabel,
+                ], true)) {
                     $isApprover = true;
                     break 2;
                 }
@@ -90,18 +109,14 @@ class HrmWorkflowController extends Controller
             return response()->json(['success' => false, 'message' => 'Department is required.'], 400);
         }
 
-        $deptUsers = User::where('department', $department)
-            ->select('id', 'name', 'role', 'designation')
+        // Tenant isolation already limits this query to the organization.
+        // Return every active user so cross-department explicit approvers and
+        // users without a department remain selectable in the "User" filter.
+        $users = User::where('active', true)
+            ->select('id', 'name', 'email', 'role', 'designation', 'department')
+            ->orderByRaw('CASE WHEN department = ? THEN 0 ELSE 1 END', [$department])
+            ->orderBy('name')
             ->get();
-        $adminManagers = User::where(function($q) {
-                $q->where('role', 'admin')
-                  ->orWhere('role', 'owner')
-                  ->orWhere('designation', 'like', '%Manager%');
-            })
-            ->select('id', 'name', 'role', 'designation')
-            ->get();
-
-        $users = $deptUsers->merge($adminManagers)->unique('id')->values();
 
         return response()->json([
             'success' => true,
@@ -188,7 +203,8 @@ class HrmWorkflowController extends Controller
             // department's workflows with this new one, OR we can just delete exact matching arrays.
             // But wait, the frontend sends the full config. No, actually the frontend only supports editing
             // ONE workflow per submitter_role selection. To avoid duplicates, let's just delete the exact matching one.
-            $existingWorkflows = HrmWorkflow::where('organization_id', $user->organization_id ?? 1)
+            $organizationId = $this->organizationId($request, $user);
+            $existingWorkflows = HrmWorkflow::where('organization_id', $organizationId)
                 ->where('department', $department)
                 ->get();
                 
@@ -202,7 +218,7 @@ class HrmWorkflowController extends Controller
             
             // Create the new workflow
             $workflow = HrmWorkflow::create([
-                'organization_id' => $user->organization_id ?? 1,
+                'organization_id' => $organizationId,
                 'department' => $department,
                 'submitter_role' => $submitterRole,
                 'application_types' => $request->application_types,
@@ -238,7 +254,7 @@ class HrmWorkflowController extends Controller
         $user = $this->resolveAuth($request);
         if (!$user) return response()->json(['success' => false, 'message' => 'Unauthenticated.'], 401);
 
-        $workflow = HrmWorkflow::where('organization_id', $user->organization_id ?? 1)->findOrFail($id);
+        $workflow = HrmWorkflow::where('organization_id', $this->organizationId($request, $user))->findOrFail($id);
         $workflow->delete();
 
         return response()->json([

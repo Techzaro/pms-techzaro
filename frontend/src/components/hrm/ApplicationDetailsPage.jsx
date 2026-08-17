@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import API_URL from "../../config/api";
 import { authToken, getUser, rolePath } from "../../utils/auth";
+import { subscribe } from "../../utils/eventBus";
 import Breadcrumb from "../Breadcrumb";
 import { ArrowLeft, User, RotateCcw, RefreshCw, FileText, HelpCircle, MessageSquare, Send, Edit3, X, Download, ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
 import HRMAdminActions from "./HRMAdminActions";
@@ -33,9 +34,17 @@ function ApplicationDetailsPage({ requestId, onBack, onRefresh, isAdmin = false,
     // Start polling for real-time updates
     pollingRef.current = setInterval(() => {
       fetchDetail(true); // true means silent fetch
-    }, 5000);
+    }, 3000);
 
-    return () => clearInterval(pollingRef.current);
+    const unsubscribe = subscribe('data:changed', () => fetchDetail(true));
+    const refreshOnFocus = () => fetchDetail(true);
+    window.addEventListener('focus', refreshOnFocus);
+
+    return () => {
+      clearInterval(pollingRef.current);
+      unsubscribe();
+      window.removeEventListener('focus', refreshOnFocus);
+    };
     // fetchDetail intentionally follows requestId; including its render-local
     // identity would restart the polling interval on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -819,4 +828,3 @@ function ApplicationDetailsPage({ requestId, onBack, onRefresh, isAdmin = false,
   );
 }
 export default ApplicationDetailsPage;
-

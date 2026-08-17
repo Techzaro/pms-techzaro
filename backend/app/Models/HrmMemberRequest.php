@@ -8,8 +8,9 @@ class HrmMemberRequest extends Model
     protected $casts = [ 'submitted_at' => 'datetime', 'approved_at' => 'datetime', 'rejected_at' => 'datetime', 'closed_at' => 'datetime' ];
     protected static function booted() {
         static::addGlobalScope('organization', function (Builder $builder) {
-            if (auth()->check() && auth()->user()->organization_id) {
-                $builder->where('organization_id', auth()->user()->organization_id);
+            $organizationId = request()?->attributes->get('currentOrganization')?->id;
+            if ($organizationId) {
+                $builder->where('organization_id', $organizationId);
             }
         });
     }

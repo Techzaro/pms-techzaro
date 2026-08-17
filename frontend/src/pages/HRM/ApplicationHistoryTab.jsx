@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import API_URL from "../../config/api";
 import { authToken, getCurrentRole } from "../../utils/auth";
+import { subscribe } from "../../utils/eventBus";
 import ApplicationDetailsPage from "../../components/hrm/ApplicationDetailsPage";
 import ApplicationTypesManager from "../../components/hrm/ApplicationTypesManager";
 import {
@@ -66,9 +67,16 @@ function ApplicationHistoryTab({ approverMode = false, excludeOwn = false }) {
   useEffect(() => {
     fetchApplications();
     const interval = setInterval(() => {
-      fetchApplications(true); // Silent poll every 30s
-    }, 30000);
-    return () => clearInterval(interval);
+      fetchApplications(true);
+    }, 5000);
+    const unsubscribe = subscribe('data:changed', () => fetchApplications(true));
+    const refreshOnFocus = () => fetchApplications(true);
+    window.addEventListener('focus', refreshOnFocus);
+    return () => {
+      clearInterval(interval);
+      unsubscribe();
+      window.removeEventListener('focus', refreshOnFocus);
+    };
     // The explicit query inputs define when polling must be restarted.
     // The explicit query inputs define when polling must be restarted.
     // eslint-disable-next-line react-hooks/exhaustive-deps

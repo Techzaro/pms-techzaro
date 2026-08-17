@@ -4,7 +4,7 @@
  * Listens for custom "modal-state" events so the right-sidebar toggle is
  * hidden while any modal is open.
  *
- * Runs a SINGLE global lightweight poll (unread-count) every 20s.
+ * Runs a SINGLE global lightweight poll (unread-count) every 5s.
  * When count changes → publishes data:changed event → all pages refresh.
  * This replaces 20+ independent page polls with ONE app-level poll.
  */
@@ -22,7 +22,7 @@ import { useOrgBranding } from "../../hooks/useOrgBranding";
 
 import "./DashboardLayout.css";
 
-const POLL_INTERVAL = 20000; // 20 seconds
+const POLL_INTERVAL = 5000;
 
 function DashboardLayout({ children }) {
   const prevCountRef = useRef(null);
@@ -71,7 +71,15 @@ function DashboardLayout({ children }) {
     poll();
 
     const id = setInterval(poll, POLL_INTERVAL);
-    return () => { stopped = true; clearInterval(id); };
+    const refreshOnFocus = () => poll();
+    window.addEventListener('focus', refreshOnFocus);
+    document.addEventListener('visibilitychange', refreshOnFocus);
+    return () => {
+      stopped = true;
+      clearInterval(id);
+      window.removeEventListener('focus', refreshOnFocus);
+      document.removeEventListener('visibilitychange', refreshOnFocus);
+    };
   }, []);
 
   return (

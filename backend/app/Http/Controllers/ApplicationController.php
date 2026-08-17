@@ -378,9 +378,15 @@ class ApplicationController extends Controller
             'dynamic_fields' => 'nullable|array',
         ]);
 
-        $organization = \App\Models\Organization::find($user->organization_id ?? 1);
+        $organization = $request->attributes->get('currentOrganization');
+        $organizationId = $organization?->id ?? $user->organization_id ?? 1;
+
+        if (!$organization) {
+            $organization = \App\Models\Master\Organization::on('mysql_master')->find($organizationId);
+        }
+
         if ($organization) {
-            $currentMonthCount = \App\Models\HrmMemberRequest::where('organization_id', $user->organization_id ?? 1)
+            $currentMonthCount = \App\Models\HrmMemberRequest::where('organization_id', $organizationId)
                 ->whereYear('created_at', date('Y'))
                 ->whereMonth('created_at', date('m'))
                 ->count();
@@ -402,7 +408,7 @@ class ApplicationController extends Controller
             $requestNumber = $prefix . '-' . date('Ymd') . '-' . rand(1000, 9999);
 
             $memberRequest = \App\Models\HrmMemberRequest::create([
-                'organization_id' => $user->organization_id ?? 1,
+                'organization_id' => $organizationId,
                 'employee_id' => $user->id,
                 'application_type' => $request->application_type,
                 'request_number' => $requestNumber,
@@ -424,7 +430,7 @@ class ApplicationController extends Controller
                     }
                     
                     \App\Models\HrmMemberRequestField::create([
-                        'organization_id' => $user->organization_id ?? 1,
+                        'organization_id' => $organizationId,
                         'request_id' => $memberRequest->id,
                         'field_name' => $fieldName,
                         'field_value' => $valueToSave,
@@ -433,7 +439,7 @@ class ApplicationController extends Controller
             }
 
             \App\Models\HrmRequestHistory::create([
-                'organization_id' => $user->organization_id ?? 1,
+                'organization_id' => $organizationId,
                 'request_id' => $memberRequest->id,
                 'performed_by' => $user->id,
                 'action' => 'Submitted',
@@ -443,7 +449,7 @@ class ApplicationController extends Controller
 
             // Instantiate Approval Workflow Chain.
             // Stage 1: Workflow explicitly targeted at this specific user ID
-            $workflowQuery = \App\Models\HrmWorkflow::where('organization_id', $user->organization_id ?? 1)
+            $workflowQuery = \App\Models\HrmWorkflow::where('organization_id', $organizationId)
                 ->whereJsonContains('application_types', $request->application_type)
                 ->with('steps');
 
@@ -555,21 +561,30 @@ class ApplicationController extends Controller
                 $userIdsToNotify = \App\Models\User::where('role', 'admin')->pluck('id')->toArray();
             }
 
-            if (!empty($userIdsToNotify)) {
-                $ns = app(\App\Services\NotificationService::class);
-                $ns->notifyMultiple(
-                    array_unique($userIdsToNotify),
-                    $user->id,
-                    'hrm_application_approval',
-                    'hrm_member_request',
-                    $memberRequest->id,
-                    '📝 Application Requires Approval',
-                    $user->name . ' has submitted a ' . $memberRequest->application_type . ' application that requires your approval.',
-                    null
-                );
-            }
-
             DB::commit();
+
+            // Notification delivery is best-effort and must never roll back an
+            // application that was saved successfully.
+            if (!empty($userIdsToNotify)) {
+                try {
+                    $ns = app(\App\Services\NotificationService::class);
+                    $ns->notifyMultiple(
+                        array_unique($userIdsToNotify),
+                        $user->id,
+                        'hrm_application_approval',
+                        'hrm_member_request',
+                        $memberRequest->id,
+                        'Application Requires Approval',
+                        $user->name . ' has submitted a ' . $memberRequest->application_type . ' application that requires your approval.',
+                        '/hrm/applications?id=' . $memberRequest->id
+                    );
+                } catch (\Throwable $notificationError) {
+                    Log::warning('HRM application saved but approver notification failed', [
+                        'request_id' => $memberRequest->id,
+                        'error' => $notificationError->getMessage(),
+                    ]);
+                }
+            }
 
             return response()->json([
                 'success' => true,
@@ -577,7 +592,9 @@ class ApplicationController extends Controller
                 'data' => ['request_id' => $memberRequest->id]
             ]);
         } catch (\Exception $e) {
-            DB::rollBack();
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
             Log::error('Submit Member Request Error: ' . $e->getMessage());
             return response()->json(['success' => false, 'message' => 'Failed to submit application'], 500);
         }
