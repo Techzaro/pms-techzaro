@@ -156,7 +156,6 @@ function ManageUsers() {
   const [guestConfirmModal, setGuestConfirmModal] = useState({ open: false, type: "", guest: null });
   const [newGuest, setNewGuest] = useState({ name: "", personal_email: "", phone_number: "", company_name: "", avatar: null, _existingAvatar: null });
   const [guestErrors, setGuestErrors] = useState({});
-
   const [localUsers, setLocalUsers] = useState([]);
   const [activeDragId, setActiveDragId] = useState(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
