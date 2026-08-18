@@ -1,0 +1,1 @@
+import{Ft as e}from"./index-BG5L4vbB.js";import t from"./Admin-MpYXem8Q.js";var n=e();function r(){return(0,n.jsx)(t,{})}export{r as default};

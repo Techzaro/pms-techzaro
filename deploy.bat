@@ -3,22 +3,43 @@ echo ========================================
 echo   PMS Deployment Script
 echo ========================================
 echo.
+echo Select environment:
+echo   1. Production
+echo   2. Staging
+echo.
+set /p ENV_CHOICE="Enter choice (1 or 2): "
 
-set DEPLOY_DIR=deployment
+if "%ENV_CHOICE%"=="1" (
+    set ENV_NAME=production
+    set ENV_FILE=.env.production
+    set DOMAIN=app.one.techxaro.com
+) else if "%ENV_CHOICE%"=="2" (
+    set ENV_NAME=staging
+    set ENV_FILE=.env.staging
+    set DOMAIN=app.one.staging.techxaro.com
+) else (
+    echo Invalid choice!
+    pause
+    exit /b 1
+)
+
+echo.
+echo Deploying to: %ENV_NAME% (%DOMAIN%)
+echo.
+
+set DEPLOY_DIR=deployment-%ENV_NAME%
 set FRONTEND_DIR=frontend\dist
 set BACKEND_DIR=backend
 
-echo [1/5] Cleaning deployment folder...
-if exist "%DEPLOY_DIR%\api" rmdir /s /q "%DEPLOY_DIR%\api"
-if exist "%DEPLOY_DIR%\assets" rmdir /s /q "%DEPLOY_DIR%\assets"
-if exist "%DEPLOY_DIR%\index.html" del "%DEPLOY_DIR%\index.html"
-if exist "%DEPLOY_DIR%\favicon.ico" del "%DEPLOY_DIR%\favicon.ico"
+echo [1/4] Cleaning deployment folder...
+if exist "%DEPLOY_DIR%" rmdir /s /q "%DEPLOY_DIR%"
+mkdir "%DEPLOY_DIR%"
 
-echo [2/5] Copying React build files...
-if not exist "%DEPLOY_DIR%" mkdir "%DEPLOY_DIR%"
+echo [2/4] Copying React build files...
 xcopy "%FRONTEND_DIR%\*" "%DEPLOY_DIR%\" /E /Y /Q
+copy "frontend\.htaccess" "%DEPLOY_DIR%\.htaccess" /Y
 
-echo [3/5] Copying Laravel project...
+echo [3/4] Copying Laravel project...
 mkdir "%DEPLOY_DIR%\api"
 xcopy "%BACKEND_DIR%\app" "%DEPLOY_DIR%\api\app\" /E /Y /Q
 xcopy "%BACKEND_DIR%\bootstrap" "%DEPLOY_DIR%\api\bootstrap\" /E /Y /Q
@@ -33,30 +54,18 @@ copy "%BACKEND_DIR%\artisan" "%DEPLOY_DIR%\api\" /Y
 copy "%BACKEND_DIR%\composer.json" "%DEPLOY_DIR%\api\" /Y
 copy "%BACKEND_DIR%\composer.lock" "%DEPLOY_DIR%\api\" /Y
 
-echo [4/5] Copying .env file...
-copy "%BACKEND_DIR%\.env.production" "%DEPLOY_DIR%\api\.env" /Y
-
-echo [5/6] Copying .htaccess to root...
-copy "frontend\.htaccess" "%DEPLOY_DIR%\.htaccess" /Y
-
-echo [6/6] Done...
+echo [4/4] Copying .env file (%ENV_FILE%)...
+copy "%BACKEND_DIR%\%ENV_FILE%" "%DEPLOY_DIR%\api\.env" /Y
 
 echo.
 echo ========================================
-echo   Deployment folder ready!
+echo   %ENV_NAME% deployment ready!
 echo ========================================
 echo.
-echo Upload the contents of "%DEPLOY_DIR%\" to your hosting:
-echo   - admin.one.techxaro.com
-echo   - app.one.techxaro.com
+echo Upload contents of "%DEPLOY_DIR%\" to server root.
 echo.
-echo Upload to: /home/techxaro/app.one.techxaro.com/
-echo.
-echo Steps after upload:
-echo   1. Extract the zip file in File Manager
-echo   2. Create MySQL database (techxaro_admin_one)
-echo   3. Run: php artisan migrate
-echo   4. Install SSL certificates
-echo   5. Enable Force HTTPS
+echo After upload, run on server:
+echo   php artisan config:clear
+echo   php artisan migrate
 echo.
 pause
