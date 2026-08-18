@@ -553,6 +553,7 @@ function Header() {
 
   /** Opens the app-switcher dropdown immediately, cancelling any pending close. */
   const openAppSwitcher = () => {
+    if (isTouchDevice.current || window.innerWidth <= 900) return;
     if (appSwitcherCloseTimer.current) {
       clearTimeout(appSwitcherCloseTimer.current);
       appSwitcherCloseTimer.current = null;
@@ -562,6 +563,7 @@ function Header() {
 
   /** Closes the app-switcher dropdown after a short delay (desktop hover). */
   const closeAppSwitcherSoon = () => {
+    if (isTouchDevice.current || window.innerWidth <= 900) return;
     appSwitcherCloseTimer.current = setTimeout(() => setShowAppSwitcher(false), 200);
   };
 
@@ -611,7 +613,7 @@ function Header() {
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleAppSwitcher(e); } }}
             style={{ position: "relative", display: "flex", alignItems: "center", cursor: "pointer", userSelect: "none", WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
           >
-            <div className="logo-box">
+            <div  className="logo-box ">
               {branding?.logo_url ? (
                 <img src={branding.logo_url} alt="Logo" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "14px" }} />
               ) : (

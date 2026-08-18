@@ -40,6 +40,7 @@ import { initFirebase } from "../../../../utils/firebase";
 import { formatDateTimeInline } from "../../../../utils/formatDateTime";
 import { getNotificationDestination } from "../../../../utils/navigation";
 import { useTheme } from "../../../../context/ThemeContext.jsx";
+import { useOrgBranding } from "../../../../hooks/useOrgBranding";
 import "./Header.css";
 
 // import CreateEmployeeModal from "../../../CreateEmployeeModal";
@@ -59,6 +60,7 @@ function Header() {
   const profileMenuRef = useRef(null);
   const logoSwitcherRef = useRef(null);
   const { theme, toggleTheme } = useTheme();
+  const { data: branding } = useOrgBranding();
 
   // ── State ──
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -555,6 +557,7 @@ function Header() {
 
   /** Opens the app-switcher dropdown immediately, cancelling any pending close. */
   const openAppSwitcher = () => {
+    if (isTouchDevice.current || window.innerWidth <= 900) return;
     if (appSwitcherCloseTimer.current) {
       clearTimeout(appSwitcherCloseTimer.current);
       appSwitcherCloseTimer.current = null;
@@ -564,6 +567,7 @@ function Header() {
 
   /** Closes the app-switcher dropdown after a short delay (desktop hover). */
   const closeAppSwitcherSoon = () => {
+    if (isTouchDevice.current || window.innerWidth <= 900) return;
     appSwitcherCloseTimer.current = setTimeout(() => setShowAppSwitcher(false), 200);
   };
 
@@ -601,7 +605,7 @@ function Header() {
           </button>
 
           {/* Logo + text – hovering (desktop) or tapping (mobile/tablet) opens
-              a portal switcher that lets the user jump back to the PMS app at /. */}
+              a portal switcher that lets the user jump back to the PMS app. */}
           <div
             className="header-logo-switcher"
             ref={logoSwitcherRef}
@@ -611,24 +615,27 @@ function Header() {
             onMouseLeave={closeAppSwitcherSoon}
             onClick={toggleAppSwitcher}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleAppSwitcher(e); } }}
-            style={{ position: "relative", display: "flex", alignItems: "center", cursor: "pointer", userSelect: "none", WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
           >
             <div className="logo-box">
-              <b>TX</b>
+              {branding?.logo_url ? (
+                <img src={branding.logo_url} alt="Logo" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "12px" }} />
+              ) : (
+                <b>{(branding?.subtitle || "TX").substring(0, 2).toUpperCase()}</b>
+              )}
             </div>
 
             <div className={"logo-text" + (showFullLogo || isSmallScreen ? "" : " logo-text--hidden")}>
-              <h3>Techxaro</h3>
-              <span>HRM Portal</span>
+              <h3>{branding?.subtitle || "Techxaro"}</h3>
+              <span>{branding?.org_name ? `${branding.org_name} • HRM` : "HRM Portal"}</span>
             </div>
 
             <ChevronDown
-              fontSize="16px"
+              size={16}
               style={{
                 marginLeft: 2,
                 color: "var(--color-text-secondary, #6b7280)",
                 transform: showAppSwitcher ? "rotate(180deg)" : "rotate(0deg)",
-                transition: "transform 0.15s ease",
+                transition: "transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
                 flexShrink: 0,
                 display: "inline-block"
               }}
@@ -640,72 +647,33 @@ function Header() {
                 onMouseEnter={openAppSwitcher}
                 onMouseLeave={closeAppSwitcherSoon}
                 onClick={(e) => e.stopPropagation()}
-                style={{
-                  position: "absolute",
-                  top: "calc(100% + 8px)",
-                  left: 0,
-                  minWidth: 230,
-                  maxWidth: "calc(100vw - 20px)",
-                  background: "var(--bg-card, #fff)",
-                  border: "1px solid var(--border-color, #e5e7eb)",
-                  borderRadius: 12,
-                  boxShadow: "0 12px 36px rgba(15, 23, 42, 0.18)",
-                  padding: 6,
-                  zIndex: 999999,
-                }}
               >
 
-                <div style={{ padding: "6px 10px 8px", fontSize: 11, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--text-secondary, #6b7280)" }}>
+                <div className="app-switcher-header">
                   Switch Portal
                 </div>
 
                 <Link
                   to={rolePath("dashboard")}
                   onClick={(e) => { e.stopPropagation(); setShowAppSwitcher(false); }}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: "10px 10px",
-                    borderRadius: 8,
-                    textDecoration: "none",
-                    color: "var(--text-primary, #111827)",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    transition: "background 0.15s",
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-primary-bg, #eef2ff)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  className="app-switcher-item"
                 >
                   <Grid size={18} style={{ color: "var(--color-primary, #6366f1)", flexShrink: 0 }} />
                   <span>
                     Project Management
                     <br />
-                    <span style={{ fontWeight: 400, fontSize: 11.5, color: "var(--text-secondary, #6b7280)" }}>
+                    <span className="app-switcher-desc">
                       Projects, tasks, deliverables
                     </span>
                   </span>
                 </Link>
 
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: "10px 10px",
-                    borderRadius: 8,
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: "var(--text-primary, #111827)",
-                    background: "var(--color-primary-bg, #eef2ff)",
-                    cursor: "default",
-                  }}
-                >
+                <div className="app-switcher-item app-switcher-item--active">
                   <Briefcase size={18} style={{ color: "var(--color-primary, #6366f1)", flexShrink: 0 }} />
                   <span>
                     HR Management
                     <br />
-                    <span style={{ fontWeight: 400, fontSize: 11.5, color: "var(--text-secondary, #6b7280)" }}>
+                    <span className="app-switcher-desc app-switcher-desc--active">
                       You're here
                     </span>
                   </span>
