@@ -16,10 +16,24 @@ import "./Breadcrumb.css";
 export default function Breadcrumb({ items = [] }) {
   if (!items || items.length === 0) return null;
 
+  // Sanitize labels (strip extra slashes or separators) and deduplicate consecutive identical items
+  const cleanedItems = items.reduce((acc, item) => {
+    if (!item || !item.label) return acc;
+    const cleanLabel = String(item.label).replace(/[/\\>]+/g, "").trim();
+    if (!cleanLabel) return acc;
+    if (acc.length > 0 && acc[acc.length - 1].label === cleanLabel) {
+      return acc;
+    }
+    acc.push({ ...item, label: cleanLabel });
+    return acc;
+  }, []);
+
+  if (cleanedItems.length === 0) return null;
+
   return (
     <nav className="breadcrumb" aria-label="Breadcrumb">
-      {items.map((item, index) => {
-        const isLast = index === items.length - 1;
+      {cleanedItems.map((item, index) => {
+        const isLast = index === cleanedItems.length - 1;
 
         return (
           <span key={index} className="breadcrumb-item">

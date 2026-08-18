@@ -1,0 +1,200 @@
+/* PMS  */
+.sidebar {
+  width: 230px;
+  background-color: #FFFFFF;
+  color: #1E293B;
+  height: calc(100vh - 108px);
+  position: fixed;
+  top: 94px;
+  left: 1px;
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 1rem 0.8rem;
+  box-sizing: border-box;
+
+  border-radius: 0px 25px 0px 0px;
+  border: 1px solid #E2E8F0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+  transition: transform 0.3s ease;
+
+  /* Scrollable rahega lekin scroller bar hide ho jayega */
+  overflow-y: auto;
+  scrollbar-width: none; /* Firefox ke liye */
+  -ms-overflow-style: none; /* IE aur Edge ke liye */
+}
+
+/* Chrome, Safari, aur Opera ke liye scrollbar chupane ke liye */
+.sidebar::-webkit-scrollbar {
+  display: none;
+}
+
+.sidebar-backdrop,
+.sidebar-tablet-backdrop {
+  display: none;
+}
+
+@media (max-width: 1200px) {
+  .sidebar {
+    top: 0;
+    height: 100vh;
+    border-radius: 0;
+    transform: translateX(-100%);
+    z-index: 10005;
+  }
+  .sidebar.sidebar--open {
+    transform: translateX(0);
+  }
+  .sidebar.sidebar--tablet-expanded {
+    transform: translateX(0);
+  }
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.4);
+    z-index: 10004;
+  }
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #475569;
+  
+  text-decoration: none;
+  padding: 0.65rem 0.9rem;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-bottom: 4px;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.sidebar-link svg {
+  font-size: 1.2rem;
+  min-width: 20px;
+  color: #64748B;
+  transition: color 0.2s;
+}
+
+.sidebar-link:hover {
+  color: white;
+  background-color: #4F46E5;
+}
+
+.sidebar-link:hover svg {
+  color: #0F172A;
+}
+
+/* Standalone Active Top-Level Link (e.g. Dashboard) */
+.sidebar-link.active:not(.sidebar-dropdown-group) {
+  color: #FFFFFF !important;
+  background-color: #4F46E5 !important;
+  font-weight: 600;
+  box-shadow: 0 4px 10px rgba(79, 70, 229, 0.25);
+}
+
+.sidebar-link.active:not(.sidebar-dropdown-group) svg {
+  color: #FFFFFF !important;
+}
+
+/* Dropdown Container Group (Tasks, Subtasks, Reports, Settings) */
+.sidebar-dropdown-group {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  border-radius: 16px;
+  margin-bottom: 6px;
+  transition: all 0.25s ease;
+  padding: 4px 6px;
+}
+
+/* When the dropdown is open or active */
+.sidebar-dropdown-group.open,
+.sidebar-dropdown-group.active {
+  background-color: #4F46E5 !important;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+  padding: 8px 10px;
+}
+
+/* Dropdown Header Row */
+.sidebar-dropdown-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 6px 8px;
+  color: #475569;
+  font-weight: 600;
+  font-size: 0.9rem;
+  border-radius: 10px;
+  transition: all 0.2s ease;
+}
+
+/* Hover state — blue bg + white text, same styling as open/active */
+.sidebar-dropdown-header:hover {
+  background-color: #4F46E5;
+  color: #FFFFFF !important;
+}
+
+.sidebar-dropdown-header:hover svg {
+  color: #FFFFFF !important;
+}
+
+.sidebar-dropdown-group.open .sidebar-dropdown-header,
+.sidebar-dropdown-group.active .sidebar-dropdown-header {
+  color: #FFFFFF !important;
+}
+
+.sidebar-dropdown-group.open .sidebar-dropdown-header svg,
+.sidebar-dropdown-group.active .sidebar-dropdown-header svg {
+  color: #FFFFFF !important;
+}
+
+/* Sub Links Container */
+.sidebar-sub-links {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 0;
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+
+/* Sub Link Items */
+.sidebar-sub-link {
+  font-size: 0.88rem;
+  color: #FFFFFF !important; /* CRISP WHITE FOR UNSELECTED SUB LINKS */
+  text-decoration: none;
+  padding: 8px 14px;
+  border-radius: 10px;
+  transition: all 0.2s ease;
+  display: block;
+  font-weight: 500;
+}
+
+.sidebar-sub-link:hover {
+  color: #FFFFFF !important;
+  background-color: rgba(255, 255, 255, 0.18);
+}
+
+/* ACTIVE / SELECTED SUB LINK -> SOLID WHITE PILL */
+.sidebar-sub-link.active {
+  background-color: #FFFFFF !important;
+  color: #1E1B4B !important; /* Bold dark navy text on white pill */
+  font-weight: 700 !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+hr {
+  border: none;
+  border-top: 1px solid #E2E8F0;
+  margin: 0.8rem 0;
+}

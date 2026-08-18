@@ -1,0 +1,122 @@
+.hrm-timeline-container {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.hrm-timeline-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 20px;
+}
+
+.hrm-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.hrm-tl-step {
+  display: flex;
+  gap: 16px;
+  min-height: 60px;
+}
+
+.hrm-tl-icon-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 24px;
+}
+
+.hrm-tl-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.hrm-tl-line {
+  flex: 1;
+  width: 2px;
+  background: #e2e8f0;
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+.hrm-tl-content {
+  padding-bottom: 20px;
+}
+
+.hrm-tl-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.hrm-tl-status-text {
+  font-size: 13px;
+  color: #475569;
+  margin-top: 4px;
+}
+
+/* Completed Step */
+.hrm-tl-step-completed .hrm-tl-icon {
+  background: #3b82f6;
+  color: #fff;
+}
+.hrm-tl-step-completed .hrm-tl-line {
+  background: #3b82f6;
+}
+.hrm-tl-step-completed .hrm-tl-label {
+  color: #0f172a;
+}
+
+/* Active Step */
+.hrm-tl-step-active .hrm-tl-icon {
+  background: #f59e0b;
+  color: #fff;
+  box-shadow: 0 0 0 3px #fef3c7;
+}
+.hrm-tl-step-active .hrm-tl-label {
+  color: #0f172a;
+}
+
+/* Approved */
+.hrm-tl-step-approved .hrm-tl-icon {
+  background: #10b981;
+  color: #fff;
+  box-shadow: 0 0 0 3px #d1fae5;
+}
+.hrm-tl-step-approved .hrm-tl-label {
+  color: #047857;
+}
+
+/* Rejected */
+.hrm-tl-step-rejected .hrm-tl-icon {
+  background: #ef4444;
+  color: #fff;
+  box-shadow: 0 0 0 3px #fee2e2;
+}
+.hrm-tl-step-rejected .hrm-tl-label {
+  color: #b91c1c;
+}
+
+/* Returned */
+.hrm-tl-step-returned .hrm-tl-icon {
+  background: #8b5cf6;
+  color: #fff;
+  box-shadow: 0 0 0 3px #ede9fe;
+}
+.hrm-tl-step-returned .hrm-tl-label {
+  color: #6d28d9;
+}

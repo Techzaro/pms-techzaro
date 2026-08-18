@@ -30,6 +30,7 @@ import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
 import ActionPopover from "../components/ActionPopover";
 import AddNoteModal from "../components/AddNoteModal";
+import TaskMultiStatusBadges from "../components/TaskMultiStatusBadges";
 import "../components/ActionPopover.css";
 import "../pages/Deliveries.css";
 import "../pages/Task.css";
@@ -540,18 +541,8 @@ function DeliveriesByYou() {
                         </Link>
                       )}
                     </div>
-                    <div>
-                      <span className="badge" style={{
-                        background: STATUS_COLORS[item.status] || "#F3F4F6",
-                        color: STATUS_TEXT_COLORS[item.status] || "#374151",
-                        padding: "4px 10px",
-                        borderRadius: "999px",
-                        fontSize: "12px",
-                        fontWeight: 600
-                      }}>
-                        <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
-                        {formatStatus(item.status)}
-                      </span>
+                    <div className="col-status">
+                      <TaskMultiStatusBadges item={item} />
                     </div>
                     <div>
                       <div className="date-box">

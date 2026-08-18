@@ -140,6 +140,7 @@ class OrganizationSettingsController extends Controller
         return response()->json([
             'success' => true,
             'branding' => [
+                'slug' => $org->slug,
                 'logo_url' => $logoUrl,
                 'logo_path' => $org->logo_path,
                 'subtitle' => $settings['subtitle'] ?? 'PMS Portal',

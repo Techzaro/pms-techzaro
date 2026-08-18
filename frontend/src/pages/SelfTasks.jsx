@@ -30,6 +30,7 @@ import Pagination from "../components/Pagination";
 import ActionPopover from "../components/ActionPopover";
 import TaskNotesPopover from "../components/TaskNotesPopover";
 import AddNoteModal from "../components/AddNoteModal";
+import TaskMultiStatusBadges from "../components/TaskMultiStatusBadges";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import { renderDynamicDates } from "../utils/tableDateUtils";
@@ -421,20 +422,8 @@ const SelfTasks = () => {
                       </Link>
                     )}
                   </div>
-                  <div>
-                    <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
-                      <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
-                      {formatStatus(item.status)}
-                    </span>
-                    {item.status === "approved" && item.approvedBy && (
-                      <div style={{ fontSize: "10px", color: "#166534", marginTop: "2px" }}>by {item.approvedBy.name}</div>
-                    )}
-                    {item.status === "rejected" && item.rejectedBy && (
-                      <div style={{ fontSize: "10px", color: "#991B1B", marginTop: "2px" }}>by {item.rejectedBy.name}</div>
-                    )}
-                    {item.status === "reopened" && item.reopenedBy && (
-                      <div style={{ fontSize: "10px", color: "#92400E", marginTop: "2px" }}>by {item.reopenedBy.name}</div>
-                    )}
+                  <div className="col-status">
+                    <TaskMultiStatusBadges item={item} />
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
                     <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>

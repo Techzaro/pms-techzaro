@@ -55,6 +55,8 @@
   border: 1px solid var(--color-primary-light);
   border-radius: 16px;
   padding: 16px;
+  min-height: 220px;
+  box-sizing: border-box;
   cursor: pointer;
   transition: all 0.3s ease;
   display: flex;
@@ -222,13 +224,18 @@
 .dash-project-card {
   background: var(--color-primary-bg);
   border: 1px solid var(--color-primary-light);
-  border-radius: 20px;
+  border-radius: 16px;
+  min-height: 220px;
+  box-sizing: border-box;
   overflow: hidden;
   transition: all 0.3s ease;
   padding: 16px;
+  display: flex;
+  flex-direction: column;
 }
 
 .dash-project-card:hover {
+  transform: translateY(-3px);
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
 }
 
@@ -285,11 +292,33 @@
 }
 
 .dash-card-footer {
-  padding: 0 0 18px;
+  padding: 0;
+  margin-top: auto;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
+}
+
+/* Keep the PMS dashboard summary cards visually identical after the merge. */
+.summary-cards-grid {
+  align-items: stretch;
+}
+
+.summary-cards-grid > .summary-card {
+  min-width: 0;
+  min-height: 132px;
+  height: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm) !important;
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.summary-cards-grid > .summary-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--color-primary-light);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08) !important;
 }
 
 .dash-date-info {
@@ -498,6 +527,11 @@
     border-radius: 16px;
     padding: 14px;
   }
+
+  .dash-task-card,
+  .dash-project-card {
+    min-height: 200px;
+  }
 }
 
 @media (max-width: 600px) {
@@ -508,6 +542,7 @@
 
   .summary-cards-grid > .summary-card {
     padding: 14px !important;
+    min-height: 112px;
   }
 
   .summary-cards-grid .summary-card h4 {
@@ -622,6 +657,11 @@
   .dash-card-subtitle {
     font-size: 14px;
   }
+
+  .dash-task-card,
+  .dash-project-card {
+    min-height: 180px;
+  }
 }
 
 /* Active Projects cards */
@@ -723,5 +763,20 @@
 .activity-item--read .activity-time {
   color: var(--text-muted) !important;
   font-weight: 400;
+}
+
+/* ── Interactive Summary Cards ── */
+.summary-card {
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  user-select: none;
+}
+
+.summary-card[role="button"]:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md, 0 8px 20px rgba(0, 0, 0, 0.06));
+}
+
+.summary-card[role="button"]:active {
+  transform: translateY(0);
 }
 

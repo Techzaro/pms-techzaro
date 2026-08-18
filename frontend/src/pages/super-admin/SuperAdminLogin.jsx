@@ -4,7 +4,7 @@ import { MdVisibility, MdVisibilityOff } from "react-icons/md";
 import { saveSuperAdminSession, getSuperAdminToken, clearSuperAdminSession } from "../../utils/auth";
 import { getOrgBaseUrl } from "../../utils/domain";
 import { api } from "./api/superAdminApi";
-import "../../pages/Login.css";
+import "./SuperAdminLogin.css";
 
 function SuperAdminLogin() {
   const navigate = useNavigate();
@@ -74,7 +74,7 @@ function SuperAdminLogin() {
   };
 
   return (
-    <div className="login-page">
+    <div className="sa-login-page">
       <div className="login-left">
         <div className="overlay">
           <h1>TECHXARO ADMIN</h1>
