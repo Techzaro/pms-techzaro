@@ -122,7 +122,7 @@ function WidgetCardItem({
         flex: w.width && w.width !== "100%" ? "0 0 auto" : "1 1 auto",
         width: w.width || "100%",
         minWidth: "260px",
-        minHeight: "140px",
+        minHeight: w.type === "calendar" || w.type === "calendar_events" || w.type === "events" ? "300px" : "140px",
         height: w.height ? `${w.height}px` : "auto",
         overflow: "visible",
         background: "var(--bg-card, #ffffff)",
@@ -133,7 +133,9 @@ function WidgetCardItem({
         position: "relative",
         boxSizing: "border-box",
         transition: "border 0.15s ease",
-        opacity: draggedIndex === index ? 0.4 : 1
+        opacity: draggedIndex === index ? 0.4 : 1,
+        display: "flex",
+        flexDirection: "column"
       }}
     >
       {/* Absolute Edge & Corner Handles for Omnidirectional Resize */}
@@ -219,35 +221,37 @@ function WidgetCardItem({
       </div>
 
       {/* Widget Body */}
-      {w.type === "calendar" ? (
-        <CalendarWidget />
-      ) : w.type === "events" ? (
-        <EventsWidget />
-      ) : w.type === "calendar_events" ? (
-        <CalendarEventsWidget />
-      ) : w.type === "pinned_tasks" ? (
-        <PinnedTasksSubWidget />
-      ) : (
-        <textarea
-          value={w.content || ""}
-          onChange={(e) => handleUpdateContent(w.id, e.target.value)}
-          placeholder="Type your notes or reminders here..."
-          style={{
-            width: "100%",
-            height: "calc(100% - 44px)",
-            minHeight: "90px",
-            padding: "12px",
-            borderRadius: "12px",
-            border: "1px solid var(--border-color, #cbd5e1)",
-            background: "var(--bg-card-subtle, #f8fafc)",
-            fontSize: "13px",
-            color: "var(--text-primary)",
-            resize: "none",
-            fontFamily: "inherit",
-            boxSizing: "border-box"
-          }}
-        />
-      )}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+        {w.type === "calendar" ? (
+          <CalendarWidget />
+        ) : w.type === "events" ? (
+          <EventsWidget />
+        ) : w.type === "calendar_events" ? (
+          <CalendarEventsWidget />
+        ) : w.type === "pinned_tasks" ? (
+          <PinnedTasksSubWidget />
+        ) : (
+          <textarea
+            value={w.content || ""}
+            onChange={(e) => handleUpdateContent(w.id, e.target.value)}
+            placeholder="Type your notes or reminders here..."
+            style={{
+              width: "100%",
+              height: "100%",
+              minHeight: "90px",
+              padding: "12px",
+              borderRadius: "12px",
+              border: "1px solid var(--border-color, #cbd5e1)",
+              background: "var(--bg-card-subtle, #f8fafc)",
+              fontSize: "13px",
+              color: "var(--text-primary)",
+              resize: "none",
+              fontFamily: "inherit",
+              boxSizing: "border-box"
+            }}
+          />
+        )}
+      </div>
     </div>
   );
 }

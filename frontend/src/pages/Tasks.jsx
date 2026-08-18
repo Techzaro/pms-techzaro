@@ -31,6 +31,7 @@ import TransferTaskDialog from "../components/TransferTaskDialog";
 import TaskFilterBar from "../components/TaskFilterBar";
 import DynamicWidgetSection from "../components/DynamicWidgetSection";
 import DraggableStatusBadges from "../components/DraggableStatusBadges";
+import TaskMultiStatusBadges from "../components/TaskMultiStatusBadges";
 import API_URL from "../config/api";
 import { usePersonalization } from "../context/PersonalizationContext";
 import { authToken, getUser, rolePath } from "../utils/auth";
@@ -120,9 +121,11 @@ function Tasks() {
   const [totalCount, setTotalCount] = useState(0);
   const currentUser = getUser();
   const [statusFilter, setStatusFilter] = useState(() => {
+    const filterParam = searchParams.get("filter");
+    if (filterParam === "due_today") return "due_today";
     const status = searchParams.get("status");
     if (status) return status;
-    return "";
+    return filterParam || "";
   });
   const [timeFilter, setTimeFilter] = useState("");
   const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
@@ -219,7 +222,9 @@ function Tasks() {
   }, []);
 
   useEffect(() => {
-    const nextFilter = searchParams.get("status") || "";
+    const filterParam = searchParams.get("filter");
+    const statusParam = searchParams.get("status");
+    const nextFilter = filterParam === "due_today" ? "due_today" : (statusParam || filterParam || "");
     setStatusFilter((current) => {
       if (nextFilter === "due_today" || current === "due_today" || nextFilter !== current) {
         return nextFilter;
@@ -593,19 +598,7 @@ function Tasks() {
                   </div>
                   
                   <div className="col-status">
-                    <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
-                      <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
-                      {formatStatus(item.status)}
-                    </span>
-                    {item.status === "approved" && item.approvedBy && (
-                      <div style={{ fontSize: "10px", color: "#166534", marginTop: "2px" }}>by {item.approvedBy.name}</div>
-                    )}
-                    {item.status === "rejected" && item.rejectedBy && (
-                      <div style={{ fontSize: "10px", color: "#991B1B", marginTop: "2px" }}>by {item.rejectedBy.name}</div>
-                    )}
-                    {item.status === "reopened" && item.reopenedBy && (
-                      <div style={{ fontSize: "10px", color: "#92400E", marginTop: "2px" }}>by {item.reopenedBy.name}</div>
-                    )}
+                    <TaskMultiStatusBadges item={item} />
                   </div>
                   
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>

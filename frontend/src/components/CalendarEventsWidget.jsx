@@ -29,8 +29,8 @@ export function CalendarWidget() {
   };
 
   return (
-    <div className="calendar-widget-container" style={{ padding: "8px" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+    <div className="calendar-widget-container">
+      <div className="cew-header-row">
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <CalendarDays size={18} style={{ color: "#2563eb" }} />
           <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-heading)" }}>{monthName}</span>
@@ -44,11 +44,11 @@ export function CalendarWidget() {
         </div>
       </div>
 
-      <div className="cew-weekdays" style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", textAlign: "center", fontWeight: 600, fontSize: "11px", color: "var(--text-secondary)", marginBottom: "6px" }}>
+      <div className="cew-weekdays">
         <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
       </div>
 
-      <div className="cew-days-grid" style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "4px", textAlign: "center" }}>
+      <div className="cew-days-grid">
         {Array.from({ length: startDayOfWeek }).map((_, i) => (
           <div key={`empty-${i}`} className="cew-day-cell empty"></div>
         ))}
@@ -60,7 +60,6 @@ export function CalendarWidget() {
               key={`day-${dayNum}`}
               className={`cew-day-cell ${isToday ? "today" : ""}`}
               onClick={() => navigate(rolePath("calendar"))}
-              style={{ padding: "6px 0", borderRadius: "6px", fontSize: "12px", cursor: "pointer", background: isToday ? "#2563eb" : "var(--bg-card-subtle)", color: isToday ? "#fff" : "var(--text-dark)", fontWeight: isToday ? 700 : 500 }}
             >
               {dayNum}
             </div>

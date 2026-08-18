@@ -84,12 +84,30 @@ const getRoleLabel = (role) => {
  * Clicking a card with a filter navigates to the corresponding filtered list view.
  */
 const SummaryCard = memo(function SummaryCard({ card, onClick }) {
+  const isClickable = Boolean(card.filter);
   return (
-    <div className="summary-card" style={{
-      background: "var(--bg-card)", borderRadius: "16px", padding: "20px",
-      boxShadow: "var(--shadow-sm)", display: "flex",
-      flexDirection: "column", gap: "18px",
-    }}>
+    <div
+      className="summary-card"
+      onClick={isClickable ? () => onClick(card) : undefined}
+      role={isClickable ? "button" : undefined}
+      tabIndex={isClickable ? 0 : undefined}
+      onKeyDown={(e) => {
+        if (isClickable && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          onClick(card);
+        }
+      }}
+      style={{
+        background: "var(--bg-card)",
+        borderRadius: "16px",
+        padding: "20px",
+        boxShadow: "var(--shadow-sm)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "18px",
+        cursor: isClickable ? "pointer" : "default",
+      }}
+    >
       <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
         <div style={{
           width: "56px", height: "56px", borderRadius: "14px",
@@ -100,18 +118,11 @@ const SummaryCard = memo(function SummaryCard({ card, onClick }) {
         </div>
         <div>
           <h4
-            onClick={card.filter ? () => onClick(card) : undefined}
-            role={card.filter ? "button" : undefined}
-            tabIndex={card.filter ? 0 : undefined}
-            onKeyDown={(e) => {
-              if (card.filter && (e.key === "Enter" || e.key === " ")) {
-                e.preventDefault();
-                onClick(card);
-              }
-            }}
             style={{
-              margin: 0, fontSize: "15px",               color: card.filter ? "var(--color-blue)" : "var(--text-secondary)",
-              cursor: card.filter ? "pointer" : "default", textUnderlineOffset: "2px",
+              margin: 0,
+              fontSize: "15px",
+              color: isClickable ? "var(--color-blue)" : "var(--text-secondary)",
+              textUnderlineOffset: "2px",
             }}
           >
             {card.title}
@@ -476,16 +487,16 @@ function Admin() {
   // For all roles: "my" = incoming (tasks), "user" = outgoing (taskby)
   const handleSummaryCardClick = useCallback((card) => {
     if (card.filter === "active-projects") {
-      navigate(`${rolePath("projects")}?filter=active`);
+      navigate(`${rolePath("projects")}?status=active`);
     } else {
       const isOutgoing = dashboardMode === "user";
       const basePath = rolePath(isOutgoing ? "taskby" : "tasks");
       if (card.filter === "in-progress-tasks") navigate(`${basePath}?status=in_progress`);
-      else if (card.filter === "tasks-due-today") navigate(`${basePath}?status=due_today`);
+      else if (card.filter === "tasks-due-today") navigate(`${basePath}?filter=due_today`);
       else if (card.filter === "approved-tasks") navigate(`${basePath}?status=approved`);
       else if (card.filter === "pending-tasks") navigate(`${basePath}?status=pending`);
     }
-  }, [navigate, currentRole, dashboardMode, isAdminManager]);
+  }, [navigate, dashboardMode]);
 
   // Transform raw today's workload data into display-ready format with role labels
   // Deduplicate by entity_id — if the same task is returned multiple times (e.g. from pivot

@@ -94,7 +94,7 @@ function Projects() {
   const [timeFilter, setTimeFilter] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [statusFilter, setStatusFilter] = useState(() => searchParams.get("filter") === "active" ? "active" : "");
+  const [statusFilter, setStatusFilter] = useState(() => searchParams.get("status") || searchParams.get("filter") || "");
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -108,6 +108,11 @@ function Projects() {
     const saved = sessionStorage.getItem("projects_current_page");
     return saved ? Math.max(1, Number(saved)) : 1;
   });
+
+  useEffect(() => {
+    const param = searchParams.get("status") || searchParams.get("filter") || "";
+    setStatusFilter(param);
+  }, [searchParams]);
 
   const handlePageChange = useCallback((newPage) => {
     setPage(newPage);
@@ -171,6 +176,7 @@ function Projects() {
 
       if (statusFilter === "active") {
         params.append("filter", "active");
+        params.append("status", "active");
       } else if (statusFilter) {
         params.append("status", statusFilter);
       }
