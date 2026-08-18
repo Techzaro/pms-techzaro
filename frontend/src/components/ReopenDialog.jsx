@@ -129,6 +129,18 @@ function ReopenDialog({ isOpen, onClose, subtask, onReopenSuccess }) {
                 <option key={r} value={r}>{r}</option>
               ))}
             </select>
+            <div className="rd-reason-tags">
+              {REOPEN_REASONS.map((r) => (
+                <button
+                  type="button"
+                  key={r}
+                  className={`rd-tag-chip ${reopenReason === r ? "rd-tag-chip--selected" : ""}`}
+                  onClick={() => setReopenReason(r)}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
           </div>
 
           {(reopenReason === "Other" || reopenReason) && (

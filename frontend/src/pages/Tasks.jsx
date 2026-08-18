@@ -14,7 +14,8 @@ import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
-import { CheckCircle2, Lock, Pause, Play, StickyNote, Users, ArrowUpRight, ChevronDown, XCircle, RotateCcw, AlertOctagon, Sliders } from "lucide-react";
+import { CheckCircle2, Lock, Pause, Play, StickyNote, Users, ArrowUpRight, ChevronDown, XCircle, RotateCcw, AlertOctagon, Sliders, Pin } from "lucide-react";
+import { togglePinTask, isTaskPinned, usePinnedTasks } from "../utils/pinnedTasks";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
 import { publish } from "../utils/eventBus";
@@ -30,6 +31,7 @@ import TransferTaskDialog from "../components/TransferTaskDialog";
 import TaskFilterBar from "../components/TaskFilterBar";
 import DynamicWidgetSection from "../components/DynamicWidgetSection";
 import DraggableStatusBadges from "../components/DraggableStatusBadges";
+import TaskMultiStatusBadges from "../components/TaskMultiStatusBadges";
 import API_URL from "../config/api";
 import { usePersonalization } from "../context/PersonalizationContext";
 import { authToken, getUser, rolePath } from "../utils/auth";
@@ -119,15 +121,18 @@ function Tasks() {
   const [totalCount, setTotalCount] = useState(0);
   const currentUser = getUser();
   const [statusFilter, setStatusFilter] = useState(() => {
+    const filterParam = searchParams.get("filter");
+    if (filterParam === "due_today") return "due_today";
     const status = searchParams.get("status");
     if (status) return status;
-    return "";
+    return filterParam || "";
   });
   const [timeFilter, setTimeFilter] = useState("");
   const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
   const [restoreDraftId, setRestoreDraftId] = useState(null);
   const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
   const [transferDialog, setTransferDialog] = useState({ open: false, task: null });
+  const [pinnedTasks] = usePinnedTasks();
 
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
@@ -217,7 +222,9 @@ function Tasks() {
   }, []);
 
   useEffect(() => {
-    const nextFilter = searchParams.get("status") || "";
+    const filterParam = searchParams.get("filter");
+    const statusParam = searchParams.get("status");
+    const nextFilter = filterParam === "due_today" ? "due_today" : (statusParam || filterParam || "");
     setStatusFilter((current) => {
       if (nextFilter === "due_today" || current === "due_today" || nextFilter !== current) {
         return nextFilter;
@@ -290,6 +297,37 @@ function Tasks() {
           : item
       )
     );
+    setSubmitTaskModal({ open: false, task: null });
+  };
+
+  const handleDirectApprove = async (e, taskId) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === taskId ? { ...item, status: "approved", ...(data.task || {}) } : item
+          )
+        );
+        publish('task:updated', { id: taskId, status: 'approved' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage("Task", "approved");
+      } else {
+        notify.error(data.message || "Failed to approve task.");
+      }
+    } catch {
+      notify.error("An error occurred while approving task.");
+    }
   };
 
   const handleAcknowledge = async (taskId) => {
@@ -560,19 +598,7 @@ function Tasks() {
                   </div>
                   
                   <div className="col-status">
-                    <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
-                      <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
-                      {formatStatus(item.status)}
-                    </span>
-                    {item.status === "approved" && item.approvedBy && (
-                      <div style={{ fontSize: "10px", color: "#166534", marginTop: "2px" }}>by {item.approvedBy.name}</div>
-                    )}
-                    {item.status === "rejected" && item.rejectedBy && (
-                      <div style={{ fontSize: "10px", color: "#991B1B", marginTop: "2px" }}>by {item.rejectedBy.name}</div>
-                    )}
-                    {item.status === "reopened" && item.reopenedBy && (
-                      <div style={{ fontSize: "10px", color: "#92400E", marginTop: "2px" }}>by {item.reopenedBy.name}</div>
-                    )}
+                    <TaskMultiStatusBadges item={item} />
                   </div>
                   
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
@@ -616,6 +642,13 @@ function Tasks() {
                       }
                     >
                       <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
+                      <button
+                        className="action-icon-btn"
+                        title={isTaskPinned(item.id) ? "Unpin from Dashboard" : "Pin to Dashboard"}
+                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); togglePinTask(item); }}
+                      >
+                        <Pin size={14} style={{ color: isTaskPinned(item.id) ? "#4f46e5" : "var(--text-secondary)", fill: isTaskPinned(item.id) ? "#4f46e5" : "none" }} />
+                      </button>
                       {(() => {
                         const isUserAdminOrManager = ["admin", "manager"].includes(currentUser?.role);
                         const canUserApprove = isUserAdminOrManager || item.created_by === currentUser?.id || item.is_next_approver;
@@ -625,8 +658,8 @@ function Tasks() {
                               <button
                                 className="action-icon-btn"
                                 title="Approve Task"
-                                style={{ color: "#16A34A" }}
-                                onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } })}
+                                style={{ color: "#16A34A", fontWeight: "bold" }}
+                                onClick={(e) => handleDirectApprove(e, item.id)}
                               >
                                 <CheckCircle2 size={16} />
                               </button>
@@ -636,7 +669,7 @@ function Tasks() {
                                 className="action-icon-btn"
                                 title="Decline Task"
                                 style={{ color: "#DC2626" }}
-                                onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } })}
+                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } }); }}
                               >
                                 <XCircle size={16} />
                               </button>
@@ -646,7 +679,7 @@ function Tasks() {
                                 className="action-icon-btn"
                                 title="Reopen Task"
                                 style={{ color: "#2563EB" }}
-                                onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } })}
+                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } }); }}
                               >
                                 <RotateCcw size={16} />
                               </button>
@@ -656,7 +689,7 @@ function Tasks() {
                                 className="action-icon-btn"
                                 title={isUserAdminOrManager ? "Abandon Task" : "Request Abandon"}
                                 style={{ color: "#F59E0B" }}
-                                onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } })}
+                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } }); }}
                               >
                                 <AlertOctagon size={16} />
                               </button>

@@ -18,6 +18,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Crown } from "lucide-react";
+import TeamExportReport from "./TeamExportReport";
 import {
   MdAdd,
   MdDelete,
@@ -124,6 +125,7 @@ function ManageTeam() {
   const mtUserListRef = useRef(null);
 
   const [deleteTeamConfirmOpen, setDeleteTeamConfirmOpen] = useState(false);
+  const [showTeamExportModal, setShowTeamExportModal] = useState(false);
   const [deleteTeamId, setDeleteTeamId] = useState(null);
   const [leaderConfirmOpen, setLeaderConfirmOpen] = useState(false);
   const [leaderConfirmData, setLeaderConfirmData] = useState({ teamId: null, memberId: null, memberName: "" });

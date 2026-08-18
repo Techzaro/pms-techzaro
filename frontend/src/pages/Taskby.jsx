@@ -31,6 +31,7 @@ import ConfirmModal from "../components/ConfirmModal";
 import TaskFilterBar from "../components/TaskFilterBar";
 import DynamicWidgetSection from "../components/DynamicWidgetSection";
 import DraggableStatusBadges from "../components/DraggableStatusBadges";
+import TaskMultiStatusBadges from "../components/TaskMultiStatusBadges";
 import API_URL from "../config/api";
 import { authToken, rolePath, getUser } from "../utils/auth";
 import { renderDynamicDates } from "../utils/tableDateUtils";
@@ -88,9 +89,11 @@ const Taskby = () => {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [totalCount, setTotalCount] = useState(0);
   const [statusFilter, setStatusFilter] = useState(() => {
+    const filterParam = searchParams.get("filter");
+    if (filterParam === "due_today") return "due_today";
     const status = searchParams.get("status");
     if (status) return status;
-    return "";
+    return filterParam || "";
   });
   const [timeFilter, setTimeFilter] = useState("");
   const [orderedItems, setOrderedItems] = useState([]);
@@ -165,8 +168,10 @@ const Taskby = () => {
   }, [items]);
 
   useEffect(() => {
-    const status = searchParams.get("status") || "";
-    setStatusFilter(status);
+    const filterParam = searchParams.get("filter");
+    const statusParam = searchParams.get("status");
+    const nextFilter = filterParam === "due_today" ? "due_today" : (statusParam || filterParam || "");
+    setStatusFilter(nextFilter);
   }, [searchParams]);
 
   const handleTaskReorder = useCallback((reordered) => {
@@ -515,16 +520,7 @@ const Taskby = () => {
                     </div>
 
                     <div className="col-status">
-                      <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
-                        <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
-                        {formatStatus(item.status)}
-                      </span>
-                      {item.assigner_paused && (
-                        <span className="badge" style={{ background: "#FEF3C7", color: "#92400E", marginTop: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                          <Lock size={11} />
-                          On Hold
-                        </span>
-                      )}
+                      <TaskMultiStatusBadges item={item} />
                     </div>
 
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>

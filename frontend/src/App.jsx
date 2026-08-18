@@ -82,6 +82,7 @@ const TaskDetails = lazy(() => import("./pages/TaskDetails"));
 const SubtaskDetails = lazy(() => import("./pages/DeliverableDetails"));
 const SelfDeliveries = lazy(() => import("./pages/SelfDeliveries"));
 const Calender = lazy(() => import("./pages/Calender"));
+const EventsPage = lazy(() => import("./pages/EventsPage"));
 const Notifications = lazy(() => import("./pages/Notifications"));
 const NotificationSettings = lazy(() => import("./pages/NotificationSettings"));
 const Personalization = lazy(() => import("./pages/Personalization"));
@@ -494,6 +495,8 @@ function App() {
                     <Route path="team-members-report" element={<Reports />} />
                     <Route path="my-profile" element={<MyProfile />} />
                     <Route path="calender" element={<Calender />} />
+                    <Route path="calendar" element={<Calender />} />
+                    <Route path="events" element={<EventsPage />} />
                     <Route path="drafts" element={<DraftCenter />} />
                     <Route path="templates" element={<Templates />} />
                     <Route path="knowledge-base" element={<KnowledgeBase />} />
@@ -793,6 +796,8 @@ function App() {
                     <Route path="team-members-report" element={<Reports />} />
                     <Route path="my-profile" element={<MyProfile />} />
                     <Route path="calender" element={<Calender />} />
+                    <Route path="calendar" element={<Calender />} />
+                    <Route path="events" element={<EventsPage />} />
                     <Route path="drafts" element={<DraftCenter />} />
                     <Route path="templates" element={<Templates />} />
                     <Route path="knowledge-base" element={<KnowledgeBase />} />
