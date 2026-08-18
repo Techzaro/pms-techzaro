@@ -1,3 +1,20 @@
+<IfModule mod_headers.c>
+    # CORS headers for cross-origin requests (admin ↔ app subdomains)
+    SetEnvIf Origin "^https?://([a-zA-Z0-9\-]+\.)*techxaro\.com$" CORS_ORIGIN=$0
+
+    # Handle preflight OPTIONS requests
+    RewriteEngine On
+    RewriteCond %{REQUEST_METHOD} OPTIONS
+    RewriteRule ^(.*)$ $1 [R=200,L]
+
+    # Apply CORS headers when origin matches
+    Header set Access-Control-Allow-Origin "%{CORS_ORIGIN}e" env=CORS_ORIGIN
+    Header set Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS" env=CORS_ORIGIN
+    Header set Access-Control-Allow-Headers "Authorization, Content-Type, Accept, X-Tenant-ID, X-Requested-With, X-XSRF-TOKEN, X-Admin-Name" env=CORS_ORIGIN
+    Header set Access-Control-Allow-Credentials "true" env=CORS_ORIGIN
+    Header set Access-Control-Max-Age "86400" env=CORS_ORIGIN
+</IfModule>
+
 RewriteEngine On
 
 RewriteCond %{HTTP:Authorization} .

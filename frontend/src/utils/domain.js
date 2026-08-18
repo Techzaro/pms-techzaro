@@ -8,8 +8,8 @@
  *   app.one.techxaro.com    → PMS (Organizations)
  *
  * Staging:
- *   staging.admin.one.techxaro.com  → Super Admin
- *   staging.app.one.techxaro.com    → PMS (Organizations)
+ *   admin.one.staging.techxaro.com  → Super Admin
+ *   app.one.staging.techxaro.com    → PMS (Organizations)
  *
  * Local:
  *   localhost:5173 → Both allowed (dev mode)
@@ -24,7 +24,7 @@ function getHostname() {
 
 /**
  * Check if current domain is a super admin domain.
- * Matches: admin.one.techxaro.com, staging.admin.one.techxaro.com, localhost
+ * Matches: admin.one.techxaro.com, admin.one.staging.techxaro.com, localhost
  */
 export function isAdminDomain() {
   const host = getHostname();
@@ -41,7 +41,7 @@ export function isAdminDomain() {
 
 /**
  * Check if current domain is an organization (PMS) domain.
- * Matches: app.one.techxaro.com, staging.app.one.techxaro.com, localhost
+ * Matches: app.one.techxaro.com, app.one.staging.techxaro.com, localhost
  */
 export function isOrgDomain() {
   const host = getHostname();
@@ -69,26 +69,18 @@ export function getEnvironment() {
 
 /**
  * Get the admin base URL for the current environment.
- * Production:  https://admin.one.techxaro.com
- * Staging:     https://staging.admin.one.techxaro.com
- * Local:       http://localhost:5173
+ * Uses window.location.origin since both staging and production
+ * run on their respective domains with relative /api paths.
  */
 export function getAdminBaseUrl() {
-  const env = getEnvironment();
-  if (env === 'staging') return 'https://staging.admin.one.techxaro.com';
-  if (env === 'production') return 'https://admin.one.techxaro.com';
   return window.location.origin;
 }
 
 /**
  * Get the org base URL for the current environment.
- * Production:  https://app.one.techxaro.com
- * Staging:     https://staging.app.one.techxaro.com
- * Local:       http://localhost:5173
+ * Uses window.location.origin since both staging and production
+ * run on their respective domains with relative /api paths.
  */
 export function getOrgBaseUrl() {
-  const env = getEnvironment();
-  if (env === 'staging') return 'https://staging.app.one.techxaro.com';
-  if (env === 'production') return 'https://app.one.techxaro.com';
   return window.location.origin;
 }

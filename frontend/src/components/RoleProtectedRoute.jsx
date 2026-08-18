@@ -7,7 +7,7 @@
 
 import { useLayoutEffect } from "react";
 import { Navigate, useParams, useNavigate, useLocation } from "react-router-dom";
-import { authToken, getCurrentRole } from "../utils/auth";
+import { authToken, getCurrentRole, getTenantSlug } from "../utils/auth";
 import { isAdminDomain } from "../utils/domain";
 
 /**
@@ -44,7 +44,7 @@ function RoleProtectedRoute({ allowedRoles, children }) {
   }
 
   // Validate org slug matches stored tenant
-  const storedSlug = localStorage.getItem("tenant_slug") || "";
+  const storedSlug = getTenantSlug();
   if (slug && storedSlug && slug !== storedSlug) {
     return <Navigate to={`/org/${storedSlug}/dashboard`} replace />;
   }

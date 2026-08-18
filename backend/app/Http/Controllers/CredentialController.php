@@ -288,16 +288,20 @@ class CredentialController extends Controller
             }
 
             // Notification to user
-            $this->notificationService->notify(
-                userId: $user->id,
-                senderId: $admin->id,
-                type: 'password_recovery_unlocked',
-                module: 'auth',
-                relatedId: $user->id,
-                title: 'Password Recovery Enabled',
-                message: 'Password recovery has been re-enabled for your account. You can now use the Forgot Password feature.',
-                link: null
-            );
+            try {
+                $this->notificationService->notify(
+                    userId: $user->id,
+                    senderId: $admin->id,
+                    type: 'password_recovery_unlocked',
+                    module: 'auth',
+                    relatedId: $user->id,
+                    title: 'Password Recovery Enabled',
+                    message: 'Password recovery has been re-enabled for your account. You can now use the Forgot Password feature.',
+                    link: null
+                );
+            } catch (\Throwable $e) {
+                \Log::error('Failed to send unlock recovery notification', ['user_id' => $user->id, 'error' => $e->getMessage()]);
+            }
 
             // Clear cache
             Cache::forget("user_profile_{$user->id}");

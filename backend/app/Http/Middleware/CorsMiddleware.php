@@ -11,7 +11,7 @@ class CorsMiddleware
     {
         $origin = $request->header('Origin', '');
 
-        if (preg_match('/\.techxaro\.com$/', $origin)) {
+        if ($this->isAllowedOrigin($origin)) {
             $headers = [
                 'Access-Control-Allow-Origin'      => $origin,
                 'Access-Control-Allow-Methods'     => 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
@@ -34,5 +34,20 @@ class CorsMiddleware
         }
 
         return $next($request);
+    }
+
+    private function isAllowedOrigin(string $origin): bool
+    {
+        if (empty($origin)) {
+            return false;
+        }
+
+        $host = parse_url($origin, PHP_URL_HOST);
+        if (!$host) {
+            return false;
+        }
+
+        $len = strlen('.techxaro.com');
+        return substr($host, -$len) === '.techxaro.com';
     }
 }

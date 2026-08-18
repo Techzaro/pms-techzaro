@@ -69,58 +69,27 @@ function _migrateIfNeeded() {
   return true;
 }
 
-/* ───── current role (tab-scoped with localStorage backup) ───── */
+/* ───── current role (strictly tab-scoped, no cross-tab leakage) ───── */
 
 export function getCurrentRole() {
-  let role = sessionStorage.getItem("currentRole");
-  if (!role) {
-    role = localStorage.getItem("lastActiveRole") || "";
-  }
-  if (!role) {
-    for (const r of ROLES) {
-      const s = _getSessions(r);
-      const keys = Object.keys(s);
-      if (keys.length > 0) {
-        const validKey = keys.find(k => !s[k].expiresAt || Date.now() <= s[k].expiresAt);
-        if (validKey) {
-          role = r;
-          try { sessionStorage.setItem("currentRole", role); } catch {}
-          break;
-        }
-      }
-    }
-  }
-  return role || "";
+  return sessionStorage.getItem("currentRole") || "";
 }
 
 export function setCurrentRole(role) {
   try { sessionStorage.setItem("currentRole", role); } catch {}
-  if (role) {
-    try { localStorage.setItem("lastActiveRole", role); } catch {}
-  } else {
-    try { localStorage.removeItem("lastActiveRole"); } catch {}
-  }
 }
 
-/* ───── session ID (tab-scoped with localStorage backup) ───── */
+/* ───── session ID (strictly tab-scoped, no cross-tab leakage) ───── */
 
 export function getSessionId() {
-  let sid = sessionStorage.getItem("sessionId");
-  if (!sid) {
-    sid = localStorage.getItem("lastActiveSessionId") || "";
-    if (sid) {
-      try { sessionStorage.setItem("sessionId", sid); } catch {}
-    }
-  }
-  return sid || "";
+  return sessionStorage.getItem("sessionId") || "";
 }
 
 export function setSessionId(id) {
-  try { sessionStorage.setItem("sessionId", id); } catch {}
   if (id) {
-    try { localStorage.setItem("lastActiveSessionId", id); } catch {}
+    try { sessionStorage.setItem("sessionId", id); } catch {}
   } else {
-    try { localStorage.removeItem("lastActiveSessionId"); } catch {}
+    try { sessionStorage.removeItem("sessionId"); } catch {}
   }
 }
 
@@ -142,7 +111,7 @@ export function getToken(role) {
   let sessions = _getSessions(r);
   let sess = sid ? sessions[sid] : null;
 
-  // Fallback: if session not found or expired, look for any active valid session for current or alternative roles
+  // Fallback: if session not found or expired, look for any active valid session WITHIN the same role only
   if (!sess || (sess.expiresAt && Date.now() > sess.expiresAt)) {
     const validSid = Object.keys(sessions).find(k => {
       const s = sessions[k];
@@ -152,22 +121,6 @@ export function getToken(role) {
       sid = validSid;
       setSessionId(sid);
       sess = sessions[sid];
-    } else {
-      for (const altRole of ROLES) {
-        const altSessions = _getSessions(altRole);
-        const altSid = Object.keys(altSessions).find(k => {
-          const s = altSessions[k];
-          return s && s.token && (!s.expiresAt || Date.now() <= s.expiresAt);
-        });
-        if (altSid) {
-          r = altRole;
-          setCurrentRole(r);
-          setSessionId(altSid);
-          sessions = altSessions;
-          sess = sessions[altSid];
-          break;
-        }
-      }
     }
   }
 
@@ -238,22 +191,6 @@ export function getUser(role) {
       sid = validSid;
       setSessionId(sid);
       sess = sessions[sid];
-    } else {
-      for (const altRole of ROLES) {
-        const altSessions = _getSessions(altRole);
-        const altSid = Object.keys(altSessions).find(k => {
-          const s = altSessions[k];
-          return s && s.user && (!s.expiresAt || Date.now() <= s.expiresAt);
-        });
-        if (altSid) {
-          r = altRole;
-          setCurrentRole(r);
-          setSessionId(altSid);
-          sessions = altSessions;
-          sess = sessions[altSid];
-          break;
-        }
-      }
     }
   }
 
@@ -385,14 +322,27 @@ export function clearAllSessions() {
   localStorage.removeItem("userId");
   localStorage.removeItem("name");
   localStorage.removeItem("email");
-  localStorage.removeItem("tenant_slug");
+  localStorage.removeItem("lastActiveRole");
+  localStorage.removeItem("lastActiveSessionId");
+  clearTenantSlug();
 }
 
 export function getTenantSlug() {
-  return localStorage.getItem("tenant_slug") || "";
+  return sessionStorage.getItem("tenant_slug") || localStorage.getItem("tenant_slug") || "";
+}
+
+export function setTenantSlug(slug) {
+  if (slug) {
+    sessionStorage.setItem("tenant_slug", slug);
+    localStorage.setItem("tenant_slug", slug);
+  } else {
+    sessionStorage.removeItem("tenant_slug");
+    localStorage.removeItem("tenant_slug");
+  }
 }
 
 export function clearTenantSlug() {
+  sessionStorage.removeItem("tenant_slug");
   localStorage.removeItem("tenant_slug");
 }
 
@@ -478,7 +428,7 @@ export function getDisplayUser() {
  * This replaces the old role-based /{role}/{page} pattern.
  */
 export function rolePath(page = "") {
-  const slug = localStorage.getItem("tenant_slug") || "";
+  const slug = getTenantSlug();
   if (!slug) return page ? `/login` : `/login`;
   return page ? `/org/${slug}/${page}` : `/org/${slug}/dashboard`;
 }

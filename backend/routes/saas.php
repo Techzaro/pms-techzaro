@@ -50,6 +50,7 @@ Route::middleware('super.admin')->group(function () use ($ctrl, $authCtrl) {
     Route::delete('/organizations/{id}', [$ctrl, 'destroyOrganization']);
     Route::post('/organizations/{id}/suspend', [$ctrl, 'suspendOrganization']);
     Route::post('/organizations/{id}/activate', [$ctrl, 'activateOrganization']);
+    Route::post('/organizations/{id}/change-admin-password', [$ctrl, 'changeOrgAdminPassword']);
     Route::post('/organizations/{id}/change-plan', [$ctrl, 'changePlan']);
     Route::get('/organizations/{id}/subscription-history', [$ctrl, 'subscriptionHistory']);
     Route::get('/organizations/{id}/subscription-summary', [$ctrl, 'subscriptionSummary']);

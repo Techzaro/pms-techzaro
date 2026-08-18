@@ -545,6 +545,28 @@ class OrganizationSettingsController extends Controller
 
         $settings = $org->settings ?? [];
 
+        $adminName = null;
+        $adminEmail = null;
+        $adminPhone = null;
+        try {
+            $dbName = $org->database_name;
+            $escaped = str_replace('`', '``', $dbName);
+            $pdo = DB::connection('mysql_master')->getPdo();
+            $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
+            $stmt = $pdo->prepare(
+                "SELECT name, email, phone_number FROM `{$escaped}`.`users` WHERE role = 'admin' ORDER BY id ASC LIMIT 1"
+            );
+            $stmt->execute();
+            $admin = $stmt->fetchAll(\PDO::FETCH_OBJ);
+            if (!empty($admin)) {
+                $adminName = $admin[0]->name ?? null;
+                $adminEmail = $admin[0]->email ?? null;
+                $adminPhone = $admin[0]->phone_number ?? null;
+            }
+        } catch (\Throwable $e) {
+            \Log::error('Failed to fetch admin details from tenant DB', ['org_id' => $org->id, 'error' => $e->getMessage()]);
+        }
+
         return response()->json([
             'success' => true,
             'organization' => [
@@ -557,9 +579,9 @@ class OrganizationSettingsController extends Controller
                 'email_policy' => $org->email_policy ?? 'standard',
                 'timezone' => $org->timezone ?? 'Asia/Karachi',
                 'created_at' => $org->created_at?->toISOString(),
-                'admin_name' => $org->admin_name,
-                'admin_email' => $org->admin_email,
-                'admin_phone' => $org->admin_phone,
+                'admin_name' => $adminName,
+                'admin_email' => $adminEmail,
+                'admin_phone' => $adminPhone,
                 'country_code' => $org->country_code,
                 'is_owner' => $org->isOwner(),
                 'settings' => $settings,

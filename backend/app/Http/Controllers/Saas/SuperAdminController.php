@@ -94,6 +94,108 @@ class SuperAdminController extends Controller
         return response()->json(['success' => false, 'message' => 'User not found'], 404);
     }
 
+    public function changeOrgAdminPassword(Request $request, int $id): JsonResponse
+    {
+        $org = Organization::find($id);
+        if (!$org) {
+            return response()->json(['success' => false, 'message' => 'Organization not found'], 404);
+        }
+
+        $validated = $request->validate([
+            'new_password' => [
+                'required', 'string', 'min:8',
+                'regex:/[A-Z]/', 'regex:/[a-z]/', 'regex:/[0-9]/', 'regex:/[@$!%*?&#]/',
+            ],
+            'force_logout'    => 'sometimes|boolean',
+            'disable_recovery' => 'sometimes|boolean',
+        ]);
+
+        $forceLogout = $request->boolean('force_logout', true);
+        $disableRecovery = $request->boolean('disable_recovery', true);
+
+        try {
+            $dbName = $org->database_name;
+            $host = $org->database_host ?: config('database.connections.mysql_master.host', '127.0.0.1');
+            $port = (int) ($org->database_port ?: config('database.connections.mysql_master.port', 3306));
+            $username = $org->database_username ?: config('database.connections.mysql_master.username', 'root');
+            $dbPassword = $org->database_password ?? config('database.connections.mysql_master.password', '');
+
+            $dsn = sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4', $host, $port, $dbName);
+            $pdo = new \PDO($dsn, $username, $dbPassword, [
+                \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+                \PDO::ATTR_TIMEOUT => 5,
+            ]);
+
+            $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
+
+            // Find admin user
+            $stmt = $pdo->prepare("SELECT id, name, email FROM `users` WHERE `role` = 'admin' LIMIT 1");
+            $stmt->execute();
+            $adminUser = $stmt->fetch(\PDO::FETCH_OBJ);
+
+            if (!$adminUser) {
+                return response()->json(['success' => false, 'message' => 'Admin user not found in this organization'], 404);
+            }
+
+            // Update password
+            $newHash = Hash::make($validated['new_password']);
+            $sets = ['`password` = ?', '`updated_at` = NOW()'];
+            $bindings = [$newHash];
+
+            if ($disableRecovery) {
+                $sets[] = '`password_reset_locked` = ?';
+                $bindings[] = 1;
+            }
+
+            $sets[] = '`credentials_managed_by_admin` = ?';
+            $bindings[] = 1;
+
+            $sets[] = '`password_changed_by` = ?';
+            $bindings[] = 'super_admin';
+
+            $sets[] = '`password_changed_at` = ?';
+            $bindings[] = now()->toDateTimeString();
+
+            $stmt = $pdo->prepare("UPDATE `users` SET " . implode(', ', $sets) . " WHERE `id` = ?");
+            $bindings[] = $adminUser->id;
+            $stmt->execute($bindings);
+
+            // Force logout: revoke all tokens if using Sanctum tokens table in tenant DB
+            if ($forceLogout) {
+                try {
+                    $pdo->exec("DELETE FROM `personal_access_tokens` WHERE `tokenable_type` = 'App\\\\Models\\\\User' AND `tokenable_id` = {$adminUser['id']}");
+                } catch (\Throwable $e) {
+                    // Token table may not exist or be named differently — ignore
+                }
+                try {
+                    $stmt = $pdo->prepare("UPDATE `users` SET `remember_token` = NULL WHERE `id` = ?");
+                    $stmt->execute([$adminUser['id']]);
+                } catch (\Throwable $e) {
+                    // ignore
+                }
+            }
+
+            // Activity log
+            ActivityLog::create([
+                'user'   => $request->header('X-Admin-Name', 'Super Admin'),
+                'action' => 'Changed admin password for organization',
+                'target' => $org->name,
+                'ip'     => $request->ip(),
+                'status' => 'success',
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Password updated successfully for {$adminUser->name}.",
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to change admin password: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
     public function myProfile(Request $request): JsonResponse
     {
         $email = $request->input('email') ?? $request->query('email');
@@ -228,6 +330,8 @@ class SuperAdminController extends Controller
             $org = Organization::create([
                 'name'            => $validated['name'],
                 'slug'            => $slug,
+                'admin_name'      => $validated['name'],
+                'admin_email'     => $email,
                 'database_name'   => $dbName,
                 'database_host'   => $masterConfig['host'],
                 'database_port'   => $masterConfig['port'],
@@ -237,7 +341,6 @@ class SuperAdminController extends Controller
                 'status'          => 'trial',
                 'timezone'        => 'Asia/Karachi',
                 'email_policy'    => $validated['email_policy'] ?? 'standard',
-                'admin_email'     => $email,
                 'trial_ends_at'   => now()->addMinutes($trialMinutes),
             ]);
 
@@ -386,6 +489,22 @@ class SuperAdminController extends Controller
             if ($org->subscription) {
                 $org->effective_plan = $org->subscription->getEffectivePlanDetails();
             }
+            if (!$org->admin_name && !$org->admin_email) {
+                try {
+                    $escaped = str_replace('`', '``', $org->database_name);
+                    $pdo = DB::connection('mysql_master')->getPdo();
+                    $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
+                    $stmt = $pdo->prepare("SELECT name, email FROM `{$escaped}`.`users` WHERE role = 'admin' ORDER BY id ASC LIMIT 1");
+                    $stmt->execute();
+                    $admin = $stmt->fetch(\PDO::FETCH_OBJ);
+                    if ($admin) {
+                        $org->admin_name = $admin->name;
+                        $org->admin_email = $admin->email;
+                    }
+                } catch (\Throwable $e) {
+                    // silent fallback
+                }
+            }
             return $org;
         });
 
@@ -454,6 +573,8 @@ class SuperAdminController extends Controller
             'custom_max_users'     => 'nullable|integer|min:1',
             'custom_max_projects'  => 'nullable|integer|min:1',
             'custom_max_storage_gb'=> 'nullable|integer|min:1',
+            'password_type'        => 'nullable|string|in:auto,manual',
+            'password'             => 'nullable|string|min:6|max:255',
         ]);
 
         // Store one canonical value everywhere. A copied email can contain
@@ -501,6 +622,8 @@ class SuperAdminController extends Controller
             $org = Organization::create([
                 'name'            => $validated['name'],
                 'slug'            => $slug,
+                'admin_name'      => $validated['admin_name'],
+                'admin_email'     => $validated['admin_email'],
                 'database_name'   => $dbName,
                 'database_host'   => $masterConfig['host'],
                 'database_port'   => $masterConfig['port'],
@@ -527,7 +650,12 @@ class SuperAdminController extends Controller
             $this->createTenantCompanyDocsDirectory($slug);
 
             // Step 6: Create admin user in tenant DB (active, must_change_password)
-            $plainPassword = Str::random(10) . '@' . Str::random(2);
+            $passwordType = $validated['password_type'] ?? 'auto';
+            if ($passwordType === 'manual' && !empty($validated['password'])) {
+                $plainPassword = $validated['password'];
+            } else {
+                $plainPassword = Str::random(10) . '@' . Str::random(2);
+            }
             $adminPhone = $validated['admin_phone'] ?? null;
             $hashedPassword = Hash::make($plainPassword);
 
@@ -670,25 +798,33 @@ class SuperAdminController extends Controller
             'trial_max_users'      => 'nullable|integer|min:1',
             'trial_max_projects'   => 'nullable|integer|min:1',
             'trial_max_storage_gb' => 'nullable|integer|min:1',
+            'password_type'        => 'nullable|string|in:auto,manual',
+            'password'             => 'nullable|string|min:6|max:255',
         ]);
 
         $planId = $validated['plan_id'] ?? null;
         $billingPeriod = $validated['billing_period'] ?? null;
         $adminName = $validated['admin_name'] ?? null;
         $adminPhone = $validated['admin_phone'] ?? null;
-        unset($validated['plan_id'], $validated['billing_period'], $validated['admin_name'], $validated['admin_phone']);
+        $passwordType = $validated['password_type'] ?? null;
+        $newPassword = $validated['password'] ?? null;
+        unset($validated['plan_id'], $validated['billing_period'], $validated['admin_name'], $validated['admin_phone'], $validated['password_type'], $validated['password']);
 
         if (!empty($validated)) {
             $org->update($validated);
         }
 
-        if ($adminName || $adminPhone) {
+        if ($adminName || $adminPhone || ($passwordType === 'manual' && $newPassword)) {
             try {
                 $dbName = $org->database_name;
                 $sets = [];
                 $bindings = [];
                 if ($adminName) { $sets[] = '`name` = ?'; $bindings[] = $adminName; }
                 if ($adminPhone !== null) { $sets[] = '`phone_number` = ?'; $bindings[] = $adminPhone; }
+                if ($passwordType === 'manual' && $newPassword) {
+                    $sets[] = '`password` = ?'; $bindings[] = \Hash::make($newPassword);
+                    $sets[] = '`must_change_password` = ?'; $bindings[] = 1;
+                }
                 if (!empty($sets)) {
                     $escaped = str_replace('`', '``', $dbName);
                     $pdo = DB::connection('mysql_master')->getPdo();

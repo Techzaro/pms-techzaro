@@ -1342,7 +1342,6 @@ function UserProfile() {
                         {unlockRecoveryLoading ? "Unlocking..." : "Enable Password Recovery"}
                       </button>
                     )}
-                    {user.active !== false && (
                       <button
                         className="btn-edit"
                         onClick={() => setShowAdminPasswordModal(true)}
@@ -1354,7 +1353,6 @@ function UserProfile() {
                         </svg>
                         Change Password
                       </button>
-                    )}
                   </div>
                 </div>
                 <div className="info-card-body">

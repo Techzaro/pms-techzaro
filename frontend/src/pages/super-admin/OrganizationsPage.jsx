@@ -1,6 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Building2, Plus, Search, Filter, ChevronRight, X, Hash } from 'lucide-react';
+import { Building2, Plus, Search, Filter, X, Hash, Eye, SlidersHorizontal, ExternalLink, Mail, User, Pencil, Trash2, Ban } from 'lucide-react';
+import ActionPopover from '../../components/ActionPopover';
+import '../../components/ActionPopover.css';
 import StatusBadge from './components/StatusBadge';
 import Pagination from './components/Pagination';
 import EmptyState from './components/EmptyState';
@@ -9,6 +11,7 @@ import { api } from './api/superAdminApi';
 import CreateOrganizationModal from './CreateOrganizationPage';
 
 const ITEMS_PER_PAGE = 10;
+const ORG_APP_URL = import.meta.env.VITE_ORG_APP_URL || '';
 
 const displayStatus = (org) => {
   if (org.status === 'suspended' || org.status === 'archived') return 'suspended';
@@ -124,62 +127,147 @@ export default function OrganizationsPage() {
           <EmptyState icon={Building2} title="No organizations found" description="No organizations match your current filters." />
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <table className="w-full">
+            <div>
+              <table className="w-full" style={{ tableLayout: 'fixed' }}>
                 <thead>
                   <tr style={s.divider}>
-                    {['ID', 'Organization', 'Plan', 'Users', 'Projects', 'Status'].map((h) => (
-                      <th key={h} className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider"
+                    {[
+                      { label: 'ID', width: 'w-[45px]' },
+                      { label: 'Organization', width: 'w-[180px]' },
+                      { label: 'Org Owner', width: 'w-[170px]' },
+                      { label: 'Plan', width: 'w-[80px]' },
+                      { label: 'Users', width: 'w-[50px]' },
+                      { label: 'Projects', width: 'w-[55px]' },
+                      { label: 'Status', width: 'w-[80px]' },
+                      { label: 'Action', width: 'w-[65px]' },
+                    ].map((col) => (
+                      <th key={col.label} className={`text-left px-3 py-3 text-xs font-semibold uppercase tracking-wider ${col.width}`}
                         style={s.textMuted}>
-                        {h}
+                        {col.label}
                       </th>
                     ))}
-                    <th className="text-right px-5 py-3 w-10"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {paginated.map((org, idx) => {
                     const isLast = idx === paginated.length - 1;
+                    const fullUrl = ORG_APP_URL ? `${ORG_APP_URL.replace(/\/+$/, '')}/org/${org.slug}` : `/org/${org.slug}`;
                     return (
-                      <tr key={org.id} onClick={() => navigate(`/super-admin/organizations/${org.id}`)}
-                        className="cursor-pointer transition-colors"
-                        style={{
-                          borderBottom: isLast ? 'none' : '1px solid var(--border-light)',
-                        }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
-                        <td className="px-5 py-4">
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold"
-                            style={{ background: 'var(--color-primary-bg)', color: 'var(--color-primary)', fontFamily: 'monospace' }}>
-                            <Hash className="w-3 h-3" />{org.id}
-                          </span>
-                        </td>
-                        <td className="px-5 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'var(--color-primary-bg)' }}>
-                              <Building2 className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
+                      <Fragment key={org.id}>
+                        <tr
+                          style={{
+                            borderBottom: isLast ? 'none' : '1px solid var(--border-light)',
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
+                          <td className="px-3 py-4 w-[45px]">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold"
+                              style={{ background: 'var(--color-primary-bg)', color: 'var(--color-primary)', fontFamily: 'monospace' }}>
+                              <Hash className="w-3 h-3" />{org.id}
+                            </span>
+                          </td>
+                          <td className="px-3 py-4 w-[180px]">
+                            <div className="flex items-center gap-2">
+                              <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'var(--color-primary-bg)' }}>
+                                <Building2 className="w-4 h-4" style={{ color: 'var(--color-primary)' }} />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold truncate" style={s.textHeading}>{org.name}</p>
+                                <a
+                                  href={fullUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs truncate flex items-center gap-1 hover:underline"
+                                  style={{ color: 'var(--color-primary)' }}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {fullUrl.replace(/^https?:\/\//, '')}
+                                  <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                                </a>
+                              </div>
                             </div>
+                          </td>
+                          <td className="px-3 py-4 w-[170px]">
                             <div className="min-w-0">
-                              <p className="text-sm font-semibold truncate" style={s.textHeading}>{org.name}</p>
-                              <p className="text-xs truncate" style={s.textMuted}>/org/{org.slug}</p>
+                              <p className="text-sm font-medium truncate flex items-center gap-1.5" style={s.textHeading}>
+                                <User className="w-3.5 h-3.5 flex-shrink-0" style={s.textMuted} />
+                                {org.admin_name || '—'}
+                              </p>
+                              {org.admin_email && (
+                                <p className="text-xs truncate flex items-center gap-1 mt-0.5" style={s.textMuted}>
+                                  <Mail className="w-3 h-3 flex-shrink-0" />
+                                  {org.admin_email}
+                                </p>
+                              )}
                             </div>
-                          </div>
-                        </td>
-                        <td className="px-5 py-4">
-                          <span className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-full"
-                            style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border-light)' }}>
-                            {planLabel(org)}
-                          </span>
-                        </td>
-                        <td className="px-5 py-4">
-                          <span className="text-sm font-medium" style={s.textHeading}>{org.users_count || 0}</span>
-                        </td>
-                        <td className="px-5 py-4">
-                          <span className="text-sm font-medium" style={s.textHeading}>{org.projects_count || 0}</span>
-                        </td>
-                        <td className="px-5 py-4"><StatusBadge status={displayStatus(org)} size="sm" /></td>
-                        <td className="px-5 py-4 text-right"><ChevronRight className="w-4 h-4" style={s.textMuted} /></td>
-                      </tr>
+                          </td>
+                          <td className="px-3 py-4 w-[80px]">
+                            <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full"
+                              style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border-light)' }}>
+                              {planLabel(org)}
+                            </span>
+                          </td>
+                          <td className="px-3 py-4 w-[50px]">
+                            <span className="text-sm font-medium" style={s.textHeading}>{org.users_count || 0}</span>
+                          </td>
+                          <td className="px-3 py-4 w-[55px]">
+                            <span className="text-sm font-medium" style={s.textHeading}>{org.projects_count || 0}</span>
+                          </td>
+                          <td className="px-3 py-4 w-[80px]"><StatusBadge status={displayStatus(org)} size="sm" /></td>
+                          <td className="px-3 py-4 w-[65px]">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <button
+                                className="action-icon-btn action-view action-trigger-lg"
+                                title="View Organization"
+                                onClick={() => navigate(`/super-admin/organizations/${org.id}`)}
+                              >
+                                <Eye size={18} />
+                              </button>
+                              <ActionPopover
+                                trigger={
+                                  <button
+                                    className="action-icon-btn action-manage action-trigger-lg"
+                                    title="More Actions"
+                                    style={{
+                                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                      padding: '4px', borderRadius: '6px',
+                                      background: 'var(--bg-hover, #f3f4f6)',
+                                      color: 'var(--text-primary, #374151)',
+                                      border: '1px solid var(--border-color, #e5e7eb)', cursor: 'pointer',
+                                    }}
+                                  >
+                                    <SlidersHorizontal size={18} />
+                                  </button>
+                                }
+                                onTriggerClick={() => navigate(`/super-admin/organizations/${org.id}`)}
+                              >
+                                <button
+                                  className="action-icon-btn action-edit"
+                                  title="Edit Organization"
+                                  onClick={() => navigate(`/super-admin/organizations/${org.id}`)}
+                                >
+                                  <Pencil size={14} />
+                                </button>
+                                <button
+                                  className="action-icon-btn"
+                                  title="Suspend Organization"
+                                  style={{ background: '#FEF3C7', color: '#D97706' }}
+                                  onMouseEnter={(e) => { e.currentTarget.style.background = '#F59E0B'; e.currentTarget.style.color = '#fff'; }}
+                                  onMouseLeave={(e) => { e.currentTarget.style.background = '#FEF3C7'; e.currentTarget.style.color = '#D97706'; }}
+                                >
+                                  <Ban size={14} />
+                                </button>
+                                <button
+                                  className="action-icon-btn action-delete"
+                                  title="Delete Organization"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </ActionPopover>
+                            </div>
+                          </td>
+                        </tr>
+                      </Fragment>
                     );
                   })}
                 </tbody>

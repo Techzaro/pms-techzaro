@@ -5,6 +5,7 @@
  */
 
 import { isAdminDomain, isOrgDomain, getAdminBaseUrl, getOrgBaseUrl } from './domain';
+import { getTenantSlug } from './auth';
 
 /** Get the current organization slug from the URL path */
 export function getSlugFromUrl() {
@@ -30,7 +31,7 @@ export function getOrganizationUrl(slug, page = '') {
 
 /** Build the org path for the current user (reads slug from URL) */
 export function orgPath(page = '') {
-  const slug = getSlugFromUrl() || localStorage.getItem('tenant_slug') || '';
+  const slug = getSlugFromUrl() || getTenantSlug() || '';
   if (!slug) return page ? `/${page}` : '/login';
   return page ? `/org/${slug}/${page}` : `/org/${slug}/dashboard`;
 }
@@ -48,7 +49,7 @@ export function getLoginPath() {
 /** Get the dashboard path based on current domain */
 export function getDashboardPath() {
   if (isAdminDomain()) return '/super-admin';
-  const slug = localStorage.getItem('tenant_slug') || '';
+  const slug = getTenantSlug() || '';
   return slug ? `/org/${slug}/dashboard` : '/login';
 }
 

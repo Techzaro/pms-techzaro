@@ -14,7 +14,7 @@ class UrlHelper
      * Get the organization application URL (no trailing slash).
      *
      * Production:  https://app.one.techxaro.com
-     * Staging:     https://staging.app.one.techxaro.com
+     * Staging:     https://app.one.staging.techxaro.com
      * Local:       http://localhost:5173
      */
     public static function getOrgAppUrl(): string
@@ -26,7 +26,7 @@ class UrlHelper
      * Get the super admin application URL (no trailing slash).
      *
      * Production:  https://admin.one.techxaro.com
-     * Staging:     https://staging.admin.one.techxaro.com
+     * Staging:     https://admin.one.staging.techxaro.com
      * Local:       http://localhost:5173/super-admin
      */
     public static function getAdminAppUrl(): string
@@ -38,7 +38,7 @@ class UrlHelper
      * Get the full organization URL for a given slug.
      *
      * Production:  https://app.one.techxaro.com/org/techxaro
-     * Staging:     https://staging.app.one.techxaro.com/org/techxaro
+     * Staging:     https://app.one.staging.techxaro.com/org/techxaro
      * Local:       http://localhost:5173/org/techxaro
      */
     public static function getOrganizationUrl(string $slug): string
@@ -50,7 +50,7 @@ class UrlHelper
      * Get the organization login URL.
      *
      * Production:  https://app.one.techxaro.com/login
-     * Staging:     https://staging.app.one.techxaro.com/login
+     * Staging:     https://app.one.staging.techxaro.com/login
      * Local:       http://localhost:5173/login
      */
     public static function getLoginUrl(): string
@@ -62,7 +62,7 @@ class UrlHelper
      * Get the super admin login URL.
      *
      * Production:  https://admin.one.techxaro.com/super-admin/login
-     * Staging:     https://staging.admin.one.techxaro.com/super-admin/login
+     * Staging:     https://admin.one.staging.techxaro.com/super-admin/login
      * Local:       http://localhost:5173/super-admin/login
      */
     public static function getAdminLoginUrl(): string

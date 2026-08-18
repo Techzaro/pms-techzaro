@@ -14,7 +14,7 @@ import { useState, useEffect } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { MdVisibility, MdVisibilityOff } from "react-icons/md";
 import API_URL from "../config/api";
-import { saveSession, clearAllSessions, authToken } from "../utils/auth";
+import { saveSession, clearAllSessions, authToken, setTenantSlug, getTenantSlug } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
 import { PasswordInput, isPasswordValid } from "../components/PasswordInput";
@@ -128,7 +128,7 @@ function Login() {
         saveSession(data.role, data.token, data.user || {}, rememberMe, data.expires_at);
 
         if (data.tenant_slug) {
-          localStorage.setItem("tenant_slug", data.tenant_slug);
+          setTenantSlug(data.tenant_slug);
         }
 
         if (data.must_change_password) {
@@ -149,7 +149,7 @@ function Login() {
    * Preserves ?redirect= parameter for post-login redirect.
    */
   const redirectToDashboard = (role) => {
-    const slug = localStorage.getItem("tenant_slug") || "";
+    const slug = getTenantSlug();
     const searchParams = new URLSearchParams(window.location.search);
     const redirectPath = searchParams.get("redirect");
 
@@ -192,7 +192,7 @@ function Login() {
       setChangingPassword(true);
 
       const token = authToken();
-      const tenantSlug = localStorage.getItem("tenant_slug") || "";
+      const tenantSlug = getTenantSlug();
 
       const res = await fetch(`${API_URL}/user/first-time-change-password`, {
         method: "PUT",
@@ -218,7 +218,7 @@ function Login() {
       if (data.token) {
         saveSession(data.role || 'member', data.token, data.user || {}, rememberMe, data.expires_at);
         if (data.tenant_slug) {
-          localStorage.setItem('tenant_slug', data.tenant_slug);
+          setTenantSlug(data.tenant_slug);
         }
         showSuccessMessage('Password', 'changed');
         setMustChangePassword(false);
