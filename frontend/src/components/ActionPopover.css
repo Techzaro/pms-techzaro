@@ -24,19 +24,26 @@
 .ap-popover-content {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 4px 6px 4px 0;
+  border-radius: 10px;
+  padding: 6px 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
 }
 
 .ap-popover-content .action-icon-btn {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border-radius: 8px;
   font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
 }
 
 .ap-popover-item {

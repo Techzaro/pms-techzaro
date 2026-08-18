@@ -4,7 +4,7 @@ import {
   ArrowLeft, Building2, Users, FolderKanban, Database, Globe, Calendar,
   Shield, Loader2, Mail, User, Phone, MailCheck, CreditCard, HardDrive, Check, Pencil, X, ArrowRight, Clock, RotateCcw, Sliders,
   HardDrive as StorageIcon, FileText, Image, Archive, FolderOpen, AlertTriangle, Trash2, Info, DollarSign, Receipt, TrendingUp,
-  CheckCircle, XCircle, Eye, Download, Bell, Settings, AlertCircle,
+  CheckCircle, XCircle, Eye, Download, Bell, Settings, AlertCircle, Lock,
 } from 'lucide-react';
 import StatusBadge from './components/StatusBadge';
 import { LoadingState, ErrorState } from './components/LoadingState';
@@ -13,6 +13,7 @@ import ConfirmModal from '../../components/ConfirmModal';
 import useUnsavedChanges from '../../hooks/useUnsavedChanges';
 import TrialConfigurationModal from './components/TrialConfigurationModal';
 import PlanCustomizeModal from './components/PlanCustomizeModal';
+import SuperAdminChangePasswordModal from './components/SuperAdminChangePasswordModal';
 import { countries, getCountryByCode, formatPhoneByCountry } from './data/countries';
 import CountrySelect from '../../components/CountrySelect';
 
@@ -72,6 +73,7 @@ export default function OrganizationDetailPage() {
   const [histSummary, setHistSummary] = useState(null);
   const [histPlanUsage, setHistPlanUsage] = useState([]);
   const [histLoading, setHistLoading] = useState(false);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -406,7 +408,18 @@ export default function OrganizationDetailPage() {
         {activeView === 'details' ? (
           <>
         <div className="rounded-xl p-5 shadow-sm" style={s.card}>
-          <h3 className="text-lg font-semibold mb-4" style={s.textHeading}>Admin Details</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold flex items-center gap-2" style={s.textHeading}>
+              <Lock className="w-5 h-5" style={{ color: 'var(--color-primary)' }} /> Admin Details
+            </h3>
+            <button onClick={() => setShowChangePasswordModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+              style={{ background: 'var(--color-primary)', color: '#fff' }}
+              onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.85'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.opacity = '1'; }}>
+              <Lock className="w-3.5 h-3.5" /> Change Password
+            </button>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {[
               { icon: User, label: 'Admin Name', value: org.admin_name || 'N/A' },
@@ -1627,6 +1640,14 @@ export default function OrganizationDetailPage() {
 
       {editOpen && (
         <EditOrganizationModal org={org} plans={plans} saving={editSaving} onSave={handleEditSave} onClose={() => setEditOpen(false)} />
+      )}
+
+      {showChangePasswordModal && (
+        <SuperAdminChangePasswordModal
+          org={org}
+          onClose={() => setShowChangePasswordModal(false)}
+          onSuccess={() => { setToast({ type: 'success', message: 'Admin password updated successfully.' }); }}
+        />
       )}
     </div>
   );
