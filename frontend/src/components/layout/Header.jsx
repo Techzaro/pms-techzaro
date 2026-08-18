@@ -4,14 +4,21 @@
  * buttons (+ Task, + Project), notification bell with unread badge, and a
  * user profile dropdown. Handles responsive behaviour (logo visibility,
  * sidebar toggle) and real-time notification polling.
+ *
+ * Also renders a hover dropdown on the logo/text ("app switcher") that
+ * lets the user jump from the PMS portal into the HRM portal. The HRM
+ * target is role-aware and remains scoped to the current organization slug:
+ * members/team leads go to /org/:slug/hrm/member-dashboard, while other
+ * roles go to /org/:slug/hrm. See utils/hrmNavigation.js for the mapping.
  */
 
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import { MdKeyboardArrowDown, MdNotifications, MdPerson, MdHistory, MdLogout, MdLock, MdDarkMode, MdLightMode, MdFeedback } from "react-icons/md";
+import { MdKeyboardArrowDown, MdNotifications, MdPerson, MdHistory, MdLogout, MdLock, MdDarkMode, MdLightMode, MdBusinessCenter, MdApps, MdFeedback } from "react-icons/md";
 import { useNavigate } from "react-router-dom";
 
 import API_URL from "../../config/api";
 import { authToken, getCurrentRole, getUser, setUser, clearSession, logoutUser, getToken, rolePath, normalizeRole } from "../../utils/auth";
+import { getHrmLandingPath } from "../../utils/hrmNavigation";
 import { subscribe } from "../../utils/eventBus";
 import { requestNotificationPermissionAsync, showDesktopNotification, getNotificationPermission } from "../../utils/browserNotification";
 import { initFirebase } from "../../utils/firebase";
@@ -38,8 +45,14 @@ function Header() {
   const searchDropdownRef = useRef(null);
   const notifListRef = useRef(null);
   const profileMenuRef = useRef(null);
+  const logoSwitcherRef = useRef(null);
   const { theme, toggleTheme } = useTheme();
   const { data: branding } = useOrgBranding();
+
+  // ── HRM navigation target (role-aware) ──
+  // Members/team leads → /:role/hrm/member-dashboard
+  // Admin/manager/etc  → /:role/hrm
+  const hrmTarget = getHrmLandingPath();
 
   // ── State ──
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -54,6 +67,11 @@ function Header() {
   const initialPollDoneRef = useRef(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifPermission, setNotifPermission] = useState(() => getNotificationPermission());
+  /** Click / hover-triggered "switch portal" dropdown anchored on the logo/text. */
+  const [showAppSwitcher, setShowAppSwitcher] = useState(false);
+  const appSwitcherCloseTimer = useRef(null);
+  /** True when the current primary input is a touch/pen (mobile/tablet). */
+  const isTouchDevice = useRef(typeof window !== 'undefined' && window.matchMedia('(hover: none)').matches);
 
   // Initialise Firebase on mount
   useEffect(() => {
@@ -518,14 +536,57 @@ function Header() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Close the logo app-switcher dropdown when clicking/touching outside.
+  useEffect(() => {
+    const handleOutside = (e) => {
+      if (logoSwitcherRef.current && !logoSwitcherRef.current.contains(e.target)) {
+        setShowAppSwitcher(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('touchstart', handleOutside, { passive: true });
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('touchstart', handleOutside);
+    };
+  }, []);
+
+  /** Opens the app-switcher dropdown immediately, cancelling any pending close. */
+  const openAppSwitcher = () => {
+    if (isTouchDevice.current || window.innerWidth <= 900) return;
+    if (appSwitcherCloseTimer.current) {
+      clearTimeout(appSwitcherCloseTimer.current);
+      appSwitcherCloseTimer.current = null;
+    }
+    setShowAppSwitcher(true);
+  };
+
+  /** Closes the app-switcher dropdown after a short delay (desktop hover). */
+  const closeAppSwitcherSoon = () => {
+    if (isTouchDevice.current || window.innerWidth <= 900) return;
+    appSwitcherCloseTimer.current = setTimeout(() => setShowAppSwitcher(false), 200);
+  };
+
+  /** Toggle open/close on click/tap — works reliably for both mouse and touch. */
+  const toggleAppSwitcher = (e) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    if (appSwitcherCloseTimer.current) {
+      clearTimeout(appSwitcherCloseTimer.current);
+      appSwitcherCloseTimer.current = null;
+    }
+    setShowAppSwitcher((prev) => !prev);
+  };
+
   return (
     <>
 
       {/* ── Left: Menu toggle + Logo ── */}
-      <div className="header-container">
+      <div className="header-container" style={{ overflow: "visible" }}>
 
         {/* LEFT */}
-        <div className="header-left">
+        <div className="header-left" style={{ overflow: "visible" }}>
 
           <button
             className="header-menu-btn"
@@ -539,17 +600,122 @@ function Header() {
             </svg>
           </button>
 
-          <div className="logo-box">
-            {branding?.logo_url ? (
-              <img src={branding.logo_url} alt="Logo" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "14px" }} />
-            ) : (
-              <b>{(branding?.subtitle || 'TX').substring(0, 2).toUpperCase()}</b>
-            )}
-          </div>
+          {/* Logo + text – hovering (desktop) or tapping (mobile/tablet) opens
+              a portal switcher that lets the user jump to the HRM app. */}
+          <div
+            className="header-logo-switcher"
+            ref={logoSwitcherRef}
+            role="button"
+            tabIndex={0}
+            onMouseEnter={openAppSwitcher}
+            onMouseLeave={closeAppSwitcherSoon}
+            onClick={toggleAppSwitcher}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleAppSwitcher(e); } }}
+            style={{ position: "relative", display: "flex", alignItems: "center", cursor: "pointer", userSelect: "none", WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
+          >
+            <div  className="logo-box ">
+              {branding?.logo_url ? (
+                <img src={branding.logo_url} alt="Logo" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "14px" }} />
+              ) : (
+                <b>{(branding?.subtitle || "TX").substring(0, 2).toUpperCase()}</b>
+              )}
+            </div>
 
-          <div className={"logo-text" + (showFullLogo || isSmallScreen ? "" : " logo-text--hidden")}>
-            <h3>{branding?.subtitle || 'PMS Portal'}</h3>
-            <span>{branding?.org_name || 'Organization'}</span>
+            <div className={"logo-text" + (showFullLogo || isSmallScreen ? "" : " logo-text--hidden")}>
+              <h3>{branding?.subtitle || "PMS Portal"}</h3>
+              <span>{branding?.org_name || "Organization"}</span>
+            </div>
+
+            <MdKeyboardArrowDown
+              fontSize="16px"
+              style={{
+                marginLeft: 2,
+                color: "var(--color-text-secondary, #6b7280)",
+                transform: showAppSwitcher ? "rotate(180deg)" : "rotate(0deg)",
+                transition: "transform 0.15s ease",
+                flexShrink: 0,
+                display: "inline-block"
+              }}
+            />
+
+            {showAppSwitcher && (
+              <div
+                className="header-app-switcher-dropdown"
+                onMouseEnter={openAppSwitcher}
+                onMouseLeave={closeAppSwitcherSoon}
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  position: "absolute",
+                  top: "calc(100% + 8px)",
+                  left: 0,
+                  minWidth: 230,
+                  maxWidth: "calc(100vw - 20px)",
+                  background: "var(--bg-card, #fff)",
+                  border: "1px solid var(--border-color, #e5e7eb)",
+                  borderRadius: 12,
+                  boxShadow: "0 12px 36px rgba(15, 23, 42, 0.18)",
+                  padding: 6,
+                  zIndex: 999999,
+                }}
+              >
+
+                <div style={{ padding: "6px 10px 8px", fontSize: 11, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--text-secondary, #6b7280)" }}>
+                  Switch Portal
+                </div>
+
+                <a
+                  href={hrmTarget}
+                  onClick={(e) => { e.stopPropagation(); setShowAppSwitcher(false); }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "10px 10px",
+                    borderRadius: 8,
+                    textDecoration: "none",
+                    color: "var(--text-primary, #111827)",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    transition: "background 0.15s",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-primary-bg, #eef2ff)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                >
+                  <MdBusinessCenter fontSize="18px" style={{ color: "var(--color-primary, #6366f1)", flexShrink: 0 }} />
+                  <span>
+                    HR Management
+                    <br />
+                    <span style={{ fontWeight: 400, fontSize: 11.5, color: "var(--text-secondary, #6b7280)" }}>
+                      Employees, payroll, recruitment
+                    </span>
+                  </span>
+                </a>
+
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "10px 10px",
+                    borderRadius: 8,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: "var(--text-primary, #111827)",
+                    background: "var(--color-primary-bg, #eef2ff)",
+                    cursor: "default",
+                  }}
+                >
+                  <MdApps fontSize="18px" style={{ color: "var(--color-primary, #6366f1)", flexShrink: 0 }} />
+                  <span>
+                    Project Management
+                    <br />
+                    <span style={{ fontWeight: 400, fontSize: 11.5, color: "var(--text-secondary, #6b7280)" }}>
+                      You're here
+                    </span>
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
         </div>
@@ -698,7 +864,6 @@ function Header() {
             <span className="quick-btn-short">+P</span>
           </button>
           )}
-
           {/* Enable desktop notifications button - only shows when permission not granted */}
           {notifPermission !== 'granted' && 'Notification' in window && (
             <button

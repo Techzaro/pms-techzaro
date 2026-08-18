@@ -4,13 +4,13 @@
  * Listens for custom "modal-state" events so the right-sidebar toggle is
  * hidden while any modal is open.
  *
- * Runs a SINGLE global lightweight poll (unread-count) every 20s.
+ * Runs a SINGLE global lightweight poll (unread-count) every 5s.
  * When count changes → publishes data:changed event → all pages refresh.
  * This replaces 20+ independent page polls with ONE app-level poll.
  */
 
 import { useEffect, useLayoutEffect, useRef } from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
 import ChatWidget from "./ChatWidget";
@@ -18,13 +18,21 @@ import StorageNotificationBanner from "../StorageNotificationBanner";
 import { authToken } from "../../utils/auth";
 import { publish } from "../../utils/eventBus";
 import API_URL from "../../config/api";
+import { useOrgBranding } from "../../hooks/useOrgBranding";
 
 import "./DashboardLayout.css";
 
-const POLL_INTERVAL = 20000; // 20 seconds
+const POLL_INTERVAL = 5000;
 
 function DashboardLayout({ children }) {
   const prevCountRef = useRef(null);
+  const location = useLocation();
+  const { data: branding } = useOrgBranding();
+
+  useEffect(() => {
+    const organizationName = branding?.org_name?.trim();
+    document.title = organizationName ? `${organizationName} | PMS` : "PMS Portal";
+  }, [branding?.org_name, location.pathname]);
 
   // Immediate layout check: if no token exists, immediately redirect to login & replace history
   useLayoutEffect(() => {
@@ -63,11 +71,19 @@ function DashboardLayout({ children }) {
     poll();
 
     const id = setInterval(poll, POLL_INTERVAL);
-    return () => { stopped = true; clearInterval(id); };
+    const refreshOnFocus = () => poll();
+    window.addEventListener('focus', refreshOnFocus);
+    document.addEventListener('visibilitychange', refreshOnFocus);
+    return () => {
+      stopped = true;
+      clearInterval(id);
+      window.removeEventListener('focus', refreshOnFocus);
+      document.removeEventListener('visibilitychange', refreshOnFocus);
+    };
   }, []);
 
   return (
-    <div className="dashboard-page">
+    <div className="dashboard-page pms-layout">
       <svg className="dashboard-wave-bg" viewBox="0 0 1440 500" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMin slice">
         <path d="M0 0H1440V140C1440 140 1100 60 800 130C500 200 350 320 100 260C-50 220 0 340 0 340V0Z" fill="url(#wave1)" />
         <path d="M0 0H1440V180C1440 180 1000 90 720 170C440 250 280 360 50 290C-100 240 0 380 0 380V0Z" fill="url(#wave2)" />

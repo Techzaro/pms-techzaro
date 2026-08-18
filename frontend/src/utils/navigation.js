@@ -67,6 +67,10 @@ const NOTIFICATION_TYPE_MAP = {
 
   // Chat
   chat_message: { page: "chat", buildPath: (id) => `chat/${id}` },
+
+  // HRM Applications
+  hrm_application_approval: { page: "applications", buildPath: (id) => `applications?id=${id}` },
+  hrm_application_response: { page: "applications", buildPath: (id) => `applications?id=${id}` },
 };
 
 // ── Dashboard Activity → Destination mapping ──
@@ -108,6 +112,25 @@ export function getNotificationDestination(notification) {
   const role = getCurrentRole();
   const isAdminOrManager = role === "admin" || role === "manager";
 
+  // Handle HRM application notifications cleanly regardless of origin or module
+  const isHrmAppType = 
+    type === "hrm_application_approval" || 
+    type === "hrm_application_response" || 
+    type === "Application Update" || 
+    type === "Application Resubmitted" || 
+    type === "Application Requires Approval" ||
+    related_module === "hrm_member_request" ||
+    related_module === "hrm_application" ||
+    related_module === "member_request";
+
+  if (isHrmAppType) {
+    const targetId = related_id || (notification.data && notification.data.request_id);
+    if (targetId) {
+      return rolePath(`hrm/applications?id=${targetId}`);
+    }
+    return rolePath("hrm/applications");
+  }
+
   // 1. Use backend link if available (strip leading slash for rolePath)
   if (link) {
     const cleanLink = link.replace(/^\//, "");
@@ -121,6 +144,7 @@ export function getNotificationDestination(notification) {
     }
     return rolePath(cleanLink);
   }
+
 
   // 2. Fall back to type-based mapping
   const mapping = NOTIFICATION_TYPE_MAP[type];

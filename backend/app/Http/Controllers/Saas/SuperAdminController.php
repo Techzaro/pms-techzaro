@@ -208,11 +208,14 @@ class SuperAdminController extends Controller
 
         $dbName = config('tenancy.database_prefix', 'pms_tenant_') . $slug;
         $domain = \App\Helpers\UrlHelper::getOrganizationUrl($slug);
+        $databaseCreated = false;
+        $org = null;
 
         try {
             // Step 1: Drop + Create database (clean slate)
             $this->dbService->dropDatabase($dbName);
             $this->dbService->createDatabase($dbName);
+            $databaseCreated = true;
 
             // Step 2: Import tenant schema (fast — bypasses 134 individual migrations)
             $this->importTenantSchema($dbName);
@@ -255,6 +258,7 @@ class SuperAdminController extends Controller
             $hashedPassword = Hash::make($plainPassword);
             $pdo = DB::connection('mysql_master')->getPdo();
             $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
+            $escaped = str_replace('`', '``', $dbName);
             $stmt = $pdo->prepare("INSERT INTO `{$escaped}`.`users` (name, email, personal_email, professional_email, phone_number, contact_no, password, role, active, must_change_password, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'admin', 1, 1, NOW(), NOW())");
             $stmt->execute([$validated['name'], $email, $email, $email, $phone, $phone, $hashedPassword]);
 
@@ -299,6 +303,8 @@ class SuperAdminController extends Controller
                 ],
             ], 201);
         } catch (\Throwable $e) {
+            $this->rollbackFailedProvisioning($org, $dbName, $databaseCreated, $e);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to create organization: ' . $e->getMessage(),
@@ -450,6 +456,11 @@ class SuperAdminController extends Controller
             'custom_max_storage_gb'=> 'nullable|integer|min:1',
         ]);
 
+        // Store one canonical value everywhere. A copied email can contain
+        // whitespace or uppercase characters, which made the first login for
+        // later tenants depend on an unreliable cross-database scan.
+        $validated['admin_email'] = Str::lower(trim($validated['admin_email']));
+
         // Use custom slug or auto-generate from name
         $slug = !empty($validated['slug']) ? Str::slug($validated['slug']) : Str::slug($validated['name']);
         $originalSlug = $slug;
@@ -461,11 +472,14 @@ class SuperAdminController extends Controller
 
         $dbName = config('tenancy.database_prefix', 'pms_tenant_') . $slug;
         $domain = \App\Helpers\UrlHelper::getOrganizationUrl($slug);
+        $databaseCreated = false;
+        $org = null;
 
         try {
             // Step 1: Drop + Create database (clean slate)
             $this->dbService->dropDatabase($dbName);
             $this->dbService->createDatabase($dbName);
+            $databaseCreated = true;
 
             // Step 2: Import tenant schema (fast — bypasses 134 individual migrations)
             $this->importTenantSchema($dbName);
@@ -496,6 +510,7 @@ class SuperAdminController extends Controller
                 'status'          => 'trial',
                 'timezone'        => 'Asia/Karachi',
                 'email_policy'    => $validated['email_policy'] ?? 'standard',
+                'admin_email'     => $validated['admin_email'],
                 'trial_ends_at'   => now()->addMinutes($trialMinutes),
             ]);
 
@@ -616,6 +631,8 @@ class SuperAdminController extends Controller
                 'admin_password' => $plainPassword,
             ], 201);
         } catch (\Throwable $e) {
+            $this->rollbackFailedProvisioning($org, $dbName, $databaseCreated, $e);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to create organization: ' . $e->getMessage(),
@@ -1127,6 +1144,52 @@ class SuperAdminController extends Controller
         $pdo->exec("SET FOREIGN_KEY_CHECKS = 1");
         $pdo->exec("SET UNIQUE_CHECKS = 1");
         $pdo = null;
+
+        // The schema snapshot contains the PMS core but predates the HRM
+        // module. Apply tenant-scoped HRM migrations before creating the admin.
+        $this->dbService->runHrmMigrations($dbName);
+    }
+
+    /**
+     * Compensate for a partially completed provisioning attempt.
+     *
+     * Tenant database creation cannot participate in the master database
+     * transaction, so explicitly remove both sides when a later step fails.
+     */
+    private function rollbackFailedProvisioning(
+        ?Organization $organization,
+        string $databaseName,
+        bool $databaseCreated,
+        \Throwable $cause
+    ): void {
+        \Log::error('Organization provisioning failed; rolling back partial resources.', [
+            'database_name' => $databaseName,
+            'organization_id' => $organization?->id,
+            'error' => $cause->getMessage(),
+        ]);
+
+        if ($organization?->exists) {
+            try {
+                $organization->forceDelete();
+            } catch (\Throwable $cleanupError) {
+                \Log::error('Failed to remove partial organization record.', [
+                    'organization_id' => $organization->id,
+                    'database_name' => $databaseName,
+                    'error' => $cleanupError->getMessage(),
+                ]);
+            }
+        }
+
+        if ($databaseCreated) {
+            try {
+                $this->dbService->dropDatabase($databaseName);
+            } catch (\Throwable $cleanupError) {
+                \Log::error('Failed to remove orphaned tenant database.', [
+                    'database_name' => $databaseName,
+                    'error' => $cleanupError->getMessage(),
+                ]);
+            }
+        }
     }
 
     // ─── Organization Trial Settings ────────────────────────────────

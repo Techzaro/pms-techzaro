@@ -48,9 +48,16 @@ class ResolveTenantDatabase
             return $next($request);
         }
 
+        // An authenticated bearer token is authoritative. This prevents a stale
+        // browser X-Tenant-ID (for example "techxaro") from switching a Farhan
+        // user's request into the wrong organization database.
+        $tokenOrganization = $this->resolveFromBearerToken($request);
+
+        if ($tokenOrganization) {
+            $organization = $tokenOrganization;
         // If no tenant identifier is present, try resolving from the bearer token.
         // This handles localhost development where no subdomain/header is available.
-        if (!$this->resolver->hasTenantIdentifier($request)) {
+        } elseif (!$this->resolver->hasTenantIdentifier($request)) {
             $organization = $this->resolveFromBearerToken($request);
             if (!$organization) {
                 return $next($request);
@@ -152,7 +159,10 @@ class ResolveTenantDatabase
         $request->attributes->set('currentOrganization', $organization);
         $request->attributes->set('tenantConnectionName', $this->dbManager->getCurrentConnectionName());
 
-        return $next($request);
+        $response = $next($request);
+        $response->headers->set('X-Tenant-Slug', $organization->slug);
+
+        return $response;
     }
 
     /**
@@ -191,9 +201,14 @@ class ResolveTenantDatabase
                 }
             }
 
-            // Fallback: find the org by matching the tokenable_id user across tenant DBs.
-            // The tokenable_id is the user's ID in the tenant DB.
-            $userId = $record->tokenable_id;
+            // Backward-compatible fallback for mappings created without a slug:
+            // locate the tenant that actually contains this Sanctum token. User
+            // IDs cannot identify a tenant because IDs (especially admin ID 1)
+            // are routinely repeated across tenant databases.
+            $tokenValue = str_contains($token, '|')
+                ? substr($token, strpos($token, '|') + 1)
+                : $token;
+            $sanctumTokenHash = hash('sha256', $tokenValue);
             $activeOrgs = Organization::whereIn('status', ['active', 'trial'])->get();
 
             foreach ($activeOrgs as $org) {
@@ -204,8 +219,8 @@ class ResolveTenantDatabase
                         $org->database_password ?? '',
                         [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION, \PDO::ATTR_TIMEOUT => 2]
                     );
-                    $stmt = $pdo->prepare('SELECT id FROM users WHERE id = ? LIMIT 1');
-                    $stmt->execute([$userId]);
+                    $stmt = $pdo->prepare('SELECT id FROM personal_access_tokens WHERE token = ? LIMIT 1');
+                    $stmt->execute([$sanctumTokenHash]);
                     if ($stmt->fetch()) {
                         return $org;
                     }
