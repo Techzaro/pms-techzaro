@@ -167,19 +167,12 @@ function Projects() {
   const currentRole = getCurrentRole();
   const isAdminOrManager = ["admin", "manager"].includes(String(currentRole || "").toLowerCase());
 
-  /** Fetch all projects from the API, applying current status and date range filters. */
+  /** Fetch all projects from the API, applying current date range filters. */
   const fetchProjects = async () => {
     try {
       setLoading(true);
       const token = authToken();
       const params = new URLSearchParams();
-
-      if (statusFilter === "active") {
-        params.append("filter", "active");
-        params.append("status", "active");
-      } else if (statusFilter) {
-        params.append("status", statusFilter);
-      }
 
       if (timeFilter && timeFilter !== "custom") {
         params.append("days", timeFilter);
@@ -220,7 +213,7 @@ function Projects() {
 
   useEffect(() => {
     fetchProjects();
-  }, [statusFilter, timeFilter, startDate, endDate]);
+  }, [timeFilter, startDate, endDate]);
 
   // Handle draft restoration from DraftCenter
   useEffect(() => {

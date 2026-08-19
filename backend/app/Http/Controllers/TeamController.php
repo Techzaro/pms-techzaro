@@ -165,7 +165,8 @@ class TeamController extends Controller
             $now = now()->toDateTimeString();
             $activities = [];
             $notifications = [];
-            foreach (array_values(array_unique($validated['member_ids'])) as $memberId) {
+            $memberIds = array_values(array_filter(array_unique($validated['member_ids']), fn($id) => (int) $id !== (int) $user->id));
+            foreach ($memberIds as $memberId) {
                 $isLeader = $leaderId && (int) $memberId === (int) $leaderId;
 
                 $activities[] = [
@@ -783,7 +784,10 @@ class TeamController extends Controller
     {
         $authUser = request()->user();
         $teamName = $team->name;
-        $memberIds = $team->members()->pluck('users.id')->toArray();
+        $memberIds = array_values(array_filter(
+            $team->members()->pluck('users.id')->toArray(),
+            fn($id) => (int) $id !== (int) $authUser->id
+        ));
 
         // ── Performer: activity + confirmation email ──
         $this->activityService->log(

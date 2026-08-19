@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import "./MultiSelectDropdown.css";
 
-const MultiSelectDropdown = ({ value = [], onChange, options = [], placeholder = "Select...", searchPlaceholder = "Search...", name }) => {
+const MultiSelectDropdown = ({ value = [], onChange, options = [], placeholder = "Select...", searchPlaceholder = "Search...", name, size = "md", className = "" }) => {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(0);
@@ -123,7 +123,7 @@ const MultiSelectDropdown = ({ value = [], onChange, options = [], placeholder =
   }, [value, options]);
 
   return (
-    <div className={`msd-wrap ${open ? "msd-open" : ""}`} ref={ref} tabIndex={0}>
+    <div className={`msd-wrap ${size === "sm" ? "msd-sm" : ""} ${className} ${open ? "msd-open" : ""}`} ref={ref} tabIndex={0}>
       <div className="msd-trigger" onClick={handleTriggerClick}>
         {open ? (
           <input

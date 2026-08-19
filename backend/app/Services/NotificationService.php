@@ -85,20 +85,17 @@ class NotificationService
     {
         if (empty($data['user_id'])) return null;
 
+        $authId = auth()->id();
+        $senderId = $data['sender_user_id'] ?? null;
+
+        // Strictly exclude self-notifications (authenticated user or sender)
+        if (($authId && (int) $data['user_id'] === (int) $authId) || ($senderId && (int) $data['user_id'] === (int) $senderId)) {
+            return null;
+        }
+
         $recipient = User::find($data['user_id']);
         if ($recipient) {
             $this->dispatchWebhooks($recipient, $data);
-        }
-
-        if (isset($data['sender_user_id']) && (int) $data['user_id'] !== (int) $data['sender_user_id']) {
-            $sender = User::find($data['sender_user_id']);
-            if ($sender && (!empty($sender->slack_webhook_url) || !empty($sender->google_chat_webhook_url) || !empty($sender->ms_teams_webhook_url))) {
-                $this->dispatchWebhooks($sender, $data);
-            }
-        }
-
-        if (isset($data['sender_user_id']) && (int) $data['user_id'] === (int) $data['sender_user_id']) {
-            return null;
         }
 
         if ($recipient && !empty($data['type'])) {
@@ -128,38 +125,14 @@ class NotificationService
     {
         if (empty($notifications)) return;
 
-        // Extract all involved user IDs (both recipient user_id AND sender_user_id)
-        $recipientIds = array_column($notifications, 'user_id');
-        $senderIds = array_column($notifications, 'sender_user_id');
-        $allUserIds = array_unique(array_filter(array_merge($recipientIds, $senderIds)));
+        $authId = auth()->id();
 
-        if (empty($allUserIds)) return;
-
-        // Fetch valid users with preferences and webhook URLs loaded
-        $usersMap = User::whereIn('id', $allUserIds)
-            ->get(['id', 'notification_preferences', 'slack_webhook_url', 'google_chat_webhook_url', 'ms_teams_webhook_url'])
-            ->keyBy('id');
-
-        // Dispatch Webhooks for all notification events (for both recipients and senders with configured webhooks)
-        foreach ($notifications as $n) {
-            if (!empty($n['user_id'])) {
-                $recipient = $usersMap->get($n['user_id']);
-                if ($recipient) {
-                    $this->dispatchWebhooks($recipient, $n);
-                }
-            }
-
-            if (!empty($n['sender_user_id']) && (int) ($n['sender_user_id']) !== (int) ($n['user_id'] ?? 0)) {
-                $sender = $usersMap->get($n['sender_user_id']);
-                if ($sender && (!empty($sender->slack_webhook_url) || !empty($sender->google_chat_webhook_url) || !empty($sender->ms_teams_webhook_url))) {
-                    $this->dispatchWebhooks($sender, $n);
-                }
-            }
-        }
-
-        // Basic filter: user_id present and not self-notification
-        $filtered = array_filter($notifications, function ($n) {
-            return !empty($n['user_id']) && (!isset($n['sender_user_id']) || (int) $n['user_id'] !== (int) $n['sender_user_id']);
+        // Basic filter: user_id present and strictly exclude self-notifications (authenticated user or sender)
+        $filtered = array_filter($notifications, function ($n) use ($authId) {
+            if (empty($n['user_id'])) return false;
+            if ($authId && (int) $n['user_id'] === (int) $authId) return false;
+            if (isset($n['sender_user_id']) && (int) $n['user_id'] === (int) $n['sender_user_id']) return false;
+            return true;
         });
 
         if (empty($filtered)) {
@@ -170,6 +143,26 @@ class NotificationService
         }
 
         $filtered = array_values($filtered);
+
+        // Extract all involved recipient user IDs
+        $recipientIds = array_unique(array_filter(array_column($filtered, 'user_id')));
+
+        if (empty($recipientIds)) return;
+
+        // Fetch valid users with preferences and webhook URLs loaded
+        $usersMap = User::whereIn('id', $recipientIds)
+            ->get(['id', 'notification_preferences', 'slack_webhook_url', 'google_chat_webhook_url', 'ms_teams_webhook_url'])
+            ->keyBy('id');
+
+        // Dispatch Webhooks only to recipient users
+        foreach ($filtered as $n) {
+            if (!empty($n['user_id'])) {
+                $recipient = $usersMap->get($n['user_id']);
+                if ($recipient) {
+                    $this->dispatchWebhooks($recipient, $n);
+                }
+            }
+        }
 
         // Filter based on user desktop category preferences for DB insertion
         $filtered = array_filter($filtered, function ($n) use ($usersMap) {
@@ -256,6 +249,16 @@ class NotificationService
      */
     public function notifyMultiple(array $userIds, int $senderId, string $type, string $module, int $relatedId, string $title, string $message, ?string $link = null, ?array $changes = null): void
     {
+        $authId = auth()->id();
+        $filteredUserIds = array_values(array_filter(
+            array_unique($userIds),
+            fn($id) => !empty($id) && (int) $id !== (int) $senderId && (!$authId || (int) $id !== (int) $authId)
+        ));
+
+        if (empty($filteredUserIds)) {
+            return;
+        }
+
         $notifications = array_map(fn(int $userId) => [
             'user_id' => $userId,
             'sender_user_id' => $senderId,
@@ -266,7 +269,7 @@ class NotificationService
             'message' => $message,
             'changes' => $changes,
             'link' => $link,
-        ], $userIds);
+        ], $filteredUserIds);
 
         $this->createBulk($notifications);
     }
@@ -311,7 +314,8 @@ class NotificationService
             'context_type' => $contextType,
         ];
 
-        $filteredIds = array_values(array_filter($recipientIds, fn($id) => (int) $id !== (int) $adder->id));
+        $authId = auth()->id();
+        $filteredIds = array_values(array_filter($recipientIds, fn($id) => (int) $id !== (int) $adder->id && (!$authId || (int) $id !== (int) $authId)));
 
         $notifications = [];
         foreach ($filteredIds as $userId) {
@@ -385,6 +389,13 @@ class NotificationService
      */
     public function dispatchWebhooks(User $user, array $notificationData): void
     {
+        $authId = auth()->id();
+        $senderId = $notificationData['sender_user_id'] ?? null;
+
+        // Strictly exclude action performer (authenticated user or sender) from receiving webhooks
+        if (($authId && (int) $user->id === (int) $authId) || ($senderId && (int) $user->id === (int) $senderId)) {
+            return;
+        }
         $eventType = $notificationData['type'] ?? 'task';
         $title = $notificationData['title'] ?? 'Notification Alert';
         $message = $notificationData['message'] ?? '';

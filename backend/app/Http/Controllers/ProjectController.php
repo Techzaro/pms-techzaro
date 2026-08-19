@@ -184,7 +184,10 @@ class ProjectController extends Controller
             });
         }
 
-        $projects = $projectsQuery->limit(200)->get();
+        if (request()->filled('per_page') || request()->filled('limit')) {
+            $projectsQuery->limit((int) (request()->query('per_page') ?: request()->query('limit')));
+        }
+        $projects = $projectsQuery->get();
 
         return $projects->map(function ($project) use ($user) {
             $isAssigned = in_array($user->id, $project->assigned_users ?? []);

@@ -31,6 +31,7 @@ import ActionPopover from "../components/ActionPopover";
 import TaskNotesPopover from "../components/TaskNotesPopover";
 import AddNoteModal from "../components/AddNoteModal";
 import TaskMultiStatusBadges from "../components/TaskMultiStatusBadges";
+import TaskFilterBar from "../components/TaskFilterBar";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import { renderDynamicDates } from "../utils/tableDateUtils";
@@ -93,6 +94,13 @@ const SelfTasks = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [statusFilter, setStatusFilter] = useState("");
   const [timeFilter, setTimeFilter] = useState("");
+  const [advancedFilters, setAdvancedFilters] = useState({
+    user_id: [],
+    project_id: [],
+    status: [],
+    start_date: "",
+    end_date: "",
+  });
   const [orderedItems, setOrderedItems] = useState([]);
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
@@ -119,6 +127,18 @@ const SelfTasks = () => {
     const token = authToken();
     const params = new URLSearchParams();
     if (timeFilter) params.append("time_filter", timeFilter);
+    if (debouncedSearch) params.append("search", debouncedSearch);
+    if (advancedFilters.user_id && advancedFilters.user_id.length > 0) {
+      params.append("user_id", advancedFilters.user_id.join(","));
+    }
+    if (advancedFilters.project_id && advancedFilters.project_id.length > 0) {
+      params.append("project_id", advancedFilters.project_id.join(","));
+    }
+    if (advancedFilters.status && advancedFilters.status.length > 0) {
+      params.append("status", advancedFilters.status.join(","));
+    }
+    if (advancedFilters.start_date) params.append("start_date", advancedFilters.start_date);
+    if (advancedFilters.end_date) params.append("end_date", advancedFilters.end_date);
 
     fetch(`${API_URL}/self-tasks?${params.toString()}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -135,7 +155,7 @@ const SelfTasks = () => {
 
   useEffect(() => {
     fetchTasks();
-  }, [debouncedSearch, timeFilter]);
+  }, [debouncedSearch, timeFilter, advancedFilters]);
 
   useAutoRefresh(fetchTasks, {
     events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
@@ -281,15 +301,68 @@ const SelfTasks = () => {
   const approvedCount = useMemo(() => baseItems.filter((i) => i.status === "approved").length, [baseItems]);
   const rejectedCount = useMemo(() => baseItems.filter((i) => i.status === "rejected").length, [baseItems]);
   const abandonedCount = useMemo(() => baseItems.filter((i) => i.status === "abandoned" || i.status === "abandon_requested").length, [baseItems]);
-  const searchFilteredItems = useMemo(() => debouncedSearch
-    ? baseItems.filter((item) => {
-        const q = debouncedSearch.toLowerCase();
+  const searchFilteredItems = useMemo(() => {
+    let list = baseItems;
+    if (debouncedSearch) {
+      const q = debouncedSearch.toLowerCase();
+      list = list.filter((item) => {
         const titleMatch = (item.title || "").toLowerCase().includes(q);
-        const assigneeMatch = (item.assignees || []).some(a => (a.name || "").toLowerCase().includes(q));
+        const assigneeMatch = (item.assignees || []).some((a) => (a.name || "").toLowerCase().includes(q));
         const assignerMatch = (item.assigner?.name || "").toLowerCase().includes(q);
-        return titleMatch || assigneeMatch || assignerMatch;
-      })
-    : baseItems, [baseItems, debouncedSearch]);
+        const projectMatch = (item.project?.title || "").toLowerCase().includes(q);
+        return titleMatch || assigneeMatch || assignerMatch || projectMatch;
+      });
+    }
+    if (advancedFilters.user_id && advancedFilters.user_id.length > 0) {
+      const uids = advancedFilters.user_id.map(Number);
+      list = list.filter((item) => {
+        return (item.assignees || []).some((a) => uids.includes(Number(a.id))) ||
+          uids.includes(Number(item.assigned_to)) ||
+          uids.includes(Number(item.assigned_by));
+      });
+    }
+    if (advancedFilters.project_id && advancedFilters.project_id.length > 0) {
+      const pids = advancedFilters.project_id.map(Number);
+      list = list.filter((item) => {
+        const projId = Number(item.project_id || item.project?.id);
+        return pids.includes(projId);
+      });
+    }
+    if (advancedFilters.status && advancedFilters.status.length > 0) {
+      list = list.filter((item) => {
+        return advancedFilters.status.some((st) => {
+          if (st === "due_today") {
+            const d = item.end_date || item.due_date || item.start_date ? new Date(item.end_date || item.due_date || item.start_date) : null;
+            const isToday = d && d.toDateString() === new Date().toDateString();
+            const isDone = ["approved", "completed", "done"].includes((item.status || "").toLowerCase());
+            return isToday && !isDone;
+          }
+          if (st === "pending") return ["pending", "planned", "Planning", "Planned"].includes(item.status);
+          if (st === "in_progress") return ["in_progress", "In Progress", "in-progress"].includes(item.status);
+          if (st === "paused") return ["paused", "pause", "Pause"].includes(item.status);
+          if (st === "transferred") return Array.isArray(item.delegation_chain) && item.delegation_chain.length > 0;
+          if (st === "rejected" || st === "declined") return item.status === "rejected" || item.status === "declined";
+          if (st === "abandoned") return item.status === "abandoned" || item.status === "abandon_requested";
+          if (st === "approved") return item.status === "approved" || item.status === "completed";
+          return item.status === st;
+        });
+      });
+    }
+    if (advancedFilters.start_date) {
+      list = list.filter((item) => {
+        const itemDate = item.start_date ? new Date(item.start_date) : null;
+        return itemDate && itemDate >= new Date(advancedFilters.start_date);
+      });
+    }
+    if (advancedFilters.end_date) {
+      list = list.filter((item) => {
+        const itemDate = item.end_date || item.due_date ? new Date(item.end_date || item.due_date) : null;
+        return itemDate && itemDate <= new Date(advancedFilters.end_date);
+      });
+    }
+    return list;
+  }, [baseItems, debouncedSearch, advancedFilters]);
+
   const filteredItems = useMemo(() => statusFilter
     ? searchFilteredItems.filter((item) => {
         if (statusFilter === "due_today") {
@@ -373,15 +446,17 @@ const SelfTasks = () => {
         containerClassName="task-progress"
       />
 
-      <div className="tasks-search-bar">
-        <IoSearchOutline fontSize={"20px"} />
-        <input
-          type="text"
-          placeholder="Search by task name or user name"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
+      {/* DEDICATED ACTION BAR & FILTERS */}
+      <TaskFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        filters={advancedFilters}
+        onFilterChange={(key, val) => setAdvancedFilters((prev) => ({ ...prev, [key]: val }))}
+        onReset={() => {
+          setSearch("");
+          setAdvancedFilters({ user_id: [], project_id: [], status: [], start_date: "", end_date: "" });
+        }}
+      />
 
       <div className="container">
         <div className="table-header-compact">
