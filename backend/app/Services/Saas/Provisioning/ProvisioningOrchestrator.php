@@ -73,6 +73,14 @@ class ProvisioningOrchestrator
             $this->migrationRunner->run($dbName);
             $status->completeStep(ProvisioningStatus::STEP_RUN_MIGRATIONS);
 
+            // Step 3b: Fix missing columns (migration safety net)
+            try {
+                \App\Console\Commands\FixTenantColumns::fixDatabaseProgrammatic($dbName);
+                Log::info("Tenant column fixes applied", ['database' => $dbName]);
+            } catch (\Throwable $e) {
+                Log::warning("Column fix step failed (non-fatal)", ['error' => $e->getMessage()]);
+            }
+
             // Step 4: Run Tenant Seeders
             $status->startStep(ProvisioningStatus::STEP_RUN_SEEDERS);
             $this->seederRunner->run(

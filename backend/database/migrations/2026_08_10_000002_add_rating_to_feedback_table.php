@@ -12,7 +12,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('feedback', function (Blueprint $table) {
-            $table->unsignedTinyInteger('rating')->nullable()->after('priority');
+            if (!Schema::hasColumn('feedback', 'rating')) {
+                $table->unsignedTinyInteger('rating')->nullable()->after('priority');
+            }
         });
     }
 
