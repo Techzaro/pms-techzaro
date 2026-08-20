@@ -111,17 +111,16 @@ export function getToken(role) {
   let sessions = _getSessions(r);
   let sess = sid ? sessions[sid] : null;
 
-  // Fallback: if session not found or expired, look for any active valid session WITHIN the same role only
+  // No fallback to other tabs' sessions — each tab owns its own session
+  // If session not found or expired, return empty (forces re-login)
   if (!sess || (sess.expiresAt && Date.now() > sess.expiresAt)) {
-    const validSid = Object.keys(sessions).find(k => {
-      const s = sessions[k];
-      return s && s.token && (!s.expiresAt || Date.now() <= s.expiresAt);
-    });
-    if (validSid) {
-      sid = validSid;
-      setSessionId(sid);
-      sess = sessions[sid];
+    if (sess && sess.expiresAt && Date.now() > sess.expiresAt) {
+      // Clean up expired session from pool
+      delete sessions[sid];
+      _setSessions(r, sessions);
     }
+    sessionStorage.removeItem("sessionId");
+    return "";
   }
 
   if (!sess) return "";
@@ -182,16 +181,14 @@ export function getUser(role) {
   let sessions = _getSessions(r);
   let sess = sid ? sessions[sid] : null;
 
+  // No fallback to other tabs' sessions
   if (!sess || (sess.expiresAt && Date.now() > sess.expiresAt)) {
-    const validSid = Object.keys(sessions).find(k => {
-      const s = sessions[k];
-      return s && s.user && (!s.expiresAt || Date.now() <= s.expiresAt);
-    });
-    if (validSid) {
-      sid = validSid;
-      setSessionId(sid);
-      sess = sessions[sid];
+    if (sess && sess.expiresAt && Date.now() > sess.expiresAt) {
+      delete sessions[sid];
+      _setSessions(r, sessions);
     }
+    sessionStorage.removeItem("sessionId");
+    return null;
   }
 
   if (!sess) return null;
@@ -308,15 +305,27 @@ export function clearSession(role) {
 }
 
 /**
- * Clears all sessions for all roles and tab state.
+ * Clears only THIS tab's sessions. Other tabs remain unaffected.
  */
 export function clearAllSessions() {
-  ROLES.forEach((r) => {
-    localStorage.removeItem(`sessions_${r}`);
-    localStorage.removeItem(`token_${r}`);
-    localStorage.removeItem(`user_${r}`);
-  });
-  sessionStorage.clear();
+  const r = getCurrentRole();
+  const sid = getSessionId();
+
+  // Only remove THIS tab's session from the pool
+  if (r && sid) {
+    const sessions = _getSessions(r);
+    if (sessions[sid]) {
+      delete sessions[sid];
+      _setSessions(r, sessions);
+    }
+  }
+
+  // Clear only this tab's sessionStorage
+  sessionStorage.removeItem("sessionId");
+  sessionStorage.removeItem("currentRole");
+  sessionStorage.removeItem("tenant_slug");
+
+  // Clear legacy keys
   localStorage.removeItem("token");
   localStorage.removeItem("role");
   localStorage.removeItem("userId");
@@ -324,26 +333,32 @@ export function clearAllSessions() {
   localStorage.removeItem("email");
   localStorage.removeItem("lastActiveRole");
   localStorage.removeItem("lastActiveSessionId");
-  clearTenantSlug();
 }
 
 export function getTenantSlug() {
-  return sessionStorage.getItem("tenant_slug") || localStorage.getItem("tenant_slug") || "";
+  // Per-tab only: never share tenant_slug across tabs via localStorage
+  const stored = sessionStorage.getItem("tenant_slug") || "";
+  // Also try to extract from URL path as fallback
+  const pathMatch = window.location.pathname.match(/^\/org\/([a-z0-9\-]+)(?:\/|$)/);
+  const urlSlug = pathMatch ? pathMatch[1] : "";
+  // Prefer stored value, but if it looks wrong (doesn't match URL), use URL slug
+  if (stored && urlSlug && stored !== urlSlug) {
+    setTenantSlug(urlSlug);
+    return urlSlug;
+  }
+  return stored || urlSlug;
 }
 
 export function setTenantSlug(slug) {
   if (slug) {
     sessionStorage.setItem("tenant_slug", slug);
-    localStorage.setItem("tenant_slug", slug);
   } else {
     sessionStorage.removeItem("tenant_slug");
-    localStorage.removeItem("tenant_slug");
   }
 }
 
 export function clearTenantSlug() {
   sessionStorage.removeItem("tenant_slug");
-  localStorage.removeItem("tenant_slug");
 }
 
 /* ───── stored email fallback (for super-admin / cross-role use) ── */

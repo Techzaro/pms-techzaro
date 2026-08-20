@@ -83,3 +83,16 @@ Artisan::command('tenants:fix-columns', function () {
 })->purpose('Fix missing columns in tenant databases')
   ->addOption('database', null, \Symfony\Component\Console\Input\InputOption::VALUE_REQUIRED, 'Specific tenant database')
   ->addOption('all', null, \Symfony\Component\Console\Input\InputOption::VALUE_NONE, 'Fix all tenant databases');
+
+// Manually register FixMasterColumns command
+Artisan::command('master:fix-columns', function () {
+    $result = \App\Console\Commands\FixMasterColumns::fixMasterDatabaseQuiet();
+    foreach ($result['logs'] as $log) {
+        if ($log['type'] === 'info') {
+            $this->line("  <info>{$log['message']}</info>");
+        } else {
+            $this->error("  {$log['message']}");
+        }
+    }
+    $this->info("Total fixes applied: {$result['fixed']}");
+})->purpose('Fix missing columns in master (saas_master) database');

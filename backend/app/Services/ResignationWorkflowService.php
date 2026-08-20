@@ -97,6 +97,7 @@ class ResignationWorkflowService
 
             $user->update([
                 'active' => false,
+                'status' => 'Resigned',
                 'must_change_password' => false,
                 'resigned_at' => now(),
                 'resigned_by' => $admin->id,

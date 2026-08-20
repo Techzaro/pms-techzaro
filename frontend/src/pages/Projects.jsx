@@ -28,6 +28,7 @@ import DraggableStatusBadges from "../components/DraggableStatusBadges";
 
 import { GoDotFill } from "react-icons/go";
 import API_URL from "../config/api";
+import { usePlanLimits } from "../hooks/useOrgSubscription";
 import { usePersonalization } from "../context/PersonalizationContext";
 import { authToken, getCurrentRole, rolePath, getUser } from "../utils/auth";
 import { renderDynamicDates } from "../utils/tableDateUtils";
@@ -82,6 +83,7 @@ const STATUS_TEXT_COLORS = {
 
 /** Main Projects page — renders project cards with search, filters and pagination. */
 function Projects() {
+  const { canCreateProject, maxProjects, currentProjects, projectsRemaining, getLimitMessage } = usePlanLimits();
   const navigate = useNavigate();
   const location = useLocation();
   const { isWidgetEnabled } = usePersonalization();
@@ -480,9 +482,17 @@ function Projects() {
               <button
                 className="create-btn"
                 onClick={() => setShowModal(true)}
+                disabled={!canCreateProject}
+                title={!canCreateProject ? getLimitMessage('project') : 'Create Project'}
+                style={!canCreateProject ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
               >
                 + Create Project
               </button>
+            )}
+            {!canCreateProject && isAdminOrManager && (
+              <span style={{ fontSize: '12px', color: 'var(--color-warning, #f59e0b)', maxWidth: '200px', lineHeight: 1.3 }}>
+                {getLimitMessage('project')}
+              </span>
             )}
           </div>
         </div>

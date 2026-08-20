@@ -58,6 +58,13 @@ class ProvisioningOrchestrator
         ]);
 
         try {
+            // Step 0: Fix master DB columns (organizations table safety net)
+            try {
+                \App\Console\Commands\FixMasterColumns::fixMasterDatabaseQuiet();
+            } catch (\Throwable $e) {
+                Log::warning("Master column fix failed (non-fatal)", ['error' => $e->getMessage()]);
+            }
+
             // Step 1: Create Organization Record (master DB)
             $status->startStep(ProvisioningStatus::STEP_CREATE_ORG_RECORD);
             $organization = $this->createOrganizationRecord($data);

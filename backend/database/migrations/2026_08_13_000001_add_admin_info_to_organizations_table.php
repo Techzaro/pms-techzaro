@@ -9,8 +9,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::connection('mysql_master')->table('organizations', function (Blueprint $table) {
-            $table->string('admin_name')->nullable()->after('slug');
-            $table->string('admin_email')->nullable()->after('admin_name');
+            if (!Schema::connection('mysql_master')->hasColumn('organizations', 'admin_name')) {
+                $table->string('admin_name')->nullable()->after('slug');
+            }
+            if (!Schema::connection('mysql_master')->hasColumn('organizations', 'admin_email')) {
+                $table->string('admin_email')->nullable()->after('admin_name');
+            }
         });
     }
 
