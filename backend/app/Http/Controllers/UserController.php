@@ -144,11 +144,16 @@ class UserController extends Controller
         $isDraft = strtolower($request->input('status', '')) === 'draft' || $request->boolean('is_draft');
 
         try {
+            // Check org email policy — standard policy makes professional_email optional
+            $org = $request->attributes->get('currentOrganization');
+            $emailPolicy = $org->email_policy ?? 'standard';
+            $isCompanyRequired = $emailPolicy === 'company_required';
+
             $request->validate([
                 'name' => 'required|string|max:255',
                 'email' => $isDraft ? 'nullable|string|email|max:255|unique:users,email' : 'required|string|email|max:255|unique:users,email',
                 'personal_email' => 'nullable|email|max:255',
-                'professional_email' => $isDraft ? 'nullable|string|email|max:255|unique:users,professional_email' : 'required|string|email|max:255|unique:users,professional_email',
+                'professional_email' => ($isDraft || !$isCompanyRequired) ? 'nullable|string|email|max:255' : 'required|string|email|max:255',
                 'professional_email_password' => 'nullable|string|max:255',
                 'role' => [$isDraft ? 'nullable' : 'required', Rule::in(['admin', 'manager', 'team_lead', 'teamlead', 'member', 'guest'])],
                 'father_name' => 'nullable|string|max:255',
@@ -213,8 +218,8 @@ class UserController extends Controller
             'email' => $request->input('email') ?: ($isDraft ? 'draft_' . Str::random(8) . '@draft.local' : null),
             'password' => Hash::make($plainPassword),
             'role' => $role,
-            'status' => $isDraft ? 'Draft' : ($request->input('status') ?: 'Active'),
-            'active' => $isDraft ? false : ($request->input('status') === 'Inactive' ? false : true),
+            'status' => $isDraft ? 'Draft' : 'Inactive',
+            'active' => $isDraft ? false : false,
             'must_change_password' => true,
 
             // Contact
@@ -235,7 +240,7 @@ class UserController extends Controller
 
             // Emails
             'personal_email' => $request->input('personal_email'),
-            'professional_email' => $request->input('professional_email'),
+            'professional_email' => $request->input('professional_email') ?: $request->input('personal_email'),
             'professional_email_password' => $request->input('professional_email_password') ?: null,
             'recovery_email' => $request->input('recovery_email'),
 
@@ -915,7 +920,7 @@ class UserController extends Controller
                 ], 403);
             }
 
-            if ($user->active === false) {
+            if ($user->status === 'Resigned') {
                 return response()->json([
                     'success' => false,
                     'message' => 'This user is already resigned.',

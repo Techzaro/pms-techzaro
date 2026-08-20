@@ -17,6 +17,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property int    $id
  * @property string $name
  * @property string $slug
+ * @property string|null $admin_name
+ * @property string|null $admin_email
  * @property string $database_name
  * @property string $database_host
  * @property int    $database_port
@@ -42,6 +44,8 @@ class Organization extends Model
     protected $fillable = [
         'name',
         'slug',
+        'admin_name',
+        'admin_email',
         'type',
         'database_name',
         'database_host',

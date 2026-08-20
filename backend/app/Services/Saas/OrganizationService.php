@@ -89,6 +89,8 @@ class OrganizationService
         $organization = Organization::create([
             'name'            => $data['name'],
             'slug'            => $data['slug'],
+            'admin_name'      => $data['admin_name'] ?? null,
+            'admin_email'     => $data['admin_email'] ?? null,
             'database_name'   => $dbName,
             'database_host'   => $data['database_host'] ?? config('tenancy.default_database.host'),
             'database_port'   => $data['database_port'] ?? config('tenancy.default_database.port'),

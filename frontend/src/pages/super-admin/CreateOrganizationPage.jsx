@@ -22,6 +22,8 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
   const [selectedPlanId, setSelectedPlanId] = useState(null);
   const [billingPeriod, setBillingPeriod] = useState('monthly');
   const [form, setForm] = useState({ name: '', slug: '', admin_name: '', admin_email: '', admin_phone: '' });
+  const [passwordType, setPasswordType] = useState('auto');
+  const [adminPassword, setAdminPassword] = useState('');
   const [slugEdited, setSlugEdited] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState('PK');
   const [showTrialModal, setShowTrialModal] = useState(false);
@@ -32,13 +34,13 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
 
   const initialValues = useMemo(() => ({
     name: '', slug: '', admin_name: '', admin_email: '', admin_phone: '', country_code: 'PK',
-    selectedPlanId: null, billingPeriod: 'monthly',
+    selectedPlanId: null, billingPeriod: 'monthly', passwordType: 'auto', adminPassword: '',
   }), []);
 
   const currentValues = useMemo(() => ({
     name: form.name, slug: form.slug, admin_name: form.admin_name, admin_email: form.admin_email, admin_phone: form.admin_phone,
-    country_code: selectedCountry, selectedPlanId, billingPeriod,
-  }), [form.name, form.slug, form.admin_name, form.admin_email, form.admin_phone, selectedCountry, selectedPlanId, billingPeriod]);
+    country_code: selectedCountry, selectedPlanId, billingPeriod, passwordType, adminPassword,
+  }), [form.name, form.slug, form.admin_name, form.admin_email, form.admin_phone, selectedCountry, selectedPlanId, billingPeriod, passwordType, adminPassword]);
 
   const { isDirty, handleClose, ConfirmDialog } = useUnsavedChanges(
     initialValues, currentValues, onClose,
@@ -102,7 +104,11 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
         admin_phone: form.admin_phone ? `${getCountryByCode(selectedCountry).dial} ${form.admin_phone}` : undefined,
         country_code: selectedCountry,
         plan_id: selectedPlanId, billing_period: billingPeriod,
+        password_type: passwordType,
       };
+      if (passwordType === 'manual' && adminPassword) {
+        payload.password = adminPassword;
+      }
       if (isTrial && trialCustomization) {
         payload.customize_trial = true;
         payload.trial_duration = trialCustomization.trial_duration;
@@ -218,6 +224,35 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
                   onChange={(e) => setForm(prev => ({ ...prev, admin_email: e.target.value }))}
                   className="w-full px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
                   style={s.input} placeholder="admin@acme.com" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ ...s.textSecondary, color: 'var(--color-primary)', fontWeight: 600 }}>Password Generation</label>
+                <div className="mt-1 mb-3">
+                  <label className="block text-xs font-medium mb-1.5" style={s.textMuted}>Account Password Mode</label>
+                  <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 'normal', fontSize: '14px', color: 'var(--text-dark)' }}>
+                      <input type="radio" name="adminPasswordType" value="auto"
+                        checked={passwordType !== 'manual'}
+                        onChange={() => { setPasswordType('auto'); setAdminPassword(''); }} />
+                      Auto-generated password
+                    </label>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 'normal', fontSize: '14px', color: 'var(--text-dark)' }}>
+                      <input type="radio" name="adminPasswordType" value="manual"
+                        checked={passwordType === 'manual'}
+                        onChange={() => setPasswordType('manual')} />
+                      Manually generated password
+                    </label>
+                  </div>
+                </div>
+                {passwordType === 'manual' && (
+                  <div>
+                    <label className="block text-sm font-medium mb-1" style={s.textSecondary}>Admin Password *</label>
+                    <input type="text" value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                      style={s.input} placeholder="Enter initial password (min 6 characters)" />
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1" style={s.textSecondary}>Country</label>

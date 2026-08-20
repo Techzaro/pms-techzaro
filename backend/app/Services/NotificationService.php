@@ -213,22 +213,28 @@ class NotificationService
     /**
      * Convenience method to notify a single user about an action.
      *
-     * @param int    $userId  Recipient user ID
-     * @param string $title   Notification title
-     * @param string $message Notification body text
-     * @param string $type    Category/event type
+     * @param int         $userId     Recipient user ID
+     * @param string      $title      Notification title
+     * @param string      $message    Notification body text
+     * @param string      $type       Category/event type
+     * @param int|null    $senderId   Sender user ID
+     * @param string|null $module     Related module name
+     * @param int|null    $relatedId  ID of the related entity
+     * @param string|null $link       Optional deep-link URL
      *
      * @return \App\Models\Notification|null
      */
-    public function notify(int $userId, string $title, string $message, string $type = 'system'): ?Notification
+    public function notify(int $userId, string $title, string $message, string $type = 'system', ?int $senderId = null, ?string $module = null, ?int $relatedId = null, ?string $link = null): ?Notification
     {
         return $this->create([
             'user_id' => $userId,
+            'sender_user_id' => $senderId,
             'title' => $title,
             'message' => $message,
             'type' => $type,
-            'related_module' => 'system',
-            'related_id' => 0,
+            'related_module' => $module ?? 'system',
+            'related_id' => $relatedId ?? 0,
+            'link' => $link,
         ]);
     }
 

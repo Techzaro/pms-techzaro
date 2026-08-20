@@ -12,8 +12,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('tasks', function (Blueprint $table) {
-            $table->timestamp('recurrence_start_date')->nullable()->after('recurrence_settings');
-            $table->timestamp('recurrence_end_date')->nullable()->after('recurrence_start_date');
+            if (!Schema::hasColumn('tasks', 'recurrence_start_date')) {
+                $table->timestamp('recurrence_start_date')->nullable()->after('recurrence_settings');
+            }
+            if (!Schema::hasColumn('tasks', 'recurrence_end_date')) {
+                $table->timestamp('recurrence_end_date')->nullable()->after('recurrence_start_date');
+            }
         });
     }
 

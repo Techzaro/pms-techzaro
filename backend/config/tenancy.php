@@ -21,6 +21,16 @@ return [
         'password' => env('TENANT_DB_PASSWORD', env('DB_PASSWORD', '')),
     ],
 
+    // Routes that should NOT trigger tenant resolution (central routes).
+    'central_routes' => [
+        'super-admin/*',
+        'login',
+        'logout',
+        'forgot-password',
+        'reset-password',
+        'auth/*',
+    ],
+
     // cPanel API settings (shared hosting database provisioning).
     'cpanel' => [
         'enabled'  => env('CPANEL_ENABLED', false),

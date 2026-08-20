@@ -100,6 +100,7 @@ export const api = {
   deleteOrganization: (id) => request(`/organizations/${id}`, { method: 'DELETE' }),
   suspendOrganization: (id) => request(`/organizations/${id}/suspend`, { method: 'POST' }),
   activateOrganization: (id) => request(`/organizations/${id}/activate`, { method: 'POST' }),
+  changeOrgAdminPassword: (id, data) => request(`/organizations/${id}/change-admin-password`, { method: 'POST', body: JSON.stringify(data) }),
 
   // ─── Plans & Modules ─────────────────────────────────────────
   getPlans: () => request('/plans'),

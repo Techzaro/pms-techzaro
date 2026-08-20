@@ -26,10 +26,12 @@ return [
         env('ADMIN_APP_URL', 'http://localhost:5173'),
         'http://127.0.0.1:5173',
         'http://localhost:5173',
+        'https://app.one.techxaro.com',
+        'https://admin.one.techxaro.com',
     ],
 
     'allowed_origins_patterns' => [
-        '/\.techxaro\.com$/',
+        '/^https?:\/\/[a-zA-Z0-9.-]+\.techxaro\.com$/',
     ],
 
     'allowed_headers' => ['*'],

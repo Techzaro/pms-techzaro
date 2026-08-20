@@ -95,7 +95,7 @@ export function invalidateCache() {}
 export function onMutation() {}
 
 // Cross-tab session synchronization
-// Detects when our session is removed by another tab (e.g. logout, max tabs exceeded)
+// Detects when our session is removed by another tab (e.g. logout)
 let _sessionConflictHandled = false;
 window.addEventListener("storage", (e) => {
   if (!e.key || _sessionConflictHandled) return;
@@ -104,30 +104,28 @@ window.addEventListener("storage", (e) => {
   const sid = getSessionId();
   if (!sid) return;
 
-  // Check if sessions_{role} was modified
-  if (e.key === `sessions_${role}` && e.newValue !== e.oldValue) {
-    try {
-      const sessions = JSON.parse(e.newValue || "{}");
-      if (!sessions[sid]) {
-        // Our session was removed by another tab
-        _sessionConflictHandled = true;
-        clearSession(role);
-        const loginPath = isAdminDomain() ? "/super-admin/login" : "/login";
-        try {
-          window.history.replaceState(null, "", loginPath);
-        } catch {}
-        window.location.replace(`${loginPath}?message=${encodeURIComponent("You have been logged in from another tab.")}`);
-      }
-    } catch {
-      // Parse error — treat as session lost
+  // Only react to sessions_{role} changes
+  if (e.key !== `sessions_${role}`) return;
+
+  // No change — ignore
+  if (e.newValue === e.oldValue) return;
+
+  try {
+    const oldSessions = e.oldValue ? JSON.parse(e.oldValue) : {};
+    const newSessions = e.newValue ? JSON.parse(e.newValue) : {};
+
+    // Our session was explicitly removed (existed before, gone now)
+    if (oldSessions[sid] && !newSessions[sid]) {
       _sessionConflictHandled = true;
       clearSession(role);
       const loginPath = isAdminDomain() ? "/super-admin/login" : "/login";
       try {
         window.history.replaceState(null, "", loginPath);
       } catch {}
-      window.location.replace(`${loginPath}?message=${encodeURIComponent("Your session has been interrupted. Please login again.")}`);
+      window.location.replace(`${loginPath}?message=${encodeURIComponent("You have been logged in from another tab.")}`);
     }
+  } catch {
+    // Parse error — ignore (don't force logout on corrupted data)
   }
 });
 

@@ -25,6 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'not.guest' => \App\Http\Middleware\EnsureNotGuest::class,
             'tenant.resolve' => \App\Http\Middleware\ResolveTenantDatabase::class,
             'super.admin' => \App\Http\Middleware\SuperAdminAuth::class,
+            'check.plan.limits' => \App\Http\Middleware\CheckPlanLimits::class,
         ]);
         $middleware->prependToPriorityList(
             \Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests::class,
@@ -39,7 +40,9 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\ResolveTenantDatabase::class,
             \App\Http\Middleware\CheckUserStatus::class,
         ]);
-        $middleware->prepend(\App\Http\Middleware\CorsMiddleware::class);
+        // CorsMiddleware removed — CORS handled by:
+        // 1. public/index.php (OPTIONS preflight at PHP level)
+        // 2. Laravel built-in HandleCors via config/cors.php
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (AuthenticationException $e, Request $request) {
