@@ -9,8 +9,9 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClientProvider } from '@tanstack/react-query'
 import App from './App.jsx'
-import './index.css'
 import 'bootstrap/dist/css/bootstrap.min.css';
+// Keep application/Tailwind styles after Bootstrap so utility classes win.
+import './index.css'
 import { LoadingProvider } from './context/LoadingContext.jsx'
 import { NotificationProvider } from './context/NotificationContext.jsx'
 import { ThemeProvider } from './context/ThemeContext.jsx'

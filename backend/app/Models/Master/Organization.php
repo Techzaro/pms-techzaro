@@ -55,6 +55,7 @@ class Organization extends Model
         'status',
         'timezone',
         'email_policy',
+        'admin_email',
         'logo_path',
         'settings',
         'trial_ends_at',

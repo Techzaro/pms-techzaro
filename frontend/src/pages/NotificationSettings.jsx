@@ -1,7 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import api from '../lib/api';
-import API_URL from '../config/api';
-import { authToken } from '../utils/auth';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import Breadcrumb from '../components/Breadcrumb';
 import './NotificationSettings.css';
@@ -17,15 +15,7 @@ const CATEGORIES = [
 ];
 
 export default function NotificationSettings() {
-  const [preferences, setPreferences] = useState({
-    project: { email: true, desktop: true, slack: true, google_chat: true, teams_channel: true },
-    task: { email: true, desktop: true, slack: true, google_chat: true, teams_channel: true },
-    sub_task: { email: true, desktop: true, slack: true, google_chat: true, teams_channel: true },
-    events: { email: true, desktop: true, slack: true, google_chat: true, teams_channel: true },
-    profile: { email: true, desktop: true, slack: false, google_chat: false, teams_channel: false },
-    teams: { email: true, desktop: true, slack: true, google_chat: true, teams_channel: true },
-    draft: { email: false, desktop: false, slack: false, google_chat: false, teams_channel: false },
-  });
+  const [preferences, setPreferences] = useState({});
 
   const [webhooks, setWebhooks] = useState({
     slack_webhook_url: '',

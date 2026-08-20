@@ -1277,6 +1277,7 @@ CREATE TABLE `users` (
   `password` varchar(255) NOT NULL,
   `role` enum('admin','manager','team_lead','member','guest') DEFAULT 'member',
   `active` tinyint(1) NOT NULL DEFAULT 1,
+  `status` varchar(32) NOT NULL DEFAULT 'Active',
   `sort_order` int(10) unsigned NOT NULL DEFAULT 0,
   `must_change_password` tinyint(1) NOT NULL DEFAULT 0,
   `credentials_managed_by_admin` tinyint(1) NOT NULL DEFAULT 0,

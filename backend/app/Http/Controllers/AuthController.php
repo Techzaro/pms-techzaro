@@ -54,11 +54,17 @@ class AuthController extends Controller
                 'password' => 'required',
             ]);
 
+            // Normalize copied credentials before any tenant lookup. Email
+            // columns use a case-insensitive collation, but surrounding spaces
+            // would otherwise cause a valid first-login credential to fail.
+            $email = Str::lower(trim((string) $request->email));
+            $request->merge(['email' => $email]);
+
             // Note: personal email restriction removed — allow authentication
             // any additional organization-level email policy is enforced elsewhere.
 
             // Rate limiting key per normalized email & IP
-            $throttleKey = Str::lower(trim($request->email)) . '|' . $request->ip();
+            $throttleKey = $email . '|' . $request->ip();
 
             // Check if account is locked out (max 5 failed attempts)
             if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
@@ -131,7 +137,6 @@ class AuthController extends Controller
 
             // logged in user
 
-            $email = $request->email;
             $organization = $request->attributes->get('currentOrganization');
             $tenantSlug = $organization?->slug;
 
@@ -219,6 +224,23 @@ class AuthController extends Controller
             $rememberMe = $request->boolean('remember_me');
             $expiresAt = $rememberMe ? now()->addDays(1) : now()->addHours(3);
 
+            // Resolve the tenant slug before writing the master token mapping.
+            // Protected requests use this mapping to switch Sanctum to the
+            // correct tenant database before authenticating the bearer token.
+            $finalTenantSlug = $tenantSlug;
+            if (!$finalTenantSlug && $organization) {
+                $finalTenantSlug = $organization->slug;
+            }
+            if (!$finalTenantSlug) {
+                $org = $user->organization ?? $user->organizationName ?? null;
+                if ($org) {
+                    $finalTenantSlug = $org->slug ?? $org->name ?? null;
+                }
+            }
+            if (!$finalTenantSlug) {
+                $finalTenantSlug = config('tenancy.domain', 'techxaro');
+            }
+
             // generate Sanctum token with explicit expiration
             $tokenResult = $user->createToken('auth_token', ['*'], $expiresAt);
             $token = $tokenResult->plainTextToken;
@@ -264,21 +286,6 @@ class AuthController extends Controller
 
             // Normalize role (teamlead → team_lead)
             $role = $user->role === 'teamlead' ? 'team_lead' : $user->role;
-
-            // Determine tenant slug: explicit resolution > org relationship > env default
-            $finalTenantSlug = $tenantSlug;
-            if (!$finalTenantSlug && $organization) {
-                $finalTenantSlug = $organization->slug;
-            }
-            if (!$finalTenantSlug) {
-                $org = $user->organization ?? $user->organizationName ?? null;
-                if ($org) {
-                    $finalTenantSlug = $org->slug ?? $org->name ?? null;
-                }
-            }
-            if (!$finalTenantSlug) {
-                $finalTenantSlug = config('tenancy.domain', 'techxaro');
-            }
 
             $response = [
                 'success' => true,
@@ -483,7 +490,7 @@ class AuthController extends Controller
                 ], 422);
             }
 
-            $user->password = bcrypt($request->new_password);
+            $user->password = $request->new_password;
             $user->must_change_password = false;
             $user->active = true;
             $user->status = 'Active';
@@ -544,6 +551,16 @@ class AuthController extends Controller
             $responseData = [
                 'success' => true,
                 'message' => 'Password changed successfully.',
+                'role' => $user->role === 'teamlead' ? 'team_lead' : $user->role,
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'avatar' => $user->avatar ?? null,
+                    'email' => $user->login_email ?: $user->email ?: $user->professional_email ?: $user->personal_email,
+                    'role' => $user->role === 'teamlead' ? 'team_lead' : $user->role,
+                    'active' => (bool) $user->active,
+                    'must_change_password' => false,
+                ],
             ];
             if ($organization) {
                 $responseData['tenant_slug'] = $organization->slug;
@@ -1016,7 +1033,7 @@ class AuthController extends Controller
                 ], 422);
             }
 
-            $user->password = bcrypt($request->new_password);
+            $user->password = $request->new_password;
             $user->password_changed_by = $user->id;
             $user->password_changed_at = now();
             $user->password_version = ($user->password_version ?? 1) + 1;
@@ -1160,6 +1177,11 @@ class AuthController extends Controller
     {
         $orgs = MasterOrganization::where('status', '!=', 'deleted')
             ->whereNotIn('status', ['suspended', 'archived'])
+            // The initial organization admin is recorded in saas_master. Put
+            // that tenant first so a second organization login is deterministic
+            // and does not depend on organization creation/order.
+            ->orderByRaw('CASE WHEN LOWER(admin_email) = ? THEN 0 ELSE 1 END', [Str::lower(trim($email))])
+            ->orderByDesc('id')
             ->get();
 
         foreach ($orgs as $org) {

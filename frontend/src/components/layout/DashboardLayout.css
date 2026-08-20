@@ -104,10 +104,10 @@ html, body, #root {
 }
 
 .all { color: var(--text-primary); }
-.pending { color: #f59e0b; }
-.in-progress { color: #2563eb; }
+.pending { color: #F59E0B; }
+.in-progress { color: #2563EB; }
 .completed { color: var(--text-primary); font-weight: bold; }
-.failed { color: #ef4444; }
+.failed { color: #EF4444; }
 .abandoned { color: grey; }
 
 .dashboard-cards {
@@ -249,7 +249,7 @@ html, body, #root {
   width: 10px;
   height: 10px;
   border-radius: 9999px;
-  background: #4338ca;
+  background: #4338CA;
 }
 
 .workload-avatars {
@@ -261,7 +261,7 @@ html, body, #root {
   width: 10px;
   height: 10px;
   border-radius: 9999px;
-  background: #0f172a;
+  background: #0F172A;
   opacity: 0.65;
 }
 
@@ -329,7 +329,7 @@ html, body, #root {
   display: grid;
   place-items: center;
   font-weight: 700;
-  color: #4338ca;
+  color: #4338CA;
 }
 
 .project-progress-meta {
@@ -369,7 +369,7 @@ html, body, #root {
   width: 10px;
   height: 10px;
   border-radius: 9999px;
-  background: #0f172a;
+  background: #0F172A;
   opacity: 0.55;
 }
 
@@ -390,7 +390,7 @@ html, body, #root {
   width: 12px;
   height: 12px;
   border-radius: 9999px;
-  background: #4338ca;
+  background: #4338CA;
   margin-top: 6px;
 }
 

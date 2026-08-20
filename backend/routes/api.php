@@ -24,6 +24,15 @@ use App\Http\Controllers\ChatController;
 use App\Http\Controllers\TaskCommentController;
 use App\Http\Controllers\DraftController;
 use App\Http\Controllers\CredentialController;
+use App\Http\Controllers\HrmRecruitmentController;
+use App\Http\Controllers\HrmAttendanceController;
+use App\Http\Controllers\ApplicationController;
+use App\Http\Controllers\HrmGlobalSettingsController;
+use App\Http\Controllers\HrmShiftController;
+use App\Http\Controllers\HrmWarningController;
+use App\Http\Controllers\HrmPerformanceController;
+use App\Http\Controllers\HrmApplicationHistoryController;
+
 use App\Http\Controllers\NotificationSettingController;
 use App\Http\Controllers\FeedbackController;
 use App\Http\Controllers\OrganizationSettingsController;
@@ -189,6 +198,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/users/{user}', [UserController::class, 'show']);
         // Update user information
         Route::put('/users/{user}', [UserController::class, 'update']);
+        Route::post('/users/{user}', [UserController::class, 'update']);
         // Delete user
         Route::delete('/users/{user}', [UserController::class, 'destroy']);
         // Mark user as resigned
@@ -466,7 +476,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/self-deliverables', [DeliverableController::class, 'mySelfDeliverables']); // Deliverables I created for myself
     Route::post('/deliverables/reorder', [DeliverableController::class, 'reorder']); // Reorder deliverables
 
-    // Deliverable creation & update routes (accessible to non-guest authenticated users)
+    // Deliverable creation and update routes (all authenticated non-guest users)
     Route::middleware(\App\Http\Middleware\EnsureNotGuest::class)->group(function () {
         Route::post('/projects/{project}/deliverables', [DeliverableController::class, 'store']); // Create deliverable (project-scoped)
         Route::post('/deliverables', [DeliverableController::class, 'storeStandalone']); // Create deliverable (no project, task_id required)
@@ -683,7 +693,152 @@ Route::middleware('auth:sanctum')->group(function () {
         });
     });
 
+    /*
+    | HRM Recruitment & Onboarding Routes
+    */
+    // Job openings
+    Route::get('/hrm/job-openings', [HrmRecruitmentController::class, 'getJobOpenings']);
+    Route::post('/hrm/job-openings', [HrmRecruitmentController::class, 'storeJobOpening']);
+    Route::patch('/hrm/job-openings/{id}', [HrmRecruitmentController::class, 'updateJobOpening']);
+    Route::put('/hrm/job-openings/{id}', [HrmRecruitmentController::class, 'updateJobOpening']);
+    Route::delete('/hrm/job-openings/{id}', [HrmRecruitmentController::class, 'deleteJobOpening']);
+
+    // Candidates
+    Route::get('/hrm/candidates', [HrmRecruitmentController::class, 'getCandidates']);
+    Route::post('/hrm/candidates', [HrmRecruitmentController::class, 'storeCandidate']);
+    Route::post('/hrm/candidates/upload-resume', [HrmRecruitmentController::class, 'uploadCandidateResume']);
+    Route::post('/hrm/candidates/{id}/analyze-cv', [HrmRecruitmentController::class, 'analyzeCandidateCV']);
+    Route::post('/hrm/candidates/{id}/schedule-interview', [HrmRecruitmentController::class, 'scheduleInterview']);
+    Route::patch('/hrm/candidates/{id}', [HrmRecruitmentController::class, 'updateCandidate']);
+    Route::put('/hrm/candidates/{id}', [HrmRecruitmentController::class, 'updateCandidate']);
+    Route::delete('/hrm/candidates/{id}', [HrmRecruitmentController::class, 'deleteCandidate']);
+
+    // Onboarding
+    Route::get('/hrm/onboarding', [HrmRecruitmentController::class, 'getOnboarding']);
+    Route::post('/hrm/onboarding', [HrmRecruitmentController::class, 'storeOnboarding']);
+    Route::patch('/hrm/onboarding/{id}', [HrmRecruitmentController::class, 'updateOnboarding']);
+    Route::put('/hrm/onboarding/{id}', [HrmRecruitmentController::class, 'updateOnboarding']);
+
+    // Offer Letters
+    Route::get('/offer-letters', [HrmRecruitmentController::class, 'getOfferLetters']);
+    Route::get('/hrm/offer-letters', [HrmRecruitmentController::class, 'getOfferLetters']);
+    Route::post('/offer-letters', [HrmRecruitmentController::class, 'storeOfferLetter']);
+    Route::post('/hrm/offer-letters', [HrmRecruitmentController::class, 'storeOfferLetter']);
+    Route::patch('/offer-letters/{id}', [HrmRecruitmentController::class, 'updateOfferLetter']);
+    Route::put('/offer-letters/{id}', [HrmRecruitmentController::class, 'updateOfferLetter']);
+    Route::patch('/hrm/offer-letters/{id}', [HrmRecruitmentController::class, 'updateOfferLetter']);
+    Route::put('/hrm/offer-letters/{id}', [HrmRecruitmentController::class, 'updateOfferLetter']);
+    Route::post('/hrm/offer-letters/{id}/send-email', [HrmRecruitmentController::class, 'sendOfferLetterEmail']);
+    Route::post('/offer-letters/{id}/send-email', [HrmRecruitmentController::class, 'sendOfferLetterEmail']);
+    Route::patch('/offer-letters/{id}/status', [HrmRecruitmentController::class, 'updateOfferLetterStatus']);
+    Route::delete('/offer-letters/{id}', [HrmRecruitmentController::class, 'deleteOfferLetter']);
+    Route::delete('/hrm/offer-letters/{id}', [HrmRecruitmentController::class, 'deleteOfferLetter']);
+
+    // Dashboard stats & real-time notifications for HRM
+    Route::get('/dashboard/hrm-stats', [HrmRecruitmentController::class, 'getDashboardStats']);
+    Route::get('/hrm/notifications', [HrmRecruitmentController::class, 'getHrmNotifications']);
+    Route::post('/hrm/notifications/mark-read', [HrmRecruitmentController::class, 'markHrmNotificationsRead']);
+
+    // Convert candidate to user employee account
+    Route::post('/hrm/candidates/{id}/convert-to-user', [HrmRecruitmentController::class, 'convertCandidateToUser']);
+
+    // Employee Documents Vault
+    Route::get('/hrm/employee-documents', [HrmRecruitmentController::class, 'getEmployeeDocuments']);
+    Route::post('/hrm/employee-documents', [HrmRecruitmentController::class, 'storeEmployeeDocument']);
+    Route::delete('/hrm/employee-documents/{id}', [HrmRecruitmentController::class, 'deleteEmployeeDocument']);
+
+    // Attendance & Work Timer Routes
+    Route::post('/hrm/attendance/clock-in', [HrmAttendanceController::class, 'clockIn']);
+    Route::post('/hrm/attendance/pause-work', [HrmAttendanceController::class, 'pauseWork']);
+    Route::post('/hrm/attendance/resume-work', [HrmAttendanceController::class, 'resumeWork']);
+    Route::post('/hrm/attendance/clock-out', [HrmAttendanceController::class, 'clockOut']);
+    Route::post('/hrm/attendance/consent', [HrmAttendanceController::class, 'updateConsent']);
+    Route::post('/hrm/attendance/wfh-request', [HrmAttendanceController::class, 'submitWfhRequest']);
+    Route::patch('/hrm/attendance/wfh-request/{id}', [HrmAttendanceController::class, 'respondWfhRequest']);
+    Route::post('/hrm/attendance/work-snapshot', [HrmAttendanceController::class, 'uploadWorkSnapshot']);
+    Route::get('/hrm/attendance/today', [HrmAttendanceController::class, 'getTodayAttendance']);
+    Route::get('/hrm/attendance/monthly-summary', [HrmAttendanceController::class, 'getMonthlySummary']);
+    Route::get('/hrm/attendance/corrections', [HrmAttendanceController::class, 'getCorrections']);
+    Route::post('/hrm/attendance/corrections', [HrmAttendanceController::class, 'submitCorrection']);
+    Route::patch('/hrm/attendance/corrections/{id}', [HrmAttendanceController::class, 'respondCorrection']);
+    Route::get('/hrm/requests-history', [HrmAttendanceController::class, 'getRequestsHistory']);
+    Route::post('/hrm/attendance/manual', [HrmAttendanceController::class, 'markManualAttendance']);
+
+    // Leaves Management Routes
+    Route::get('/hrm/leaves', [HrmAttendanceController::class, 'getLeaves']);
+    Route::post('/hrm/leaves', [HrmAttendanceController::class, 'storeLeaveRequest']);
+    Route::patch('/hrm/leaves/{id}', [HrmAttendanceController::class, 'respondLeaveRequest']);
+    Route::post('/hrm/leaves/{id}', [HrmAttendanceController::class, 'respondLeaveRequest']);
+
+    // Member Self-Service Portal Routes
+    Route::get('/hrm/member/summary', [ApplicationController::class, 'getMemberDashboardSummary']);
+    Route::post('/hrm/member/request-form', [\App\Http\Controllers\ApplicationController::class, 'submitMemberRequest']);
+    Route::get('/hrm/member/application-context', [\App\Http\Controllers\ApplicationController::class, 'getApplicationContext']);
+    Route::patch('/hrm/member/requests/{id}', [HrmAttendanceController::class, 'respondMemberRequest']);
+    Route::post('/hrm/member/requests/{id}', [HrmAttendanceController::class, 'respondMemberRequest']);
+
+    // Global HRM Settings & Timesheets Routes
+    Route::get('/hrm/settings', [HrmGlobalSettingsController::class, 'getSettings']);
+    Route::post('/hrm/settings', [HrmGlobalSettingsController::class, 'updateSettings']);
+    Route::get('/hrm/timesheets', [HrmGlobalSettingsController::class, 'getTimesheets']);
+    Route::post('/hrm/timesheets/generate', [HrmGlobalSettingsController::class, 'generateTimesheet']);
+    Route::patch('/hrm/timesheets/{id}', [HrmGlobalSettingsController::class, 'respondTimesheet']);
+
+    // Working Models & Shift Templates Routes
+    Route::get('/hrm/shifts', [HrmShiftController::class, 'getShifts']);
+    Route::post('/hrm/shifts', [HrmShiftController::class, 'storeShift']);
+    Route::post('/hrm/shifts/{id}/activate', [HrmShiftController::class, 'activateShift']);
+    Route::put('/hrm/shifts/{id}', [HrmShiftController::class, 'updateShift']);
+    Route::delete('/hrm/shifts/{id}', [HrmShiftController::class, 'deleteShift']);
+
+    // Real-Time Admin Screen Verification Requests
+    Route::post('/hrm/screen-requests', [HrmShiftController::class, 'createScreenRequest']);
+    Route::post('/hrm/screen-requests/{id}/respond', [HrmShiftController::class, 'respondScreenRequest']);
+    Route::get('/hrm/screen-requests/active', [HrmShiftController::class, 'getActiveScreenRequest']);
+
+    // Corporate Policy Warnings & Department Sync Routes
+    Route::get('/hrm/warnings', [HrmWarningController::class, 'getWarnings']);
+    Route::post('/hrm/warnings/{id}/submit-reason', [HrmWarningController::class, 'submitRemovalReason']);
+    Route::post('/hrm/warnings/{id}/remove', [HrmWarningController::class, 'removeWarning']);
+    Route::post('/hrm/warnings/{id}/reject', [HrmWarningController::class, 'rejectRemoval']);
+    Route::post('/hrm/departments/sync-policy', [HrmWarningController::class, 'syncDepartmentSettings']);
+    Route::get('/hrm/departments/settings', [HrmWarningController::class, 'getDepartmentSettings']);
+
+    // Complete HRM Application Request History & Immutable Audit Trail Routes
+    Route::get('/hrm/application-history', [HrmApplicationHistoryController::class, 'index']);
+    Route::get('/hrm/application-history/all/{id}', [HrmApplicationHistoryController::class, 'show']);
+    Route::post('/hrm/application-history/all/{id}/comments', [HrmApplicationHistoryController::class, 'addComment']);
+    Route::post('/hrm/application-history/all/{id}/attachments', [HrmApplicationHistoryController::class, 'uploadAttachment']);
+    Route::patch('/hrm/application-history/all/{id}/status', [HrmApplicationHistoryController::class, 'updateStatus']);
+    Route::post('/hrm/application-history/all/{id}/respond-info', [HrmApplicationHistoryController::class, 'respondInfoRequest']);
+
+    // Dynamic Admin Custom Application Types Routes
+
+
+    // Dynamic Approval Workflow Builder Routes
+    Route::get('/hrm/workflows', [\App\Http\Controllers\HrmWorkflowController::class, 'index']);
+    Route::get('/hrm/workflows/check-approver', [\App\Http\Controllers\HrmWorkflowController::class, 'checkApprover']);
+    Route::get('/hrm/workflows/department-users', [\App\Http\Controllers\HrmWorkflowController::class, 'getDepartmentUsers']);
+    Route::get('/hrm/workflows/departments', [\App\Http\Controllers\HrmWorkflowController::class, 'getDepartments']);
+    Route::get('/hrm/workflows/organization-roles', [\App\Http\Controllers\HrmWorkflowController::class, 'getOrganizationRoles']);
+    Route::post('/hrm/workflows', [\App\Http\Controllers\HrmWorkflowController::class, 'save']);
+    Route::delete('/hrm/workflows/{id}', [\App\Http\Controllers\HrmWorkflowController::class, 'destroy']);
+
+    // Performance & Evaluation Routes
+    Route::get('/hrm/performance/summary', [HrmPerformanceController::class, 'getPerformanceSummary']);
+    Route::post('/hrm/performance/goals', [HrmPerformanceController::class, 'storeGoal']);
+    Route::patch('/hrm/performance/goals/{id}', [HrmPerformanceController::class, 'updateGoal']);
+    Route::post('/hrm/performance/appraisals', [HrmPerformanceController::class, 'storeAppraisal']);
 });
+
+/*
+| Public Candidate Offer Letter Portal Routes
+| Accessible by candidate from email link without requiring staff login.
+*/
+Route::get('/public/offer-letters/{id}', [HrmRecruitmentController::class, 'getPublicOfferLetter']);
+Route::get('/public/offer-letters/{id}/document', [HrmRecruitmentController::class, 'downloadOfferLetterDocument']);
+Route::get('/hrm/offer-letters/{id}/document', [HrmRecruitmentController::class, 'downloadOfferLetterDocument']);
+Route::post('/public/offer-letters/{id}/respond', [HrmRecruitmentController::class, 'candidateRespondOfferLetter']);
 
 /*
 | Document Download Routes

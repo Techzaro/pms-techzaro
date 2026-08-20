@@ -8,7 +8,19 @@ const BRANDING_QUERY_KEY = ["organization-branding"];
 async function fetchBranding() {
   try {
     const data = await api.get("/organization-settings/branding", null, { skipNotify: true });
-    if (data?.success && data?.branding) return data.branding;
+    if (data?.success && data?.branding) {
+      const resolvedSlug = data.branding.slug;
+      if (resolvedSlug) {
+        localStorage.setItem("tenant_slug", resolvedSlug);
+
+        const match = window.location.pathname.match(/^\/org\/([^/]+)(\/.*)?$/);
+        if (match && match[1] !== resolvedSlug) {
+          const correctedPath = `/org/${resolvedSlug}${match[2] || "/dashboard"}`;
+          window.history.replaceState(window.history.state, "", `${correctedPath}${window.location.search}${window.location.hash}`);
+        }
+      }
+      return data.branding;
+    }
   } catch {}
   return { logo_url: null, subtitle: "PMS Portal", org_name: "" };
 }

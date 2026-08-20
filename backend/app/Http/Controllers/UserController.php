@@ -50,6 +50,13 @@ class UserController extends Controller
         'offer_letter',
         'techxaro_regulations',
         'other_document',
+        'cv',
+        'latest_education_cert',
+        'previous_exp_letter',
+        'previous_salary_slip',
+        'criminal_record_file',
+        'cnic_front_image',
+        'cnic_back_image',
     ];
 
     /**
@@ -61,6 +68,7 @@ class UserController extends Controller
      */
     public function index(Request $request)
     {
+        Cache::forget('all_users_list');
         $role = $request->query('role');
         $status = $request->query('status');
         $search = $request->query('search');
@@ -986,15 +994,11 @@ class UserController extends Controller
 
             $allIds = $adminManagerIds->merge($memberIds)->unique();
 
-            $users = User::select('id', 'name', 'email', 'role', 'department')
-                ->where('active', true)
-                ->whereIn('id', $allIds)
+            $users = User::whereIn('id', $allIds)
                 ->orderBy('name')
                 ->get();
         } else {
-            $users = User::select('id', 'name', 'email', 'role', 'department')
-                ->where('active', true)
-                ->orderBy('name')
+            $users = User::orderBy('name')
                 ->get();
         }
 
@@ -1280,6 +1284,9 @@ class UserController extends Controller
 
         $singleFields = [
             'employment_contract', 'offer_letter', 'techxaro_regulations',
+            'cv', 'latest_education_cert', 'previous_exp_letter',
+            'previous_salary_slip', 'criminal_record_file',
+            'cnic_front_image', 'cnic_back_image',
         ];
 
         $uploadErrors = [];
