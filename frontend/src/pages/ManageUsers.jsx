@@ -47,6 +47,7 @@ import Pagination from "../components/Pagination";
 import { useSubmit } from "../hooks/useSubmit";
 import LoadingButton from "../components/LoadingButton";
 import CompanyDocuments from "../components/CompanyDocuments";
+import MultiSelectDropdown from "../components/MultiSelectDropdown";
 import "./ManageUsers.css";
 
 /** Formats CNIC number with dashes: XXXXX-XXXXXXX-X */
@@ -94,6 +95,7 @@ function ManageUsers() {
   const [pendingDeletionUser, setPendingDeletionUser] = useState(null);
   const [deleteGuestConfirmOpen, setDeleteGuestConfirmOpen] = useState(false);
   const [pendingDeleteGuest, setPendingDeleteGuest] = useState(null);
+  const [projectsList, setProjectsList] = useState([]);
   const [newUser, setNewUser] = useState({
     fullName: "",
     fatherName: "",
@@ -117,6 +119,7 @@ function ManageUsers() {
     jobStartedDate: "",
     jobEndedDate: "",
     role: "member",
+    project_ids: [],
     grossSalary: "",
     appliedVia: "",
     bankName: "",
@@ -317,6 +320,23 @@ function ManageUsers() {
     }
   };
 
+  const fetchProjects = async () => {
+    try {
+      const token = authToken();
+      if (!token) return;
+      const res = await fetch(`${API_URL}/projects`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : (data?.projects || []);
+      setProjectsList(list);
+    } catch {
+      // ignore
+    }
+  };
+
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -456,6 +476,7 @@ function ManageUsers() {
       jobStartedDate: "",
       jobEndedDate: "",
       role: "member",
+      project_ids: [],
       grossSalary: "",
       appliedVia: "",
       bankName: "",
@@ -570,6 +591,7 @@ function ManageUsers() {
       jobStartedDate: "",
       jobEndedDate: "",
       role: "member",
+      project_ids: [],
       status: "Active",
       grossSalary: "",
       appliedVia: "",
@@ -1556,6 +1578,12 @@ function ManageUsers() {
     formData.append("bank_account_number", newUser.bankAccountNumber);
     formData.append("bank_account_title", newUser.bankAccountTitle);
 
+    if (newUser.project_ids && newUser.project_ids.length > 0) {
+      newUser.project_ids.forEach((pid) => {
+        formData.append("project_ids[]", pid);
+      });
+    }
+
     const fileFields = [
       "employmentContract", "offerLetter", "techxaroRegulations",
     ];
@@ -2490,6 +2518,22 @@ function ManageUsers() {
                   <div className="form-row">
                     <label htmlFor="appliedVia">Applied Via</label>
                     <input type="text" id="appliedVia" name="appliedVia" value={newUser.appliedVia} onChange={handleChange} placeholder="e.g. Website, Referral, LinkedIn" />
+                  </div>
+                  <div className="form-row" style={{ gridColumn: "1 / -1" }}>
+                    <label>Projects</label>
+                    <MultiSelectDropdown
+                      value={newUser.project_ids || []}
+                      onChange={(val) => {
+                        setNewUser((prev) => ({ ...prev, project_ids: val }));
+                        markDirty();
+                      }}
+                      options={projectsList.map((p) => ({
+                        value: p.id,
+                        label: p.title + (p.business_id ? ` (${p.business_id})` : ""),
+                      }))}
+                      placeholder="Select projects to assign..."
+                      searchPlaceholder="Search projects..."
+                    />
                   </div>
                 </div>
 

@@ -27,6 +27,7 @@ import Pagination from "../components/Pagination";
 import ActionPopover from "../components/ActionPopover";
 import TaskNotesPopover from "../components/TaskNotesPopover";
 import AddNoteModal from "../components/AddNoteModal";
+import TaskMultiStatusBadges from "../components/TaskMultiStatusBadges";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import { renderDynamicDates } from "../utils/tableDateUtils";
@@ -89,7 +90,7 @@ function GuestTasks() {
 
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
-  const ITEMS_PER_PAGE = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -335,8 +336,8 @@ function GuestTasks() {
 
   const taskIdList = filteredItems.map((i) => i.id);
 
-  const totalPages = showAll ? 1 : Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
-  const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+  const totalPages = showAll ? 1 : Math.ceil(filteredItems.length / itemsPerPage);
+  const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * itemsPerPage, page * itemsPerPage);
 
   const breadcrumbs = [
     { label: "Tasks", path: rolePath("guest-tasks") },
@@ -451,19 +452,7 @@ function GuestTasks() {
                   </div>
 
                   <div className="col-status">
-                    <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
-                      <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
-                      {formatStatus(item.status)}
-                    </span>
-                    {item.status === "approved" && item.approvedBy && (
-                      <div style={{ fontSize: "10px", color: "#166534", marginTop: "2px" }}>by {item.approvedBy.name}</div>
-                    )}
-                    {item.status === "rejected" && item.rejectedBy && (
-                      <div style={{ fontSize: "10px", color: "#991B1B", marginTop: "2px" }}>by {item.rejectedBy.name}</div>
-                    )}
-                    {item.status === "reopened" && item.reopenedBy && (
-                      <div style={{ fontSize: "10px", color: "#92400E", marginTop: "2px" }}>by {item.reopenedBy.name}</div>
-                    )}
+                    <TaskMultiStatusBadges item={item} />
                   </div>
 
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
@@ -613,8 +602,14 @@ function GuestTasks() {
         )}
       </div>
 
-      {!showAll && totalPages > 1 && (
-        <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+      {!showAll && (
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          itemsPerPage={itemsPerPage}
+          onItemsPerPageChange={(val) => { setItemsPerPage(val); setPage(1); }}
+        />
       )}
 
       <SubmitTaskModal

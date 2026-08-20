@@ -1,127 +1,97 @@
-import { useLocation, useParams } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { rolePath } from "../utils/auth";
 
 /**
- * Hook to generate breadcrumb items based on current route
+ * Hook to generate accurate, clean breadcrumb navigation items based on current route location.
  * @returns {Array} Array of breadcrumb items [{label, path}]
  */
 export default function useBreadcrumb() {
   const location = useLocation();
-  const params = useParams();
-  const pathSegments = location.pathname.split("/").filter(Boolean);
+  const rawSegments = location.pathname.split("/").filter(Boolean);
 
-  // Remove role segment (first segment)
-  const segments = pathSegments.slice(1);
+  // Filter out tenant/org prefixes like 'org', {slug}, or role prefixes like 'admin', 'manager', 'employee', 'super-admin'
+  const ignorePrefixes = new Set(["org", "admin", "manager", "employee", "team_lead", "super-admin", "guest", "client"]);
+  
+  // Find index where actual application routes start
+  const appSegments = rawSegments.filter((seg, idx) => {
+    if (idx < 2 && ignorePrefixes.has(seg)) return false;
+    if (idx === 1 && rawSegments[0] === "org") return false; // tenant slug
+    return true;
+  });
 
-  const breadcrumbs = [];
+  const breadcrumbs = [
+    { label: "Dashboard", path: rolePath("") }
+  ];
 
-  // Map of route segments to labels
-  const routeLabels = {
-    dashboard: "Dashboard",
-    tasks: "Tasks",
-    taskby: "Tasks",
-    "self-tasks": "Tasks",
-    projects: "Projects",
-    deliveries: "Subtasks",
-    "deliveries-by-you": "Subtasks",
-    "self-deliveries": "Subtasks",
-    "manage-users": "Users",
-    "manage-team": "Teams",
-    calender: "Calendar",
-    reports: "Reports",
-    "my-profile": "Profile",
-    notifications: "Notifications",
-    history: "History",
-    "create-project": "Projects",
+  if (appSegments.length === 0 || (appSegments.length === 1 && appSegments[0] === "dashboard")) {
+    breadcrumbs[0].path = null;
+    return breadcrumbs;
+  }
+
+  const mainRoute = appSegments[0];
+
+  const sectionMap = {
+    tasks: { label: "Tasks", path: rolePath("tasks") },
+    taskby: { label: "Tasks (Assigned By You)", path: rolePath("taskby") },
+    "self-tasks": { label: "Self Tasks", path: rolePath("self-tasks") },
+    projects: { label: "Projects", path: rolePath("projects") },
+    "create-project": { label: "Projects", path: rolePath("projects") },
+    deliveries: { label: "Subtasks", path: rolePath("deliveries") },
+    "deliveries-by-you": { label: "Subtasks (Assigned By You)", path: rolePath("deliveries-by-you") },
+    "self-deliveries": { label: "Self Subtasks", path: rolePath("self-deliveries") },
+    "manage-users": { label: "Manage Users", path: rolePath("manage-users") },
+    "manage-team": { label: "Manage Teams", path: rolePath("manage-team") },
+    calender: { label: "Calendar", path: rolePath("calender") },
+    reports: { label: "Reports", path: rolePath("reports") },
+    "my-profile": { label: "My Profile", path: rolePath("my-profile") },
+    notifications: { label: "Notifications", path: rolePath("notifications") },
+    history: { label: "Activity History", path: rolePath("history") },
+    branding: { label: "Branding", path: rolePath("branding") },
+    billing: { label: "Billing", path: rolePath("billing") },
   };
 
-  // Sub-route labels
-  const subRouteLabels = {
-    tasks: "Assigned To You",
-    taskby: "Assigned By You",
-    "self-tasks": "Self Tasks",
-    deliveries: "Assigned To You",
-    "deliveries-by-you": "Assigned By You",
-    "self-deliveries": "Self Subtasks",
-  };
-
-  // Detail page labels
-  const detailLabels = {
+  const detailMap = {
     "task-details": "Task Details",
     "deliverable-details": "Subtask Details",
     "project-details": "Project Details",
     "user-profile": "User Profile",
+    "user-performance": "User Performance",
   };
 
-  // Build breadcrumb based on route
-  if (segments.length === 0) {
-    // Dashboard
-    breadcrumbs.push({ label: "Dashboard", path: null });
-  } else {
-    const mainRoute = segments[0];
+  // Add primary section breadcrumb
+  if (sectionMap[mainRoute]) {
+    breadcrumbs.push({
+      label: sectionMap[mainRoute].label,
+      path: appSegments.length > 1 ? sectionMap[mainRoute].path : null,
+    });
+  } else if (!detailMap[mainRoute]) {
+    const formattedLabel = mainRoute.charAt(0).toUpperCase() + mainRoute.slice(1).replace(/-/g, " ");
+    breadcrumbs.push({
+      label: formattedLabel,
+      path: appSegments.length > 1 ? rolePath(mainRoute) : null,
+    });
+  }
 
-    // Add main section
-    if (mainRoute === "taskby" || mainRoute === "self-tasks") {
-      breadcrumbs.push({ label: "Tasks", path: rolePath("tasks") });
-    } else if (mainRoute === "deliveries-by-you" || mainRoute === "self-deliveries") {
-      breadcrumbs.push({ label: "Subtasks", path: rolePath("deliveries") });
-    } else if (mainRoute === "create-project") {
-      breadcrumbs.push({ label: "Projects", path: rolePath("projects") });
-    } else if (mainRoute === "manage-users") {
-      breadcrumbs.push({ label: "Users", path: rolePath("manage-users") });
-    } else if (mainRoute === "manage-team") {
-      breadcrumbs.push({ label: "Teams", path: rolePath("manage-team") });
-    } else if (mainRoute === "reports") {
-      breadcrumbs.push({ label: "Reports", path: rolePath("reports") });
-    } else if (mainRoute === "my-profile") {
-      breadcrumbs.push({ label: "Profile", path: rolePath("my-profile") });
-    } else {
+  // Check for detail pages or nested sub-routes
+  for (let i = 1; i < appSegments.length; i++) {
+    const seg = appSegments[i];
+    if (detailMap[seg]) {
       breadcrumbs.push({
-        label: routeLabels[mainRoute] || mainRoute,
-        path: segments.length > 1 ? rolePath(mainRoute) : null,
+        label: detailMap[seg],
+        path: null,
+      });
+      break;
+    } else if (sectionMap[seg] && !breadcrumbs.some(b => b.label === sectionMap[seg].label)) {
+      breadcrumbs.push({
+        label: sectionMap[seg].label,
+        path: i < appSegments.length - 1 ? sectionMap[seg].path : null,
       });
     }
+  }
 
-    // Add sub-route if exists
-    if (segments.length > 1 && segments[1] !== "task-details" && segments[1] !== "deliverable-details" && segments[1] !== "project-details" && segments[1] !== "user-profile") {
-      const subLabel = subRouteLabels[segments[1]];
-      if (subLabel) {
-        breadcrumbs.push({
-          label: subLabel,
-          path: segments.length > 2 ? rolePath(segments[1]) : null,
-        });
-      }
-    }
-
-    // Handle detail pages
-    if (segments.includes("task-details") || segments.includes("deliverable-details") || segments.includes("project-details") || segments.includes("user-profile")) {
-      const detailIndex = segments.findIndex(seg =>
-        ["task-details", "deliverable-details", "project-details", "user-profile"].includes(seg)
-      );
-
-      if (detailIndex > 0) {
-        const prevSegment = segments[detailIndex - 1];
-        const subLabel = subRouteLabels[prevSegment];
-        if (subLabel && !breadcrumbs.find(b => b.label === subLabel)) {
-          breadcrumbs.push({
-            label: subLabel,
-            path: rolePath(prevSegment),
-          });
-        }
-      }
-
-      const detailLabel = detailLabels[segments[detailIndex]];
-      if (detailLabel) {
-        breadcrumbs.push({ label: detailLabel, path: null });
-      }
-    }
-
-    // Handle special cases
-    if (segments[0] === "reports" && segments.length > 1) {
-      if (segments[1] === "user-performance") {
-        breadcrumbs.push({ label: "User Performance", path: null });
-      }
-    }
+  // Ensure last item has path: null (current active page)
+  if (breadcrumbs.length > 0) {
+    breadcrumbs[breadcrumbs.length - 1].path = null;
   }
 
   return breadcrumbs;

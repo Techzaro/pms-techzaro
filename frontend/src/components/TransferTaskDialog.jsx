@@ -171,6 +171,18 @@ function TransferTaskDialog({ isOpen, onClose, task, entityType, onTransferSucce
                   <option key={r} value={r}>{r}</option>
                 ))}
               </select>
+              <div className="tt-reason-tags">
+                {TRANSFER_REASONS.map((r) => (
+                  <button
+                    type="button"
+                    key={r}
+                    className={`tt-tag-chip ${reason === r ? "tt-tag-chip--selected" : ""}`}
+                    onClick={() => { setReason(r); setIsDirty(true); }}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {(reason === "Other" || reasonDetail.trim()) && (

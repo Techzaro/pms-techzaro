@@ -26,6 +26,8 @@ import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
 import ActionPopover from "../components/ActionPopover";
 import AddNoteModal from "../components/AddNoteModal";
+import TaskMultiStatusBadges from "../components/TaskMultiStatusBadges";
+import TaskFilterBar from "../components/TaskFilterBar";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import { renderDynamicDates } from "../utils/tableDateUtils";
@@ -85,12 +87,19 @@ function AllDeliveries() {
     return "";
   });
   const [timeFilter, setTimeFilter] = useState("");
+  const [advancedFilters, setAdvancedFilters] = useState({
+    user_id: [],
+    project_id: [],
+    status: [],
+    start_date: "",
+    end_date: "",
+  });
   const [orderedItems, setOrderedItems] = useState([]);
   const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
 
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
-  const ITEMS_PER_PAGE = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -102,7 +111,19 @@ function AllDeliveries() {
     setLoading(true);
     const token = authToken();
     const params = new URLSearchParams();
+    if (debouncedSearch) params.append("search", debouncedSearch);
     if (timeFilter) params.append("time_filter", timeFilter);
+    if (advancedFilters.user_id && advancedFilters.user_id.length > 0) {
+      params.append("user_id", Array.isArray(advancedFilters.user_id) ? advancedFilters.user_id.join(",") : advancedFilters.user_id);
+    }
+    if (advancedFilters.project_id && advancedFilters.project_id.length > 0) {
+      params.append("project_id", Array.isArray(advancedFilters.project_id) ? advancedFilters.project_id.join(",") : advancedFilters.project_id);
+    }
+    if (advancedFilters.status && advancedFilters.status.length > 0) {
+      params.append("status", Array.isArray(advancedFilters.status) ? advancedFilters.status.join(",") : advancedFilters.status);
+    }
+    if (advancedFilters.start_date) params.append("start_date", advancedFilters.start_date);
+    if (advancedFilters.end_date) params.append("end_date", advancedFilters.end_date);
 
     fetch(`${API_URL}/all-deliverables?${params.toString()}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -126,7 +147,7 @@ function AllDeliveries() {
 
   useEffect(() => {
     fetchDeliverables();
-  }, [debouncedSearch, timeFilter]);
+  }, [debouncedSearch, timeFilter, advancedFilters]);
 
   useAutoRefresh(fetchDeliverables, {
     events: ['deliverable:created', 'deliverable:updated', 'deliverable:deleted', 'data:changed'],
@@ -211,16 +232,75 @@ function AllDeliveries() {
   const rejectedCount = useMemo(() => safeBaseItems.filter((i) => i && i.status === "rejected").length, [safeBaseItems]);
   const abandonedCount = useMemo(() => safeBaseItems.filter((i) => i && (i.status === "abandoned" || i.status === "abandon_requested")).length, [safeBaseItems]);
 
-  const searchFilteredItems = useMemo(() => debouncedSearch
-    ? safeBaseItems.filter((item) => {
+  const searchFilteredItems = useMemo(() => {
+    let list = safeBaseItems;
+    if (debouncedSearch) {
+      const q = debouncedSearch.toLowerCase();
+      list = list.filter((item) => {
         if (!item) return false;
-        const q = debouncedSearch.toLowerCase();
         const titleMatch = (item.title || "").toLowerCase().includes(q);
         const assigneeMatch = (item.assignee?.name || "").toLowerCase().includes(q);
         const creatorMatch = (item.creator?.name || "").toLowerCase().includes(q);
-        return titleMatch || assigneeMatch || creatorMatch;
-      })
-    : safeBaseItems, [safeBaseItems, debouncedSearch]);
+        const taskMatch = (item.task?.title || "").toLowerCase().includes(q);
+        const projectMatch = (item.project?.title || item.task?.project?.title || "").toLowerCase().includes(q);
+        return titleMatch || assigneeMatch || creatorMatch || taskMatch || projectMatch;
+      });
+    }
+    if (advancedFilters.user_id && advancedFilters.user_id.length > 0) {
+      const uids = (Array.isArray(advancedFilters.user_id) ? advancedFilters.user_id : [advancedFilters.user_id]).map(Number);
+      list = list.filter((item) => {
+        if (!item) return false;
+        const aid = Number(item.assigned_to || item.assignee?.id);
+        const cid = Number(item.created_by || item.creator?.id);
+        return uids.includes(aid) || uids.includes(cid);
+      });
+    }
+    if (advancedFilters.project_id && advancedFilters.project_id.length > 0) {
+      const pids = (Array.isArray(advancedFilters.project_id) ? advancedFilters.project_id : [advancedFilters.project_id]).map(Number);
+      list = list.filter((item) => {
+        if (!item) return false;
+        const pid = Number(item.project_id || item.project?.id || item.task?.project_id || item.task?.project?.id);
+        return pids.includes(pid);
+      });
+    }
+    if (advancedFilters.status && advancedFilters.status.length > 0) {
+      const sts = Array.isArray(advancedFilters.status) ? advancedFilters.status : [advancedFilters.status];
+      list = list.filter((item) => {
+        if (!item) return false;
+        return sts.some((st) => {
+          if (st === "due_today") {
+            const d = item.due_date || item.end_date || item.start_date ? new Date(item.due_date || item.end_date || item.start_date) : null;
+            const isToday = d && !isNaN(d.getTime()) && d.toDateString() === new Date().toDateString();
+            const isDone = ["approved", "completed", "done"].includes((item.status || "").toLowerCase());
+            return isToday && !isDone;
+          }
+          if (st === "pending") return ["pending", "planned", "Planning", "Planned"].includes(item.status);
+          if (st === "in_progress") return ["in_progress", "In Progress", "in-progress"].includes(item.status);
+          if (st === "paused") return ["paused", "pause", "Pause"].includes(item.status);
+          if (st === "transferred") return Array.isArray(item.delegation_chain) && item.delegation_chain.length > 0;
+          if (st === "rejected" || st === "declined") return item.status === "rejected" || item.status === "declined";
+          if (st === "abandoned") return item.status === "abandoned" || item.status === "abandon_requested";
+          if (st === "approved") return item.status === "approved" || item.status === "completed";
+          return item.status === st;
+        });
+      });
+    }
+    if (advancedFilters.start_date) {
+      list = list.filter((item) => {
+        if (!item || !item.start_date) return false;
+        return new Date(item.start_date) >= new Date(advancedFilters.start_date);
+      });
+    }
+    if (advancedFilters.end_date) {
+      list = list.filter((item) => {
+        if (!item || (!item.end_date && !item.due_date)) return false;
+        const d = new Date(item.end_date || item.due_date);
+        return d <= new Date(advancedFilters.end_date);
+      });
+    }
+    return list;
+  }, [safeBaseItems, debouncedSearch, advancedFilters]);
+
   const filteredItems = useMemo(() => statusFilter && statusFilter !== "due_today"
     ? searchFilteredItems.filter((item) => {
         if (!item) return false;
@@ -239,8 +319,8 @@ function AllDeliveries() {
 
   const deliverableIdList = filteredItems.map((i) => i.id);
 
-  const totalPages = showAll ? 1 : Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
-  const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+  const totalPages = showAll ? 1 : Math.ceil(filteredItems.length / itemsPerPage);
+  const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * itemsPerPage, page * itemsPerPage);
 
   const breadcrumbs = [
     { label: "Subtasks", path: rolePath("deliveries") },
@@ -287,16 +367,17 @@ function AllDeliveries() {
           containerClassName="task-progress"
         />
 
-        {/* SEARCH BAR */}
-        <div className="delivery-serach-bar">
-          <IoSearchOutline fontSize={"20px"} />
-          <input
-            type="text"
-            placeholder="Search by subtask name, assigned to, assigned by, parent task, or project"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
+        {/* DEDICATED ACTION BAR & FILTERS */}
+        <TaskFilterBar
+          search={search}
+          onSearchChange={setSearch}
+          filters={advancedFilters}
+          onFilterChange={(key, val) => setAdvancedFilters((prev) => ({ ...prev, [key]: val }))}
+          onReset={() => {
+            setSearch("");
+            setAdvancedFilters({ user_id: [], project_id: [], status: [], start_date: "", end_date: "" });
+          }}
+        />
 
         {/* TABLE */}
         <div className="container">
@@ -386,19 +467,7 @@ function AllDeliveries() {
 
                     {/* Status */}
                     <div className="col-status">
-                      <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
-                        <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
-                        {formatStatus(item.status)}
-                      </span>
-                      {item.status === "approved" && item.approvedBy && (
-                        <div style={{ fontSize: "10px", color: "#166534", marginTop: "2px" }}>by {item.approvedBy.name}</div>
-                      )}
-                      {item.status === "rejected" && item.rejectedBy && (
-                        <div style={{ fontSize: "10px", color: "#991B1B", marginTop: "2px" }}>by {item.rejectedBy.name}</div>
-                      )}
-                      {item.status === "reopened" && item.reopenedBy && (
-                        <div style={{ fontSize: "10px", color: "#92400E", marginTop: "2px" }}>by {item.reopenedBy.name}</div>
-                      )}
+                      <TaskMultiStatusBadges item={item} />
                     </div>
 
                     {/* Due Date */}
@@ -447,8 +516,14 @@ function AllDeliveries() {
         </div>
       </div>
 
-      {!showAll && totalPages > 1 && (
-        <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+      {!showAll && (
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          itemsPerPage={itemsPerPage}
+          onItemsPerPageChange={(val) => { setItemsPerPage(val); setPage(1); }}
+        />
       )}
 
       <AddNoteModal

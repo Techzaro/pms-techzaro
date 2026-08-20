@@ -96,7 +96,7 @@ function Projects() {
   const [timeFilter, setTimeFilter] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [statusFilter, setStatusFilter] = useState(() => searchParams.get("filter") === "active" ? "active" : "");
+  const [statusFilter, setStatusFilter] = useState(() => searchParams.get("status") || searchParams.get("filter") || "");
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -110,6 +110,11 @@ function Projects() {
     const saved = sessionStorage.getItem("projects_current_page");
     return saved ? Math.max(1, Number(saved)) : 1;
   });
+
+  useEffect(() => {
+    const param = searchParams.get("status") || searchParams.get("filter") || "";
+    setStatusFilter(param);
+  }, [searchParams]);
 
   const handlePageChange = useCallback((newPage) => {
     setPage(newPage);
@@ -164,18 +169,12 @@ function Projects() {
   const currentRole = getCurrentRole();
   const isAdminOrManager = ["admin", "manager"].includes(String(currentRole || "").toLowerCase());
 
-  /** Fetch all projects from the API, applying current status and date range filters. */
+  /** Fetch all projects from the API, applying current date range filters. */
   const fetchProjects = async () => {
     try {
       setLoading(true);
       const token = authToken();
       const params = new URLSearchParams();
-
-      if (statusFilter === "active") {
-        params.append("filter", "active");
-      } else if (statusFilter) {
-        params.append("status", statusFilter);
-      }
 
       if (timeFilter && timeFilter !== "custom") {
         params.append("days", timeFilter);
@@ -216,7 +215,7 @@ function Projects() {
 
   useEffect(() => {
     fetchProjects();
-  }, [statusFilter, timeFilter, startDate, endDate]);
+  }, [timeFilter, startDate, endDate]);
 
   // Handle draft restoration from DraftCenter
   useEffect(() => {

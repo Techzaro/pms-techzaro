@@ -2,11 +2,11 @@ import React, { useEffect, useState } from "react";
 import { IoSearchOutline, IoFilterOutline } from "react-icons/io5";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
-import CustomSelect from "./CustomSelect";
+import MultiSelectDropdown from "./MultiSelectDropdown";
 
 /**
  * TaskFilterBar.jsx
- * Action & filter bar for task tables with collapsible filter toggle button.
+ * Action & filter bar for task and subtask tables with collapsible filter toggle button.
  */
 export default function TaskFilterBar({ filters, onFilterChange, onReset, search, onSearchChange }) {
   const [users, setUsers] = useState([]);
@@ -23,7 +23,7 @@ export default function TaskFilterBar({ filters, onFilterChange, onReset, search
     })
       .then((res) => res.json())
       .then((data) => {
-        const list = Array.isArray(data) ? data : data.data || [];
+        const list = Array.isArray(data) ? data : (data.users || data.data || []);
         setUsers(list);
       })
       .catch(() => {});
@@ -34,37 +34,48 @@ export default function TaskFilterBar({ filters, onFilterChange, onReset, search
     })
       .then((res) => res.json())
       .then((data) => {
-        const list = Array.isArray(data) ? data : data.data || [];
+        const list = Array.isArray(data) ? data : (data.projects || data.data || []);
         setProjects(list);
       })
       .catch(() => {});
   }, []);
 
-  const userOptions = [
-    { value: "", label: "All Assignees" },
-    ...users.map((u) => ({ value: String(u.id), label: u.name })),
-  ];
+  const userOptions = users.map((u) => ({
+    value: u.id,
+    label: u.name || u.email,
+  }));
 
-  const projectOptions = [
-    { value: "", label: "All Projects" },
-    ...projects.map((p) => ({ value: String(p.id), label: p.title })),
-  ];
+  const projectOptions = projects.map((p) => ({
+    value: p.id,
+    label: p.title + (p.business_id ? ` (${p.business_id})` : ""),
+  }));
 
   const statusOptions = [
-    { value: "", label: "All Statuses" },
+    { value: "due_today", label: "Due Today" },
     { value: "pending", label: "Pending" },
     { value: "in_progress", label: "In Progress" },
+    { value: "paused", label: "Paused" },
     { value: "submitted", label: "Submitted" },
-    { value: "approved", label: "Approved" },
     { value: "reopened", label: "Reopened" },
+    { value: "transferred", label: "Transferred" },
+    { value: "approved", label: "Approved" },
+    { value: "rejected", label: "Declined" },
     { value: "abandoned", label: "Abandoned" },
   ];
 
+  const toArray = (val) => {
+    if (Array.isArray(val)) return val;
+    if (val !== undefined && val !== null && val !== "") return [val];
+    return [];
+  };
+
+  const isNonEmpty = (val) => (Array.isArray(val) ? val.length > 0 : Boolean(val));
+
   const isActive = Boolean(
     (search && search.trim()) ||
-    filters?.user_id ||
-    filters?.project_id ||
-    filters?.status ||
+    isNonEmpty(filters?.user_id) ||
+    isNonEmpty(filters?.project_id) ||
+    isNonEmpty(filters?.status) ||
     filters?.start_date ||
     filters?.end_date
   );
@@ -81,6 +92,9 @@ export default function TaskFilterBar({ filters, onFilterChange, onReset, search
         boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
         boxSizing: "border-box",
         width: "100%",
+        position: "relative",
+        zIndex: 50,
+        overflow: "visible",
       }}
     >
       {/* Top Header Row with Search Input & Filter Toggle Button */}
@@ -200,41 +214,47 @@ export default function TaskFilterBar({ filters, onFilterChange, onReset, search
           }}
         >
           {/* Person (Assignee) Filter */}
-          <div style={{ flex: "1 1 150px", minWidth: 130 }}>
+          <div style={{ flex: "1 1 180px", minWidth: 150 }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
               Person (Assignee)
             </label>
-            <CustomSelect
-              name="filter_user_id"
-              value={filters?.user_id || ""}
+            <MultiSelectDropdown
+              size="sm"
+              value={toArray(filters?.user_id)}
               onChange={(val) => onFilterChange("user_id", val)}
               options={userOptions}
+              placeholder="All Assignees"
+              searchPlaceholder="Search assignees..."
             />
           </div>
 
           {/* Project Filter */}
-          <div style={{ flex: "1 1 150px", minWidth: 130 }}>
+          <div style={{ flex: "1 1 180px", minWidth: 150 }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
               Project
             </label>
-            <CustomSelect
-              name="filter_project_id"
-              value={filters?.project_id || ""}
+            <MultiSelectDropdown
+              size="sm"
+              value={toArray(filters?.project_id)}
               onChange={(val) => onFilterChange("project_id", val)}
               options={projectOptions}
+              placeholder="All Projects"
+              searchPlaceholder="Search projects..."
             />
           </div>
 
           {/* Status Filter */}
-          <div style={{ flex: "1 1 140px", minWidth: 120 }}>
+          <div style={{ flex: "1 1 180px", minWidth: 150 }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
               Status
             </label>
-            <CustomSelect
-              name="filter_status"
-              value={filters?.status || ""}
+            <MultiSelectDropdown
+              size="sm"
+              value={toArray(filters?.status)}
               onChange={(val) => onFilterChange("status", val)}
               options={statusOptions}
+              placeholder="All Statuses"
+              searchPlaceholder="Search statuses..."
             />
           </div>
 

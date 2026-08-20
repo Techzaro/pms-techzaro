@@ -291,18 +291,19 @@ function ChatWidget() {
   };
 
   return (
-    <div
-      className="fab-speed-dial-container"
-      onMouseEnter={() => setSpeedDialOpen(true)}
-      onMouseLeave={() => setSpeedDialOpen(false)}
-    >
+    <div className="fab-speed-dial-container">
       {/* Vertically Stacked Speed Dial Actions */}
       <div className={`fab-speed-dial-actions ${speedDialOpen ? "fab-speed-dial-actions--open" : ""}`}>
         {/* 1. Events */}
         <button
           type="button"
           className="fab-action-item"
-          onClick={() => { setSpeedDialOpen(false); navigate(rolePath("calender")); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            setSpeedDialOpen(false);
+            navigate(rolePath("events"));
+          }}
           title="Events"
         >
           <span className="fab-action-label">Events</span>
@@ -315,7 +316,12 @@ function ChatWidget() {
         <button
           type="button"
           className="fab-action-item"
-          onClick={() => { setSpeedDialOpen(false); navigate(rolePath("calender")); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            setSpeedDialOpen(false);
+            navigate(rolePath("calendar"));
+          }}
           title="Calendar"
         >
           <span className="fab-action-label">Calendar</span>
@@ -330,6 +336,7 @@ function ChatWidget() {
           className="fab-action-item"
           onClick={(e) => {
             e.stopPropagation();
+            e.preventDefault();
             setIsOpen((prev) => !prev);
             setSpeedDialOpen(false);
           }}
@@ -348,6 +355,7 @@ function ChatWidget() {
         className={`fab-main-btn ${(speedDialOpen || isOpen) ? "fab-main-btn--open" : ""}`}
         onClick={(e) => {
           e.stopPropagation();
+          e.preventDefault();
           if (isOpen) {
             setIsOpen(false);
             setSpeedDialOpen(false);

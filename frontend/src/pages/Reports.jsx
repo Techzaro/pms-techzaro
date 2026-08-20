@@ -16,6 +16,7 @@ import { useState, useCallback, memo, useMemo, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { IoSearchOutline } from "react-icons/io5";
 import CompanyEmployeeReport from "./CompanyEmployeeReport";
+import TeamExportReport from "./TeamExportReport";
 import { getUser, rolePath } from "../utils/auth";
 import { useApiQuery } from "../hooks/useApi";
 import { useQueryClient } from "@tanstack/react-query";
@@ -131,6 +132,7 @@ function Reports() {
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [showCompanyReport, setShowCompanyReport] = useState(false);
+  const [showTeamExportModal, setShowTeamExportModal] = useState(false);
   const [teamSearch, setTeamSearch] = useState("");
   const [userSearch, setUserSearch] = useState("");
 
@@ -413,12 +415,21 @@ function Reports() {
                   onChange={(e) => { setTeamSearch(e.target.value); setTeamSlide(0); }}
                 />
               </div>
-              <button
-                onClick={() => navigate(rolePath("manage-team"))}
-                className="teams-view-all-btn"
-              >
-                View All Teams
-              </button>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                <button
+                  onClick={() => setShowTeamExportModal(true)}
+                  className="reports-export-btn"
+                  style={{ background: "#4f46e5", borderColor: "#4f46e5", height: "36px", padding: "0 14px", fontSize: "13px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                >
+                  Export Team Report <span>↓</span>
+                </button>
+                <button
+                  onClick={() => navigate(rolePath("manage-team"))}
+                  className="teams-view-all-btn"
+                >
+                  View All Teams
+                </button>
+              </div>
             </div>
             {isTeamsLoading ? (
               <div style={{ padding: "24px", textAlign: "center", color: "var(--text-muted)" }}>Loading...</div>
@@ -683,6 +694,7 @@ function Reports() {
       </div>
 
       <CompanyEmployeeReport isOpen={showCompanyReport} onClose={() => setShowCompanyReport(false)} />
+      <TeamExportReport isOpen={showTeamExportModal} onClose={() => setShowTeamExportModal(false)} team={{ id: "all", name: "All Teams" }} />
     </DashboardLayout>
   );
 }

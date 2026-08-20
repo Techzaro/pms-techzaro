@@ -116,6 +116,8 @@ function TaskSubmissionPanel({
   task,
   isCreator,
   isAssignee,
+  isSuperAdmin: propIsSuperAdmin,
+  canApprove: propCanApprove,
   onTaskUpdate,
   onSubmitClick,
   confirmDialog,
@@ -136,9 +138,8 @@ function TaskSubmissionPanel({
   const transferorHasApproved = task.transferor_has_approved ?? false;
   const currentUser = getUser();
   const userRole = currentUser?.role;
-  const isAdminOrManager = userRole === "admin" || userRole === "manager";
-  const isMemberOrTeamLead = userRole === "member" || userRole === "team_lead" || userRole === "teamlead";
-  const canApprove = isAdminOrManager || (isCreator && !transferorHasApproved && !(hasDelegationChain && !isNextApprover)) || isNextApprover;
+  const isSuperAdmin = propIsSuperAdmin ?? (userRole === "admin" || userRole === "super_admin");
+  const canApprove = propCanApprove ?? (!isAssignee && (isCreator || isSuperAdmin));
 
   const [abandonModalOpen, setAbandonModalOpen] = useState(false);
   const [abandonAction, setAbandonAction] = useState(null);
@@ -528,7 +529,7 @@ function TaskSubmissionPanel({
 
             {status !== "abandoned" && (
               <>
-                {isAdminOrManager && status === "abandon_requested" && (
+                {canApprove && status === "abandon_requested" && (
                   <>
                     <button
                       className="td-review-btn td-review-btn--approve"
@@ -550,7 +551,7 @@ function TaskSubmissionPanel({
                   </>
                 )}
 
-                {isAdminOrManager && status !== "abandon_requested" && (
+                {canApprove && status !== "abandon_requested" && (
                   <button
                     className="td-review-btn td-review-btn--reject"
                     style={{ background: "#dc2626", color: "#fff", borderColor: "#dc2626" }}
@@ -564,7 +565,7 @@ function TaskSubmissionPanel({
                   </button>
                 )}
 
-                {isMemberOrTeamLead && status !== "abandon_requested" && (
+                {isAssignee && !canApprove && status !== "abandon_requested" && (
                   <button
                     className="td-review-btn td-review-btn--reject"
                     style={{ background: "#f59e0b", color: "#fff", borderColor: "#f59e0b" }}
@@ -632,14 +633,33 @@ function TaskSubmissionPanel({
                 {/* Show attachments for all submissions in history */}
                 {(sub.attachments?.length > 0 || sub.file_name) && (
                   <div style={{ marginTop: "8px", display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                    {(sub.attachments || []).map((att) => (
-                      <a key={att.id} className="td-submission-file-link" href={fileUrl(att.full_url)} target="_blank" rel="noopener noreferrer" style={{ fontSize: "11px", padding: "2px 8px" }}>
-                        {att.attachment_type === "link" ? <ExternalLink size={12} /> : <FileText size={12} />}
-                        <span>{att.original_name || att.file_name}</span>
-                      </a>
-                    ))}
+                    {(sub.attachments || []).map((att) => {
+                      const name = att.original_name || att.file_name;
+                      return (
+                        <a
+                          key={att.id}
+                          className="td-submission-file-link"
+                          href={att.attachment_type === "link" ? att.url : downloadUrl(att.full_url, name)}
+                          download={att.attachment_type === "link" ? undefined : name}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => att.attachment_type !== "link" && triggerDownload(e, att.full_url, name)}
+                          style={{ fontSize: "11px", padding: "2px 8px" }}
+                        >
+                          {att.attachment_type === "link" ? <ExternalLink size={12} /> : <FileText size={12} />}
+                          <span>{name}</span>
+                        </a>
+                      );
+                    })}
                     {sub.file_name && (!sub.attachments || sub.attachments.length === 0) && (
-                      <a className="td-submission-file-link" href={`${API_URL}/tasks/submission-file/${sub.id}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: "11px", padding: "2px 8px" }}>
+                      <a
+                        className="td-submission-file-link"
+                        href={`${API_URL}/tasks/submission-file/${sub.id}`}
+                        download={sub.file_name}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ fontSize: "11px", padding: "2px 8px" }}
+                      >
                         <FileText size={12} />
                         <span>{sub.file_name}</span>
                       </a>

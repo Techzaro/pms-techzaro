@@ -31,6 +31,7 @@ import ConfirmModal from "../components/ConfirmModal";
 import TaskFilterBar from "../components/TaskFilterBar";
 import DynamicWidgetSection from "../components/DynamicWidgetSection";
 import DraggableStatusBadges from "../components/DraggableStatusBadges";
+import TaskMultiStatusBadges from "../components/TaskMultiStatusBadges";
 import API_URL from "../config/api";
 import { authToken, rolePath, getUser } from "../utils/auth";
 import { renderDynamicDates } from "../utils/tableDateUtils";
@@ -88,9 +89,11 @@ const Taskby = () => {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [totalCount, setTotalCount] = useState(0);
   const [statusFilter, setStatusFilter] = useState(() => {
+    const filterParam = searchParams.get("filter");
+    if (filterParam === "due_today") return "due_today";
     const status = searchParams.get("status");
     if (status) return status;
-    return "";
+    return filterParam || "";
   });
   const [timeFilter, setTimeFilter] = useState("");
   const [orderedItems, setOrderedItems] = useState([]);
@@ -108,9 +111,9 @@ const Taskby = () => {
 
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [advancedFilters, setAdvancedFilters] = useState({
-    user_id: "",
-    project_id: "",
-    status: "",
+    user_id: [],
+    project_id: [],
+    status: [],
     start_date: "",
     end_date: "",
   });
@@ -131,9 +134,15 @@ const Taskby = () => {
     params.append("per_page", itemsPerPage);
     if (debouncedSearch) params.append("search", debouncedSearch);
     if (timeFilter) params.append("time_filter", timeFilter);
-    if (advancedFilters.user_id) params.append("user_id", advancedFilters.user_id);
-    if (advancedFilters.project_id) params.append("project_id", advancedFilters.project_id);
-    if (advancedFilters.status) params.append("status", advancedFilters.status);
+    if (advancedFilters.user_id && advancedFilters.user_id.length > 0) {
+      params.append("user_id", Array.isArray(advancedFilters.user_id) ? advancedFilters.user_id.join(",") : advancedFilters.user_id);
+    }
+    if (advancedFilters.project_id && advancedFilters.project_id.length > 0) {
+      params.append("project_id", Array.isArray(advancedFilters.project_id) ? advancedFilters.project_id.join(",") : advancedFilters.project_id);
+    }
+    if (advancedFilters.status && advancedFilters.status.length > 0) {
+      params.append("status", Array.isArray(advancedFilters.status) ? advancedFilters.status.join(",") : advancedFilters.status);
+    }
     if (advancedFilters.start_date) params.append("start_date", advancedFilters.start_date);
     if (advancedFilters.end_date) params.append("end_date", advancedFilters.end_date);
     if (sortBy) params.append("sort_by", sortBy);
@@ -165,8 +174,10 @@ const Taskby = () => {
   }, [items]);
 
   useEffect(() => {
-    const status = searchParams.get("status") || "";
-    setStatusFilter(status);
+    const filterParam = searchParams.get("filter");
+    const statusParam = searchParams.get("status");
+    const nextFilter = filterParam === "due_today" ? "due_today" : (statusParam || filterParam || "");
+    setStatusFilter(nextFilter);
   }, [searchParams]);
 
   const handleTaskReorder = useCallback((reordered) => {
@@ -334,9 +345,50 @@ const Taskby = () => {
     if (debouncedSearch) {
       const q = debouncedSearch.toLowerCase();
       const titleMatch = (item.title || "").toLowerCase().includes(q);
-      const assigneeMatch = (item.assignees || []).some(a => (a.name || "").toLowerCase().includes(q));
+      const assigneeMatch = (item.assignees || []).some((a) => (a.name || "").toLowerCase().includes(q));
       const assignerMatch = (item.assigner?.name || "").toLowerCase().includes(q);
-      if (!titleMatch && !assigneeMatch && !assignerMatch) return false;
+      const projectMatch = (item.project?.title || "").toLowerCase().includes(q);
+      if (!titleMatch && !assigneeMatch && !assignerMatch && !projectMatch) return false;
+    }
+    if (advancedFilters.user_id && advancedFilters.user_id.length > 0) {
+      const uids = (Array.isArray(advancedFilters.user_id) ? advancedFilters.user_id : [advancedFilters.user_id]).map(Number);
+      const hasMatch = (item.assignees || []).some((a) => uids.includes(Number(a.id))) ||
+        uids.includes(Number(item.assigned_to)) ||
+        uids.includes(Number(item.assigned_by));
+      if (!hasMatch) return false;
+    }
+    if (advancedFilters.project_id && advancedFilters.project_id.length > 0) {
+      const pids = (Array.isArray(advancedFilters.project_id) ? advancedFilters.project_id : [advancedFilters.project_id]).map(Number);
+      const projId = Number(item.project_id || item.project?.id);
+      if (!pids.includes(projId)) return false;
+    }
+    if (advancedFilters.status && advancedFilters.status.length > 0) {
+      const sts = Array.isArray(advancedFilters.status) ? advancedFilters.status : [advancedFilters.status];
+      const match = sts.some((st) => {
+        if (st === "due_today") {
+          const d = item.end_date || item.due_date || item.start_date ? new Date(item.end_date || item.due_date || item.start_date) : null;
+          const isToday = d && d.toDateString() === new Date().toDateString();
+          const isDone = ["approved", "completed", "done"].includes((item.status || "").toLowerCase());
+          return isToday && !isDone;
+        }
+        if (st === "pending") return ["pending", "planned", "Planning", "Planned"].includes(item.status);
+        if (st === "in_progress") return ["in_progress", "In Progress", "in-progress"].includes(item.status);
+        if (st === "paused") return ["paused", "pause", "Pause"].includes(item.status);
+        if (st === "transferred") return Array.isArray(item.delegation_chain) && item.delegation_chain.length > 0;
+        if (st === "rejected" || st === "declined") return item.status === "rejected" || item.status === "declined";
+        if (st === "abandoned") return item.status === "abandoned" || item.status === "abandon_requested";
+        if (st === "approved") return item.status === "approved" || item.status === "completed";
+        return item.status === st;
+      });
+      if (!match) return false;
+    }
+    if (advancedFilters.start_date) {
+      const itemDate = item.start_date ? new Date(item.start_date) : null;
+      if (!itemDate || itemDate < new Date(advancedFilters.start_date)) return false;
+    }
+    if (advancedFilters.end_date) {
+      const itemDate = item.end_date || item.due_date ? new Date(item.end_date || item.due_date) : null;
+      if (!itemDate || itemDate > new Date(advancedFilters.end_date)) return false;
     }
     if (statusFilter === "due_today") {
       const dateVal = item.end_date || item.due_date || item.start_date;
@@ -360,7 +412,7 @@ const Taskby = () => {
       return item.status === statusFilter;
     }
     return true;
-  }), [baseItems, debouncedSearch, statusFilter]);
+  }), [baseItems, debouncedSearch, statusFilter, advancedFilters]);
 
   const taskIdList = filteredItems.map((i) => i.id);
 
@@ -434,7 +486,7 @@ const Taskby = () => {
         onFilterChange={(key, val) => setAdvancedFilters((prev) => ({ ...prev, [key]: val }))}
         onReset={() => {
           setSearch("");
-          setAdvancedFilters({ user_id: "", project_id: "", status: "", start_date: "", end_date: "" });
+          setAdvancedFilters({ user_id: [], project_id: [], status: [], start_date: "", end_date: "" });
         }}
       />
 
@@ -515,16 +567,7 @@ const Taskby = () => {
                     </div>
 
                     <div className="col-status">
-                      <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
-                        <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
-                        {formatStatus(item.status)}
-                      </span>
-                      {item.assigner_paused && (
-                        <span className="badge" style={{ background: "#FEF3C7", color: "#92400E", marginTop: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                          <Lock size={11} />
-                          On Hold
-                        </span>
-                      )}
+                      <TaskMultiStatusBadges item={item} />
                     </div>
 
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>

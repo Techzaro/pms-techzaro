@@ -7,7 +7,7 @@
  * - View modal to review submissions (approve/reject actions)
  * - Deep-linking support via ?selectedDeliverable= param
  */
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import DraggableStatusBadges from "../components/DraggableStatusBadges";
@@ -30,6 +30,8 @@ import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
 import ActionPopover from "../components/ActionPopover";
 import AddNoteModal from "../components/AddNoteModal";
+import TaskMultiStatusBadges from "../components/TaskMultiStatusBadges";
+import TaskFilterBar from "../components/TaskFilterBar";
 import "../components/ActionPopover.css";
 import "../pages/Deliveries.css";
 import "../pages/Task.css";
@@ -79,6 +81,13 @@ function DeliveriesByYou() {
     return "";
   });
   const [timeFilter, setTimeFilter] = useState("");
+  const [advancedFilters, setAdvancedFilters] = useState({
+    user_id: [],
+    project_id: [],
+    status: [],
+    start_date: "",
+    end_date: "",
+  });
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editItem, setEditItem] = useState(null);
@@ -103,7 +112,19 @@ function DeliveriesByYou() {
     setLoading(true);
     const token = authToken();
     const params = new URLSearchParams();
+    if (debouncedSearch) params.append("search", debouncedSearch);
     if (timeFilter) params.append("time_filter", timeFilter);
+    if (advancedFilters.user_id && advancedFilters.user_id.length > 0) {
+      params.append("user_id", Array.isArray(advancedFilters.user_id) ? advancedFilters.user_id.join(",") : advancedFilters.user_id);
+    }
+    if (advancedFilters.project_id && advancedFilters.project_id.length > 0) {
+      params.append("project_id", Array.isArray(advancedFilters.project_id) ? advancedFilters.project_id.join(",") : advancedFilters.project_id);
+    }
+    if (advancedFilters.status && advancedFilters.status.length > 0) {
+      params.append("status", Array.isArray(advancedFilters.status) ? advancedFilters.status.join(",") : advancedFilters.status);
+    }
+    if (advancedFilters.start_date) params.append("start_date", advancedFilters.start_date);
+    if (advancedFilters.end_date) params.append("end_date", advancedFilters.end_date);
 
     fetch(`${API_URL}/deliverables/assigned-by-me?${params.toString()}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -126,7 +147,7 @@ function DeliveriesByYou() {
 
   useEffect(() => {
     fetchSubtasks();
-  }, [debouncedSearch, timeFilter]);
+  }, [debouncedSearch, timeFilter, advancedFilters]);
 
   useAutoRefresh(fetchSubtasks, { events: ['deliverable:updated', 'deliverable:created', 'deliverable:deleted', 'data:changed'] });
 
@@ -395,15 +416,74 @@ function DeliveriesByYou() {
   const rejectedCount = displayItems.filter((i) => i && i.status === "rejected").length;
   const abandonedCount = displayItems.filter((i) => i && (i.status === "abandoned" || i.status === "abandon_requested")).length;
 
-  const searchFilteredItems = debouncedSearch
-    ? displayItems.filter((item) => {
+  const searchFilteredItems = useMemo(() => {
+    let list = displayItems;
+    if (debouncedSearch) {
+      const q = debouncedSearch.toLowerCase();
+      list = list.filter((item) => {
         if (!item) return false;
-        const q = debouncedSearch.toLowerCase();
         const titleMatch = (item.title || "").toLowerCase().includes(q);
         const assigneeMatch = (item.assignee?.name || "").toLowerCase().includes(q);
-        return titleMatch || assigneeMatch;
-      })
-    : displayItems;
+        const taskMatch = (item.task?.title || "").toLowerCase().includes(q);
+        const projectMatch = (item.project?.title || item.task?.project?.title || "").toLowerCase().includes(q);
+        return titleMatch || assigneeMatch || taskMatch || projectMatch;
+      });
+    }
+    if (advancedFilters.user_id && advancedFilters.user_id.length > 0) {
+      const uids = (Array.isArray(advancedFilters.user_id) ? advancedFilters.user_id : [advancedFilters.user_id]).map(Number);
+      list = list.filter((item) => {
+        if (!item) return false;
+        const aid = Number(item.assigned_to || item.assignee?.id);
+        const cid = Number(item.created_by || item.creator?.id);
+        return uids.includes(aid) || uids.includes(cid);
+      });
+    }
+    if (advancedFilters.project_id && advancedFilters.project_id.length > 0) {
+      const pids = (Array.isArray(advancedFilters.project_id) ? advancedFilters.project_id : [advancedFilters.project_id]).map(Number);
+      list = list.filter((item) => {
+        if (!item) return false;
+        const pid = Number(item.project_id || item.project?.id || item.task?.project_id || item.task?.project?.id);
+        return pids.includes(pid);
+      });
+    }
+    if (advancedFilters.status && advancedFilters.status.length > 0) {
+      const sts = Array.isArray(advancedFilters.status) ? advancedFilters.status : [advancedFilters.status];
+      list = list.filter((item) => {
+        if (!item) return false;
+        return sts.some((st) => {
+          if (st === "due_today") {
+            const d = item.due_date || item.end_date || item.start_date ? new Date(item.due_date || item.end_date || item.start_date) : null;
+            const isToday = d && !isNaN(d.getTime()) && d.toDateString() === new Date().toDateString();
+            const isDone = ["approved", "completed", "done"].includes((item.status || "").toLowerCase());
+            return isToday && !isDone;
+          }
+          if (st === "pending") return ["pending", "planned", "Planning", "Planned"].includes(item.status);
+          if (st === "in_progress") return ["in_progress", "In Progress", "in-progress"].includes(item.status);
+          if (st === "paused") return ["paused", "pause", "Pause"].includes(item.status);
+          if (st === "transferred") return Array.isArray(item.delegation_chain) && item.delegation_chain.length > 0;
+          if (st === "rejected" || st === "declined") return item.status === "rejected" || item.status === "declined";
+          if (st === "abandoned") return item.status === "abandoned" || item.status === "abandon_requested";
+          if (st === "approved") return item.status === "approved" || item.status === "completed";
+          return item.status === st;
+        });
+      });
+    }
+    if (advancedFilters.start_date) {
+      list = list.filter((item) => {
+        if (!item || !item.start_date) return false;
+        return new Date(item.start_date) >= new Date(advancedFilters.start_date);
+      });
+    }
+    if (advancedFilters.end_date) {
+      list = list.filter((item) => {
+        if (!item || (!item.end_date && !item.due_date)) return false;
+        const d = new Date(item.end_date || item.due_date);
+        return d <= new Date(advancedFilters.end_date);
+      });
+    }
+    return list;
+  }, [displayItems, debouncedSearch, advancedFilters]);
+
   const filteredItems = statusFilter && statusFilter !== "due_today"
     ? searchFilteredItems.filter((item) => {
         if (!item) return false;
@@ -423,7 +503,7 @@ function DeliveriesByYou() {
   const safeFilteredItems = Array.isArray(filteredItems) ? filteredItems : [];
   const subtaskIds = safeFilteredItems.map((item) => item.id);
 
-  const totalPages = showAll ? 1 : Math.max(1, Math.ceil(safeFilteredItems.length / (ITEMS_PER_PAGE || 10)));
+  const totalPages = showAll ? 1 : Math.ceil(safeFilteredItems.length / (ITEMS_PER_PAGE || 10));
   const paginatedItems = showAll ? safeFilteredItems : safeFilteredItems.slice((page - 1) * (ITEMS_PER_PAGE || 10), page * (ITEMS_PER_PAGE || 10));
 
   const breadcrumbs = [
@@ -475,10 +555,17 @@ function DeliveriesByYou() {
           containerClassName="task-progress"
         />
 
-        <div className="delivery-serach-bar">
-          <IoSearchOutline fontSize={"20px"} />
-          <input type="text" placeholder="Search by subtask name or assignee" value={search} onChange={(e) => setSearch(e.target.value)} />
-        </div>
+        {/* DEDICATED ACTION BAR & FILTERS */}
+        <TaskFilterBar
+          search={search}
+          onSearchChange={setSearch}
+          filters={advancedFilters}
+          onFilterChange={(key, val) => setAdvancedFilters((prev) => ({ ...prev, [key]: val }))}
+          onReset={() => {
+            setSearch("");
+            setAdvancedFilters({ user_id: [], project_id: [], status: [], start_date: "", end_date: "" });
+          }}
+        />
 
         <div className="container">
           {/* Header - Div based */}
@@ -540,18 +627,8 @@ function DeliveriesByYou() {
                         </Link>
                       )}
                     </div>
-                    <div>
-                      <span className="badge" style={{
-                        background: STATUS_COLORS[item.status] || "#F3F4F6",
-                        color: STATUS_TEXT_COLORS[item.status] || "#374151",
-                        padding: "4px 10px",
-                        borderRadius: "999px",
-                        fontSize: "12px",
-                        fontWeight: 600
-                      }}>
-                        <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
-                        {formatStatus(item.status)}
-                      </span>
+                    <div className="col-status">
+                      <TaskMultiStatusBadges item={item} />
                     </div>
                     <div>
                       <div className="date-box">
