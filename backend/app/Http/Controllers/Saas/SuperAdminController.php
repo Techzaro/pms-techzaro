@@ -150,8 +150,7 @@ class SuperAdminController extends Controller
             $sets[] = '`credentials_managed_by_admin` = ?';
             $bindings[] = 1;
 
-            $sets[] = '`password_changed_by` = ?';
-            $bindings[] = 'super_admin';
+            $sets[] = '`password_changed_by` = NULL';
 
             $sets[] = '`password_changed_at` = ?';
             $bindings[] = now()->toDateTimeString();
