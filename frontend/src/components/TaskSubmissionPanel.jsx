@@ -116,6 +116,8 @@ function TaskSubmissionPanel({
   task,
   isCreator,
   isAssignee,
+  isSuperAdmin: propIsSuperAdmin,
+  canApprove: propCanApprove,
   onTaskUpdate,
   onSubmitClick,
   confirmDialog,
@@ -136,9 +138,8 @@ function TaskSubmissionPanel({
   const transferorHasApproved = task.transferor_has_approved ?? false;
   const currentUser = getUser();
   const userRole = currentUser?.role;
-  const isAdminOrManager = userRole === "admin" || userRole === "manager";
-  const isMemberOrTeamLead = userRole === "member" || userRole === "team_lead" || userRole === "teamlead";
-  const canApprove = isAdminOrManager || (isCreator && !transferorHasApproved && !(hasDelegationChain && !isNextApprover)) || isNextApprover;
+  const isSuperAdmin = propIsSuperAdmin ?? (userRole === "admin" || userRole === "super_admin");
+  const canApprove = propCanApprove ?? (!isAssignee && (isCreator || isSuperAdmin));
 
   const [abandonModalOpen, setAbandonModalOpen] = useState(false);
   const [abandonAction, setAbandonAction] = useState(null);
@@ -528,7 +529,7 @@ function TaskSubmissionPanel({
 
             {status !== "abandoned" && (
               <>
-                {isAdminOrManager && status === "abandon_requested" && (
+                {canApprove && status === "abandon_requested" && (
                   <>
                     <button
                       className="td-review-btn td-review-btn--approve"
@@ -550,7 +551,7 @@ function TaskSubmissionPanel({
                   </>
                 )}
 
-                {isAdminOrManager && status !== "abandon_requested" && (
+                {canApprove && status !== "abandon_requested" && (
                   <button
                     className="td-review-btn td-review-btn--reject"
                     style={{ background: "#dc2626", color: "#fff", borderColor: "#dc2626" }}
@@ -564,7 +565,7 @@ function TaskSubmissionPanel({
                   </button>
                 )}
 
-                {isMemberOrTeamLead && status !== "abandon_requested" && (
+                {isAssignee && !canApprove && status !== "abandon_requested" && (
                   <button
                     className="td-review-btn td-review-btn--reject"
                     style={{ background: "#f59e0b", color: "#fff", borderColor: "#f59e0b" }}

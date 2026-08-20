@@ -412,9 +412,8 @@ function TaskDetails() {
   const transferorReturnToSelf = task?.transferor_return_to_self ?? true;
   const transferorHasApproved = task?.transferor_has_approved ?? false;
   const hasPendingDelegation = task?.pending_delegation && task.pending_delegation.delegated_to === currentUser?.id;
-  const isDelegatee = task?.is_delegatee ?? false;
-  const isNextApprover = task?.is_next_approver ?? false;
-  const canApprove = readOnly ? false : (task?.can_approve ?? (isAdminOrManager || isCreator || isNextApprover));
+  const isSuperAdmin = currentUser && ["admin", "super_admin"].includes(currentUser.role);
+  const canApprove = readOnly ? false : (!isAssignee && (isCreator || isSuperAdmin));
 
   const { submitting: acknowledging, run: runAcknowledge } = useSubmit();
   const { submitting: pausing, run: runPause } = useSubmit();
@@ -1258,7 +1257,7 @@ function TaskDetails() {
                       {approvingTask ? "Approving..." : "Approve Task"}
                     </button>
                   )}
-                  {task?.status !== "abandoned" && task?.status !== "approved" && (
+                  {canApprove && task?.status !== "abandoned" && task?.status !== "approved" && (
                     <button
                       className="td-btn-danger"
                       style={{ background: "#dc2626", color: "#ffffff", border: "none", fontWeight: 600, padding: "8px 16px", borderRadius: "8px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}
@@ -1353,11 +1352,13 @@ function TaskDetails() {
               </div>
 
               {/* Task Submission Workflow */}
-              {!readOnly && (isAssignee || isCreator) && (
+              {!readOnly && (isAssignee || isCreator || isSuperAdmin) && (
                 <TaskSubmissionPanel
                   task={task}
                   isCreator={isCreator}
                   isAssignee={isAssignee}
+                  isSuperAdmin={isSuperAdmin}
+                  canApprove={canApprove}
                   onTaskUpdate={handleTaskActionSuccess}
                   onSubmitClick={() => { setIsEditingTaskSubmission(false); setTaskSubmitModalOpen(true); }}
                   onEditSubmissionClick={() => { setIsEditingTaskSubmission(true); setTaskSubmitModalOpen(true); }}

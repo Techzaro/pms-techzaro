@@ -81,9 +81,11 @@ class DeliverableController extends Controller
             $query->where('created_by', $user->id);
         }
 
-        $query->when($isDueTodayFilter, fn ($q) => $q->whereDate('due_date', today())->whereNotIn('status', $this->dueTodayExcludedStatuses()));
-
-        $deliverables = $query->orderBy('sort_order')->latest('updated_at')->filter($filters)->limit(200)->get();
+        $query->orderBy('sort_order')->orderBy('created_at', 'desc')->orderBy('id', 'desc')->filter($filters);
+        if ($request->filled('per_page') || $request->filled('limit')) {
+            $query->limit((int) ($request->input('per_page') ?: $request->input('limit')));
+        }
+        $deliverables = $query->get();
 
         // Ensure project_id is populated for old subtasks that may lack it
         foreach ($deliverables as $deliverable) {
@@ -190,10 +192,11 @@ class DeliverableController extends Controller
 
         $query->where('created_by', $user->id);
 
-        $query->whereColumn('created_by', '!=', 'assigned_to');
-        $query->when($isDueTodayFilter, fn ($q) => $q->whereDate('due_date', today())->whereNotIn('status', $this->dueTodayExcludedStatuses()));
-
-        $deliverables = $query->orderBy('sort_order')->latest('updated_at')->filter($filters)->limit(200)->get();
+        $query->orderBy('sort_order')->orderBy('created_at', 'desc')->orderBy('id', 'desc')->filter($filters);
+        if ($request->filled('per_page') || $request->filled('limit')) {
+            $query->limit((int) ($request->input('per_page') ?: $request->input('limit')));
+        }
+        $deliverables = $query->get();
 
         // Process delegation chain for OA visibility
         $deliverables = $deliverables->map(function ($d) use ($user) {
@@ -251,7 +254,7 @@ class DeliverableController extends Controller
             unset($filters['status']);
         }
 
-        $deliverables = Deliverable::with([
+        $query = Deliverable::with([
             'project:id,title', 'assignee:id,name,email,role',
             'creator:id,name,role', 'task:id,title,project_id', 'task.project:id,title',
             'latestSubmission', 'latestSubmission.submittedBy:id,name,email', 'latestSubmission.attachments',
@@ -263,10 +266,13 @@ class DeliverableController extends Controller
                     });
             })
             ->when($isDueTodayFilter, fn ($q) => $q->whereDate('due_date', today())->whereNotIn('status', $this->dueTodayExcludedStatuses()))
-            ->orderBy('sort_order')->latest('updated_at')
-            ->filter($filters)
-            ->limit(200)
-            ->get();
+            ->orderBy('sort_order')->orderBy('created_at', 'desc')->orderBy('id', 'desc')
+            ->filter($filters);
+
+        if ($request->filled('per_page') || $request->filled('limit')) {
+            $query->limit((int) ($request->input('per_page') ?: $request->input('limit')));
+        }
+        $deliverables = $query->get();
 
         return response()->json(['success' => true, 'data' => $deliverables]);
     }
@@ -2419,34 +2425,164 @@ class DeliverableController extends Controller
         }
 
         // ── Apply filters ──
-        $query->when($isDueTodayFilter, fn ($q) => $q->whereDate('due_date', today())->whereNotIn('status', $this->dueTodayExcludedStatuses()))
-            ->when($isPendingFilter, fn ($q) => $q->whereIn('status', ['pending']))
-            ->when($search, fn ($q) => $q->where(function ($sq) use ($search) {
+        $userIds = $request->input('user_id', $request->input('user_ids', $request->input('assigned_to', [])));
+        if (is_string($userIds) && str_contains($userIds, ',')) {
+            $userIds = explode(',', $userIds);
+        }
+        if (! is_array($userIds) && ! empty($userIds)) {
+            $userIds = [$userIds];
+        }
+        if (! empty($userIds) && is_array($userIds)) {
+            $userIds = array_values(array_filter(array_map('intval', $userIds)));
+            if (! empty($userIds)) {
+                $query->where(function ($q) use ($userIds) {
+                    $q->whereIn('assigned_to', $userIds)
+                        ->orWhereIn('created_by', $userIds);
+                });
+            }
+        }
+
+        $projectIds = $request->input('project_id', $request->input('project_ids', []));
+        if (is_string($projectIds) && str_contains($projectIds, ',')) {
+            $projectIds = explode(',', $projectIds);
+        }
+        if (! is_array($projectIds) && ! empty($projectIds)) {
+            $projectIds = [$projectIds];
+        }
+        if (! empty($projectIds) && is_array($projectIds)) {
+            $projectIds = array_values(array_filter(array_map('intval', $projectIds)));
+            if (! empty($projectIds)) {
+                $query->whereIn('project_id', $projectIds);
+            }
+        }
+
+        $rawStatuses = $request->input('status', $request->input('statuses', []));
+        if (is_string($rawStatuses) && str_contains($rawStatuses, ',')) {
+            $rawStatuses = explode(',', $rawStatuses);
+        }
+        if (! is_array($rawStatuses) && ! empty($rawStatuses)) {
+            $rawStatuses = [$rawStatuses];
+        }
+        if (is_array($rawStatuses) && ! empty($rawStatuses)) {
+            $expandedStatuses = [];
+            $hasDueToday = false;
+            $hasTransferred = false;
+            foreach ($rawStatuses as $st) {
+                $st = trim((string) $st);
+                if ($st === 'due_today') {
+                    $hasDueToday = true;
+                } elseif ($st === 'transferred') {
+                    $hasTransferred = true;
+                } elseif ($st === 'pending') {
+                    $expandedStatuses = array_merge($expandedStatuses, ['pending', 'planned', 'Planning', 'Planned']);
+                } elseif ($st === 'in_progress') {
+                    $expandedStatuses = array_merge($expandedStatuses, ['in_progress', 'In Progress', 'in-progress']);
+                } elseif ($st === 'paused') {
+                    $expandedStatuses = array_merge($expandedStatuses, ['paused', 'pause', 'Pause']);
+                } elseif ($st === 'rejected' || $st === 'declined') {
+                    $expandedStatuses[] = 'rejected';
+                    $expandedStatuses[] = 'declined';
+                } elseif ($st === 'abandoned') {
+                    $expandedStatuses[] = 'abandoned';
+                    $expandedStatuses[] = 'abandon_requested';
+                } elseif ($st === 'approved') {
+                    $expandedStatuses[] = 'approved';
+                    $expandedStatuses[] = 'completed';
+                } elseif (! empty($st)) {
+                    $expandedStatuses[] = $st;
+                }
+            }
+            $expandedStatuses = array_values(array_unique($expandedStatuses));
+            $query->where(function ($sq) use ($expandedStatuses, $hasDueToday, $hasTransferred) {
+                $hasCondition = false;
+                if (! empty($expandedStatuses)) {
+                    $sq->whereIn('status', $expandedStatuses);
+                    $hasCondition = true;
+                }
+                if ($hasDueToday) {
+                    if ($hasCondition) {
+                        $sq->orWhere(function ($dq) {
+                            $dq->whereDate('due_date', today())->whereNotIn('status', $this->dueTodayExcludedStatuses());
+                        });
+                    } else {
+                        $sq->whereDate('due_date', today())->whereNotIn('status', $this->dueTodayExcludedStatuses());
+                        $hasCondition = true;
+                    }
+                }
+                if ($hasTransferred) {
+                    if ($hasCondition) {
+                        $sq->orWhere(function ($tq) {
+                            $tq->whereNotNull('delegation_chain')->where('delegation_chain', '!=', '[]');
+                        });
+                    } else {
+                        $sq->whereNotNull('delegation_chain')->where('delegation_chain', '!=', '[]');
+                    }
+                }
+            });
+        } elseif (is_string($rawStatuses) && ! empty($rawStatuses)) {
+            if ($rawStatuses === 'due_today') {
+                $query->whereDate('due_date', today())->whereNotIn('status', $this->dueTodayExcludedStatuses());
+            } elseif ($rawStatuses === 'transferred') {
+                $query->whereNotNull('delegation_chain')->where('delegation_chain', '!=', '[]');
+            } elseif ($rawStatuses === 'pending') {
+                $query->whereIn('status', ['pending', 'planned', 'Planning', 'Planned']);
+            } elseif ($rawStatuses === 'in_progress') {
+                $query->whereIn('status', ['in_progress', 'In Progress', 'in-progress']);
+            } elseif ($rawStatuses === 'paused') {
+                $query->whereIn('status', ['paused', 'pause', 'Pause']);
+            } elseif ($rawStatuses === 'rejected' || $rawStatuses === 'declined') {
+                $query->whereIn('status', ['rejected', 'declined']);
+            } elseif ($rawStatuses === 'abandoned') {
+                $query->whereIn('status', ['abandoned', 'abandon_requested']);
+            } elseif ($rawStatuses === 'approved') {
+                $query->whereIn('status', ['approved', 'completed']);
+            } else {
+                $query->where('status', $rawStatuses);
+            }
+        }
+
+        if ($search) {
+            $query->where(function ($sq) use ($search) {
                 $sq->where('title', 'like', '%'.$search.'%')
                     ->orWhereHas('assignee', fn ($aq) => $aq->where('name', 'like', '%'.$search.'%'))
                     ->orWhereHas('creator', fn ($cq) => $cq->where('name', 'like', '%'.$search.'%'))
                     ->orWhereHas('task', fn ($tq) => $tq->where('title', 'like', '%'.$search.'%'));
-            }))
-            ->when($statusFilter && ! $isDueTodayFilter && ! $isPendingFilter, fn ($q) => $q->where('status', $statusFilter))
-            ->when($timeFilter, fn ($q) => $q->where('updated_at', '>=', now()->subDays((int) $timeFilter)));
+            });
+        }
 
-        $deliverables = $query
-            ->with([
-                'project:id,title',
-                'assignee:id,name,email,role',
-                'creator:id,name,role',
-                'task:id,title,project_id',
-                'task.project:id,title',
-                'latestSubmission',
-                'approvedBy:id,name,role',
-                'rejectedBy:id,name,role',
-                'reopenedBy:id,name,role',
-                'updatedBy:id,name,role',
-            ])
+        if ($timeFilter) {
+            $query->where('updated_at', '>=', now()->subDays((int) $timeFilter));
+        }
+
+        if ($request->filled('start_date')) {
+            $query->whereDate('start_date', '>=', $request->input('start_date'));
+        }
+
+        if ($request->filled('end_date')) {
+            $query->whereDate('end_date', '<=', $request->input('end_date'));
+        }
+
+        $query->with([
+            'project:id,title',
+            'assignee:id,name,email,role',
+            'creator:id,name,role',
+            'task:id,title,project_id',
+            'task.project:id,title',
+            'latestSubmission',
+            'approvedBy:id,name,role',
+            'rejectedBy:id,name,role',
+            'reopenedBy:id,name,role',
+            'updatedBy:id,name,role',
+        ])
             ->orderBy('sort_order')
-            ->latest('updated_at')
-            ->limit(200)
-            ->get();
+            ->orderBy('created_at', 'desc')
+            ->orderBy('id', 'desc');
+
+        if ($request->filled('per_page') || $request->filled('limit')) {
+            $query->limit((int) ($request->input('per_page') ?: $request->input('limit')));
+        }
+
+        $deliverables = $query->get();
 
         // Transform to add submission_status field for frontend Progress column
         $deliverables->transform(function ($deliverable) {

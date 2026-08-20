@@ -9,7 +9,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('conversations', function (Blueprint $table) {
-            $table->unsignedBigInteger('org_id')->nullable()->after('created_by');
+            if (!Schema::hasColumn('conversations', 'org_id')) {
+                $table->unsignedBigInteger('org_id')->nullable()->after('created_by');
+            }
         });
     }
 

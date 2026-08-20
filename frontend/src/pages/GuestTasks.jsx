@@ -90,7 +90,7 @@ function GuestTasks() {
 
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
-  const ITEMS_PER_PAGE = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -336,8 +336,8 @@ function GuestTasks() {
 
   const taskIdList = filteredItems.map((i) => i.id);
 
-  const totalPages = showAll ? 1 : Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
-  const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+  const totalPages = showAll ? 1 : Math.ceil(filteredItems.length / itemsPerPage);
+  const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * itemsPerPage, page * itemsPerPage);
 
   const breadcrumbs = [
     { label: "Tasks", path: rolePath("guest-tasks") },
@@ -602,8 +602,14 @@ function GuestTasks() {
         )}
       </div>
 
-      {!showAll && totalPages > 1 && (
-        <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+      {!showAll && (
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          itemsPerPage={itemsPerPage}
+          onItemsPerPageChange={(val) => { setItemsPerPage(val); setPage(1); }}
+        />
       )}
 
       <SubmitTaskModal

@@ -37,6 +37,12 @@
   height: 32px;
   border-radius: 8px;
   font-size: 14px;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.ap-popover-content .action-icon-btn:hover {
+  background: var(--bg-hover, #e2e8f0) !important;
+  opacity: 0.9;
   display: inline-flex;
   align-items: center;
   justify-content: center;

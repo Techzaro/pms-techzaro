@@ -189,12 +189,8 @@ class SubscriptionService
      */
     public function isWithinUserLimit(Organization $organization): bool
     {
-        $subscription = $organization->subscription;
-        if (!$subscription || !$subscription->plan) {
-            return false;
-        }
-
-        return true; // Actual count check would query tenant DB
+        $result = app(EntitlementService::class)->canCreateUser($organization);
+        return $result['allowed'];
     }
 
     /**
@@ -202,12 +198,8 @@ class SubscriptionService
      */
     public function isWithinProjectLimit(Organization $organization): bool
     {
-        $subscription = $organization->subscription;
-        if (!$subscription || !$subscription->plan) {
-            return false;
-        }
-
-        return true; // Actual count check would query tenant DB
+        $result = app(EntitlementService::class)->canCreateProject($organization);
+        return $result['allowed'];
     }
 
     /**

@@ -300,15 +300,10 @@ class OrganizationSettingsController extends Controller
         $enabledModules = $modules->where('is_enabled', true);
         $disabledModules = $modules->where('is_enabled', false);
 
-        // Count usage within current subscription period only (resets on renewal)
-        $periodStart = $subscription->starts_at;
-        $periodEnd = $subscription->ends_at;
-        $currentUsers = \App\Models\User::where('created_at', '>=', $periodStart)
-            ->where('created_at', '<=', $periodEnd)
-            ->count();
-        $currentProjects = \App\Models\Project::where('created_at', '>=', $periodStart)
-            ->where('created_at', '<=', $periodEnd)
-            ->count();
+        // Count ALL active users and projects (not scoped to subscription period)
+        // This ensures limits are enforced against total resource count
+        $currentUsers = \App\Models\User::count();
+        $currentProjects = \App\Models\Project::count();
 
         // Check for org-specific trial config overrides
         $effectiveMaxUsers = $plan?->max_users;

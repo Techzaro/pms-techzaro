@@ -192,8 +192,8 @@ Route::middleware('auth:sanctum')->group(function () {
     | Admin and manager only: CRUD operations for managing users.
     */
     Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager')->group(function () {
-        // Create new user
-        Route::post('/users', [UserController::class, 'store']);
+        // Create new user (enforces plan user limit)
+        Route::post('/users', [UserController::class, 'store'])->middleware(\App\Http\Middleware\CheckPlanLimits::class . ':users');
         // View user details
         Route::get('/users/{user}', [UserController::class, 'show']);
         // Update user information
@@ -223,7 +223,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/users/{user}/request-deletion', [UserController::class, 'requestDeletion']);
 
         // Guest (Client Portal) management
-        Route::post('/guests', [UserController::class, 'storeGuest']);
+        Route::post('/guests', [UserController::class, 'storeGuest'])->middleware(\App\Http\Middleware\CheckPlanLimits::class . ':users');
         Route::put('/guests/{user}', [UserController::class, 'updateGuest']);
         Route::delete('/guests/{user}', [UserController::class, 'destroyGuest']);
         Route::post('/guests/{user}/resend-invitation', [UserController::class, 'resendInvitation']);
@@ -311,8 +311,8 @@ Route::middleware('auth:sanctum')->group(function () {
     | Admin and manager only: create, update, delete projects and manage files.
     */
     Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager')->group(function () {
-        // Create new project
-        Route::post('/projects', [ProjectController::class, 'store']);
+        // Create new project (enforces plan project limit)
+        Route::post('/projects', [ProjectController::class, 'store'])->middleware(\App\Http\Middleware\CheckPlanLimits::class . ':projects');
         // Update project
         Route::put('/projects/{project}', [ProjectController::class, 'update']);
         // Partial update project

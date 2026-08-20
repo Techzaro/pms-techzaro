@@ -69,7 +69,7 @@ export function usePlanLimits() {
 
   useEffect(() => {
     const unsub = subscribe("data:changed", (payload) => {
-      if (["user", "guest", "project"].includes(payload?.type)) {
+      if (["user", "guest", "project", "team"].includes(payload?.type)) {
         queryClient.invalidateQueries({ queryKey: SUBSCRIPTION_QUERY_KEY });
       }
     });

@@ -2,6 +2,7 @@
 
 namespace App\Services\Saas\Provisioning;
 
+use App\Console\Commands\FixTenantColumns;
 use App\Services\Saas\DatabaseProvisionService;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Log;
@@ -36,6 +37,22 @@ class TenantMigrationRunner
         $output = Artisan::output();
 
         Log::info("Tenant migrations completed on database: {$databaseName}");
+
+        // Safety net: fix any missing columns/tables that migrations may have skipped
+        try {
+            $result = FixTenantColumns::fixDatabaseQuiet($databaseName);
+            if ($result['fixed'] > 0) {
+                Log::info("Tenant column fixes applied after migration", [
+                    'database' => $databaseName,
+                    'fixed'    => $result['fixed'],
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::warning("Column fix failed after migration (non-fatal)", [
+                'database' => $databaseName,
+                'error'    => $e->getMessage(),
+            ]);
+        }
 
         return [
             'success'    => true,

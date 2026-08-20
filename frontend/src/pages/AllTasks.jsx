@@ -26,6 +26,7 @@ import ActionPopover from "../components/ActionPopover";
 import TaskNotesPopover from "../components/TaskNotesPopover";
 import AddNoteModal from "../components/AddNoteModal";
 import TaskMultiStatusBadges from "../components/TaskMultiStatusBadges";
+import TaskFilterBar from "../components/TaskFilterBar";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import { renderDynamicDates } from "../utils/tableDateUtils";
@@ -87,6 +88,13 @@ function AllTasks() {
     return filterParam || "";
   });
   const [timeFilter, setTimeFilter] = useState("");
+  const [advancedFilters, setAdvancedFilters] = useState({
+    user_id: [],
+    project_id: [],
+    status: [],
+    start_date: "",
+    end_date: "",
+  });
   const [orderedItems, setOrderedItems] = useState([]);
   const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
 
@@ -105,6 +113,18 @@ function AllTasks() {
     const token = authToken();
     const params = new URLSearchParams();
     if (timeFilter) params.append("time_filter", timeFilter);
+    if (debouncedSearch) params.append("search", debouncedSearch);
+    if (advancedFilters.user_id && advancedFilters.user_id.length > 0) {
+      params.append("user_id", advancedFilters.user_id.join(","));
+    }
+    if (advancedFilters.project_id && advancedFilters.project_id.length > 0) {
+      params.append("project_id", advancedFilters.project_id.join(","));
+    }
+    if (advancedFilters.status && advancedFilters.status.length > 0) {
+      params.append("status", advancedFilters.status.join(","));
+    }
+    if (advancedFilters.start_date) params.append("start_date", advancedFilters.start_date);
+    if (advancedFilters.end_date) params.append("end_date", advancedFilters.end_date);
 
     fetch(`${API_URL}/all-tasks?${params.toString()}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -121,7 +141,7 @@ function AllTasks() {
 
   useEffect(() => {
     fetchTasks();
-  }, [debouncedSearch, timeFilter]);
+  }, [debouncedSearch, timeFilter, advancedFilters]);
 
   useAutoRefresh(fetchTasks, {
     events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
@@ -211,7 +231,47 @@ function AllTasks() {
       const titleMatch = (item.title || "").toLowerCase().includes(q);
       const assigneeMatch = (item.assignees || []).some(a => (a.name || "").toLowerCase().includes(q));
       const assignerMatch = (item.assigner?.name || "").toLowerCase().includes(q);
-      if (!titleMatch && !assigneeMatch && !assignerMatch) return false;
+      const projectMatch = (item.project?.title || "").toLowerCase().includes(q);
+      if (!titleMatch && !assigneeMatch && !assignerMatch && !projectMatch) return false;
+    }
+    if (advancedFilters.user_id && advancedFilters.user_id.length > 0) {
+      const uids = advancedFilters.user_id.map(Number);
+      const hasMatch = (item.assignees || []).some((a) => uids.includes(Number(a.id))) ||
+        uids.includes(Number(item.assigned_to)) ||
+        uids.includes(Number(item.assigned_by));
+      if (!hasMatch) return false;
+    }
+    if (advancedFilters.project_id && advancedFilters.project_id.length > 0) {
+      const pids = advancedFilters.project_id.map(Number);
+      const projId = Number(item.project_id || item.project?.id);
+      if (!pids.includes(projId)) return false;
+    }
+    if (advancedFilters.status && advancedFilters.status.length > 0) {
+      const match = advancedFilters.status.some((st) => {
+        if (st === "due_today") {
+          const d = item.end_date || item.due_date || item.start_date ? new Date(item.end_date || item.due_date || item.start_date) : null;
+          const isToday = d && d.toDateString() === new Date().toDateString();
+          const isDone = ["approved", "completed", "done"].includes((item.status || "").toLowerCase());
+          return isToday && !isDone;
+        }
+        if (st === "pending") return ["pending", "planned", "Planning", "Planned"].includes(item.status);
+        if (st === "in_progress") return ["in_progress", "In Progress", "in-progress"].includes(item.status);
+        if (st === "paused") return ["paused", "pause", "Pause"].includes(item.status);
+        if (st === "transferred") return Array.isArray(item.delegation_chain) && item.delegation_chain.length > 0;
+        if (st === "rejected" || st === "declined") return item.status === "rejected" || item.status === "declined";
+        if (st === "abandoned") return item.status === "abandoned" || item.status === "abandon_requested";
+        if (st === "approved") return item.status === "approved" || item.status === "completed";
+        return item.status === st;
+      });
+      if (!match) return false;
+    }
+    if (advancedFilters.start_date) {
+      const itemDate = item.start_date ? new Date(item.start_date) : null;
+      if (!itemDate || itemDate < new Date(advancedFilters.start_date)) return false;
+    }
+    if (advancedFilters.end_date) {
+      const itemDate = item.end_date || item.due_date ? new Date(item.end_date || item.due_date) : null;
+      if (!itemDate || itemDate > new Date(advancedFilters.end_date)) return false;
     }
     if (statusFilter === "due_today") {
       const dateVal = item.end_date || item.due_date || item.start_date;
@@ -235,7 +295,7 @@ function AllTasks() {
       return item.status === statusFilter;
     }
     return true;
-  }), [baseItems, debouncedSearch, statusFilter]);
+  }), [baseItems, debouncedSearch, statusFilter, advancedFilters]);
 
   const taskIdList = filteredItems.map((i) => i.id);
 
@@ -288,16 +348,17 @@ function AllTasks() {
         containerClassName="task-progress"
       />
 
-      {/* SEARCH BAR */}
-      <div className="tasks-search-bar">
-        <IoSearchOutline fontSize={"20px"} />
-        <input
-          type="text"
-          placeholder="Search by task name, assigned to, assigned by, or project"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
+      {/* DEDICATED ACTION BAR & FILTERS */}
+      <TaskFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        filters={advancedFilters}
+        onFilterChange={(key, val) => setAdvancedFilters((prev) => ({ ...prev, [key]: val }))}
+        onReset={() => {
+          setSearch("");
+          setAdvancedFilters({ user_id: [], project_id: [], status: [], start_date: "", end_date: "" });
+        }}
+      />
 
       {/* TABLE */}
       <div className="container">
