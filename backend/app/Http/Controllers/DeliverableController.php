@@ -398,7 +398,8 @@ class DeliverableController extends Controller
         $payload['can_revoke_delegation'] = $activeOutgoingDelegation && $activeOutgoingDelegation->status === 'pending';
 
         $pendingStatuses = ['pending', 'in_progress', 'reopened', 'paused', 'rework_required'];
-        $payload['can_submit'] = ($isAssignee || $isCurrentOwner) && in_array($deliverable->status, ['in_progress', 'reopened', 'paused', 'rework_required']);
+        $isAlreadySubmittedOrClosed = in_array($deliverable->status, ['submitted', 'submitted_late', 'approved']);
+        $payload['can_submit'] = ! $isAlreadySubmittedOrClosed && ($isAssignee || $isCurrentOwner) && in_array($deliverable->status, ['in_progress', 'reopened', 'paused', 'rework_required']);
         if ($isTransferor && ! $transferorHasApproved) {
             $payload['can_submit'] = false;
             if (! $transferorReturnToSelf) {
@@ -406,7 +407,7 @@ class DeliverableController extends Controller
             }
         }
         // Transferor has approved — force allow submit so they can forward to OA
-        if ($isTransferor && $transferorHasApproved && $transferorReturnToSelf) {
+        if ($isTransferor && $transferorHasApproved && $transferorReturnToSelf && ! $isAlreadySubmittedOrClosed) {
             $payload['can_submit'] = true;
             $payload['is_assignee'] = true;
             $payload['is_current_owner'] = true;
@@ -980,8 +981,25 @@ class DeliverableController extends Controller
         if (! $isAssignee && ! $isCurrentOwner && ! $isAuthorizedRole) {
             return response()->json(['success' => false, 'message' => 'Only the assignee or current owner can submit this deliverable'], 403);
         }
-        if (! in_array($deliverable->status, ['pending', 'in_progress', 'rejected', 'reopened', 'rework_required'])) {
-            return response()->json(['success' => false, 'message' => 'This deliverable cannot be submitted in its current status'], 422);
+        $currentStatus = strtolower(trim((string) $deliverable->status));
+
+        if (in_array($currentStatus, ['submitted', 'submitted_late'])) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Deliverable is already submitted',
+                'deliverable' => $deliverable->fresh()->load(['assignee:id,name,email,role', 'creator:id,name']),
+            ], 200);
+        }
+
+        $allowedSubmitStatuses = [
+            'pending', 'not_started', 'assigned', 'planned', 'planning',
+            'in_progress', 'in-progress', 'acknowledged',
+            'reopened', 'rework_required',
+            'paused',
+            'rejected', 'declined',
+        ];
+        if (! in_array($currentStatus, $allowedSubmitStatuses)) {
+            return response()->json(['success' => false, 'message' => 'This deliverable cannot be submitted in its current status (' . $deliverable->status . ')'], 422);
         }
 
         $validated = $request->validate([
@@ -1092,11 +1110,11 @@ class DeliverableController extends Controller
 
         if ($notifyUserId && (int) $notifyUserId !== (int) $user->id) {
             $this->notificationService->notify(
-                $notifyUserId,
-                $user->id,
+                (int) $notifyUserId,
+                (int) $user->id,
                 'deliverable_submitted',
                 'deliverable',
-                $deliverable->id,
+                (int) $deliverable->id,
                 'Deliverable Submitted',
                 $user->name.' has submitted the deliverable "'.$deliverable->title.'" for your review.',
                 '/deliveries-by-you?selectedDeliverable='.$deliverable->id
@@ -1189,11 +1207,11 @@ class DeliverableController extends Controller
             ]);
 
             $this->notificationService->notify(
-                $user->id,
-                $user->id,
+                (int) $user->id,
+                (int) $user->id,
                 'deliverable_ready_to_forward',
                 'deliverable',
-                $deliverable->id,
+                (int) $deliverable->id,
                 'Ready to Forward',
                 'You have approved the delegated subtask "'.$deliverable->title.'". You can now submit it to the original assigner for final approval.',
                 '/deliveries?selectedDeliverable='.$deliverable->id
@@ -1242,11 +1260,11 @@ class DeliverableController extends Controller
 
         if ($deliverable->assigned_to) {
             $this->notificationService->notify(
-                $deliverable->assigned_to,
-                $user->id,
+                (int) $deliverable->assigned_to,
+                (int) $user->id,
                 'deliverable_approved',
                 'deliverable',
-                $deliverable->id,
+                (int) $deliverable->id,
                 'Deliverable Approved',
                 'Your deliverable "'.$deliverable->title.'" has been approved.',
                 '/deliveries?selectedDeliverable='.$deliverable->id
@@ -1323,11 +1341,11 @@ class DeliverableController extends Controller
                 $msg .= ' Reason: '.$validated['comment'];
             }
             $this->notificationService->notify(
-                $deliverable->assigned_to,
-                $user->id,
+                (int) $deliverable->assigned_to,
+                (int) $user->id,
                 'deliverable_rejected',
                 'deliverable',
-                $deliverable->id,
+                (int) $deliverable->id,
                 'Deliverable Rejected',
                 $msg,
                 '/deliveries?selectedDeliverable='.$deliverable->id
@@ -1480,11 +1498,11 @@ class DeliverableController extends Controller
                 $msg .= ' Instructions: '.$validated['instructions'];
             }
             $this->notificationService->notify(
-                $deliverable->assigned_to,
-                $user->id,
+                (int) $deliverable->assigned_to,
+                (int) $user->id,
                 'deliverable_reopened',
                 'deliverable',
-                $deliverable->id,
+                (int) $deliverable->id,
                 'Subtask Reopened',
                 $msg,
                 '/deliveries?selectedDeliverable='.$deliverable->id
@@ -2277,22 +2295,27 @@ class DeliverableController extends Controller
     /**
      * Send a notification to the deliverable assignee about assignment.
      *
-     * @param  Deliverable  $deliverable  The deliverable being assigned.
-     * @param  User  $sender  The user who assigned the deliverable.
-     * @param  string  $type  The notification type identifier.
-     * @param  string  $title  The notification title.
+     * @param  Deliverable  $deliverable  The deliverable model.
+     * @param  User  $sender  The user performing the action.
+     * @param  string  $type  Notification type key.
+     * @param  string  $title  Notification title.
+     * @param  string|null  $customMessage  Optional custom message body.
      */
-    private function sendDeliverableNotification(Deliverable $deliverable, User $sender, string $type, string $title): void
+    private function sendDeliverableNotification(Deliverable $deliverable, User $sender, string $type, string $title, ?string $customMessage = null): void
     {
-        $deliverable->loadMissing('task:id,title,business_id');
-        $taskTitle = $deliverable->task->title ?? '';
-        $taskCode = $deliverable->task->business_id ?? '';
-        $dueDate = $deliverable->due_date ? $deliverable->due_date->format('d-M-Y') : '';
-        $message = 'A new deliverable "'.$deliverable->title.'" ('.$deliverable->business_id.') has been assigned to you';
-        if ($sender->name) {
-            $message .= ' by '.$sender->name;
+        if (! $deliverable->assigned_to || (int) $deliverable->assigned_to === (int) $sender->id) {
+            return;
         }
-        $message .= '.';
+
+        $taskTitle = $deliverable->task?->title ?? '';
+        $taskCode = $deliverable->task?->business_id ?? '';
+        $projectName = $deliverable->project?->title ?? '';
+        $dueDate = $deliverable->end_date ? \Carbon\Carbon::parse($deliverable->end_date)->format('M d, Y H:i') : null;
+
+        $message = $customMessage ?? $sender->name.' assigned a new subtask "'.$deliverable->title.'" to you.';
+        if ($projectName) {
+            $message .= ' Project: '.$projectName.'.';
+        }
         if ($taskTitle) {
             $message .= ' Task: '.$taskTitle.'.';
         }
@@ -2304,11 +2327,11 @@ class DeliverableController extends Controller
         }
 
         $this->notificationService->notify(
-            $deliverable->assigned_to,
-            $sender->id,
+            (int) $deliverable->assigned_to,
+            (int) $sender->id,
             $type,
             'deliverable',
-            $deliverable->id,
+            (int) $deliverable->id,
             $title,
             $message,
             '/deliveries?selectedDeliverable='.$deliverable->id
@@ -2332,17 +2355,17 @@ class DeliverableController extends Controller
 
         if (isset($changes[0]) && $changes[0]['field_name'] === 'assigned_to') {
             $this->sendDeliverableNotification($deliverable, $updater, 'deliverable_assigned', 'Deliverable Assigned');
-        } elseif ($deliverable->assigned_to && $deliverable->assigned_to !== $updater->id) {
+        } elseif ($deliverable->assigned_to && (int) $deliverable->assigned_to !== (int) $updater->id) {
             $changeMsg = 'The deliverable "'.$deliverable->title.'" has been updated by '.$updater->name.'.';
             if (count($changes) > 0) {
                 $changeMsg .= ' '.count($changes).' change(s) were made.';
             }
             $this->notificationService->notify(
-                $deliverable->assigned_to,
-                $updater->id,
+                (int) $deliverable->assigned_to,
+                (int) $updater->id,
                 'deliverable_updated',
                 'deliverable',
-                $deliverable->id,
+                (int) $deliverable->id,
                 'Deliverable Updated',
                 $changeMsg,
                 '/deliveries?selectedDeliverable='.$deliverable->id,

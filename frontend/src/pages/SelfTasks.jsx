@@ -408,8 +408,9 @@ const SelfTasks = () => {
 
         <div className="task-btns">
           <div className="all-time">
-            <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}>
+            <select value={timeFilter} onChange={(e) => { setTimeFilter(e.target.value); setPage(1); }}>
               <option value="">All Time</option>
+              <option value="today">Today</option>
               <option value="7">Last 7 Days</option>
               <option value="30">Last 30 Days</option>
               <option value="180">Last 6 Months</option>
@@ -559,7 +560,7 @@ const SelfTasks = () => {
                                 <XCircle size={16} />
                               </button>
                             )}
-                            {canUserApprove && (item.status === "approved" || item.status === "submitted" || item.status === "reopened") && (
+                            {canUserApprove && (item.status === "approved" || item.status === "submitted" || item.status === "reopened" || item.status === "abandoned") && (
                               <button
                                 className="action-icon-btn"
                                 title="Reopen Task"

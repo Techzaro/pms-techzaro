@@ -224,18 +224,57 @@ class NotificationService
      *
      * @return \App\Models\Notification|null
      */
-    public function notify(int $userId, string $title, string $message, string $type = 'system', ?int $senderId = null, ?string $module = null, ?int $relatedId = null, ?string $link = null): ?Notification
-    {
-        return $this->create([
+    public function notify(
+        int|string $userId,
+        mixed $title = '',
+        mixed $message = '',
+        mixed $type = 'system',
+        mixed $senderId = null,
+        mixed $module = null,
+        mixed $relatedId = null,
+        mixed $link = null,
+        mixed $changes = null
+    ): ?Notification {
+        $userId = (int) $userId;
+
+        // If called positional with controller signature:
+        // notify($userId, $senderId, $type, $module, $relatedId, $title, $message, $link, $changes = null)
+        // In this case, $title was passed numeric $senderId, $message was passed $type, $type was passed $module, $senderId was passed $relatedId, $module was passed $title, $relatedId was passed $message
+        if (is_numeric($title) && is_string($message) && is_string($type) && is_numeric($senderId) && is_string($module)) {
+            $realSenderId = (int) $title;
+            $realType = (string) $message;
+            $realModule = (string) $type;
+            $realRelatedId = (int) $senderId;
+            $realTitle = (string) $module;
+            $realMessage = (string) $relatedId;
+            $realLink = $link !== null ? (string) $link : null;
+            $realChanges = is_array($changes) ? $changes : null;
+        } else {
+            $realTitle = (string) $title;
+            $realMessage = (string) $message;
+            $realType = (string) $type;
+            $realSenderId = $senderId !== null ? (int) $senderId : null;
+            $realModule = $module !== null ? (string) $module : 'system';
+            $realRelatedId = $relatedId !== null ? (int) $relatedId : 0;
+            $realLink = $link !== null ? (string) $link : null;
+            $realChanges = is_array($changes) ? $changes : null;
+        }
+
+        $data = [
             'user_id' => $userId,
-            'sender_user_id' => $senderId,
-            'title' => $title,
-            'message' => $message,
-            'type' => $type,
-            'related_module' => $module ?? 'system',
-            'related_id' => $relatedId ?? 0,
-            'link' => $link,
-        ]);
+            'sender_user_id' => $realSenderId,
+            'title' => $realTitle,
+            'message' => $realMessage,
+            'type' => $realType,
+            'related_module' => $realModule ?? 'system',
+            'related_id' => $realRelatedId ?? 0,
+            'link' => $realLink,
+        ];
+        if (! empty($realChanges)) {
+            $data['changes'] = $realChanges;
+        }
+
+        return $this->create($data);
     }
 
     /**

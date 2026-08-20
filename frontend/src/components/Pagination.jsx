@@ -4,7 +4,7 @@
  * display. Shows ellipsis for large page counts to keep the UI compact.
  */
 
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 
 /**
  * Renders pagination controls for navigating between pages.
@@ -13,6 +13,17 @@ import React from "react";
  * @param {Function} onPageChange - Callback invoked with the target page number.
  */
 export default function Pagination({ currentPage, totalPages, onPageChange, itemsPerPage, onItemsPerPageChange }) {
+  const [jumpIdx, setJumpIdx] = useState(null);
+  const [jumpValue, setJumpValue] = useState("");
+  const jumpInputRef = useRef(null);
+
+  useEffect(() => {
+    if (jumpIdx !== null && jumpInputRef.current) {
+      jumpInputRef.current.focus();
+      jumpInputRef.current.select();
+    }
+  }, [jumpIdx]);
+
   if (totalPages <= 1 && !onItemsPerPageChange) return null;
 
   /** Generate array of all page numbers */
@@ -41,6 +52,16 @@ export default function Pagination({ currentPage, totalPages, onPageChange, item
       visible.push(totalPages);
     }
     return visible;
+  };
+
+  const handleJump = (e) => {
+    if (e) e.preventDefault();
+    const pageNum = parseInt(jumpValue, 10);
+    if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+      onPageChange(pageNum);
+    }
+    setJumpIdx(null);
+    setJumpValue("");
   };
 
   return (
@@ -98,9 +119,94 @@ export default function Pagination({ currentPage, totalPages, onPageChange, item
 
           {getVisiblePages().map((page, idx) =>
             page === "..." ? (
-              <span key={`dots-${idx}`} style={{ padding: "0 4px", color: "var(--text-muted)", fontSize: "13px" }}>
-                ...
-              </span>
+              jumpIdx === idx ? (
+                <div
+                  key={`jump-${idx}`}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    padding: "2px 4px",
+                    background: "var(--bg-card)",
+                    border: "1px solid var(--color-primary)",
+                    borderRadius: "6px",
+                  }}
+                >
+                  <input
+                    ref={jumpInputRef}
+                    type="number"
+                    min={1}
+                    max={totalPages}
+                    placeholder="#"
+                    value={jumpValue}
+                    onChange={(e) => setJumpValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleJump(e);
+                      if (e.key === "Escape") { setJumpIdx(null); setJumpValue(""); }
+                    }}
+                    onBlur={() => {
+                      // Slight delay so click on Go button still registers
+                      setTimeout(() => {
+                        setJumpIdx((curr) => (curr === idx ? null : curr));
+                      }, 180);
+                    }}
+                    style={{
+                      width: "42px",
+                      padding: "4px 2px",
+                      border: "none",
+                      background: "transparent",
+                      color: "var(--text-primary)",
+                      fontSize: "12px",
+                      textAlign: "center",
+                      outline: "none",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleJump}
+                    title="Go to page"
+                    style={{
+                      padding: "2px 6px",
+                      borderRadius: "4px",
+                      border: "none",
+                      background: "var(--color-primary)",
+                      color: "#fff",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Go
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  key={`dots-${idx}`}
+                  onClick={() => { setJumpIdx(idx); setJumpValue(""); }}
+                  title="Click to jump to a page"
+                  style={{
+                    padding: "4px 6px",
+                    color: "var(--text-muted)",
+                    fontSize: "13px",
+                    background: "transparent",
+                    border: "1px dashed transparent",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = "var(--color-primary)";
+                    e.currentTarget.style.color = "var(--color-primary)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = "transparent";
+                    e.currentTarget.style.color = "var(--text-muted)";
+                  }}
+                >
+                  ...
+                </button>
+              )
             ) : (
               <button
                 key={page}

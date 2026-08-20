@@ -15,9 +15,8 @@ import { Link, useNavigate, useSearchParams, useLocation } from "react-router-do
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
 import { CheckCircle2, Lock, Pause, Play, StickyNote, Users, ArrowUpRight, ChevronDown, XCircle, RotateCcw, AlertOctagon, Sliders, Pin } from "lucide-react";
-import { togglePinTask, isTaskPinned, usePinnedTasks } from "../utils/pinnedTasks";
-import { useNotification } from "../context/NotificationContext";
-import { showSuccessMessage } from "../utils/notify";
+import { usePinnedTasks, togglePinTask, isTaskPinned } from "../utils/pinnedTasks";
+import { showSuccessMessage, notify } from "../utils/notify";
 import { publish } from "../utils/eventBus";
 import CreateTaskModal from "../components/CreateTaskModal";
 import SubmitTaskModal from "../components/SubmitTaskModal";
@@ -110,7 +109,6 @@ function Tasks() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isWidgetEnabled } = usePersonalization();
-  const { notify } = useNotification();
   const [searchParams, setSearchParams] = useSearchParams();
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [items, setItems] = useState([]);
@@ -146,8 +144,8 @@ function Tasks() {
     end_date: "",
   });
 
-  const [sortBy, setSortBy] = useState("due_date");
-  const [sortOrder, setSortOrder] = useState("asc");
+  const [sortBy, setSortBy] = useState("");
+  const [sortOrder, setSortOrder] = useState("");
 
   const handleReorder = (newItems) => {
     setItems(newItems);
@@ -163,7 +161,7 @@ function Tasks() {
     setLoading(true);
     const token = authToken();
     const params = new URLSearchParams();
-    params.append("per_page", itemsPerPage);
+    if (timeFilter) params.append("time_filter", timeFilter);
     if (debouncedSearch) params.append("search", debouncedSearch);
     if (advancedFilters.user_id && advancedFilters.user_id.length > 0) {
       params.append("user_id", Array.isArray(advancedFilters.user_id) ? advancedFilters.user_id.join(",") : advancedFilters.user_id);
@@ -194,7 +192,7 @@ function Tasks() {
 
   useEffect(() => {
     fetchTasks();
-  }, [debouncedSearch, itemsPerPage, advancedFilters, sortBy, sortOrder]);
+  }, [debouncedSearch, timeFilter, advancedFilters, sortBy, sortOrder]);
 
   useAutoRefresh(fetchTasks, {
     events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
@@ -356,11 +354,15 @@ function Tasks() {
         showSuccessMessage("Task", "acknowledged");
       } else {
         const errorMsg = data?.message || data?.error || (data?.errors ? Object.values(data.errors).flat().join(", ") : null) || "Failed to acknowledge task.";
-        notify.error(errorMsg);
+        if (notify?.error) {
+          notify.error(errorMsg);
+        }
       }
     } catch (err) {
       const errorMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed to acknowledge task.";
-      notify.error(errorMsg);
+      if (notify?.error) {
+        notify.error(errorMsg);
+      }
     }
   };
 
@@ -542,8 +544,9 @@ function Tasks() {
 
         <div className="task-btns">
           <div className="all-time">
-            <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}>
+            <select value={timeFilter} onChange={(e) => { setTimeFilter(e.target.value); setPage(1); }}>
               <option value="">All Time</option>
+              <option value="today">Today</option>
               <option value="7">Last 7 Days</option>
               <option value="30">Last 30 Days</option>
               <option value="180">Last 6 Months</option>
@@ -734,7 +737,7 @@ function Tasks() {
                                 <XCircle size={16} />
                               </button>
                             )}
-                            {canUserApprove && (item.status === "approved" || item.status === "submitted" || item.status === "reopened") && (
+                            {canUserApprove && (item.status === "approved" || item.status === "submitted" || item.status === "reopened" || item.status === "abandoned") && (
                               <button
                                 className="action-icon-btn"
                                 title="Reopen Task"

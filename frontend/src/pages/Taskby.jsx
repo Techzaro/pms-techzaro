@@ -118,8 +118,8 @@ const Taskby = () => {
     end_date: "",
   });
 
-  const [sortBy, setSortBy] = useState("due_date");
-  const [sortOrder, setSortOrder] = useState("asc");
+  const [sortBy, setSortBy] = useState("");
+  const [sortOrder, setSortOrder] = useState("");
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -131,7 +131,6 @@ const Taskby = () => {
     setLoading(true);
     const token = authToken();
     const params = new URLSearchParams();
-    params.append("per_page", itemsPerPage);
     if (debouncedSearch) params.append("search", debouncedSearch);
     if (timeFilter) params.append("time_filter", timeFilter);
     if (advancedFilters.user_id && advancedFilters.user_id.length > 0) {
@@ -163,7 +162,7 @@ const Taskby = () => {
 
   useEffect(() => {
     fetchTasks();
-  }, [debouncedSearch, timeFilter, itemsPerPage, advancedFilters, sortBy, sortOrder]);
+  }, [debouncedSearch, timeFilter, advancedFilters, sortBy, sortOrder]);
 
   useAutoRefresh(fetchTasks, {
     events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
@@ -436,8 +435,9 @@ const Taskby = () => {
 
         <div className="task-btns">
           <div className="all-time">
-            <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}>
+            <select value={timeFilter} onChange={(e) => { setTimeFilter(e.target.value); setPage(1); }}>
               <option value="">All Time</option>
+              <option value="today">Today</option>
               <option value="7">Last 7 Days</option>
               <option value="30">Last 30 Days</option>
               <option value="180">Last 6 Months</option>
@@ -688,7 +688,7 @@ const Taskby = () => {
                                   <XCircle size={16} />
                                 </button>
                               )}
-                              {canUserApprove && (item.status === "approved" || item.status === "submitted" || item.status === "reopened") && (
+                              {canUserApprove && (item.status === "approved" || item.status === "submitted" || item.status === "reopened" || item.status === "abandoned") && (
                                 <button
                                   className="action-icon-btn"
                                   title="Reopen Task"

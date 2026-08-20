@@ -16,8 +16,7 @@ import SortableTableWrapper, { DragHandle } from "./SortableTableWrapper";
 import ConfirmModal from "./ConfirmModal";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
-import { showSuccessMessage } from "../utils/notify";
-import { useNotification } from "../context/NotificationContext";
+import { showSuccessMessage, notify } from "../utils/notify";
 
 const API_BASE = API_URL.replace(/\/api\/?$/, "");
 
@@ -46,8 +45,6 @@ export default function FileUploadSection({ entityType, entityId, files, onReord
   const [showLinkForm, setShowLinkForm] = useState(false);
   const [addingLink, setAddingLink] = useState(false);
   const fileInputRef = useRef(null);
-  const { notify } = useNotification();
-
   const baseEndpoint = entityType === "task" ? "tasks" : "deliverables";
 
   const filteredFiles = files.filter((f) => {

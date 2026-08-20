@@ -17,8 +17,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
 import { ArrowUpRight, CheckCircle2, Lock, Pause, Play, StickyNote, Sliders, XCircle, RotateCcw, AlertOctagon } from "lucide-react";
-import { useNotification } from "../context/NotificationContext";
-import { showSuccessMessage } from "../utils/notify";
+import { showSuccessMessage, notify } from "../utils/notify";
 import { publish } from "../utils/eventBus";
 import SubmitTaskModal from "../components/SubmitTaskModal";
 import SortableTableWrapper from "../components/SortableTableWrapper";
@@ -70,7 +69,6 @@ const PRIORITY_TEXT_COLORS = {
 /** Guest Tasks page — renders tasks assigned to the current guest user. */
 function GuestTasks() {
   const navigate = useNavigate();
-  const { notify } = useNotification();
   const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -522,7 +520,7 @@ function GuestTasks() {
                                 <XCircle size={16} />
                               </button>
                             )}
-                            {canUserApprove && (item.status === "approved" || item.status === "submitted" || item.status === "reopened") && (
+                            {canUserApprove && (item.status === "approved" || item.status === "submitted" || item.status === "reopened" || item.status === "abandoned") && (
                               <button
                                 className="action-icon-btn"
                                 title="Reopen Task"

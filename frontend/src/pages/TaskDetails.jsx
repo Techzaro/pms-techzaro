@@ -8,7 +8,7 @@
  * previous/next buttons and tracks which tasks have been viewed.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
@@ -28,6 +28,7 @@ import {
   Play,
   Plus,
   RefreshCw,
+  RotateCcw,
   Shield,
   Timer,
   Trash2,
@@ -398,8 +399,10 @@ function TaskDetails() {
   const currentUser = getUser();
   const isCreator = task?.is_creator ?? (task && currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10));
   const isAssignee = task?.is_assignee ?? (task && currentUser && (task.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10)));
-  const canEdit = readOnly ? false : (task?.can_edit ?? (task && currentUser && isCreator && !["approved", "submitted"].includes(task?.status?.toLowerCase())));
-  const canSubmitTask = readOnly ? false : (task?.my_status === "submitted" || (isAssignee && task?.my_status === "submitted") ? false : (task?.can_submit ?? (task && currentUser && isAssignee && ["in_progress", "reopened", "paused"].includes(task?.status))));
+  const taskStatus = (task?.status || "").toLowerCase();
+  const isTerminalOrSubmitted = ["submitted", "submitted_late", "approved", "abandoned"].includes(taskStatus);
+  const canEdit = readOnly ? false : (task?.can_edit ?? (task && currentUser && isCreator && !["approved", "submitted", "submitted_late", "abandoned"].includes(taskStatus)));
+  const canSubmitTask = readOnly || isTerminalOrSubmitted ? false : (task?.my_status === "submitted" || (isAssignee && task?.my_status === "submitted") ? false : (task?.can_submit && !isTerminalOrSubmitted ? true : (task && currentUser && isAssignee && ["in_progress", "reopened", "paused"].includes(taskStatus))));
   const canAcknowledge = readOnly ? false : (task && currentUser && isAssignee && ["pending", "reopened"].includes(task?.status));
   const isAdminOrManager = currentUser && ["admin", "manager"].includes(currentUser.role);
   const canPause = readOnly ? false : (task && currentUser && (isAssignee || isAdminOrManager) && task?.my_status !== "submitted" && task?.status === "in_progress" && !task?.assigner_paused);
@@ -407,11 +410,12 @@ function TaskDetails() {
   const isAssignerLocked = !!task?.assigner_paused;
   const canAssignerPause = readOnly ? false : (task && currentUser && isCreator && !task?.assigner_paused && ["pending", "in_progress", "reopened", "paused"].includes(task?.status));
   const canAssignerResume = readOnly ? false : (task && currentUser && isCreator && task?.assigner_paused);
-  const isApproved = task?.status?.toLowerCase() === "approved";
+  const isApproved = taskStatus === "approved";
   const isTransferor = task?.is_transferor ?? false;
   const transferorReturnToSelf = task?.transferor_return_to_self ?? true;
   const transferorHasApproved = task?.transferor_has_approved ?? false;
   const hasPendingDelegation = task?.pending_delegation && task.pending_delegation.delegated_to === currentUser?.id;
+  const isDelegatee = task?.is_delegatee ?? (task?.current_owner && currentUser && parseInt(task.current_owner, 10) === parseInt(currentUser.id, 10)) ?? false;
   const isSuperAdmin = currentUser && ["admin", "super_admin"].includes(currentUser.role);
   const canApprove = readOnly ? false : (!isAssignee && (isCreator || isSuperAdmin));
 
@@ -789,10 +793,11 @@ function TaskDetails() {
   };
 
   const handleTaskActionSuccess = (updatedTask, options = {}) => {
-    setTask((prev) => ({ ...prev, ...updatedTask }));
-    if (!options.skipToast) {
+    setTask((prev) => ({ ...prev, ...(updatedTask || {}) }));
+    if (!options.skipToast && updatedTask) {
       const statusActions = {
         submitted: "submitted",
+        submitted_late: "submitted",
         approved: "approved",
         rejected: "rejected",
         reopened: "reopened",
@@ -802,8 +807,11 @@ function TaskDetails() {
         : statusActions[updatedTask?.status] || "updated";
       showSuccessMessage("Task", action);
     }
-    publish('task:updated', updatedTask);
-    publish('data:changed', { type: 'task', action: 'updated' });
+    if (updatedTask) {
+      publish('task:updated', updatedTask);
+      publish('data:changed', { type: 'task', action: 'updated' });
+    }
+    fetchTask(true);
   };
 
   const handleDeleteTask = async () => {
@@ -1255,6 +1263,16 @@ function TaskDetails() {
                     >
                       <CheckCircle2 size={15} />
                       {approvingTask ? "Approving..." : "Approve Task"}
+                    </button>
+                  )}
+                  {canApprove && (task?.status === "approved" || task?.status === "abandoned") && (
+                    <button
+                      className="td-btn-secondary"
+                      style={{ border: "1px solid var(--border-color, #e5e7eb)", fontWeight: 600, padding: "8px 16px", borderRadius: "8px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px", background: "var(--bg-card, #ffffff)", color: "var(--color-primary, #2563EB)" }}
+                      onClick={() => setTaskReopenDialog(true)}
+                    >
+                      <RotateCcw size={15} />
+                      Reopen Task
                     </button>
                   )}
                   {canApprove && task?.status !== "abandoned" && task?.status !== "approved" && (
