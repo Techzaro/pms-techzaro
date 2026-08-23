@@ -65,9 +65,9 @@ function PauseReasonModal({ isOpen, onClose, onConfirm, isAssigner = false }) {
             <line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
         </div>
-        <h3 id="cm-title">{isAssigner ? "Place on Hold" : "Pause Task"}</h3>
+        <h3 id="cm-title">Pause Task</h3>
         <p id="cm-message" style={{ marginBottom: "16px" }}>
-          {isAssigner ? "Select a reason for placing this task on hold:" : "Select a reason for pausing:"}
+          Select a reason for pausing:
         </p>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "12px" }}>
@@ -104,7 +104,7 @@ function PauseReasonModal({ isOpen, onClose, onConfirm, isAssigner = false }) {
             onClick={handleConfirm}
             disabled={!reason || processing || (reason === "other" && !reasonDetail.trim())}
           >
-            {processing ? "Processing..." : isAssigner ? "Place on Hold" : "Pause"}
+            {processing ? "Processing..." : "Pause"}
           </button>
         </div>
       </div>

@@ -206,4 +206,16 @@ class User extends Authenticatable
     {
         return $this->hasOne(\App\Models\ResignationLog::class);
     }
+
+    /** Tasks followed by this user. */
+    public function followedTasks(): BelongsToMany
+    {
+        return $this->belongsToMany(Task::class, 'task_followers')->withTimestamps();
+    }
+
+    /** Projects followed by this user. */
+    public function followedProjects(): BelongsToMany
+    {
+        return $this->belongsToMany(Project::class, 'project_followers')->withTimestamps();
+    }
 }

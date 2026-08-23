@@ -99,7 +99,7 @@ export default function TaskMultiStatusBadges({ item }) {
         item.status_history.some((h) => (h.status || h.action) === "abandoned" || (h.status || h.action) === "abandon_requested"))
     );
 
-  // 4. Assigner paused on hold
+  // 4. Assigner paused
   const isHold = Boolean(item.assigner_paused);
 
   const secondaryBadges = [];
@@ -139,8 +139,8 @@ export default function TaskMultiStatusBadges({ item }) {
 
   if (isHold) {
     secondaryBadges.push({
-      key: "on_hold",
-      label: "On Hold",
+      key: "assigner_paused",
+      label: "Paused by Assigner",
       bg: "#FEF3C7",
       color: "#92400E",
       border: "#FDE68A",

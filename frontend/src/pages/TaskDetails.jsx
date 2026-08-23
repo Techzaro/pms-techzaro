@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
 import { useNotification } from "../context/NotificationContext";
-import { showSuccessMessage } from "../utils/notify";
+import { showSuccessMessage, notify, toast } from "../utils/notify";
 import {
   BarChart3,
   Calendar,
@@ -314,6 +314,12 @@ function TaskDetails() {
   const [deleteSubtaskConfirmOpen, setDeleteSubtaskConfirmOpen] = useState(false);
   const [deleteSubtaskTargetId, setDeleteSubtaskTargetId] = useState(null);
 
+  const [followers, setFollowers] = useState(task?.followers || []);
+  const [followerDropdownOpen, setFollowerDropdownOpen] = useState(false);
+  const [teamUsers, setTeamUsers] = useState([]);
+  const [followerSearch, setFollowerSearch] = useState("");
+  const followerDropdownRef = useRef(null);
+
   const taskChangesForHighlight = (task?.changes || []).map((c) => ({ ...c, id: c.id || 0 }));
   const {
     hasUnread: taskHasUnread,
@@ -338,6 +344,9 @@ function TaskDetails() {
       if (res.ok) {
         const data = await res.json();
         setTask(data.task);
+        if (data.task?.followers) {
+          setFollowers(data.task.followers);
+        }
       } else if (res.status === 404) {
         setTask(null);
         if (!isDeletingRef.current) {
@@ -360,6 +369,121 @@ function TaskDetails() {
       setLoading(false);
     }
   }, [taskId, navigate]);
+
+  useEffect(() => {
+    if (task?.followers) {
+      setFollowers(task.followers);
+    }
+  }, [task?.followers]);
+
+  useEffect(() => {
+    const fetchTeamUsers = async () => {
+      try {
+        const token = authToken();
+        const res = await fetch(`${API_URL}/team-users`, {
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          skipLoader: true,
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setTeamUsers(data.users || data.team_users || (Array.isArray(data) ? data : []));
+        }
+      } catch (err) {
+        console.error("Failed to load team users for followers", err);
+      }
+    };
+    fetchTeamUsers();
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (followerDropdownRef.current && !followerDropdownRef.current.contains(event.target)) {
+        setFollowerDropdownOpen(false);
+      }
+    };
+    if (followerDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [followerDropdownOpen]);
+
+  const handleAddFollower = async (userId) => {
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/followers`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ user_id: userId }),
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        if (data.followers) {
+          setFollowers(data.followers);
+        } else {
+          const addedUser = (teamUsers.length ? teamUsers : (task?.project?.team?.members || [])).find((u) => parseInt(u.id, 10) === parseInt(userId, 10));
+          if (addedUser) setFollowers((prev) => [...prev, addedUser]);
+        }
+        toast.success("Follower added successfully");
+        setFollowerDropdownOpen(false);
+      } else {
+        toast.error(data.message || "Failed to add follower.");
+      }
+    } catch {
+      toast.error("Failed to add follower.");
+    }
+  };
+
+  const handleRemoveFollower = async (userId) => {
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/followers/${userId}`, {
+        method: "DELETE",
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        if (data.followers) {
+          setFollowers(data.followers);
+        } else {
+          setFollowers((prev) => prev.filter((f) => parseInt(f.id, 10) !== parseInt(userId, 10)));
+        }
+        toast.success("Follower removed successfully");
+      } else {
+        toast.error(data.message || "Failed to remove follower.");
+      }
+    } catch {
+      toast.error("Failed to remove follower.");
+    }
+  };
+
+  const availableFollowerUsers = useMemo(() => {
+    const assigneeIds = new Set((task?.assignees || []).map((a) => parseInt(a.id, 10)));
+    if (task?.assigned_to) assigneeIds.add(parseInt(task.assigned_to, 10));
+    const followerIds = new Set((followers || []).map((f) => parseInt(f.id, 10)));
+
+    let sourceList = teamUsers.length > 0 ? teamUsers : (task?.project?.team?.members || []);
+
+    return sourceList.filter((u) => {
+      const uId = parseInt(u.id, 10);
+      if (assigneeIds.has(uId) || followerIds.has(uId)) return false;
+      if (followerSearch.trim()) {
+        const query = followerSearch.toLowerCase();
+        return (u.name || "").toLowerCase().includes(query) || (u.email || "").toLowerCase().includes(query);
+      }
+      return true;
+    });
+  }, [teamUsers, task?.assignees, task?.assigned_to, task?.project?.team?.members, followers, followerSearch]);
 
   useEffect(() => {
     if (taskId) fetchTask(true);
@@ -397,27 +521,30 @@ function TaskDetails() {
   }, []);
 
   const currentUser = getUser();
+  const isAdminOrManager = currentUser && ["admin", "manager"].includes(currentUser.role);
+  const isSuperAdmin = currentUser && ["admin", "super_admin"].includes(currentUser.role);
   const isCreator = task?.is_creator ?? (task && currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10));
   const isAssignee = task?.is_assignee ?? (task && currentUser && (task.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10)));
+  const isFollower = (followers || []).some((f) => parseInt(f.id, 10) === parseInt(currentUser?.id, 10));
+  const isOnlyFollower = isFollower && !isAdminOrManager && !isCreator && !isAssignee;
   const taskStatus = (task?.status || "").toLowerCase();
   const isTerminalOrSubmitted = ["submitted", "submitted_late", "approved", "abandoned"].includes(taskStatus);
-  const canEdit = readOnly ? false : (task?.can_edit ?? (task && currentUser && isCreator && !["approved", "submitted", "submitted_late", "abandoned"].includes(taskStatus)));
-  const canSubmitTask = readOnly || isTerminalOrSubmitted ? false : (task?.my_status === "submitted" || (isAssignee && task?.my_status === "submitted") ? false : (task?.can_submit && !isTerminalOrSubmitted ? true : (task && currentUser && isAssignee && ["in_progress", "reopened", "paused"].includes(taskStatus))));
-  const canAcknowledge = readOnly ? false : (task && currentUser && isAssignee && ["pending", "reopened"].includes(task?.status));
-  const isAdminOrManager = currentUser && ["admin", "manager"].includes(currentUser.role);
-  const canPause = readOnly ? false : (task && currentUser && (isAssignee || isAdminOrManager) && task?.my_status !== "submitted" && task?.status === "in_progress" && !task?.assigner_paused);
-  const canContinue = readOnly ? false : (task && currentUser && (isAssignee || isAdminOrManager) && task?.my_status !== "submitted" && task?.status === "paused" && !task?.assigner_paused);
+  const canEdit = (readOnly || isOnlyFollower) ? false : (task?.can_edit ?? (task && currentUser && isCreator && !["approved", "submitted", "submitted_late", "abandoned"].includes(taskStatus)));
+  const canDelete = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isCreator || isAdminOrManager));
+  const canSubmitTask = (readOnly || isTerminalOrSubmitted || isOnlyFollower) ? false : (task?.my_status === "submitted" || (isAssignee && task?.my_status === "submitted") ? false : (task?.can_submit && !isTerminalOrSubmitted ? true : (task && currentUser && isAssignee && ["in_progress", "reopened", "paused"].includes(taskStatus))));
+  const canAcknowledge = (readOnly || isOnlyFollower) ? false : (task && currentUser && isAssignee && ["pending", "reopened"].includes(task?.status));
+  const canPause = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isAdminOrManager) && ["in_progress", "submitted"].includes(task?.status) && !task?.assigner_paused);
+  const canContinue = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isAdminOrManager) && task?.status === "paused" && !task?.assigner_paused);
   const isAssignerLocked = !!task?.assigner_paused;
-  const canAssignerPause = readOnly ? false : (task && currentUser && isCreator && !task?.assigner_paused && ["pending", "in_progress", "reopened", "paused"].includes(task?.status));
-  const canAssignerResume = readOnly ? false : (task && currentUser && isCreator && task?.assigner_paused);
+  const canAssignerPause = (readOnly || isOnlyFollower) ? false : (task && currentUser && isCreator && !task?.assigner_paused && ["pending", "in_progress", "reopened", "paused", "submitted"].includes(task?.status));
+  const canAssignerResume = (readOnly || isOnlyFollower) ? false : (task && currentUser && isCreator && task?.assigner_paused);
   const isApproved = taskStatus === "approved";
   const isTransferor = task?.is_transferor ?? false;
   const transferorReturnToSelf = task?.transferor_return_to_self ?? true;
   const transferorHasApproved = task?.transferor_has_approved ?? false;
   const hasPendingDelegation = task?.pending_delegation && task.pending_delegation.delegated_to === currentUser?.id;
   const isDelegatee = task?.is_delegatee ?? (task?.current_owner && currentUser && parseInt(task.current_owner, 10) === parseInt(currentUser.id, 10)) ?? false;
-  const isSuperAdmin = currentUser && ["admin", "super_admin"].includes(currentUser.role);
-  const canApprove = readOnly ? false : (!isAssignee && (isCreator || isSuperAdmin));
+  const canApprove = (readOnly || isOnlyFollower) ? false : (!isAssignee && (isCreator || isSuperAdmin));
 
   const { submitting: acknowledging, run: runAcknowledge } = useSubmit();
   const { submitting: pausing, run: runPause } = useSubmit();
@@ -486,8 +613,9 @@ function TaskDetails() {
   const assignees = task?.assignees || [];
   const assigner = task?.assigner;
   const project = task?.project;
+  const isTerminalTask = ["completed", "approved", "submitted", "submitted_late", "done"].includes((task?.status || "").toLowerCase());
+  const progress = isTerminalTask ? 100 : (typeof task?.deliverables_progress === "number" ? task.deliverables_progress : 0);
   const files = task?.files || [];
-  const progress = typeof task?.deliverables_progress === "number" ? task.deliverables_progress : 0;
 
   const handleFileReorder = useCallback((reordered) => {
     if (!task?.id) return;
@@ -725,12 +853,12 @@ function TaskDetails() {
       if (res.ok) {
         const updated = data.deliverable || data.subtask || data;
         handleSubtaskActionSuccess(updated);
-        showSuccessMessage("Subtask", "placed on hold");
+        showSuccessMessage("Subtask", "paused");
       } else {
-        notify.error(data.message || "Failed to place subtask on hold.");
+        notify.error(data.message || "Failed to pause subtask.");
       }
     } catch {
-      notify.error("Failed to place subtask on hold.");
+      notify.error("Failed to pause subtask.");
     }
     setActingSubtaskId(null);
   };
@@ -830,18 +958,18 @@ function TaskDetails() {
           _notifHandled: true,
         });
         if (res.ok) {
-          showSuccessMessage("Task", "deleted");
+          toast.success("Task deleted successfully");
           publish('task:deleted', { id: taskId });
           publish('data:changed', { type: 'task', action: 'deleted' });
           navigate(rolePath("tasks"), { replace: true });
         } else {
           isDeletingRef.current = false;
           const data = await res.json().catch(() => ({}));
-          notify.error(data.message || "Failed to delete task.");
+          toast.error(data.message || "Failed to delete task.");
         }
       } catch {
         isDeletingRef.current = false;
-        notify.error("Failed to delete task.");
+        toast.error("Failed to delete task.");
       }
     });
   };
@@ -957,12 +1085,12 @@ function TaskDetails() {
           setTask(data.task);
           publish('task:updated', { id: taskId });
           publish('data:changed', { type: 'task', action: 'updated' });
-          showSuccessMessage("Task", "placed on hold");
+          showSuccessMessage("Task", "paused");
         } else {
-          notify.error(data.message || "Failed to place task on hold.");
+          notify.error(data.message || "Failed to pause task.");
         }
       } catch {
-        notify.error("Failed to place task on hold.");
+        notify.error("Failed to pause task.");
       }
     });
   };
@@ -1179,15 +1307,15 @@ function TaskDetails() {
                   <button className="td-nav-btn" onClick={() => goToTask(prevTaskId)} disabled={!prevTaskId}><ChevronLeft size={18} /></button>
                   <button className="td-nav-btn" onClick={() => goToTask(nextTaskId)} disabled={!nextTaskId}><ChevronRight size={18} /></button>
                   {canEdit && (
-                    <>
-                      <button className="td-btn-outline" onClick={() => setShowEditModal(true)}>
-                        <Pencil size={15} strokeWidth={2.5} />
-                        Edit
-                      </button>
-                      <button className="td-btn-danger" onClick={handleDeleteTask} disabled={deleting} style={deleting ? { opacity: 0.6, cursor: "not-allowed" } : {}}>
-                        {deleting ? "Deleting..." : "Delete"}
-                      </button>
-                    </>
+                    <button className="td-btn-outline" onClick={() => setShowEditModal(true)}>
+                      <Pencil size={15} strokeWidth={2.5} />
+                      Edit
+                    </button>
+                  )}
+                  {canDelete && (
+                    <button className="td-btn-danger" onClick={handleDeleteTask} disabled={deleting} style={deleting ? { opacity: 0.6, cursor: "not-allowed" } : {}}>
+                      {deleting ? "Deleting..." : "Delete"}
+                    </button>
                   )}
                   {!readOnly && isAssignee && task?.allow_transfer === true && !["approved", "rejected", "pending", "submitted"].includes(task?.status) && task?.my_status !== "submitted" && !isTransferor && !task?.active_outgoing_delegation && !hasPendingDelegation && !isDelegatee && (
                     <button className="td-btn-outline" onClick={() => setTransferDialog(true)}>
@@ -1227,7 +1355,7 @@ function TaskDetails() {
                   {canAssignerPause && !isTransferor && !task?.active_outgoing_delegation && (
                     <button className="td-btn-primary" onClick={() => setAssignerPauseModalOpen(true)} disabled={assignerPausing} style={{ backgroundColor: assignerPausing ? "var(--text-muted)" : "var(--color-primary)", borderColor: assignerPausing ? "var(--text-muted)" : "var(--color-primary)", opacity: assignerPausing ? 0.7 : 1, cursor: assignerPausing ? "not-allowed" : "pointer" }}>
                       <Lock size={15} />
-                      {assignerPausing ? "Pausing..." : "Put On Hold"}
+                      {assignerPausing ? "Pausing..." : "Pause"}
                     </button>
                   )}
                   {canAssignerResume && !isTransferor && !task?.active_outgoing_delegation && (
@@ -1239,14 +1367,14 @@ function TaskDetails() {
                   {isAssignerLocked && !isCreator && (
                     <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 14px", borderRadius: "6px", backgroundColor: "var(--color-warning-bg)", color: "var(--color-warning)", fontSize: "13px", fontWeight: 600, border: "1px solid var(--color-warning)" }}>
                       <Lock size={14} />
-                      On Hold by Assigner
+                      Paused by Assigner
                     </span>
                   )}
                   {canSubmitTask && !task?.active_outgoing_delegation && !hasPendingDelegation && (
                     <button
                       className="td-btn-primary"
                       disabled={task?.status === "paused" || isAssignerLocked}
-                      title={isAssignerLocked ? "Task is on hold by the assigner" : task?.status === "paused" ? "Continue the task first to submit" : ""}
+                      title={isAssignerLocked ? "Task is paused by the assigner" : task?.status === "paused" ? "Continue the task first to submit" : ""}
                       onClick={() => !isAssignerLocked && setTaskSubmitModalOpen(true)}
                       style={task?.status === "paused" || isAssignerLocked ? { opacity: 0.5, cursor: "not-allowed" } : {}}
                     >
@@ -1456,7 +1584,7 @@ function TaskDetails() {
                       </div>
 
                       {/* TASK DISCUSSION - inside overview */}
-                      <TaskDiscussion taskId={task.id} readOnly={readOnly} />
+                      <TaskDiscussion taskId={task.id} readOnly={readOnly} teamUsers={teamUsers} />
                     </div>
                   )}
 
@@ -1551,16 +1679,14 @@ function TaskDetails() {
                                             <Pencil size={16} />
                                           </button>
                                         )}
-                                        {d.status?.toLowerCase() !== "approved" && (
-                                          <button
-                                            className="action-icon-btn action-delete"
-                                            title="Delete Subtask"
-                                            disabled={actingSubtaskId === d.id}
-                                            onClick={() => handleSubtaskDelete(d.id)}
-                                          >
-                                            <Trash2 size={16} />
-                                          </button>
-                                        )}
+                                        <button
+                                          className="action-icon-btn action-delete"
+                                          title="Delete Subtask"
+                                          disabled={actingSubtaskId === d.id}
+                                          onClick={() => handleSubtaskDelete(d.id)}
+                                        >
+                                          <Trash2 size={16} />
+                                        </button>
                                         {d.status === "submitted" && (
                                           <button className="action-icon-btn action-submit" title="Approve" disabled={actingSubtaskId === d.id} onClick={() => handleSubtaskApprove(d.id)} style={{ color: "#16A34A" }}>
                                             <CheckCircle2 size={16} />
@@ -1571,10 +1697,10 @@ function TaskDetails() {
                                             <XCircle size={16} />
                                           </button>
                                         )}
-                                        {["pending", "in_progress", "reopened", "paused"].includes(d.status) && !d.assigner_paused && (
+                                        {["pending", "in_progress", "reopened", "paused", "submitted"].includes(d.status) && !d.assigner_paused && (
                                           <button
                                             className="action-icon-btn"
-                                            title="Put On Hold"
+                                            title="Pause"
                                             disabled={actingSubtaskId === d.id}
                                             onClick={() => handleSubtaskAssignerPause(d.id)}
                                             style={{ color: "#7C3AED", cursor: actingSubtaskId === d.id ? "not-allowed" : "pointer" }}
@@ -1599,7 +1725,7 @@ function TaskDetails() {
                                         {d.assigner_paused && (
                                           <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#92400E", fontSize: "11px", fontWeight: 600, border: "1px solid #F59E0B" }}>
                                             <Lock size={12} />
-                                            On Hold
+                                            Paused by Assigner
                                           </span>
                                         )}
                                         {!d.assigner_paused && d.status === "pending" && (
@@ -1607,7 +1733,7 @@ function TaskDetails() {
                                             <CheckCircle2 size={16} />
                                           </button>
                                         )}
-                                        {!d.assigner_paused && d.status === "in_progress" && (
+                                        {!d.assigner_paused && ["in_progress", "submitted"].includes(d.status) && (
                                           <button className="action-icon-btn action-submit" title="Pause" disabled={actingSubtaskId === d.id} onClick={() => handleSubtaskPause(d.id)} style={{ color: "#D97706" }}>
                                             <Pause size={16} />
                                           </button>
@@ -1620,7 +1746,7 @@ function TaskDetails() {
                                         {(d.status === "pending" || d.status === "rejected" || d.status === "reopened") && (
                                           <button
                                             className="action-icon-btn action-submit"
-                                            title={task?.status === "paused" ? "Task is paused. Resume the task first." : task?.assigner_paused ? "Task is on hold by assigner." : "Submit"}
+                                            title={task?.status === "paused" ? "Task is paused. Resume the task first." : task?.assigner_paused ? "Task is paused by assigner." : "Submit"}
                                             disabled={task?.status === "paused" || task?.assigner_paused}
                                             onClick={() => setSubmitModal({ open: true, subtask: d })}
                                             style={task?.status === "paused" || task?.assigner_paused ? { opacity: 0.4, cursor: "not-allowed" } : {}}
@@ -1784,6 +1910,197 @@ function TaskDetails() {
                         </span>
                       )) : "—"}
                     </span>
+                  </div>
+                </li>
+                <li style={{ position: "relative" }}>
+                  <span className="td-dot" style={{ background: "#8b5cf6" }} />
+                  <div style={{ width: "100%" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                      <span className="td-info-label">Followers</span>
+                      {!readOnly && (isAdminOrManager || isCreator || isAssignee) && (
+                        <button
+                          type="button"
+                          onClick={() => { setFollowerDropdownOpen((prev) => !prev); setFollowerSearch(""); }}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: "var(--color-primary, #2563eb)",
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            padding: "0 2px",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "2px",
+                          }}
+                        >
+                          + Add Follower
+                        </button>
+                      )}
+                    </div>
+
+                    {followerDropdownOpen && (
+                      <div
+                        ref={followerDropdownRef}
+                        style={{
+                          position: "absolute",
+                          right: 0,
+                          top: "28px",
+                          width: "220px",
+                          maxHeight: "260px",
+                          backgroundColor: "#ffffff",
+                          border: "1px solid var(--border-color, #e5e7eb)",
+                          borderRadius: "8px",
+                          boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+                          zIndex: 50,
+                          display: "flex",
+                          flexDirection: "column",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div style={{ padding: "8px", borderBottom: "1px solid #f3f4f6" }}>
+                          <input
+                            type="text"
+                            placeholder="Search users..."
+                            value={followerSearch}
+                            onChange={(e) => setFollowerSearch(e.target.value)}
+                            autoFocus
+                            style={{
+                              width: "100%",
+                              padding: "4px 8px",
+                              fontSize: "12px",
+                              border: "1px solid #d1d5db",
+                              borderRadius: "4px",
+                              outline: "none",
+                              boxSizing: "border-box",
+                            }}
+                          />
+                        </div>
+                        <div style={{ overflowY: "auto", maxHeight: "200px", padding: "4px 0" }}>
+                          {availableFollowerUsers.length > 0 ? (
+                            availableFollowerUsers.map((u) => (
+                              <button
+                                key={u.id}
+                                type="button"
+                                onClick={() => handleAddFollower(u.id)}
+                                style={{
+                                  width: "100%",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "8px",
+                                  padding: "6px 10px",
+                                  border: "none",
+                                  background: "transparent",
+                                  cursor: "pointer",
+                                  textAlign: "left",
+                                  fontSize: "12px",
+                                  color: "#374151",
+                                }}
+                                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f3f4f6")}
+                                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                              >
+                                <span
+                                  style={{
+                                    width: "20px",
+                                    height: "20px",
+                                    borderRadius: "50%",
+                                    backgroundColor: "#8b5cf6",
+                                    color: "#ffffff",
+                                    fontSize: "10px",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    fontWeight: 600,
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  {u.avatar ? (
+                                    <img src={fileUrl(u.avatar)} alt="" style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />
+                                  ) : (
+                                    (u.name || "?").charAt(0).toUpperCase()
+                                  )}
+                                </span>
+                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {u.name}
+                                </span>
+                              </button>
+                            ))
+                          ) : (
+                            <div style={{ padding: "8px 12px", fontSize: "12px", color: "#9ca3af", textAlign: "center" }}>
+                              No users available
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "4px" }}>
+                      {followers.length > 0 ? (
+                        followers.map((f) => (
+                          <span
+                            key={f.id}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              backgroundColor: "var(--bg-card-alt, #f3f4f6)",
+                              border: "1px solid var(--border-color, #e5e7eb)",
+                              borderRadius: "16px",
+                              padding: "2px 8px 2px 4px",
+                              fontSize: "12px",
+                              fontWeight: 500,
+                              color: "var(--text-primary, #1f2937)",
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: "18px",
+                                height: "18px",
+                                borderRadius: "50%",
+                                backgroundColor: "#8b5cf6",
+                                color: "#ffffff",
+                                fontSize: "10px",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontWeight: 600,
+                                overflow: "hidden",
+                                flexShrink: 0,
+                              }}
+                            >
+                              {f.avatar ? (
+                                <img src={fileUrl(f.avatar)} alt="" style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />
+                              ) : (
+                                (f.name || "?").charAt(0).toUpperCase()
+                              )}
+                            </span>
+                            <span>{f.name}</span>
+                            {!readOnly && (isAdminOrManager || isCreator || isAssignee || parseInt(f.id, 10) === parseInt(currentUser?.id, 10)) && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveFollower(f.id)}
+                                title="Remove follower"
+                                style={{
+                                  background: "none",
+                                  border: "none",
+                                  color: "var(--text-muted, #9ca3af)",
+                                  cursor: "pointer",
+                                  fontSize: "14px",
+                                  lineHeight: 1,
+                                  padding: "0 2px",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                }}
+                              >
+                                &times;
+                              </button>
+                            )}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="td-info-val" style={{ color: "var(--text-muted, #9ca3af)", fontSize: "13px" }}>No followers yet</span>
+                      )}
+                    </div>
                   </div>
                 </li>
                 <li>

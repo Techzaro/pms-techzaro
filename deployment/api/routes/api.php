@@ -22,6 +22,7 @@ use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\TaskCommentController;
+use App\Http\Controllers\TaskFollowerController;
 use App\Http\Controllers\DraftController;
 use App\Http\Controllers\CredentialController;
 use App\Http\Controllers\NotificationSettingController;
@@ -421,6 +422,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/comments/{comment}', [TaskCommentController::class, 'update']); // Edit a comment
     Route::delete('/comments/{comment}', [TaskCommentController::class, 'destroy']); // Delete a comment
     Route::get('/comments/{comment}/file', [TaskCommentController::class, 'downloadFile']); // Download attachment
+
+    // Task followers
+    Route::get('/tasks/{task}/followers', [TaskFollowerController::class, 'index']); // List followers
+    Route::post('/tasks/{task}/followers', [TaskFollowerController::class, 'addFollower']); // Add follower
+    Route::delete('/tasks/{task}/followers', [TaskFollowerController::class, 'removeFollower']); // Remove follower
+    Route::delete('/tasks/{task}/followers/{user}', [TaskFollowerController::class, 'removeFollower']); // Remove follower by user ID
 
     // Personal user notes on tasks (private per user)
     Route::get('/tasks/{task}/my-note', [\App\Http\Controllers\TaskUserNoteController::class, 'show']); // View own note

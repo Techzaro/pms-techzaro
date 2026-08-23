@@ -63,7 +63,7 @@ import { renderDynamicDates } from "../utils/tableDateUtils";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { useSubmit } from "../hooks/useSubmit";
 import { useNotification } from "../context/NotificationContext";
-import { showSuccessMessage } from "../utils/notify";
+import { showSuccessMessage, notify, toast } from "../utils/notify";
 import { useActivityHighlight } from "../hooks/useActivityHighlight";
 import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import "../components/layout/ActivityHighlight.css";
@@ -617,7 +617,11 @@ function ProjectDetails() {
     }).catch(() => { });
   }, [project?.id, project?.unviewed_changes_count]);
 
-  const handleDeleteTask = async (taskId) => {
+  const handleDeleteTask = async (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
     setDeleteTaskId(taskId);
     setDeleteTaskConfirmOpen(true);
   };
@@ -626,6 +630,7 @@ function ProjectDetails() {
     const taskId = deleteTaskId;
     setDeleteTaskConfirmOpen(false);
     setDeleteTaskId(null);
+    if (!taskId) return;
     try {
       const token = authToken();
       const res = await fetch(`${API}/tasks/${taskId}`, {
@@ -636,20 +641,27 @@ function ProjectDetails() {
         },
         _notifHandled: true,
       });
-      if (!res.ok) {
+      if (res.ok) {
+        setOrderedTasks((prev) => prev.filter((t) => String(t.id) !== String(taskId)));
+        toast.success("Task deleted successfully");
+        loadProject().catch(() => {});
+        publish("task:deleted", { id: taskId });
+        publish("data:changed", { type: "task", action: "deleted" });
+      } else {
         const data = await res.json().catch(() => ({}));
-        notify.error(data.message || "Failed to delete task.");
-        return;
+        toast.error(data.message || "Failed to delete task.");
       }
-      showSuccessMessage("Task", "deleted");
-      loadProject().catch(() => {});
     } catch (err) {
       console.error(err);
-      notify.error("Failed to delete task.");
+      toast.error("Failed to delete task.");
     }
   };
 
-  const handleTaskAcknowledge = async (taskId) => {
+  const handleTaskAcknowledge = async (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
     try {
       const token = authToken();
       const res = await fetch(`${API}/tasks/${taskId}/acknowledge`, {
@@ -657,9 +669,9 @@ function ProjectDetails() {
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         _notifHandled: true,
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "in_progress", ...data.task } : t));
+        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "in_progress", ...(data.task || {}) } : t));
         publish('task:updated', { id: taskId, status: 'in_progress' });
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage("Task", "acknowledged");
@@ -671,7 +683,11 @@ function ProjectDetails() {
     }
   };
 
-  const handleTaskContinue = async (taskId) => {
+  const handleTaskContinue = async (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
     try {
       const token = authToken();
       const res = await fetch(`${API}/tasks/${taskId}/continue`, {
@@ -679,9 +695,9 @@ function ProjectDetails() {
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         _notifHandled: true,
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "in_progress", ...data.task } : t));
+        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "in_progress", ...(data.task || {}) } : t));
         publish('task:updated', { id: taskId, status: 'in_progress' });
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage("Task", "resumed");
@@ -693,23 +709,27 @@ function ProjectDetails() {
     }
   };
 
-  const handleTaskPause = async (taskId) => {
+  const handleTaskPause = async (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
     try {
       const token = authToken();
       const res = await fetch(`${API}/tasks/${taskId}/pause`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ reason: "other" }),
+        body: JSON.stringify({ reason: "other", reason_detail: "Paused from task list" }),
         _notifHandled: true,
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "paused", ...data.task } : t));
+        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "paused", ...(data.task || {}) } : t));
         publish('task:updated', { id: taskId, status: 'paused' });
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage("Task", "paused");
       } else {
-        notify.error(data.message || "Failed to pause task.");
+        notify.error(data?.message || data?.error || "Failed to pause task.");
       }
     } catch {
       notify.error("Failed to pause task.");
@@ -729,12 +749,12 @@ function ProjectDetails() {
       const data = await res.json();
       if (res.ok) {
         setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, assigner_paused: true, ...data.task } : t));
-        showSuccessMessage("Task", "placed on hold");
+        showSuccessMessage("Task", "paused");
       } else {
-        notify.error(data.message || "Failed to place task on hold.");
+        notify.error(data.message || "Failed to pause task.");
       }
     } catch {
-      notify.error("Failed to place task on hold.");
+      notify.error("Failed to pause task.");
     }
     setHoldingTaskId(null);
   };
@@ -854,12 +874,14 @@ function ProjectDetails() {
     return "tasks";
   };
 
-  const isCreator = project.is_creator;
-  const isAssigned = project.is_assigned;
-  const isAdminOrManager = project.is_admin_or_manager;
-  const isViewOnlyUser = (project.view_only_users || []).some((u) => (u.id || u) === currentUser?.id);
+  const isCreator = !!project?.is_creator;
+  const isAssigned = !!project?.is_assigned;
+  const isAdminOrManager = !!project?.is_admin_or_manager;
+  const isViewOnlyUser = !!project?.is_view_only || (project?.view_only_users || []).some((u) => Number(u?.id || u) === Number(currentUser?.id));
 
-  const canEdit = project.can_edit && !isViewOnlyUser;
+  const canEdit = !isViewOnlyUser && (project?.can_edit || isAdminOrManager);
+  const canManage = !isViewOnlyUser && isAdminOrManager;
+  const canAddTask = !isViewOnlyUser && currentUser?.role !== "guest" && (isCreator || isAdminOrManager || isAssigned);
 
   const handleMilestoneToggle = async (milestone) => {
     await runMilestoneToggle(async () => {
@@ -874,7 +896,7 @@ function ProjectDetails() {
         if (res.ok) {
           setProject((prev) => ({
             ...prev,
-            milestones: (prev.milestones || []).map((m) => m.id === milestone.id ? data.milestone : m),
+            milestones: (prev?.milestones || []).map((m) => m.id === milestone.id ? data.milestone : m),
           }));
           showSuccessMessage("Milestone", data.message);
           publish('data:changed', { type: 'project', action: 'updated' });
@@ -916,17 +938,23 @@ function ProjectDetails() {
     setVisibilitySaving(true);
     try {
       const token = authToken();
-      const userIds = Object.keys(visibilitySelected).filter((id) => visibilitySelected[id]).map(Number);
+      const userIds = Object.keys(visibilitySelected || {}).filter((id) => visibilitySelected[id]).map(Number);
       const res = await fetch(`${API_URL}/projects/${project.id}/visibility`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ user_ids: userIds }),
         _notifHandled: true,
       });
-      if (!res.ok) throw new Error("Failed to save visibility");
+      const data = await res.json();
+      if (!res.ok || data.success === false) {
+        throw new Error(data.message || "Failed to save visibility");
+      }
+      showSuccessMessage("Project visibility", "updated");
       closeVisibility();
+      loadProject();
     } catch (err) {
       console.error("Save visibility error:", err);
+      notify.error(err.message || "Failed to save visibility");
     } finally {
       setVisibilitySaving(false);
     }
@@ -1037,9 +1065,22 @@ function ProjectDetails() {
   const overviewInner = (
     <>
       {project.description && (
-        <div style={{ marginBottom: 20, overflow: "hidden", wordBreak: "break-word", overflowWrap: "break-word" }}>
+        <div style={{ marginBottom: 20, maxWidth: "100%", wordBreak: "break-word", overflowWrap: "break-word" }}>
           <h2 className="pd-block-title">Description</h2>
-          <div className="pd-desc-tx pd-rich" style={{ overflow: "hidden", wordBreak: "break-word", overflowWrap: "anywhere", whiteSpace: "pre-wrap" }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(project.description) }} />
+          <div
+            className="pd-desc-tx pd-rich"
+            style={{
+              maxHeight: "250px",
+              overflowY: "auto",
+              backgroundColor: "#f9fafb",
+              padding: "12px",
+              borderRadius: "8px",
+              border: "1px solid var(--border-color, #e5e7eb)",
+              wordBreak: "break-word",
+              whiteSpace: "pre-wrap",
+            }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(project.description) }}
+          />
         </div>
       )}
       <div className="pd-shell-split">
@@ -1135,7 +1176,7 @@ function ProjectDetails() {
               <div className="pd-meta-rows__content">
                 <div className="pd-meta-rows__header">
                   <span className="pd-meta-rows__label">Project manager</span>
-                  {(currentUser?.role === "admin" || currentUser?.role === "manager") && (
+                  {(currentUser?.role === "admin" || currentUser?.role === "manager") && !isViewOnlyUser && (
                     <button className="pd-manager-edit" onClick={openManagerEdit} title="Change project manager">
                       Edit
                     </button>
@@ -1231,7 +1272,7 @@ function ProjectDetails() {
                     <button className="td-nav-btn" onClick={() => goToProject(prevProjectId)} disabled={!prevProjectId} title="Previous project"><ChevronLeft size={18} /></button>
                     <button className="td-nav-btn" onClick={() => goToProject(nextProjectId)} disabled={!nextProjectId} title="Next project"><ChevronRight size={18} /></button>
                     <span className={`pd-pill-status pd-pill-status--${statusSlug(project.status)}`}>{project.status}</span>
-                    {isAdminOrManager && (
+                    {isAdminOrManager && !isViewOnlyUser && (
                       <button type="button" className="pd-btn-tx pd-btn-tx--outline" onClick={openVisibility}>
                         <IoEyeOutline size={16} />
                         Show To
@@ -1316,7 +1357,7 @@ function ProjectDetails() {
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                               <input type="text" placeholder="Search by task name..." value={taskSearch} onChange={(e) => setTaskSearch(e.target.value)} />
                             </div>
-                            {currentUser?.role !== "guest" && (
+                            {canAddTask && (
                               <button type="button" className="pd-btn-tx pd-btn-tx--primary" onClick={() => setShowTaskModal(true)} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                                 <Plus size={16} /> Add Task
                               </button>
@@ -1355,19 +1396,25 @@ function ProjectDetails() {
                                             {formatStatus(t.status)}
                                           </span>
                                         </div>
-                                        <div>
-                                          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", marginBottom: "4px" }}>
-                                            <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-dark)" }}>
-                                              {t.deliverables_progress || 0}%
-                                            </span>
-                                          </div>
-                                          <div className="progress-bar-track">
-                                            <div className="progress-bar-fill" style={{ width: `${t.deliverables_progress || 0}%` }}></div>
-                                          </div>
-                                          <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "4px" }}>
-                                            {t.approved_deliverables || 0}/{t.total_deliverables || 0} Del. Approved
-                                          </div>
-                                        </div>
+                                        {(() => {
+                                          const isTerminal = ["completed", "approved", "submitted", "submitted_late", "done"].includes((t.status || "").toLowerCase());
+                                          const prog = isTerminal ? 100 : (t.deliverables_progress || 0);
+                                          return (
+                                            <div>
+                                              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", marginBottom: "4px" }}>
+                                                <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-dark)" }}>
+                                                  {prog}%
+                                                </span>
+                                              </div>
+                                              <div className="progress-bar-track">
+                                                <div className="progress-bar-fill" style={{ width: `${prog}%` }}></div>
+                                              </div>
+                                              <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "4px" }}>
+                                                {t.approved_deliverables || 0}/{t.total_deliverables || 0} Del. Approved
+                                              </div>
+                                            </div>
+                                          );
+                                        })()}
                                         <div>
                                           <span className="badge" style={{ background: PRIORITY_COLORS[t.priority] || "var(--bg-hover)", color: PRIORITY_TEXT_COLORS[t.priority] || "var(--text-dark)" }}>
                                             <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[t.priority] || "var(--text-dark)" }}></span>
@@ -1424,17 +1471,17 @@ function ProjectDetails() {
                                                         <Pencil size={16} />
                                                       </button>
                                                     );
-                                                    buttons.push(
-                                                      <button
-                                                        key="delete"
-                                                        className="action-icon-btn action-delete"
-                                                        title="Delete Task"
-                                                        onClick={() => handleDeleteTask(t.id)}
-                                                      >
-                                                        <Trash2 size={16} />
-                                                      </button>
-                                                    );
                                                   }
+                                                  buttons.push(
+                                                    <button
+                                                      key="delete"
+                                                      className="action-icon-btn action-delete"
+                                                      title="Delete Task"
+                                                      onClick={(e) => handleDeleteTask(e, t.id)}
+                                                    >
+                                                      <Trash2 size={16} />
+                                                    </button>
+                                                  );
                                                   if (t.assigner_paused) {
                                                     buttons.push(
                                                       <button
@@ -1442,20 +1489,20 @@ function ProjectDetails() {
                                                         className="action-icon-btn"
                                                         title="Resume"
                                                         disabled={resumingTaskId === t.id}
-                                                        onClick={() => handleTaskAssignerResume(t.id)}
+                                                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleTaskAssignerResume(t.id); }}
                                                         style={{ color: "#059669", cursor: resumingTaskId === t.id ? "not-allowed" : "pointer" }}
                                                       >
                                                         <Lock size={16} />
                                                       </button>
                                                     );
-                                                  } else if (["pending", "in_progress", "reopened", "paused"].includes(t.status)) {
+                                                  } else if (["pending", "in_progress", "reopened", "paused", "submitted"].includes(t.status?.toLowerCase())) {
                                                     buttons.push(
                                                       <button
                                                         key="hold"
                                                         className="action-icon-btn"
-                                                        title="Put On Hold"
+                                                        title="Pause"
                                                         disabled={holdingTaskId === t.id}
-                                                        onClick={() => { setPauseModalTaskId(t.id); setPauseModalOpen(true); }}
+                                                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); setPauseModalTaskId(t.id); setPauseModalOpen(true); }}
                                                         style={{ color: "#7C3AED", cursor: holdingTaskId === t.id ? "not-allowed" : "pointer" }}
                                                       >
                                                         <Lock size={16} />
@@ -1470,27 +1517,27 @@ function ProjectDetails() {
                                                     return (
                                                       <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#92400E", fontSize: "11px", fontWeight: 600, border: "1px solid #F59E0B" }}>
                                                         <Lock size={12} />
-                                                        On Hold
+                                                        Paused by Assigner
                                                       </span>
                                                     );
                                                   }
                                                   if (t.status === "pending") {
                                                     return (
-                                                      <button className="action-icon-btn action-submit" title="Acknowledge" onClick={() => handleTaskAcknowledge(t.id)}>
+                                                      <button className="action-icon-btn action-submit" title="Acknowledge" onClick={(e) => handleTaskAcknowledge(e, t.id)}>
                                                         <CheckCircle2 size={16} />
                                                       </button>
                                                     );
                                                   }
                                                   if (t.status === "paused") {
                                                     return (
-                                                      <button className="action-icon-btn action-submit" title="Continue" onClick={() => handleTaskContinue(t.id)} style={{ color: "#059669" }}>
+                                                      <button className="action-icon-btn action-submit" title="Continue" onClick={(e) => handleTaskContinue(e, t.id)} style={{ color: "#059669" }}>
                                                         <Play size={16} />
                                                       </button>
                                                     );
                                                   }
-                                                  if (t.status === "in_progress" && !t.assigner_paused) {
+                                                  if (["in_progress", "submitted"].includes(t.status?.toLowerCase()) && !t.assigner_paused) {
                                                     return (
-                                                      <button className="action-icon-btn action-submit" title="Pause" onClick={() => handleTaskPause(t.id)} style={{ color: "#D97706" }}>
+                                                      <button className="action-icon-btn action-submit" title="Pause" onClick={(e) => handleTaskPause(e, t.id)} style={{ color: "#D97706" }}>
                                                         <Pause size={16} />
                                                       </button>
                                                     );
@@ -1501,7 +1548,7 @@ function ProjectDetails() {
                                                         className="action-icon-btn action-submit"
                                                         title={t.pending_deliverables_count > 0 ? "Submit all subtasks first" : "Submit Task"}
                                                         disabled={t.pending_deliverables_count > 0}
-                                                        onClick={() => !t.pending_deliverables_count && setSubmitTaskModal({ open: true, task: t })}
+                                                        onClick={(e) => { e.stopPropagation(); !t.pending_deliverables_count && setSubmitTaskModal({ open: true, task: t }); }}
                                                         style={t.pending_deliverables_count > 0 ? { opacity: 0.4, cursor: "not-allowed" } : {}}
                                                       >
                                                         <LuSend size={16} />
@@ -1543,7 +1590,7 @@ function ProjectDetails() {
                                 />
                               </div>
                             )}
-                            {isAdminOrManager && (
+                            {isAdminOrManager && !isViewOnlyUser && (
                               <button type="button" className="pd-btn-tx pd-btn-tx--primary" onClick={() => setShowAddFileModal(true)} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                                 <Plus size={16} /> Add Files
                               </button>
@@ -1620,14 +1667,14 @@ function ProjectDetails() {
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                               <input type="text" placeholder="Search by member name or role..." value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)} />
                             </div>
-                            {isAdminOrManager && (
+                            {isAdminOrManager && !isViewOnlyUser && (
                               <button
                                 type="button"
                                 onClick={() => setShowProjectMembersModal(true)}
                                 className="pd-link-manage"
-                                style={{ background: "none", border: "none", cursor: "pointer" }}
+                                style={{ background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}
                               >
-                                Manage
+                                Manage Members
                               </button>
                             )}
                           </div>
@@ -1636,11 +1683,13 @@ function ProjectDetails() {
                               <div className="pd-avatar" aria-hidden>
                                 {initials(project.creator.name)}
                               </div>
-                              <div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
                                 <div className="pd-member-name">{project.creator.name}</div>
                                 <div className="pd-member-role">Project Manager · {project.creator.role || "—"}</div>
                               </div>
-                              <span className="pd-badge-owner">Project Manager</span>
+                              <div className="pd-member-right">
+                                <span className="pd-badge-owner">Project Manager</span>
+                              </div>
                             </div>
                           )}
                           <SortableTableWrapper
@@ -1682,11 +1731,13 @@ function ProjectDetails() {
                                     <div className="pd-avatar" aria-hidden style={{ background: "var(--color-primary)" }}>
                                       {initials(team.leader.name)}
                                     </div>
-                                    <div>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
                                       <div className="pd-member-name">{team.leader.name}</div>
                                       <div className="pd-member-role">Team Lead · {team.leader.role || "—"}</div>
                                     </div>
-                                    <span className="pd-badge-owner">Lead</span>
+                                    <div className="pd-member-right">
+                                      <span className="pd-badge-owner">Lead</span>
+                                    </div>
                                   </div>
                                 )}
                                 {(team.members || []).filter((m) => m.id !== team.leader?.id && m.id !== project.creator?.id).map((m) => (
@@ -1694,9 +1745,13 @@ function ProjectDetails() {
                                     <div className="pd-avatar" aria-hidden>
                                       {initials(m.name)}
                                     </div>
-                                    <div>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
                                       <div className="pd-member-name">{m.name}</div>
                                       <div className="pd-member-role">{m.role || "Member"}</div>
+                                    </div>
+                                    <div className="pd-member-right">
+                                      {m.department && <span className="pd-member-dept">{m.department}</span>}
+                                      <span className="pd-badge-member">Member</span>
                                     </div>
                                   </div>
                                 ))}
@@ -1752,7 +1807,7 @@ function ProjectDetails() {
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                               <input type="text" placeholder="Search by title, username, or URL..." value={accessSearch} onChange={(e) => setAccessSearch(e.target.value)} />
                             </div>
-                            {isAdminOrManager && (
+                            {isAdminOrManager && !isViewOnlyUser && (
                               <button type="button" className="pd-btn-tx pd-btn-tx--primary" onClick={() => setShowAddAccessModal(true)} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                                 <Plus size={16} /> Add Access
                               </button>

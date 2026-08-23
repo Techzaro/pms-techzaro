@@ -194,6 +194,9 @@ export default function EditTaskModal({ task, onClose }) {
   const [selectedAssigneeIds, setSelectedAssigneeIds] = useState(
     task.assignees?.map((a) => a.id) || []
   );
+  const [selectedFollowerIds, setSelectedFollowerIds] = useState(
+    task.followers?.map((f) => f.id || f) || []
+  );
   const [requirementsList, setRequirementsList] = useState(task.requirements || []);
   const [reqInput, setReqInput] = useState("");
   const [subtasks, setSubtasks] = useState(task.deliverables || []);
@@ -639,6 +642,7 @@ export default function EditTaskModal({ task, onClose }) {
             start_date: toUTCIso(form.start_date),
             end_date: toUTCIso(form.end_date),
             assigned_to: selectedAssigneeIds,
+            followers: selectedFollowerIds,
             existing_file_names: existingFiles.reduce((acc, f) => {
               const nameChanged = f.customName && f.customName !== f.name;
               const urlChanged = f.customUrl && f.customUrl !== f.url;
@@ -740,6 +744,16 @@ export default function EditTaskModal({ task, onClose }) {
                   />
                 )}
               </div>
+            </div>
+
+            <div className="task-field">
+              <label>Followers (Optional)</label>
+              <UserSelectDropdown
+                users={displayUsers.filter((u) => !selectedAssigneeIds.includes(u.id))}
+                selectedIds={selectedFollowerIds}
+                onChange={(ids) => { setSelectedFollowerIds(ids); markDirty(); }}
+                placeholder="Click to select followers"
+              />
             </div>
 
             <div className="task-field">

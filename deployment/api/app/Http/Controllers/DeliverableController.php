@@ -1855,7 +1855,9 @@ class DeliverableController extends Controller
     {
         $user = $request->user();
         $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
-        if (! $isAssignee && ! in_array($user->role, ['admin', 'manager'])) {
+        $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
+        $isAdminOrManager = in_array($user->role, ['admin', 'manager', 'super_admin']);
+        if (! $isAssignee && ! $isCreator && ! $isAdminOrManager) {
             return response()->json(['success' => false, 'message' => 'You do not have permission to pause/resume this subtask.'], 403);
         }
         if ($deliverable->timer_state !== 'running') {
@@ -1891,7 +1893,9 @@ class DeliverableController extends Controller
     {
         $user = $request->user();
         $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
-        if (! $isAssignee && ! in_array($user->role, ['admin', 'manager'])) {
+        $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
+        $isAdminOrManager = in_array($user->role, ['admin', 'manager', 'super_admin']);
+        if (! $isAssignee && ! $isCreator && ! $isAdminOrManager) {
             return response()->json(['success' => false, 'message' => 'You do not have permission to pause/resume this subtask.'], 403);
         }
         if ($deliverable->timer_state !== 'paused') {

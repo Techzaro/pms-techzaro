@@ -587,6 +587,7 @@ class TaskController extends Controller
             'unviewedChanges' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
             'changes' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
             'deliverableTemplates',
+            'followers:id,name,email,avatar,role',
         ]);
 
         $isCreator = (int) $task->assigned_by === (int) $user->id;
@@ -864,6 +865,8 @@ class TaskController extends Controller
             'deliverable_templates.*.quantity' => 'nullable|integer|min:1|max:100',
             'deliverable_templates.*.combined' => 'nullable|boolean',
             'allow_transfer' => 'nullable|boolean',
+            'followers' => 'nullable|array',
+            'followers.*' => 'exists:users,id',
         ]);
 
         if (! empty($validated['start_date']) && ! empty($validated['end_date'])) {
@@ -982,6 +985,9 @@ class TaskController extends Controller
                 'allow_transfer' => $validated['allow_transfer'] ?? true,
             ]);
             $task->assignees()->sync([$userId => ['due_date' => $dueDates[$userId] ?? null]]);
+            if (! empty($validated['followers'])) {
+                $task->followers()->sync($validated['followers']);
+            }
 
             $assignee = $assignees->get($userId);
 
@@ -1518,6 +1524,16 @@ class TaskController extends Controller
             return response()->json(['success' => false, 'message' => 'Approved tasks cannot be edited.'], 403);
         }
 
+        // Decode JSON-encoded array fields if passed as strings
+        foreach (['existing_file_names', 'deliverables', 'requirements', 'assigned_to', 'due_dates', 'followers'] as $field) {
+            if (is_string($request->input($field))) {
+                $decoded = json_decode($request->input($field), true);
+                if (is_array($decoded)) {
+                    $request->merge([$field => $decoded]);
+                }
+            }
+        }
+
         $validated = $request->validate([
             'title' => 'sometimes|required|string|max:255',
             'description' => 'sometimes|nullable|string',
@@ -1530,6 +1546,8 @@ class TaskController extends Controller
             'status' => 'sometimes|string|max:64',
             'assigned_to' => 'sometimes|required|array|min:1',
             'assigned_to.*' => 'required|integer|exists:users,id',
+            'followers' => 'nullable|array',
+            'followers.*' => 'integer|exists:users,id',
             'deliverables' => 'nullable|array',
             'deliverables.*.id' => 'nullable|integer|exists:deliverables,id',
             'deliverables.*.title' => 'required_with:deliverables|string|max:255',
@@ -1553,6 +1571,8 @@ class TaskController extends Controller
             ]);
         }
         unset($validated['assigned_to']);
+        $followers = $validated['followers'] ?? null;
+        unset($validated['followers']);
         $dueDates = $validated['due_dates'] ?? null;
         unset($validated['due_dates']);
         $existingFileNames = $validated['existing_file_names'] ?? null;
@@ -1591,6 +1611,10 @@ class TaskController extends Controller
         $oldAssigneeIds = $task->assignees()->pluck('users.id')->toArray();
         $validated['updated_by'] = $user->id;
         $task->update($validated);
+
+        if ($request->has('followers')) {
+            $task->followers()->sync($followers ?? []);
+        }
 
         // Rename existing files/links if provided
         if ($existingFileNames) {
@@ -2249,7 +2273,8 @@ class TaskController extends Controller
     {
         $user = $request->user();
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists() || (int) $task->assigned_to === (int) $user->id;
-        $isAuthorized = $isAssignee || in_array($user->role, ['admin', 'manager']);
+        $isCreator = (int) ($task->assigned_by ?? 0) === (int) $user->id || (int) ($task->created_by ?? 0) === (int) $user->id;
+        $isAuthorized = $isAssignee || $isCreator || in_array($user->role, ['admin', 'manager', 'super_admin']);
 
         if (! $isAuthorized) {
             return response()->json(['success' => false, 'message' => 'You do not have permission to pause/resume this task.'], 403);
@@ -2263,7 +2288,7 @@ class TaskController extends Controller
             return response()->json(['success' => false, 'message' => 'This task is paused by the assigner and cannot be paused'], 422);
         }
 
-        if (strtolower((string) $task->status) !== 'in_progress') {
+        if (! in_array(strtolower((string) $task->status), ['in_progress', 'submitted'])) {
             return response()->json(['success' => false, 'message' => 'This task cannot be paused in its current status'], 422);
         }
 
@@ -2409,17 +2434,18 @@ class TaskController extends Controller
     public function assignerPause(Request $request, Task $task)
     {
         $user = $request->user();
-        $isCreator = (int) $task->assigned_by === (int) $user->id;
+        $isCreator = (int) ($task->assigned_by ?? 0) === (int) $user->id || (int) ($task->created_by ?? 0) === (int) $user->id;
+        $isAdminOrManager = in_array($user->role, ['admin', 'manager', 'super_admin']);
 
-        if (! $isCreator) {
-            return response()->json(['success' => false, 'message' => 'Only the task creator can pause this task'], 403);
+        if (! $isCreator && ! $isAdminOrManager) {
+            return response()->json(['success' => false, 'message' => 'Only the task creator or admin/manager can pause this task'], 403);
         }
 
         if ($task->assigner_paused) {
             return response()->json(['success' => false, 'message' => 'This task is already paused by the assigner'], 422);
         }
 
-        $activeStatuses = ['pending', 'in_progress', 'reopened', 'paused'];
+        $activeStatuses = ['pending', 'in_progress', 'reopened', 'paused', 'submitted'];
         if (! in_array(strtolower((string) $task->status), $activeStatuses)) {
             return response()->json(['success' => false, 'message' => 'This task cannot be paused in its current status'], 422);
         }
@@ -2517,10 +2543,11 @@ class TaskController extends Controller
     public function assignerResume(Request $request, Task $task)
     {
         $user = $request->user();
-        $isCreator = (int) $task->assigned_by === (int) $user->id;
+        $isCreator = (int) ($task->assigned_by ?? 0) === (int) $user->id || (int) ($task->created_by ?? 0) === (int) $user->id;
+        $isAdminOrManager = in_array($user->role, ['admin', 'manager', 'super_admin']);
 
-        if (! $isCreator) {
-            return response()->json(['success' => false, 'message' => 'Only the task creator can resume this task'], 403);
+        if (! $isCreator && ! $isAdminOrManager) {
+            return response()->json(['success' => false, 'message' => 'Only the task creator or admin/manager can resume this task'], 403);
         }
 
         if (! $task->assigner_paused) {
@@ -3325,12 +3352,11 @@ class TaskController extends Controller
     public function destroy(Task $task)
     {
         $user = request()->user();
-        if ((int) $task->assigned_by !== (int) $user->id && ! in_array($user->role, ['admin', 'manager'])) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized — only the task creator or admin/manager can delete'], 403);
-        }
+        $isCreator = (int) ($task->assigned_by ?? 0) === (int) $user->id || (int) ($task->created_by ?? 0) === (int) $user->id;
+        $isAdminOrManager = in_array($user->role, ['admin', 'manager', 'super_admin']);
 
-        if (in_array($task->status, ['approved', 'submitted'])) {
-            return response()->json(['success' => false, 'message' => 'Cannot delete a task that is '.$task->status], 422);
+        if (! $isCreator && ! $isAdminOrManager) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized — only the task creator or admin/manager can delete'], 403);
         }
 
         $task->assignees()->detach();

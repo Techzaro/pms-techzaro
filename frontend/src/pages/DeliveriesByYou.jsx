@@ -316,12 +316,12 @@ function DeliveriesByYou() {
         setSubtasks((prev) => prev.map((d) => d.id === itemId ? { ...d, assigner_paused: true, ...data.deliverable } : d));
         publish('deliverable:updated', { id: itemId });
         publish('data:changed', { type: 'deliverable', action: 'updated' });
-        showSuccessMessage("Subtask", "placed on hold");
+        showSuccessMessage("Subtask", "paused");
       } else {
-        notify.error(data.message || "Failed to place on hold.");
+        notify.error(data.message || "Failed to pause.");
       }
     } catch {
-      notify.error("Failed to place on hold.");
+      notify.error("Failed to pause.");
     } finally {
       setActingId(null);
       setActingType(null);
@@ -654,16 +654,14 @@ function DeliveriesByYou() {
                             <Pencil size={16} />
                           </button>
                         )}
-                        {item.status?.toLowerCase() !== "approved" && (
-                          <button
-                            className="action-icon-btn action-delete"
-                            title="Delete Subtask"
-                            disabled={actingId === item.id}
-                            onClick={() => handleDelete(item.id)}
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
+                        <button
+                          className="action-icon-btn action-delete"
+                          title="Delete Subtask"
+                          disabled={actingId === item.id}
+                          onClick={() => handleDelete(item.id)}
+                        >
+                          <Trash2 size={16} />
+                        </button>
                         {item.status === "submitted" && (
                           <button className="action-icon-btn action-submit" title="Approve" disabled={actingId === item.id} onClick={() => handleApprove(item.id)} style={{ color: "#16A34A" }}>
                             <CheckCircle2 size={16} />
@@ -674,10 +672,10 @@ function DeliveriesByYou() {
                             <XCircle size={16} />
                           </button>
                         )}
-                        {["pending", "in_progress", "reopened", "paused"].includes(item.status) && !item.assigner_paused && (
+                        {["pending", "in_progress", "reopened", "paused", "submitted"].includes(item.status) && !item.assigner_paused && (
                           <button
                             className="action-icon-btn"
-                            title="Put On Hold"
+                            title="Pause"
                             disabled={actingId === item.id}
                             onClick={() => handleAssignerPause(item.id)}
                             style={{ color: "#7C3AED", cursor: actingId === item.id ? "not-allowed" : "pointer" }}

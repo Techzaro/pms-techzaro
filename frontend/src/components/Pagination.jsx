@@ -55,7 +55,10 @@ export default function Pagination({ currentPage, totalPages, onPageChange, item
   };
 
   const handleJump = (e) => {
-    if (e) e.preventDefault();
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     const pageNum = parseInt(jumpValue, 10);
     if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
       onPageChange(pageNum);
@@ -163,7 +166,14 @@ export default function Pagination({ currentPage, totalPages, onPageChange, item
                   />
                   <button
                     type="button"
-                    onClick={handleJump}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      handleJump(e);
+                    }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleJump(e);
+                    }}
                     title="Go to page"
                     style={{
                       padding: "2px 6px",

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\User;
 use App\Services\BusinessIdService;
 use Illuminate\Support\Facades\Log;
 
@@ -239,7 +240,6 @@ class Task extends Model
             if (! empty($ids)) {
                 $query->where(function ($q) use ($ids) {
                     $q->whereIn('assigned_to', $ids)
-                      ->orWhereIn('assigned_by', $ids)
                       ->orWhereHas('assignees', fn ($aq) => $aq->whereIn('users.id', $ids));
                 });
             }
@@ -301,6 +301,12 @@ class Task extends Model
     public function assignees(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'task_user')->withPivot('due_date', 'status', 'submitted_at')->withTimestamps();
+    }
+
+    /** All users following this task (many-to-many). */
+    public function followers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'task_followers')->withTimestamps();
     }
 
     /** Deliverables belonging to this task, ordered by sort order. */
@@ -636,5 +642,38 @@ class Task extends Model
             'auto_paused' => 'Auto Paused Due To Inactivity',
             'other' => 'Other',
         ];
+    }
+
+    /**
+     * Compute task progress percentage (0 - 100).
+     * If status is approved, completed, submitted, or done, progress is always 100%.
+     * If deliverables exist, computes ratio of approved deliverables.
+     */
+    public function computeProgress(): int
+    {
+        $status = strtolower($this->status ?? '');
+        if (in_array($status, ['approved', 'completed', 'submitted', 'submitted_late', 'done'])) {
+            return 100;
+        }
+
+        $total = (int) ($this->total_deliverables ?? ($this->deliverables()->count()));
+        if ($total > 0) {
+            $completed = (int) ($this->completed_deliverables ?? ($this->deliverables()->where('status', 'approved')->count()));
+            return (int) round(($completed / $total) * 100);
+        }
+
+        return 0;
+    }
+
+    public function getDeliverablesProgressAttribute($value)
+    {
+        $status = strtolower($this->status ?? '');
+        if (in_array($status, ['approved', 'completed', 'submitted', 'submitted_late', 'done'])) {
+            return 100;
+        }
+        if ($value !== null && $value !== '') {
+            return (int) $value;
+        }
+        return $this->computeProgress();
     }
 }

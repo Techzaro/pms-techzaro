@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   MessageSquare,
   Send,
@@ -68,10 +68,23 @@ function roleLabel(role) {
   return role.charAt(0).toUpperCase() + role.slice(1);
 }
 
+function highlightMentions(content) {
+  if (!content) return "";
+  return content.replace(/@([A-Za-z0-9_]+(?:\s[A-Za-z0-9_]+)?)(?=[<>\s,.:;!?]|$)/g, (match, name, offset, str) => {
+    const prevStr = str.slice(0, offset);
+    const lastOpenTag = prevStr.lastIndexOf("<");
+    const lastCloseTag = prevStr.lastIndexOf(">");
+    if (lastOpenTag > lastCloseTag) {
+      return match;
+    }
+    return `<span class="td-comment-mention" style="color: #2563eb; font-weight: 600; background-color: #eff6ff; padding: 1px 6px; border-radius: 4px; display: inline-block;">@${name}</span>`;
+  });
+}
+
 function renderCommentBody(text) {
   if (!text) return null;
   if (text.includes("<p>") || text.includes("<div>") || text.includes("<span>")) {
-    return text;
+    return highlightMentions(text);
   }
   let html = text
     .replace(/&/g, "&amp;")
@@ -85,10 +98,7 @@ function renderCommentBody(text) {
   html = html.replace(/\{color:([^}]+)\}(.+?)\{\/color\}/g, '<span style="color:$1">$2</span>');
   html = html.replace(/\{highlight:([^}]+)\}(.+?)\{\/highlight\}/g, '<mark style="background:$1">$2</mark>');
   html = html.replace(/\n/g, "<br/>");
-  html = html.replace(
-    /@(\w+(?:\s\w+)?)/g,
-    '<span class="td-comment-mention">@$1</span>'
-  );
+  html = highlightMentions(html);
   return html;
 }
 
@@ -102,16 +112,21 @@ function CommentItem({
   onDelete,
   onEdit,
   depth,
+  mentionableUsers = [],
 }) {
   const [showReplies, setShowReplies] = useState(depth === 0);
   const [replyOpen, setReplyOpen] = useState(false);
   const [replyText, setReplyText] = useState("");
+  const [replyMentionedUserIds, setReplyMentionedUserIds] = useState([]);
+  const [replyShowMentions, setReplyShowMentions] = useState(false);
+  const [replyMentionQuery, setReplyMentionQuery] = useState("");
   const [replySending, setReplySending] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(comment.body || "");
   const [editSending, setEditSending] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef(null);
+  const replyDropdownRef = useRef(null);
 
   const isOwner =
     currentUser && parseInt(comment.user?.id || comment.user_id, 10) === parseInt(currentUser.id, 10);
@@ -122,12 +137,46 @@ function CommentItem({
       if (menuRef.current && !menuRef.current.contains(e.target)) {
         setShowMenu(false);
       }
+      if (replyDropdownRef.current && !replyDropdownRef.current.contains(e.target)) {
+        setReplyShowMentions(false);
+      }
     }
-    if (showMenu) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleReplyChange = (e) => {
+    const val = e.target.value;
+    setReplyText(val);
+    const cursorPos = e.target.selectionStart || val.length;
+    const textBeforeCursor = val.substring(0, cursorPos);
+    const mentionMatch = textBeforeCursor.match(/@([a-zA-Z0-9_]*)$/);
+    if (mentionMatch) {
+      setReplyMentionQuery(mentionMatch[1].toLowerCase());
+      setReplyShowMentions(true);
+    } else {
+      setReplyShowMentions(false);
     }
-  }, [showMenu]);
+  };
+
+  const insertReplyMention = (participant) => {
+    const atMatch = replyText.substring(0, replyText.length).match(/@([a-zA-Z0-9_]*)$/);
+    if (atMatch) {
+      const atIndex = replyText.lastIndexOf("@" + atMatch[1]);
+      const newText = replyText.substring(0, atIndex) + `@${participant.name} ` + replyText.substring(atIndex + atMatch[0].length);
+      setReplyText(newText);
+    } else {
+      setReplyText((prev) => prev + `@${participant.name} `);
+    }
+    setReplyMentionedUserIds((prev) => Array.from(new Set([...prev, participant.id])));
+    setReplyShowMentions(false);
+  };
+
+  const filteredReplyUsers = mentionableUsers.filter(
+    (p) =>
+      parseInt(p.id, 10) !== parseInt(currentUser?.id, 10) &&
+      (p.name || "").toLowerCase().includes(replyMentionQuery.toLowerCase())
+  );
 
   const handleReply = async () => {
     if (!replyText.trim()) return;
@@ -137,6 +186,11 @@ function CommentItem({
       const formData = new FormData();
       formData.append("body", replyText.trim());
       formData.append("parent_id", comment.id);
+      if (replyMentionedUserIds && replyMentionedUserIds.length > 0) {
+        replyMentionedUserIds.forEach((id) => {
+          formData.append("mentioned_user_ids[]", id);
+        });
+      }
 
       const res = await fetch(commentsEndpoint, {
         method: "POST",
@@ -146,6 +200,7 @@ function CommentItem({
       const data = await res.json();
       if (res.ok && data.success) {
         setReplyText("");
+        setReplyMentionedUserIds([]);
         setReplyOpen(false);
         onEdit();
       }
@@ -349,12 +404,36 @@ function CommentItem({
         )}
 
         {replyOpen && (
-          <div className="td-comment-reply-input">
+          <div className="td-comment-reply-input" style={{ position: "relative" }}>
+            {replyShowMentions && filteredReplyUsers.length > 0 && (
+              <div className="td-mention-dropdown" ref={replyDropdownRef} style={{ bottom: "100%", left: 0, right: 0 }}>
+                {filteredReplyUsers.slice(0, 8).map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    className="td-mention-item"
+                    onClick={() => insertReplyMention(p)}
+                  >
+                    <div className="td-mention-avatar">
+                      {p.avatar ? (
+                        <img src={fileUrl(p.avatar)} alt={p.name} />
+                      ) : (
+                        initials(p.name)
+                      )}
+                    </div>
+                    <div className="td-mention-info">
+                      <span className="td-mention-name">{p.name}</span>
+                      <span className="td-mention-role">{roleLabel(p.role)}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
             <textarea
               className="td-comment-textarea"
               placeholder={`Reply to ${comment.user?.name || "comment"}...`}
               value={replyText}
-              onChange={(e) => setReplyText(e.target.value)}
+              onChange={handleReplyChange}
               rows={2}
               autoFocus
               onKeyDown={(e) => {
@@ -369,6 +448,8 @@ function CommentItem({
                 onClick={() => {
                   setReplyOpen(false);
                   setReplyText("");
+                  setReplyMentionedUserIds([]);
+                  setReplyShowMentions(false);
                 }}
                 disabled={replySending}
               >
@@ -399,6 +480,7 @@ function CommentItem({
                 onDelete={onDelete}
                 onEdit={onEdit}
                 depth={depth + 1}
+                mentionableUsers={mentionableUsers}
               />
             ))}
           </div>
@@ -408,7 +490,7 @@ function CommentItem({
   );
 }
 
-export default function TaskDiscussion({ taskId, deliverableId, entityType, readOnly }) {
+export default function TaskDiscussion({ taskId, deliverableId, entityType, readOnly, teamUsers = [] }) {
   const isDeliverable = entityType === "deliverable" && deliverableId;
   const commentsEndpoint = isDeliverable
     ? `${API_URL}/deliverables/${deliverableId}/comments`
@@ -426,18 +508,21 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState("");
+  const [mentionedUserIds, setMentionedUserIds] = useState([]);
   const [sending, setSending] = useState(false);
   const [file, setFile] = useState(null);
   const [fileName, setFileName] = useState("");
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [participants, setParticipants] = useState([]);
+  const [teamUsersList, setTeamUsersList] = useState(teamUsers);
   const [showMentions, setShowMentions] = useState(false);
   const [mentionQuery, setMentionQuery] = useState("");
   const [collapsed, setCollapsed] = useState(false);
   const commentsEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const quillRef = useRef(null);
+  const mentionsDropdownRef = useRef(null);
   const currentUser = getUser();
 
   const fetchComments = useCallback(
@@ -488,6 +573,73 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
     }
   }, [taskId, deliverableId, fetchComments, fetchParticipants]);
 
+  useEffect(() => {
+    if (teamUsers && teamUsers.length > 0) {
+      setTeamUsersList(teamUsers);
+    }
+  }, [teamUsers]);
+
+  useEffect(() => {
+    if (!teamUsers || teamUsers.length === 0) {
+      const loadUsers = async () => {
+        try {
+          const token = authToken();
+          const res = await fetch(`${API_URL}/team-users`, {
+            headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+            skipLoader: true,
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setTeamUsersList(data.users || data.team_users || (Array.isArray(data) ? data : []));
+          }
+        } catch (err) {
+          console.error("Failed to load team users for mentions", err);
+        }
+      };
+      loadUsers();
+    }
+  }, [teamUsers]);
+
+  const mentionableUsers = useMemo(() => {
+    const map = new Map();
+    (participants || []).forEach((p) => {
+      if (p?.id) map.set(parseInt(p.id, 10), p);
+    });
+    (teamUsersList || []).forEach((u) => {
+      if (u?.id && !map.has(parseInt(u.id, 10))) {
+        map.set(parseInt(u.id, 10), u);
+      }
+    });
+    return Array.from(map.values());
+  }, [participants, teamUsersList]);
+
+  const filteredParticipants = mentionableUsers.filter(
+    (p) =>
+      parseInt(p.id, 10) !== parseInt(currentUser?.id, 10) &&
+      (p.name || "").toLowerCase().includes(mentionQuery.toLowerCase())
+  );
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (mentionsDropdownRef.current && !mentionsDropdownRef.current.contains(e.target)) {
+        setShowMentions(false);
+      }
+    };
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        setShowMentions(false);
+      }
+    };
+    if (showMentions) {
+      document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("keydown", handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showMentions]);
+
   const handlePost = async () => {
     const stripped = newComment.replace(/<[^>]*>/g, "").trim();
     if (!stripped && !file) return;
@@ -499,6 +651,11 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
       if (file) {
         formData.append("file", file);
       }
+      if (mentionedUserIds && mentionedUserIds.length > 0) {
+        mentionedUserIds.forEach((id) => {
+          formData.append("mentioned_user_ids[]", id);
+        });
+      }
 
       const res = await fetch(commentsEndpoint, {
         method: "POST",
@@ -508,6 +665,7 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
       const data = await res.json();
       if (res.ok && data.success) {
         setNewComment("");
+        setMentionedUserIds([]);
         setFile(null);
         setFileName("");
         fetchComments(1);
@@ -543,10 +701,12 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
 
   const handleQuillChange = (value, delta, source, editor) => {
     setNewComment(value);
+    if (!editor) return;
     const text = editor.getText();
-    const cursorPos = editor.getSelection()?.index || 0;
+    const selection = editor.getSelection();
+    const cursorPos = selection ? selection.index : text.length;
     const textBeforeCursor = text.substring(0, cursorPos);
-    const mentionMatch = textBeforeCursor.match(/@(\w*)$/);
+    const mentionMatch = textBeforeCursor.match(/@([a-zA-Z0-9_]*)$/);
     if (mentionMatch) {
       setMentionQuery(mentionMatch[1].toLowerCase());
       setShowMentions(true);
@@ -556,25 +716,30 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
   };
 
   const insertMention = (participant) => {
-    const quill = quillRef.current?.getQuill();
-    if (!quill) return;
-    const cursorPos = quill.getSelection()?.index || quill.getLength() - 1;
-    const textBeforeCursor = quill.getText(0, cursorPos);
-    const atMatch = textBeforeCursor.match(/@(\w*)$/);
-    if (atMatch) {
-      const atIndex = cursorPos - atMatch[0].length;
-      quill.deleteText(atIndex, atMatch[0].length);
-      quill.insertText(atIndex, `@${participant.name} `, { bold: false });
-      quill.setSelection(atIndex + participant.name.length + 2);
+    const quill = quillRef.current?.getEditor ? quillRef.current.getEditor() : quillRef.current?.getQuill?.();
+    if (quill) {
+      const selection = quill.getSelection();
+      const cursorPos = selection ? selection.index : quill.getLength() - 1;
+      const textBeforeCursor = quill.getText(0, cursorPos);
+      const atMatch = textBeforeCursor.match(/@([a-zA-Z0-9_]*)$/);
+      if (atMatch) {
+        const atIndex = cursorPos - atMatch[0].length;
+        quill.deleteText(atIndex, atMatch[0].length);
+        quill.insertText(atIndex, `@${participant.name} `, { bold: false });
+        quill.setSelection(atIndex + participant.name.length + 2);
+      }
+    } else {
+      setNewComment((prev) => {
+        const atMatch = prev.match(/@([a-zA-Z0-9_]*)$/);
+        if (atMatch) {
+          return prev.substring(0, prev.length - atMatch[0].length) + `@${participant.name} `;
+        }
+        return prev + `@${participant.name} `;
+      });
     }
+    setMentionedUserIds((prev) => Array.from(new Set([...prev, participant.id])));
     setShowMentions(false);
   };
-
-  const filteredParticipants = participants.filter(
-    (p) =>
-      p.id !== currentUser?.id &&
-      (p.name || "").toLowerCase().includes(mentionQuery)
-  );
 
   const handleFileSelect = (e) => {
     const selected = e.target.files?.[0];
@@ -638,6 +803,7 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
                   onDelete={handleDelete}
                   onEdit={handleRefresh}
                   depth={0}
+                  mentionableUsers={mentionableUsers}
                 />
               ))}
               <div ref={commentsEndRef} />
@@ -645,9 +811,9 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
           )}
 
           {!readOnly && (
-            <div className="td-discussion-input-area">
+            <div className="td-discussion-input-area" style={{ position: "relative" }}>
               {showMentions && filteredParticipants.length > 0 && (
-                <div className="td-mention-dropdown">
+                <div className="td-mention-dropdown" ref={mentionsDropdownRef}>
                   {filteredParticipants.slice(0, 8).map((p) => (
                     <button
                       key={p.id}

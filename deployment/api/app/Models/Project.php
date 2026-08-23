@@ -8,6 +8,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use App\Models\User;
 use App\Services\BusinessIdService;
 
 /**
@@ -292,5 +294,11 @@ class Project extends Model
             ->select('id', 'name', 'email', 'role', 'department')
             ->orderBy('name')
             ->get();
+    }
+
+    /** All users following this project (many-to-many). */
+    public function followers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'project_followers')->withTimestamps();
     }
 }

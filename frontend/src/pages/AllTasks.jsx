@@ -102,29 +102,48 @@ function AllTasks() {
   const [showAll, setShowAll] = useState(false);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
+  const [sortBy, setSortBy] = useState("");
+  const [sortDirection, setSortDirection] = useState("desc");
+
+  const handleSort = (column) => {
+    if (sortBy === column) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(column);
+      setSortDirection("asc");
+    }
+    setPage(1);
+  };
+
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(timer);
   }, [search]);
 
   /** Fetch all tasks from the API with role-based visibility. */
-  const fetchTasks = () => {
+  const fetchTasks = useCallback(() => {
     setLoading(true);
     const token = authToken();
     const params = new URLSearchParams();
     if (timeFilter) params.append("time_filter", timeFilter);
     if (debouncedSearch) params.append("search", debouncedSearch);
     if (advancedFilters.user_id && advancedFilters.user_id.length > 0) {
-      params.append("user_id", advancedFilters.user_id.join(","));
+      params.append("user_id", Array.isArray(advancedFilters.user_id) ? advancedFilters.user_id.join(",") : advancedFilters.user_id);
     }
     if (advancedFilters.project_id && advancedFilters.project_id.length > 0) {
-      params.append("project_id", advancedFilters.project_id.join(","));
+      params.append("project_id", Array.isArray(advancedFilters.project_id) ? advancedFilters.project_id.join(",") : advancedFilters.project_id);
     }
     if (advancedFilters.status && advancedFilters.status.length > 0) {
-      params.append("status", advancedFilters.status.join(","));
+      params.append("status", Array.isArray(advancedFilters.status) ? advancedFilters.status.join(",") : advancedFilters.status);
     }
     if (advancedFilters.start_date) params.append("start_date", advancedFilters.start_date);
     if (advancedFilters.end_date) params.append("end_date", advancedFilters.end_date);
+    if (sortBy) {
+      params.append("sort_by", sortBy);
+      params.append("sort_direction", sortDirection);
+      params.append("sort_dir", sortDirection);
+      params.append("sort_order", sortDirection);
+    }
 
     fetch(`${API_URL}/all-tasks?${params.toString()}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -137,11 +156,11 @@ function AllTasks() {
       })
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
-  };
+  }, [debouncedSearch, timeFilter, advancedFilters, sortBy, sortDirection]);
 
   useEffect(() => {
     fetchTasks();
-  }, [debouncedSearch, timeFilter, advancedFilters]);
+  }, [fetchTasks]);
 
   useAutoRefresh(fetchTasks, {
     events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
@@ -365,13 +384,25 @@ function AllTasks() {
       <div className="container">
         <div className="all-tasks-header">
           <div style={{ fontSize: 12, fontWeight: 600 }}>ID</div>
-          <div>Assigned To</div>
-          <div>Assigned By</div>
-          <div>Task Name</div>
-          <div>Status</div>
+          <div style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("assigned_to")}>
+            Assigned To
+          </div>
+          <div style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("assigned_by")}>
+            Assigned By
+          </div>
+          <div style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("title")}>
+            Task Name
+          </div>
+          <div style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("status")}>
+            Status
+          </div>
           <div>Progress</div>
-          <div>Priority</div>
-          <div>Start & Due Date</div>
+          <div style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("priority")}>
+            Priority
+          </div>
+          <div style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("due_date")}>
+            Start & Due Date
+          </div>
           <div style={{ textAlign: "center" }}>Action</div>
         </div>
 
@@ -448,17 +479,23 @@ function AllTasks() {
                   </div>
 
                   {/* Progress */}
-                  <div className="col-progress">
-                    <div style={{ fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "2px" }}>
-                      {item.deliverables_progress || 0}%
-                    </div>
-                    <div className="progress-bar-track" style={{ width: "80px" }}>
-                      <div className="progress-bar-fill" style={{ width: `${item.deliverables_progress || 0}%` }}></div>
-                    </div>
-                    <div style={{ fontSize: "11px", color: "#6b7280", whiteSpace: "nowrap" }}>
-                      {item.approved_deliverables || 0}/{item.total_deliverables || 0}
-                    </div>
-                  </div>
+                  {(() => {
+                    const isTerminal = ["completed", "approved", "submitted", "submitted_late", "done"].includes((item.status || "").toLowerCase());
+                    const prog = isTerminal ? 100 : (item.deliverables_progress || 0);
+                    return (
+                      <div className="col-progress">
+                        <div style={{ fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "2px" }}>
+                          {prog}%
+                        </div>
+                        <div className="progress-bar-track" style={{ width: "80px" }}>
+                          <div className="progress-bar-fill" style={{ width: `${prog}%` }}></div>
+                        </div>
+                        <div style={{ fontSize: "11px", color: "#6b7280", whiteSpace: "nowrap" }}>
+                          {item.approved_deliverables || 0}/{item.total_deliverables || 0}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Priority */}
                   <div className="col-priority">

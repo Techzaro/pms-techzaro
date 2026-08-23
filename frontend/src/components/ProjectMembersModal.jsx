@@ -33,28 +33,36 @@ export default function ProjectMembersModal({ isOpen, onClose, project, onSucces
       : [];
     setViewOnlyUsers(currentViewOnly);
 
+    // Pre-populate users from project if available
+    const existingUsers = [
+      ...(Array.isArray(project.members) ? project.members : []),
+      ...(Array.isArray(project.view_only_users) ? project.view_only_users : []),
+      ...(project.creator ? [project.creator] : []),
+    ];
+    if (existingUsers.length > 0) {
+      setUsers((prev) => (prev.length === 0 ? existingUsers : prev));
+    }
+
     // Fetch teams and users
     const token = authToken();
     const headers = { Accept: "application/json", Authorization: `Bearer ${token}` };
 
     fetch(`${API_URL}/teams`, { headers })
-      .then((res) => res.json())
+      .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
-        if (data.success && Array.isArray(data.data)) {
-          setTeams(data.data);
-        } else if (Array.isArray(data)) {
-          setTeams(data);
+        const list = Array.isArray(data) ? data : (data.data || data.teams || []);
+        if (Array.isArray(list) && list.length > 0) {
+          setTeams(list);
         }
       })
       .catch(() => {});
 
-    fetch(`${API_URL}/users`, { headers })
-      .then((res) => res.json())
+    fetch(`${API_URL}/team-users`, { headers })
+      .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
-        if (data.success && Array.isArray(data.data)) {
-          setUsers(data.data);
-        } else if (Array.isArray(data)) {
-          setUsers(data);
+        const list = Array.isArray(data) ? data : (data.users || data.data || []);
+        if (Array.isArray(list) && list.length > 0) {
+          setUsers(list);
         }
       })
       .catch(() => {});
@@ -79,9 +87,9 @@ export default function ProjectMembersModal({ isOpen, onClose, project, onSucces
     try {
       const token = authToken();
       const payload = {
-        team_ids: selectedTeamIds,
-        assigned_users: assignedUsers,
-        view_only_users: viewOnlyUsers,
+        team_ids: (selectedTeamIds || []).map((t) => Number(typeof t === "object" ? t.id : t)).filter((id) => !isNaN(id) && id > 0),
+        assigned_users: (assignedUsers || []).map((u) => Number(typeof u === "object" ? u.id : u)).filter((id) => !isNaN(id) && id > 0),
+        view_only_users: (viewOnlyUsers || []).map((u) => Number(typeof u === "object" ? u.id : u)).filter((id) => !isNaN(id) && id > 0),
       };
 
       const res = await fetch(`${API_URL}/projects/${project.id}`, {
@@ -96,7 +104,8 @@ export default function ProjectMembersModal({ isOpen, onClose, project, onSucces
 
       const data = await res.json();
       if (!res.ok || data.success === false) {
-        throw new Error(data.message || "Failed to update project members");
+        const errorMsg = data.errors ? Object.values(data.errors).flat().join(". ") : data.message;
+        throw new Error(errorMsg || "Failed to update project members");
       }
 
       if (onSuccess) onSuccess();
@@ -118,16 +127,16 @@ export default function ProjectMembersModal({ isOpen, onClose, project, onSucces
           </button>
         </div>
 
-        <form onSubmit={handleSave} className="cp-body">
-          {error && <div style={{ color: "#ef4444", marginBottom: 12, fontSize: 13 }}>{error}</div>}
+        <form onSubmit={handleSave} className="cp-body" style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+          {error && <div style={{ color: "#ef4444", padding: "8px 12px", background: "#fef2f2", borderRadius: "6px", fontSize: 13, border: "1px solid #fecaca" }}>{error}</div>}
 
           {/* Teams Selection */}
-          <div className="cp-field">
-            <label>Assigned Teams</label>
+          <div className="cp-field" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <label style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-dark, #1f2937)" }}>Assigned Teams</label>
             {teams.length === 0 ? (
-              <div style={{ fontSize: 12, color: "#888" }}>No teams available</div>
+              <div style={{ fontSize: 13, color: "#888", fontStyle: "italic" }}>No teams available</div>
             ) : (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 4 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 2 }}>
                 {teams.map((t) => {
                   const isSelected = selectedTeamIds.includes(Number(t.id));
                   return (
@@ -137,18 +146,22 @@ export default function ProjectMembersModal({ isOpen, onClose, project, onSucces
                         display: "inline-flex",
                         alignItems: "center",
                         gap: 6,
-                        padding: "6px 12px",
-                        borderRadius: 6,
-                        border: isSelected ? "1px solid #3b82f6" : "1px solid #e5e7eb",
-                        background: isSelected ? "#eff6ff" : "#fff",
+                        padding: "6px 14px",
+                        borderRadius: 20,
+                        border: isSelected ? "1px solid var(--color-primary, #3b82f6)" : "1px solid var(--border-color, #e5e7eb)",
+                        background: isSelected ? "var(--color-primary-bg, #eff6ff)" : "var(--bg-card, #fff)",
+                        color: isSelected ? "var(--color-primary, #2563eb)" : "var(--text-dark, #374151)",
                         cursor: "pointer",
                         fontSize: 13,
+                        fontWeight: isSelected ? 600 : 500,
+                        transition: "all 0.15s ease",
                       }}
                     >
                       <input
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => toggleTeam(t.id)}
+                        style={{ accentColor: "var(--color-primary, #3b82f6)" }}
                       />
                       <span>{t.name}</span>
                     </label>
@@ -159,8 +172,8 @@ export default function ProjectMembersModal({ isOpen, onClose, project, onSucces
           </div>
 
           {/* Assigned Members */}
-          <div className="cp-field" style={{ marginTop: 16 }}>
-            <label>Assigned Members (Full Access)</label>
+          <div className="cp-field" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <label style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-dark, #1f2937)" }}>Assigned Members (Full Access)</label>
             <UserSelectDropdown
               users={users}
               selectedIds={assignedUsers}
@@ -170,8 +183,8 @@ export default function ProjectMembersModal({ isOpen, onClose, project, onSucces
           </div>
 
           {/* View-Only Users */}
-          <div className="cp-field" style={{ marginTop: 16 }}>
-            <label>View-Only Users</label>
+          <div className="cp-field" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <label style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-dark, #1f2937)" }}>View-Only Users</label>
             <UserSelectDropdown
               users={users}
               selectedIds={viewOnlyUsers}
@@ -180,11 +193,10 @@ export default function ProjectMembersModal({ isOpen, onClose, project, onSucces
             />
           </div>
 
-          <div className="flex justify-end gap-3 mt-4 border-t pt-4" style={{ marginTop: 24, display: "flex", justifyContent: "flex-end", gap: 12, paddingTop: 16, borderTop: "1px solid var(--border-color, #e5e7eb)" }}>
+          <div style={{ marginTop: 8, display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12, paddingTop: 16, borderTop: "1px solid var(--border-color, #e5e7eb)" }}>
             <button
               type="button"
-              className="px-4 py-2 rounded-md bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium text-sm transition-colors"
-              style={{ padding: "8px 16px", borderRadius: 6, background: "var(--bg-secondary, #e5e7eb)", color: "var(--text-dark, #374151)", border: "none", cursor: "pointer", fontWeight: 500 }}
+              style={{ padding: "8px 18px", borderRadius: 6, background: "var(--bg-secondary, #f3f4f6)", color: "var(--text-dark, #374151)", border: "1px solid var(--border-color, #e5e7eb)", cursor: "pointer", fontWeight: 500, fontSize: 14 }}
               onClick={onClose}
               disabled={saving}
             >
@@ -192,8 +204,7 @@ export default function ProjectMembersModal({ isOpen, onClose, project, onSucces
             </button>
             <button
               type="submit"
-              className="px-4 py-2 rounded-md bg-primary hover:bg-primary-dark text-white font-medium text-sm transition-colors"
-              style={{ padding: "8px 16px", borderRadius: 6, background: "var(--color-primary, #3b82f6)", color: "#fff", border: "none", cursor: "pointer", fontWeight: 500 }}
+              style={{ padding: "8px 20px", borderRadius: 6, background: "var(--color-primary, #3b82f6)", color: "#fff", border: "none", cursor: "pointer", fontWeight: 600, fontSize: 14, boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}
               disabled={saving}
             >
               {saving ? "Saving..." : "Save Members"}

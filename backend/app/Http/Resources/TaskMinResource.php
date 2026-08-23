@@ -50,6 +50,11 @@ class TaskMinResource extends JsonResource
      */
     private function computeProgress(): int
     {
+        $status = strtolower($this->status ?? '');
+        if (in_array($status, ['approved', 'completed', 'submitted', 'submitted_late', 'done'])) {
+            return 100;
+        }
+
         $total = (int) ($this->total_deliverables ?? 0);
         if ($total <= 0) return 0;
         return (int) round(($this->approved_deliverables / $total) * 100);

@@ -36,6 +36,7 @@ import API_URL from "../config/api";
 import { authToken, rolePath, getUser } from "../utils/auth";
 import { renderDynamicDates } from "../utils/tableDateUtils";
 import { formatDateTimeInline } from "../utils/formatDateTime";
+import { showSuccessMessage, notify, toast } from "../utils/notify";
 import { useNotification } from "../context/NotificationContext";
 import "../components/ActionPopover.css";
 import "../pages/Task.css";
@@ -119,7 +120,17 @@ const Taskby = () => {
   });
 
   const [sortBy, setSortBy] = useState("");
-  const [sortOrder, setSortOrder] = useState("");
+  const [sortDirection, setSortDirection] = useState("desc");
+
+  const handleSort = (column) => {
+    if (sortBy === column) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(column);
+      setSortDirection("asc");
+    }
+    setPage(1);
+  };
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -127,7 +138,7 @@ const Taskby = () => {
   }, [search]);
 
   /** Fetch tasks assigned by the current user from the API. */
-  const fetchTasks = () => {
+  const fetchTasks = useCallback(() => {
     setLoading(true);
     const token = authToken();
     const params = new URLSearchParams();
@@ -144,8 +155,12 @@ const Taskby = () => {
     }
     if (advancedFilters.start_date) params.append("start_date", advancedFilters.start_date);
     if (advancedFilters.end_date) params.append("end_date", advancedFilters.end_date);
-    if (sortBy) params.append("sort_by", sortBy);
-    if (sortOrder) params.append("sort_order", sortOrder);
+    if (sortBy) {
+      params.append("sort_by", sortBy);
+      params.append("sort_direction", sortDirection);
+      params.append("sort_dir", sortDirection);
+      params.append("sort_order", sortDirection);
+    }
 
     fetch(`${API_URL}/assigned-tasks?${params.toString()}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -158,11 +173,11 @@ const Taskby = () => {
       })
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
-  };
+  }, [debouncedSearch, timeFilter, advancedFilters, sortBy, sortDirection]);
 
   useEffect(() => {
     fetchTasks();
-  }, [debouncedSearch, timeFilter, advancedFilters, sortBy, sortOrder]);
+  }, [fetchTasks]);
 
   useAutoRefresh(fetchTasks, {
     events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
@@ -220,18 +235,19 @@ const Taskby = () => {
       const res = await fetch(`${API_URL}/tasks/${taskId}/assigner-pause`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ reason: reason_detail || reason }),
+        body: JSON.stringify({ reason: reason_detail || reason || "other" }),
         _notifHandled: true,
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setItems((prev) => prev.map((item) => item.id === taskId ? { ...item, assigner_paused: true, ...data.task } : item));
-        showSuccessMessage("Task", "placed on hold");
+        setItems((prev) => prev.map((item) => item.id === taskId ? { ...item, assigner_paused: true, ...(data.task || {}) } : item));
+        setOrderedItems((prev) => prev.map((item) => item.id === taskId ? { ...item, assigner_paused: true, ...(data.task || {}) } : item));
+        showSuccessMessage("Task", "paused");
       } else {
-        alert(data.message || "Failed to place task on hold.");
+        notify.error(data.message || data.error || "Failed to pause task.");
       }
     } catch {
-      alert("Failed to place task on hold.");
+      notify.error("Failed to pause task.");
     }
     setHoldingTaskId(null);
   };
@@ -245,20 +261,25 @@ const Taskby = () => {
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         _notifHandled: true,
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setItems((prev) => prev.map((item) => item.id === taskId ? { ...item, assigner_paused: false, ...data.task } : item));
+        setItems((prev) => prev.map((item) => item.id === taskId ? { ...item, assigner_paused: false, ...(data.task || {}) } : item));
+        setOrderedItems((prev) => prev.map((item) => item.id === taskId ? { ...item, assigner_paused: false, ...(data.task || {}) } : item));
         showSuccessMessage("Task", "resumed by assigner");
       } else {
-        alert(data.message || "Failed to resume task.");
+        notify.error(data.message || data.error || "Failed to resume task.");
       }
     } catch {
-      alert("Failed to resume task.");
+      notify.error("Failed to resume task.");
     }
     setResumingTaskId(null);
   };
 
-  const handleDelete = async (taskId) => {
+  const handleDelete = (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
     setDeleteTargetId(taskId);
     setDeleteConfirmOpen(true);
   };
@@ -267,6 +288,7 @@ const Taskby = () => {
     const taskId = deleteTargetId;
     setDeleteConfirmOpen(false);
     setDeleteTargetId(null);
+    if (!taskId) return;
     try {
       const token = authToken();
       const res = await fetch(`${API_URL}/tasks/${taskId}`, {
@@ -275,16 +297,17 @@ const Taskby = () => {
         _notifHandled: true,
       });
       if (res.ok) {
-        setItems((prev) => prev.filter((item) => item.id !== taskId));
+        setItems((prev) => prev.filter((item) => String(item.id) !== String(taskId)));
+        setOrderedItems((prev) => prev.filter((item) => String(item.id) !== String(taskId)));
         publish('task:deleted', { id: taskId });
         publish('data:changed', { type: 'task', action: 'deleted' });
-        showSuccessMessage("Task", "deleted");
+        toast.success("Task deleted successfully");
       } else {
-        const data = await res.json();
-        notify.error(data.message || "Failed to delete task.");
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.message || "Failed to delete task.");
       }
     } catch {
-      notify.error("Failed to delete task.");
+      toast.error("Failed to delete task.");
     }
   };
 
@@ -494,12 +517,22 @@ const Taskby = () => {
         {/* Header Table */}
         <div className="table-header1">
           <div style={{ fontSize: 12, fontWeight: 600 }}>ID</div>
-          <div>Assigned To</div>
-          <div className="task-name-column">Task Name</div>
-          <div className="status-column">Status</div>
+          <div style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("assigned_to")}>
+            Assigned To
+          </div>
+          <div className="task-name-column" style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("title")}>
+            Task Name
+          </div>
+          <div className="status-column" style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("status")}>
+            Status
+          </div>
           <div>Progress</div>
-          <div className="priority-column">Priority</div>
-          <div className="date-column">Start & Due Date</div>
+          <div className="priority-column" style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("priority")}>
+            Priority
+          </div>
+          <div className="date-column" style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("due_date")}>
+            Start & Due Date
+          </div>
           <div>Action</div>
         </div>
 
@@ -570,17 +603,23 @@ const Taskby = () => {
                       <TaskMultiStatusBadges item={item} />
                     </div>
 
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
-                      <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>
-                        {item.deliverables_progress || 0}%
-                      </div>
-                      <div className="progress-bar-track">
-                        <div className="progress-bar-fill" style={{ width: `${item.deliverables_progress || 0}%` }}></div>
-                      </div>
-                      <div style={{ fontSize: "12px", color: "#6b7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {item.approved_deliverables || 0}/{item.total_deliverables || 0} subtasks
-                      </div>
-                    </div>
+                    {(() => {
+                      const isTerminal = ["completed", "approved", "submitted", "submitted_late", "done"].includes((item.status || "").toLowerCase());
+                      const prog = isTerminal ? 100 : (item.deliverables_progress || 0);
+                      return (
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+                          <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>
+                            {prog}%
+                          </div>
+                          <div className="progress-bar-track">
+                            <div className="progress-bar-fill" style={{ width: `${prog}%` }}></div>
+                          </div>
+                          <div style={{ fontSize: "12px", color: "#6b7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {item.approved_deliverables || 0}/{item.total_deliverables || 0} subtasks
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     <div className="col-priority">
                       <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
@@ -644,21 +683,21 @@ const Taskby = () => {
                                   <Pencil size={16} />
                                 </button>
                               )}
-                              {item.status?.toLowerCase() !== "approved" && (
-                                <button
-                                  className="action-icon-btn action-delete"
-                                  title="Delete"
-                                  onClick={() => {
-                                    if (isRecurrence) {
-                                      setDeleteRecurrenceTask(item);
-                                    } else {
-                                      handleDelete(item.id);
-                                    }
-                                  }}
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                              )}
+                              <button
+                                className="action-icon-btn action-delete"
+                                title="Delete"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  if (isRecurrence) {
+                                    setDeleteRecurrenceTask(item);
+                                  } else {
+                                    handleDelete(e, item.id);
+                                  }
+                                }}
+                              >
+                                <Trash2 size={16} />
+                              </button>
                             </>
                           );
                         })()}
@@ -673,7 +712,7 @@ const Taskby = () => {
                                   className="action-icon-btn"
                                   title="Approve Task"
                                   style={{ color: "#16A34A" }}
-                                  onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } })}
+                                  onClick={(e) => { e.stopPropagation(); navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } }); }}
                                 >
                                   <CheckCircle2 size={16} />
                                 </button>
@@ -683,7 +722,7 @@ const Taskby = () => {
                                   className="action-icon-btn"
                                   title="Decline Task"
                                   style={{ color: "#DC2626" }}
-                                  onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } })}
+                                  onClick={(e) => { e.stopPropagation(); navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } }); }}
                                 >
                                   <XCircle size={16} />
                                 </button>
@@ -693,7 +732,7 @@ const Taskby = () => {
                                   className="action-icon-btn"
                                   title="Reopen Task"
                                   style={{ color: "#2563EB" }}
-                                  onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } })}
+                                  onClick={(e) => { e.stopPropagation(); navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } }); }}
                                 >
                                   <RotateCcw size={16} />
                                 </button>
@@ -703,7 +742,7 @@ const Taskby = () => {
                                   className="action-icon-btn"
                                   title={isUserAdminOrManager ? "Abandon Task" : "Request Abandon"}
                                   style={{ color: "#F59E0B" }}
-                                  onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } })}
+                                  onClick={(e) => { e.stopPropagation(); navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } }); }}
                                 >
                                   <AlertOctagon size={16} />
                                 </button>
@@ -711,12 +750,12 @@ const Taskby = () => {
                             </>
                           );
                         })()}
-                        {["pending", "in_progress", "reopened", "paused"].includes(item.status) && !item.assigner_paused && (
+                        {["pending", "in_progress", "reopened", "paused", "submitted"].includes(item.status?.toLowerCase()) && !item.assigner_paused && (
                           <button
                             className="action-icon-btn"
-                            title="Put On Hold"
+                            title="Pause"
                             disabled={holdingTaskId === item.id}
-                            onClick={() => { setPauseModalTaskId(item.id); setPauseModalOpen(true); }}
+                            onClick={(e) => { e.stopPropagation(); e.preventDefault(); setPauseModalTaskId(item.id); setPauseModalOpen(true); }}
                             style={{ color: "#7C3AED", cursor: holdingTaskId === item.id ? "not-allowed" : "pointer" }}
                           >
                             <Lock size={16} />
@@ -727,7 +766,7 @@ const Taskby = () => {
                             className="action-icon-btn"
                             title="Resume"
                             disabled={resumingTaskId === item.id}
-                            onClick={() => handleAssignerResume(item.id)}
+                            onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleAssignerResume(item.id); }}
                             style={{ color: "#059669", cursor: resumingTaskId === item.id ? "not-allowed" : "pointer" }}
                           >
                             <Lock size={16} />

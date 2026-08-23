@@ -16,14 +16,15 @@ import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
-import { ArrowUpRight, CheckCircle2, Lock, Pause, Play, StickyNote, ChevronDown, XCircle, RotateCcw, AlertOctagon, Sliders } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, Lock, Pause, Play, StickyNote, ChevronDown, XCircle, RotateCcw, AlertOctagon, Sliders, Trash2 } from "lucide-react";
 import { publish } from "../utils/eventBus";
 import { useNotification } from "../context/NotificationContext";
-import { showSuccessMessage } from "../utils/notify";
+import { showSuccessMessage, notify, toast } from "../utils/notify";
 import CreateTaskModal from "../components/CreateTaskModal";
 import SubmitTaskModal from "../components/SubmitTaskModal";
 import SubmitDeliverableModal from "../components/SubmitDeliverableModal"; // Added missing import
 import SelfDeliverableViewModal from "../components/SelfDeliverableViewModal"; // Added missing import
+import ConfirmModal from "../components/ConfirmModal";
 import SortableTableWrapper from "../components/SortableTableWrapper";
 import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
@@ -87,6 +88,8 @@ const SelfTasks = () => {
   const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
   const [viewModal, setViewModal] = useState({ open: false, subtask: null }); // Added missing state
   const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState(null);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -106,6 +109,19 @@ const SelfTasks = () => {
   const [showAll, setShowAll] = useState(false);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
+  const [sortBy, setSortBy] = useState("");
+  const [sortDirection, setSortDirection] = useState("desc");
+
+  const handleSort = (column) => {
+    if (sortBy === column) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(column);
+      setSortDirection("asc");
+    }
+    setPage(1);
+  };
+
   const selectStatusFilter = (filter) => {
     if (filter === statusFilter && filter === "") {
       setShowAll(!showAll);
@@ -122,23 +138,29 @@ const SelfTasks = () => {
   }, [search]);
 
   /** Fetch self-assigned tasks/projects from the API with current filters. */
-  const fetchTasks = () => {
+  const fetchTasks = useCallback(() => {
     setLoading(true);
     const token = authToken();
     const params = new URLSearchParams();
     if (timeFilter) params.append("time_filter", timeFilter);
     if (debouncedSearch) params.append("search", debouncedSearch);
     if (advancedFilters.user_id && advancedFilters.user_id.length > 0) {
-      params.append("user_id", advancedFilters.user_id.join(","));
+      params.append("user_id", Array.isArray(advancedFilters.user_id) ? advancedFilters.user_id.join(",") : advancedFilters.user_id);
     }
     if (advancedFilters.project_id && advancedFilters.project_id.length > 0) {
-      params.append("project_id", advancedFilters.project_id.join(","));
+      params.append("project_id", Array.isArray(advancedFilters.project_id) ? advancedFilters.project_id.join(",") : advancedFilters.project_id);
     }
     if (advancedFilters.status && advancedFilters.status.length > 0) {
-      params.append("status", advancedFilters.status.join(","));
+      params.append("status", Array.isArray(advancedFilters.status) ? advancedFilters.status.join(",") : advancedFilters.status);
     }
     if (advancedFilters.start_date) params.append("start_date", advancedFilters.start_date);
     if (advancedFilters.end_date) params.append("end_date", advancedFilters.end_date);
+    if (sortBy) {
+      params.append("sort_by", sortBy);
+      params.append("sort_direction", sortDirection);
+      params.append("sort_dir", sortDirection);
+      params.append("sort_order", sortDirection);
+    }
 
     fetch(`${API_URL}/self-tasks?${params.toString()}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -151,11 +173,11 @@ const SelfTasks = () => {
       })
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
-  };
+  }, [debouncedSearch, timeFilter, advancedFilters, sortBy, sortDirection]);
 
   useEffect(() => {
     fetchTasks();
-  }, [debouncedSearch, timeFilter, advancedFilters]);
+  }, [fetchTasks]);
 
   useAutoRefresh(fetchTasks, {
     events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
@@ -200,7 +222,11 @@ const SelfTasks = () => {
     fetchTasks();
   };
 
-  const handleAcknowledge = async (taskId) => {
+  const handleAcknowledge = async (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
     try {
       const token = authToken();
       const res = await fetch(`${API_URL}/tasks/${taskId}/acknowledge`, {
@@ -208,9 +234,9 @@ const SelfTasks = () => {
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         _notifHandled: true,
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setItems((prev) => prev.map((item) => item.id === taskId ? { ...item, status: "in_progress", ...data.task } : item));
+        setItems((prev) => prev.map((item) => item.id === taskId ? { ...item, status: "in_progress", ...(data.task || {}) } : item));
         publish('task:updated', { id: taskId, status: 'in_progress' });
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage("Task", "acknowledged");
@@ -222,7 +248,11 @@ const SelfTasks = () => {
     }
   };
 
-  const handleContinue = async (taskId) => {
+  const handleContinue = async (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
     try {
       const token = authToken();
       const res = await fetch(`${API_URL}/tasks/${taskId}/continue`, {
@@ -230,9 +260,9 @@ const SelfTasks = () => {
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         _notifHandled: true,
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setItems((prev) => prev.map((item) => item.id === taskId ? { ...item, status: "in_progress", ...data.task } : item));
+        setItems((prev) => prev.map((item) => item.id === taskId ? { ...item, status: "in_progress", ...(data.task || {}) } : item));
         publish('task:updated', { id: taskId, status: 'in_progress' });
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage("Task", "resumed");
@@ -244,26 +274,66 @@ const SelfTasks = () => {
     }
   };
 
-  const handlePause = async (taskId) => {
+  const handlePause = async (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
     try {
       const token = authToken();
       const res = await fetch(`${API_URL}/tasks/${taskId}/pause`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ reason: "other" }),
+        body: JSON.stringify({ reason: "other", reason_detail: "Paused from task list" }),
         _notifHandled: true,
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setItems((prev) => prev.map((item) => item.id === taskId ? { ...item, status: "paused", ...data.task } : item));
+        setItems((prev) => prev.map((item) => item.id === taskId ? { ...item, status: "paused", ...(data.task || {}) } : item));
         publish('task:updated', { id: taskId, status: 'paused' });
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage("Task", "paused");
       } else {
-        notify.error(data.message || "Failed to pause task.");
+        notify.error(data?.message || data?.error || "Failed to pause task.");
       }
     } catch {
       notify.error("Failed to pause task.");
+    }
+  };
+
+  const handleDelete = (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    setDeleteTargetId(taskId);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    const taskId = deleteTargetId;
+    setDeleteConfirmOpen(false);
+    setDeleteTargetId(null);
+    if (!taskId) return;
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      if (res.ok) {
+        setItems((prev) => prev.filter((item) => String(item.id) !== String(taskId)));
+        setOrderedItems((prev) => prev.filter((item) => String(item.id) !== String(taskId)));
+        publish('task:deleted', { id: taskId });
+        publish('data:changed', { type: 'task', action: 'deleted' });
+        toast.success("Task deleted successfully");
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.message || "Failed to delete task.");
+      }
+    } catch {
+      toast.error("Failed to delete task.");
     }
   };
 
@@ -462,11 +532,19 @@ const SelfTasks = () => {
       <div className="container">
         <div className="table-header-compact">
           <div style={{ fontSize: 12, fontWeight: 600 }}>ID</div>
-          <div>Task Name</div>
-          <div>Status</div>
+          <div style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("title")}>
+            Task Name
+          </div>
+          <div style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("status")}>
+            Status
+          </div>
           <div>Progress</div>
-          <div>Priority</div>
-          <div>Start & Due Date</div>
+          <div style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("priority")}>
+            Priority
+          </div>
+          <div style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("due_date")}>
+            Start & Due Date
+          </div>
           <div>Action</div>
         </div>
 
@@ -501,15 +579,21 @@ const SelfTasks = () => {
                   <div className="col-status">
                     <TaskMultiStatusBadges item={item} />
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
-                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>
-                      {item.deliverables_progress || 0}%
-                    </div>
-                    <div className="progress-bar-track"><div className="progress-bar-fill" style={{ width: `${item.deliverables_progress || 0}%` }}></div></div>
-                    <div style={{ fontSize: "12px", color: "#6b7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {item.approved_deliverables || 0}/{item.total_deliverables || 0} subtasks
-                    </div>
-                  </div>
+                  {(() => {
+                    const isTerminal = ["completed", "approved", "submitted", "submitted_late", "done"].includes((item.status || "").toLowerCase());
+                    const prog = isTerminal ? 100 : (item.deliverables_progress || 0);
+                    return (
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+                        <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>
+                          {prog}%
+                        </div>
+                        <div className="progress-bar-track"><div className="progress-bar-fill" style={{ width: `${prog}%` }}></div></div>
+                        <div style={{ fontSize: "12px", color: "#6b7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {item.approved_deliverables || 0}/{item.total_deliverables || 0} subtasks
+                        </div>
+                      </div>
+                    );
+                  })()}
                   <div>
                     <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
                       <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
@@ -589,27 +673,27 @@ const SelfTasks = () => {
                           return (
                             <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#92400E", fontSize: "11px", fontWeight: 600, border: "1px solid #F59E0B" }}>
                               <Lock size={12} />
-                              On Hold
+                              Paused by Assigner
                             </span>
                           );
                         }
                         if (item.status === "pending") {
                           return (
-                            <button className="action-icon-btn action-submit" title="Acknowledge Task" onClick={() => handleAcknowledge(item.id)}>
+                            <button className="action-icon-btn action-submit" title="Acknowledge Task" onClick={(e) => handleAcknowledge(e, item.id)}>
                               <CheckCircle2 size={16} />
                             </button>
                           );
                         }
                         if (item.status === "paused") {
                           return (
-                            <button className="action-icon-btn action-submit" title="Continue Task" onClick={() => handleContinue(item.id)}>
+                            <button className="action-icon-btn action-submit" title="Continue Task" onClick={(e) => handleContinue(e, item.id)}>
                               <Play size={16} />
                             </button>
                           );
                         }
-                        if (item.status === "in_progress" && !item.assigner_paused) {
+                        if (["in_progress", "submitted"].includes(item.status?.toLowerCase()) && !item.assigner_paused) {
                           return (
-                            <button className="action-icon-btn action-submit" title="Pause Task" onClick={() => handlePause(item.id)} style={{ color: "#D97706" }}>
+                            <button className="action-icon-btn action-submit" title="Pause Task" onClick={(e) => handlePause(e, item.id)} style={{ color: "#D97706" }}>
                               <Pause size={16} />
                             </button>
                           );
@@ -621,7 +705,7 @@ const SelfTasks = () => {
                                 className="action-icon-btn action-submit" 
                                 title={item.pending_deliverables_count > 0 ? "Submit all subtasks first" : "Submit Task"} 
                                 disabled={item.pending_deliverables_count > 0} 
-                                onClick={() => !item.pending_deliverables_count && setSubmitTaskModal({ open: true, task: item })} 
+                                onClick={(e) => { e.stopPropagation(); !item.pending_deliverables_count && setSubmitTaskModal({ open: true, task: item }); }} 
                                 style={item.pending_deliverables_count > 0 ? { opacity: 0.4, cursor: "not-allowed" } : {}}
                               >
                                 <LuSend size={16} />
@@ -631,6 +715,13 @@ const SelfTasks = () => {
                         }
                         return null;
                       })()}
+                      <button
+                        className="action-icon-btn action-delete"
+                        title="Delete Task"
+                        onClick={(e) => handleDelete(e, item.id)}
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </ActionPopover>
                   </div>
                 </div>
@@ -649,6 +740,17 @@ const SelfTasks = () => {
           onItemsPerPageChange={(val) => { setItemsPerPage(val); setPage(1); }}
         />
       )}
+
+      <ConfirmModal
+        isOpen={deleteConfirmOpen}
+        onClose={() => { setDeleteConfirmOpen(false); setDeleteTargetId(null); }}
+        onConfirm={confirmDelete}
+        title="Confirm Deletion"
+        message="Are you sure you want to delete this task? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        danger
+      />
 
       {/* Modals */}
       {showTaskModal.open && (

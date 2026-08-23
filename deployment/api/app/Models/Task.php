@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\User;
 use App\Services\BusinessIdService;
 use Illuminate\Support\Facades\Log;
 
@@ -220,6 +221,12 @@ class Task extends Model
     public function assignees(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'task_user')->withPivot('due_date', 'status', 'submitted_at')->withTimestamps();
+    }
+
+    /** All users following this task (many-to-many). */
+    public function followers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'task_followers')->withTimestamps();
     }
 
     /** Deliverables belonging to this task, ordered by sort order. */

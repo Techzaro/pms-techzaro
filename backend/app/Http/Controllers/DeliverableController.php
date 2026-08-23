@@ -81,7 +81,7 @@ class DeliverableController extends Controller
             $query->where('created_by', $user->id);
         }
 
-        $query->orderBy('sort_order')->orderBy('created_at', 'desc')->orderBy('id', 'desc')->filter($filters);
+        $query->orderBy('created_at', 'desc')->orderBy('id', 'desc')->filter($filters);
         if ($request->filled('per_page') || $request->filled('limit')) {
             $query->limit((int) ($request->input('per_page') ?: $request->input('limit')));
         }
@@ -192,7 +192,7 @@ class DeliverableController extends Controller
 
         $query->where('created_by', $user->id);
 
-        $query->orderBy('sort_order')->orderBy('created_at', 'desc')->orderBy('id', 'desc')->filter($filters);
+        $query->orderBy('created_at', 'desc')->orderBy('id', 'desc')->filter($filters);
         if ($request->filled('per_page') || $request->filled('limit')) {
             $query->limit((int) ($request->input('per_page') ?: $request->input('limit')));
         }
@@ -266,7 +266,7 @@ class DeliverableController extends Controller
                     });
             })
             ->when($isDueTodayFilter, fn ($q) => $q->whereDate('due_date', today())->whereNotIn('status', $this->dueTodayExcludedStatuses()))
-            ->orderBy('sort_order')->orderBy('created_at', 'desc')->orderBy('id', 'desc')
+            ->orderBy('created_at', 'desc')->orderBy('id', 'desc')
             ->filter($filters);
 
         if ($request->filled('per_page') || $request->filled('limit')) {
@@ -936,10 +936,6 @@ class DeliverableController extends Controller
         $isCreator = (int) $deliverable->created_by === (int) $user->id;
         if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        }
-
-        if (in_array($deliverable->status, ['approved', 'submitted'])) {
-            return response()->json(['success' => false, 'message' => 'Cannot delete a subtask that is '.$deliverable->status], 422);
         }
 
         $deliverable->delete();
@@ -1932,7 +1928,9 @@ class DeliverableController extends Controller
     {
         $user = $request->user();
         $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
-        if (! $isAssignee && ! in_array($user->role, ['admin', 'manager'])) {
+        $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
+        $isAdminOrManager = in_array($user->role, ['admin', 'manager', 'super_admin']);
+        if (! $isAssignee && ! $isCreator && ! $isAdminOrManager) {
             return response()->json(['success' => false, 'message' => 'You do not have permission to pause/resume this subtask.'], 403);
         }
         $validated = $request->validate([
@@ -1966,7 +1964,9 @@ class DeliverableController extends Controller
     {
         $user = $request->user();
         $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
-        if (! $isAssignee && ! in_array($user->role, ['admin', 'manager'])) {
+        $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
+        $isAdminOrManager = in_array($user->role, ['admin', 'manager', 'super_admin']);
+        if (! $isAssignee && ! $isCreator && ! $isAdminOrManager) {
             return response()->json(['success' => false, 'message' => 'You do not have permission to pause/resume this subtask.'], 403);
         }
         if ($deliverable->timer_state !== 'paused') {
@@ -2458,10 +2458,7 @@ class DeliverableController extends Controller
         if (! empty($userIds) && is_array($userIds)) {
             $userIds = array_values(array_filter(array_map('intval', $userIds)));
             if (! empty($userIds)) {
-                $query->where(function ($q) use ($userIds) {
-                    $q->whereIn('assigned_to', $userIds)
-                        ->orWhereIn('created_by', $userIds);
-                });
+                $query->whereIn('assigned_to', $userIds);
             }
         }
 
@@ -2597,7 +2594,6 @@ class DeliverableController extends Controller
             'reopenedBy:id,name,role',
             'updatedBy:id,name,role',
         ])
-            ->orderBy('sort_order')
             ->orderBy('created_at', 'desc')
             ->orderBy('id', 'desc');
 

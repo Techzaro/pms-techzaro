@@ -173,20 +173,12 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
             <label>
               <Globe size={14} /> Website Name
             </label>
-            <select
-              className="aam-select"
+            <input
+              type="text"
+              placeholder="Enter website name or URL"
               value={websiteName}
               onChange={(e) => { setIsDirty(true); setWebsiteName(e.target.value); }}
-            >
-              <option value="">Select website</option>
-              {files
-                .filter((f) => f.url && /^https?:\/\//i.test(f.url))
-                .map((f) => (
-                  <option key={f.id} value={f.name}>
-                    {f.name}
-                  </option>
-                ))}
-            </select>
+            />
           </div>
 
           <div className="aam-field">

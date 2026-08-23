@@ -77,6 +77,7 @@ const CreateSubtaskModal = ({
       project_id: editData?.project_id || initialProjectId || "",
       task_id: editData?.task_id || initialTaskId || "",
       assigned_to: editData?.assignees?.map(a => a.id || a) || (editData?.assigned_to ? [editData.assigned_to] : []),
+      followers: editData?.followers?.map(f => f.id || f) || [],
       priority: editData?.priority || "Medium",
       start_date: editData?.start_date ? editData.start_date.slice(0, 16) : "",
       due_date: editData?.due_date ? editData.due_date.slice(0, 16) : "",
@@ -251,6 +252,7 @@ const CreateSubtaskModal = ({
     due_date: form.due_date || null,
     assignees: form.assigned_to.length > 0 ? form.assigned_to : null,
     assigned_to: form.assigned_to.length > 0 ? form.assigned_to[0] : null,
+    followers: form.followers || [],
     allow_transfer: form.allow_transfer === "allow",
   }), [form]);
 
@@ -526,6 +528,17 @@ const CreateSubtaskModal = ({
                 error={!!formErrors.assigned_to}
               />
               {formErrors.assigned_to && <span className="field-error-text" style={{ color: "#EF4444", fontSize: "12px", marginTop: "4px", display: "block" }}>{formErrors.assigned_to}</span>}
+            </div>
+
+            {/* Followers */}
+            <div className="task-card">
+              <div className="task-card-top"><span>Followers</span></div>
+              <UserSelectDropdown
+                users={displayUsers.filter(u => !form.assigned_to.includes(u.id))}
+                selectedIds={form.followers || []}
+                onChange={(ids) => updateForm("followers", ids)}
+                placeholder="Select followers (optional)"
+              />
             </div>
 
             {/* Priority */}
