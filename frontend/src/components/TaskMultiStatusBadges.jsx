@@ -1,207 +1,218 @@
 import React from "react";
-import { RotateCcw, ArrowUpRight, AlertOctagon, Lock } from "lucide-react";
+import { RotateCcw, ArrowRightLeft, Lock } from "lucide-react";
 
 export const STATUS_COLORS = {
+  Pending: "#FEF3C7",
+  "In Progress": "#DBEAFE",
+  Paused: "#FEF3C7",
+  Submitted: "#DBEAFE",
+  Approved: "#DCFCE7",
+  Declined: "#FEE2E2",
+  Abandoned: "#FEE2E2",
   pending: "#FEF3C7",
   in_progress: "#DBEAFE",
+  "in-progress": "#DBEAFE",
   paused: "#FEF3C7",
   submitted: "#DBEAFE",
-  reopened: "#EDE9FE",
+  reopened: "#FEF3C7",
   approved: "#DCFCE7",
   rejected: "#FEE2E2",
+  declined: "#FEE2E2",
   abandon_requested: "#FEF3C7",
   abandoned: "#FEE2E2",
-  Planning: "#DBEAFE",
-  "In-progress": "#DBEAFE",
+  Planning: "#FEF3C7",
   Completed: "#DCFCE7",
   Pause: "#FEF3C7",
 };
 
 export const STATUS_TEXT_COLORS = {
+  Pending: "#92400E",
+  "In Progress": "#1E40AF",
+  Paused: "#92400E",
+  Submitted: "#1E40AF",
+  Approved: "#166534",
+  Declined: "#991B1B",
+  Abandoned: "#991B1B",
   pending: "#92400E",
   in_progress: "#1E40AF",
+  "in-progress": "#1E40AF",
   paused: "#92400E",
   submitted: "#1E40AF",
-  reopened: "#5B21B6",
+  reopened: "#92400E",
   approved: "#166534",
   rejected: "#991B1B",
+  declined: "#991B1B",
   abandon_requested: "#92400E",
   abandoned: "#991B1B",
-  Planning: "#1E40AF",
-  "In-progress": "#1E40AF",
+  Planning: "#92400E",
   Completed: "#166534",
   Pause: "#92400E",
 };
 
 export const STATUS_LABELS = {
+  Pending: "Pending",
+  "In Progress": "In Progress",
+  Paused: "Paused",
+  Submitted: "Submitted",
+  Approved: "Approved",
+  Declined: "Declined",
+  Abandoned: "Abandoned",
   pending: "Pending",
   in_progress: "In Progress",
+  "in-progress": "In Progress",
   paused: "Paused",
   submitted: "Submitted",
-  reopened: "Reopened",
+  reopened: "Pending",
   approved: "Approved",
-  rejected: "Rejected",
+  rejected: "Declined",
+  declined: "Declined",
   abandon_requested: "Abandon Requested",
   abandoned: "Abandoned",
-  Planning: "Planning",
-  "In-progress": "In Progress",
-  Completed: "Completed",
+  Planning: "Pending",
+  Completed: "Approved",
   Pause: "Paused",
 };
 
 export function formatStatus(status) {
   if (!status) return "Pending";
-  return STATUS_LABELS[status] || status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  return STATUS_LABELS[status] || String(status).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 /**
- * TaskMultiStatusBadges
- * Renders the primary status badge and conditionally renders smaller secondary
- * badges for Reopened, Transferred, and Abandoned states.
+ * TaskMultiStatusBadges (SRS Section 10)
+ * Prominently displays ONLY the Current Status without string concatenation.
+ * Modifier states (Reopened, Transferred, Assigner Locked) are displayed as subtle independent icons.
+ * Uses defensive CSS layout to prevent text overlap.
  */
 export default function TaskMultiStatusBadges({ item }) {
   if (!item) return null;
 
-  const currentStatus = (item.status || "pending").toLowerCase();
-  const primaryBg = STATUS_COLORS[item.status] || STATUS_COLORS[currentStatus] || "#F3F4F6";
-  const primaryColor = STATUS_TEXT_COLORS[item.status] || STATUS_TEXT_COLORS[currentStatus] || "#374151";
-  const primaryLabel = formatStatus(item.status);
+  const rawStatus = item?.status || "Pending";
+  const normalizedKey = String(rawStatus).toLowerCase();
+  const primaryBg = STATUS_COLORS[rawStatus] || STATUS_COLORS[normalizedKey] || "#F3F4F6";
+  const primaryColor = STATUS_TEXT_COLORS[rawStatus] || STATUS_TEXT_COLORS[normalizedKey] || "#374151";
+  const primaryLabel = formatStatus(rawStatus);
 
-  // 1. Check if task was reopened in its lifecycle (when primary status is not 'reopened')
-  const isReopenedHistory =
-    currentStatus !== "reopened" &&
-    Boolean(
-      item.is_reopened ||
-      item.reopened_at ||
-      (item.reopen_count && item.reopen_count > 0) ||
-      item.reopen_reason ||
-      (Array.isArray(item.status_history) && item.status_history.some((h) => (h.status || h.action) === "reopened")) ||
-      (Array.isArray(item.submissions) && item.submissions.some((s) => s.status === "reopened" || s.reopened_at))
-    );
-
-  // 2. Check if task was transferred/delegated
-  const isTransferredHistory = Boolean(
-    item.is_transferred ||
-    (Array.isArray(item.delegation_chain) && item.delegation_chain.length > 0) ||
-    (item.delegation_count && item.delegation_count > 0) ||
-    (Array.isArray(item.status_history) && item.status_history.some((h) => (h.status || h.action) === "transferred"))
+  // 1. Subtle Reopened Indicator (SRS Section 5 & 10)
+  const isReopened = Boolean(
+    (Array.isArray(item?.states) && item.states.some((s) => String(s).toLowerCase() === "reopened")) ||
+    item?.is_reopened ||
+    item?.reopened_at ||
+    (item?.reopen_count && item.reopen_count > 0)
   );
 
-  // 3. Check if task has abandoned history (when primary status is not 'abandoned' / 'abandon_requested')
-  const isAbandonedHistory =
-    currentStatus !== "abandoned" &&
-    currentStatus !== "abandon_requested" &&
-    Boolean(
-      item.is_abandoned ||
-      item.abandoned_at ||
-      item.abandon_reason ||
-      (Array.isArray(item.status_history) &&
-        item.status_history.some((h) => (h.status || h.action) === "abandoned" || (h.status || h.action) === "abandon_requested"))
-    );
+  // 2. Subtle Transferred Indicator (SRS Section 5 & 10)
+  const isTransferred = Boolean(
+    (Array.isArray(item?.states) && item.states.some((s) => String(s).toLowerCase() === "transferred")) ||
+    item?.is_transferred ||
+    (Array.isArray(item?.delegation_chain) && item.delegation_chain.length > 0)
+  );
 
-  // 4. Assigner paused
-  const isHold = Boolean(item.assigner_paused);
-
-  const secondaryBadges = [];
-
-  if (isReopenedHistory) {
-    secondaryBadges.push({
-      key: "reopened",
-      label: item.reopen_count && item.reopen_count > 1 ? `Reopened (${item.reopen_count}x)` : "Reopened",
-      bg: "#EDE9FE",
-      color: "#5B21B6",
-      border: "#DDD6FE",
-      icon: <RotateCcw size={10} />,
-    });
-  }
-
-  if (isTransferredHistory) {
-    secondaryBadges.push({
-      key: "transferred",
-      label: "Transferred",
-      bg: "#E0E7FF",
-      color: "#3730A3",
-      border: "#C7D2FE",
-      icon: <ArrowUpRight size={10} />,
-    });
-  }
-
-  if (isAbandonedHistory) {
-    secondaryBadges.push({
-      key: "abandoned",
-      label: "Abandoned",
-      bg: "#FEE2E2",
-      color: "#991B1B",
-      border: "#FECACA",
-      icon: <AlertOctagon size={10} />,
-    });
-  }
-
-  if (isHold) {
-    secondaryBadges.push({
-      key: "assigner_paused",
-      label: "Paused by Assigner",
-      bg: "#FEF3C7",
-      color: "#92400E",
-      border: "#FDE68A",
-      icon: <Lock size={10} />,
-    });
-  }
+  // 3. Assigner Paused Lock Indicator
+  const isAssignerPaused = Boolean(item?.assigner_paused);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-start" }}>
-      {/* Primary Status Badge */}
-      <span className="badge" style={{ background: primaryBg, color: primaryColor }}>
-        <span className="dot" style={{ background: primaryColor }}></span>
+    <div
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        gap: "8px",
+        minWidth: 0,
+        alignItems: "center",
+      }}
+    >
+      {/* Prominent Primary Status Badge */}
+      <span
+        className="badge"
+        style={{
+          background: primaryBg,
+          color: primaryColor,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "5px",
+          padding: "3px 9px",
+          borderRadius: "6px",
+          fontSize: "11px",
+          fontWeight: 600,
+          whiteSpace: "nowrap",
+          flexShrink: 0,
+        }}
+      >
+        <span
+          className="dot"
+          style={{
+            background: primaryColor,
+            width: "6px",
+            height: "6px",
+            borderRadius: "50%",
+            display: "inline-block",
+          }}
+        />
         {primaryLabel}
       </span>
 
-      {/* Approver / Actor Subtitles */}
-      {currentStatus === "approved" && item.approvedBy && (
-        <div style={{ fontSize: "10px", color: "#166534", marginTop: "1px" }}>by {item.approvedBy.name}</div>
-      )}
-      {currentStatus === "rejected" && item.rejectedBy && (
-        <div style={{ fontSize: "10px", color: "#991B1B", marginTop: "1px" }}>by {item.rejectedBy.name}</div>
-      )}
-      {currentStatus === "reopened" && item.reopenedBy && (
-        <div style={{ fontSize: "10px", color: "#92400E", marginTop: "1px" }}>by {item.reopenedBy.name}</div>
-      )}
-
-      {/* Secondary Multi-Status Indicator Badges */}
-      {secondaryBadges.length > 0 && (
-        <div
-          className="secondary-status-badges"
+      {/* Subtle Modifier Icons without text clutter */}
+      {isReopened && (
+        <span
+          title={item?.reopen_count && item.reopen_count > 1 ? `Reopened (${item.reopen_count}x)` : "Reopened"}
           style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "3px",
-            marginTop: "2px",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 20,
+            height: 20,
+            borderRadius: "50%",
+            background: "#EDE9FE",
+            color: "#6D28D9",
+            border: "1px solid #DDD6FE",
+            cursor: "help",
+            flexShrink: 0,
           }}
         >
-          {secondaryBadges.map((b) => (
-            <span
-              key={b.key}
-              className="secondary-badge"
-              style={{
-                fontSize: "10px",
-                lineHeight: 1.2,
-                padding: "2px 6px",
-                borderRadius: "4px",
-                fontWeight: 600,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "3px",
-                background: b.bg,
-                color: b.color,
-                border: `1px solid ${b.border}`,
-                whiteSpace: "nowrap",
-              }}
-            >
-              {b.icon}
-              {b.label}
-            </span>
-          ))}
-        </div>
+          <RotateCcw size={11} />
+        </span>
+      )}
+
+      {isTransferred && (
+        <span
+          title="Transferred / Delegated"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 20,
+            height: 20,
+            borderRadius: "50%",
+            background: "#E0E7FF",
+            color: "#4338CA",
+            border: "1px solid #C7D2FE",
+            cursor: "help",
+            flexShrink: 0,
+          }}
+        >
+          <ArrowRightLeft size={11} />
+        </span>
+      )}
+
+      {isAssignerPaused && (
+        <span
+          title="Paused by Assigner (Locked)"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 20,
+            height: 20,
+            borderRadius: "50%",
+            background: "#FEF3C7",
+            color: "#92400E",
+            border: "1px solid #FDE68A",
+            cursor: "help",
+            flexShrink: 0,
+          }}
+        >
+          <Lock size={11} />
+        </span>
       )}
     </div>
   );

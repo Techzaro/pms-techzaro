@@ -1,0 +1,1 @@
+import{L as e,Pt as t}from"./index-D_SFyZlu.js";function n(n,r,i,a={}){return t({queryKey:Array.isArray(n)?n:[n,i],queryFn:()=>e.get(r,i),...a})}export{n as t};

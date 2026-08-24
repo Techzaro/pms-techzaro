@@ -1974,7 +1974,26 @@ class TaskController extends Controller
             return response()->json(['success' => false, 'message' => 'Approved tasks cannot be modified.'], 403);
         }
 
-        $validated = $request->validate(['status' => 'required|string|max:64|in:pending,in_progress,review,completed,done,failed,abandoned']);
+        $validated = $request->validate(['status' => 'required|string|max:64']);
+        // Normalize status
+        $rawStatus = trim($validated['status']);
+        $normalizedMap = [
+            'pending' => 'Pending',
+            'in_progress' => 'In Progress',
+            'in-progress' => 'In Progress',
+            'submitted' => 'Submitted',
+            'review' => 'Submitted',
+            'approved' => 'Approved',
+            'completed' => 'Approved',
+            'done' => 'Approved',
+            'paused' => 'Paused',
+            'declined' => 'Declined',
+            'rejected' => 'Declined',
+            'failed' => 'Declined',
+            'abandoned' => 'Abandoned',
+        ];
+        $targetStatus = $normalizedMap[strtolower($rawStatus)] ?? $rawStatus;
+        $validated['status'] = $targetStatus;
         $oldStatus = $task->status;
         $task->update(['status' => $validated['status']]);
 
@@ -3178,6 +3197,7 @@ class TaskController extends Controller
             'reopen_comment' => $reopenComment,
             'reopen_reason' => $validated['reopen_reason'],
             'reopen_instructions' => $validated['instructions'] ?? null,
+            'states' => array_values(array_unique(array_merge(is_array($task->states) ? $task->states : [], ['Reopened']))),
             'reopen_link' => $validated['link'] ?? null,
             'updated_by' => $user->id,
         ];

@@ -450,6 +450,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/tasks/{task}/my-note/{note}', [\App\Http\Controllers\TaskUserNoteController::class, 'update']); // Update own note
     Route::delete('/tasks/{task}/my-note/{note}', [\App\Http\Controllers\TaskUserNoteController::class, 'destroy']); // Delete own note
 
+        // Task Saved Views Routes (SRS Section 11)
+    Route::get('/task-saved-views', [\App\Http\Controllers\TaskSavedViewController::class, 'index']);
+    Route::post('/task-saved-views', [\App\Http\Controllers\TaskSavedViewController::class, 'store']);
+    Route::put('/task-saved-views/{taskSavedView}', [\App\Http\Controllers\TaskSavedViewController::class, 'update']);
+    Route::delete('/task-saved-views/{taskSavedView}', [\App\Http\Controllers\TaskSavedViewController::class, 'destroy']);
+    Route::get('/tasks', [TaskController::class, 'allTasks']);
+
     // Task filtering routes
     Route::get('/my-tasks', [TaskController::class, 'myTasks']); // Tasks assigned to me
     Route::get('/assigned-tasks', [TaskController::class, 'assignedByMe']); // Tasks I assigned to others

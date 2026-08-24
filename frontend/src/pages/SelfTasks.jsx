@@ -100,7 +100,10 @@ const SelfTasks = () => {
   const [advancedFilters, setAdvancedFilters] = useState({
     user_id: [],
     project_id: [],
+    statuses: [],
     status: [],
+    states: [],
+    due_states: [],
     start_date: "",
     end_date: "",
   });
@@ -139,41 +142,77 @@ const SelfTasks = () => {
 
   /** Fetch self-assigned tasks/projects from the API with current filters. */
   const fetchTasks = useCallback(() => {
-    setLoading(true);
-    const token = authToken();
-    const params = new URLSearchParams();
-    if (timeFilter) params.append("time_filter", timeFilter);
-    if (debouncedSearch) params.append("search", debouncedSearch);
-    if (advancedFilters.user_id && advancedFilters.user_id.length > 0) {
-      params.append("user_id", Array.isArray(advancedFilters.user_id) ? advancedFilters.user_id.join(",") : advancedFilters.user_id);
-    }
-    if (advancedFilters.project_id && advancedFilters.project_id.length > 0) {
-      params.append("project_id", Array.isArray(advancedFilters.project_id) ? advancedFilters.project_id.join(",") : advancedFilters.project_id);
-    }
-    if (advancedFilters.status && advancedFilters.status.length > 0) {
-      params.append("status", Array.isArray(advancedFilters.status) ? advancedFilters.status.join(",") : advancedFilters.status);
-    }
-    if (advancedFilters.start_date) params.append("start_date", advancedFilters.start_date);
-    if (advancedFilters.end_date) params.append("end_date", advancedFilters.end_date);
-    if (sortBy) {
-      params.append("sort_by", sortBy);
-      params.append("sort_direction", sortDirection);
-      params.append("sort_dir", sortDirection);
-      params.append("sort_order", sortDirection);
-    }
+    try {
+      setLoading(true);
+      const token = authToken();
+      const params = new URLSearchParams();
+      if (timeFilter) params.append("time_filter", timeFilter);
+      if (debouncedSearch) params.append("search", debouncedSearch);
+      if (statusFilter && (!advancedFilters.statuses || advancedFilters.statuses.length === 0)) {
+        params.append("status", statusFilter);
+      }
 
-    fetch(`${API_URL}/self-tasks?${params.toString()}`, {
-      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-      skipLoader: true,
-    })
-      .then((res) => (res.ok ? res.json() : { data: [] }))
-      .then((data) => {
-        setItems(data?.data || []);
-        setTotalCount(data?.total ?? 0);
+      const stList = Array.isArray(advancedFilters.statuses)
+        ? advancedFilters.statuses
+        : Array.isArray(advancedFilters.status)
+        ? advancedFilters.status
+        : [];
+      if (stList.length > 0) {
+        stList.forEach((st) => params.append("statuses[]", st));
+        params.append("statuses", stList.join(","));
+      }
+
+      const statesList = Array.isArray(advancedFilters.states) ? advancedFilters.states : [];
+      if (statesList.length > 0) {
+        statesList.forEach((st) => params.append("states[]", st));
+        params.append("states", statesList.join(","));
+      }
+
+      const dueList = Array.isArray(advancedFilters.due_states) ? advancedFilters.due_states : [];
+      if (dueList.length > 0) {
+        dueList.forEach((st) => params.append("due_states[]", st));
+        params.append("due_states", dueList.join(","));
+      }
+
+      const uList = Array.isArray(advancedFilters.user_id) ? advancedFilters.user_id : [];
+      if (uList.length > 0) {
+        params.append("user_id", uList.join(","));
+      }
+
+      const pList = Array.isArray(advancedFilters.project_id) ? advancedFilters.project_id : [];
+      if (pList.length > 0) {
+        params.append("project_id", pList.join(","));
+      }
+
+      if (advancedFilters.start_date) params.append("start_date", advancedFilters.start_date);
+      if (advancedFilters.end_date) params.append("end_date", advancedFilters.end_date);
+      if (sortBy) {
+        params.append("sort_by", sortBy);
+        params.append("sort_direction", sortDirection);
+        params.append("sort_dir", sortDirection);
+        params.append("sort_order", sortDirection);
+      }
+
+      fetch(`${API_URL}/self-tasks?${params.toString()}`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
       })
-      .catch(() => setItems([]))
-      .finally(() => setLoading(false));
-  }, [debouncedSearch, timeFilter, advancedFilters, sortBy, sortDirection]);
+        .then((res) => (res.ok ? res.json() : { data: [] }))
+        .then((data) => {
+          setItems(Array.isArray(data?.data) ? data.data : []);
+          setTotalCount(typeof data?.total === "number" ? data.total : Array.isArray(data?.data) ? data.data.length : 0);
+        })
+        .catch((err) => {
+          console.warn("Failed to fetch tasks:", err);
+          setItems([]);
+        })
+        .finally(() => setLoading(false));
+    } catch (err) {
+      console.error("fetchTasks exception:", err);
+      setLoading(false);
+      setItems([]);
+    }
+  }, [debouncedSearch, timeFilter, statusFilter, advancedFilters, sortBy, sortDirection]);
 
   useEffect(() => {
     fetchTasks();
@@ -372,66 +411,8 @@ const SelfTasks = () => {
   const rejectedCount = useMemo(() => baseItems.filter((i) => i.status === "rejected").length, [baseItems]);
   const abandonedCount = useMemo(() => baseItems.filter((i) => i.status === "abandoned" || i.status === "abandon_requested").length, [baseItems]);
   const searchFilteredItems = useMemo(() => {
-    let list = baseItems;
-    if (debouncedSearch) {
-      const q = debouncedSearch.toLowerCase();
-      list = list.filter((item) => {
-        const titleMatch = (item.title || "").toLowerCase().includes(q);
-        const assigneeMatch = (item.assignees || []).some((a) => (a.name || "").toLowerCase().includes(q));
-        const assignerMatch = (item.assigner?.name || "").toLowerCase().includes(q);
-        const projectMatch = (item.project?.title || "").toLowerCase().includes(q);
-        return titleMatch || assigneeMatch || assignerMatch || projectMatch;
-      });
-    }
-    if (advancedFilters.user_id && advancedFilters.user_id.length > 0) {
-      const uids = advancedFilters.user_id.map(Number);
-      list = list.filter((item) => {
-        return (item.assignees || []).some((a) => uids.includes(Number(a.id))) ||
-          uids.includes(Number(item.assigned_to)) ||
-          uids.includes(Number(item.assigned_by));
-      });
-    }
-    if (advancedFilters.project_id && advancedFilters.project_id.length > 0) {
-      const pids = advancedFilters.project_id.map(Number);
-      list = list.filter((item) => {
-        const projId = Number(item.project_id || item.project?.id);
-        return pids.includes(projId);
-      });
-    }
-    if (advancedFilters.status && advancedFilters.status.length > 0) {
-      list = list.filter((item) => {
-        return advancedFilters.status.some((st) => {
-          if (st === "due_today") {
-            const d = item.end_date || item.due_date || item.start_date ? new Date(item.end_date || item.due_date || item.start_date) : null;
-            const isToday = d && d.toDateString() === new Date().toDateString();
-            const isDone = ["approved", "completed", "done"].includes((item.status || "").toLowerCase());
-            return isToday && !isDone;
-          }
-          if (st === "pending") return ["pending", "planned", "Planning", "Planned"].includes(item.status);
-          if (st === "in_progress") return ["in_progress", "In Progress", "in-progress"].includes(item.status);
-          if (st === "paused") return ["paused", "pause", "Pause"].includes(item.status);
-          if (st === "transferred") return Array.isArray(item.delegation_chain) && item.delegation_chain.length > 0;
-          if (st === "rejected" || st === "declined") return item.status === "rejected" || item.status === "declined";
-          if (st === "abandoned") return item.status === "abandoned" || item.status === "abandon_requested";
-          if (st === "approved") return item.status === "approved" || item.status === "completed";
-          return item.status === st;
-        });
-      });
-    }
-    if (advancedFilters.start_date) {
-      list = list.filter((item) => {
-        const itemDate = item.start_date ? new Date(item.start_date) : null;
-        return itemDate && itemDate >= new Date(advancedFilters.start_date);
-      });
-    }
-    if (advancedFilters.end_date) {
-      list = list.filter((item) => {
-        const itemDate = item.end_date || item.due_date ? new Date(item.end_date || item.due_date) : null;
-        return itemDate && itemDate <= new Date(advancedFilters.end_date);
-      });
-    }
-    return list;
-  }, [baseItems, debouncedSearch, advancedFilters]);
+    return baseItems;
+  }, [baseItems]);
 
   const filteredItems = useMemo(() => statusFilter
     ? searchFilteredItems.filter((item) => {
@@ -499,17 +480,14 @@ const SelfTasks = () => {
 
       <DraggableStatusBadges
         badges={[
-          { id: "due_today", label: "Due Today", count: dueTodayCount, className: "DueToday", dotColor: "#EF4444" },
+          { id: "", label: "All", count: allCount, className: "All" },
           { id: "pending", label: "Pending", count: pendingCount, className: "Pending" },
           { id: "in_progress", label: "In Progress", count: inProgressCount, className: "InProgress" },
-          { id: "paused", label: "Paused", count: pausedCount, className: "Paused" },
           { id: "submitted", label: "Submitted", count: submittedCount, className: "Submitted" },
-          { id: "reopened", label: "Reopened", count: reopenedCount, className: "Reopened" },
-          { id: "transferred", label: "Transferred", count: transferredCount, className: "Transferred" },
           { id: "approved", label: "Approved", count: approvedCount, className: "Approved" },
+          { id: "paused", label: "Paused", count: pausedCount, className: "Paused" },
           { id: "rejected", label: "Declined", count: rejectedCount, className: "Rejected" },
           { id: "abandoned", label: "Abandoned", count: abandonedCount, className: "Abandoned", dotColor: "#DC2626" },
-          { id: "", label: "All", count: allCount, className: "All" },
         ]}
         activeStatus={statusFilter}
         onSelectStatus={selectStatusFilter}

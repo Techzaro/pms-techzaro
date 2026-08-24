@@ -113,29 +113,77 @@ function GuestTasks() {
 
   /** Fetch tasks assigned to the current guest user from the API. */
   const fetchTasks = useCallback(() => {
-    setLoading(true);
-    const token = authToken();
-    const params = new URLSearchParams();
-    if (debouncedSearch) params.append("search", debouncedSearch);
-    if (sortBy) {
-      params.append("sort_by", sortBy);
-      params.append("sort_direction", sortDirection);
-      params.append("sort_dir", sortDirection);
-      params.append("sort_order", sortDirection);
-    }
+    try {
+      setLoading(true);
+      const token = authToken();
+      const params = new URLSearchParams();
+      if (timeFilter) params.append("time_filter", timeFilter);
+      if (debouncedSearch) params.append("search", debouncedSearch);
+      if (statusFilter && (!advancedFilters.statuses || advancedFilters.statuses.length === 0)) {
+        params.append("status", statusFilter);
+      }
 
-    fetch(`${API_URL}/my-tasks?${params.toString()}`, {
-      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-      skipLoader: true,
-    })
-      .then((res) => (res.ok ? res.json() : { data: [] }))
-      .then((data) => {
-        setItems(data?.data || []);
-        setTotalCount(data?.total ?? 0);
+      const stList = Array.isArray(advancedFilters.statuses)
+        ? advancedFilters.statuses
+        : Array.isArray(advancedFilters.status)
+        ? advancedFilters.status
+        : [];
+      if (stList.length > 0) {
+        stList.forEach((st) => params.append("statuses[]", st));
+        params.append("statuses", stList.join(","));
+      }
+
+      const statesList = Array.isArray(advancedFilters.states) ? advancedFilters.states : [];
+      if (statesList.length > 0) {
+        statesList.forEach((st) => params.append("states[]", st));
+        params.append("states", statesList.join(","));
+      }
+
+      const dueList = Array.isArray(advancedFilters.due_states) ? advancedFilters.due_states : [];
+      if (dueList.length > 0) {
+        dueList.forEach((st) => params.append("due_states[]", st));
+        params.append("due_states", dueList.join(","));
+      }
+
+      const uList = Array.isArray(advancedFilters.user_id) ? advancedFilters.user_id : [];
+      if (uList.length > 0) {
+        params.append("user_id", uList.join(","));
+      }
+
+      const pList = Array.isArray(advancedFilters.project_id) ? advancedFilters.project_id : [];
+      if (pList.length > 0) {
+        params.append("project_id", pList.join(","));
+      }
+
+      if (advancedFilters.start_date) params.append("start_date", advancedFilters.start_date);
+      if (advancedFilters.end_date) params.append("end_date", advancedFilters.end_date);
+      if (sortBy) {
+        params.append("sort_by", sortBy);
+        params.append("sort_direction", sortDirection);
+        params.append("sort_dir", sortDirection);
+        params.append("sort_order", sortDirection);
+      }
+
+      fetch(`${API_URL}/my-tasks?${params.toString()}`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
       })
-      .catch(() => setItems([]))
-      .finally(() => setLoading(false));
-  }, [debouncedSearch, sortBy, sortDirection]);
+        .then((res) => (res.ok ? res.json() : { data: [] }))
+        .then((data) => {
+          setItems(Array.isArray(data?.data) ? data.data : []);
+          setTotalCount(typeof data?.total === "number" ? data.total : Array.isArray(data?.data) ? data.data.length : 0);
+        })
+        .catch((err) => {
+          console.warn("Failed to fetch tasks:", err);
+          setItems([]);
+        })
+        .finally(() => setLoading(false));
+    } catch (err) {
+      console.error("fetchTasks exception:", err);
+      setLoading(false);
+      setItems([]);
+    }
+  }, [debouncedSearch, timeFilter, statusFilter, advancedFilters, sortBy, sortDirection]);
 
   useEffect(() => {
     fetchTasks();
@@ -437,16 +485,14 @@ function GuestTasks() {
       {/* STATUS FILTERS */}
       <DraggableStatusBadges
         badges={[
-          { id: "due_today", label: "Due Today", count: dueTodayCount, className: "DueToday", dotColor: "#EF4444" },
+          { id: "", label: "All", count: allCount, className: "All" },
           { id: "pending", label: "Pending", count: pendingCount, className: "Pending" },
           { id: "in_progress", label: "In Progress", count: inProgressCount, className: "InProgress" },
-          { id: "paused", label: "Paused", count: pausedCount, className: "Paused" },
           { id: "submitted", label: "Submitted", count: submittedCount, className: "Submitted" },
-          { id: "reopened", label: "Reopened", count: reopenedCount, className: "Reopened" },
-          { id: "transferred", label: "Transferred", count: transferredCount, className: "Transferred" },
           { id: "approved", label: "Approved", count: approvedCount, className: "Approved" },
+          { id: "paused", label: "Paused", count: pausedCount, className: "Paused" },
           { id: "rejected", label: "Declined", count: rejectedCount, className: "Rejected" },
-          { id: "", label: "All", count: allCount, className: "All" },
+          { id: "abandoned", label: "Abandoned", count: abandonedCount, className: "Abandoned", dotColor: "#DC2626" },
         ]}
         activeStatus={statusFilter}
         onSelectStatus={selectStatusFilter}

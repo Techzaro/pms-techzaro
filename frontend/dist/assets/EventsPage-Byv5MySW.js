@@ -1,1 +1,0 @@
-import"./rolldown-runtime-QTnfLwEv.js";import{n as e,t}from"./jsx-runtime-DRF4vMFQ.js";import n from"./EventsList-D-P7-run.js";e();var r=t();function i(){return(0,r.jsx)(n,{})}export{i as default};

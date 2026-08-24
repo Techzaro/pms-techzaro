@@ -2021,7 +2021,26 @@ class TaskController extends Controller
             return response()->json(['success' => false, 'message' => 'Approved tasks cannot be modified.'], 403);
         }
 
-        $validated = $request->validate(['status' => 'required|string|max:64|in:pending,in_progress,review,completed,done,failed,abandoned']);
+        $validated = $request->validate(['status' => 'required|string|max:64']);
+        // Normalize status
+        $rawStatus = trim($validated['status']);
+        $normalizedMap = [
+            'pending' => 'Pending',
+            'in_progress' => 'In Progress',
+            'in-progress' => 'In Progress',
+            'submitted' => 'Submitted',
+            'review' => 'Submitted',
+            'approved' => 'Approved',
+            'completed' => 'Approved',
+            'done' => 'Approved',
+            'paused' => 'Paused',
+            'declined' => 'Declined',
+            'rejected' => 'Declined',
+            'failed' => 'Declined',
+            'abandoned' => 'Abandoned',
+        ];
+        $targetStatus = $normalizedMap[strtolower($rawStatus)] ?? $rawStatus;
+        $validated['status'] = $targetStatus;
         $oldStatus = $task->status;
         $task->update(['status' => $validated['status']]);
 
@@ -3434,6 +3453,7 @@ class TaskController extends Controller
             'reopen_comment' => $reopenComment,
             'reopen_reason' => $validated['reopen_reason'],
             'reopen_instructions' => $validated['instructions'] ?? null,
+            'states' => array_values(array_unique(array_merge(is_array($task->states) ? $task->states : [], ['Reopened']))),
             'reopen_link' => $validated['link'] ?? null,
             'abandoned_at' => null,
             'abandoned_by' => null,
@@ -4356,7 +4376,8 @@ class TaskController extends Controller
             }
         }
 
-        $rawStatuses = $request->input('status', $request->input('statuses', []));
+        // ── 1. STATUSES FILTER (OR within statuses) ──
+        $rawStatuses = $request->input('statuses', $request->input('status', []));
         if (is_string($rawStatuses) && str_contains($rawStatuses, ',')) {
             $rawStatuses = explode(',', $rawStatuses);
         }
@@ -4367,77 +4388,178 @@ class TaskController extends Controller
             $expandedStatuses = [];
             $hasDueToday = false;
             $hasTransferred = false;
+            $hasReopened = false;
+
             foreach ($rawStatuses as $st) {
                 $st = trim((string) $st);
-                if ($st === 'due_today') {
+                $stLower = strtolower($st);
+
+                if ($stLower === 'due_today') {
                     $hasDueToday = true;
-                } elseif ($st === 'transferred') {
+                } elseif ($stLower === 'transferred') {
                     $hasTransferred = true;
-                } elseif ($st === 'pending') {
-                    $expandedStatuses = array_merge($expandedStatuses, $this->pendingTaskStatuses());
-                } elseif ($st === 'in_progress') {
-                    $expandedStatuses = array_merge($expandedStatuses, $this->inProgressTaskStatuses());
-                } elseif ($st === 'paused') {
-                    $expandedStatuses = array_merge($expandedStatuses, $this->pausedTaskStatuses());
-                } elseif ($st === 'rejected' || $st === 'declined') {
-                    $expandedStatuses[] = 'rejected';
-                    $expandedStatuses[] = 'declined';
-                } elseif ($st === 'abandoned') {
-                    $expandedStatuses[] = 'abandoned';
-                    $expandedStatuses[] = 'abandon_requested';
-                } elseif ($st === 'approved') {
-                    $expandedStatuses[] = 'approved';
-                    $expandedStatuses[] = 'completed';
+                } elseif ($stLower === 'reopened') {
+                    $hasReopened = true;
+                } elseif (in_array($stLower, ['pending', 'planned', 'planning'])) {
+                    $expandedStatuses = array_merge($expandedStatuses, ['Pending', 'pending', 'planned', 'Planning', 'Planned']);
+                } elseif (in_array($stLower, ['in_progress', 'in progress', 'in-progress', 'doing'])) {
+                    $expandedStatuses = array_merge($expandedStatuses, ['In Progress', 'in_progress', 'in-progress', 'doing']);
+                } elseif (in_array($stLower, ['submitted', 'review', 'in_review'])) {
+                    $expandedStatuses = array_merge($expandedStatuses, ['Submitted', 'submitted', 'review', 'in_review']);
+                } elseif (in_array($stLower, ['approved', 'completed', 'done'])) {
+                    $expandedStatuses = array_merge($expandedStatuses, ['Approved', 'approved', 'completed', 'done']);
+                } elseif (in_array($stLower, ['paused', 'pause'])) {
+                    $expandedStatuses = array_merge($expandedStatuses, ['Paused', 'paused', 'pause']);
+                } elseif (in_array($stLower, ['declined', 'rejected', 'failed'])) {
+                    $expandedStatuses = array_merge($expandedStatuses, ['Declined', 'declined', 'rejected', 'failed']);
+                } elseif (in_array($stLower, ['abandoned', 'abandon_requested'])) {
+                    $expandedStatuses = array_merge($expandedStatuses, ['Abandoned', 'abandoned', 'abandon_requested']);
                 } elseif (! empty($st)) {
                     $expandedStatuses[] = $st;
                 }
             }
+
             $expandedStatuses = array_values(array_unique($expandedStatuses));
-            $query->where(function ($sq) use ($expandedStatuses, $hasDueToday, $hasTransferred) {
-                $hasCondition = false;
-                if (! empty($expandedStatuses)) {
-                    $sq->whereIn('tasks.status', $expandedStatuses);
-                    $hasCondition = true;
-                }
-                if ($hasDueToday) {
-                    if ($hasCondition) {
-                        $sq->orWhere(function ($dq) {
-                            $this->applyDueTodayFilter($dq);
-                        });
-                    } else {
-                        $this->applyDueTodayFilter($sq);
+            if (! empty($expandedStatuses) || $hasDueToday || $hasTransferred || $hasReopened) {
+                $query->where(function ($sq) use ($expandedStatuses, $hasDueToday, $hasTransferred, $hasReopened) {
+                    $hasCondition = false;
+                    if (! empty($expandedStatuses)) {
+                        $sq->whereIn('tasks.status', $expandedStatuses);
                         $hasCondition = true;
                     }
-                }
-                if ($hasTransferred) {
-                    if ($hasCondition) {
-                        $sq->orWhere(function ($tq) {
-                            $tq->whereNotNull('tasks.delegation_chain')->where('tasks.delegation_chain', '!=', '[]');
-                        });
-                    } else {
-                        $sq->whereNotNull('tasks.delegation_chain')->where('tasks.delegation_chain', '!=', '[]');
+                    if ($hasDueToday) {
+                        if ($hasCondition) {
+                            $sq->orWhere(function ($dq) {
+                                $this->applyDueTodayFilter($dq);
+                            });
+                        } else {
+                            $this->applyDueTodayFilter($sq);
+                            $hasCondition = true;
+                        }
                     }
-                }
-            });
-        } elseif (is_string($rawStatuses) && ! empty($rawStatuses)) {
-            if ($rawStatuses === 'due_today') {
-                $this->applyDueTodayFilter($query);
-            } elseif ($rawStatuses === 'transferred') {
-                $query->whereNotNull('tasks.delegation_chain')->where('tasks.delegation_chain', '!=', '[]');
-            } elseif ($rawStatuses === 'pending') {
-                $query->whereIn('tasks.status', $this->pendingTaskStatuses());
-            } elseif ($rawStatuses === 'in_progress') {
-                $query->whereIn('tasks.status', $this->inProgressTaskStatuses());
-            } elseif ($rawStatuses === 'paused') {
-                $query->whereIn('tasks.status', $this->pausedTaskStatuses());
-            } elseif ($rawStatuses === 'rejected' || $rawStatuses === 'declined') {
-                $query->whereIn('tasks.status', ['rejected', 'declined']);
-            } elseif ($rawStatuses === 'abandoned') {
-                $query->whereIn('tasks.status', ['abandoned', 'abandon_requested']);
-            } elseif ($rawStatuses === 'approved') {
-                $query->whereIn('tasks.status', ['approved', 'completed']);
-            } else {
-                $query->where('tasks.status', $rawStatuses);
+                    if ($hasTransferred) {
+                        $transferCondition = function ($tq) {
+                            $tq->whereJsonContains('tasks.states', 'Transferred')->orWhereJsonContains('tasks.states', 'transferred')
+                               ->orWhere(function ($dtq) {
+                                   $dtq->whereNotNull('tasks.delegation_chain')->where('tasks.delegation_chain', '!=', '[]');
+                               });
+                        };
+                        if ($hasCondition) {
+                            $sq->orWhere($transferCondition);
+                        } else {
+                            $sq->where($transferCondition);
+                            $hasCondition = true;
+                        }
+                    }
+                    if ($hasReopened) {
+                        $reopenCondition = function ($rq) {
+                            $rq->whereJsonContains('tasks.states', 'Reopened')->orWhereJsonContains('tasks.states', 'reopened')
+                               ->orWhere('tasks.status', 'reopened')
+                               ->orWhere('tasks.reopen_count', '>', 0)
+                               ->orWhereNotNull('tasks.reopened_at');
+                        };
+                        if ($hasCondition) {
+                            $sq->orWhere($reopenCondition);
+                        } else {
+                            $sq->where($reopenCondition);
+                            $hasCondition = true;
+                        }
+                    }
+                });
+            }
+        }
+
+        // ── 2. STATES FILTER (OR within states, AND with other filters) ──
+        $rawStates = $request->input('states', $request->input('state', []));
+        if (is_string($rawStates) && str_contains($rawStates, ',')) {
+            $rawStates = explode(',', $rawStates);
+        }
+        if (! is_array($rawStates) && ! empty($rawStates)) {
+            $rawStates = [$rawStates];
+        }
+        if (is_array($rawStates) && ! empty($rawStates)) {
+            $rawStates = array_values(array_filter(array_map('trim', $rawStates)));
+            if (! empty($rawStates)) {
+                $query->where(function ($stateQuery) use ($rawStates) {
+                    foreach ($rawStates as $idx => $stateItem) {
+                        $stateItemLower = strtolower($stateItem);
+                        $clause = function ($sq) use ($stateItem, $stateItemLower) {
+                            if ($stateItemLower === 'reopened') {
+                                $sq->whereJsonContains('tasks.states', 'Reopened')->orWhereJsonContains('tasks.states', 'reopened')
+                                   ->orWhere('tasks.status', 'reopened')
+                                   ->orWhere('tasks.reopen_count', '>', 0)
+                                   ->orWhereNotNull('tasks.reopened_at');
+                            } elseif ($stateItemLower === 'transferred') {
+                                $sq->whereJsonContains('tasks.states', 'Transferred')->orWhereJsonContains('tasks.states', 'transferred')
+                                   ->orWhere(function ($dtq) {
+                                       $dtq->whereNotNull('tasks.delegation_chain')->where('tasks.delegation_chain', '!=', '[]');
+                                   });
+                            } else {
+                                $escaped = json_encode($stateItem);
+                                $sq->whereJsonContains('tasks.states', $stateItem);
+                            }
+                        };
+
+                        if ($idx === 0) {
+                            $stateQuery->where($clause);
+                        } else {
+                            $stateQuery->orWhere($clause);
+                        }
+                    }
+                });
+            }
+        }
+
+        // ── 3. DUE STATES FILTER (OR within due states, AND with other filters) ──
+        $rawDueStates = $request->input('due_states', $request->input('due_state', $request->input('dueStates', [])));
+        if (is_string($rawDueStates) && str_contains($rawDueStates, ',')) {
+            $rawDueStates = explode(',', $rawDueStates);
+        }
+        if (! is_array($rawDueStates) && ! empty($rawDueStates)) {
+            $rawDueStates = [$rawDueStates];
+        }
+        if (is_array($rawDueStates) && ! empty($rawDueStates)) {
+            $rawDueStates = array_values(array_filter(array_map('trim', $rawDueStates)));
+            if (! empty($rawDueStates)) {
+                $query->where(function ($dueQuery) use ($rawDueStates) {
+                    $now = \Carbon\Carbon::now();
+                    $todayStart = $now->copy()->startOfDay();
+                    $todayEnd = $now->copy()->endOfDay();
+                    $weekStart = $now->copy()->startOfWeek()->startOfDay();
+                    $weekEnd = $now->copy()->endOfWeek()->endOfDay();
+                    $monthStart = $now->copy()->startOfMonth()->startOfDay();
+                    $monthEnd = $now->copy()->endOfMonth()->endOfDay();
+
+                    foreach ($rawDueStates as $idx => $dueItem) {
+                        $dueItemLower = strtolower($dueItem);
+                        $clause = function ($dq) use ($dueItemLower, $todayStart, $todayEnd, $weekStart, $weekEnd, $monthStart, $monthEnd) {
+                            if (in_array($dueItemLower, ['overdue', 'over_due', 'past_due'])) {
+                                $dq->whereNotNull('tasks.end_date')
+                                   ->where('tasks.end_date', '<', $todayStart);
+                            } elseif (in_array($dueItemLower, ['due today', 'due_today', 'today'])) {
+                                $dq->whereNotNull('tasks.end_date')
+                                   ->whereBetween('tasks.end_date', [$todayStart, $todayEnd]);
+                            } elseif (in_array($dueItemLower, ['due this week', 'due_this_week', 'this_week', 'week'])) {
+                                $dq->whereNotNull('tasks.end_date')
+                                   ->whereBetween('tasks.end_date', [$weekStart, $weekEnd]);
+                            } elseif (in_array($dueItemLower, ['due this month', 'due_this_month', 'this_month', 'month'])) {
+                                $dq->whereNotNull('tasks.end_date')
+                                   ->whereBetween('tasks.end_date', [$monthStart, $monthEnd]);
+                            } elseif (in_array($dueItemLower, ['upcoming', 'future'])) {
+                                $dq->whereNotNull('tasks.end_date')
+                                   ->where('tasks.end_date', '>', $monthEnd);
+                            } elseif (in_array($dueItemLower, ['no due date', 'no_due_date', 'none', 'null'])) {
+                                $dq->whereNull('tasks.end_date');
+                            }
+                        };
+
+                        if ($idx === 0) {
+                            $dueQuery->where($clause);
+                        } else {
+                            $dueQuery->orWhere($clause);
+                        }
+                    }
+                });
             }
         }
 

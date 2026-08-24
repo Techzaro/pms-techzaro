@@ -1459,17 +1459,25 @@ function TaskDetails() {
               </div>
 
               <div className="td-badges">
-                <span className="td-badge" style={{ background: statusBgColor(task.status), color: statusColor(task.status) }}>
-                  <span className="td-badge-dot" style={{ background: statusColor(task.status) }} />
-                  {statusLabel(task.status)}
+                <span className="td-badge" style={{ background: statusBgColor(task?.status), color: statusColor(task?.status) }}>
+                  <span className="td-badge-dot" style={{ background: statusColor(task?.status) }} />
+                  {statusLabel(task?.status || "Pending")}
                 </span>
-                <span className="td-badge" style={{ background: priorityBgColor(task.priority), color: priorityColor(task.priority) }}>
-                  <span className="td-badge-dot" style={{ background: priorityColor(task.priority) }} />
-                  {task.priority} Priority
-                </span>
-                <span className="td-badge" style={{ background: task.allow_transfer ? "#f0fdf4" : "#fef2f2", color: task.allow_transfer ? "#16a34a" : "#dc2626" }}>
-                  <span className="td-badge-dot" style={{ background: task.allow_transfer ? "#16a34a" : "#dc2626" }} />
-                  {task.allow_transfer ? "Transfer Allowed" : "Transfer Not Allowed"}
+                {Array.isArray(task?.states) && task.states.map((st, idx) => (
+                  <span key={idx} className="td-badge" style={{ background: "#EDE9FE", color: "#6D28D9", border: "1px solid #DDD6FE" }}>
+                    <span className="td-badge-dot" style={{ background: "#6D28D9" }} />
+                    {st}
+                  </span>
+                ))}
+                {task?.priority && (
+                  <span className="td-badge" style={{ background: priorityBgColor(task.priority), color: priorityColor(task.priority) }}>
+                    <span className="td-badge-dot" style={{ background: priorityColor(task.priority) }} />
+                    {task.priority} Priority
+                  </span>
+                )}
+                <span className="td-badge" style={{ background: task?.allow_transfer ? "#f0fdf4" : "#fef2f2", color: task?.allow_transfer ? "#16a34a" : "#dc2626" }}>
+                  <span className="td-badge-dot" style={{ background: task?.allow_transfer ? "#16a34a" : "#dc2626" }} />
+                  {task?.allow_transfer ? "Transfer Allowed" : "Transfer Not Allowed"}
                 </span>
               </div>
 
