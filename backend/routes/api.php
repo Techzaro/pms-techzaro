@@ -602,12 +602,18 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /*
     | Calendar / Event Routes
-    | CRUD operations for calendar events.
+    | CRUD operations for calendar events and event categories.
     */
+    Route::get('/event-categories', [\App\Http\Controllers\EventCategoryController::class, 'index']);
+    Route::get('/event-categories/{eventCategory}', [\App\Http\Controllers\EventCategoryController::class, 'show']);
+    Route::post('/event-categories', [\App\Http\Controllers\EventCategoryController::class, 'store'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
+    Route::match(['put', 'post'], '/event-categories/{eventCategory}', [\App\Http\Controllers\EventCategoryController::class, 'update'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
+    Route::delete('/event-categories/{eventCategory}', [\App\Http\Controllers\EventCategoryController::class, 'destroy'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
+
     Route::get('/events', [EventController::class, 'index']); // List all events
     Route::get('/events/{event}', [EventController::class, 'show']); // View event details
     Route::post('/events', [EventController::class, 'store'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Create new event
-    Route::put('/events/{event}', [EventController::class, 'update'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Update event
+    Route::match(['put', 'post'], '/events/{event}', [EventController::class, 'update'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Update event
     Route::delete('/events/{event}', [EventController::class, 'destroy'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Delete event
 
     /*
@@ -651,8 +657,16 @@ Route::middleware('auth:sanctum')->group(function () {
     | Knowledge Base Management Routes
     | Tiered visibility knowledge sharing system for articles, documentation, and resources.
     */
+    Route::get('/kb-categories', [\App\Http\Controllers\KbCategoryController::class, 'index']);
+    Route::get('/kb-categories/{kbCategory}', [\App\Http\Controllers\KbCategoryController::class, 'show']);
+    Route::post('/kb-categories', [\App\Http\Controllers\KbCategoryController::class, 'store'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
+    Route::match(['put', 'post'], '/kb-categories/{kbCategory}', [\App\Http\Controllers\KbCategoryController::class, 'update'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
+    Route::delete('/kb-categories/{kbCategory}', [\App\Http\Controllers\KbCategoryController::class, 'destroy'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
+
     Route::get('/knowledge-base', [\App\Http\Controllers\KnowledgeBaseController::class, 'index']); // List visible knowledge base items
     Route::get('/knowledge-base/{knowledgeBase}', [\App\Http\Controllers\KnowledgeBaseController::class, 'show']); // View article details
+    Route::get('/knowledge-base/{knowledgeBase}/versions', [\App\Http\Controllers\KnowledgeBaseController::class, 'getVersions']); // View article versions
+    Route::post('/knowledge-base/{knowledgeBase}/versions/{versionId}/restore', [\App\Http\Controllers\KnowledgeBaseController::class, 'restoreVersion'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Restore version
     Route::post('/knowledge-base', [\App\Http\Controllers\KnowledgeBaseController::class, 'store'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Create article
     Route::match(['put', 'post'], '/knowledge-base/{knowledgeBase}', [\App\Http\Controllers\KnowledgeBaseController::class, 'update'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Update article
     Route::delete('/knowledge-base/{knowledgeBase}', [\App\Http\Controllers\KnowledgeBaseController::class, 'destroy'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Delete article

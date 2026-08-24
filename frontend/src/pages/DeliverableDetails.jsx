@@ -11,7 +11,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useLocation, useNavigate, Link } from "react-router-dom";
-import { BarChart3, Calendar, Check, CheckCircle2, ChevronLeft, ChevronRight, Copy, Download, ExternalLink, FileText, FolderOpen, Lock, Pause, Pencil, Play, RefreshCw, Timer, Trash2, XCircle } from "lucide-react";
+import { BarChart3, Calendar, Check, CheckCircle2, ChevronLeft, ChevronRight, Copy, Download, ExternalLink, FileText, FolderOpen, Lock, Pause, Pencil, Play, RefreshCw, Timer, Trash2, XCircle, Activity } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import ConfirmModal from "../components/ConfirmModal";
@@ -21,6 +21,7 @@ import TransferTaskDialog from "../components/TransferTaskDialog";
 import DelegationChain from "../components/DelegationChain";
 import TaskDiscussion from "../components/TaskDiscussion";
 import FileUploadSection from "../components/FileUploadSection";
+import UnifiedActivityFeed from "../components/UnifiedActivityFeed";
 import CreateDeliverableModel from "../components/layout/CreateDeliverableModel";
 import API_URL from "../config/api";
 const API_BASE = API_URL.replace(/\/api\/?$/, "");
@@ -731,6 +732,7 @@ function SubtaskDetails() {
                   {[
                     { id: "overview", label: "Overview", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg> },
                     { id: "files", label: "Platform files & links", icon: <FolderOpen size={16} /> },
+                    { id: "activity", label: "Activity", icon: <Activity size={16} /> },
                   ].map(({ id, label, icon }) => (
                     <button key={id} className={`td-tab ${tab === id ? "td-tab--on" : ""}`} onClick={() => setTab(id)}>
                       {icon}
@@ -829,6 +831,16 @@ function SubtaskDetails() {
 
                   {tab === "files" && (
                     <FileUploadSection entityType="deliverable" entityId={subtask.id} files={files} onReorder={handleFileReorder} onFilesChange={fetchSubtask} readOnly={true} />
+                  )}
+
+                  {tab === "activity" && (
+                    <div className="td-overview" style={{ padding: "20px" }}>
+                      <UnifiedActivityFeed
+                        module="deliverable"
+                        entityId={subtask.id}
+                        initialUsers={[subtask.assignee, subtask.assigner].filter(Boolean)}
+                      />
+                    </div>
                   )}
                 </div>
 

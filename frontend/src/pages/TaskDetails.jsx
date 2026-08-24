@@ -37,6 +37,7 @@ import {
   XCircle,
   StickyNote,
   Pin,
+  Activity,
 } from "lucide-react";
 import { usePinnedTasks, togglePinTask, isTaskPinned } from "../utils/pinnedTasks";
 import { IoEyeOutline } from "react-icons/io5";
@@ -1536,6 +1537,7 @@ function TaskDetails() {
                     { id: "subtasks", label: "Subtasks", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg> },
                     { id: "files", label: "Platform files & links", icon: <FolderOpen size={16} /> },
                     { id: "access", label: "Access", icon: <Shield size={16} /> },
+                    { id: "activity", label: "Activity", icon: <Activity size={16} /> },
                   ].filter((t) => currentUser?.role !== "guest" || t.id !== "subtasks").map(({ id, label, icon }) => (
                     <button key={id} className={`td-tab ${tab === id ? "td-tab--on" : ""}`} onClick={() => setTab(id)}>
                       {icon}
@@ -1811,6 +1813,12 @@ function TaskDetails() {
                           )}
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {tab === "activity" && (
+                    <div className="td-overview" style={{ padding: "20px" }}>
+                      <UnifiedActivityFeed module="task" entityId={task.id} initialUsers={assignees} />
                     </div>
                   )}
 
@@ -2126,9 +2134,6 @@ function TaskDetails() {
                 </li>
               </ul>
             </div>
-
-            {/* UNIFIED ACTIVITY FEED */}
-            <UnifiedActivityFeed module="task" entityId={task.id} initialUsers={assignees} />
 
             <div className="td-card">
               <div className="td-card-head">

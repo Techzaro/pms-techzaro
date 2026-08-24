@@ -37,6 +37,13 @@ import {
   Users,
   X,
   XCircle,
+  BookOpen,
+  Megaphone,
+  Video,
+  Clock,
+  Eye,
+  ArrowUpRight,
+  Activity,
 } from "lucide-react";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import SmartDragHandle from "../components/SmartDragHandle";
@@ -343,6 +350,12 @@ function ProjectDetails() {
   const [memberSearch, setMemberSearch] = useState("");
   const [viewAccessSearch, setViewAccessSearch] = useState("");
   const [accessSearch, setAccessSearch] = useState("");
+  const [projectKbArticles, setProjectKbArticles] = useState([]);
+  const [loadingKb, setLoadingKb] = useState(false);
+  const [kbSearch, setKbSearch] = useState("");
+  const [projectEvents, setProjectEvents] = useState([]);
+  const [loadingProjectEvents, setLoadingProjectEvents] = useState(false);
+  const [eventSearch, setEventSearch] = useState("");
   const [editFileItem, setEditFileItem] = useState(null);
   const [editFileName, setEditFileName] = useState("");
   const [editFileUrl, setEditFileUrl] = useState("");
@@ -400,6 +413,46 @@ function ProjectDetails() {
       fetchAccessCredentials();
     }
   }, [tab, project]);
+
+  useEffect(() => {
+    if (tab === "kb" && (project?.id || projectId)) {
+      const pId = project?.id || projectId;
+      setLoadingKb(true);
+      const token = authToken();
+      fetch(`${API_URL}/knowledge-base?all=1`, {
+        headers: { Authorization: token ? `Bearer ${token}` : "" },
+        skipLoader: true,
+      })
+        .then((r) => r.json())
+        .then((d) => {
+          const list = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
+          const filtered = list.filter((a) => String(a.project_id) === String(pId));
+          setProjectKbArticles(filtered);
+        })
+        .catch((err) => console.error("Error fetching project KB", err))
+        .finally(() => setLoadingKb(false));
+    }
+  }, [tab, project?.id, projectId]);
+
+  useEffect(() => {
+    if (tab === "events" && (project?.id || projectId)) {
+      const pId = project?.id || projectId;
+      setLoadingProjectEvents(true);
+      const token = authToken();
+      fetch(`${API_URL}/events?all=true`, {
+        headers: { Authorization: token ? `Bearer ${token}` : "" },
+        skipLoader: true,
+      })
+        .then((r) => r.json())
+        .then((d) => {
+          const list = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
+          const filtered = list.filter((e) => String(e.project_id) === String(pId) || (e.visibility_level === "project_team" && String(e.project_id) === String(pId)));
+          setProjectEvents(filtered);
+        })
+        .catch((err) => console.error("Error fetching project events", err))
+        .finally(() => setLoadingProjectEvents(false));
+    }
+  }, [tab, project?.id, projectId]);
 
   useEffect(() => {
     const handleClickOutsideManager = (e) => {
@@ -1053,14 +1106,10 @@ function ProjectDetails() {
     { id: "files", label: "Platform files & links", icon: FolderOpen },
     { id: "access", label: "Accessess", icon: Shield },
     { id: "members", label: "Members", icon: Users },
+    { id: "kb", label: "Knowledge Base", icon: BookOpen },
+    { id: "events", label: "Events & Announcements", icon: Calendar },
+    { id: "activity", label: "Activity", icon: Activity },
   ];
-
-  const renderRail = () => (
-    <div className="pd-rail">
-      {/* UNIFIED ACTIVITY FEED */}
-      <UnifiedActivityFeed module="project" entityId={projectId} initialUsers={members} />
-    </div>
-  );
 
   const overviewInner = (
     <>
@@ -1847,15 +1896,264 @@ function ProjectDetails() {
                         </section>
                       </div>
                     )}
+
+                    {tab === "kb" && (
+                      <div className="pd-tab-panel">
+                        <section className="pd-card-flat">
+                          <div className="pd-card-flat__head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+                            <div>
+                              <h2 className="pd-block-title pd-block-title--inline" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                <BookOpen size={20} color="#2563eb" /> Project Knowledge Base & Documentation
+                              </h2>
+                              <p className="pd-muted" style={{ margin: "4px 0 0" }}>
+                                Technical specifications, SOPs, and guidelines specific to {project?.title || "this project"}.
+                              </p>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                              <div className="pd-files-search" style={{ margin: 0 }}>
+                                <input
+                                  type="text"
+                                  placeholder="Search project articles..."
+                                  value={kbSearch}
+                                  onChange={(e) => setKbSearch(e.target.value)}
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                className="pd-btn-tx pd-btn-tx--primary"
+                                onClick={() => navigate(rolePath("knowledge-base/create"), { state: { projectId: project?.id || projectId, projectTitle: project?.title } })}
+                                style={{ display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap" }}
+                              >
+                                <Plus size={16} /> Add Document
+                              </button>
+                            </div>
+                          </div>
+
+                          {loadingKb ? (
+                            <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-secondary)" }}>
+                              Loading project knowledge base...
+                            </div>
+                          ) : (() => {
+                            const filteredKb = Array.isArray(projectKbArticles) ? projectKbArticles.filter((a) => {
+                              if (!kbSearch.trim()) return true;
+                              const q = kbSearch.toLowerCase();
+                              return (
+                                a.title?.toLowerCase().includes(q) ||
+                                a.content?.toLowerCase().includes(q) ||
+                                a.categoryRelation?.name?.toLowerCase().includes(q) ||
+                                a.category?.toLowerCase().includes(q)
+                              );
+                            }) : [];
+
+                            if (filteredKb.length === 0) {
+                              return (
+                                <div style={{ textAlign: "center", padding: "50px 20px", background: "var(--bg-card-subtle)", borderRadius: "10px", marginTop: "16px" }}>
+                                  <BookOpen size={40} style={{ color: "#9ca3af", margin: "0 auto 10px" }} />
+                                  <h4 style={{ margin: "0 0 6px", fontSize: "15px", fontWeight: 600 }}>No project documentation yet</h4>
+                                  <p style={{ margin: "0 0 16px", fontSize: "13px", color: "var(--text-secondary)" }}>
+                                    Create and share SOPs, architectural guidelines, or deliverable checklists for this project.
+                                  </p>
+                                  <button
+                                    type="button"
+                                    onClick={() => navigate(rolePath("knowledge-base/create"), { state: { projectId: project?.id || projectId, projectTitle: project?.title } })}
+                                    style={{ padding: "7px 16px", borderRadius: "6px", background: "#2563eb", color: "#ffffff", border: "none", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                                  >
+                                    <Plus size={14} style={{ display: "inline", verticalAlign: "-2px", marginRight: "4px" }} /> Add Document
+                                  </button>
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "14px", marginTop: "18px" }}>
+                                {filteredKb.map((item) => (
+                                  <div
+                                    key={item.id}
+                                    style={{
+                                      padding: "16px",
+                                      borderRadius: "10px",
+                                      border: "1px solid var(--border-color)",
+                                      background: "var(--bg-card)",
+                                      display: "flex",
+                                      flexDirection: "column",
+                                      justifyContent: "space-between",
+                                      boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                                    }}
+                                  >
+                                    <div>
+                                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                                        <span style={{ fontSize: "11px", fontWeight: 600, color: "#2563eb", background: "#eff6ff", padding: "2px 8px", borderRadius: "4px" }}>
+                                          {item.categoryRelation?.name || item.category || "General"}
+                                        </span>
+                                        {item.views_count > 0 && (
+                                          <span style={{ fontSize: "11px", color: "var(--text-muted)", display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                                            <Eye size={12} /> {item.views_count}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <h4 style={{ margin: "0 0 6px", fontSize: "15px", fontWeight: 600, color: "var(--text-primary)" }}>
+                                        {item.title}
+                                      </h4>
+                                      <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "12px" }}>
+                                        By {item.creator?.name || "Team Member"} on {new Date(item.updated_at || item.created_at).toLocaleDateString()}
+                                      </div>
+                                    </div>
+                                    <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", borderTop: "1px solid var(--border-color)", paddingTop: "10px" }}>
+                                      <button
+                                        type="button"
+                                        onClick={() => navigate(rolePath(`knowledge-base/edit/${item.id}`))}
+                                        style={{ padding: "5px 12px", borderRadius: "6px", background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                                      >
+                                        Edit / View
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })()}
+                        </section>
+                      </div>
+                    )}
+
+                    {tab === "events" && (
+                      <div className="pd-tab-panel">
+                        <section className="pd-card-flat">
+                          <div className="pd-card-flat__head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+                            <div>
+                              <h2 className="pd-block-title pd-block-title--inline" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                <Calendar size={20} color="#2563eb" /> Project Events & Schedule
+                              </h2>
+                              <p className="pd-muted" style={{ margin: "4px 0 0" }}>
+                                Sprint demos, milestone reviews, and team meetings for {project?.title || "this project"}.
+                              </p>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                              <div className="pd-files-search" style={{ margin: 0 }}>
+                                <input
+                                  type="text"
+                                  placeholder="Search project events..."
+                                  value={eventSearch}
+                                  onChange={(e) => setEventSearch(e.target.value)}
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                className="pd-btn-tx pd-btn-tx--primary"
+                                onClick={() => navigate(rolePath("events/create"), { state: { projectId: project?.id || projectId, projectTitle: project?.title } })}
+                                style={{ display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap" }}
+                              >
+                                <Plus size={16} /> Add Event
+                              </button>
+                            </div>
+                          </div>
+
+                          {loadingProjectEvents ? (
+                            <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-secondary)" }}>
+                              Loading project events...
+                            </div>
+                          ) : (() => {
+                            const filteredEv = Array.isArray(projectEvents) ? projectEvents.filter((ev) => {
+                              if (!eventSearch.trim()) return true;
+                              const q = eventSearch.toLowerCase();
+                              return (
+                                ev.title?.toLowerCase().includes(q) ||
+                                ev.description?.toLowerCase().includes(q) ||
+                                ev.location?.toLowerCase().includes(q)
+                              );
+                            }) : [];
+
+                            if (filteredEv.length === 0) {
+                              return (
+                                <div style={{ textAlign: "center", padding: "50px 20px", background: "var(--bg-card-subtle)", borderRadius: "10px", marginTop: "16px" }}>
+                                  <Calendar size={40} style={{ color: "#9ca3af", margin: "0 auto 10px" }} />
+                                  <h4 style={{ margin: "0 0 6px", fontSize: "15px", fontWeight: 600 }}>No project events scheduled</h4>
+                                  <p style={{ margin: "0 0 16px", fontSize: "13px", color: "var(--text-secondary)" }}>
+                                    Schedule sprint meetings, demo sessions, and release deadlines for this project.
+                                  </p>
+                                  <button
+                                    type="button"
+                                    onClick={() => navigate(rolePath("events/create"), { state: { projectId: project?.id || projectId, projectTitle: project?.title } })}
+                                    style={{ padding: "7px 16px", borderRadius: "6px", background: "#2563eb", color: "#ffffff", border: "none", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                                  >
+                                    <Plus size={14} style={{ display: "inline", verticalAlign: "-2px", marginRight: "4px" }} /> Add Event
+                                  </button>
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "14px", marginTop: "18px" }}>
+                                {filteredEv.map((ev) => {
+                                  const dateStr = ev.start_date ? new Date(ev.start_date).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) : "Scheduled";
+                                  const timeStr = ev.start_date && !ev.all_day ? new Date(ev.start_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : (ev.all_day ? "All Day" : "");
+
+                                  return (
+                                    <div
+                                      key={ev.id}
+                                      style={{
+                                        padding: "16px",
+                                        borderRadius: "10px",
+                                        border: "1px solid var(--border-color)",
+                                        background: "var(--bg-card)",
+                                        display: "flex",
+                                        flexDirection: "column",
+                                        justifyContent: "space-between",
+                                        boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                                      }}
+                                    >
+                                      <div>
+                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                                          <span style={{ fontSize: "11px", fontWeight: 600, color: ev.category?.color || "#2563eb", background: "#eff6ff", padding: "2px 8px", borderRadius: "4px" }}>
+                                            {ev.category?.name || ev.type || "Event"}
+                                          </span>
+                                          <span style={{ fontSize: "11px", color: "var(--text-muted)", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                            <Clock size={12} /> {timeStr || dateStr}
+                                          </span>
+                                        </div>
+                                        <h4 style={{ margin: "0 0 6px", fontSize: "15px", fontWeight: 600, color: "var(--text-primary)" }}>
+                                          {ev.title}
+                                        </h4>
+                                        <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "10px" }}>
+                                          📅 {dateStr}
+                                        </div>
+                                        {ev.meeting_link && (
+                                          <div style={{ fontSize: "12px", color: "#2563eb", marginBottom: "8px", display: "flex", alignItems: "center", gap: "4px" }}>
+                                            <Video size={13} color="#10b981" /> Virtual Meeting
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", borderTop: "1px solid var(--border-color)", paddingTop: "10px" }}>
+                                        <button
+                                          type="button"
+                                          onClick={() => navigate(rolePath(`events/edit/${ev.id}`))}
+                                          style={{ padding: "5px 12px", borderRadius: "6px", background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                                        >
+                                          Edit / View
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()}
+                        </section>
+                      </div>
+                    )}
+
+                    {tab === "activity" && (
+                      <div className="pd-tab-panel">
+                        <section className="pd-card-flat" style={{ padding: "20px" }}>
+                          <UnifiedActivityFeed module="project" entityId={projectId} initialUsers={members} />
+                        </section>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
 
             </div>
-          </div>
-
-          <div>
-            {renderRail()}
           </div>
         </div>
       </DashboardLayout>

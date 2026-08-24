@@ -4,9 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Deliverable;
 use App\Models\Event;
+use App\Models\EventParticipant;
+use App\Models\EventVisibility;
 use App\Models\Notification;
 use App\Models\Project;
 use App\Models\Task;
+use App\Models\Team;
 use App\Models\User;
 use App\Services\ActivityService;
 use App\Services\AuditService;
@@ -15,14 +18,9 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
-/**
- * Controller for managing calendar events.
- * Provides CRUD operations for manual events, a unified calendar view
- * aggregating tasks, projects, deliverables, and manual events,
- * and a summary endpoint for today's and upcoming events.
- * Sends notifications to assigned users on event creation, update, and deletion.
- */
 class EventController extends Controller
 {
     public function __construct(
@@ -32,47 +30,515 @@ class EventController extends Controller
     ) {}
 
     /**
-     * List all events visible to the authenticated user with pagination.
-     *
-     * Non-admin/manager users only see events they are assigned to.
-     * Supports 'all' query param to return all events without pagination.
-     *
-     * @param  Request  $request  Query parameters: 'all', filter params.
-     * @return JsonResponse JSON response with paginated or full event list.
+     * List all events visible to the authenticated user.
      */
-    public function index(Request $request)
+    public function index(Request $request): JsonResponse
     {
         $user = $request->user();
-        $query = Event::with('user:id,name', 'assignedUsers:id,name')
-            ->latest('start_date')
-            ->filter($request->query());
+        $isAdmin = in_array($user->role, ['admin', 'manager']);
 
-        if (! in_array($user->role, ['admin', 'manager'])) {
-            $query->whereHas('assignedUsers', function ($q) use ($user) {
-                $q->where('user_id', $user->id);
+        // User's teams
+        $userTeamIds = Team::whereHas('members', fn ($q) => $q->where('users.id', $user->id))
+            ->orWhere('leader_id', $user->id)
+            ->pluck('id')->toArray();
+
+        $userDept = $user->department ?: 'General';
+
+        $query = Event::with([
+            'category:id,name,slug,color,icon',
+            'user:id,name,email,role,avatar',
+            'organizer:id,name,email,role,avatar',
+            'assignedUsers:id,name,email,role,avatar',
+            'participants.user:id,name,email,role,avatar',
+            'visibilities.team:id,name',
+            'visibilities.user:id,name',
+        ])->latest('start_date');
+
+        // Strictly apply tiered visibility rules
+        if (!$isAdmin) {
+            $query->where(function ($q) use ($user, $userTeamIds, $userDept) {
+                // Creator or Organizer
+                $q->where('user_id', $user->id)
+                    ->orWhere('organizer_id', $user->id)
+                    // Global / Organization
+                    ->orWhere('is_global', true)
+                    ->orWhere('visibility_level', 'organization')
+                    // Department
+                    ->orWhere(function ($dq) use ($userDept) {
+                        $dq->where('visibility_level', 'department_team')
+        ->whereHas('visibilities', fn ($vq) => $vq->where('department', $userDept)->where('is_visible', true));
+                    })
+                    // Assigned or Participant
+                    ->orWhereHas('assignedUsers', fn ($aq) => $aq->where('user_id', $user->id))
+                    ->orWhereHas('participants', fn ($pq) => $pq->where('user_id', $user->id))
+                    // Team Visibility
+                    ->orWhere(function ($tq) use ($userTeamIds) {
+                        $tq->where('visibility_level', 'team')
+                            ->whereHas('visibilities', fn ($vq) => $vq->whereIn('team_id', $userTeamIds)->where('is_visible', true));
+                    })
+                    // Custom Granular Visibility
+                    ->orWhere(function ($cq) use ($user, $userTeamIds, $userDept) {
+                        $cq->where('visibility_level', 'custom')
+                            ->whereHas('visibilities', function ($vq) use ($user, $userTeamIds, $userDept) {
+                                $vq->where(function ($ivq) use ($user, $userTeamIds, $userDept) {
+                                    $ivq->where('user_id', $user->id)
+                                        ->orWhereIn('team_id', $userTeamIds)
+                                        ->orWhere('department', $userDept)
+                                        ->orWhere('role', $user->role);
+                                })->where('is_visible', true);
+                            });
+                    });
             });
+        }
+
+        // Filters
+        if ($request->filled('type') && $request->input('type') !== 'all') {
+            $type = $request->input('type');
+            if ($type === 'announcement') {
+                $query->where(fn ($q) => $q->where('type', 'announcement')->orWhere('type', 'Company Announcement')->orWhere('is_global', true));
+            } elseif ($type === 'event') {
+                $query->where('type', '!=', 'announcement')->where('type', '!=', 'Company Announcement');
+            } else {
+                $query->where('type', $type);
+            }
+        }
+
+        if ($request->filled('category_id') && $request->input('category_id') !== 'all') {
+            $query->where('category_id', $request->input('category_id'));
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%")
+                    ->orWhere('location', 'like', "%{$search}%")
+                    ->orWhereHas('category', fn ($cq) => $cq->where('name', 'like', "%{$search}%"));
+            });
+        }
+
+        if ($request->filled('month')) {
+            // e.g. YYYY-MM
+            $month = $request->input('month');
+            $query->where('start_date', 'like', "{$month}%");
         }
 
         if ($request->boolean('all')) {
             $events = $query->limit(500)->get();
-
-            return response()->json(['data' => $events->map(fn ($event) => $this->formatEventResponse($event))]);
+            return response()->json([
+                'success' => true,
+                'data' => $events->map(fn ($event) => $this->formatEventResponse($event)),
+            ]);
         }
 
-        $events = $query->paginate(50);
+        $events = $query->paginate((int) $request->input('per_page', 50));
         $events->getCollection()->transform(fn ($event) => $this->formatEventResponse($event));
 
         return response()->json($events);
     }
 
     /**
-     * Get a unified calendar view combining tasks, projects, deliverables, and manual events.
-     *
-     * Filters by date range (from/to) and optional search term. Returns all items
-     * relevant to the authenticated user in a normalized calendar event format.
-     *
-     * @param  Request  $request  Query parameters: from, to, search.
-     * @return JsonResponse JSON response with unified event list and metadata counts.
+     * Retrieve a single event by ID.
+     */
+    public function show(Event $event): JsonResponse
+    {
+        $user = request()->user();
+        $isAdmin = in_array($user->role, ['admin', 'manager']);
+
+        $event->load([
+            'category:id,name,slug,color,icon',
+            'user:id,name,email,role,avatar',
+            'organizer:id,name,email,role,avatar',
+            'assignedUsers:id,name,email,role,avatar',
+            'participants.user:id,name,email,role,avatar',
+            'visibilities.team:id,name',
+            'visibilities.user:id,name',
+        ]);
+
+        if (!$isAdmin) {
+            $isAssigned = $event->assignedUsers->contains('id', $user->id);
+            $isParticipant = $event->participants->contains('user_id', $user->id);
+            $isCreator = ($event->user_id === $user->id) || ($event->organizer_id === $user->id);
+
+            if (!$event->is_global && $event->visibility_level === 'private' && !$isCreator) {
+                return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'event' => $this->formatEventResponse($event),
+            'data' => $this->formatEventResponse($event),
+        ]);
+    }
+
+    /**
+     * Create a new event or company announcement with DB transaction.
+     */
+    public function store(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        // Support JSON string parsing for arrays if passed as form-data
+        foreach (['participant_user_ids', 'assigned_user_ids', 'attendee_ids', 'team_ids', 'user_ids'] as $f) {
+            if (is_string($request->input($f))) {
+                $decoded = json_decode($request->input($f), true);
+                if (is_array($decoded)) {
+                    $request->merge([$f => $decoded]);
+                }
+            }
+        }
+
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'type' => 'nullable|string|max:64',
+            'category_id' => 'nullable|integer|exists:event_categories,id',
+            'color' => 'nullable|string|max:32',
+            'start_date' => 'required|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'all_day' => 'nullable|boolean',
+            'is_global' => 'nullable|boolean',
+            'visibility_level' => 'nullable|string|max:32',
+            'location' => 'nullable|string|max:255',
+            'meeting_link' => 'nullable|string|max:2048',
+            'status' => 'nullable|string|max:32',
+            'organizer_id' => 'nullable|integer|exists:users,id',
+            'assigned_user_ids' => 'nullable|array',
+            'assigned_user_ids.*' => 'integer|exists:users,id',
+            'participant_user_ids' => 'nullable|array',
+            'participant_user_ids.*' => 'integer|exists:users,id',
+            'attendee_ids' => 'nullable|array',
+            'attendee_ids.*' => 'integer|exists:users,id',
+            'project_id' => 'nullable|exists:projects,id',
+            'team_ids' => 'nullable|array',
+            'team_ids.*' => 'integer|exists:teams,id',
+            'user_ids' => 'nullable|array',
+            'user_ids.*' => 'integer|exists:users,id',
+        ]);
+
+        $event = DB::transaction(function () use ($user, $validated) {
+            $type = $validated['type'] ?? 'Meeting';
+            $isAnnouncement = in_array(strtolower($type), ['announcement', 'company announcement']);
+            $visibilityLevel = $validated['visibility_level'] ?? 'organization';
+            $isGlobal = (bool) ($validated['is_global'] ?? false) || ($isAnnouncement && $visibilityLevel === 'organization');
+
+            $createdEvent = Event::create([
+                'user_id' => $user->id,
+                'organizer_id' => $validated['organizer_id'] ?? $user->id,
+                'title' => $validated['title'],
+                'description' => $validated['description'] ?? null,
+                'type' => $type,
+                'category_id' => $validated['category_id'] ?? null,
+                'color' => $validated['color'] ?? null,
+                'start_date' => $validated['start_date'],
+                'end_date' => $validated['end_date'] ?? $validated['start_date'],
+                'all_day' => $validated['all_day'] ?? false,
+                'is_global' => $isGlobal,
+                'visibility_level' => $visibilityLevel,
+                'location' => $validated['location'] ?? null,
+                'meeting_link' => $validated['meeting_link'] ?? null,
+                'project_id' => $validated['project_id'] ?? null,
+                'status' => $validated['status'] ?? 'scheduled',
+            ]);
+
+            // Sync assigned users & participants
+            $participantIds = $validated['attendee_ids'] ?? ($validated['participant_user_ids'] ?? ($validated['assigned_user_ids'] ?? ($validated['user_ids'] ?? [])));
+            if (!$isGlobal && !empty($participantIds)) {
+                $createdEvent->assignedUsers()->sync($participantIds);
+
+                foreach ($participantIds as $pId) {
+                    EventParticipant::create([
+                        'event_id' => $createdEvent->id,
+                        'user_id' => $pId,
+                        'status' => 'invited',
+                        'attended' => false,
+                    ]);
+                }
+            }
+
+            // Sync Audience Visibilities
+            if (!empty($validated['team_ids'])) {
+                foreach ($validated['team_ids'] as $tId) {
+                    EventVisibility::create([
+                        'event_id' => $createdEvent->id,
+                        'team_id' => $tId,
+                        'is_visible' => true,
+                    ]);
+                }
+            }
+            if ($visibilityLevel === 'custom' && !empty($validated['user_ids'])) {
+                foreach ($validated['user_ids'] as $uId) {
+                    EventVisibility::firstOrCreate([
+                        'event_id' => $createdEvent->id,
+                        'user_id' => $uId,
+                        'is_visible' => true,
+                    ]);
+                }
+            }
+
+            return $createdEvent;
+        });
+
+        // Notifications & Audit Logging (Safe)
+        try {
+            $this->sendBulkEventNotification($event, $user, 'event_created', 'Event Assigned');
+            $this->activityService->log($user->id, 'event_created', "Created event '{$event->title}'", 'event', $event->id);
+            $this->auditService->log(
+                module: 'event_management',
+                action: 'create',
+                description: "Created event {$event->title}",
+                user: $user,
+                entityType: 'Event',
+                entityId: $event->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            Log::error('Event post-create notification error: ' . $e->getMessage());
+        }
+
+        $formatted = $this->formatEventResponse($event->fresh([
+            'category',
+            'user',
+            'organizer',
+            'assignedUsers',
+            'participants.user',
+            'visibilities',
+        ]));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Event created successfully',
+            'data' => $formatted,
+            'event' => $formatted,
+        ], 201);
+    }
+
+    /**
+     * Update an existing calendar event with DB transaction.
+     */
+    public function update(Request $request, Event $event): JsonResponse
+    {
+        $user = $request->user();
+        $isAdmin = in_array($user->role, ['admin', 'manager']);
+        if (!$isAdmin && $event->user_id !== $user->id && $event->organizer_id !== $user->id) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        foreach (['participant_user_ids', 'assigned_user_ids', 'attendee_ids', 'team_ids', 'user_ids'] as $f) {
+            if (is_string($request->input($f))) {
+                $decoded = json_decode($request->input($f), true);
+                if (is_array($decoded)) {
+                    $request->merge([$f => $decoded]);
+                }
+            }
+        }
+
+        $validated = $request->validate([
+            'title' => 'sometimes|required|string|max:255',
+            'description' => 'sometimes|nullable|string',
+            'type' => 'sometimes|string|max:64',
+            'category_id' => 'nullable|integer|exists:event_categories,id',
+            'color' => 'sometimes|nullable|string|max:32',
+            'start_date' => 'sometimes|required|date',
+            'end_date' => 'sometimes|nullable|date|after_or_equal:start_date',
+            'all_day' => 'sometimes|nullable|boolean',
+            'is_global' => 'sometimes|boolean',
+            'visibility_level' => 'sometimes|nullable|string|max:32',
+            'location' => 'sometimes|nullable|string|max:255',
+            'meeting_link' => 'sometimes|nullable|string|max:2048',
+            'status' => 'sometimes|nullable|string|max:32',
+            'organizer_id' => 'nullable|integer|exists:users,id',
+            'assigned_user_ids' => 'nullable|array',
+            'assigned_user_ids.*' => 'integer|exists:users,id',
+            'participant_user_ids' => 'nullable|array',
+            'participant_user_ids.*' => 'integer|exists:users,id',
+            'attendee_ids' => 'nullable|array',
+            'attendee_ids.*' => 'integer|exists:users,id',
+            'project_id' => 'nullable|exists:projects,id',
+            'team_ids' => 'nullable|array',
+            'team_ids.*' => 'integer|exists:teams,id',
+            'user_ids' => 'nullable|array',
+            'user_ids.*' => 'integer|exists:users,id',
+        ]);
+
+        DB::transaction(function () use ($event, $validated) {
+            $event->update([
+                'title' => $validated['title'] ?? $event->title,
+                'description' => $validated['description'] ?? $event->description,
+                'type' => $validated['type'] ?? $event->type,
+                'category_id' => array_key_exists('category_id', $validated) ? $validated['category_id'] : $event->category_id,
+                'color' => $validated['color'] ?? $event->color,
+                'start_date' => $validated['start_date'] ?? $event->start_date,
+                'end_date' => $validated['end_date'] ?? $event->end_date,
+                'all_day' => $validated['all_day'] ?? $event->all_day,
+                'is_global' => $validated['is_global'] ?? $event->is_global,
+                'visibility_level' => $validated['visibility_level'] ?? $event->visibility_level,
+                'location' => $validated['location'] ?? $event->location,
+                'meeting_link' => $validated['meeting_link'] ?? $event->meeting_link,
+                'status' => $validated['status'] ?? $event->status,
+                'organizer_id' => $validated['organizer_id'] ?? $event->organizer_id,
+            ]);
+
+            // Sync participants if field provided
+            if (array_key_exists('participant_user_ids', $validated) || array_key_exists('assigned_user_ids', $validated) || array_key_exists('user_ids', $validated)) {
+                $participantIds = $validated['attendee_ids'] ?? ($validated['participant_user_ids'] ?? ($validated['assigned_user_ids'] ?? ($validated['user_ids'] ?? [])));
+                if ($event->is_global) {
+                    $event->assignedUsers()->detach();
+                    EventParticipant::where('event_id', $event->id)->delete();
+                } else {
+                    $event->assignedUsers()->sync($participantIds);
+                    EventParticipant::where('event_id', $event->id)->delete();
+                    foreach ($participantIds as $pId) {
+                        EventParticipant::create([
+                            'event_id' => $event->id,
+                            'user_id' => $pId,
+                            'status' => 'invited',
+                            'attended' => false,
+                        ]);
+                    }
+                }
+            }
+
+            // Sync Visibilities
+            if (array_key_exists('team_ids', $validated) || array_key_exists('visibility_level', $validated)) {
+                EventVisibility::where('event_id', $event->id)->delete();
+                if (!empty($validated['team_ids'])) {
+                    foreach ($validated['team_ids'] as $tId) {
+                        EventVisibility::create([
+                            'event_id' => $event->id,
+                            'team_id' => $tId,
+                            'is_visible' => true,
+                        ]);
+                    }
+                }
+                if (($validated['visibility_level'] ?? $event->visibility_level) === 'custom' && !empty($validated['user_ids'])) {
+                    foreach ($validated['user_ids'] as $uId) {
+                        EventVisibility::firstOrCreate([
+                            'event_id' => $event->id,
+                            'user_id' => $uId,
+                            'is_visible' => true,
+                        ]);
+                    }
+                }
+            }
+        });
+
+        try {
+            $this->sendBulkEventNotification($event, $user, 'event_updated', 'Event Updated');
+            $this->activityService->log($user->id, 'event_updated', "You updated event '{$event->title}'", 'event', $event->id);
+        } catch (\Throwable $e) {
+            Log::error('Event post-update notification error: ' . $e->getMessage());
+        }
+
+        $formatted = $this->formatEventResponse($event->fresh([
+            'category',
+            'user',
+            'organizer',
+            'assignedUsers',
+            'participants.user',
+            'visibilities',
+        ]));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Event updated successfully',
+            'data' => $formatted,
+            'event' => $formatted,
+        ]);
+    }
+
+    /**
+     * Delete a calendar event with DB transaction.
+     */
+    public function destroy(Event $event): JsonResponse
+    {
+        $user = request()->user();
+        $isAdmin = in_array($user->role, ['admin', 'manager']);
+        if (!$isAdmin && $event->user_id !== $user->id && $event->organizer_id !== $user->id) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        DB::transaction(function () use ($event) {
+            EventParticipant::where('event_id', $event->id)->delete();
+            EventVisibility::where('event_id', $event->id)->delete();
+            $event->assignedUsers()->detach();
+            $event->delete();
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Event deleted successfully',
+        ]);
+    }
+
+    /**
+     * Format an event model into a standardized, crash-proof API response array.
+     */
+    private function formatEventResponse(Event $event): array
+    {
+        $event->loadMissing('category', 'user:id,name,email,avatar', 'organizer:id,name,email,avatar', 'assignedUsers:id,name,email,avatar', 'participants.user:id,name,email,avatar', 'visibilities.team:id,name');
+
+        $assignedArray = $event->assignedUsers ? $event->assignedUsers->map(fn ($u) => [
+            'id' => $u->id,
+            'name' => $u->name,
+            'email' => $u->email,
+            'avatar' => $u->avatar,
+        ])->toArray() : [];
+
+        $participantsArray = $event->participants ? $event->participants->map(fn ($p) => [
+            'id' => $p->id,
+            'user_id' => $p->user_id,
+            'name' => $p->user?->name ?? 'User',
+            'email' => $p->user?->email,
+            'status' => $p->status,
+            'attended' => (bool) $p->attended,
+        ])->toArray() : [];
+
+        return [
+            'id' => $event->id,
+            'source' => 'manual',
+            'type' => $event->type,
+            'event_type' => $event->type,
+            'title' => $event->title,
+            'description' => $event->description,
+            'event_date' => $event->start_date?->format('Y-m-d'),
+            'start_date' => $event->start_date?->format('Y-m-d\\TH:i:s'),
+            'end_date' => $event->end_date?->format('Y-m-d\\TH:i:s'),
+            'all_day' => (bool) $event->all_day,
+            'color' => $event->color,
+            'is_global' => (bool) $event->is_global,
+            'is_announcement' => ($event->type === 'announcement' || $event->type === 'Company Announcement' || $event->is_global),
+            'visibility_level' => $event->visibility_level ?? ($event->is_global ? 'organization' : 'private'),
+            'location' => $event->location,
+            'meeting_link' => $event->meeting_link,
+            'status' => $event->status ?? 'scheduled',
+            'user_id' => $event->user_id,
+            'organizer_id' => $event->organizer_id,
+            'creator_name' => $event->user?->name ?? 'System',
+            'organizer_name' => $event->organizer?->name ?? $event->user?->name,
+            'category_id' => $event->category_id,
+            'category' => $event->category ? [
+                'id' => $event->category->id,
+                'name' => $event->category->name,
+                'slug' => $event->category->slug,
+                'color' => $event->category->color,
+                'icon' => $event->category->icon,
+            ] : null,
+            'assigned_users' => $assignedArray,
+            'participants' => $participantsArray,
+            'visibilities' => $event->visibilities ? $event->visibilities->map(fn ($v) => [
+                'team_id' => $v->team_id,
+                'team_name' => $v->team?->name,
+                'user_id' => $v->user_id,
+            ])->toArray() : [],
+            'created_at' => $event->created_at?->toIso8601String(),
+            'updated_at' => $event->updated_at?->toIso8601String(),
+        ];
+    }
+
+    /**
+     * Unified calendar view combining tasks, projects, deliverables, and manual events.
      */
     public function unifiedCalendar(Request $request)
     {
@@ -150,9 +616,9 @@ class EventController extends Controller
         $deliverables = $deliverableQuery->limit(500)->get();
 
         // Manual Events
-        $manualEventsQuery = Event::with(['user:id,name', 'assignedUsers:id']);
+        $manualEventsQuery = Event::with(['category', 'user:id,name', 'assignedUsers:id']);
         if (! in_array($user->role, ['admin', 'manager'])) {
-            $manualEventsQuery->where(fn ($q) => $q->where('is_global', true)->orWhereHas('assignedUsers', fn ($aq) => $aq->where('user_id', $user->id)));
+            $manualEventsQuery->where(fn ($q) => $q->where('is_global', true)->orWhere('visibility_level', 'organization')->orWhereHas('assignedUsers', fn ($aq) => $aq->where('user_id', $user->id)));
         }
         if ($startDate && $endDate) {
             $manualEventsQuery->where(function ($q) use ($startDate, $endDate) {
@@ -163,7 +629,6 @@ class EventController extends Controller
         }
         $manualEvents = $manualEventsQuery->limit(500)->get();
 
-        // Transform in bulk
         foreach ($tasks as $task) {
             $events->push($this->toCalendarEvent('task', $task->id, $task, ['assignee_name' => $task->assignee?->name, 'assigner_name' => $task->assigner?->name, 'project_title' => $task->project?->title]));
         }
@@ -188,12 +653,7 @@ class EventController extends Controller
     }
 
     /**
-     * Get a summary of today's and upcoming events from the unified calendar.
-     *
-     * Returns events split into 'today' and 'upcoming' categories, cached for 60 seconds.
-     *
-     * @param  Request  $request  Query parameter: local_date (YYYY-MM-DD, defaults to today).
-     * @return JsonResponse JSON response with today and upcoming event arrays.
+     * Get a summary of today's and upcoming events.
      */
     public function unifiedSummary(Request $request)
     {
@@ -225,9 +685,9 @@ class EventController extends Controller
                 ->select(['id', 'title', 'description', 'due_date', 'assigned_to', 'created_by', 'project_id', 'task_id', 'status', 'priority', 'submitted_at', 'approved_at', 'rejected_at'])
                 ->with(['project:id,title', 'assignee:id,name', 'creator:id,name'])->get();
 
-            $manualEventsQuery = Event::with(['user:id,name', 'assignedUsers:id']);
+            $manualEventsQuery = Event::with(['category', 'user:id,name', 'assignedUsers:id']);
             if (! in_array($user->role, ['admin', 'manager'])) {
-                $manualEventsQuery->where(fn ($q) => $q->where('is_global', true)->orWhereHas('assignedUsers', fn ($aq) => $aq->where('user_id', $user->id)));
+                $manualEventsQuery->where(fn ($q) => $q->where('is_global', true)->orWhere('visibility_level', 'organization')->orWhereHas('assignedUsers', fn ($aq) => $aq->where('user_id', $user->id)));
             }
             $manualEvents = $manualEventsQuery->where(function ($q) use ($today) {
                 $q->whereDate('start_date', '>=', $today)->orWhereDate('end_date', '>=', $today);
@@ -249,7 +709,6 @@ class EventController extends Controller
             $todayEvents = $events->filter(fn ($ev) => substr($ev['start_date'] ?? $ev['date'] ?? '', 0, 10) === $today)->values();
             $upcomingEvents = $events->filter(function ($ev) use ($today) {
                 $date = substr($ev['start_date'] ?? $ev['date'] ?? '', 0, 10);
-
                 return $date !== '' && $date > $today;
             })->values();
 
@@ -284,344 +743,69 @@ class EventController extends Controller
     private function formatManualEvent(Event $event): array
     {
         return [
-            'id' => $event->id, 'source' => 'manual', 'type' => $event->type,
-            'title' => $event->title, 'user_id' => $event->user_id, 'created_by' => $event->user_id,
+            'id' => $event->id,
+            'source' => 'manual',
+            'type' => $event->type,
+            'title' => $event->title,
+            'user_id' => $event->user_id,
+            'created_by' => $event->user_id,
             'description' => $event->description,
             'date' => $this->fmtDate($event->start_date),
             'start_date' => $this->fmtDate($event->start_date),
             'end_date' => $this->fmtDate($event->end_date),
-            'status' => $event->type, 'priority' => null,
+            'status' => $event->status ?? $event->type,
+            'priority' => null,
             'user_name' => $event->user?->name,
-            'type_name' => $this->getEventTypeLabel($event->type),
+            'type_name' => $event->type,
             'created_at' => $this->fmtDate($event->created_at),
             'updated_at' => $this->fmtDate($event->updated_at),
-            'all_day' => $event->all_day, 'color' => $event->color,
+            'all_day' => (bool) $event->all_day,
+            'color' => $event->color,
             'is_global' => (bool) $event->is_global,
-            'assigned_user_ids' => $event->assignedUsers->pluck('id')->toArray(),
+            'assigned_user_ids' => $event->assignedUsers ? $event->assignedUsers->pluck('id')->toArray() : [],
         ];
     }
 
-    /**
-     * Retrieve a single event by ID.
-     *
-     * Non-admin/manager users can only view global events or events they are assigned to.
-     *
-     * @param  Event  $event  The event to retrieve.
-     * @return JsonResponse JSON response with the formatted event or 403.
-     */
-    public function show(Event $event)
-    {
-        $user = request()->user();
-        $event->load('assignedUsers');
-
-        if (! in_array($user->role, ['admin', 'manager'])) {
-            if (! $event->is_global && ! $event->assignedUsers->contains('id', $user->id)) {
-                return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-            }
-        }
-
-        return response()->json(['success' => true, 'event' => $this->formatEventResponse($event)]);
-    }
-
-    /**
-     * Create a new calendar event. Only admin/manager roles can create events.
-     *
-     * Sends notifications to all assigned users (or all active users for global events).
-     *
-     * @param  Request  $request  Validated input: title, description, type, color, start_date, end_date, all_day, is_global, assigned_user_ids.
-     * @return JsonResponse JSON response with the created event.
-     */
-    public function store(Request $request)
-    {
-        $user = $request->user();
-        if (! in_array($user->role, ['admin', 'manager'])) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        }
-
-        $validated = $request->validate([
-            'title' => 'required|string|max:255', 'description' => 'nullable|string',
-            'type' => 'nullable|string|max:64',
-            'color' => 'nullable|string|max:16', 'start_date' => 'required|date',
-            'end_date' => 'nullable|date|after_or_equal:start_date', 'all_day' => 'nullable|boolean',
-            'is_global' => 'nullable|boolean', 'assigned_user_ids' => 'nullable|array',
-            'assigned_user_ids.*' => 'integer|exists:users,id',
-        ]);
-
-        $event = Event::create([
-            'user_id' => $user->id, 'title' => $validated['title'],
-            'description' => $validated['description'] ?? null, 'type' => $validated['type'] ?? 'Meeting',
-            'color' => $validated['color'] ?? null, 'start_date' => $validated['start_date'],
-            'end_date' => $validated['end_date'] ?? null, 'all_day' => $validated['all_day'] ?? false,
-            'is_global' => $validated['is_global'] ?? false,
-        ]);
-
-        if (! ($validated['is_global'] ?? false) && ! empty($validated['assigned_user_ids'])) {
-            $event->assignedUsers()->sync($validated['assigned_user_ids']);
-        }
-
-        $this->sendBulkEventNotification($event, $user, 'event_created', 'Event Assigned');
-
-        // Send confirmation email to performer
-        $assignedCount = count($validated['assigned_user_ids'] ?? []);
-        $this->notificationService->confirmAction($user, 'Created', 'event', $event->title, [
-            'Assigned To' => $assignedCount > 0 ? $assignedCount.' user(s)' : 'All users (global event)',
-            'Date' => $event->start_date ? Carbon::parse($event->start_date)->format('d M Y, g:i A') : 'N/A',
-        ]);
-
-        // Log activity
-        $activityDesc = $assignedCount > 0
-            ? 'You created event "'.$event->title.'" and assigned it to '.$assignedCount.' user(s)'
-            : 'You created event "'.$event->title.'"';
-        $this->activityService->log($user->id, 'event_created', $activityDesc, 'event', $event->id);
-
-        try {
-            $this->auditService->log(
-                module: 'event_management',
-                action: 'create',
-                description: "Created event {$event->title}",
-                user: $user,
-                entityType: 'Event',
-                entityId: $event->id,
-                status: 'success'
-            );
-        } catch (\Throwable $e) {
-            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
-        }
-
-        return response()->json(['success' => true, 'message' => 'Event created successfully', 'event' => $this->formatEventResponse($event->fresh())], 201);
-    }
-
-    /**
-     * Update an existing calendar event. Only admin/manager roles can update events.
-     *
-     * Syncs assigned user relationships and sends notifications to affected users.
-     *
-     * @param  Request  $request  Validated input for updatable fields.
-     * @param  Event  $event  The event to update.
-     * @return JsonResponse JSON response with the updated event.
-     */
-    public function update(Request $request, Event $event)
-    {
-        $user = $request->user();
-        if (! in_array($user->role, ['admin', 'manager'])) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        }
-
-        $validated = $request->validate([
-            'title' => 'sometimes|required|string|max:255', 'description' => 'sometimes|nullable|string',
-            'type' => 'sometimes|string|max:64',
-            'color' => 'sometimes|nullable|string|max:16', 'start_date' => 'sometimes|required|date',
-            'end_date' => 'sometimes|nullable|date|after_or_equal:start_date', 'all_day' => 'sometimes|nullable|boolean',
-            'is_global' => 'sometimes|boolean', 'assigned_user_ids' => 'nullable|array',
-            'assigned_user_ids.*' => 'integer|exists:users,id',
-        ]);
-
-        $event->update([
-            'title' => $validated['title'] ?? $event->title, 'description' => $validated['description'] ?? $event->description,
-            'type' => $validated['type'] ?? $event->type, 'color' => $validated['color'] ?? $event->color,
-            'start_date' => $validated['start_date'] ?? $event->start_date, 'end_date' => $validated['end_date'] ?? $event->end_date,
-            'all_day' => $validated['all_day'] ?? $event->all_day, 'is_global' => $validated['is_global'] ?? $event->is_global,
-        ]);
-
-        if (array_key_exists('assigned_user_ids', $validated)) {
-            if ($event->is_global) {
-                $event->assignedUsers()->detach();
-            } else {
-                $event->assignedUsers()->sync($validated['assigned_user_ids'] ?? []);
-            }
-        }
-
-        $this->sendBulkEventNotification($event, $user, 'event_updated', 'Event Updated');
-
-        // Send confirmation email to performer
-        $this->notificationService->confirmAction($user, 'Updated', 'event', $event->title, [
-            'Date' => $event->start_date ? Carbon::parse($event->start_date)->format('d M Y, g:i A') : 'N/A',
-        ]);
-
-        // Log activity
-        $this->activityService->log($user->id, 'event_updated', 'You updated event "'.$event->title.'"', 'event', $event->id);
-
-        try {
-            $this->auditService->log(
-                module: 'event_management',
-                action: 'update',
-                description: "Updated event {$event->title}",
-                user: $user,
-                entityType: 'Event',
-                entityId: $event->id,
-                status: 'success'
-            );
-        } catch (\Throwable $e) {
-            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
-        }
-
-        return response()->json(['success' => true, 'message' => 'Event updated successfully', 'event' => $this->formatEventResponse($event->fresh())]);
-    }
-
-    /**
-     * Delete a calendar event. Only admin/manager roles can delete events.
-     *
-     * Sends cancellation notifications to all assigned users before deletion.
-     *
-     * @param  Event  $event  The event to delete.
-     * @return JsonResponse JSON response confirming deletion.
-     */
-    public function destroy(Event $event)
-    {
-        $user = request()->user();
-        if (! in_array($user->role, ['admin', 'manager'])) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        }
-
-        $this->sendBulkEventNotification($event, $user, 'event_cancelled', 'Event Cancelled');
-
-        // Send confirmation email to performer
-        $this->notificationService->confirmAction($user, 'Cancelled', 'event', $event->title, [
-            'Original Date' => $event->start_date ? Carbon::parse($event->start_date)->format('d M Y, g:i A') : 'N/A',
-        ]);
-
-        // Log activity
-        $this->activityService->log($user->id, 'event_cancelled', 'You cancelled event "'.$event->title.'"', 'event', $event->id);
-
-        try {
-            $this->auditService->log(
-                module: 'event_management',
-                action: 'delete',
-                description: "Deleted event {$event->title}",
-                user: $user,
-                entityType: 'Event',
-                entityId: $event->id,
-                status: 'success'
-            );
-        } catch (\Throwable $e) {
-            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
-        }
-
-        $event->delete();
-
-        return response()->json(['success' => true, 'message' => 'Event deleted successfully']);
-    }
-
-    /**
-     * Send bulk notifications to all event recipients, avoiding duplicates within 5 minutes.
-     *
-     * @param  Event  $event  The event triggering the notification.
-     * @param  User  $sender  The user who performed the action.
-     * @param  string  $type  The notification type (event_created, event_updated, event_cancelled).
-     * @param  string  $title  The notification title.
-     */
     private function sendBulkEventNotification(Event $event, User $sender, string $type, string $title): void
     {
         $recipientIds = $this->getEventRecipientIds($event);
         $notifications = [];
 
-        // Single bulk EXISTS check instead of per-recipient
         $existingUserIds = Notification::whereIn('user_id', $recipientIds)->where('type', $type)
             ->where('related_module', 'event')->where('related_id', $event->id)
             ->where('created_at', '>=', now()->subMinutes(5))
             ->pluck('user_id')->toArray();
 
         foreach ($recipientIds as $recipientId) {
-            if ((int) $recipientId === (int) $sender->id) {
-                continue;
-            }
-            if (in_array((int) $recipientId, $existingUserIds, true)) {
-                continue;
-            }
+            if ((int) $recipientId === (int) $sender->id) continue;
+            if (in_array((int) $recipientId, $existingUserIds, true)) continue;
 
             $notifications[] = [
-                'user_id' => $recipientId, 'sender_user_id' => $sender->id,
-                'type' => $type, 'related_module' => 'event', 'related_id' => $event->id,
-                'title' => $title, 'message' => $this->buildEventMessage($event, $sender, $type),
-                'link' => '/calender',
+                'user_id' => $recipientId,
+                'sender_user_id' => $sender->id,
+                'type' => $type,
+                'related_module' => 'event',
+                'related_id' => $event->id,
+                'title' => $title,
+                'message' => "Event '{$event->title}' scheduled for " . ($event->start_date ? Carbon::parse($event->start_date)->format('d M Y') : 'upcoming date'),
+                'link' => '/events',
             ];
         }
 
         $this->notificationService->createBulk($notifications);
     }
 
-    /**
-     * Get all user IDs that should receive notifications for an event.
-     *
-     * Returns all active users for global events, or the assigned user IDs for non-global events.
-     *
-     * @param  Event  $event  The event to get recipients for.
-     * @return array Array of user IDs.
-     */
     private function getEventRecipientIds(Event $event): array
     {
-        if ($event->is_global) {
+        if ($event->is_global || $event->visibility_level === 'organization') {
             return User::where('active', true)->pluck('id')->toArray();
         }
-        $assignedIds = $event->assignedUsers()->pluck('user_id')->toArray();
-
-        return ! empty($assignedIds) ? $assignedIds : [$event->user_id];
+        $assignedIds = $event->assignedUsers ? $event->assignedUsers()->pluck('user_id')->toArray() : [];
+        return !empty($assignedIds) ? $assignedIds : [$event->user_id];
     }
 
-    /**
-     * Format an event model into a standardized API response array.
-     *
-     * @param  Event  $event  The event to format.
-     * @return array Formatted event data.
-     */
-    private function formatEventResponse(Event $event): array
-    {
-        $event->loadMissing('user:id,name', 'assignedUsers:id,name');
-
-        return [
-            'id' => $event->id, 'source' => 'manual', 'type' => $event->type,
-            'title' => $event->title, 'description' => $event->description,
-            'event_type' => $event->type, 'event_date' => $event->start_date?->format('Y-m-d'),
-            'start_date' => $event->start_date?->format('Y-m-d\TH:i:s'),
-            'end_date' => $event->end_date?->format('Y-m-d\TH:i:s'),
-            'all_day' => (bool) $event->all_day, 'color' => $event->color,
-            'is_global' => (bool) $event->is_global, 'user_id' => $event->user_id,
-            'creator_name' => $event->user?->name,
-            'assigned_users' => $event->assignedUsers->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->toArray(),
-            'created_at' => $event->created_at?->toIso8601String(),
-            'updated_at' => $event->updated_at?->toIso8601String(),
-        ];
-    }
-
-    /**
-     * Format a date value to ISO 8601 format, or return null if empty.
-     *
-     * @param  mixed  $date  A Carbon instance or date string.
-     * @return string|null Formatted date string or null.
-     */
     private function fmtDate($date): ?string
     {
-        return $date ? (is_string($date) ? $date : $date->format('Y-m-d\TH:i:s')) : null;
-    }
-
-    /**
-     * Get a human-readable label for an event type.
-     *
-     * @param  string  $type  The event type key.
-     * @return string The display label for the event type.
-     */
-    private function getEventTypeLabel(string $type): string
-    {
-        return ['Meeting' => 'Meeting', 'Training' => 'Training', 'Workshop' => 'Workshop', 'Client Meeting' => 'Client Meeting',
-            'Company Event' => 'Company Event', 'Holiday' => 'Holiday', 'Interview' => 'Interview',
-            'Project Milestone' => 'Project Milestone', 'Internship Activity' => 'Internship Activity', 'Other' => 'Other'][$type] ?? $type;
-    }
-
-    /**
-     * Build a notification message based on the event type and sender.
-     *
-     * @param  Event  $event  The event.
-     * @param  User  $sender  The user who triggered the event.
-     * @param  string  $type  The notification type.
-     * @return string The formatted notification message.
-     */
-    private function buildEventMessage(Event $event, User $sender, string $type): string
-    {
-        return match ($type) {
-            'event_created' => "A new event '{$event->title}' has been assigned to you by {$sender->name}.",
-            'event_updated' => "The event '{$event->title}' has been updated. Please review the latest details.",
-            'event_cancelled' => "The event '{$event->title}' has been cancelled.",
-            default => "Event notification: '{$event->title}'.",
-        };
+        return $date ? (is_string($date) ? $date : $date->format('Y-m-d\\TH:i:s')) : null;
     }
 }

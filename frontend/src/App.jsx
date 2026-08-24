@@ -60,6 +60,8 @@ const SubtaskDetails = lazy(() => import("./pages/DeliverableDetails"));
 const SelfDeliveries = lazy(() => import("./pages/SelfDeliveries"));
 const Calender = lazy(() => import("./pages/Calender"));
 const EventsPage = lazy(() => import("./pages/EventsPage"));
+const EventsList = lazy(() => import("./pages/EventsList"));
+const EventEditor = lazy(() => import("./pages/EventEditor"));
 const Notifications = lazy(() => import("./pages/Notifications"));
 const NotificationSettings = lazy(() => import("./pages/NotificationSettings"));
 const Personalization = lazy(() => import("./pages/Personalization"));
@@ -74,6 +76,8 @@ const OrgChat = lazy(() => import("./pages/OrgChatPage"));
 const DraftCenter = lazy(() => import("./pages/DraftCenter"));
 const Templates = lazy(() => import("./pages/Templates"));
 const KnowledgeBase = lazy(() => import("./pages/KnowledgeBase"));
+const KnowledgeBaseList = lazy(() => import("./pages/KnowledgeBaseList"));
+const KnowledgeBaseEditor = lazy(() => import("./pages/KnowledgeBaseEditor"));
 const FeedbackCenter = lazy(() => import("./pages/FeedbackCenter"));
 const BrandingPage = lazy(() => import("./pages/BrandingPage"));
 const SubscriptionPage = lazy(() => import("./pages/SubscriptionPage"));
@@ -310,10 +314,16 @@ function App() {
                     <Route path="my-profile" element={<MyProfile />} />
                     <Route path="calender" element={<Calender />} />
                     <Route path="calendar" element={<Calender />} />
-                    <Route path="events" element={<EventsPage />} />
+                    <Route path="events" element={<EventsList />} />
+                    <Route path="events/create" element={<EventEditor />} />
+                    <Route path="events/edit/:id" element={<EventEditor />} />
+                    <Route path="events/:id" element={<EventEditor />} />
                     <Route path="drafts" element={<DraftCenter />} />
                     <Route path="templates" element={<Templates />} />
-                    <Route path="knowledge-base" element={<KnowledgeBase />} />
+                    <Route path="knowledge-base" element={<KnowledgeBaseList />} />
+                    <Route path="knowledge-base/create" element={<KnowledgeBaseEditor />} />
+                    <Route path="knowledge-base/edit/:id" element={<KnowledgeBaseEditor />} />
+                    <Route path="knowledge-base/:id" element={<KnowledgeBaseEditor />} />
                     <Route path="notifications" element={<Notifications />} />
                     <Route path="settings/notifications" element={<NotificationSettings />} />
                     <Route path="audit-logs" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><AuditLogs /></RoleProtectedRoute>} />
@@ -375,10 +385,16 @@ function App() {
                     <Route path="my-profile" element={<MyProfile />} />
                     <Route path="calender" element={<Calender />} />
                     <Route path="calendar" element={<Calender />} />
-                    <Route path="events" element={<EventsPage />} />
+                    <Route path="events" element={<EventsList />} />
+                    <Route path="events/create" element={<EventEditor />} />
+                    <Route path="events/edit/:id" element={<EventEditor />} />
+                    <Route path="events/:id" element={<EventEditor />} />
                     <Route path="drafts" element={<DraftCenter />} />
                     <Route path="templates" element={<Templates />} />
-                    <Route path="knowledge-base" element={<KnowledgeBase />} />
+                    <Route path="knowledge-base" element={<KnowledgeBaseList />} />
+                    <Route path="knowledge-base/create" element={<KnowledgeBaseEditor />} />
+                    <Route path="knowledge-base/edit/:id" element={<KnowledgeBaseEditor />} />
+                    <Route path="knowledge-base/:id" element={<KnowledgeBaseEditor />} />
                     <Route path="notifications" element={<Notifications />} />
                     <Route path="settings/notifications" element={<NotificationSettings />} />
                     <Route path="audit-logs" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><AuditLogs /></RoleProtectedRoute>} />
