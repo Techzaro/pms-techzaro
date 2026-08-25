@@ -740,7 +740,7 @@ export default function OrganizationDetailPage() {
                             <span className="text-xs" style={s.textSecondary}>{file.file_size_mb} MB</span>
                             <span className="text-xs" style={s.textMuted}>{new Date(file.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                             <button type="button"
-                              onClick={() => { console.log('[DELETE] file clicked', file.id, file.file_name); setStorageFileDeleteConfirm({ open: true, id: file.id }); }}
+                              onClick={() => setStorageFileDeleteConfirm({ open: true, id: file.id })}
                               className="p-1 rounded-md hover:bg-red-50 transition-colors"
                               title="Delete">
                               <Trash2 className="w-3.5 h-3.5" style={{ color: '#ef4444' }} />
@@ -1763,6 +1763,23 @@ export default function OrganizationDetailPage() {
           onSuccess={() => { setToast({ type: 'success', message: 'Admin password updated successfully.' }); }}
         />
       )}
+
+      <ConfirmModal
+        isOpen={storageFileDeleteConfirm.open}
+        onClose={() => setStorageFileDeleteConfirm({ open: false, id: null })}
+        onConfirm={async (done) => {
+          try {
+            await handleDeleteStorageRecord(storageFileDeleteConfirm.id);
+          } finally {
+            setStorageFileDeleteConfirm({ open: false, id: null });
+            done();
+          }
+        }}
+        title="Delete File"
+        message="Are you sure you want to delete this file? This action cannot be undone."
+        confirmText="Delete"
+        danger
+      />
     </div>
   );
 }
@@ -2120,23 +2137,6 @@ function EditOrganizationModal({ org, plans, saving, onSave, onClose }) {
           onClose={() => setShowPlanCustomModal(false)}
         />
       )}
-
-      <ConfirmModal
-        isOpen={storageFileDeleteConfirm.open}
-        onClose={() => setStorageFileDeleteConfirm({ open: false, id: null })}
-        onConfirm={async (done) => {
-          try {
-            await handleDeleteStorageRecord(storageFileDeleteConfirm.id);
-          } finally {
-            setStorageFileDeleteConfirm({ open: false, id: null });
-            done();
-          }
-        }}
-        title="Delete File"
-        message="Are you sure you want to delete this file? This action cannot be undone."
-        confirmText="Delete"
-        danger
-      />
 
       {ConfirmDialog}
     </div>

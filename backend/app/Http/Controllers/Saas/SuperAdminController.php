@@ -363,6 +363,7 @@ class SuperAdminController extends Controller
             // Step 6: Create admin user in tenant DB (active, must_change_password)
             $phone = $validated['phone'] ?? null;
             $hashedPassword = Hash::make($plainPassword);
+            $escaped = str_replace('`', '``', $dbName);
             $pdo = DB::connection('mysql_master')->getPdo();
             $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
             $stmt = $pdo->prepare("INSERT INTO `{$escaped}`.`users` (name, email, personal_email, professional_email, phone_number, contact_no, password, role, active, must_change_password, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'admin', 1, 1, NOW(), NOW())");
