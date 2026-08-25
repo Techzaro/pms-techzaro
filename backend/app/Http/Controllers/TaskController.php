@@ -19,6 +19,7 @@ use App\Services\AuditService;
 use App\Services\DelegationService;
 use App\Services\NotificationService;
 use App\Services\RecurringService;
+use App\Services\StorageDiskResolver;
 use App\Traits\HasStorageEnforcement;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -626,6 +627,35 @@ class TaskController extends Controller
             'changes' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
             'deliverableTemplates',
         ]);
+
+        $org = request()->attributes->get('currentOrganization');
+        if ($org) {
+            if ($task->files) StorageDiskResolver::resolveFileUrls($task->files, $org);
+            if ($task->project && $task->project->files) StorageDiskResolver::resolveFileUrls($task->project->files, $org);
+            if (!empty($task->reopen_file_path)) {
+                $task->reopen_file_path = collect(explode(',', $task->reopen_file_path))
+                    ->filter()->map(fn($p) => StorageDiskResolver::resolveUrl($org, trim($p)))->implode(',');
+            }
+            if ($task->submissions) {
+                $task->submissions->each(function ($sub) use ($org) {
+                    if (!empty($sub->file_path) && !str_starts_with($sub->file_path, 'http') && !str_starts_with($sub->file_path, '/storage/')) {
+                        $sub->file_path = StorageDiskResolver::resolveUrl($org, $sub->file_path);
+                    }
+                    if ($sub->attachments) {
+                        StorageDiskResolver::resolveFileUrls($sub->attachments, $org);
+                    }
+                });
+            }
+            if ($task->latestSubmission && !isset($task->submissions)) {
+                $sub = $task->latestSubmission;
+                if (!empty($sub->file_path) && !str_starts_with($sub->file_path, 'http') && !str_starts_with($sub->file_path, '/storage/')) {
+                    $sub->file_path = StorageDiskResolver::resolveUrl($org, $sub->file_path);
+                }
+                if ($sub->attachments) {
+                    StorageDiskResolver::resolveFileUrls($sub->attachments, $org);
+                }
+            }
+        }
 
         $isCreator = (int) $task->assigned_by === (int) $user->id;
         $isAssignee = $task->assignees->contains('id', $user->id);
@@ -2718,10 +2748,15 @@ class TaskController extends Controller
         ]);
 
         $filePath = $fileName = null;
+        $org = $request->attributes->get('currentOrganization');
         if ($request->hasFile('file')) {
             $file = $request->file('file');
             $fileName = $file->getClientOriginalName();
-            $filePath = $file->store('task-submissions/'.$task->id, 'public');
+            if ($org) {
+                $filePath = StorageDiskResolver::store($org, $file, 'task-submissions/'.$task->id);
+            } else {
+                $filePath = $file->store('task-submissions/'.$task->id, 'public');
+            }
         }
 
         $submission = TaskSubmission::create([
@@ -2735,11 +2770,13 @@ class TaskController extends Controller
             $submission->attachments()->createMany(
                 collect($request->file('files'))->map(fn ($file) => [
                     'submission_type' => 'task',
-                    'file_name' => basename($path = $file->store('task-submissions/'.$task->id, 'public')),
+                    'file_name' => basename($path = $org
+                        ? StorageDiskResolver::store($org, $file, 'task-submissions/'.$task->id)
+                        : $file->store('task-submissions/'.$task->id, 'public')),
                     'original_name' => $file->getClientOriginalName(), 'file_path' => $path,
                     'file_type' => $file->getMimeType(), 'file_size' => $file->getSize(),
                     'attachment_type' => str_starts_with($file->getMimeType(), 'image/') ? 'image' : 'file',
-                    'url' => '/storage/'.$path,
+                    'url' => $org ? (StorageDiskResolver::isS3($org) ? $path : '/storage/'.$path) : '/storage/'.$path,
                 ])->toArray()
             );
         }
@@ -2952,7 +2989,12 @@ class TaskController extends Controller
         if ($request->hasFile('file')) {
             $file = $request->file('file');
             $submission->file_name = $file->getClientOriginalName();
-            $submission->file_path = $file->store('task-submissions/'.$task->id, 'public');
+            $org = $request->attributes->get('currentOrganization');
+            if ($org) {
+                $submission->file_path = StorageDiskResolver::store($org, $file, 'task-submissions/'.$task->id);
+            } else {
+                $submission->file_path = $file->store('task-submissions/'.$task->id, 'public');
+            }
         }
 
         $submission->save();
@@ -2961,13 +3003,15 @@ class TaskController extends Controller
             $submission->attachments()->createMany(
                 collect($request->file('files'))->map(fn ($file) => [
                     'submission_type' => 'task',
-                    'file_name' => basename($path = $file->store('task-submissions/'.$task->id, 'public')),
+                    'file_name' => basename($path = $org
+                        ? StorageDiskResolver::store($org, $file, 'task-submissions/'.$task->id)
+                        : $file->store('task-submissions/'.$task->id, 'public')),
                     'original_name' => $file->getClientOriginalName(),
                     'file_path' => $path,
                     'file_type' => $file->getMimeType(),
                     'file_size' => $file->getSize(),
                     'attachment_type' => str_starts_with($file->getMimeType(), 'image/') ? 'image' : 'file',
-                    'url' => '/storage/'.$path,
+                    'url' => $org ? (StorageDiskResolver::isS3($org) ? $path : '/storage/'.$path) : '/storage/'.$path,
                 ])->toArray()
             );
         }
@@ -3301,6 +3345,7 @@ class TaskController extends Controller
         $filePaths = [];
         $fileNames = [];
         $uploadedFiles = [];
+        $org = $request->attributes->get('currentOrganization');
         if ($request->hasFile('files')) {
             $uploadedFiles = $request->file('files');
         } elseif ($request->hasFile('file')) {
@@ -3310,7 +3355,11 @@ class TaskController extends Controller
         foreach ($uploadedFiles as $uploadedFile) {
             if ($uploadedFile && $uploadedFile->isValid()) {
                 $fileNames[] = $uploadedFile->getClientOriginalName();
-                $filePaths[] = $uploadedFile->store('task-reopen/'.$task->id, 'public');
+                if ($org) {
+                    $filePaths[] = StorageDiskResolver::store($org, $uploadedFile, 'task-reopen/'.$task->id);
+                } else {
+                    $filePaths[] = $uploadedFile->store('task-reopen/'.$task->id, 'public');
+                }
             }
         }
 
@@ -3513,6 +3562,11 @@ class TaskController extends Controller
             return response()->json(['success' => false, 'message' => 'Cannot delete a task that is '.$task->status], 422);
         }
 
+        $org = request()->attributes->get('currentOrganization');
+        if ($org) {
+            $this->cleanupTaskFiles($task, $org);
+        }
+
         $task->assignees()->detach();
         $task->deliverables()->delete();
         $task->files()->delete();
@@ -3533,6 +3587,46 @@ class TaskController extends Controller
         }
 
         return response()->json(['success' => true, 'message' => 'Task deleted successfully']);
+    }
+
+    private function cleanupTaskFiles(Task $task, $org): void
+    {
+        try {
+            foreach ($task->files as $file) {
+                if (!empty($file->url)) {
+                    StorageDiskResolver::delete($org, $file->url);
+                }
+            }
+            foreach ($task->submissions as $submission) {
+                if (!empty($submission->file_path)) {
+                    StorageDiskResolver::delete($org, $submission->file_path);
+                }
+                foreach ($submission->attachments as $att) {
+                    if (!empty($att->file_path)) {
+                        StorageDiskResolver::delete($org, $att->file_path);
+                    }
+                }
+            }
+            foreach ($task->deliverables as $deliverable) {
+                foreach ($deliverable->files as $file) {
+                    if (!empty($file->url)) {
+                        StorageDiskResolver::delete($org, $file->url);
+                    }
+                }
+                foreach ($deliverable->submissions as $submission) {
+                    if (!empty($submission->file_path)) {
+                        StorageDiskResolver::delete($org, $submission->file_path);
+                    }
+                    foreach ($submission->attachments as $att) {
+                        if (!empty($att->file_path)) {
+                            StorageDiskResolver::delete($org, $att->file_path);
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            \Log::error('Failed to cleanup task files: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -3564,12 +3658,23 @@ class TaskController extends Controller
             return response()->json(['success' => false, 'message' => $storageCheck['message']], 422);
         }
 
-        $path = $file->store('task-files/'.$task->id, 'public');
-        $this->trackFileUpload($request, 'attachments', '/storage/'.$path, $file->getClientOriginalName(), $file->getMimeType(), $file->getSize());
+        $org = $request->attributes->get('currentOrganization');
+        if ($org) {
+            $path = StorageDiskResolver::store($org, $file, 'task-files/'.$task->id);
+            $fileUrl = StorageDiskResolver::isS3($org) ? $path : '/storage/'.$path;
+        } else {
+            $path = $file->store('task-files/'.$task->id, 'public');
+            $fileUrl = '/storage/'.$path;
+        }
+        try { $this->trackFileUpload($request, 'attachments', $fileUrl, $file->getClientOriginalName(), $file->getMimeType(), $file->getSize()); } catch (\Throwable $e) { \Log::warning('trackFileUpload failed: '.$e->getMessage()); }
 
         $customName = $request->input('name') ?: $file->getClientOriginalName();
         $nextOrder = $task->files()->max('sort_order') + 1;
-        $fileRecord = $task->files()->create(['name' => $customName, 'url' => '/storage/'.$path, 'sort_order' => $nextOrder]);
+        $fileRecord = $task->files()->create(['name' => $customName, 'url' => $fileUrl, 'sort_order' => $nextOrder]);
+
+        if ($org) {
+            $fileRecord->url = StorageDiskResolver::resolveUrl($org, $fileRecord->url);
+        }
 
         TaskChange::create([
             'task_id' => $task->id,
@@ -3655,7 +3760,10 @@ class TaskController extends Controller
         }
 
         $fileName = $file->name;
-        if ($file->url && str_starts_with($file->url, '/storage/')) {
+        $org = request()->attributes->get('currentOrganization');
+        if ($org && $file->url) {
+            StorageDiskResolver::delete($org, $file->url);
+        } elseif ($file->url && str_starts_with($file->url, '/storage/')) {
             $relativePath = str_replace('/storage/', '', $file->url);
             Storage::disk('public')->delete($relativePath);
         }

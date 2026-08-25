@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Project;
 use App\Models\Template;
+use App\Services\StorageDiskResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -89,7 +90,12 @@ class TemplateController extends Controller
 
         $filePath = null;
         if ($request->hasFile('file')) {
-            $filePath = $request->file('file')->store('templates', 'public');
+            $org = $request->attributes->get('currentOrganization');
+            if ($org) {
+                $filePath = StorageDiskResolver::store($org, $request->file('file'), 'templates');
+            } else {
+                $filePath = $request->file('file')->store('templates', 'public');
+            }
         }
 
         $templateData = [
@@ -148,7 +154,12 @@ class TemplateController extends Controller
             if ($template->file_path) {
                 Storage::disk('public')->delete($template->file_path);
             }
-            $filePath = $request->file('file')->store('templates', 'public');
+            $org = $request->attributes->get('currentOrganization');
+            if ($org) {
+                $filePath = StorageDiskResolver::store($org, $request->file('file'), 'templates');
+            } else {
+                $filePath = $request->file('file')->store('templates', 'public');
+            }
         }
 
         $currentData = $template->data ?? [];

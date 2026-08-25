@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import Breadcrumb from '../components/Breadcrumb';
 import api from '../lib/api';
+import ConfirmModal from '../components/ConfirmModal';
 import {
   HardDrive, FileText, Image, Archive, FolderOpen, TrendingUp,
   AlertTriangle, CheckCircle, Trash2, Clock, ChevronDown, ChevronUp,
@@ -47,6 +48,7 @@ export default function StoragePage() {
   const [preferences, setPreferences] = useState(null);
   const [prefLoading, setPrefLoading] = useState(false);
   const [prefSaving, setPrefSaving] = useState(false);
+  const [singleDeleteConfirm, setSingleDeleteConfirm] = useState({ open: false, id: null });
 
   useEffect(() => {
     fetchAllData();
@@ -522,7 +524,7 @@ export default function StoragePage() {
                         {file.file_size_mb} MB
                       </span>
                       <button
-                        onClick={() => handleDeleteSingleFile(file.id)}
+                        onClick={() => setSingleDeleteConfirm({ open: true, id: file.id })}
                         style={{
                           padding: '6px 10px', borderRadius: '8px', border: 'none',
                           background: 'var(--color-danger-bg)', color: 'var(--color-danger)',
@@ -573,7 +575,7 @@ export default function StoragePage() {
                         {new Date(file.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       </span>
                       <button
-                        onClick={() => handleDeleteSingleFile(file.id)}
+                        onClick={() => setSingleDeleteConfirm({ open: true, id: file.id })}
                         style={{
                           padding: '4px 8px', borderRadius: '6px', border: 'none',
                           background: 'transparent', color: 'var(--text-muted)',
@@ -1150,6 +1152,19 @@ export default function StoragePage() {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={singleDeleteConfirm.open}
+        onClose={() => setSingleDeleteConfirm({ open: false, id: null })}
+        onConfirm={() => {
+          handleDeleteSingleFile(singleDeleteConfirm.id);
+          setSingleDeleteConfirm({ open: false, id: null });
+        }}
+        title="Delete File"
+        message="Are you sure you want to delete this file? This action cannot be undone."
+        confirmText="Delete"
+        danger
+      />
     </DashboardLayout>
   );
 }

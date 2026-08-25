@@ -1577,29 +1577,18 @@ function ProjectDetails() {
                                       <div className="pd-file-box__drag-handle">
                                         <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={f.id} businessId={f.business_id} color="#16a34a" />
                                       </div>
-                                      <div className="pd-file-box__content">
-                                         <a
-                                           href={fileUrl(f.url || f.file_path || f.path)}
-                                           target="_blank"
-                                           rel="noopener noreferrer"
-                                           className="pd-file-box__name"
-                                           style={{ textDecoration: "none", color: "inherit", display: "inline-flex", alignItems: "center", gap: "6px" }}
-                                         >
-                                           <FolderOpen size={18} />
-                                           <span style={{ fontWeight: 600, color: "var(--color-primary)" }}>{f.name}</span>
-                                         </a>
-                                         {f.url && (
-                                           <a
-                                             href={fileUrl(f.url)}
-                                             target="_blank"
-                                             rel="noopener noreferrer"
-                                             className="pd-file-box__link"
-                                             style={{ color: "var(--color-primary)", marginTop: "4px", display: "block" }}
-                                           >
-                                             {f.url}
-                                           </a>
-                                         )}
-                                       </div>
+                                       <div className="pd-file-box__content">
+                                          <a
+                                            href={fileUrl(f.url || f.file_path || f.path)}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="pd-file-box__name"
+                                            style={{ textDecoration: "none", color: "inherit", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                                          >
+                                            <FolderOpen size={18} />
+                                            <span style={{ fontWeight: 600, color: "var(--color-primary)" }}>{f.name}</span>
+                                          </a>
+                                        </div>
                                     </div>
                                   );
                                 }}

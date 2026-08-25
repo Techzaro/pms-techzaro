@@ -47,6 +47,17 @@ class FileStorageService
         }
         $cleanCandidates = array_unique($cleanCandidates);
 
+        // Check if path looks like an S3 key (org-{id}/...) and try S3 disk
+        $org = request()->attributes->get('currentOrganization');
+        if ($org && \App\Services\StorageDiskResolver::isS3($org)) {
+            \App\Services\StorageDiskResolver::getDisk($org);
+            foreach ($cleanCandidates as $cand) {
+                if (Storage::disk('s3')->exists($cand)) {
+                    return ['disk' => 's3', 'path' => $cand];
+                }
+            }
+        }
+
         // Check on public disk
         foreach ($cleanCandidates as $cand) {
             if (Storage::disk('public')->exists($cand)) {

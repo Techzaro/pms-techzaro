@@ -32,18 +32,17 @@ class TenantFilesystemManager
     {
         $settings = $organization->settings ?? [];
 
-        // Check for per-tenant cloud storage settings
-        if (!empty($settings['s3_key'])) {
+        // Check for S3 storage via DB columns
+        if ($organization->storage_driver === 's3' && $organization->storage_s3_access_key && $organization->storage_s3_bucket) {
             return [
                 'disk' => 'tenant_s3',
                 'config' => [
-                    'driver' => 's3',
-                    'key'    => $settings['s3_key'],
-                    'secret' => $settings['s3_secret'],
-                    'region' => $settings['s3_region'] ?? 'us-east-1',
-                    'bucket' => $settings['s3_bucket'],
-                    'url'    => $settings['s3_url'] ?? null,
-                    'endpoint' => $settings['s3_endpoint'] ?? null,
+                    'driver'                  => 's3',
+                    'key'                     => $organization->storage_s3_access_key,
+                    'secret'                  => $organization->storage_s3_secret_key,
+                    'region'                  => $organization->storage_s3_region ?? 'us-east-1',
+                    'bucket'                  => $organization->storage_s3_bucket,
+                    'use_path_style_endpoint' => false,
                 ],
             ];
         }

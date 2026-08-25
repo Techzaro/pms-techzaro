@@ -7,6 +7,7 @@ use App\Models\Project;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use App\Services\StorageDiskResolver;
 
 class KnowledgeBaseController extends Controller
 {
@@ -122,7 +123,12 @@ class KnowledgeBaseController extends Controller
         if ($request->hasFile('file')) {
             $file = $request->file('file');
             $fileName = $file->getClientOriginalName();
-            $filePath = $file->store('knowledge_base', 'public');
+            $org = $request->attributes->get('currentOrganization');
+            if ($org) {
+                $filePath = StorageDiskResolver::store($org, $file, 'knowledge_base');
+            } else {
+                $filePath = $file->store('knowledge_base', 'public');
+            }
         }
 
         $item = KnowledgeBase::create([
@@ -165,19 +171,33 @@ class KnowledgeBaseController extends Controller
         $filePath = $knowledgeBase->file_path;
         $fileName = $knowledgeBase->file_name;
 
+        $org = $request->attributes->get('currentOrganization');
+
         if ($request->boolean('delete_file') && $filePath) {
-            Storage::disk('public')->delete($filePath);
+            if ($org) {
+                StorageDiskResolver::delete($org, $filePath);
+            } else {
+                Storage::disk('public')->delete($filePath);
+            }
             $filePath = null;
             $fileName = null;
         }
 
         if ($request->hasFile('file')) {
             if ($knowledgeBase->file_path) {
-                Storage::disk('public')->delete($knowledgeBase->file_path);
+                if ($org) {
+                    StorageDiskResolver::delete($org, $knowledgeBase->file_path);
+                } else {
+                    Storage::disk('public')->delete($knowledgeBase->file_path);
+                }
             }
             $file = $request->file('file');
             $fileName = $file->getClientOriginalName();
-            $filePath = $file->store('knowledge_base', 'public');
+            if ($org) {
+                $filePath = StorageDiskResolver::store($org, $file, 'knowledge_base');
+            } else {
+                $filePath = $file->store('knowledge_base', 'public');
+            }
         }
 
         $knowledgeBase->update([
@@ -207,7 +227,12 @@ class KnowledgeBaseController extends Controller
         }
 
         if ($knowledgeBase->file_path) {
-            Storage::disk('public')->delete($knowledgeBase->file_path);
+            $org = $request->attributes->get('currentOrganization');
+            if ($org) {
+                StorageDiskResolver::delete($org, $knowledgeBase->file_path);
+            } else {
+                Storage::disk('public')->delete($knowledgeBase->file_path);
+            }
         }
 
         $knowledgeBase->delete();

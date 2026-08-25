@@ -8,6 +8,7 @@ use App\Models\Master\Organization;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use App\Services\StorageDiskResolver;
 
 class OrgChatController extends Controller
 {
@@ -96,7 +97,12 @@ class OrgChatController extends Controller
         if ($request->hasFile('file')) {
             $file = $request->file('file');
             $filename = 'org_chat_' . time() . '_' . mt_rand(10000, 99999) . '_' . $file->getClientOriginalName();
-            $path = $file->storeAs('org_chat_files/' . $conversation->id, $filename, 'public');
+            $org = Organization::find($conversation->organization_id);
+            if ($org) {
+                $path = StorageDiskResolver::store($org, $file, 'org_chat_files/' . $conversation->id, $filename);
+            } else {
+                $path = $file->storeAs('org_chat_files/' . $conversation->id, $filename, 'public');
+            }
             $messageData['file_path'] = $path;
             $messageData['file_name'] = $file->getClientOriginalName();
         }
@@ -168,7 +174,11 @@ class OrgChatController extends Controller
         if ($request->hasFile('file')) {
             $file = $request->file('file');
             $filename = 'org_chat_' . time() . '_' . mt_rand(10000, 99999) . '_' . $file->getClientOriginalName();
-            $path = $file->storeAs('org_chat_files/' . $conversation->id, $filename, 'public');
+            if ($org) {
+                $path = StorageDiskResolver::store($org, $file, 'org_chat_files/' . $conversation->id, $filename);
+            } else {
+                $path = $file->storeAs('org_chat_files/' . $conversation->id, $filename, 'public');
+            }
             $messageData['file_path'] = $path;
             $messageData['file_name'] = $file->getClientOriginalName();
         }
@@ -188,10 +198,19 @@ class OrgChatController extends Controller
     {
         $message = OrgChatMessage::findOrFail($messageId);
 
-        if (!$message->file_path || !Storage::disk('public')->exists($message->file_path)) {
+        $org = Organization::find($message->conversation->organization_id ?? null);
+        if ($org) {
+            $exists = StorageDiskResolver::exists($org, $message->file_path);
+        } else {
+            $exists = Storage::disk('public')->exists($message->file_path);
+        }
+        if (!$message->file_path || !$exists) {
             return response()->json(['success' => false, 'message' => 'File not found'], 404);
         }
 
+        if ($org) {
+            return Storage::disk(StorageDiskResolver::getDisk($org))->download($message->file_path, $message->file_name);
+        }
         return Storage::disk('public')->download($message->file_path, $message->file_name);
     }
 

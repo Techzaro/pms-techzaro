@@ -4,7 +4,7 @@ import {
   ArrowLeft, Building2, Users, FolderKanban, Database, Globe, Calendar,
   Shield, Loader2, Mail, User, Phone, MailCheck, CreditCard, HardDrive, Check, Pencil, X, ArrowRight, Clock, RotateCcw, Sliders,
   HardDrive as StorageIcon, FileText, Image, Archive, FolderOpen, AlertTriangle, Trash2, Info, DollarSign, Receipt, TrendingUp,
-  CheckCircle, XCircle, Eye, Download, Bell, Settings, AlertCircle, Lock,
+  CheckCircle, XCircle, Eye, EyeOff, Download, Bell, Settings, AlertCircle, Lock,
 } from 'lucide-react';
 import StatusBadge from './components/StatusBadge';
 import { LoadingState, ErrorState } from './components/LoadingState';
@@ -62,9 +62,14 @@ export default function OrganizationDetailPage() {
   const [toast, setToast] = useState(null);
   const [storageNotifications, setStorageNotifications] = useState([]);
   const [storagePinned, setStoragePinned] = useState([]);
+  const [storageFileDeleteConfirm, setStorageFileDeleteConfirm] = useState({ open: false, id: null });
   const [storagePreferences, setStoragePreferences] = useState(null);
   const [prefLoading, setPrefLoading] = useState(false);
   const [prefSaving, setPrefSaving] = useState(false);
+  const [testingS3, setTestingS3] = useState(false);
+  const [s3TestResult, setS3TestResult] = useState(null);
+  const [showAccessKey, setShowAccessKey] = useState(false);
+  const [showSecretKey, setShowSecretKey] = useState(false);
   const [driverMode, setDriverMode] = useState('local');
   const [billingData, setBillingData] = useState(null);
   const [billingLoading, setBillingLoading] = useState(false);
@@ -734,7 +739,7 @@ export default function OrganizationDetailPage() {
                           <div className="flex items-center gap-3 flex-shrink-0">
                             <span className="text-xs" style={s.textSecondary}>{file.file_size_mb} MB</span>
                             <span className="text-xs" style={s.textMuted}>{new Date(file.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                            <button onClick={() => handleDeleteStorageRecord(file.id)}
+                            <button onClick={() => setStorageFileDeleteConfirm({ open: true, id: file.id })}
                               className="p-1 rounded-md hover:bg-red-50 transition-colors" title="Delete">
                               <Trash2 className="w-3.5 h-3.5" style={{ color: 'var(--color-danger)' }} />
                             </button>
@@ -864,180 +869,284 @@ export default function OrganizationDetailPage() {
 
                 {/* Preferences Tab */}
                 {storageTab === 'preferences' && (
-                  <div className="rounded-xl p-5 shadow-sm" style={s.card}>
-                    <h3 className="text-sm font-semibold mb-4 flex items-center gap-2" style={s.textHeading}>
-                      <Settings className="w-4 h-4" style={{ color: 'var(--color-primary)' }} /> Storage Preferences
+                  <div className="rounded-xl p-6 shadow-sm" style={s.card}>
+                    <h3 className="text-base font-semibold mb-5 flex items-center gap-2" style={s.textHeading}>
+                      <Settings className="w-5 h-5" style={{ color: 'var(--color-primary)' }} /> Storage Preferences
                     </h3>
                     {prefLoading ? (
                       <div className="flex items-center gap-2 py-6 justify-center">
-                        <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'var(--color-primary)' }} />
-                        <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Loading preferences...</span>
+                        <Loader2 className="w-5 h-5 animate-spin" style={{ color: 'var(--color-primary)' }} />
+                        <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Loading preferences...</span>
                       </div>
                     ) : storagePreferences ? (
-                      <div className="space-y-4" data-storage-prefs>
+                      <div className="space-y-5" data-storage-prefs>
                         {/* Storage Driver */}
-                        <div className="p-4 rounded-lg" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-light)' }}>
-                          <p className="text-xs font-semibold mb-3" style={{ color: 'var(--color-primary)' }}>Storage Driver</p>
-                          <p className="text-[11px] mb-3" style={{ color: 'var(--text-muted)' }}>Choose where this organization stores files. Switching drivers does NOT migrate existing files.</p>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="p-5 rounded-xl" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-light)' }}>
+                          <p className="text-sm font-semibold mb-2" style={{ color: 'var(--color-primary)' }}>Storage Driver</p>
+                          <p className="text-sm mb-4" style={{ color: 'var(--text-muted)' }}>Choose where this organization stores files. Switching drivers does NOT migrate existing files.</p>
+                          <div style={{ display: 'flex', flexDirection: 'row', gap: '16px' }}>
                             {/* Local Option */}
-                            <label className="p-4 rounded-lg cursor-pointer flex items-start gap-3 transition-all"
+                            <div onClick={() => setDriverMode('local')}
                               style={{
+                                flex: 1, padding: '10px 16px', borderRadius: '12px', cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'nowrap',
                                 background: driverMode === 'local' ? 'var(--color-primary-bg)' : 'var(--bg-primary)',
-                                border: driverMode === 'local' ? '2px solid var(--color-primary)' : '2px solid var(--border)',
+                                border: driverMode === 'local' ? '2px solid var(--color-primary)' : '2px solid var(--border-color)',
                               }}>
-                              <input type="radio" name="storage_driver" value="local"
+                              <input type="radio" name="storage_driver" value="local" readOnly
                                 checked={driverMode === 'local'}
-                                onChange={() => setDriverMode('local')}
-                                className="mt-0.5" style={{ accentColor: 'var(--color-primary)' }} />
-                              <div>
-                                <div className="flex items-center gap-1.5">
-                                  <HardDrive className="w-4 h-4" style={{ color: 'var(--color-primary)' }} />
-                                  <span className="text-xs font-semibold" style={s.text}>Local Server</span>
-                                </div>
-                                <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>Store files on the application server disk</p>
-                              </div>
-                            </label>
+                                style={{ accentColor: 'var(--color-primary)', margin: 0, display: 'inline' }} />
+                              <HardDrive style={{ width: '16px', height: '16px', color: 'var(--color-primary)', flexShrink: 0 }} />
+                              <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', flexShrink: 0 }}>Local Server</span>
+                              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>- Store files on the application server disk</span>
+                            </div>
                             {/* S3 Option */}
-                            <label className="p-4 rounded-lg cursor-pointer flex items-start gap-3 transition-all"
+                            <div onClick={() => setDriverMode('s3')}
                               style={{
+                                flex: 1, padding: '10px 16px', borderRadius: '12px', cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'nowrap',
                                 background: driverMode === 's3' ? 'var(--color-primary-bg)' : 'var(--bg-primary)',
-                                border: driverMode === 's3' ? '2px solid var(--color-primary)' : '2px solid var(--border)',
+                                border: driverMode === 's3' ? '2px solid var(--color-primary)' : '2px solid var(--border-color)',
                               }}>
-                              <input type="radio" name="storage_driver" value="s3"
+                              <input type="radio" name="storage_driver" value="s3" readOnly
                                 checked={driverMode === 's3'}
-                                onChange={() => setDriverMode('s3')}
-                                className="mt-0.5" style={{ accentColor: 'var(--color-primary)' }} />
-                              <div>
-                                <div className="flex items-center gap-1.5">
-                                  <Globe className="w-4 h-4" style={{ color: '#f59e0b' }} />
-                                  <span className="text-xs font-semibold" style={s.text}>AWS S3</span>
-                                </div>
-                                <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>Store files on Amazon S3 cloud storage</p>
-                              </div>
-                            </label>
+                                style={{ accentColor: 'var(--color-primary)', margin: 0, display: 'inline' }} />
+                              <Globe style={{ width: '16px', height: '16px', color: '#f59e0b', flexShrink: 0 }} />
+                              <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', flexShrink: 0 }}>AWS S3</span>
+                              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>- Store files on Amazon S3 cloud storage</span>
+                            </div>
                           </div>
                         </div>
 
                         {/* S3 Configuration (shown only when S3 is selected) */}
-                        <div className="p-4 rounded-lg" id="s3-config-section"
+                        <div className="p-5 rounded-xl" id="s3-config-section"
                           style={{
                             background: 'var(--bg-hover)',
                             border: driverMode === 's3' ? '2px solid #f59e0b' : '1px solid var(--border-light)',
                             opacity: driverMode === 's3' ? 1 : 0.5,
                             transition: 'all 0.2s ease',
                           }}>
-                          <p className="text-xs font-semibold mb-3 flex items-center gap-1.5" style={{ color: '#f59e0b' }}>
-                            <Globe className="w-3.5 h-3.5" /> S3 Configuration
+                          <p className="text-sm font-semibold mb-4 flex items-center gap-1.5" style={{ color: '#f59e0b' }}>
+                            <Globe className="w-4 h-4" /> S3 Configuration
                           </p>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                              <label className="text-xs" style={{ color: 'var(--text-secondary)' }}>Bucket Name *</label>
+                              <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Bucket Name *</label>
                               <input type="text" name="s3_bucket" defaultValue={storagePreferences.s3_bucket || ''} disabled={driverMode !== 's3'}
                                 placeholder="my-pms-bucket"
-                                className="w-full mt-1 p-2 rounded-lg text-sm" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
+                                className="w-full mt-1.5 p-2.5 rounded-lg text-sm transition-all"
+                                style={{ background: 'var(--bg-primary)', border: '2px solid #64748b', color: 'var(--text-primary)' }}
+                                onFocus={(e) => { e.target.style.borderColor = 'var(--color-primary)'; e.target.style.boxShadow = '0 0 0 3px var(--color-primary-bg)'; }}
+                                onBlur={(e) => { e.target.style.borderColor = '#64748b'; e.target.style.boxShadow = 'none'; }}
+                                onMouseEnter={(e) => { if (document.activeElement !== e.target) e.target.style.borderColor = '#94a3b8'; }}
+                                onMouseLeave={(e) => { if (document.activeElement !== e.target) e.target.style.borderColor = '#64748b'; }} />
                             </div>
                             <div>
-                              <label className="text-xs" style={{ color: 'var(--text-secondary)' }}>Region *</label>
+                              <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Region *</label>
                               <select name="s3_region" defaultValue={storagePreferences.s3_region || 'us-east-1'} disabled={driverMode !== 's3'}
-                                className="w-full mt-1 p-2 rounded-lg text-sm" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}>
-                                {['us-east-1','us-east-2','us-west-1','us-west-2','eu-west-1','eu-west-2','eu-central-1','ap-south-1','ap-southeast-1','ap-northeast-1','sa-east-1'].map(r => (
+                                className="w-full mt-1.5 p-2.5 rounded-lg text-sm transition-all"
+                                style={{ background: 'var(--bg-primary)', border: '2px solid #64748b', color: 'var(--text-primary)' }}
+                                onFocus={(e) => { e.target.style.borderColor = 'var(--color-primary)'; e.target.style.boxShadow = '0 0 0 3px var(--color-primary-bg)'; }}
+                                onBlur={(e) => { e.target.style.borderColor = '#64748b'; e.target.style.boxShadow = 'none'; }}
+                                onMouseEnter={(e) => { if (document.activeElement !== e.target) e.target.style.borderColor = '#94a3b8'; }}
+                                onMouseLeave={(e) => { if (document.activeElement !== e.target) e.target.style.borderColor = '#64748b'; }}>
+                                {['us-east-1','us-east-2','us-west-1','us-west-2','eu-north-1','eu-west-1','eu-west-2','eu-central-1','ap-south-1','ap-southeast-1','ap-northeast-1','sa-east-1'].map(r => (
                                   <option key={r} value={r}>{r}</option>
                                 ))}
                               </select>
                             </div>
                             <div>
-                              <label className="text-xs" style={{ color: 'var(--text-secondary)' }}>Path Prefix</label>
+                              <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Path Prefix</label>
                               <input type="text" name="s3_prefix" defaultValue={storagePreferences.s3_prefix || `org-${id}/`} disabled={driverMode !== 's3'}
                                 placeholder={`org-${id}/`}
-                                className="w-full mt-1 p-2 rounded-lg text-sm" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
+                                className="w-full mt-1.5 p-2.5 rounded-lg text-sm transition-all"
+                                style={{ background: 'var(--bg-primary)', border: '2px solid #64748b', color: 'var(--text-primary)' }}
+                                onFocus={(e) => { e.target.style.borderColor = 'var(--color-primary)'; e.target.style.boxShadow = '0 0 0 3px var(--color-primary-bg)'; }}
+                                onBlur={(e) => { e.target.style.borderColor = '#64748b'; e.target.style.boxShadow = 'none'; }}
+                                onMouseEnter={(e) => { if (document.activeElement !== e.target) e.target.style.borderColor = '#94a3b8'; }}
+                                onMouseLeave={(e) => { if (document.activeElement !== e.target) e.target.style.borderColor = '#64748b'; }} />
                             </div>
                             <div>
-                              <label className="text-xs" style={{ color: 'var(--text-secondary)' }}>Access Key ID</label>
-                              <input type="password" name="s3_access_key" defaultValue={storagePreferences.s3_access_key ? '••••••••' : ''} disabled={driverMode !== 's3'}
-                                placeholder="AKIA..."
-                                className="w-full mt-1 p-2 rounded-lg text-sm" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
+                              <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Access Key ID</label>
+                              <div style={{ position: 'relative' }}>
+                                <input type={showAccessKey ? 'text' : 'password'} name="s3_access_key" defaultValue={storagePreferences.s3_access_key || ''} disabled={driverMode !== 's3'}
+                                  placeholder="AKIA..."
+                                  className="w-full mt-1.5 p-2.5 pr-10 rounded-lg text-sm transition-all"
+                                  style={{ background: 'var(--bg-primary)', border: '2px solid #64748b', color: 'var(--text-primary)' }}
+                                  onFocus={(e) => { e.target.style.borderColor = 'var(--color-primary)'; e.target.style.boxShadow = '0 0 0 3px var(--color-primary-bg)'; }}
+                                  onBlur={(e) => { e.target.style.borderColor = '#64748b'; e.target.style.boxShadow = 'none'; }}
+                                  onMouseEnter={(e) => { if (document.activeElement !== e.target) e.target.style.borderColor = '#94a3b8'; }}
+                                  onMouseLeave={(e) => { if (document.activeElement !== e.target) e.target.style.borderColor = '#64748b'; }} />
+                                {driverMode === 's3' && storagePreferences.s3_access_key && (
+                                  <button type="button" onClick={() => setShowAccessKey(!showAccessKey)}
+                                    style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}>
+                                    {showAccessKey ? <EyeOff size={16} style={{ color: 'var(--text-muted)' }} /> : <Eye size={16} style={{ color: 'var(--text-muted)' }} />}
+                                  </button>
+                                )}
+                              </div>
                             </div>
                             <div>
-                              <label className="text-xs" style={{ color: 'var(--text-secondary)' }}>Secret Access Key</label>
-                              <input type="password" name="s3_secret_key" defaultValue={storagePreferences.s3_secret_key ? '••••••••' : ''} disabled={driverMode !== 's3'}
-                                placeholder="••••••••"
-                                className="w-full mt-1 p-2 rounded-lg text-sm" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
+                              <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Secret Access Key</label>
+                              <div style={{ position: 'relative' }}>
+                                <input type={showSecretKey ? 'text' : 'password'} name="s3_secret_key" defaultValue={storagePreferences.s3_secret_key || ''} disabled={driverMode !== 's3'}
+                                  placeholder="••••••••"
+                                  className="w-full mt-1.5 p-2.5 pr-10 rounded-lg text-sm transition-all"
+                                  style={{ background: 'var(--bg-primary)', border: '2px solid #64748b', color: 'var(--text-primary)' }}
+                                  onFocus={(e) => { e.target.style.borderColor = 'var(--color-primary)'; e.target.style.boxShadow = '0 0 0 3px var(--color-primary-bg)'; }}
+                                  onBlur={(e) => { e.target.style.borderColor = '#64748b'; e.target.style.boxShadow = 'none'; }}
+                                  onMouseEnter={(e) => { if (document.activeElement !== e.target) e.target.style.borderColor = '#94a3b8'; }}
+                                  onMouseLeave={(e) => { if (document.activeElement !== e.target) e.target.style.borderColor = '#64748b'; }} />
+                                {driverMode === 's3' && storagePreferences.s3_secret_key && (
+                                  <button type="button" onClick={() => setShowSecretKey(!showSecretKey)}
+                                    style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}>
+                                    {showSecretKey ? <EyeOff size={16} style={{ color: 'var(--text-muted)' }} /> : <Eye size={16} style={{ color: 'var(--text-muted)' }} />}
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           </div>
+                          <div className="mt-4">
+                            <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Endpoint URL <span className="text-xs" style={{ color: 'var(--text-muted)' }}>(optional — for S3-compatible providers)</span></label>
+                            <input type="text" name="s3_endpoint" defaultValue={storagePreferences.s3_endpoint || ''} disabled={driverMode !== 's3'}
+                              placeholder="Leave empty for AWS S3. E.g. https://nyc3.digitaloceanspaces.com"
+                              className="w-full mt-1.5 p-2.5 rounded-lg text-sm transition-all"
+                              style={{ background: 'var(--bg-primary)', border: '2px solid #64748b', color: 'var(--text-primary)' }}
+                              onFocus={(e) => { e.target.style.borderColor = 'var(--color-primary)'; e.target.style.boxShadow = '0 0 0 3px var(--color-primary-bg)'; }}
+                              onBlur={(e) => { e.target.style.borderColor = '#64748b'; e.target.style.boxShadow = 'none'; }}
+                              onMouseEnter={(e) => { if (document.activeElement !== e.target) e.target.style.borderColor = '#94a3b8'; }}
+                              onMouseLeave={(e) => { if (document.activeElement !== e.target) e.target.style.borderColor = '#64748b'; }} />
+                            <p className="text-xs mt-1.5" style={{ color: 'var(--text-muted)' }}>
+                              For Cloudflare R2, DigitalOcean Spaces, Wasabi, MinIO etc. Leave empty to use default AWS S3.
+                            </p>
+                          </div>
                           {driverMode === 's3' && (
-                            <div className="mt-3 flex items-center gap-2">
-                              <button type="button" className="px-3 py-1.5 rounded-lg text-[11px] font-semibold flex items-center gap-1.5"
+                            <div className="mt-4 flex items-center gap-3">
+                              <button type="button" disabled={testingS3}
+                                onClick={async () => {
+                                  setTestingS3(true);
+                                  setS3TestResult(null);
+                                  try {
+                                    const section = document.querySelector('[data-storage-prefs]');
+                                    const getVal = (name) => section?.querySelector(`[name="${name}"]`)?.value || '';
+                                    const payload = {
+                                      s3_bucket: getVal('s3_bucket'),
+                                      s3_region: getVal('s3_region'),
+                                      s3_access_key: getVal('s3_access_key'),
+                                      s3_secret_key: getVal('s3_secret_key'),
+                                      s3_prefix: getVal('s3_prefix'),
+                                      s3_endpoint: getVal('s3_endpoint'),
+                                    };
+                                    const res = await api.testOrgS3Connection(id, payload);
+                                    setS3TestResult({ success: true, message: res.message });
+                                  } catch (e) {
+                                    setS3TestResult({ success: false, message: e.message || 'Connection failed' });
+                                  } finally {
+                                    setTestingS3(false);
+                                  }
+                                }}
+                                className="px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-1.5 transition-all hover:shadow-sm"
                                 style={{ background: 'var(--color-success-bg)', color: 'var(--color-success)', border: '1px solid var(--color-success)' }}>
-                                <CheckCircle className="w-3 h-3" /> Test Connection
+                                {testingS3 ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                                {testingS3 ? 'Testing...' : 'Test Connection'}
                               </button>
-                              <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Verify S3 credentials before saving</span>
+                              {s3TestResult && (
+                                <span className="text-xs flex items-center gap-1" style={{ color: s3TestResult.success ? 'var(--color-success)' : 'var(--color-error)' }}>
+                                  {s3TestResult.success ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                                  {s3TestResult.message}
+                                </span>
+                              )}
+                              {!s3TestResult && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Verify S3 credentials before saving</span>}
                             </div>
                           )}
                         </div>
 
                         {/* Cleanup Policy */}
-                        <div className="p-4 rounded-lg" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-light)' }}>
-                          <p className="text-xs font-semibold mb-2" style={{ color: 'var(--color-primary)' }}>Cleanup Policy</p>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="p-5 rounded-xl" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-light)' }}>
+                          <p className="text-sm font-semibold mb-3" style={{ color: 'var(--color-primary)' }}>Cleanup Policy</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                              <label className="text-xs" style={{ color: 'var(--text-secondary)' }}>Delete files older than (months)</label>
+                              <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Delete files older than (months)</label>
                               <input type="number" name="cleanup_months" min="1" max="60" defaultValue={storagePreferences.cleanup_months || 6}
-                                className="w-full mt-1 p-2 rounded-lg text-sm" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
+                                className="w-full mt-1.5 p-2.5 rounded-lg text-sm transition-all"
+                                style={{ background: 'var(--bg-primary)', border: '2px solid #64748b', color: 'var(--text-primary)' }}
+                                onFocus={(e) => { e.target.style.borderColor = 'var(--color-primary)'; e.target.style.boxShadow = '0 0 0 3px var(--color-primary-bg)'; }}
+                                onBlur={(e) => { e.target.style.borderColor = '#64748b'; e.target.style.boxShadow = 'none'; }}
+                                onMouseEnter={(e) => { if (document.activeElement !== e.target) e.target.style.borderColor = '#94a3b8'; }}
+                                onMouseLeave={(e) => { if (document.activeElement !== e.target) e.target.style.borderColor = '#64748b'; }} />
                             </div>
                             <div>
-                              <label className="text-xs" style={{ color: 'var(--text-secondary)' }}>Large file threshold (MB)</label>
+                              <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Large file threshold (MB)</label>
                               <input type="number" name="large_file_threshold_mb" min="100" max="10000" step="100" defaultValue={storagePreferences.large_file_threshold_mb || 500}
-                                className="w-full mt-1 p-2 rounded-lg text-sm" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
+                                className="w-full mt-1.5 p-2.5 rounded-lg text-sm transition-all"
+                                style={{ background: 'var(--bg-primary)', border: '2px solid #64748b', color: 'var(--text-primary)' }}
+                                onFocus={(e) => { e.target.style.borderColor = 'var(--color-primary)'; e.target.style.boxShadow = '0 0 0 3px var(--color-primary-bg)'; }}
+                                onBlur={(e) => { e.target.style.borderColor = '#64748b'; e.target.style.boxShadow = 'none'; }}
+                                onMouseEnter={(e) => { if (document.activeElement !== e.target) e.target.style.borderColor = '#94a3b8'; }}
+                                onMouseLeave={(e) => { if (document.activeElement !== e.target) e.target.style.borderColor = '#64748b'; }} />
                             </div>
                           </div>
-                          <label className="flex items-center gap-2 mt-3 cursor-pointer">
+                          <label className="flex items-center gap-2 mt-4 cursor-pointer">
                             <input type="checkbox" name="auto_cleanup_enabled" defaultChecked={storagePreferences.auto_cleanup_enabled !== false}
                               className="w-4 h-4 rounded" style={{ accentColor: 'var(--color-primary)' }} />
-                            <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Enable automatic cleanup</span>
+                            <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Enable automatic cleanup</span>
                           </label>
                         </div>
 
                         {/* Notification Thresholds */}
-                        <div className="p-4 rounded-lg" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-light)' }}>
-                          <p className="text-xs font-semibold mb-2" style={{ color: 'var(--color-warning)' }}>Alert Thresholds</p>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="p-5 rounded-xl" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-light)' }}>
+                          <p className="text-sm font-semibold mb-3" style={{ color: 'var(--color-warning)' }}>Alert Thresholds</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                              <label className="text-xs" style={{ color: 'var(--text-secondary)' }}>Warning threshold (%)</label>
+                              <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Warning threshold (%)</label>
                               <input type="number" name="warning_threshold_percent" min="50" max="95" defaultValue={storagePreferences.warning_threshold_percent || 80}
-                                className="w-full mt-1 p-2 rounded-lg text-sm" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
+                                className="w-full mt-1.5 p-2.5 rounded-lg text-sm transition-all"
+                                style={{ background: 'var(--bg-primary)', border: '2px solid #64748b', color: 'var(--text-primary)' }}
+                                onFocus={(e) => { e.target.style.borderColor = 'var(--color-primary)'; e.target.style.boxShadow = '0 0 0 3px var(--color-primary-bg)'; }}
+                                onBlur={(e) => { e.target.style.borderColor = '#64748b'; e.target.style.boxShadow = 'none'; }}
+                                onMouseEnter={(e) => { if (document.activeElement !== e.target) e.target.style.borderColor = '#94a3b8'; }}
+                                onMouseLeave={(e) => { if (document.activeElement !== e.target) e.target.style.borderColor = '#64748b'; }} />
                             </div>
                             <div>
-                              <label className="text-xs" style={{ color: 'var(--text-secondary)' }}>Critical threshold (%)</label>
+                              <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Critical threshold (%)</label>
                               <input type="number" name="critical_threshold_percent" min="80" max="100" defaultValue={storagePreferences.critical_threshold_percent || 95}
-                                className="w-full mt-1 p-2 rounded-lg text-sm" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
+                                className="w-full mt-1.5 p-2.5 rounded-lg text-sm transition-all"
+                                style={{ background: 'var(--bg-primary)', border: '2px solid #64748b', color: 'var(--text-primary)' }}
+                                onFocus={(e) => { e.target.style.borderColor = 'var(--color-primary)'; e.target.style.boxShadow = '0 0 0 3px var(--color-primary-bg)'; }}
+                                onBlur={(e) => { e.target.style.borderColor = '#64748b'; e.target.style.boxShadow = 'none'; }}
+                                onMouseEnter={(e) => { if (document.activeElement !== e.target) e.target.style.borderColor = '#94a3b8'; }}
+                                onMouseLeave={(e) => { if (document.activeElement !== e.target) e.target.style.borderColor = '#64748b'; }} />
                             </div>
                           </div>
                         </div>
 
                         {/* Storage Limits Override */}
-                        <div className="p-4 rounded-lg" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-light)' }}>
-                          <p className="text-xs font-semibold mb-2" style={{ color: 'var(--color-info)' }}>Storage Limit Override</p>
-                          <p className="text-[10px] mb-2" style={{ color: 'var(--text-muted)' }}>Override the plan storage limit for this specific organization</p>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="p-5 rounded-xl" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-light)' }}>
+                          <p className="text-sm font-semibold mb-1" style={{ color: 'var(--color-info)' }}>Storage Limit Override</p>
+                          <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>Override the plan storage limit for this specific organization</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                              <label className="text-xs" style={{ color: 'var(--text-secondary)' }}>Custom Max Storage (GB)</label>
+                              <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Custom Max Storage (GB)</label>
                               <input type="number" name="custom_max_storage_gb" min="1" max="9999" defaultValue={storagePreferences.custom_max_storage_gb || ''} placeholder="Leave empty to use plan limit"
-                                className="w-full mt-1 p-2 rounded-lg text-sm" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
+                                className="w-full mt-1.5 p-2.5 rounded-lg text-sm transition-all"
+                                style={{ background: 'var(--bg-primary)', border: '2px solid #64748b', color: 'var(--text-primary)' }}
+                                onFocus={(e) => { e.target.style.borderColor = 'var(--color-primary)'; e.target.style.boxShadow = '0 0 0 3px var(--color-primary-bg)'; }}
+                                onBlur={(e) => { e.target.style.borderColor = '#64748b'; e.target.style.boxShadow = 'none'; }}
+                                onMouseEnter={(e) => { if (document.activeElement !== e.target) e.target.style.borderColor = '#94a3b8'; }}
+                                onMouseLeave={(e) => { if (document.activeElement !== e.target) e.target.style.borderColor = '#64748b'; }} />
                             </div>
                             <div>
-                              <label className="text-xs" style={{ color: 'var(--text-secondary)' }}>Auto-delete when full</label>
+                              <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Auto-delete when full</label>
                               <label className="flex items-center gap-2 mt-2 cursor-pointer">
                                 <input type="checkbox" name="auto_delete_enabled" defaultChecked={storagePreferences.auto_delete_enabled !== false}
                                   className="w-4 h-4 rounded" style={{ accentColor: 'var(--color-primary)' }} />
-                                <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Delete oldest files when storage limit reached</span>
+                                <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Delete oldest files when storage limit reached</span>
                               </label>
                             </div>
                           </div>
                         </div>
 
                         {/* Save Button */}
-                        <div className="flex justify-end">
+                        <div className="flex justify-end pt-2">
                           <button disabled={prefSaving}
                             onClick={async () => {
                               setPrefSaving(true);
@@ -1059,6 +1168,9 @@ export default function OrganizationDetailPage() {
                                   s3_bucket: getVal('s3_bucket'),
                                   s3_region: getVal('s3_region'),
                                   s3_prefix: getVal('s3_prefix'),
+                                  s3_access_key: getVal('s3_access_key'),
+                                  s3_secret_key: getVal('s3_secret_key'),
+                                  s3_endpoint: getVal('s3_endpoint'),
                                   cleanup_months: parseInt(getVal('cleanup_months')) || 6,
                                   large_file_threshold_mb: parseInt(getVal('large_file_threshold_mb')) || 500,
                                   auto_cleanup_enabled: isChecked('auto_cleanup_enabled'),
@@ -1074,15 +1186,15 @@ export default function OrganizationDetailPage() {
                               } catch (e) { setToast({ type: 'error', message: 'Failed to save' }); }
                               finally { setPrefSaving(false); }
                             }}
-                            className="px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5"
+                            className="px-5 py-2.5 rounded-lg text-sm font-semibold flex items-center gap-1.5 transition-all hover:shadow-md"
                             style={{ background: 'var(--color-primary)', color: '#fff' }}>
-                            {prefSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                            {prefSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                             {prefSaving ? 'Saving...' : 'Save Preferences'}
                           </button>
                         </div>
                       </div>
                     ) : (
-                      <p className="text-xs text-center py-6" style={{ color: 'var(--text-muted)' }}>No preferences data</p>
+                      <p className="text-sm text-center py-6" style={{ color: 'var(--text-muted)' }}>No preferences data</p>
                     )}
                   </div>
                 )}
@@ -2006,6 +2118,23 @@ function EditOrganizationModal({ org, plans, saving, onSave, onClose }) {
           onClose={() => setShowPlanCustomModal(false)}
         />
       )}
+
+      <ConfirmModal
+        isOpen={storageFileDeleteConfirm.open}
+        onClose={() => setStorageFileDeleteConfirm({ open: false, id: null })}
+        onConfirm={async (done) => {
+          try {
+            await handleDeleteStorageRecord(storageFileDeleteConfirm.id);
+          } finally {
+            setStorageFileDeleteConfirm({ open: false, id: null });
+            done();
+          }
+        }}
+        title="Delete File"
+        message="Are you sure you want to delete this file? This action cannot be undone."
+        confirmText="Delete"
+        danger
+      />
 
       {ConfirmDialog}
     </div>

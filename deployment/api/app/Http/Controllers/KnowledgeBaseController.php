@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\KnowledgeBase;
 use App\Models\Project;
+use App\Services\StorageDiskResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -122,7 +123,12 @@ class KnowledgeBaseController extends Controller
         if ($request->hasFile('file')) {
             $file = $request->file('file');
             $fileName = $file->getClientOriginalName();
-            $filePath = $file->store('knowledge_base', 'public');
+            $org = $request->attributes->get('currentOrganization');
+            if ($org) {
+                $filePath = StorageDiskResolver::store($org, $file, 'knowledge_base');
+            } else {
+                $filePath = $file->store('knowledge_base', 'public');
+            }
         }
 
         $item = KnowledgeBase::create([
@@ -177,7 +183,12 @@ class KnowledgeBaseController extends Controller
             }
             $file = $request->file('file');
             $fileName = $file->getClientOriginalName();
-            $filePath = $file->store('knowledge_base', 'public');
+            $org = $request->attributes->get('currentOrganization');
+            if ($org) {
+                $filePath = StorageDiskResolver::store($org, $file, 'knowledge_base');
+            } else {
+                $filePath = $file->store('knowledge_base', 'public');
+            }
         }
 
         $knowledgeBase->update([

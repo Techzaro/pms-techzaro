@@ -7,6 +7,7 @@ use App\Models\Template;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use App\Services\StorageDiskResolver;
 
 class TemplateController extends Controller
 {
@@ -92,7 +93,12 @@ class TemplateController extends Controller
 
         $filePath = null;
         if ($request->hasFile('file')) {
-            $filePath = $request->file('file')->store('templates', 'public');
+            $org = $request->attributes->get('currentOrganization');
+            if ($org) {
+                $filePath = StorageDiskResolver::store($org, $request->file('file'), 'templates');
+            } else {
+                $filePath = $request->file('file')->store('templates', 'public');
+            }
         }
 
         $templateData = [
@@ -142,16 +148,31 @@ class TemplateController extends Controller
         ]);
 
         $filePath = $template->file_path;
+
+        $org = $request->attributes->get('currentOrganization');
+
         if ($request->boolean('delete_file') && $filePath) {
-            Storage::disk('public')->delete($filePath);
+            if ($org) {
+                StorageDiskResolver::delete($org, $filePath);
+            } else {
+                Storage::disk('public')->delete($filePath);
+            }
             $filePath = null;
         }
 
         if ($request->hasFile('file')) {
             if ($template->file_path) {
-                Storage::disk('public')->delete($template->file_path);
+                if ($org) {
+                    StorageDiskResolver::delete($org, $template->file_path);
+                } else {
+                    Storage::disk('public')->delete($template->file_path);
+                }
             }
-            $filePath = $request->file('file')->store('templates', 'public');
+            if ($org) {
+                $filePath = StorageDiskResolver::store($org, $request->file('file'), 'templates');
+            } else {
+                $filePath = $request->file('file')->store('templates', 'public');
+            }
         }
 
         $currentData = $template->data ?? [];
@@ -185,7 +206,12 @@ class TemplateController extends Controller
         }
 
         if ($template->file_path) {
-            Storage::disk('public')->delete($template->file_path);
+            $org = $request->attributes->get('currentOrganization');
+            if ($org) {
+                StorageDiskResolver::delete($org, $template->file_path);
+            } else {
+                Storage::disk('public')->delete($template->file_path);
+            }
         }
 
         $template->delete();

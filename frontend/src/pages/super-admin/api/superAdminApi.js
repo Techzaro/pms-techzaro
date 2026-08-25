@@ -14,15 +14,16 @@ function getAdminName() {
 
 async function request(url, options = {}) {
   const token = superAdminAuthToken();
+  const { headers: extraHeaders, ...restOptions } = options;
   const res = await fetch(`${BASE}${url}`, {
+    ...restOptions,
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json',
       'X-Admin-Name': getAdminName(),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
+      ...extraHeaders,
     },
-    ...options,
   });
   const data = await res.json();
   if (res.status === 401) {
@@ -37,13 +38,14 @@ async function request(url, options = {}) {
 }
 
 async function publicRequest(url, options = {}) {
+  const { headers: extraHeaders, ...restOptions } = options;
   const res = await fetch(`${BASE}${url}`, {
+    ...restOptions,
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json',
-      ...options.headers,
+      ...extraHeaders,
     },
-    ...options,
   });
   const data = await res.json();
   if (!res.ok || data.success === false) {
@@ -135,6 +137,7 @@ export const api = {
   // ─── Organization Storage Preferences (Super Admin) ────────
   getOrgStoragePreferences: (orgId) => request(`/organizations/${orgId}/storage/preferences`),
   updateOrgStoragePreferences: (orgId, data) => request(`/organizations/${orgId}/storage/preferences`, { method: 'PUT', body: JSON.stringify(data) }),
+  testOrgS3Connection: (orgId, data) => request(`/organizations/${orgId}/storage/test-connection`, { method: 'POST', body: JSON.stringify(data) }),
 
   // ─── Organization Billing ───────────────────────────────────
   getOrgBilling: (orgId, params = {}) => {

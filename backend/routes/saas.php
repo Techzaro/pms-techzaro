@@ -67,6 +67,7 @@ Route::middleware('super.admin')->group(function () use ($ctrl, $authCtrl) {
     // Storage Preferences (Super Admin)
     Route::get('/organizations/{id}/storage/preferences', [$ctrl, 'orgStoragePreferences']);
     Route::put('/organizations/{id}/storage/preferences', [$ctrl, 'orgStoragePreferencesUpdate']);
+    Route::post('/organizations/{id}/storage/test-connection', [$ctrl, 'orgTestS3Connection']);
     Route::get('/organizations/{id}/billing', [$ctrl, 'orgBillingInvoices']);
     Route::post('/billing/{invoiceId}/approve', [$ctrl, 'approvePayment']);
     Route::post('/billing/{invoiceId}/reject', [$ctrl, 'rejectPayment']);

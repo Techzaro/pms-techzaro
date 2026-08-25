@@ -17,6 +17,7 @@ use App\Services\ActivityService;
 use App\Services\AuditService;
 use App\Services\DelegationService;
 use App\Services\NotificationService;
+use App\Services\StorageDiskResolver;
 use App\Traits\HasStorageEnforcement;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -81,9 +82,11 @@ class DeliverableController extends Controller
             $query->where('created_by', $user->id);
         }
 
-        $query->when($isDueTodayFilter, fn ($q) => $q->whereDate('due_date', today())->whereNotIn('status', $this->dueTodayExcludedStatuses()));
-
-        $deliverables = $query->orderBy('sort_order')->latest('updated_at')->filter($filters)->limit(200)->get();
+        $query->orderBy('sort_order')->orderBy('created_at', 'desc')->orderBy('id', 'desc')->filter($filters);
+        if ($request->filled('per_page') || $request->filled('limit')) {
+            $query->limit((int) ($request->input('per_page') ?: $request->input('limit')));
+        }
+        $deliverables = $query->get();
 
         // Ensure project_id is populated for old subtasks that may lack it
         foreach ($deliverables as $deliverable) {
@@ -190,10 +193,11 @@ class DeliverableController extends Controller
 
         $query->where('created_by', $user->id);
 
-        $query->whereColumn('created_by', '!=', 'assigned_to');
-        $query->when($isDueTodayFilter, fn ($q) => $q->whereDate('due_date', today())->whereNotIn('status', $this->dueTodayExcludedStatuses()));
-
-        $deliverables = $query->orderBy('sort_order')->latest('updated_at')->filter($filters)->limit(200)->get();
+        $query->orderBy('sort_order')->orderBy('created_at', 'desc')->orderBy('id', 'desc')->filter($filters);
+        if ($request->filled('per_page') || $request->filled('limit')) {
+            $query->limit((int) ($request->input('per_page') ?: $request->input('limit')));
+        }
+        $deliverables = $query->get();
 
         // Process delegation chain for OA visibility
         $deliverables = $deliverables->map(function ($d) use ($user) {
@@ -251,18 +255,25 @@ class DeliverableController extends Controller
             unset($filters['status']);
         }
 
-        $deliverables = Deliverable::with([
+        $query = Deliverable::with([
             'project:id,title', 'assignee:id,name,email,role',
             'creator:id,name,role', 'task:id,title,project_id', 'task.project:id,title',
             'latestSubmission', 'latestSubmission.submittedBy:id,name,email', 'latestSubmission.attachments',
         ])
-            ->where('assigned_to', $user->id)
-            ->where('created_by', $user->id)
+            ->where(function ($q) use ($user) {
+                $q->where('assigned_to', $user->id)
+                    ->orWhere(function ($sq) use ($user) {
+                        $sq->where('created_by', $user->id)->whereNull('assigned_to');
+                    });
+            })
             ->when($isDueTodayFilter, fn ($q) => $q->whereDate('due_date', today())->whereNotIn('status', $this->dueTodayExcludedStatuses()))
-            ->orderBy('sort_order')->latest('updated_at')
-            ->filter($filters)
-            ->limit(200)
-            ->get();
+            ->orderBy('sort_order')->orderBy('created_at', 'desc')->orderBy('id', 'desc')
+            ->filter($filters);
+
+        if ($request->filled('per_page') || $request->filled('limit')) {
+            $query->limit((int) ($request->input('per_page') ?: $request->input('limit')));
+        }
+        $deliverables = $query->get();
 
         return response()->json(['success' => true, 'data' => $deliverables]);
     }
@@ -308,6 +319,38 @@ class DeliverableController extends Controller
             'approvedBy:id,name', 'rejectedBy:id,name', 'reopenedBy:id,name',
             'unviewedChanges' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
         ]);
+
+        $org = request()->attributes->get('currentOrganization');
+        if ($org) {
+            if ($deliverable->files) StorageDiskResolver::resolveFileUrls($deliverable->files, $org);
+            if (!empty($deliverable->reopen_file_path)) {
+                $deliverable->reopen_file_path = collect(explode(',', $deliverable->reopen_file_path))
+                    ->filter()->map(fn($p) => StorageDiskResolver::resolveUrl($org, trim($p)))->implode(',');
+            }
+            if (!empty($deliverable->rework_file_path)) {
+                $deliverable->rework_file_path = collect(explode(',', $deliverable->rework_file_path))
+                    ->filter()->map(fn($p) => StorageDiskResolver::resolveUrl($org, trim($p)))->implode(',');
+            }
+            if ($deliverable->submissions) {
+                $deliverable->submissions->each(function ($sub) use ($org) {
+                    if (!empty($sub->file_path) && !str_starts_with($sub->file_path, 'http') && !str_starts_with($sub->file_path, '/storage/')) {
+                        $sub->file_path = StorageDiskResolver::resolveUrl($org, $sub->file_path);
+                    }
+                    if ($sub->attachments) {
+                        StorageDiskResolver::resolveFileUrls($sub->attachments, $org);
+                    }
+                });
+            }
+            if ($deliverable->latestSubmission && !isset($deliverable->submissions)) {
+                $sub = $deliverable->latestSubmission;
+                if (!empty($sub->file_path) && !str_starts_with($sub->file_path, 'http') && !str_starts_with($sub->file_path, '/storage/')) {
+                    $sub->file_path = StorageDiskResolver::resolveUrl($org, $sub->file_path);
+                }
+                if ($sub->attachments) {
+                    StorageDiskResolver::resolveFileUrls($sub->attachments, $org);
+                }
+            }
+        }
 
         $payload = $deliverable->toArray();
 
@@ -486,7 +529,9 @@ class DeliverableController extends Controller
         )));
         if (! empty($allAssigneeIds)) {
             $projectMemberIds = $project->getMembers()->pluck('id')->map(fn ($id) => (int) $id)->toArray();
-            $invalidIds = array_diff(array_map('intval', $allAssigneeIds), $projectMemberIds);
+            $adminManagerIds = User::whereIn('id', $allAssigneeIds)->whereIn('role', ['admin', 'manager'])->pluck('id')->map(fn ($id) => (int) $id)->toArray();
+            $allowedIds = array_unique(array_merge($projectMemberIds, $adminManagerIds));
+            $invalidIds = array_diff(array_map('intval', $allAssigneeIds), $allowedIds);
             if (! empty($invalidIds)) {
                 throw ValidationException::withMessages([
                     'assigned_to' => 'One or more selected users are not members of this project. Please select only project members.',
@@ -572,6 +617,19 @@ class DeliverableController extends Controller
         ]);
 
         try {
+            $this->activityService->log(
+                $user->id,
+                'deliverable_created',
+                'Created subtask "'.$deliverable->title.'"',
+                'deliverable',
+                $deliverable->id,
+                'create'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log activity for deliverable create', ['error' => $e->getMessage()]);
+        }
+
+        try {
             $this->auditService->log(
                 module: 'deliverable_management',
                 action: 'create',
@@ -649,7 +707,9 @@ class DeliverableController extends Controller
         )));
         if (! empty($allAssigneeIds) && $project) {
             $projectMemberIds = $project->getMembers()->pluck('id')->map(fn ($id) => (int) $id)->toArray();
-            $invalidIds = array_diff(array_map('intval', $allAssigneeIds), $projectMemberIds);
+            $adminManagerIds = User::whereIn('id', $allAssigneeIds)->whereIn('role', ['admin', 'manager'])->pluck('id')->map(fn ($id) => (int) $id)->toArray();
+            $allowedIds = array_unique(array_merge($projectMemberIds, $adminManagerIds));
+            $invalidIds = array_diff(array_map('intval', $allAssigneeIds), $allowedIds);
             if (! empty($invalidIds)) {
                 throw ValidationException::withMessages([
                     'assigned_to' => 'One or more selected users are not members of this project.',
@@ -703,6 +763,33 @@ class DeliverableController extends Controller
         }
 
         $deliverable->load('task:id,title,business_id');
+
+        try {
+            $this->activityService->log(
+                $user->id,
+                'deliverable_created',
+                'Created subtask "'.$deliverable->title.'"',
+                'deliverable',
+                $deliverable->id,
+                'create'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log activity for deliverable create standalone', ['error' => $e->getMessage()]);
+        }
+
+        try {
+            $this->auditService->log(
+                module: 'deliverable_management',
+                action: 'create',
+                description: "Created deliverable {$deliverable->title}",
+                user: $user,
+                entityType: 'Deliverable',
+                entityId: $deliverable->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit for deliverable create standalone', ['error' => $e->getMessage()]);
+        }
 
         return response()->json([
             'success' => true,
@@ -887,6 +974,11 @@ class DeliverableController extends Controller
             return response()->json(['success' => false, 'message' => 'Cannot delete a subtask that is '.$deliverable->status], 422);
         }
 
+        $org = request()->attributes->get('currentOrganization');
+        if ($org) {
+            $this->cleanupDeliverableFiles($deliverable, $org);
+        }
+
         $deliverable->delete();
 
         try {
@@ -904,6 +996,30 @@ class DeliverableController extends Controller
         }
 
         return response()->json(['success' => true, 'message' => 'Deliverable deleted successfully']);
+    }
+
+    private function cleanupDeliverableFiles(Deliverable $deliverable, $org): void
+    {
+        try {
+            foreach ($deliverable->files as $file) {
+                if (!empty($file->url)) {
+                    StorageDiskResolver::delete($org, $file->url);
+                }
+            }
+            foreach ($deliverable->submissions as $submission) {
+                if (!empty($submission->file_path)) {
+                    StorageDiskResolver::delete($org, $submission->file_path);
+                }
+                foreach ($submission->attachments as $att) {
+                    if (!empty($att->file_path)) {
+                        StorageDiskResolver::delete($org, $att->file_path);
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            \Log::error('Failed to cleanup deliverable files: ' . $e->getMessage());
+        }
+    }
     }
 
     /**
@@ -926,7 +1042,7 @@ class DeliverableController extends Controller
         if (! $isAssignee && ! $isCurrentOwner && ! $isAuthorizedRole) {
             return response()->json(['success' => false, 'message' => 'Only the assignee or current owner can submit this deliverable'], 403);
         }
-        if (! in_array($deliverable->status, ['pending', 'rejected', 'reopened', 'rework_required'])) {
+        if (! in_array($deliverable->status, ['pending', 'in_progress', 'rejected', 'reopened', 'rework_required'])) {
             return response()->json(['success' => false, 'message' => 'This deliverable cannot be submitted in its current status'], 422);
         }
 
@@ -937,11 +1053,18 @@ class DeliverableController extends Controller
             'links' => 'nullable|array', 'links.*' => 'string|max:2048',
         ]);
 
-        $filePath = $fileName = null;
+        $filePath = $fileName = $fileUrl = null;
         if ($request->hasFile('file')) {
             $file = $request->file('file');
             $fileName = $file->getClientOriginalName();
-            $filePath = $file->store('deliverable-submissions/'.$deliverable->id, 'public');
+            $org = $request->attributes->get('currentOrganization');
+            if ($org) {
+                $filePath = StorageDiskResolver::store($org, $file, 'deliverable-submissions/'.$deliverable->id);
+                $fileUrl = StorageDiskResolver::isS3($org) ? $filePath : '/storage/'.$filePath;
+            } else {
+                $filePath = $file->store('deliverable-submissions/'.$deliverable->id, 'public');
+                $fileUrl = '/storage/'.$filePath;
+            }
         }
 
         $submission = DeliverableSubmission::create([
@@ -952,15 +1075,26 @@ class DeliverableController extends Controller
         ]);
 
         if ($request->hasFile('files')) {
+            $org = $request->attributes->get('currentOrganization');
             $submission->attachments()->createMany(
-                collect($request->file('files'))->map(fn ($file) => [
-                    'submission_type' => 'deliverable',
-                    'file_name' => basename($path = $file->store('deliverable-submissions/'.$deliverable->id, 'public')),
-                    'original_name' => $file->getClientOriginalName(), 'file_path' => $path,
-                    'file_type' => $file->getMimeType(), 'file_size' => $file->getSize(),
-                    'attachment_type' => str_starts_with($file->getMimeType(), 'image/') ? 'image' : 'file',
-                    'url' => '/storage/'.$path,
-                ])->toArray()
+                collect($request->file('files'))->map(function ($file) use ($deliverable, $org) {
+                    if ($org) {
+                        $path = StorageDiskResolver::store($org, $file, 'deliverable-submissions/'.$deliverable->id);
+                        $url = StorageDiskResolver::isS3($org) ? $path : '/storage/'.$path;
+                    } else {
+                        $path = $file->store('deliverable-submissions/'.$deliverable->id, 'public');
+                        $url = '/storage/'.$path;
+                    }
+
+                    return [
+                        'submission_type' => 'deliverable',
+                        'file_name' => basename($path),
+                        'original_name' => $file->getClientOriginalName(), 'file_path' => $path,
+                        'file_type' => $file->getMimeType(), 'file_size' => $file->getSize(),
+                        'attachment_type' => str_starts_with($file->getMimeType(), 'image/') ? 'image' : 'file',
+                        'url' => $url,
+                    ];
+                })->toArray()
             );
         }
 
@@ -1356,10 +1490,15 @@ class DeliverableController extends Controller
             $uploadedFiles = [$request->file('file')];
         }
 
+        $org = $request->attributes->get('currentOrganization');
         foreach ($uploadedFiles as $uploadedFile) {
             if ($uploadedFile && $uploadedFile->isValid()) {
                 $fileNames[] = $uploadedFile->getClientOriginalName();
-                $filePaths[] = $uploadedFile->store('deliverable-reopen/'.$deliverable->id, 'public');
+                if ($org) {
+                    $filePaths[] = StorageDiskResolver::store($org, $uploadedFile, 'deliverable-reopen/'.$deliverable->id);
+                } else {
+                    $filePaths[] = $uploadedFile->store('deliverable-reopen/'.$deliverable->id, 'public');
+                }
             }
         }
 
@@ -1551,10 +1690,15 @@ class DeliverableController extends Controller
             $uploadedFiles = [$request->file('file')];
         }
 
+        $org = $request->attributes->get('currentOrganization');
         foreach ($uploadedFiles as $uploadedFile) {
             if ($uploadedFile && $uploadedFile->isValid()) {
                 $fileNames[] = $uploadedFile->getClientOriginalName();
-                $filePaths[] = $uploadedFile->store('deliverable-rework/'.$deliverable->id, 'public');
+                if ($org) {
+                    $filePaths[] = StorageDiskResolver::store($org, $uploadedFile, 'deliverable-rework/'.$deliverable->id);
+                } else {
+                    $filePaths[] = $uploadedFile->store('deliverable-rework/'.$deliverable->id, 'public');
+                }
             }
         }
 
@@ -1651,6 +1795,10 @@ class DeliverableController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized to edit this submission.'], 403);
         }
 
+        if ($deliverable->has_edited_submission) {
+            return response()->json(['success' => false, 'message' => 'Submission can only be edited once.'], 422);
+        }
+
         $validated = $request->validate([
             'comment' => 'nullable|string|max:2000',
             'file' => 'nullable|file|max:51200',
@@ -1667,23 +1815,40 @@ class DeliverableController extends Controller
         if ($request->hasFile('file')) {
             $file = $request->file('file');
             $submission->file_name = $file->getClientOriginalName();
-            $submission->file_path = $file->store('deliverable-submissions/'.$deliverable->id, 'public');
+            $org = $request->attributes->get('currentOrganization');
+            if ($org) {
+                $submission->file_path = StorageDiskResolver::store($org, $file, 'deliverable-submissions/'.$deliverable->id);
+            } else {
+                $submission->file_path = $file->store('deliverable-submissions/'.$deliverable->id, 'public');
+            }
         }
 
         $submission->save();
+        $deliverable->update(['has_edited_submission' => true]);
 
         if ($request->hasFile('files')) {
+            $org = $request->attributes->get('currentOrganization');
             $submission->attachments()->createMany(
-                collect($request->file('files'))->map(fn ($file) => [
-                    'submission_type' => 'deliverable',
-                    'file_name' => basename($path = $file->store('deliverable-submissions/'.$deliverable->id, 'public')),
-                    'original_name' => $file->getClientOriginalName(),
-                    'file_path' => $path,
-                    'file_type' => $file->getMimeType(),
-                    'file_size' => $file->getSize(),
-                    'attachment_type' => str_starts_with($file->getMimeType(), 'image/') ? 'image' : 'file',
-                    'url' => '/storage/'.$path,
-                ])->toArray()
+                collect($request->file('files'))->map(function ($file) use ($deliverable, $org) {
+                    if ($org) {
+                        $path = StorageDiskResolver::store($org, $file, 'deliverable-submissions/'.$deliverable->id);
+                        $url = StorageDiskResolver::isS3($org) ? $path : '/storage/'.$path;
+                    } else {
+                        $path = $file->store('deliverable-submissions/'.$deliverable->id, 'public');
+                        $url = '/storage/'.$path;
+                    }
+
+                    return [
+                        'submission_type' => 'deliverable',
+                        'file_name' => basename($path),
+                        'original_name' => $file->getClientOriginalName(),
+                        'file_path' => $path,
+                        'file_type' => $file->getMimeType(),
+                        'file_size' => $file->getSize(),
+                        'attachment_type' => str_starts_with($file->getMimeType(), 'image/') ? 'image' : 'file',
+                        'url' => $url,
+                    ];
+                })->toArray()
             );
         }
 
@@ -1858,16 +2023,14 @@ class DeliverableController extends Controller
         if (! $isAssignee && ! in_array($user->role, ['admin', 'manager'])) {
             return response()->json(['success' => false, 'message' => 'You do not have permission to pause/resume this subtask.'], 403);
         }
-        if ($deliverable->timer_state !== 'running') {
-            return response()->json(['success' => false, 'message' => 'Timer is not running'], 422);
-        }
-
         $validated = $request->validate([
             'reason' => 'nullable|string|max:64',
             'reason_detail' => 'nullable|string|max:500',
         ]);
 
-        $deliverable->pauseTimer($validated['reason'] ?? null, $validated['reason_detail'] ?? null, false, $user->id);
+        if ($deliverable->timer_state === 'running') {
+            $deliverable->pauseTimer($validated['reason'] ?? null, $validated['reason_detail'] ?? null, false, $user->id);
+        }
         $deliverable->update(['status' => 'paused', 'paused_by' => $user->id, 'paused_at' => now(), 'updated_by' => $user->id]);
 
         DeliverableWorkflowEvent::create([
@@ -2063,15 +2226,26 @@ class DeliverableController extends Controller
             return response()->json(['success' => false, 'message' => $storageCheck['message']], 422);
         }
 
-        $path = $file->store('deliverable-files/'.$deliverable->id, 'public');
-        $this->trackFileUpload($request, 'attachments', '/storage/'.$path, $file->getClientOriginalName(), $file->getMimeType(), $file->getSize());
+        $org = $request->attributes->get('currentOrganization');
+        if ($org) {
+            $path = StorageDiskResolver::store($org, $file, 'deliverable-files/'.$deliverable->id);
+            $fileUrl = StorageDiskResolver::isS3($org) ? $path : '/storage/'.$path;
+        } else {
+            $path = $file->store('deliverable-files/'.$deliverable->id, 'public');
+            $fileUrl = '/storage/'.$path;
+        }
+        try { $this->trackFileUpload($request, 'attachments', $fileUrl, $file->getClientOriginalName(), $file->getMimeType(), $file->getSize()); } catch (\Throwable $e) { \Log::warning('trackFileUpload failed: '.$e->getMessage()); }
 
         $name = $request->input('name', $file->getClientOriginalName());
 
         $deliverableFile = $deliverable->files()->create([
             'name' => $name,
-            'url' => '/storage/'.$path,
+            'url' => $fileUrl,
         ]);
+
+        if ($org) {
+            $deliverableFile->url = StorageDiskResolver::resolveUrl($org, $deliverableFile->url);
+        }
 
         $deliverable->update(['updated_by' => $user->id]);
 
@@ -2141,7 +2315,10 @@ class DeliverableController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
-        if ($file->url && str_starts_with($file->url, '/storage/') && Storage::disk('public')->exists(str_replace('/storage/', '', $file->url))) {
+        $org = $request->attributes->get('currentOrganization');
+        if ($org && $file->url) {
+            StorageDiskResolver::delete($org, $file->url);
+        } elseif ($file->url && str_starts_with($file->url, '/storage/') && Storage::disk('public')->exists(str_replace('/storage/', '', $file->url))) {
             Storage::disk('public')->delete(str_replace('/storage/', '', $file->url));
         }
 
@@ -2181,7 +2358,11 @@ class DeliverableController extends Controller
             ->where('user_id', $request->user()->id)
             ->first();
 
-        return response()->json(['success' => true, 'note' => $note]);
+        return response()->json([
+            'success' => true,
+            'note' => $note,
+            'notes' => $note ? [$note] : [],
+        ]);
     }
 
     /**
@@ -2319,33 +2500,8 @@ class DeliverableController extends Controller
         // ── Role-based visibility ──
         switch ($role) {
             case 'admin':
-                // Admin sees everything — no scope filter
-                break;
-
             case 'manager':
-                // Manager sees deliverables where any participant (assignee/creator) is in the same team(s)
-                $teamIds = $user->teams()->pluck('teams.id');
-                $ledTeamIds = $user->ledTeams()->pluck('teams.id');
-                $allTeamIds = $teamIds->merge($ledTeamIds)->unique();
-
-                if ($allTeamIds->isNotEmpty()) {
-                    $scopeUserIds = DB::table('team_user')
-                        ->whereIn('team_id', $allTeamIds)
-                        ->pluck('user_id')
-                        ->push($user->id)
-                        ->unique();
-
-                    $query->where(function ($q) use ($scopeUserIds) {
-                        $q->whereIn('assigned_to', $scopeUserIds)
-                            ->orWhereIn('created_by', $scopeUserIds);
-                    });
-                } else {
-                    // No teams — only own deliverables
-                    $query->where(function ($q) use ($user) {
-                        $q->where('assigned_to', $user->id)
-                            ->orWhere('created_by', $user->id);
-                    });
-                }
+                // Admin and Manager see everything — no scope filter
                 break;
 
             case 'team_lead':
@@ -2389,34 +2545,164 @@ class DeliverableController extends Controller
         }
 
         // ── Apply filters ──
-        $query->when($isDueTodayFilter, fn ($q) => $q->whereDate('due_date', today())->whereNotIn('status', $this->dueTodayExcludedStatuses()))
-            ->when($isPendingFilter, fn ($q) => $q->whereIn('status', ['pending']))
-            ->when($search, fn ($q) => $q->where(function ($sq) use ($search) {
+        $userIds = $request->input('user_id', $request->input('user_ids', $request->input('assigned_to', [])));
+        if (is_string($userIds) && str_contains($userIds, ',')) {
+            $userIds = explode(',', $userIds);
+        }
+        if (! is_array($userIds) && ! empty($userIds)) {
+            $userIds = [$userIds];
+        }
+        if (! empty($userIds) && is_array($userIds)) {
+            $userIds = array_values(array_filter(array_map('intval', $userIds)));
+            if (! empty($userIds)) {
+                $query->where(function ($q) use ($userIds) {
+                    $q->whereIn('assigned_to', $userIds)
+                        ->orWhereIn('created_by', $userIds);
+                });
+            }
+        }
+
+        $projectIds = $request->input('project_id', $request->input('project_ids', []));
+        if (is_string($projectIds) && str_contains($projectIds, ',')) {
+            $projectIds = explode(',', $projectIds);
+        }
+        if (! is_array($projectIds) && ! empty($projectIds)) {
+            $projectIds = [$projectIds];
+        }
+        if (! empty($projectIds) && is_array($projectIds)) {
+            $projectIds = array_values(array_filter(array_map('intval', $projectIds)));
+            if (! empty($projectIds)) {
+                $query->whereIn('project_id', $projectIds);
+            }
+        }
+
+        $rawStatuses = $request->input('status', $request->input('statuses', []));
+        if (is_string($rawStatuses) && str_contains($rawStatuses, ',')) {
+            $rawStatuses = explode(',', $rawStatuses);
+        }
+        if (! is_array($rawStatuses) && ! empty($rawStatuses)) {
+            $rawStatuses = [$rawStatuses];
+        }
+        if (is_array($rawStatuses) && ! empty($rawStatuses)) {
+            $expandedStatuses = [];
+            $hasDueToday = false;
+            $hasTransferred = false;
+            foreach ($rawStatuses as $st) {
+                $st = trim((string) $st);
+                if ($st === 'due_today') {
+                    $hasDueToday = true;
+                } elseif ($st === 'transferred') {
+                    $hasTransferred = true;
+                } elseif ($st === 'pending') {
+                    $expandedStatuses = array_merge($expandedStatuses, ['pending', 'planned', 'Planning', 'Planned']);
+                } elseif ($st === 'in_progress') {
+                    $expandedStatuses = array_merge($expandedStatuses, ['in_progress', 'In Progress', 'in-progress']);
+                } elseif ($st === 'paused') {
+                    $expandedStatuses = array_merge($expandedStatuses, ['paused', 'pause', 'Pause']);
+                } elseif ($st === 'rejected' || $st === 'declined') {
+                    $expandedStatuses[] = 'rejected';
+                    $expandedStatuses[] = 'declined';
+                } elseif ($st === 'abandoned') {
+                    $expandedStatuses[] = 'abandoned';
+                    $expandedStatuses[] = 'abandon_requested';
+                } elseif ($st === 'approved') {
+                    $expandedStatuses[] = 'approved';
+                    $expandedStatuses[] = 'completed';
+                } elseif (! empty($st)) {
+                    $expandedStatuses[] = $st;
+                }
+            }
+            $expandedStatuses = array_values(array_unique($expandedStatuses));
+            $query->where(function ($sq) use ($expandedStatuses, $hasDueToday, $hasTransferred) {
+                $hasCondition = false;
+                if (! empty($expandedStatuses)) {
+                    $sq->whereIn('status', $expandedStatuses);
+                    $hasCondition = true;
+                }
+                if ($hasDueToday) {
+                    if ($hasCondition) {
+                        $sq->orWhere(function ($dq) {
+                            $dq->whereDate('due_date', today())->whereNotIn('status', $this->dueTodayExcludedStatuses());
+                        });
+                    } else {
+                        $sq->whereDate('due_date', today())->whereNotIn('status', $this->dueTodayExcludedStatuses());
+                        $hasCondition = true;
+                    }
+                }
+                if ($hasTransferred) {
+                    if ($hasCondition) {
+                        $sq->orWhere(function ($tq) {
+                            $tq->whereNotNull('delegation_chain')->where('delegation_chain', '!=', '[]');
+                        });
+                    } else {
+                        $sq->whereNotNull('delegation_chain')->where('delegation_chain', '!=', '[]');
+                    }
+                }
+            });
+        } elseif (is_string($rawStatuses) && ! empty($rawStatuses)) {
+            if ($rawStatuses === 'due_today') {
+                $query->whereDate('due_date', today())->whereNotIn('status', $this->dueTodayExcludedStatuses());
+            } elseif ($rawStatuses === 'transferred') {
+                $query->whereNotNull('delegation_chain')->where('delegation_chain', '!=', '[]');
+            } elseif ($rawStatuses === 'pending') {
+                $query->whereIn('status', ['pending', 'planned', 'Planning', 'Planned']);
+            } elseif ($rawStatuses === 'in_progress') {
+                $query->whereIn('status', ['in_progress', 'In Progress', 'in-progress']);
+            } elseif ($rawStatuses === 'paused') {
+                $query->whereIn('status', ['paused', 'pause', 'Pause']);
+            } elseif ($rawStatuses === 'rejected' || $rawStatuses === 'declined') {
+                $query->whereIn('status', ['rejected', 'declined']);
+            } elseif ($rawStatuses === 'abandoned') {
+                $query->whereIn('status', ['abandoned', 'abandon_requested']);
+            } elseif ($rawStatuses === 'approved') {
+                $query->whereIn('status', ['approved', 'completed']);
+            } else {
+                $query->where('status', $rawStatuses);
+            }
+        }
+
+        if ($search) {
+            $query->where(function ($sq) use ($search) {
                 $sq->where('title', 'like', '%'.$search.'%')
                     ->orWhereHas('assignee', fn ($aq) => $aq->where('name', 'like', '%'.$search.'%'))
                     ->orWhereHas('creator', fn ($cq) => $cq->where('name', 'like', '%'.$search.'%'))
                     ->orWhereHas('task', fn ($tq) => $tq->where('title', 'like', '%'.$search.'%'));
-            }))
-            ->when($statusFilter && ! $isDueTodayFilter && ! $isPendingFilter, fn ($q) => $q->where('status', $statusFilter))
-            ->when($timeFilter, fn ($q) => $q->where('updated_at', '>=', now()->subDays((int) $timeFilter)));
+            });
+        }
 
-        $deliverables = $query
-            ->with([
-                'project:id,title',
-                'assignee:id,name,email,role',
-                'creator:id,name,role',
-                'task:id,title,project_id',
-                'task.project:id,title',
-                'latestSubmission',
-                'approvedBy:id,name,role',
-                'rejectedBy:id,name,role',
-                'reopenedBy:id,name,role',
-                'updatedBy:id,name,role',
-            ])
+        if ($timeFilter) {
+            $query->where('updated_at', '>=', now()->subDays((int) $timeFilter));
+        }
+
+        if ($request->filled('start_date')) {
+            $query->whereDate('start_date', '>=', $request->input('start_date'));
+        }
+
+        if ($request->filled('end_date')) {
+            $query->whereDate('end_date', '<=', $request->input('end_date'));
+        }
+
+        $query->with([
+            'project:id,title',
+            'assignee:id,name,email,role',
+            'creator:id,name,role',
+            'task:id,title,project_id',
+            'task.project:id,title',
+            'latestSubmission',
+            'approvedBy:id,name,role',
+            'rejectedBy:id,name,role',
+            'reopenedBy:id,name,role',
+            'updatedBy:id,name,role',
+        ])
             ->orderBy('sort_order')
-            ->latest('updated_at')
-            ->limit(200)
-            ->get();
+            ->orderBy('created_at', 'desc')
+            ->orderBy('id', 'desc');
+
+        if ($request->filled('per_page') || $request->filled('limit')) {
+            $query->limit((int) ($request->input('per_page') ?: $request->input('limit')));
+        }
+
+        $deliverables = $query->get();
 
         // Transform to add submission_status field for frontend Progress column
         $deliverables->transform(function ($deliverable) {

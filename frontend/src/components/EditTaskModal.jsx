@@ -27,6 +27,13 @@ import RichTextEditor from "./RichTextEditor";
 import CreateSubtaskModal from "./layout/CreateDeliverableModel";
 import "./layout/CreateTaskModal.css";
 
+function isExternalLink(url) {
+  if (!url || !url.startsWith("http")) return false;
+  if (url.includes("/storage/")) return false;
+  if (url.includes(".s3.") || url.includes("s3.amazonaws.com")) return false;
+  return true;
+}
+
 const REPEAT_OPTIONS = [
   { value: "daily", label: "Daily" },
   { value: "weekly", label: "Weekly" },
@@ -794,7 +801,7 @@ export default function EditTaskModal({ task, onClose }) {
 
               {(() => {
                 const existingAttachments = existingFiles.filter(
-                  (f) => !(f.url && f.url.startsWith("http") && !f.url.includes("/storage/"))
+                  (f) => !isExternalLink(f.url)
                 );
                 return existingAttachments.length > 0 && (
                   <div className="cp-attachments-list">
@@ -898,7 +905,7 @@ export default function EditTaskModal({ task, onClose }) {
 
               {(() => {
                 const existingLinks = existingFiles.filter(
-                  (f) => f.url && f.url.startsWith("http") && !f.url.includes("/storage/")
+                  (f) => isExternalLink(f.url)
                 );
                 return existingLinks.length > 0 && (
                   <div className="cp-attachments-list" style={{ marginTop: "8px" }}>

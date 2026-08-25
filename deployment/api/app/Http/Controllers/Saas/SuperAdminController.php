@@ -26,6 +26,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 
 class SuperAdminController extends Controller
 {
@@ -1938,7 +1939,7 @@ class SuperAdminController extends Controller
         $request->validate([
             'storage_driver'             => 'nullable|string|in:local,s3',
             's3_bucket'                  => 'nullable|string|max:255',
-            's3_region'                  => 'nullable|string|max:50',
+            's3_region'                  => ['nullable','string','max:50', Rule::in(['us-east-1','us-east-2','us-west-1','us-west-2','eu-north-1','eu-west-1','eu-west-2','eu-central-1','ap-south-1','ap-southeast-1','ap-northeast-1','sa-east-1'])],
             's3_prefix'                  => 'nullable|string|max:100',
             's3_access_key'              => 'nullable|string|max:255',
             's3_secret_key'              => 'nullable|string|max:255',
@@ -1991,6 +1992,49 @@ class SuperAdminController extends Controller
                 'custom_max_storage_gb'       => $org->custom_max_storage_gb,
             ],
         ]);
+    }
+
+    public function orgTestS3Connection(Request $request, string $id): JsonResponse
+    {
+        $request->validate([
+            's3_bucket'       => 'required|string|max:255',
+            's3_region'       => ['required','string','max:50', Rule::in(['us-east-1','us-east-2','us-west-1','us-west-2','eu-north-1','eu-west-1','eu-west-2','eu-central-1','ap-south-1','ap-southeast-1','ap-northeast-1','sa-east-1'])],
+            's3_access_key'   => 'required|string|max:255',
+            's3_secret_key'   => 'required|string|max:255',
+            's3_prefix'       => 'nullable|string|max:100',
+        ]);
+
+        $org = Organization::on('mysql_master')->find($id);
+        if (!$org) {
+            return response()->json(['success' => false, 'message' => 'Organization not found.'], 404);
+        }
+
+        try {
+            config([
+                'filesystems.disks.s3_test' => [
+                    'driver'                  => 's3',
+                    'key'                     => $request->input('s3_access_key'),
+                    'secret'                  => $request->input('s3_secret_key'),
+                    'region'                  => $request->input('s3_region'),
+                    'bucket'                  => $request->input('s3_bucket'),
+                    'use_path_style_endpoint' => false,
+                ],
+            ]);
+
+            $disk = Storage::disk('s3_test');
+            $prefix = rtrim($request->input('s3_prefix', ''), '/');
+            $disk->files($prefix ? $prefix.'/' : '', 1);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'S3 connection successful. Bucket is accessible.',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'S3 connection failed: ' . $e->getMessage(),
+            ]);
+        }
     }
 
     // ─── Organization Billing ───────────────────────────────────

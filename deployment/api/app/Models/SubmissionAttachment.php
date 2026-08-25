@@ -34,9 +34,20 @@ class SubmissionAttachment extends Model
             return $this->url;
         }
         if ($this->url) {
-            return $this->url;
+            if (preg_match('/^https?:\/\//i', $this->url) || str_starts_with($this->url, '/storage/')) {
+                return $this->url;
+            }
+            $org = request()->attributes->get('currentOrganization');
+            if ($org) {
+                return \App\Services\StorageDiskResolver::resolveUrl($org, $this->url);
+            }
+            return '/storage/' . ltrim($this->url, '/');
         }
         if ($this->file_path) {
+            $org = request()->attributes->get('currentOrganization');
+            if ($org) {
+                return \App\Services\StorageDiskResolver::resolveUrl($org, $this->file_path);
+            }
             return '/storage/' . ltrim($this->file_path, '/');
         }
         return null;

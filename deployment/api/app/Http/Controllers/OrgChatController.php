@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Master\OrgChatConversation;
 use App\Models\Master\OrgChatMessage;
 use App\Models\Master\Organization;
+use App\Services\StorageDiskResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -96,7 +97,12 @@ class OrgChatController extends Controller
         if ($request->hasFile('file')) {
             $file = $request->file('file');
             $filename = 'org_chat_' . time() . '_' . mt_rand(10000, 99999) . '_' . $file->getClientOriginalName();
-            $path = $file->storeAs('org_chat_files/' . $conversation->id, $filename, 'public');
+            $org = $request->attributes->get('currentOrganization');
+            if ($org) {
+                $path = StorageDiskResolver::store($org, $file, 'org_chat_files/' . $conversation->id, $filename);
+            } else {
+                $path = $file->storeAs('org_chat_files/' . $conversation->id, $filename, 'public');
+            }
             $messageData['file_path'] = $path;
             $messageData['file_name'] = $file->getClientOriginalName();
         }
@@ -168,7 +174,7 @@ class OrgChatController extends Controller
         if ($request->hasFile('file')) {
             $file = $request->file('file');
             $filename = 'org_chat_' . time() . '_' . mt_rand(10000, 99999) . '_' . $file->getClientOriginalName();
-            $path = $file->storeAs('org_chat_files/' . $conversation->id, $filename, 'public');
+            $path = StorageDiskResolver::store($org, $file, 'org_chat_files/' . $conversation->id, $filename);
             $messageData['file_path'] = $path;
             $messageData['file_name'] = $file->getClientOriginalName();
         }

@@ -26,6 +26,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 
 class SuperAdminController extends Controller
 {
@@ -318,6 +319,13 @@ class SuperAdminController extends Controller
             // Step 2: Import tenant schema (fast — bypasses 134 individual migrations)
             $this->importTenantSchema($dbName);
 
+            // Step 2b: Fix any missing columns/tables that schema import might have missed
+            try {
+                \App\Console\Commands\FixTenantColumns::fixDatabaseProgrammatic($dbName);
+            } catch (\Throwable $e) {
+                \Log::warning('FixTenantColumns failed during register', ['db' => $dbName, 'error' => $e->getMessage()]);
+            }
+
             // Step 3: Create organization record
             $masterConfig = config('database.connections.mysql_master');
             $trialPlan = OrganizationPlan::where('slug', 'trial')->first();
@@ -589,6 +597,13 @@ class SuperAdminController extends Controller
 
             // Step 2: Import tenant schema (fast — bypasses 134 individual migrations)
             $this->importTenantSchema($dbName);
+
+            // Step 2b: Fix any missing columns/tables that schema import might have missed
+            try {
+                \App\Console\Commands\FixTenantColumns::fixDatabaseProgrammatic($dbName);
+            } catch (\Throwable $e) {
+                \Log::warning('FixTenantColumns failed during storeOrganization', ['db' => $dbName, 'error' => $e->getMessage()]);
+            }
 
             // Step 3: Create organization record
             $masterConfig = config('database.connections.mysql_master');
@@ -1870,12 +1885,15 @@ class SuperAdminController extends Controller
 
     public function deleteOrgStorageRecord(Request $request, string $orgId, string $recordId): JsonResponse
     {
+        \Log::info("deleteOrgStorageRecord called", ['orgId' => $orgId, 'recordId' => $recordId]);
+
         $org = Organization::on('mysql_master')->find($orgId);
         if (!$org) {
             return response()->json(['success' => false, 'message' => 'Organization not found.'], 404);
         }
 
         $result = \App\Services\StorageFileService::deleteFile($org, (int) $recordId);
+        \Log::info("deleteFile result", ['result' => $result, 'orgId' => $orgId, 'recordId' => $recordId]);
 
         if (!$result) {
             return response()->json(['success' => false, 'message' => 'Record not found.'], 404);
@@ -2052,8 +2070,9 @@ class SuperAdminController extends Controller
                 's3_bucket'                   => $org->storage_s3_bucket ?? '',
                 's3_region'                   => $org->storage_s3_region ?? 'us-east-1',
                 's3_prefix'                   => $org->storage_s3_prefix ?? "org-{$org->id}",
-                's3_access_key'               => $org->storage_s3_access_key ? true : false,
-                's3_secret_key'               => $org->storage_s3_secret_key ? true : false,
+                's3_access_key'               => $org->storage_s3_access_key ?? '',
+                's3_secret_key'               => $org->storage_s3_secret_key ?? '',
+                's3_endpoint'                 => $org->storage_s3_endpoint ?? '',
                 'cleanup_months'              => $org->storage_cleanup_months ?? 6,
                 'large_file_threshold_mb'     => $org->storage_large_file_threshold_mb ?? 500,
                 'auto_cleanup_enabled'        => $org->storage_auto_cleanup ?? true,
@@ -2070,10 +2089,11 @@ class SuperAdminController extends Controller
         $request->validate([
             'storage_driver'             => 'nullable|string|in:local,s3',
             's3_bucket'                  => 'nullable|string|max:255',
-            's3_region'                  => 'nullable|string|max:50',
+            's3_region'                  => ['nullable','string','max:50'],
             's3_prefix'                  => 'nullable|string|max:100',
             's3_access_key'              => 'nullable|string|max:255',
             's3_secret_key'              => 'nullable|string|max:255',
+            's3_endpoint'                => 'nullable|string|max:500',
             'cleanup_months'             => 'nullable|integer|min:1|max:60',
             'large_file_threshold_mb'    => 'nullable|integer|min:10|max:50000',
             'auto_cleanup_enabled'       => 'nullable|boolean',
@@ -2095,6 +2115,7 @@ class SuperAdminController extends Controller
             'storage_s3_prefix'              => $request->input('s3_prefix'),
             'storage_s3_access_key'          => $request->input('s3_access_key') !== '••••••••' ? $request->input('s3_access_key') : null,
             'storage_s3_secret_key'          => $request->input('s3_secret_key') !== '••••••••' ? $request->input('s3_secret_key') : null,
+            'storage_s3_endpoint'            => $request->input('s3_endpoint') !== '••••••••' ? $request->input('s3_endpoint') : null,
             'storage_cleanup_months'         => $request->input('cleanup_months'),
             'storage_large_file_threshold_mb'=> $request->input('large_file_threshold_mb'),
             'storage_auto_cleanup'           => $request->boolean('auto_cleanup_enabled'),
@@ -2114,6 +2135,7 @@ class SuperAdminController extends Controller
                 's3_bucket'                   => $org->storage_s3_bucket,
                 's3_region'                   => $org->storage_s3_region,
                 's3_prefix'                   => $org->storage_s3_prefix,
+                's3_endpoint'                 => $org->storage_s3_endpoint,
                 'cleanup_months'              => $org->storage_cleanup_months,
                 'large_file_threshold_mb'     => $org->storage_large_file_threshold_mb,
                 'auto_cleanup_enabled'        => $org->storage_auto_cleanup,
@@ -2123,6 +2145,58 @@ class SuperAdminController extends Controller
                 'custom_max_storage_gb'       => $org->custom_max_storage_gb,
             ],
         ]);
+    }
+
+    public function orgTestS3Connection(Request $request, string $id): JsonResponse
+    {
+        $request->validate([
+            's3_bucket'       => 'required|string|max:255',
+            's3_region'       => 'nullable|string|max:50',
+            's3_access_key'   => 'required|string|max:255',
+            's3_secret_key'   => 'required|string|max:255',
+            's3_prefix'       => 'nullable|string|max:100',
+            's3_endpoint'     => 'nullable|string|max:500',
+        ]);
+
+        $org = Organization::on('mysql_master')->find($id);
+        if (!$org) {
+            return response()->json(['success' => false, 'message' => 'Organization not found.'], 404);
+        }
+
+        try {
+            $diskConfig = [
+                'driver'                  => 's3',
+                'key'                     => $request->input('s3_access_key'),
+                'secret'                  => $request->input('s3_secret_key'),
+                'region'                  => $request->input('s3_region') ?: 'us-east-1',
+                'bucket'                  => $request->input('s3_bucket'),
+                'use_path_style_endpoint' => false,
+            ];
+
+            // S3-compatible provider (Cloudflare R2, DigitalOcean Spaces, Wasabi, MinIO etc.)
+            $endpoint = $request->input('s3_endpoint');
+            if (!empty($endpoint)) {
+                $diskConfig['endpoint'] = $endpoint;
+                $diskConfig['use_path_style_endpoint'] = true;
+            }
+
+            config(['filesystems.disks.s3_test' => $diskConfig]);
+
+            $disk = Storage::disk('s3_test');
+            $prefix = rtrim($request->input('s3_prefix', ''), '/');
+            $disk->files($prefix ? $prefix.'/' : '', 1);
+
+            $provider = !empty($endpoint) ? 'S3-compatible provider' : 'AWS S3';
+            return response()->json([
+                'success' => true,
+                'message' => "{$provider} connection successful. Bucket is accessible.",
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Connection failed: ' . $e->getMessage(),
+            ]);
+        }
     }
 
     // ─── Organization Billing ───────────────────────────────────

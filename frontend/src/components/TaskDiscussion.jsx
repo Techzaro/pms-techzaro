@@ -13,6 +13,7 @@ import {
 import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
 import RichTextEditor from "./RichTextEditor";
+import ConfirmModal from "./ConfirmModal";
 
 const API_BASE = API_URL.replace(/\/api\/?$/, "");
 
@@ -111,6 +112,7 @@ function CommentItem({
   const [editText, setEditText] = useState(comment.body || "");
   const [editSending, setEditSending] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const menuRef = useRef(null);
 
   const isOwner =
@@ -177,8 +179,13 @@ function CommentItem({
   };
 
   const handleDelete = () => {
-    onDelete(comment.id);
+    setDeleteConfirmOpen(true);
     setShowMenu(false);
+  };
+
+  const confirmDelete = () => {
+    onDelete(comment.id);
+    setDeleteConfirmOpen(false);
   };
 
   const replies = comment.replies || [];
@@ -404,6 +411,15 @@ function CommentItem({
           </div>
         )}
       </div>
+      <ConfirmModal
+        isOpen={deleteConfirmOpen}
+        onClose={() => setDeleteConfirmOpen(false)}
+        onConfirm={confirmDelete}
+        title="Delete Comment"
+        message="Are you sure you want to delete this comment? This action cannot be undone."
+        confirmText="Delete"
+        danger
+      />
     </div>
   );
 }

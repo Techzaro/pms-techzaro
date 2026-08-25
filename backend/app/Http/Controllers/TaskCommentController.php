@@ -12,6 +12,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
+use App\Services\StorageDiskResolver;
 
 class TaskCommentController extends Controller
 {
@@ -156,7 +157,12 @@ class TaskCommentController extends Controller
         if ($request->hasFile('file')) {
             $file = $request->file('file');
             $filename = 'comment_'.time().'_'.mt_rand(10000, 99999).'.'.$file->getClientOriginalExtension();
-            $path = $file->storeAs($storageDir, $filename, 'public');
+            $org = $request->attributes->get('currentOrganization');
+            if ($org) {
+                $path = StorageDiskResolver::store($org, $file, $storageDir, $filename);
+            } else {
+                $path = $file->storeAs($storageDir, $filename, 'public');
+            }
             $commentData['file_path'] = $path;
             $commentData['file_name'] = $file->getClientOriginalName();
             $commentData['file_size'] = $file->getSize();
@@ -228,8 +234,13 @@ class TaskCommentController extends Controller
             return response()->json(['success' => false, 'message' => 'You do not have permission to delete this comment.'], 403);
         }
 
-        if ($comment->file_path && Storage::disk('public')->exists($comment->file_path)) {
-            Storage::disk('public')->delete($comment->file_path);
+        if ($comment->file_path) {
+            $org = $request->attributes->get('currentOrganization');
+            if ($org) {
+                StorageDiskResolver::delete($org, $comment->file_path);
+            } elseif (Storage::disk('public')->exists($comment->file_path)) {
+                Storage::disk('public')->delete($comment->file_path);
+            }
         }
 
         $comment->delete();
@@ -356,10 +367,19 @@ class TaskCommentController extends Controller
             }
         }
 
-        if (! $comment->file_path || ! Storage::disk('public')->exists($comment->file_path)) {
+        $org = $request->attributes->get('currentOrganization');
+        if ($org) {
+            $exists = StorageDiskResolver::exists($org, $comment->file_path);
+        } else {
+            $exists = Storage::disk('public')->exists($comment->file_path);
+        }
+        if (! $comment->file_path || ! $exists) {
             return response()->json(['success' => false, 'message' => 'File not found.'], 404);
         }
 
+        if ($org) {
+            return Storage::disk(StorageDiskResolver::getDisk($org))->download($comment->file_path, $comment->file_name);
+        }
         return Storage::disk('public')->download($comment->file_path, $comment->file_name);
     }
 

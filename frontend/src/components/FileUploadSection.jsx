@@ -269,19 +269,14 @@ export default function FileUploadSection({ entityType, entityId, files, onReord
                 <div className="pd-file-box__content">
                   <div className="pd-file-box__name">
                     <FolderOpen size={18} />
-                    <span>{f.name}</span>
+                    {f.url ? (
+                      <a href={fileUrl(f.url)} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none", color: "inherit" }}>
+                        <span>{f.name}</span>
+                      </a>
+                    ) : (
+                      <span>{f.name}</span>
+                    )}
                   </div>
-                  {f.url && (
-                    <a
-                      href={fileUrl(f.url)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="pd-file-box__link"
-                      style={{ color: "#6366f1" }}
-                    >
-                      {f.url}
-                    </a>
-                  )}
                 </div>
                 {!readOnly && (
                   <div style={{ display: "flex", gap: 6, marginLeft: "auto", flexShrink: 0 }}>

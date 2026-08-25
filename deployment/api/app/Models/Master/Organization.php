@@ -62,6 +62,14 @@ class Organization extends Model
         'storage_pin_threshold',
         'storage_driver',
         'storage_s3_prefix',
+        'storage_s3_bucket',
+        'storage_s3_region',
+        'storage_s3_access_key',
+        'storage_s3_secret_key',
+        'storage_cleanup_months',
+        'storage_large_file_threshold_mb',
+        'storage_auto_cleanup',
+        'custom_max_storage_gb',
     ];
 
     protected $hidden = [

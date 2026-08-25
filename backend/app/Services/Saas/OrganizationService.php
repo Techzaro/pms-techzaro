@@ -85,6 +85,13 @@ class OrganizationService
         $this->db->createDatabase($dbName);
         $this->db->runMigrations($dbName);
 
+        // 1b. Fix any missing columns/tables that migrations might have missed
+        try {
+            \App\Console\Commands\FixTenantColumns::fixDatabaseProgrammatic($dbName);
+        } catch (\Throwable $e) {
+            \Log::warning('FixTenantColumns failed during OrganizationService create', ['db' => $dbName, 'error' => $e->getMessage()]);
+        }
+
         // 2. Create organization record
         $organization = Organization::create([
             'name'            => $data['name'],

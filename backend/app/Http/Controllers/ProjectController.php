@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Services\ActivityService;
 use App\Services\AuditService;
 use App\Services\NotificationService;
+use App\Services\StorageDiskResolver;
 use App\Traits\HasStorageEnforcement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -457,6 +458,11 @@ class ProjectController extends Controller
             $project->load(array_merge($baseRelations, $optionalRelations));
         } catch (\Exception $e) {
             $project->load($baseRelations);
+        }
+
+        $org = request()->attributes->get('currentOrganization');
+        if ($org && $project->files) {
+            StorageDiskResolver::resolveFileUrls($project->files, $org);
         }
 
         $project->loadCount(['tasks as total_tasks', 'tasks as completed_tasks' => function ($q) {
@@ -924,6 +930,11 @@ class ProjectController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
+        $org = request()->attributes->get('currentOrganization');
+        if ($org) {
+            $this->cleanupProjectFiles($project, $org);
+        }
+
         $project->delete();
 
         try {
@@ -943,6 +954,53 @@ class ProjectController extends Controller
         return response()->json(['success' => true, 'message' => 'Project deleted successfully']);
     }
 
+    private function cleanupProjectFiles(Project $project, $org): void
+    {
+        try {
+            foreach ($project->files as $file) {
+                if (!empty($file->url)) {
+                    StorageDiskResolver::delete($org, $file->url);
+                }
+            }
+            foreach ($project->tasks as $task) {
+                foreach ($task->files as $file) {
+                    if (!empty($file->url)) {
+                        StorageDiskResolver::delete($org, $file->url);
+                    }
+                }
+                foreach ($task->submissions as $submission) {
+                    if (!empty($submission->file_path)) {
+                        StorageDiskResolver::delete($org, $submission->file_path);
+                    }
+                    foreach ($submission->attachments as $att) {
+                        if (!empty($att->file_path)) {
+                            StorageDiskResolver::delete($org, $att->file_path);
+                        }
+                    }
+                }
+                foreach ($task->deliverables as $deliverable) {
+                    foreach ($deliverable->files as $file) {
+                        if (!empty($file->url)) {
+                            StorageDiskResolver::delete($org, $file->url);
+                        }
+                    }
+                    foreach ($deliverable->submissions as $submission) {
+                        if (!empty($submission->file_path)) {
+                            StorageDiskResolver::delete($org, $submission->file_path);
+                        }
+                        foreach ($submission->attachments as $att) {
+                            if (!empty($att->file_path)) {
+                                StorageDiskResolver::delete($org, $att->file_path);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            \Log::error('Failed to cleanup project files: ' . $e->getMessage());
+        }
+    }
+
     /**
      * Upload a file attachment to a project.
      *
@@ -960,13 +1018,24 @@ class ProjectController extends Controller
             return response()->json(['success' => false, 'message' => $storageCheck['message']], 422);
         }
 
-        $path = $file->store('project-files', 'public');
-        $this->trackFileUpload($request, 'attachments', '/storage/'.$path, $file->getClientOriginalName(), $file->getMimeType(), $file->getSize());
+        $org = $request->attributes->get('currentOrganization');
+        if ($org) {
+            $path = StorageDiskResolver::store($org, $file, 'project-files');
+            $fileUrl = StorageDiskResolver::isS3($org) ? $path : '/storage/'.$path;
+        } else {
+            $path = $file->store('project-files', 'public');
+            $fileUrl = '/storage/'.$path;
+        }
+        try { $this->trackFileUpload($request, 'attachments', $fileUrl, $file->getClientOriginalName(), $file->getMimeType(), $file->getSize()); } catch (\Throwable $e) { \Log::warning('trackFileUpload failed: '.$e->getMessage()); }
 
         $attachment = $project->files()->create([
             'name' => $file->getClientOriginalName(),
-            'url' => '/storage/'.$path,
+            'url' => $fileUrl,
         ]);
+
+        if ($org) {
+            $attachment->url = StorageDiskResolver::resolveUrl($org, $attachment->url);
+        }
 
         $user = $request->user();
         ProjectChange::create([
@@ -1219,7 +1288,10 @@ class ProjectController extends Controller
     public function deleteFile(Project $project, ProjectFile $file)
     {
         $fileName = $file->name;
-        if ($file->url && str_starts_with($file->url, '/storage/')) {
+        $org = request()->attributes->get('currentOrganization');
+        if ($org && $file->url) {
+            StorageDiskResolver::delete($org, $file->url);
+        } elseif ($file->url && str_starts_with($file->url, '/storage/')) {
             $relativePath = str_replace('/storage/', '', $file->url);
             Storage::disk('public')->delete($relativePath);
         }

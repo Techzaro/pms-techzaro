@@ -25,6 +25,13 @@ import AutoSaveIndicator from "./AutoSaveIndicator";
 import RichTextEditor from "./RichTextEditor";
 import "./layout/CreateProjectModal.css";
 
+function isExternalLink(url) {
+  if (!url || !url.startsWith("http")) return false;
+  if (url.includes("/storage/")) return false;
+  if (url.includes(".s3.") || url.includes("s3.amazonaws.com")) return false;
+  return true;
+}
+
 const EditProjectModal = ({ project, onClose }) => {
   const draftSaveRef = useRef(null);
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useDraftGuard(onClose, {
@@ -802,7 +809,7 @@ const EditProjectModal = ({ project, onClose }) => {
 
               {(() => {
                 const existingAttachments = existingFiles.filter(
-                  (f) => !(f.url && f.url.startsWith("http") && !f.url.includes("/storage/"))
+                  (f) => !isExternalLink(f.url)
                 );
                 return existingAttachments.length > 0 && (
                   <div className="cp-attachments-list">
@@ -906,7 +913,7 @@ const EditProjectModal = ({ project, onClose }) => {
 
               {(() => {
                 const existingLinks = existingFiles.filter(
-                  (f) => f.url && f.url.startsWith("http") && !f.url.includes("/storage/")
+                  (f) => isExternalLink(f.url)
                 );
                 return existingLinks.length > 0 && (
                   <div className="cp-attachments-list" style={{ marginTop: "8px" }}>

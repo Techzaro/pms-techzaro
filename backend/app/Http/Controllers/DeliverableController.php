@@ -17,6 +17,7 @@ use App\Services\ActivityService;
 use App\Services\AuditService;
 use App\Services\DelegationService;
 use App\Services\NotificationService;
+use App\Services\StorageDiskResolver;
 use App\Traits\HasStorageEnforcement;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -318,6 +319,38 @@ class DeliverableController extends Controller
             'approvedBy:id,name', 'rejectedBy:id,name', 'reopenedBy:id,name',
             'unviewedChanges' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
         ]);
+
+        $org = request()->attributes->get('currentOrganization');
+        if ($org) {
+            if ($deliverable->files) StorageDiskResolver::resolveFileUrls($deliverable->files, $org);
+            if (!empty($deliverable->reopen_file_path)) {
+                $deliverable->reopen_file_path = collect(explode(',', $deliverable->reopen_file_path))
+                    ->filter()->map(fn($p) => StorageDiskResolver::resolveUrl($org, trim($p)))->implode(',');
+            }
+            if (!empty($deliverable->rework_file_path)) {
+                $deliverable->rework_file_path = collect(explode(',', $deliverable->rework_file_path))
+                    ->filter()->map(fn($p) => StorageDiskResolver::resolveUrl($org, trim($p)))->implode(',');
+            }
+            if ($deliverable->submissions) {
+                $deliverable->submissions->each(function ($sub) use ($org) {
+                    if (!empty($sub->file_path) && !str_starts_with($sub->file_path, 'http') && !str_starts_with($sub->file_path, '/storage/')) {
+                        $sub->file_path = StorageDiskResolver::resolveUrl($org, $sub->file_path);
+                    }
+                    if ($sub->attachments) {
+                        StorageDiskResolver::resolveFileUrls($sub->attachments, $org);
+                    }
+                });
+            }
+            if ($deliverable->latestSubmission && !isset($deliverable->submissions)) {
+                $sub = $deliverable->latestSubmission;
+                if (!empty($sub->file_path) && !str_starts_with($sub->file_path, 'http') && !str_starts_with($sub->file_path, '/storage/')) {
+                    $sub->file_path = StorageDiskResolver::resolveUrl($org, $sub->file_path);
+                }
+                if ($sub->attachments) {
+                    StorageDiskResolver::resolveFileUrls($sub->attachments, $org);
+                }
+            }
+        }
 
         $payload = $deliverable->toArray();
 
@@ -941,6 +974,11 @@ class DeliverableController extends Controller
             return response()->json(['success' => false, 'message' => 'Cannot delete a subtask that is '.$deliverable->status], 422);
         }
 
+        $org = request()->attributes->get('currentOrganization');
+        if ($org) {
+            $this->cleanupDeliverableFiles($deliverable, $org);
+        }
+
         $deliverable->delete();
 
         try {
@@ -958,6 +996,30 @@ class DeliverableController extends Controller
         }
 
         return response()->json(['success' => true, 'message' => 'Deliverable deleted successfully']);
+    }
+
+    private function cleanupDeliverableFiles(Deliverable $deliverable, $org): void
+    {
+        try {
+            foreach ($deliverable->files as $file) {
+                if (!empty($file->url)) {
+                    StorageDiskResolver::delete($org, $file->url);
+                }
+            }
+            foreach ($deliverable->submissions as $submission) {
+                if (!empty($submission->file_path)) {
+                    StorageDiskResolver::delete($org, $submission->file_path);
+                }
+                foreach ($submission->attachments as $att) {
+                    if (!empty($att->file_path)) {
+                        StorageDiskResolver::delete($org, $att->file_path);
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            \Log::error('Failed to cleanup deliverable files: ' . $e->getMessage());
+        }
+    }
     }
 
     /**
@@ -991,11 +1053,18 @@ class DeliverableController extends Controller
             'links' => 'nullable|array', 'links.*' => 'string|max:2048',
         ]);
 
-        $filePath = $fileName = null;
+        $filePath = $fileName = $fileUrl = null;
         if ($request->hasFile('file')) {
             $file = $request->file('file');
             $fileName = $file->getClientOriginalName();
-            $filePath = $file->store('deliverable-submissions/'.$deliverable->id, 'public');
+            $org = $request->attributes->get('currentOrganization');
+            if ($org) {
+                $filePath = StorageDiskResolver::store($org, $file, 'deliverable-submissions/'.$deliverable->id);
+                $fileUrl = StorageDiskResolver::isS3($org) ? $filePath : '/storage/'.$filePath;
+            } else {
+                $filePath = $file->store('deliverable-submissions/'.$deliverable->id, 'public');
+                $fileUrl = '/storage/'.$filePath;
+            }
         }
 
         $submission = DeliverableSubmission::create([
@@ -1006,15 +1075,26 @@ class DeliverableController extends Controller
         ]);
 
         if ($request->hasFile('files')) {
+            $org = $request->attributes->get('currentOrganization');
             $submission->attachments()->createMany(
-                collect($request->file('files'))->map(fn ($file) => [
-                    'submission_type' => 'deliverable',
-                    'file_name' => basename($path = $file->store('deliverable-submissions/'.$deliverable->id, 'public')),
-                    'original_name' => $file->getClientOriginalName(), 'file_path' => $path,
-                    'file_type' => $file->getMimeType(), 'file_size' => $file->getSize(),
-                    'attachment_type' => str_starts_with($file->getMimeType(), 'image/') ? 'image' : 'file',
-                    'url' => '/storage/'.$path,
-                ])->toArray()
+                collect($request->file('files'))->map(function ($file) use ($deliverable, $org) {
+                    if ($org) {
+                        $path = StorageDiskResolver::store($org, $file, 'deliverable-submissions/'.$deliverable->id);
+                        $url = StorageDiskResolver::isS3($org) ? $path : '/storage/'.$path;
+                    } else {
+                        $path = $file->store('deliverable-submissions/'.$deliverable->id, 'public');
+                        $url = '/storage/'.$path;
+                    }
+
+                    return [
+                        'submission_type' => 'deliverable',
+                        'file_name' => basename($path),
+                        'original_name' => $file->getClientOriginalName(), 'file_path' => $path,
+                        'file_type' => $file->getMimeType(), 'file_size' => $file->getSize(),
+                        'attachment_type' => str_starts_with($file->getMimeType(), 'image/') ? 'image' : 'file',
+                        'url' => $url,
+                    ];
+                })->toArray()
             );
         }
 
@@ -1410,10 +1490,15 @@ class DeliverableController extends Controller
             $uploadedFiles = [$request->file('file')];
         }
 
+        $org = $request->attributes->get('currentOrganization');
         foreach ($uploadedFiles as $uploadedFile) {
             if ($uploadedFile && $uploadedFile->isValid()) {
                 $fileNames[] = $uploadedFile->getClientOriginalName();
-                $filePaths[] = $uploadedFile->store('deliverable-reopen/'.$deliverable->id, 'public');
+                if ($org) {
+                    $filePaths[] = StorageDiskResolver::store($org, $uploadedFile, 'deliverable-reopen/'.$deliverable->id);
+                } else {
+                    $filePaths[] = $uploadedFile->store('deliverable-reopen/'.$deliverable->id, 'public');
+                }
             }
         }
 
@@ -1605,10 +1690,15 @@ class DeliverableController extends Controller
             $uploadedFiles = [$request->file('file')];
         }
 
+        $org = $request->attributes->get('currentOrganization');
         foreach ($uploadedFiles as $uploadedFile) {
             if ($uploadedFile && $uploadedFile->isValid()) {
                 $fileNames[] = $uploadedFile->getClientOriginalName();
-                $filePaths[] = $uploadedFile->store('deliverable-rework/'.$deliverable->id, 'public');
+                if ($org) {
+                    $filePaths[] = StorageDiskResolver::store($org, $uploadedFile, 'deliverable-rework/'.$deliverable->id);
+                } else {
+                    $filePaths[] = $uploadedFile->store('deliverable-rework/'.$deliverable->id, 'public');
+                }
             }
         }
 
@@ -1725,24 +1815,40 @@ class DeliverableController extends Controller
         if ($request->hasFile('file')) {
             $file = $request->file('file');
             $submission->file_name = $file->getClientOriginalName();
-            $submission->file_path = $file->store('deliverable-submissions/'.$deliverable->id, 'public');
+            $org = $request->attributes->get('currentOrganization');
+            if ($org) {
+                $submission->file_path = StorageDiskResolver::store($org, $file, 'deliverable-submissions/'.$deliverable->id);
+            } else {
+                $submission->file_path = $file->store('deliverable-submissions/'.$deliverable->id, 'public');
+            }
         }
 
         $submission->save();
         $deliverable->update(['has_edited_submission' => true]);
 
         if ($request->hasFile('files')) {
+            $org = $request->attributes->get('currentOrganization');
             $submission->attachments()->createMany(
-                collect($request->file('files'))->map(fn ($file) => [
-                    'submission_type' => 'deliverable',
-                    'file_name' => basename($path = $file->store('deliverable-submissions/'.$deliverable->id, 'public')),
-                    'original_name' => $file->getClientOriginalName(),
-                    'file_path' => $path,
-                    'file_type' => $file->getMimeType(),
-                    'file_size' => $file->getSize(),
-                    'attachment_type' => str_starts_with($file->getMimeType(), 'image/') ? 'image' : 'file',
-                    'url' => '/storage/'.$path,
-                ])->toArray()
+                collect($request->file('files'))->map(function ($file) use ($deliverable, $org) {
+                    if ($org) {
+                        $path = StorageDiskResolver::store($org, $file, 'deliverable-submissions/'.$deliverable->id);
+                        $url = StorageDiskResolver::isS3($org) ? $path : '/storage/'.$path;
+                    } else {
+                        $path = $file->store('deliverable-submissions/'.$deliverable->id, 'public');
+                        $url = '/storage/'.$path;
+                    }
+
+                    return [
+                        'submission_type' => 'deliverable',
+                        'file_name' => basename($path),
+                        'original_name' => $file->getClientOriginalName(),
+                        'file_path' => $path,
+                        'file_type' => $file->getMimeType(),
+                        'file_size' => $file->getSize(),
+                        'attachment_type' => str_starts_with($file->getMimeType(), 'image/') ? 'image' : 'file',
+                        'url' => $url,
+                    ];
+                })->toArray()
             );
         }
 
@@ -2120,15 +2226,26 @@ class DeliverableController extends Controller
             return response()->json(['success' => false, 'message' => $storageCheck['message']], 422);
         }
 
-        $path = $file->store('deliverable-files/'.$deliverable->id, 'public');
-        $this->trackFileUpload($request, 'attachments', '/storage/'.$path, $file->getClientOriginalName(), $file->getMimeType(), $file->getSize());
+        $org = $request->attributes->get('currentOrganization');
+        if ($org) {
+            $path = StorageDiskResolver::store($org, $file, 'deliverable-files/'.$deliverable->id);
+            $fileUrl = StorageDiskResolver::isS3($org) ? $path : '/storage/'.$path;
+        } else {
+            $path = $file->store('deliverable-files/'.$deliverable->id, 'public');
+            $fileUrl = '/storage/'.$path;
+        }
+        try { $this->trackFileUpload($request, 'attachments', $fileUrl, $file->getClientOriginalName(), $file->getMimeType(), $file->getSize()); } catch (\Throwable $e) { \Log::warning('trackFileUpload failed: '.$e->getMessage()); }
 
         $name = $request->input('name', $file->getClientOriginalName());
 
         $deliverableFile = $deliverable->files()->create([
             'name' => $name,
-            'url' => '/storage/'.$path,
+            'url' => $fileUrl,
         ]);
+
+        if ($org) {
+            $deliverableFile->url = StorageDiskResolver::resolveUrl($org, $deliverableFile->url);
+        }
 
         $deliverable->update(['updated_by' => $user->id]);
 
@@ -2198,7 +2315,10 @@ class DeliverableController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
-        if ($file->url && str_starts_with($file->url, '/storage/') && Storage::disk('public')->exists(str_replace('/storage/', '', $file->url))) {
+        $org = $request->attributes->get('currentOrganization');
+        if ($org && $file->url) {
+            StorageDiskResolver::delete($org, $file->url);
+        } elseif ($file->url && str_starts_with($file->url, '/storage/') && Storage::disk('public')->exists(str_replace('/storage/', '', $file->url))) {
             Storage::disk('public')->delete(str_replace('/storage/', '', $file->url));
         }
 

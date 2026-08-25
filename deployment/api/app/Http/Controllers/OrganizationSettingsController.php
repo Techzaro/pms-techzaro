@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use App\Services\StorageDiskResolver;
 
 class OrganizationSettingsController extends Controller
 {
@@ -133,8 +134,8 @@ class OrganizationSettingsController extends Controller
 
         $settings = $org->settings ?? [];
         $logoUrl = null;
-        if ($org->logo_path && Storage::disk('public')->exists($org->logo_path)) {
-            $logoUrl = Storage::disk('public')->url($org->logo_path);
+        if ($org->logo_path && StorageDiskResolver::exists($org, $org->logo_path)) {
+            $logoUrl = StorageDiskResolver::resolveUrl($org, $org->logo_path);
         }
 
         return response()->json([
@@ -179,23 +180,22 @@ class OrganizationSettingsController extends Controller
         // Handle logo upload or removal
         $logoPath = $org->logo_path;
         if ($request->boolean('remove_logo')) {
-            if ($logoPath && Storage::disk('public')->exists($logoPath)) {
-                Storage::disk('public')->delete($logoPath);
+            if ($logoPath && StorageDiskResolver::exists($org, $logoPath)) {
+                StorageDiskResolver::delete($org, $logoPath);
             }
             $logoPath = null;
         } elseif ($request->hasFile('logo')) {
             // Delete old logo if exists
-            if ($logoPath && Storage::disk('public')->exists($logoPath)) {
-                Storage::disk('public')->delete($logoPath);
+            if ($logoPath && StorageDiskResolver::exists($org, $logoPath)) {
+                StorageDiskResolver::delete($org, $logoPath);
             }
 
             $file = $request->file('logo');
             $ext = $file->getClientOriginalExtension();
             $uploadDir = 'org_logos/' . $org->slug;
-            Storage::disk('public')->makeDirectory($uploadDir);
             $filename = 'logo.' . $ext;
-            $file->storeAs($uploadDir, $filename, 'public');
-            $logoPath = $uploadDir . '/' . $filename;
+            $path = StorageDiskResolver::store($org, $file, $uploadDir, $filename);
+            $logoPath = $path;
         }
 
         // Update settings JSON
@@ -208,8 +208,8 @@ class OrganizationSettingsController extends Controller
         ]);
 
         $logoUrl = null;
-        if ($logoPath && Storage::disk('public')->exists($logoPath)) {
-            $logoUrl = Storage::disk('public')->url($logoPath);
+        if ($logoPath && StorageDiskResolver::exists($org, $logoPath)) {
+            $logoUrl = StorageDiskResolver::resolveUrl($org, $logoPath);
         }
 
         try {
@@ -299,15 +299,10 @@ class OrganizationSettingsController extends Controller
         $enabledModules = $modules->where('is_enabled', true);
         $disabledModules = $modules->where('is_enabled', false);
 
-        // Count usage within current subscription period only (resets on renewal)
-        $periodStart = $subscription->starts_at;
-        $periodEnd = $subscription->ends_at;
-        $currentUsers = \App\Models\User::where('created_at', '>=', $periodStart)
-            ->where('created_at', '<=', $periodEnd)
-            ->count();
-        $currentProjects = \App\Models\Project::where('created_at', '>=', $periodStart)
-            ->where('created_at', '<=', $periodEnd)
-            ->count();
+        // Count ALL active users and projects (not scoped to subscription period)
+        // This ensures limits are enforced against total resource count
+        $currentUsers = \App\Models\User::count();
+        $currentProjects = \App\Models\Project::count();
 
         // Check for org-specific trial config overrides
         $effectiveMaxUsers = $plan?->max_users;

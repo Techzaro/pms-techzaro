@@ -30,24 +30,31 @@ class TenantFilesystemManager
      */
     public function getFilesystemConfig(Organization $organization): array
     {
-        $settings = $organization->settings ?? [];
+        // Read S3 config from DB columns (set via Super Admin storage preferences)
+        if ($organization->storage_driver === 's3' && $organization->storage_s3_access_key && $organization->storage_s3_bucket) {
+            $config = [
+                'driver'                  => 's3',
+                'key'                     => $organization->storage_s3_access_key,
+                'secret'                  => $organization->storage_s3_secret_key,
+                'region'                  => $organization->storage_s3_region ?? 'us-east-1',
+                'bucket'                  => $organization->storage_s3_bucket,
+                'use_path_style_endpoint' => false,
+            ];
 
-        // Check for per-tenant cloud storage settings
-        if (!empty($settings['s3_key'])) {
+            // S3-compatible providers (Cloudflare R2, DigitalOcean Spaces, Wasabi, MinIO etc.)
+            if (!empty($organization->storage_s3_endpoint)) {
+                $config['endpoint'] = $organization->storage_s3_endpoint;
+                $config['use_path_style_endpoint'] = true;
+            }
+
             return [
                 'disk' => 'tenant_s3',
-                'config' => [
-                    'driver' => 's3',
-                    'key'    => $settings['s3_key'],
-                    'secret' => $settings['s3_secret'],
-                    'region' => $settings['s3_region'] ?? 'us-east-1',
-                    'bucket' => $settings['s3_bucket'],
-                    'url'    => $settings['s3_url'] ?? null,
-                    'endpoint' => $settings['s3_endpoint'] ?? null,
-                ],
+                'config' => $config,
             ];
         }
 
+        // Fallback: check settings JSON for legacy R2 config
+        $settings = $organization->settings ?? [];
         if (!empty($settings['r2_key'])) {
             return [
                 'disk' => 'tenant_r2',

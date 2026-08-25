@@ -22,7 +22,26 @@ class StorageDiskResolver
      */
     public static function getDisk(Organization $org): string
     {
-        return $org->storage_driver === 's3' ? 's3' : 'public';
+        if ($org->storage_driver === 's3' && $org->storage_s3_access_key && $org->storage_s3_secret_key) {
+            $config = [
+                'driver'                  => 's3',
+                'key'                     => $org->storage_s3_access_key,
+                'secret'                  => $org->storage_s3_secret_key,
+                'region'                  => $org->storage_s3_region ?? 'us-east-1',
+                'bucket'                  => $org->storage_s3_bucket,
+                'use_path_style_endpoint' => false,
+            ];
+
+            // S3-compatible providers (Cloudflare R2, DigitalOcean Spaces, Wasabi, MinIO etc.)
+            if (!empty($org->storage_s3_endpoint)) {
+                $config['endpoint'] = $org->storage_s3_endpoint;
+                $config['use_path_style_endpoint'] = true;
+            }
+
+            config()->set('filesystems.disks.s3', $config);
+            return 's3';
+        }
+        return 'public';
     }
 
     /**
@@ -72,7 +91,7 @@ class StorageDiskResolver
         }
 
         if ($disk === 's3') {
-            $path = Storage::disk('s3')->put($path, file_get_contents($file), 'private');
+            Storage::disk('s3')->put($path, file_get_contents($file), 'private');
             return $path;
         }
 
@@ -100,7 +119,7 @@ class StorageDiskResolver
 
             // For local/public disk
             return Storage::disk('public')->delete($path);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error("Failed to delete file: {$filePath} - " . $e->getMessage());
             return false;
         }
@@ -187,5 +206,57 @@ class StorageDiskResolver
         }
 
         return Storage::disk($disk)->size($path);
+    }
+
+    /**
+     * Resolve a stored file path/URL to a viewable URL.
+     *
+     * - If stored value is already a full URL (pre-signed or external), return as-is.
+     * - If stored value is a local path (/storage/...), return as-is.
+     * - If org uses S3 and stored value is an S3 key path, generate fresh pre-signed URL.
+     */
+    public static function resolveUrl(Organization $org, string $storedUrl): string
+    {
+        if (empty($storedUrl)) return $storedUrl;
+
+        if (preg_match('/^https?:\/\//i', $storedUrl)) {
+            return $storedUrl;
+        }
+
+        if (str_starts_with($storedUrl, '/storage/')) {
+            return $storedUrl;
+        }
+
+        if ($org->storage_driver === 's3' && $org->storage_s3_access_key && $org->storage_s3_secret_key) {
+            return self::getTemporaryUrl($org, $storedUrl);
+        }
+
+        return $storedUrl;
+    }
+
+    /**
+     * Resolve file URLs on a collection of file models in-place.
+     */
+    public static function resolveFileUrls($files, Organization $org): void
+    {
+        if (!$files || !$org) return;
+        $files->each(function ($file) use ($org) {
+            if (!empty($file->url)) {
+                $file->url = self::resolveUrl($org, $file->url);
+            }
+            if (!empty($file->file_path)) {
+                $file->file_path = self::resolveUrl($org, $file->file_path);
+            }
+        });
+    }
+
+    /**
+     * Check if the org uses S3 storage.
+     */
+    public static function isS3(Organization $org): bool
+    {
+        return $org->storage_driver === 's3'
+            && !empty($org->storage_s3_access_key)
+            && !empty($org->storage_s3_secret_key);
     }
 }

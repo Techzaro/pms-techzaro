@@ -88,6 +88,7 @@ class StorageFileService
 
     /**
      * Delete a file record AND the physical file from disk/S3.
+     * Also removes the corresponding project_files record from the tenant DB.
      */
     public static function deleteFile(Organization $org, int $recordId): bool
     {
@@ -98,16 +99,54 @@ class StorageFileService
 
         if (!$record) return false;
 
-        // Delete physical file
-        StorageDiskResolver::delete($org, $record->file_path);
+        // Delete physical file (non-fatal if it fails)
+        try {
+            StorageDiskResolver::delete($org, $record->file_path);
+        } catch (\Throwable $e) {
+            Log::warning("Physical file delete failed for '{$record->file_path}': " . $e->getMessage());
+        }
 
-        // Delete record
+        // Remove tenant DB references (non-fatal if it fails)
+        self::removeProjectFileReference($org, $record->file_path);
+
+        // Always delete the storage record
         $record->delete();
 
         // Invalidate cache
         self::invalidateCache($org->id);
 
         return true;
+    }
+
+    /**
+     * Remove file records that reference the given file path from the tenant DB.
+     * Cleans up project_files, task_files, and deliverable_files tables.
+     */
+    private static function removeProjectFileReference(Organization $org, string $filePath): void
+    {
+        try {
+            $connectionName = 'tenant_' . $org->id;
+
+            // Register and connect to tenant DB
+            config()->set("database.connections.{$connectionName}", $org->getDatabaseConfig());
+            DB::purge($connectionName);
+            DB::reconnect($connectionName);
+
+            $tenantDb = DB::connection($connectionName);
+
+            // Delete matching rows from all file tables
+            foreach (['project_files', 'task_files', 'deliverable_files', 'submission_attachments'] as $table) {
+                if ($tenantDb->getSchemaBuilder()->hasTable($table)) {
+                    $column = $tenantDb->getSchemaBuilder()->hasColumn($table, 'url') ? 'url' : 'file_path';
+                    $tenantDb->table($table)->where($column, $filePath)->delete();
+                }
+            }
+
+            // Purge tenant connection to avoid leaking
+            DB::purge($connectionName);
+        } catch (\Throwable $e) {
+            Log::warning("Failed to remove file reference for path '{$filePath}': " . $e->getMessage());
+        }
     }
 
     /**
@@ -126,6 +165,7 @@ class StorageFileService
 
         foreach ($records as $record) {
             StorageDiskResolver::delete($org, $record->file_path);
+            self::removeProjectFileReference($org, $record->file_path);
             $freedBytes += $record->file_size_bytes;
             $record->delete();
             $deletedCount++;
@@ -156,6 +196,7 @@ class StorageFileService
 
         foreach ($records as $record) {
             StorageDiskResolver::delete($org, $record->file_path);
+            self::removeProjectFileReference($org, $record->file_path);
             $freedBytes += $record->file_size_bytes;
             $record->delete();
             $deletedCount++;
@@ -190,6 +231,7 @@ class StorageFileService
             if ($freed >= $remaining) break;
 
             StorageDiskResolver::delete($org, $record->file_path);
+            self::removeProjectFileReference($org, $record->file_path);
             $freed += $record->file_size_bytes;
             $record->delete();
         }
@@ -219,6 +261,7 @@ class StorageFileService
 
         $freed = $oldestFile->file_size_bytes;
         StorageDiskResolver::delete($org, $oldestFile->file_path);
+        self::removeProjectFileReference($org, $oldestFile->file_path);
         $oldestFile->delete();
 
         self::invalidateCache($org->id);
