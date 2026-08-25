@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Plus, X, GripVertical, RotateCcw, Search, Maximize2, Minimize2, Pin } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import CalendarEventsWidget, { CalendarWidget, EventsWidget } from "./CalendarEventsWidget";
+import CalendarEventsWidget, { CalendarWidget, EventsWidget, KnowledgeBaseWidget } from "./CalendarEventsWidget";
 import { usePinnedTasks, togglePinTask } from "../utils/pinnedTasks";
 import { rolePath } from "../utils/auth";
 
@@ -175,9 +175,9 @@ function WidgetCardItem({
             <GripVertical size={18} />
           </span>
 
-          {w.type === "calendar_events" || w.type === "calendar" || w.type === "events" ? (
+          {w.type === "calendar_events" || w.type === "calendar" || w.type === "events" || w.type === "knowledge_base" ? (
             <h4 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "var(--text-heading)" }}>
-              {w.type === "calendar" ? "📅 " : w.type === "events" ? "🗓️ " : "📅 "}{w.title || (w.type === "calendar" ? "Calendar Widget" : w.type === "events" ? "Events Widget" : "Calendar & Events")}
+              {w.type === "calendar" ? "📅 " : w.type === "events" ? "🗓️ " : w.type === "knowledge_base" ? "📖 " : "📅 "}{w.title || (w.type === "calendar" ? "Calendar Widget" : w.type === "events" ? "Events Widget" : w.type === "knowledge_base" ? "Knowledge Base" : "Calendar & Events")}
             </h4>
           ) : (
             <div style={{ display: "flex", alignItems: "center", gap: "6px", flex: 1 }}>
@@ -226,6 +226,8 @@ function WidgetCardItem({
           <CalendarWidget />
         ) : w.type === "events" ? (
           <EventsWidget />
+        ) : w.type === "knowledge_base" ? (
+          <KnowledgeBaseWidget />
         ) : w.type === "calendar_events" ? (
           <CalendarEventsWidget />
         ) : w.type === "pinned_tasks" ? (
@@ -332,6 +334,13 @@ export default function DynamicWidgetSection({ storageKey = "pms_dashboard_widge
           { id: `ev_${Date.now()}`, type: "events", title: "Events Widget", width: "100%", height: 320 }
         ]);
       }
+    } else if (type === "knowledge_base") {
+      if (!widgets.some((w) => w.type === "knowledge_base")) {
+        setWidgets((prev) => [
+          ...prev,
+          { id: `kb_${Date.now()}`, type: "knowledge_base", title: "Knowledge Base", width: "100%", height: 320 }
+        ]);
+      }
     } else if (type === "calendar_events") {
       if (!widgets.some((w) => w.type === "calendar_events")) {
         setWidgets((prev) => [
@@ -379,6 +388,7 @@ export default function DynamicWidgetSection({ storageKey = "pms_dashboard_widge
     { type: "pinned_tasks", title: "Pinned Tasks & Reminders", desc: "View and access your pinned dashboard tasks" },
     { type: "calendar", title: "Calendar Widget", desc: "Mini monthly calendar grid & schedule navigator" },
     { type: "events", title: "Events Widget", desc: "Upcoming events schedule and attendee assignments" },
+    { type: "knowledge_base", title: "Knowledge Base", desc: "Recently added and updated documentation and guidelines" },
     { type: "calendar_events", title: "Calendar & Events (Combined)", desc: "Combined mini calendar and schedule view" },
     { type: "notes", title: "Notes Widget", desc: "Custom card with editable title and notes" }
   ];

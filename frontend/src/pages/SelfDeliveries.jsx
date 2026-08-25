@@ -509,7 +509,7 @@ function SelfDeliveries() {
                         onTriggerClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { from: "self-deliveries", subtaskIds } })}
                       >
                         <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
-                        {item.status === "in_progress" && !item.assigner_paused && (
+                        {["in_progress", "submitted"].includes(item.status) && !item.assigner_paused && (
                           <button className="action-icon-btn action-submit" title="Pause" disabled={actingId === item.id} onClick={() => handlePause(item.id)} style={{ color: "#D97706" }}>
                             <Pause size={16} />
                           </button>
@@ -522,13 +522,13 @@ function SelfDeliveries() {
                         {item.assigner_paused && (
                           <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#92400E", fontSize: "11px", fontWeight: 600, border: "1px solid #F59E0B" }}>
                             <Lock size={12} />
-                            On Hold
+                            Paused by Assigner
                           </span>
                         )}
                         {canSubmit && (
                           <button
                             className="action-icon-btn action-submit"
-                            title={item.task?.status === "paused" ? "Parent task is paused. Resume the task first." : item.task?.assigner_paused ? "Parent task is on hold by assigner." : item.status === "rework_required" ? "Resubmit Subtask" : "Submit Subtask"}
+                            title={item.task?.status === "paused" ? "Parent task is paused. Resume the task first." : item.task?.assigner_paused ? "Parent task is paused by assigner." : item.status === "rework_required" ? "Resubmit Subtask" : "Submit Subtask"}
                             disabled={item.task?.status === "paused" || item.task?.assigner_paused}
                             onClick={() => setSubmitModal({ open: true, subtask: item })}
                             style={item.task?.status === "paused" || item.task?.assigner_paused ? { opacity: 0.4, cursor: "not-allowed" } : {}}

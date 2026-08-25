@@ -162,6 +162,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
     return {
       project_id: projectId ? [projectId] : [],
       assigned_to: [],
+      followers: [],
       title: "",
       description: "",
       priority: "Medium",
@@ -430,6 +431,11 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
     if (formErrors.assigned_to) setFormErrors((prev) => { const n = { ...prev }; delete n.assigned_to; return n; });
   };
 
+  const handleFollowersChange = (ids) => {
+    setForm((prev) => ({ ...prev, followers: ids }));
+    markDirty();
+  };
+
   const handleAddRequirement = () => { if (!reqInput.trim()) return; markDirty(); setRequirementsList((prev) => [...prev, reqInput.trim()]); setReqInput(""); };
   const handleRemoveRequirement = (index) => { markDirty(); setRequirementsList((prev) => prev.filter((_, i) => i !== index)); };
   const handleReqKeyDown = (e) => { if (e.key === "Enter") { e.preventDefault(); handleAddRequirement(); } };
@@ -604,6 +610,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
           deliverable_templates: validTemplates.length > 0 ? validTemplates.map((t) => ({ title: t.title.trim(), description: t.description || null, quantity: t.quantity || 1, combined: t.combined || false })) : undefined,
           deliverables: subtasks.length > 0 ? subtasks.map((d) => ({ title: d.title, start_date: d.start_date || null, due_date: d.due_date || null, assigned_to: d.assigned_to || null })) : undefined,
           allow_transfer: form.allow_transfer === "allow",
+          followers: form.followers || [],
         };
 
         const projectIds = projectId ? [projectId] : form.project_id;
@@ -713,6 +720,16 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                     placeholder="Click to select members" error={!!formErrors.assigned_to} />
                   {formErrors.assigned_to && <span className="field-error-text">{formErrors.assigned_to}</span>}
                 </div>
+              </div>
+
+              <div className="task-field">
+                <label>Followers (Optional)</label>
+                <UserSelectDropdown
+                  users={displayUsers.filter((u) => !form.assigned_to.includes(u.id))}
+                  selectedIds={form.followers || []}
+                  onChange={handleFollowersChange}
+                  placeholder="Click to select followers"
+                />
               </div>
 
               <div className="task-field">

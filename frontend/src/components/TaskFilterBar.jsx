@@ -1,18 +1,49 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { IoSearchOutline, IoFilterOutline } from "react-icons/io5";
+import { Bookmark, Check, Trash2, Plus } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
+import { notify } from "../utils/notify";
 import MultiSelectDropdown from "./MultiSelectDropdown";
 
 /**
  * TaskFilterBar.jsx
- * Action & filter bar for task and subtask tables with collapsible filter toggle button.
+ * Advanced Action & Filter Bar with Multi-Select categories and Saved Views integration.
+ * Supports: Statuses, States (Reopened, Transferred), Due States, Assignees, Projects, Date Ranges.
+ * Fully accessible to ALL user roles (Admin, Manager, Team Lead, Member).
  */
-export default function TaskFilterBar({ filters, onFilterChange, onReset, search, onSearchChange }) {
+export default function TaskFilterBar({
+  filters = {},
+  onFilterChange,
+  onApplyFilters,
+  onReset,
+  search = "",
+  onSearchChange,
+  module = "tasks",
+}) {
   const [users, setUsers] = useState([]);
   const [projects, setProjects] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
+  const [savedViews, setSavedViews] = useState([]);
+  const [activeViewId, setActiveViewId] = useState("all");
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [newViewName, setNewViewName] = useState("");
+  const [savingView, setSavingView] = useState(false);
+  const [showViewsDropdown, setShowViewsDropdown] = useState(false);
 
+  // Standard non-deletable default views (SRS Section 11)
+  const defaultViews = [
+    { id: "all", name: "All", filters: {} },
+    { id: "pending", name: "Pending", filters: { statuses: ["Pending"] } },
+    { id: "in_progress", name: "In Progress", filters: { statuses: ["In Progress"] } },
+    { id: "submitted", name: "Submitted", filters: { statuses: ["Submitted"] } },
+    { id: "approved", name: "Approved", filters: { statuses: ["Approved"] } },
+    { id: "paused", name: "Paused", filters: { statuses: ["Paused"] } },
+    { id: "declined", name: "Declined", filters: { statuses: ["Declined"] } },
+    { id: "abandoned", name: "Abandoned", filters: { statuses: ["Abandoned"] } },
+  ];
+
+  // Fetch users & projects for dropdowns
   useEffect(() => {
     const token = authToken();
     if (!token) return;
@@ -23,10 +54,10 @@ export default function TaskFilterBar({ filters, onFilterChange, onReset, search
     })
       .then((res) => res.json())
       .then((data) => {
-        const list = Array.isArray(data) ? data : (data.users || data.data || []);
-        setUsers(list);
+        const list = Array.isArray(data) ? data : (data?.users || data?.data || []);
+        setUsers(Array.isArray(list) ? list : []);
       })
-      .catch(() => {});
+      .catch(() => setUsers([]));
 
     fetch(`${API_URL}/projects`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -34,33 +65,69 @@ export default function TaskFilterBar({ filters, onFilterChange, onReset, search
     })
       .then((res) => res.json())
       .then((data) => {
-        const list = Array.isArray(data) ? data : (data.projects || data.data || []);
-        setProjects(list);
+        const list = Array.isArray(data) ? data : (data?.projects || data?.data || []);
+        setProjects(Array.isArray(list) ? list : []);
       })
-      .catch(() => {});
+      .catch(() => setProjects([]));
   }, []);
 
+  // Fetch User's Custom Saved Views (SRS Section 11 & 12 - Available to all roles)
+  const fetchSavedViews = useCallback(() => {
+    const token = authToken();
+    if (!token) return;
+
+    fetch(`${API_URL}/task-saved-views`, {
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      skipLoader: true,
+    })
+      .then((res) => (res.ok ? res.json() : { data: [] }))
+      .then((data) => {
+        const list = Array.isArray(data?.data) ? data.data : [];
+        setSavedViews(list);
+      })
+      .catch(() => setSavedViews([]));
+  }, []);
+
+  useEffect(() => {
+    fetchSavedViews();
+  }, [fetchSavedViews]);
+
+  // Options for multi-select dropdowns
   const userOptions = users.map((u) => ({
-    value: u.id,
-    label: u.name || u.email,
+    value: u?.id,
+    label: u?.name || u?.email || "User",
   }));
 
   const projectOptions = projects.map((p) => ({
-    value: p.id,
-    label: p.title + (p.business_id ? ` (${p.business_id})` : ""),
+    value: p?.id,
+    label: (p?.title || "Project") + (p?.business_id ? ` (${p.business_id})` : ""),
   }));
 
+  // SRS Section 8 & 9 Statuses Options
   const statusOptions = [
-    { value: "due_today", label: "Due Today" },
-    { value: "pending", label: "Pending" },
-    { value: "in_progress", label: "In Progress" },
-    { value: "paused", label: "Paused" },
-    { value: "submitted", label: "Submitted" },
-    { value: "reopened", label: "Reopened" },
-    { value: "transferred", label: "Transferred" },
-    { value: "approved", label: "Approved" },
-    { value: "rejected", label: "Declined" },
-    { value: "abandoned", label: "Abandoned" },
+    { value: "Pending", label: "Pending" },
+    { value: "In Progress", label: "In Progress" },
+    { value: "Submitted", label: "Submitted" },
+    { value: "Approved", label: "Approved" },
+    { value: "Paused", label: "Paused" },
+    { value: "Declined", label: "Declined" },
+    { value: "Abandoned", label: "Abandoned" },
+  ];
+
+  // SRS Section 5 States Options
+  const stateOptions = [
+    { value: "Reopened", label: "Reopened" },
+    { value: "Transferred", label: "Transferred" },
+  ];
+
+  // SRS Section 6 Due State Options
+  const dueStateOptions = [
+    { value: "Due Today", label: "Due Today" },
+    { value: "Due This Week", label: "Due This Week" },
+    { value: "Due This Month", label: "Due This Month" },
+    { value: "Overdue", label: "Overdue" },
+    { value: "Upcoming", label: "Upcoming" },
+    { value: "No due date", label: "No due date" },
   ];
 
   const toArray = (val) => {
@@ -73,12 +140,119 @@ export default function TaskFilterBar({ filters, onFilterChange, onReset, search
 
   const isActive = Boolean(
     (search && search.trim()) ||
+    isNonEmpty(filters?.statuses) ||
+    isNonEmpty(filters?.status) ||
+    isNonEmpty(filters?.states) ||
+    isNonEmpty(filters?.due_states) ||
     isNonEmpty(filters?.user_id) ||
     isNonEmpty(filters?.project_id) ||
-    isNonEmpty(filters?.status) ||
     filters?.start_date ||
     filters?.end_date
   );
+
+  // Apply a selected view (Default or Custom)
+  const handleSelectView = (view) => {
+    setActiveViewId(view?.id || "all");
+    setShowViewsDropdown(false);
+
+    if (onApplyFilters) {
+      onApplyFilters(view?.filters || {});
+    } else {
+      if (onReset) onReset();
+      const targetFilters = view?.filters || {};
+      Object.keys(targetFilters).forEach((k) => {
+        if (onFilterChange) onFilterChange(k, targetFilters[k]);
+      });
+    }
+  };
+
+  // Save current active filters as a custom Saved View
+  const handleSaveCurrentView = async (e) => {
+    e.preventDefault();
+    if (!newViewName.trim()) {
+      notify?.error ? notify.error("Please enter a name for the view.") : alert("Please enter a name for the view.");
+      return;
+    }
+
+    setSavingView(true);
+    const token = authToken();
+
+    const currentFiltersPayload = {
+      statuses: toArray(filters?.statuses || filters?.status),
+      states: toArray(filters?.states),
+      due_states: toArray(filters?.due_states),
+      user_id: toArray(filters?.user_id),
+      project_id: toArray(filters?.project_id),
+      start_date: filters?.start_date || "",
+      end_date: filters?.end_date || "",
+    };
+
+    try {
+      const res = await fetch(`${API_URL}/task-saved-views`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: newViewName.trim(),
+          filters: currentFiltersPayload,
+          is_default: false,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data?.success) {
+        notify?.success ? notify.success("Saved view created successfully!") : null;
+        setNewViewName("");
+        setShowSaveModal(false);
+        fetchSavedViews();
+        if (data?.data?.id) {
+          setActiveViewId(`custom-${data.data.id}`);
+        }
+      } else {
+        notify?.error ? notify.error(data?.message || "Failed to save view.") : alert(data?.message || "Failed to save view.");
+      }
+    } catch (err) {
+      notify?.error ? notify.error("Error saving view.") : console.error(err);
+    } finally {
+      setSavingView(false);
+    }
+  };
+
+  // Delete a custom saved view
+  const handleDeleteView = async (e, viewId) => {
+    e.stopPropagation();
+    if (!window.confirm("Are you sure you want to delete this saved view?")) return;
+
+    const token = authToken();
+    try {
+      const res = await fetch(`${API_URL}/task-saved-views/${viewId}`, {
+        method: "DELETE",
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (res.ok) {
+        notify?.success ? notify.success("Saved view deleted.") : null;
+        fetchSavedViews();
+        if (activeViewId === `custom-${viewId}`) {
+          setActiveViewId("all");
+          if (onReset) onReset();
+        }
+      }
+    } catch (err) {
+      console.error("Error deleting saved view:", err);
+    }
+  };
+
+  const currentActiveViewName =
+    defaultViews.find((v) => v.id === activeViewId)?.name ||
+    savedViews.find((v) => `custom-${v.id}` === activeViewId)?.name ||
+    "Saved Views";
 
   return (
     <div
@@ -97,7 +271,7 @@ export default function TaskFilterBar({ filters, onFilterChange, onReset, search
         overflow: "visible",
       }}
     >
-      {/* Top Header Row with Search Input & Filter Toggle Button */}
+      {/* Top Header Row with Search, Saved Views Selector, and Filter Toggle */}
       <div
         style={{
           display: "flex",
@@ -107,39 +281,206 @@ export default function TaskFilterBar({ filters, onFilterChange, onReset, search
           justifyContent: "space-between",
         }}
       >
-        {/* Task Name Search */}
-        <div style={{ flex: "1 1 240px", minWidth: 200, position: "relative" }}>
-          <IoSearchOutline
-            style={{
-              position: "absolute",
-              left: 12,
-              top: "50%",
-              transform: "translateY(-50%)",
-              color: "#9ca3af",
-              fontSize: 16,
-            }}
-          />
-          <input
-            type="text"
-            placeholder="Search task name..."
-            value={search || ""}
-            onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
-            style={{
-              width: "100%",
-              height: "38px",
-              padding: "6px 12px 6px 36px",
-              borderRadius: "8px",
-              border: "1px solid var(--border-color, #cbd5e1)",
-              background: "var(--bg-card, #ffffff)",
-              color: "var(--text-primary, #0f172a)",
-              fontSize: "13px",
-              outline: "none",
-              boxSizing: "border-box",
-            }}
-          />
+        {/* Left Side: Search & Saved Views dropdown */}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: "1 1 360px", minWidth: 280, flexWrap: "wrap" }}>
+          {/* Task Name Search */}
+          <div style={{ flex: "1 1 200px", minWidth: 180, position: "relative" }}>
+            <IoSearchOutline
+              style={{
+                position: "absolute",
+                left: 12,
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: "#9ca3af",
+                fontSize: 16,
+              }}
+            />
+            <input
+              type="text"
+              placeholder="Search tasks..."
+              value={search || ""}
+              onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
+              style={{
+                width: "100%",
+                height: "38px",
+                padding: "6px 12px 6px 36px",
+                borderRadius: "8px",
+                border: "1px solid var(--border-color, #cbd5e1)",
+                background: "var(--bg-card, #ffffff)",
+                color: "var(--text-primary, #0f172a)",
+                fontSize: "13px",
+                outline: "none",
+                boxSizing: "border-box",
+              }}
+            />
+          </div>
+
+          {/* Saved Views Dropdown Selector (SRS Sec 11 & 12) */}
+          <div style={{ position: "relative" }}>
+            <button
+              type="button"
+              onClick={() => setShowViewsDropdown(!showViewsDropdown)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                height: "38px",
+                padding: "0 12px",
+                borderRadius: "8px",
+                border: "1px solid var(--border-color, #cbd5e1)",
+                background: "var(--bg-card, #ffffff)",
+                color: "var(--text-primary, #334155)",
+                fontSize: "13px",
+                fontWeight: 500,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+              title="Select or manage saved views"
+            >
+              <Bookmark size={15} style={{ color: "#4f46e5" }} />
+              <span>View: <strong>{currentActiveViewName}</strong></span>
+            </button>
+
+            {/* Views Dropdown Menu */}
+            {showViewsDropdown && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "44px",
+                  left: 0,
+                  width: "260px",
+                  background: "#ffffff",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "10px",
+                  boxShadow: "0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)",
+                  zIndex: 200,
+                  padding: "8px",
+                }}
+              >
+                {/* Standard Views */}
+                <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "#64748b", padding: "4px 8px" }}>
+                  Standard Views
+                </div>
+                <div style={{ maxHeight: "150px", overflowY: "auto", marginBottom: "6px" }}>
+                  {defaultViews.map((dv) => {
+                    const isSelected = activeViewId === dv.id;
+                    return (
+                      <div
+                        key={dv.id}
+                        onClick={() => handleSelectView(dv)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "6px 8px",
+                          borderRadius: "6px",
+                          fontSize: "12px",
+                          cursor: "pointer",
+                          background: isSelected ? "#eff6ff" : "transparent",
+                          color: isSelected ? "#2563eb" : "#334155",
+                          fontWeight: isSelected ? 600 : 400,
+                        }}
+                      >
+                        <span>{dv.name}</span>
+                        {isSelected && <Check size={14} color="#2563eb" />}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Custom Saved Views */}
+                <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: "6px" }}>
+                  <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "#64748b", padding: "4px 8px" }}>
+                    My Custom Views
+                  </div>
+                  {savedViews.length === 0 ? (
+                    <div style={{ padding: "6px 8px", fontSize: "11px", color: "#94a3b8", fontStyle: "italic" }}>
+                      No custom views yet.
+                    </div>
+                  ) : (
+                    <div style={{ maxHeight: "140px", overflowY: "auto" }}>
+                      {savedViews.map((sv) => {
+                        const isSelected = activeViewId === `custom-${sv.id}`;
+                        return (
+                          <div
+                            key={sv.id}
+                            onClick={() => handleSelectView({ id: `custom-${sv.id}`, name: sv.name, filters: sv.filters })}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              padding: "6px 8px",
+                              borderRadius: "6px",
+                              fontSize: "12px",
+                              cursor: "pointer",
+                              background: isSelected ? "#eff6ff" : "transparent",
+                              color: isSelected ? "#2563eb" : "#334155",
+                              fontWeight: isSelected ? 600 : 400,
+                            }}
+                          >
+                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {sv.name}
+                            </span>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              {isSelected && <Check size={14} color="#2563eb" />}
+                              <button
+                                type="button"
+                                onClick={(e) => handleDeleteView(e, sv.id)}
+                                style={{
+                                  background: "transparent",
+                                  border: "none",
+                                  color: "#ef4444",
+                                  cursor: "pointer",
+                                  padding: 2,
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                }}
+                                title="Delete view"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Save Current View Action */}
+                <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: "8px", marginTop: "4px" }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowViewsDropdown(false);
+                      setShowSaveModal(true);
+                    }}
+                    style={{
+                      width: "100%",
+                      padding: "6px 8px",
+                      borderRadius: "6px",
+                      border: "1px dashed #cbd5e1",
+                      background: "#f8fafc",
+                      color: "#4f46e5",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    <Plus size={14} />
+                    <span>Save Current Filters as View</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Toggle Filters & Reset Buttons */}
+        {/* Right Side: Toggle Filters & Reset Buttons */}
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <button
             type="button"
@@ -178,7 +519,10 @@ export default function TaskFilterBar({ filters, onFilterChange, onReset, search
           {isActive && (
             <button
               type="button"
-              onClick={onReset}
+              onClick={() => {
+                setActiveViewId("all");
+                if (onReset) onReset();
+              }}
               style={{
                 height: "38px",
                 padding: "0 14px",
@@ -197,7 +541,7 @@ export default function TaskFilterBar({ filters, onFilterChange, onReset, search
         </div>
       </div>
 
-      {/* Collapsible Advanced Filters Container */}
+      {/* Collapsible Advanced Filters Container (Multi-Select SRS Sec 8 & 9) */}
       {showFilters && (
         <div
           style={{
@@ -213,60 +557,105 @@ export default function TaskFilterBar({ filters, onFilterChange, onReset, search
             overflow: "visible",
           }}
         >
-          {/* Person (Assignee) Filter */}
-          <div style={{ flex: "1 1 180px", minWidth: 150 }}>
+          {/* 1. Status Multi-Select Filter (Pending, In Progress, Submitted, Approved, Paused, Declined, Abandoned) */}
+          <div style={{ flex: "1 1 180px", minWidth: 160 }}>
+            <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
+              Status
+            </label>
+            <MultiSelectDropdown
+              size="sm"
+              value={toArray(filters?.statuses || filters?.status)}
+              onChange={(val) => {
+                if (onFilterChange) {
+                  onFilterChange("statuses", val);
+                  onFilterChange("status", val);
+                }
+              }}
+              options={statusOptions}
+              placeholder="All Statuses"
+              searchPlaceholder="Search status..."
+            />
+          </div>
+
+          {/* 2. State / Activity Multi-Select Filter (Reopened, Transferred) */}
+          <div style={{ flex: "1 1 150px", minWidth: 140 }}>
+            <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
+              Activity / States
+            </label>
+            <MultiSelectDropdown
+              size="sm"
+              value={toArray(filters?.states || filters?.state)}
+              onChange={(val) => {
+                if (onFilterChange) {
+                  onFilterChange("states", val);
+                  onFilterChange("state", val);
+                }
+              }}
+              options={stateOptions}
+              placeholder="All States"
+              searchPlaceholder="Search state..."
+            />
+          </div>
+
+          {/* 3. Due State Multi-Select Filter (Due Today, Due This Week, Overdue, etc.) */}
+          <div style={{ flex: "1 1 160px", minWidth: 150 }}>
+            <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
+              Due State
+            </label>
+            <MultiSelectDropdown
+              size="sm"
+              value={toArray(filters?.due_states || filters?.due_state)}
+              onChange={(val) => {
+                if (onFilterChange) {
+                  onFilterChange("due_states", val);
+                  onFilterChange("due_state", val);
+                }
+              }}
+              options={dueStateOptions}
+              placeholder="All Due Dates"
+              searchPlaceholder="Search due state..."
+            />
+          </div>
+
+          {/* 4. Person (Assignee) Multi-Select Filter */}
+          <div style={{ flex: "1 1 160px", minWidth: 150 }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
               Person (Assignee)
             </label>
             <MultiSelectDropdown
               size="sm"
-              value={toArray(filters?.user_id)}
-              onChange={(val) => onFilterChange("user_id", val)}
+              value={toArray(filters?.user_id || filters?.assigned_to)}
+              onChange={(val) => onFilterChange && onFilterChange("user_id", val)}
               options={userOptions}
               placeholder="All Assignees"
               searchPlaceholder="Search assignees..."
             />
           </div>
 
-          {/* Project Filter */}
-          <div style={{ flex: "1 1 180px", minWidth: 150 }}>
+          {/* 5. Project Multi-Select Filter */}
+          <div style={{ flex: "1 1 160px", minWidth: 150 }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
               Project
             </label>
             <MultiSelectDropdown
               size="sm"
               value={toArray(filters?.project_id)}
-              onChange={(val) => onFilterChange("project_id", val)}
+              onChange={(val) => onFilterChange && onFilterChange("project_id", val)}
               options={projectOptions}
               placeholder="All Projects"
               searchPlaceholder="Search projects..."
             />
           </div>
 
-          {/* Status Filter */}
-          <div style={{ flex: "1 1 180px", minWidth: 150 }}>
-            <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
-              Status
-            </label>
-            <MultiSelectDropdown
-              size="sm"
-              value={toArray(filters?.status)}
-              onChange={(val) => onFilterChange("status", val)}
-              options={statusOptions}
-              placeholder="All Statuses"
-              searchPlaceholder="Search statuses..."
-            />
-          </div>
-
-          {/* Start Date */}
-          <div style={{ flex: "1 1 130px", minWidth: 120 }}>
+          {/* 6. Start Date */}
+          <div style={{ flex: "1 1 120px", minWidth: 110 }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
               Start Date
             </label>
             <input
               type="date"
               value={filters?.start_date || ""}
-              onChange={(e) => onFilterChange("start_date", e.target.value)}
+              onChange={(e) => onFilterChange && onFilterChange("start_date", e.target.value)}
               style={{
                 width: "100%",
                 height: "36px",
@@ -282,15 +671,15 @@ export default function TaskFilterBar({ filters, onFilterChange, onReset, search
             />
           </div>
 
-          {/* End Date */}
-          <div style={{ flex: "1 1 130px", minWidth: 120 }}>
+          {/* 7. End Date */}
+          <div style={{ flex: "1 1 120px", minWidth: 110 }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
               End Date
             </label>
             <input
               type="date"
               value={filters?.end_date || ""}
-              onChange={(e) => onFilterChange("end_date", e.target.value)}
+              onChange={(e) => onFilterChange && onFilterChange("end_date", e.target.value)}
               style={{
                 width: "100%",
                 height: "36px",
@@ -304,6 +693,102 @@ export default function TaskFilterBar({ filters, onFilterChange, onReset, search
                 boxSizing: "border-box",
               }}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Save View Modal Dialog */}
+      {showSaveModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+          onClick={() => setShowSaveModal(false)}
+        >
+          <div
+            style={{
+              background: "#ffffff",
+              borderRadius: "12px",
+              padding: "20px",
+              width: "100%",
+              maxWidth: "400px",
+              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+              <Bookmark size={20} color="#4f46e5" />
+              <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#1e293b" }}>
+                Save Current View
+              </h3>
+            </div>
+            <p style={{ margin: "0 0 16px", fontSize: "13px", color: "#64748b" }}>
+              Save your active filters for quick access anytime.
+            </p>
+            <form onSubmit={handleSaveCurrentView}>
+              <input
+                type="text"
+                placeholder="e.g. My Urgent Overdue Tasks"
+                value={newViewName}
+                onChange={(e) => setNewViewName(e.target.value)}
+                autoFocus
+                style={{
+                  width: "100%",
+                  height: "38px",
+                  padding: "8px 12px",
+                  borderRadius: "8px",
+                  border: "1px solid #cbd5e1",
+                  fontSize: "13px",
+                  marginBottom: "16px",
+                  boxSizing: "border-box",
+                  outline: "none",
+                }}
+              />
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowSaveModal(false)}
+                  style={{
+                    padding: "8px 14px",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    background: "#ffffff",
+                    color: "#64748b",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingView}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: "8px",
+                    border: "none",
+                    background: "#4f46e5",
+                    color: "#ffffff",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    cursor: savingView ? "not-allowed" : "pointer",
+                    opacity: savingView ? 0.7 : 1,
+                  }}
+                >
+                  {savingView ? "Saving..." : "Save View"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

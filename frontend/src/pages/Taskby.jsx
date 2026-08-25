@@ -36,6 +36,7 @@ import API_URL from "../config/api";
 import { authToken, rolePath, getUser } from "../utils/auth";
 import { renderDynamicDates } from "../utils/tableDateUtils";
 import { formatDateTimeInline } from "../utils/formatDateTime";
+import { showSuccessMessage, notify, toast } from "../utils/notify";
 import { useNotification } from "../context/NotificationContext";
 import "../components/ActionPopover.css";
 import "../pages/Task.css";
@@ -113,13 +114,26 @@ const Taskby = () => {
   const [advancedFilters, setAdvancedFilters] = useState({
     user_id: [],
     project_id: [],
+    statuses: [],
     status: [],
+    states: [],
+    due_states: [],
     start_date: "",
     end_date: "",
   });
 
-  const [sortBy, setSortBy] = useState("due_date");
-  const [sortOrder, setSortOrder] = useState("asc");
+  const [sortBy, setSortBy] = useState("");
+  const [sortDirection, setSortDirection] = useState("desc");
+
+  const handleSort = (column) => {
+    if (sortBy === column) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(column);
+      setSortDirection("asc");
+    }
+    setPage(1);
+  };
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -127,43 +141,82 @@ const Taskby = () => {
   }, [search]);
 
   /** Fetch tasks assigned by the current user from the API. */
-  const fetchTasks = () => {
-    setLoading(true);
-    const token = authToken();
-    const params = new URLSearchParams();
-    params.append("per_page", itemsPerPage);
-    if (debouncedSearch) params.append("search", debouncedSearch);
-    if (timeFilter) params.append("time_filter", timeFilter);
-    if (advancedFilters.user_id && advancedFilters.user_id.length > 0) {
-      params.append("user_id", Array.isArray(advancedFilters.user_id) ? advancedFilters.user_id.join(",") : advancedFilters.user_id);
-    }
-    if (advancedFilters.project_id && advancedFilters.project_id.length > 0) {
-      params.append("project_id", Array.isArray(advancedFilters.project_id) ? advancedFilters.project_id.join(",") : advancedFilters.project_id);
-    }
-    if (advancedFilters.status && advancedFilters.status.length > 0) {
-      params.append("status", Array.isArray(advancedFilters.status) ? advancedFilters.status.join(",") : advancedFilters.status);
-    }
-    if (advancedFilters.start_date) params.append("start_date", advancedFilters.start_date);
-    if (advancedFilters.end_date) params.append("end_date", advancedFilters.end_date);
-    if (sortBy) params.append("sort_by", sortBy);
-    if (sortOrder) params.append("sort_order", sortOrder);
+  const fetchTasks = useCallback(() => {
+    try {
+      setLoading(true);
+      const token = authToken();
+      const params = new URLSearchParams();
+      if (timeFilter) params.append("time_filter", timeFilter);
+      if (debouncedSearch) params.append("search", debouncedSearch);
+      if (statusFilter && (!advancedFilters.statuses || advancedFilters.statuses.length === 0)) {
+        params.append("status", statusFilter);
+      }
 
-    fetch(`${API_URL}/assigned-tasks?${params.toString()}`, {
-      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-      skipLoader: true,
-    })
-      .then((res) => (res.ok ? res.json() : { data: [] }))
-      .then((data) => {
-        setItems(data?.data || []);
-        setTotalCount(data?.total ?? 0);
+      const stList = Array.isArray(advancedFilters.statuses)
+        ? advancedFilters.statuses
+        : Array.isArray(advancedFilters.status)
+        ? advancedFilters.status
+        : [];
+      if (stList.length > 0) {
+        stList.forEach((st) => params.append("statuses[]", st));
+        params.append("statuses", stList.join(","));
+      }
+
+      const statesList = Array.isArray(advancedFilters.states) ? advancedFilters.states : [];
+      if (statesList.length > 0) {
+        statesList.forEach((st) => params.append("states[]", st));
+        params.append("states", statesList.join(","));
+      }
+
+      const dueList = Array.isArray(advancedFilters.due_states) ? advancedFilters.due_states : [];
+      if (dueList.length > 0) {
+        dueList.forEach((st) => params.append("due_states[]", st));
+        params.append("due_states", dueList.join(","));
+      }
+
+      const uList = Array.isArray(advancedFilters.user_id) ? advancedFilters.user_id : [];
+      if (uList.length > 0) {
+        params.append("user_id", uList.join(","));
+      }
+
+      const pList = Array.isArray(advancedFilters.project_id) ? advancedFilters.project_id : [];
+      if (pList.length > 0) {
+        params.append("project_id", pList.join(","));
+      }
+
+      if (advancedFilters.start_date) params.append("start_date", advancedFilters.start_date);
+      if (advancedFilters.end_date) params.append("end_date", advancedFilters.end_date);
+      if (sortBy) {
+        params.append("sort_by", sortBy);
+        params.append("sort_direction", sortDirection);
+        params.append("sort_dir", sortDirection);
+        params.append("sort_order", sortDirection);
+      }
+
+      fetch(`${API_URL}/assigned-tasks?${params.toString()}`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
       })
-      .catch(() => setItems([]))
-      .finally(() => setLoading(false));
-  };
+        .then((res) => (res.ok ? res.json() : { data: [] }))
+        .then((data) => {
+          setItems(Array.isArray(data?.data) ? data.data : []);
+          setTotalCount(typeof data?.total === "number" ? data.total : Array.isArray(data?.data) ? data.data.length : 0);
+        })
+        .catch((err) => {
+          console.warn("Failed to fetch tasks:", err);
+          setItems([]);
+        })
+        .finally(() => setLoading(false));
+    } catch (err) {
+      console.error("fetchTasks exception:", err);
+      setLoading(false);
+      setItems([]);
+    }
+  }, [debouncedSearch, timeFilter, statusFilter, advancedFilters, sortBy, sortDirection]);
 
   useEffect(() => {
     fetchTasks();
-  }, [debouncedSearch, timeFilter, itemsPerPage, advancedFilters, sortBy, sortOrder]);
+  }, [fetchTasks]);
 
   useAutoRefresh(fetchTasks, {
     events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
@@ -221,18 +274,19 @@ const Taskby = () => {
       const res = await fetch(`${API_URL}/tasks/${taskId}/assigner-pause`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ reason: reason_detail || reason }),
+        body: JSON.stringify({ reason: reason_detail || reason || "other" }),
         _notifHandled: true,
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setItems((prev) => prev.map((item) => item.id === taskId ? { ...item, assigner_paused: true, ...data.task } : item));
-        showSuccessMessage("Task", "placed on hold");
+        setItems((prev) => prev.map((item) => item.id === taskId ? { ...item, assigner_paused: true, ...(data.task || {}) } : item));
+        setOrderedItems((prev) => prev.map((item) => item.id === taskId ? { ...item, assigner_paused: true, ...(data.task || {}) } : item));
+        showSuccessMessage("Task", "paused");
       } else {
-        alert(data.message || "Failed to place task on hold.");
+        notify.error(data.message || data.error || "Failed to pause task.");
       }
     } catch {
-      alert("Failed to place task on hold.");
+      notify.error("Failed to pause task.");
     }
     setHoldingTaskId(null);
   };
@@ -246,20 +300,25 @@ const Taskby = () => {
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         _notifHandled: true,
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setItems((prev) => prev.map((item) => item.id === taskId ? { ...item, assigner_paused: false, ...data.task } : item));
+        setItems((prev) => prev.map((item) => item.id === taskId ? { ...item, assigner_paused: false, ...(data.task || {}) } : item));
+        setOrderedItems((prev) => prev.map((item) => item.id === taskId ? { ...item, assigner_paused: false, ...(data.task || {}) } : item));
         showSuccessMessage("Task", "resumed by assigner");
       } else {
-        alert(data.message || "Failed to resume task.");
+        notify.error(data.message || data.error || "Failed to resume task.");
       }
     } catch {
-      alert("Failed to resume task.");
+      notify.error("Failed to resume task.");
     }
     setResumingTaskId(null);
   };
 
-  const handleDelete = async (taskId) => {
+  const handleDelete = (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
     setDeleteTargetId(taskId);
     setDeleteConfirmOpen(true);
   };
@@ -268,6 +327,7 @@ const Taskby = () => {
     const taskId = deleteTargetId;
     setDeleteConfirmOpen(false);
     setDeleteTargetId(null);
+    if (!taskId) return;
     try {
       const token = authToken();
       const res = await fetch(`${API_URL}/tasks/${taskId}`, {
@@ -276,16 +336,17 @@ const Taskby = () => {
         _notifHandled: true,
       });
       if (res.ok) {
-        setItems((prev) => prev.filter((item) => item.id !== taskId));
+        setItems((prev) => prev.filter((item) => String(item.id) !== String(taskId)));
+        setOrderedItems((prev) => prev.filter((item) => String(item.id) !== String(taskId)));
         publish('task:deleted', { id: taskId });
         publish('data:changed', { type: 'task', action: 'deleted' });
-        showSuccessMessage("Task", "deleted");
+        toast.success("Task deleted successfully");
       } else {
-        const data = await res.json();
-        notify.error(data.message || "Failed to delete task.");
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.message || "Failed to delete task.");
       }
     } catch {
-      notify.error("Failed to delete task.");
+      toast.error("Failed to delete task.");
     }
   };
 
@@ -341,78 +402,34 @@ const Taskby = () => {
   const rejectedCount = useMemo(() => baseItems.filter((i) => i.status === "rejected").length, [baseItems]);
   const abandonedCount = useMemo(() => baseItems.filter((i) => i.status === "abandoned" || i.status === "abandon_requested").length, [baseItems]);
 
-  const filteredItems = useMemo(() => baseItems.filter((item) => {
-    if (debouncedSearch) {
-      const q = debouncedSearch.toLowerCase();
-      const titleMatch = (item.title || "").toLowerCase().includes(q);
-      const assigneeMatch = (item.assignees || []).some((a) => (a.name || "").toLowerCase().includes(q));
-      const assignerMatch = (item.assigner?.name || "").toLowerCase().includes(q);
-      const projectMatch = (item.project?.title || "").toLowerCase().includes(q);
-      if (!titleMatch && !assigneeMatch && !assignerMatch && !projectMatch) return false;
-    }
-    if (advancedFilters.user_id && advancedFilters.user_id.length > 0) {
-      const uids = (Array.isArray(advancedFilters.user_id) ? advancedFilters.user_id : [advancedFilters.user_id]).map(Number);
-      const hasMatch = (item.assignees || []).some((a) => uids.includes(Number(a.id))) ||
-        uids.includes(Number(item.assigned_to)) ||
-        uids.includes(Number(item.assigned_by));
-      if (!hasMatch) return false;
-    }
-    if (advancedFilters.project_id && advancedFilters.project_id.length > 0) {
-      const pids = (Array.isArray(advancedFilters.project_id) ? advancedFilters.project_id : [advancedFilters.project_id]).map(Number);
-      const projId = Number(item.project_id || item.project?.id);
-      if (!pids.includes(projId)) return false;
-    }
-    if (advancedFilters.status && advancedFilters.status.length > 0) {
-      const sts = Array.isArray(advancedFilters.status) ? advancedFilters.status : [advancedFilters.status];
-      const match = sts.some((st) => {
-        if (st === "due_today") {
-          const d = item.end_date || item.due_date || item.start_date ? new Date(item.end_date || item.due_date || item.start_date) : null;
-          const isToday = d && d.toDateString() === new Date().toDateString();
-          const isDone = ["approved", "completed", "done"].includes((item.status || "").toLowerCase());
-          return isToday && !isDone;
-        }
-        if (st === "pending") return ["pending", "planned", "Planning", "Planned"].includes(item.status);
-        if (st === "in_progress") return ["in_progress", "In Progress", "in-progress"].includes(item.status);
-        if (st === "paused") return ["paused", "pause", "Pause"].includes(item.status);
-        if (st === "transferred") return Array.isArray(item.delegation_chain) && item.delegation_chain.length > 0;
-        if (st === "rejected" || st === "declined") return item.status === "rejected" || item.status === "declined";
-        if (st === "abandoned") return item.status === "abandoned" || item.status === "abandon_requested";
-        if (st === "approved") return item.status === "approved" || item.status === "completed";
-        return item.status === st;
-      });
-      if (!match) return false;
-    }
-    if (advancedFilters.start_date) {
-      const itemDate = item.start_date ? new Date(item.start_date) : null;
-      if (!itemDate || itemDate < new Date(advancedFilters.start_date)) return false;
-    }
-    if (advancedFilters.end_date) {
-      const itemDate = item.end_date || item.due_date ? new Date(item.end_date || item.due_date) : null;
-      if (!itemDate || itemDate > new Date(advancedFilters.end_date)) return false;
-    }
-    if (statusFilter === "due_today") {
-      const dateVal = item.end_date || item.due_date || item.start_date;
-      if (!dateVal) return false;
-      const d = new Date(dateVal);
-      const now = new Date();
-      const isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
-      const isCompleted = ["approved", "completed", "done"].includes((item.status || "").toLowerCase());
-      return isToday && !isCompleted;
-    }
+  const filteredItems = useMemo(() => {
+    let list = baseItems;
     if (statusFilter) {
-      if (statusFilter === "pending") {
-        return pendingStatuses.includes(item.status);
+      const sf = String(statusFilter).toLowerCase();
+      if (sf === "due_today") {
+        list = list.filter((item) => {
+          const dateVal = item.end_date || item.due_date || item.start_date;
+          if (!dateVal) return false;
+          const d = new Date(dateVal);
+          const now = new Date();
+          const isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+          const isCompleted = ["approved", "completed", "done"].includes((item.status || "").toLowerCase());
+          return isToday && !isCompleted;
+        });
+      } else if (sf === "pending") {
+        list = list.filter((item) => pendingStatuses.includes(item.status));
+      } else if (sf === "in_progress") {
+        list = list.filter((item) => inProgressStatuses.includes(item.status));
+      } else if (sf === "rejected" || sf === "declined") {
+        list = list.filter((item) => item.status === "rejected" || item.status === "declined");
+      } else if (sf === "abandoned") {
+        list = list.filter((item) => item.status === "abandoned" || item.status === "abandon_requested");
+      } else {
+        list = list.filter((item) => String(item.status).toLowerCase() === sf);
       }
-      if (statusFilter === "transferred") {
-        return item.delegation_chain && item.delegation_chain.length > 0;
-      }
-      if (statusFilter === "abandoned") {
-        return item.status === "abandoned" || item.status === "abandon_requested";
-      }
-      return item.status === statusFilter;
     }
-    return true;
-  }), [baseItems, debouncedSearch, statusFilter, advancedFilters]);
+    return list;
+  }, [baseItems, statusFilter]);
 
   const taskIdList = filteredItems.map((i) => i.id);
 
@@ -436,8 +453,9 @@ const Taskby = () => {
 
         <div className="task-btns">
           <div className="all-time">
-            <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}>
+            <select value={timeFilter} onChange={(e) => { setTimeFilter(e.target.value); setPage(1); }}>
               <option value="">All Time</option>
+              <option value="today">Today</option>
               <option value="7">Last 7 Days</option>
               <option value="30">Last 30 Days</option>
               <option value="180">Last 6 Months</option>
@@ -460,17 +478,14 @@ const Taskby = () => {
 
       <DraggableStatusBadges
         badges={[
-          { id: "due_today", label: "Due Today", count: dueTodayCount, className: "DueToday", dotColor: "#EF4444" },
+          { id: "", label: "All", count: allCount, className: "All" },
           { id: "pending", label: "Pending", count: pendingCount, className: "Pending" },
           { id: "in_progress", label: "In Progress", count: inProgressCount, className: "InProgress" },
-          { id: "paused", label: "Paused", count: pausedCount, className: "Paused" },
           { id: "submitted", label: "Submitted", count: submittedCount, className: "Submitted" },
-          { id: "reopened", label: "Reopened", count: reopenedCount, className: "Reopened" },
-          { id: "transferred", label: "Transferred", count: transferredCount, className: "Transferred" },
           { id: "approved", label: "Approved", count: approvedCount, className: "Approved" },
+          { id: "paused", label: "Paused", count: pausedCount, className: "Paused" },
           { id: "rejected", label: "Declined", count: rejectedCount, className: "Rejected" },
           { id: "abandoned", label: "Abandoned", count: abandonedCount, className: "Abandoned", dotColor: "#DC2626" },
-          { id: "", label: "All", count: allCount, className: "All" },
         ]}
         activeStatus={statusFilter}
         onSelectStatus={selectStatusFilter}
@@ -494,12 +509,22 @@ const Taskby = () => {
         {/* Header Table */}
         <div className="table-header1">
           <div style={{ fontSize: 12, fontWeight: 600 }}>ID</div>
-          <div>Assigned To</div>
-          <div className="task-name-column">Task Name</div>
-          <div className="status-column">Status</div>
+          <div style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("assigned_to")}>
+            Assigned To
+          </div>
+          <div className="task-name-column" style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("title")}>
+            Task Name
+          </div>
+          <div className="status-column" style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("status")}>
+            Status
+          </div>
           <div>Progress</div>
-          <div className="priority-column">Priority</div>
-          <div className="date-column">Start & Due Date</div>
+          <div className="priority-column" style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("priority")}>
+            Priority
+          </div>
+          <div className="date-column" style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("due_date")}>
+            Start & Due Date
+          </div>
           <div>Action</div>
         </div>
 
@@ -570,17 +595,23 @@ const Taskby = () => {
                       <TaskMultiStatusBadges item={item} />
                     </div>
 
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
-                      <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>
-                        {item.deliverables_progress || 0}%
-                      </div>
-                      <div className="progress-bar-track">
-                        <div className="progress-bar-fill" style={{ width: `${item.deliverables_progress || 0}%` }}></div>
-                      </div>
-                      <div style={{ fontSize: "12px", color: "#6b7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {item.approved_deliverables || 0}/{item.total_deliverables || 0} subtasks
-                      </div>
-                    </div>
+                    {(() => {
+                      const isTerminal = ["completed", "approved", "submitted", "submitted_late", "done"].includes((item.status || "").toLowerCase());
+                      const prog = isTerminal ? 100 : (item.deliverables_progress || 0);
+                      return (
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+                          <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>
+                            {prog}%
+                          </div>
+                          <div className="progress-bar-track">
+                            <div className="progress-bar-fill" style={{ width: `${prog}%` }}></div>
+                          </div>
+                          <div style={{ fontSize: "12px", color: "#6b7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {item.approved_deliverables || 0}/{item.total_deliverables || 0} subtasks
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     <div className="col-priority">
                       <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
@@ -644,21 +675,21 @@ const Taskby = () => {
                                   <Pencil size={16} />
                                 </button>
                               )}
-                              {item.status?.toLowerCase() !== "approved" && (
-                                <button
-                                  className="action-icon-btn action-delete"
-                                  title="Delete"
-                                  onClick={() => {
-                                    if (isRecurrence) {
-                                      setDeleteRecurrenceTask(item);
-                                    } else {
-                                      handleDelete(item.id);
-                                    }
-                                  }}
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                              )}
+                              <button
+                                className="action-icon-btn action-delete"
+                                title="Delete"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  if (isRecurrence) {
+                                    setDeleteRecurrenceTask(item);
+                                  } else {
+                                    handleDelete(e, item.id);
+                                  }
+                                }}
+                              >
+                                <Trash2 size={16} />
+                              </button>
                             </>
                           );
                         })()}
@@ -673,7 +704,7 @@ const Taskby = () => {
                                   className="action-icon-btn"
                                   title="Approve Task"
                                   style={{ color: "#16A34A" }}
-                                  onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } })}
+                                  onClick={(e) => { e.stopPropagation(); navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } }); }}
                                 >
                                   <CheckCircle2 size={16} />
                                 </button>
@@ -683,17 +714,17 @@ const Taskby = () => {
                                   className="action-icon-btn"
                                   title="Decline Task"
                                   style={{ color: "#DC2626" }}
-                                  onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } })}
+                                  onClick={(e) => { e.stopPropagation(); navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } }); }}
                                 >
                                   <XCircle size={16} />
                                 </button>
                               )}
-                              {canUserApprove && (item.status === "approved" || item.status === "submitted" || item.status === "reopened") && (
+                              {canUserApprove && (item.status === "approved" || item.status === "submitted" || item.status === "reopened" || item.status === "abandoned") && (
                                 <button
                                   className="action-icon-btn"
                                   title="Reopen Task"
                                   style={{ color: "#2563EB" }}
-                                  onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } })}
+                                  onClick={(e) => { e.stopPropagation(); navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } }); }}
                                 >
                                   <RotateCcw size={16} />
                                 </button>
@@ -703,7 +734,7 @@ const Taskby = () => {
                                   className="action-icon-btn"
                                   title={isUserAdminOrManager ? "Abandon Task" : "Request Abandon"}
                                   style={{ color: "#F59E0B" }}
-                                  onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } })}
+                                  onClick={(e) => { e.stopPropagation(); navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } }); }}
                                 >
                                   <AlertOctagon size={16} />
                                 </button>
@@ -711,12 +742,12 @@ const Taskby = () => {
                             </>
                           );
                         })()}
-                        {["pending", "in_progress", "reopened", "paused"].includes(item.status) && !item.assigner_paused && (
+                        {["pending", "in_progress", "reopened", "paused", "submitted"].includes(item.status?.toLowerCase()) && !item.assigner_paused && (
                           <button
                             className="action-icon-btn"
-                            title="Put On Hold"
+                            title="Pause"
                             disabled={holdingTaskId === item.id}
-                            onClick={() => { setPauseModalTaskId(item.id); setPauseModalOpen(true); }}
+                            onClick={(e) => { e.stopPropagation(); e.preventDefault(); setPauseModalTaskId(item.id); setPauseModalOpen(true); }}
                             style={{ color: "#7C3AED", cursor: holdingTaskId === item.id ? "not-allowed" : "pointer" }}
                           >
                             <Lock size={16} />
@@ -727,7 +758,7 @@ const Taskby = () => {
                             className="action-icon-btn"
                             title="Resume"
                             disabled={resumingTaskId === item.id}
-                            onClick={() => handleAssignerResume(item.id)}
+                            onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleAssignerResume(item.id); }}
                             style={{ color: "#059669", cursor: resumingTaskId === item.id ? "not-allowed" : "pointer" }}
                           >
                             <Lock size={16} />

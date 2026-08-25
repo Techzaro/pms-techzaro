@@ -108,8 +108,9 @@ const ActionPopover = ({ trigger, children, onTriggerClick }) => {
       onMouseLeave={handleMouseLeave}
       onKeyDown={handleKeyDown}
       tabIndex={0}
+      onClick={(e) => e.stopPropagation()}
     >
-      <div className="ap-trigger" onClick={onTriggerClick}>{trigger}</div>
+      <div className="ap-trigger" onClick={(e) => { e.stopPropagation(); onTriggerClick && onTriggerClick(e); }}>{trigger}</div>
       {open &&
         createPortal(
           <div
@@ -118,10 +119,11 @@ const ActionPopover = ({ trigger, children, onTriggerClick }) => {
             style={{ position: "fixed", top: pos.top, left: pos.left, zIndex: 99999 }}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="ap-popover-content">
               {childArray.map((child, idx) => (
-                <div key={idx} className={`ap-popover-item ${highlightedIndex === idx ? "ap-popover-item--highlighted" : ""}`} onMouseEnter={() => setHighlightedIndex(idx)}>
+                <div key={idx} className={`ap-popover-item ${highlightedIndex === idx ? "ap-popover-item--highlighted" : ""}`} onMouseEnter={() => setHighlightedIndex(idx)} onClick={(e) => e.stopPropagation()}>
                   {child}
                 </div>
               ))}

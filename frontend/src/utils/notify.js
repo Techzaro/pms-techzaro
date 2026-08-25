@@ -50,6 +50,8 @@ export const notify = {
   info: (msg, dur) => notifyRef.info?.(msg, dur),
 };
 
+export const toast = notify;
+
 /**
  * Shows a context-based success message.
  * @param {string} entity - Entity name (e.g. "Task", "Project", "Event")

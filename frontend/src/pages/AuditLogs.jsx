@@ -127,11 +127,6 @@ function AuditLogs() {
     }
   };
 
-  const sortArrow = (col) => {
-    if (sortBy !== col) return "";
-    return sortDir === "asc" ? " ▲" : " ▼";
-  };
-
   const applyFilters = () => {
     setSearch(searchInput);
     fetchLogs(1);
@@ -306,18 +301,18 @@ function AuditLogs() {
                     <thead>
                       <tr>
                         <th className="audit-th-sort" onClick={() => handleSort("created_at")}>
-                          Date & Time{sortArrow("created_at")}
+                          Date & Time
                         </th>
                         <th>User</th>
                         <th className="audit-th-sort" onClick={() => handleSort("module")}>
-                          Module{sortArrow("module")}
+                          Module
                         </th>
                         <th className="audit-th-sort" onClick={() => handleSort("action")}>
-                          Action{sortArrow("action")}
+                          Action
                         </th>
                         <th>Description</th>
                         <th className="audit-th-sort" onClick={() => handleSort("status")}>
-                          Status{sortArrow("status")}
+                          Status
                         </th>
                         <th>IP Address</th>
                         <th>Browser</th>

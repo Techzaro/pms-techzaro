@@ -78,6 +78,39 @@ function ChatWidget() {
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const user = JSON.parse(localStorage.getItem(`user_${getCurrentRole()}`) || "{}");
+  const speedDialTimeoutRef = useRef(null);
+
+  const handleFabMouseEnter = () => {
+    if (speedDialTimeoutRef.current) {
+      clearTimeout(speedDialTimeoutRef.current);
+      speedDialTimeoutRef.current = null;
+    }
+    setSpeedDialOpen(true);
+  };
+
+  const handleFabMouseLeave = () => {
+    if (speedDialTimeoutRef.current) {
+      clearTimeout(speedDialTimeoutRef.current);
+    }
+    speedDialTimeoutRef.current = setTimeout(() => {
+      setSpeedDialOpen(false);
+    }, 200);
+  };
+
+  const handleActionsMouseEnter = () => {
+    if (speedDialTimeoutRef.current) {
+      clearTimeout(speedDialTimeoutRef.current);
+      speedDialTimeoutRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (speedDialTimeoutRef.current) {
+        clearTimeout(speedDialTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -291,9 +324,16 @@ function ChatWidget() {
   };
 
   return (
-    <div className="fab-speed-dial-container">
+    <div
+      className="fab-speed-dial-container"
+      onMouseLeave={handleFabMouseLeave}
+    >
       {/* Vertically Stacked Speed Dial Actions */}
-      <div className={`fab-speed-dial-actions ${speedDialOpen ? "fab-speed-dial-actions--open" : ""}`}>
+      <div
+        className={`fab-speed-dial-actions ${speedDialOpen ? "fab-speed-dial-actions--open" : ""}`}
+        onMouseEnter={handleActionsMouseEnter}
+        onMouseLeave={handleFabMouseLeave}
+      >
         {/* 1. Events */}
         <button
           type="button"
@@ -353,6 +393,8 @@ function ChatWidget() {
       <button
         type="button"
         className={`fab-main-btn ${(speedDialOpen || isOpen) ? "fab-main-btn--open" : ""}`}
+        onMouseEnter={handleFabMouseEnter}
+        onMouseLeave={handleFabMouseLeave}
         onClick={(e) => {
           e.stopPropagation();
           e.preventDefault();

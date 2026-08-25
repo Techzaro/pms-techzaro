@@ -64,15 +64,17 @@
   color: var(--text-muted);
 }
 
-/* Count badge when input is not focused */
+/* Selected names text when input is not focused */
 .usd-combo-count {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-primary);
-  background: var(--color-primary-bg);
-  padding: 3px 10px;
-  border-radius: 8px;
-  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-dark, #1f2937);
+  background: transparent;
+  padding: 0;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

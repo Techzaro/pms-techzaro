@@ -37,6 +37,13 @@ import {
   Users,
   X,
   XCircle,
+  BookOpen,
+  Megaphone,
+  Video,
+  Clock,
+  Eye,
+  ArrowUpRight,
+  Activity,
 } from "lucide-react";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import SmartDragHandle from "../components/SmartDragHandle";
@@ -63,7 +70,7 @@ import { renderDynamicDates } from "../utils/tableDateUtils";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { useSubmit } from "../hooks/useSubmit";
 import { useNotification } from "../context/NotificationContext";
-import { showSuccessMessage } from "../utils/notify";
+import { showSuccessMessage, notify, toast } from "../utils/notify";
 import { useActivityHighlight } from "../hooks/useActivityHighlight";
 import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import "../components/layout/ActivityHighlight.css";
@@ -343,6 +350,12 @@ function ProjectDetails() {
   const [memberSearch, setMemberSearch] = useState("");
   const [viewAccessSearch, setViewAccessSearch] = useState("");
   const [accessSearch, setAccessSearch] = useState("");
+  const [projectKbArticles, setProjectKbArticles] = useState([]);
+  const [loadingKb, setLoadingKb] = useState(false);
+  const [kbSearch, setKbSearch] = useState("");
+  const [projectEvents, setProjectEvents] = useState([]);
+  const [loadingProjectEvents, setLoadingProjectEvents] = useState(false);
+  const [eventSearch, setEventSearch] = useState("");
   const [editFileItem, setEditFileItem] = useState(null);
   const [editFileName, setEditFileName] = useState("");
   const [editFileUrl, setEditFileUrl] = useState("");
@@ -400,6 +413,46 @@ function ProjectDetails() {
       fetchAccessCredentials();
     }
   }, [tab, project]);
+
+  useEffect(() => {
+    if (tab === "kb" && (project?.id || projectId)) {
+      const pId = project?.id || projectId;
+      setLoadingKb(true);
+      const token = authToken();
+      fetch(`${API_URL}/knowledge-base?all=1`, {
+        headers: { Authorization: token ? `Bearer ${token}` : "" },
+        skipLoader: true,
+      })
+        .then((r) => r.json())
+        .then((d) => {
+          const list = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
+          const filtered = list.filter((a) => String(a.project_id) === String(pId));
+          setProjectKbArticles(filtered);
+        })
+        .catch((err) => console.error("Error fetching project KB", err))
+        .finally(() => setLoadingKb(false));
+    }
+  }, [tab, project?.id, projectId]);
+
+  useEffect(() => {
+    if (tab === "events" && (project?.id || projectId)) {
+      const pId = project?.id || projectId;
+      setLoadingProjectEvents(true);
+      const token = authToken();
+      fetch(`${API_URL}/events?all=true`, {
+        headers: { Authorization: token ? `Bearer ${token}` : "" },
+        skipLoader: true,
+      })
+        .then((r) => r.json())
+        .then((d) => {
+          const list = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
+          const filtered = list.filter((e) => String(e.project_id) === String(pId) || (e.visibility_level === "project_team" && String(e.project_id) === String(pId)));
+          setProjectEvents(filtered);
+        })
+        .catch((err) => console.error("Error fetching project events", err))
+        .finally(() => setLoadingProjectEvents(false));
+    }
+  }, [tab, project?.id, projectId]);
 
   useEffect(() => {
     const handleClickOutsideManager = (e) => {
@@ -617,7 +670,11 @@ function ProjectDetails() {
     }).catch(() => { });
   }, [project?.id, project?.unviewed_changes_count]);
 
-  const handleDeleteTask = async (taskId) => {
+  const handleDeleteTask = async (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
     setDeleteTaskId(taskId);
     setDeleteTaskConfirmOpen(true);
   };
@@ -626,6 +683,7 @@ function ProjectDetails() {
     const taskId = deleteTaskId;
     setDeleteTaskConfirmOpen(false);
     setDeleteTaskId(null);
+    if (!taskId) return;
     try {
       const token = authToken();
       const res = await fetch(`${API}/tasks/${taskId}`, {
@@ -636,20 +694,27 @@ function ProjectDetails() {
         },
         _notifHandled: true,
       });
-      if (!res.ok) {
+      if (res.ok) {
+        setOrderedTasks((prev) => prev.filter((t) => String(t.id) !== String(taskId)));
+        toast.success("Task deleted successfully");
+        loadProject().catch(() => {});
+        publish("task:deleted", { id: taskId });
+        publish("data:changed", { type: "task", action: "deleted" });
+      } else {
         const data = await res.json().catch(() => ({}));
-        notify.error(data.message || "Failed to delete task.");
-        return;
+        toast.error(data.message || "Failed to delete task.");
       }
-      showSuccessMessage("Task", "deleted");
-      loadProject().catch(() => {});
     } catch (err) {
       console.error(err);
-      notify.error("Failed to delete task.");
+      toast.error("Failed to delete task.");
     }
   };
 
-  const handleTaskAcknowledge = async (taskId) => {
+  const handleTaskAcknowledge = async (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
     try {
       const token = authToken();
       const res = await fetch(`${API}/tasks/${taskId}/acknowledge`, {
@@ -657,9 +722,9 @@ function ProjectDetails() {
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         _notifHandled: true,
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "in_progress", ...data.task } : t));
+        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "in_progress", ...(data.task || {}) } : t));
         publish('task:updated', { id: taskId, status: 'in_progress' });
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage("Task", "acknowledged");
@@ -671,7 +736,11 @@ function ProjectDetails() {
     }
   };
 
-  const handleTaskContinue = async (taskId) => {
+  const handleTaskContinue = async (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
     try {
       const token = authToken();
       const res = await fetch(`${API}/tasks/${taskId}/continue`, {
@@ -679,9 +748,9 @@ function ProjectDetails() {
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         _notifHandled: true,
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "in_progress", ...data.task } : t));
+        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "in_progress", ...(data.task || {}) } : t));
         publish('task:updated', { id: taskId, status: 'in_progress' });
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage("Task", "resumed");
@@ -693,23 +762,27 @@ function ProjectDetails() {
     }
   };
 
-  const handleTaskPause = async (taskId) => {
+  const handleTaskPause = async (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
     try {
       const token = authToken();
       const res = await fetch(`${API}/tasks/${taskId}/pause`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ reason: "other" }),
+        body: JSON.stringify({ reason: "other", reason_detail: "Paused from task list" }),
         _notifHandled: true,
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "paused", ...data.task } : t));
+        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "paused", ...(data.task || {}) } : t));
         publish('task:updated', { id: taskId, status: 'paused' });
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage("Task", "paused");
       } else {
-        notify.error(data.message || "Failed to pause task.");
+        notify.error(data?.message || data?.error || "Failed to pause task.");
       }
     } catch {
       notify.error("Failed to pause task.");
@@ -729,12 +802,12 @@ function ProjectDetails() {
       const data = await res.json();
       if (res.ok) {
         setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, assigner_paused: true, ...data.task } : t));
-        showSuccessMessage("Task", "placed on hold");
+        showSuccessMessage("Task", "paused");
       } else {
-        notify.error(data.message || "Failed to place task on hold.");
+        notify.error(data.message || "Failed to pause task.");
       }
     } catch {
-      notify.error("Failed to place task on hold.");
+      notify.error("Failed to pause task.");
     }
     setHoldingTaskId(null);
   };
@@ -854,12 +927,14 @@ function ProjectDetails() {
     return "tasks";
   };
 
-  const isCreator = project.is_creator;
-  const isAssigned = project.is_assigned;
-  const isAdminOrManager = project.is_admin_or_manager;
-  const isViewOnlyUser = (project.view_only_users || []).some((u) => (u.id || u) === currentUser?.id);
+  const isCreator = !!project?.is_creator;
+  const isAssigned = !!project?.is_assigned;
+  const isAdminOrManager = !!project?.is_admin_or_manager;
+  const isViewOnlyUser = !!project?.is_view_only || (project?.view_only_users || []).some((u) => Number(u?.id || u) === Number(currentUser?.id));
 
-  const canEdit = project.can_edit && !isViewOnlyUser;
+  const canEdit = !isViewOnlyUser && (project?.can_edit || isAdminOrManager);
+  const canManage = !isViewOnlyUser && isAdminOrManager;
+  const canAddTask = !isViewOnlyUser && currentUser?.role !== "guest" && (isCreator || isAdminOrManager || isAssigned);
 
   const handleMilestoneToggle = async (milestone) => {
     await runMilestoneToggle(async () => {
@@ -874,7 +949,7 @@ function ProjectDetails() {
         if (res.ok) {
           setProject((prev) => ({
             ...prev,
-            milestones: (prev.milestones || []).map((m) => m.id === milestone.id ? data.milestone : m),
+            milestones: (prev?.milestones || []).map((m) => m.id === milestone.id ? data.milestone : m),
           }));
           showSuccessMessage("Milestone", data.message);
           publish('data:changed', { type: 'project', action: 'updated' });
@@ -916,17 +991,23 @@ function ProjectDetails() {
     setVisibilitySaving(true);
     try {
       const token = authToken();
-      const userIds = Object.keys(visibilitySelected).filter((id) => visibilitySelected[id]).map(Number);
+      const userIds = Object.keys(visibilitySelected || {}).filter((id) => visibilitySelected[id]).map(Number);
       const res = await fetch(`${API_URL}/projects/${project.id}/visibility`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ user_ids: userIds }),
         _notifHandled: true,
       });
-      if (!res.ok) throw new Error("Failed to save visibility");
+      const data = await res.json();
+      if (!res.ok || data.success === false) {
+        throw new Error(data.message || "Failed to save visibility");
+      }
+      showSuccessMessage("Project visibility", "updated");
       closeVisibility();
+      loadProject();
     } catch (err) {
       console.error("Save visibility error:", err);
+      notify.error(err.message || "Failed to save visibility");
     } finally {
       setVisibilitySaving(false);
     }
@@ -1025,21 +1106,30 @@ function ProjectDetails() {
     { id: "files", label: "Platform files & links", icon: FolderOpen },
     { id: "access", label: "Accessess", icon: Shield },
     { id: "members", label: "Members", icon: Users },
+    { id: "kb", label: "Knowledge Base", icon: BookOpen },
+    { id: "events", label: "Events & Announcements", icon: Calendar },
+    { id: "activity", label: "Activity", icon: Activity },
   ];
-
-  const renderRail = () => (
-    <div className="pd-rail">
-      {/* UNIFIED ACTIVITY FEED */}
-      <UnifiedActivityFeed module="project" entityId={projectId} initialUsers={members} />
-    </div>
-  );
 
   const overviewInner = (
     <>
       {project.description && (
-        <div style={{ marginBottom: 20, overflow: "hidden", wordBreak: "break-word", overflowWrap: "break-word" }}>
+        <div style={{ marginBottom: 20, maxWidth: "100%", wordBreak: "break-word", overflowWrap: "break-word" }}>
           <h2 className="pd-block-title">Description</h2>
-          <div className="pd-desc-tx pd-rich" style={{ overflow: "hidden", wordBreak: "break-word", overflowWrap: "anywhere", whiteSpace: "pre-wrap" }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(project.description) }} />
+          <div
+            className="pd-desc-tx pd-rich"
+            style={{
+              maxHeight: "250px",
+              overflowY: "auto",
+              backgroundColor: "#f9fafb",
+              padding: "12px",
+              borderRadius: "8px",
+              border: "1px solid var(--border-color, #e5e7eb)",
+              wordBreak: "break-word",
+              whiteSpace: "pre-wrap",
+            }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(project.description) }}
+          />
         </div>
       )}
       <div className="pd-shell-split">
@@ -1135,7 +1225,7 @@ function ProjectDetails() {
               <div className="pd-meta-rows__content">
                 <div className="pd-meta-rows__header">
                   <span className="pd-meta-rows__label">Project manager</span>
-                  {(currentUser?.role === "admin" || currentUser?.role === "manager") && (
+                  {(currentUser?.role === "admin" || currentUser?.role === "manager") && !isViewOnlyUser && (
                     <button className="pd-manager-edit" onClick={openManagerEdit} title="Change project manager">
                       Edit
                     </button>
@@ -1231,7 +1321,7 @@ function ProjectDetails() {
                     <button className="td-nav-btn" onClick={() => goToProject(prevProjectId)} disabled={!prevProjectId} title="Previous project"><ChevronLeft size={18} /></button>
                     <button className="td-nav-btn" onClick={() => goToProject(nextProjectId)} disabled={!nextProjectId} title="Next project"><ChevronRight size={18} /></button>
                     <span className={`pd-pill-status pd-pill-status--${statusSlug(project.status)}`}>{project.status}</span>
-                    {isAdminOrManager && (
+                    {isAdminOrManager && !isViewOnlyUser && (
                       <button type="button" className="pd-btn-tx pd-btn-tx--outline" onClick={openVisibility}>
                         <IoEyeOutline size={16} />
                         Show To
@@ -1316,7 +1406,7 @@ function ProjectDetails() {
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                               <input type="text" placeholder="Search by task name..." value={taskSearch} onChange={(e) => setTaskSearch(e.target.value)} />
                             </div>
-                            {currentUser?.role !== "guest" && (
+                            {canAddTask && (
                               <button type="button" className="pd-btn-tx pd-btn-tx--primary" onClick={() => setShowTaskModal(true)} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                                 <Plus size={16} /> Add Task
                               </button>
@@ -1355,19 +1445,25 @@ function ProjectDetails() {
                                             {formatStatus(t.status)}
                                           </span>
                                         </div>
-                                        <div>
-                                          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", marginBottom: "4px" }}>
-                                            <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-dark)" }}>
-                                              {t.deliverables_progress || 0}%
-                                            </span>
-                                          </div>
-                                          <div className="progress-bar-track">
-                                            <div className="progress-bar-fill" style={{ width: `${t.deliverables_progress || 0}%` }}></div>
-                                          </div>
-                                          <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "4px" }}>
-                                            {t.approved_deliverables || 0}/{t.total_deliverables || 0} Del. Approved
-                                          </div>
-                                        </div>
+                                        {(() => {
+                                          const isTerminal = ["completed", "approved", "submitted", "submitted_late", "done"].includes((t.status || "").toLowerCase());
+                                          const prog = isTerminal ? 100 : (t.deliverables_progress || 0);
+                                          return (
+                                            <div>
+                                              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", marginBottom: "4px" }}>
+                                                <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-dark)" }}>
+                                                  {prog}%
+                                                </span>
+                                              </div>
+                                              <div className="progress-bar-track">
+                                                <div className="progress-bar-fill" style={{ width: `${prog}%` }}></div>
+                                              </div>
+                                              <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "4px" }}>
+                                                {t.approved_deliverables || 0}/{t.total_deliverables || 0} Del. Approved
+                                              </div>
+                                            </div>
+                                          );
+                                        })()}
                                         <div>
                                           <span className="badge" style={{ background: PRIORITY_COLORS[t.priority] || "var(--bg-hover)", color: PRIORITY_TEXT_COLORS[t.priority] || "var(--text-dark)" }}>
                                             <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[t.priority] || "var(--text-dark)" }}></span>
@@ -1424,17 +1520,17 @@ function ProjectDetails() {
                                                         <Pencil size={16} />
                                                       </button>
                                                     );
-                                                    buttons.push(
-                                                      <button
-                                                        key="delete"
-                                                        className="action-icon-btn action-delete"
-                                                        title="Delete Task"
-                                                        onClick={() => handleDeleteTask(t.id)}
-                                                      >
-                                                        <Trash2 size={16} />
-                                                      </button>
-                                                    );
                                                   }
+                                                  buttons.push(
+                                                    <button
+                                                      key="delete"
+                                                      className="action-icon-btn action-delete"
+                                                      title="Delete Task"
+                                                      onClick={(e) => handleDeleteTask(e, t.id)}
+                                                    >
+                                                      <Trash2 size={16} />
+                                                    </button>
+                                                  );
                                                   if (t.assigner_paused) {
                                                     buttons.push(
                                                       <button
@@ -1442,20 +1538,20 @@ function ProjectDetails() {
                                                         className="action-icon-btn"
                                                         title="Resume"
                                                         disabled={resumingTaskId === t.id}
-                                                        onClick={() => handleTaskAssignerResume(t.id)}
+                                                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleTaskAssignerResume(t.id); }}
                                                         style={{ color: "#059669", cursor: resumingTaskId === t.id ? "not-allowed" : "pointer" }}
                                                       >
                                                         <Lock size={16} />
                                                       </button>
                                                     );
-                                                  } else if (["pending", "in_progress", "reopened", "paused"].includes(t.status)) {
+                                                  } else if (["pending", "in_progress", "reopened", "paused", "submitted"].includes(t.status?.toLowerCase())) {
                                                     buttons.push(
                                                       <button
                                                         key="hold"
                                                         className="action-icon-btn"
-                                                        title="Put On Hold"
+                                                        title="Pause"
                                                         disabled={holdingTaskId === t.id}
-                                                        onClick={() => { setPauseModalTaskId(t.id); setPauseModalOpen(true); }}
+                                                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); setPauseModalTaskId(t.id); setPauseModalOpen(true); }}
                                                         style={{ color: "#7C3AED", cursor: holdingTaskId === t.id ? "not-allowed" : "pointer" }}
                                                       >
                                                         <Lock size={16} />
@@ -1470,27 +1566,27 @@ function ProjectDetails() {
                                                     return (
                                                       <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#92400E", fontSize: "11px", fontWeight: 600, border: "1px solid #F59E0B" }}>
                                                         <Lock size={12} />
-                                                        On Hold
+                                                        Paused by Assigner
                                                       </span>
                                                     );
                                                   }
                                                   if (t.status === "pending") {
                                                     return (
-                                                      <button className="action-icon-btn action-submit" title="Acknowledge" onClick={() => handleTaskAcknowledge(t.id)}>
+                                                      <button className="action-icon-btn action-submit" title="Acknowledge" onClick={(e) => handleTaskAcknowledge(e, t.id)}>
                                                         <CheckCircle2 size={16} />
                                                       </button>
                                                     );
                                                   }
                                                   if (t.status === "paused") {
                                                     return (
-                                                      <button className="action-icon-btn action-submit" title="Continue" onClick={() => handleTaskContinue(t.id)} style={{ color: "#059669" }}>
+                                                      <button className="action-icon-btn action-submit" title="Continue" onClick={(e) => handleTaskContinue(e, t.id)} style={{ color: "#059669" }}>
                                                         <Play size={16} />
                                                       </button>
                                                     );
                                                   }
-                                                  if (t.status === "in_progress" && !t.assigner_paused) {
+                                                  if (["in_progress", "submitted"].includes(t.status?.toLowerCase()) && !t.assigner_paused) {
                                                     return (
-                                                      <button className="action-icon-btn action-submit" title="Pause" onClick={() => handleTaskPause(t.id)} style={{ color: "#D97706" }}>
+                                                      <button className="action-icon-btn action-submit" title="Pause" onClick={(e) => handleTaskPause(e, t.id)} style={{ color: "#D97706" }}>
                                                         <Pause size={16} />
                                                       </button>
                                                     );
@@ -1501,7 +1597,7 @@ function ProjectDetails() {
                                                         className="action-icon-btn action-submit"
                                                         title={t.pending_deliverables_count > 0 ? "Submit all subtasks first" : "Submit Task"}
                                                         disabled={t.pending_deliverables_count > 0}
-                                                        onClick={() => !t.pending_deliverables_count && setSubmitTaskModal({ open: true, task: t })}
+                                                        onClick={(e) => { e.stopPropagation(); !t.pending_deliverables_count && setSubmitTaskModal({ open: true, task: t }); }}
                                                         style={t.pending_deliverables_count > 0 ? { opacity: 0.4, cursor: "not-allowed" } : {}}
                                                       >
                                                         <LuSend size={16} />
@@ -1543,7 +1639,7 @@ function ProjectDetails() {
                                 />
                               </div>
                             )}
-                            {isAdminOrManager && (
+                            {isAdminOrManager && !isViewOnlyUser && (
                               <button type="button" className="pd-btn-tx pd-btn-tx--primary" onClick={() => setShowAddFileModal(true)} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                                 <Plus size={16} /> Add Files
                               </button>
@@ -1609,14 +1705,14 @@ function ProjectDetails() {
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                               <input type="text" placeholder="Search by member name or role..." value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)} />
                             </div>
-                            {isAdminOrManager && (
+                            {isAdminOrManager && !isViewOnlyUser && (
                               <button
                                 type="button"
                                 onClick={() => setShowProjectMembersModal(true)}
                                 className="pd-link-manage"
-                                style={{ background: "none", border: "none", cursor: "pointer" }}
+                                style={{ background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}
                               >
-                                Manage
+                                Manage Members
                               </button>
                             )}
                           </div>
@@ -1625,11 +1721,13 @@ function ProjectDetails() {
                               <div className="pd-avatar" aria-hidden>
                                 {initials(project.creator.name)}
                               </div>
-                              <div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
                                 <div className="pd-member-name">{project.creator.name}</div>
                                 <div className="pd-member-role">Project Manager · {project.creator.role || "—"}</div>
                               </div>
-                              <span className="pd-badge-owner">Project Manager</span>
+                              <div className="pd-member-right">
+                                <span className="pd-badge-owner">Project Manager</span>
+                              </div>
                             </div>
                           )}
                           <SortableTableWrapper
@@ -1671,11 +1769,13 @@ function ProjectDetails() {
                                     <div className="pd-avatar" aria-hidden style={{ background: "var(--color-primary)" }}>
                                       {initials(team.leader.name)}
                                     </div>
-                                    <div>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
                                       <div className="pd-member-name">{team.leader.name}</div>
                                       <div className="pd-member-role">Team Lead · {team.leader.role || "—"}</div>
                                     </div>
-                                    <span className="pd-badge-owner">Lead</span>
+                                    <div className="pd-member-right">
+                                      <span className="pd-badge-owner">Lead</span>
+                                    </div>
                                   </div>
                                 )}
                                 {(team.members || []).filter((m) => m.id !== team.leader?.id && m.id !== project.creator?.id).map((m) => (
@@ -1683,9 +1783,13 @@ function ProjectDetails() {
                                     <div className="pd-avatar" aria-hidden>
                                       {initials(m.name)}
                                     </div>
-                                    <div>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
                                       <div className="pd-member-name">{m.name}</div>
                                       <div className="pd-member-role">{m.role || "Member"}</div>
+                                    </div>
+                                    <div className="pd-member-right">
+                                      {m.department && <span className="pd-member-dept">{m.department}</span>}
+                                      <span className="pd-badge-member">Member</span>
                                     </div>
                                   </div>
                                 ))}
@@ -1741,7 +1845,7 @@ function ProjectDetails() {
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                               <input type="text" placeholder="Search by title, username, or URL..." value={accessSearch} onChange={(e) => setAccessSearch(e.target.value)} />
                             </div>
-                            {isAdminOrManager && (
+                            {isAdminOrManager && !isViewOnlyUser && (
                               <button type="button" className="pd-btn-tx pd-btn-tx--primary" onClick={() => setShowAddAccessModal(true)} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                                 <Plus size={16} /> Add Access
                               </button>
@@ -1781,15 +1885,264 @@ function ProjectDetails() {
                         </section>
                       </div>
                     )}
+
+                    {tab === "kb" && (
+                      <div className="pd-tab-panel">
+                        <section className="pd-card-flat">
+                          <div className="pd-card-flat__head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+                            <div>
+                              <h2 className="pd-block-title pd-block-title--inline" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                <BookOpen size={20} color="#2563eb" /> Project Knowledge Base & Documentation
+                              </h2>
+                              <p className="pd-muted" style={{ margin: "4px 0 0" }}>
+                                Technical specifications, SOPs, and guidelines specific to {project?.title || "this project"}.
+                              </p>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                              <div className="pd-files-search" style={{ margin: 0 }}>
+                                <input
+                                  type="text"
+                                  placeholder="Search project articles..."
+                                  value={kbSearch}
+                                  onChange={(e) => setKbSearch(e.target.value)}
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                className="pd-btn-tx pd-btn-tx--primary"
+                                onClick={() => navigate(rolePath("knowledge-base/create"), { state: { projectId: project?.id || projectId, projectTitle: project?.title } })}
+                                style={{ display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap" }}
+                              >
+                                <Plus size={16} /> Add Document
+                              </button>
+                            </div>
+                          </div>
+
+                          {loadingKb ? (
+                            <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-secondary)" }}>
+                              Loading project knowledge base...
+                            </div>
+                          ) : (() => {
+                            const filteredKb = Array.isArray(projectKbArticles) ? projectKbArticles.filter((a) => {
+                              if (!kbSearch.trim()) return true;
+                              const q = kbSearch.toLowerCase();
+                              return (
+                                a.title?.toLowerCase().includes(q) ||
+                                a.content?.toLowerCase().includes(q) ||
+                                a.categoryRelation?.name?.toLowerCase().includes(q) ||
+                                a.category?.toLowerCase().includes(q)
+                              );
+                            }) : [];
+
+                            if (filteredKb.length === 0) {
+                              return (
+                                <div style={{ textAlign: "center", padding: "50px 20px", background: "var(--bg-card-subtle)", borderRadius: "10px", marginTop: "16px" }}>
+                                  <BookOpen size={40} style={{ color: "#9ca3af", margin: "0 auto 10px" }} />
+                                  <h4 style={{ margin: "0 0 6px", fontSize: "15px", fontWeight: 600 }}>No project documentation yet</h4>
+                                  <p style={{ margin: "0 0 16px", fontSize: "13px", color: "var(--text-secondary)" }}>
+                                    Create and share SOPs, architectural guidelines, or deliverable checklists for this project.
+                                  </p>
+                                  <button
+                                    type="button"
+                                    onClick={() => navigate(rolePath("knowledge-base/create"), { state: { projectId: project?.id || projectId, projectTitle: project?.title } })}
+                                    style={{ padding: "7px 16px", borderRadius: "6px", background: "#2563eb", color: "#ffffff", border: "none", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                                  >
+                                    <Plus size={14} style={{ display: "inline", verticalAlign: "-2px", marginRight: "4px" }} /> Add Document
+                                  </button>
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "14px", marginTop: "18px" }}>
+                                {filteredKb.map((item) => (
+                                  <div
+                                    key={item.id}
+                                    style={{
+                                      padding: "16px",
+                                      borderRadius: "10px",
+                                      border: "1px solid var(--border-color)",
+                                      background: "var(--bg-card)",
+                                      display: "flex",
+                                      flexDirection: "column",
+                                      justifyContent: "space-between",
+                                      boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                                    }}
+                                  >
+                                    <div>
+                                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                                        <span style={{ fontSize: "11px", fontWeight: 600, color: "#2563eb", background: "#eff6ff", padding: "2px 8px", borderRadius: "4px" }}>
+                                          {item.categoryRelation?.name || item.category || "General"}
+                                        </span>
+                                        {item.views_count > 0 && (
+                                          <span style={{ fontSize: "11px", color: "var(--text-muted)", display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                                            <Eye size={12} /> {item.views_count}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <h4 style={{ margin: "0 0 6px", fontSize: "15px", fontWeight: 600, color: "var(--text-primary)" }}>
+                                        {item.title}
+                                      </h4>
+                                      <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "12px" }}>
+                                        By {item.creator?.name || "Team Member"} on {new Date(item.updated_at || item.created_at).toLocaleDateString()}
+                                      </div>
+                                    </div>
+                                    <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", borderTop: "1px solid var(--border-color)", paddingTop: "10px" }}>
+                                      <button
+                                        type="button"
+                                        onClick={() => navigate(rolePath(`knowledge-base/edit/${item.id}`))}
+                                        style={{ padding: "5px 12px", borderRadius: "6px", background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                                      >
+                                        Edit / View
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })()}
+                        </section>
+                      </div>
+                    )}
+
+                    {tab === "events" && (
+                      <div className="pd-tab-panel">
+                        <section className="pd-card-flat">
+                          <div className="pd-card-flat__head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+                            <div>
+                              <h2 className="pd-block-title pd-block-title--inline" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                <Calendar size={20} color="#2563eb" /> Project Events & Schedule
+                              </h2>
+                              <p className="pd-muted" style={{ margin: "4px 0 0" }}>
+                                Sprint demos, milestone reviews, and team meetings for {project?.title || "this project"}.
+                              </p>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                              <div className="pd-files-search" style={{ margin: 0 }}>
+                                <input
+                                  type="text"
+                                  placeholder="Search project events..."
+                                  value={eventSearch}
+                                  onChange={(e) => setEventSearch(e.target.value)}
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                className="pd-btn-tx pd-btn-tx--primary"
+                                onClick={() => navigate(rolePath("events/create"), { state: { projectId: project?.id || projectId, projectTitle: project?.title } })}
+                                style={{ display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap" }}
+                              >
+                                <Plus size={16} /> Add Event
+                              </button>
+                            </div>
+                          </div>
+
+                          {loadingProjectEvents ? (
+                            <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-secondary)" }}>
+                              Loading project events...
+                            </div>
+                          ) : (() => {
+                            const filteredEv = Array.isArray(projectEvents) ? projectEvents.filter((ev) => {
+                              if (!eventSearch.trim()) return true;
+                              const q = eventSearch.toLowerCase();
+                              return (
+                                ev.title?.toLowerCase().includes(q) ||
+                                ev.description?.toLowerCase().includes(q) ||
+                                ev.location?.toLowerCase().includes(q)
+                              );
+                            }) : [];
+
+                            if (filteredEv.length === 0) {
+                              return (
+                                <div style={{ textAlign: "center", padding: "50px 20px", background: "var(--bg-card-subtle)", borderRadius: "10px", marginTop: "16px" }}>
+                                  <Calendar size={40} style={{ color: "#9ca3af", margin: "0 auto 10px" }} />
+                                  <h4 style={{ margin: "0 0 6px", fontSize: "15px", fontWeight: 600 }}>No project events scheduled</h4>
+                                  <p style={{ margin: "0 0 16px", fontSize: "13px", color: "var(--text-secondary)" }}>
+                                    Schedule sprint meetings, demo sessions, and release deadlines for this project.
+                                  </p>
+                                  <button
+                                    type="button"
+                                    onClick={() => navigate(rolePath("events/create"), { state: { projectId: project?.id || projectId, projectTitle: project?.title } })}
+                                    style={{ padding: "7px 16px", borderRadius: "6px", background: "#2563eb", color: "#ffffff", border: "none", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                                  >
+                                    <Plus size={14} style={{ display: "inline", verticalAlign: "-2px", marginRight: "4px" }} /> Add Event
+                                  </button>
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "14px", marginTop: "18px" }}>
+                                {filteredEv.map((ev) => {
+                                  const dateStr = ev.start_date ? new Date(ev.start_date).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) : "Scheduled";
+                                  const timeStr = ev.start_date && !ev.all_day ? new Date(ev.start_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : (ev.all_day ? "All Day" : "");
+
+                                  return (
+                                    <div
+                                      key={ev.id}
+                                      style={{
+                                        padding: "16px",
+                                        borderRadius: "10px",
+                                        border: "1px solid var(--border-color)",
+                                        background: "var(--bg-card)",
+                                        display: "flex",
+                                        flexDirection: "column",
+                                        justifyContent: "space-between",
+                                        boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                                      }}
+                                    >
+                                      <div>
+                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                                          <span style={{ fontSize: "11px", fontWeight: 600, color: ev.category?.color || "#2563eb", background: "#eff6ff", padding: "2px 8px", borderRadius: "4px" }}>
+                                            {ev.category?.name || ev.type || "Event"}
+                                          </span>
+                                          <span style={{ fontSize: "11px", color: "var(--text-muted)", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                            <Clock size={12} /> {timeStr || dateStr}
+                                          </span>
+                                        </div>
+                                        <h4 style={{ margin: "0 0 6px", fontSize: "15px", fontWeight: 600, color: "var(--text-primary)" }}>
+                                          {ev.title}
+                                        </h4>
+                                        <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "10px" }}>
+                                          📅 {dateStr}
+                                        </div>
+                                        {ev.meeting_link && (
+                                          <div style={{ fontSize: "12px", color: "#2563eb", marginBottom: "8px", display: "flex", alignItems: "center", gap: "4px" }}>
+                                            <Video size={13} color="#10b981" /> Virtual Meeting
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", borderTop: "1px solid var(--border-color)", paddingTop: "10px" }}>
+                                        <button
+                                          type="button"
+                                          onClick={() => navigate(rolePath(`events/edit/${ev.id}`))}
+                                          style={{ padding: "5px 12px", borderRadius: "6px", background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                                        >
+                                          Edit / View
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()}
+                        </section>
+                      </div>
+                    )}
+
+                    {tab === "activity" && (
+                      <div className="pd-tab-panel">
+                        <section className="pd-card-flat" style={{ padding: "20px" }}>
+                          <UnifiedActivityFeed module="project" entityId={projectId} initialUsers={members} />
+                        </section>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
 
             </div>
-          </div>
-
-          <div>
-            {renderRail()}
           </div>
         </div>
       </DashboardLayout>

@@ -26,7 +26,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRelativeTime } from "../hooks/useRelativeTime";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { usePersonalization } from "../context/PersonalizationContext";
-import CalendarEventsWidget from "../components/CalendarEventsWidget";
+import CalendarEventsWidget, { CalendarWidget, EventsWidget, KnowledgeBaseWidget } from "../components/CalendarEventsWidget";
 import DynamicWidgetSection from "../components/DynamicWidgetSection";
 import { X, Plus, RotateCcw, GripVertical, Pin, Trash2, ArrowUpRight } from "lucide-react";
 import { usePinnedTasks, togglePinTask } from "../utils/pinnedTasks";
@@ -40,9 +40,10 @@ const ALL_DASHBOARD_WIDGETS = [
   { id: "active_projects", title: "Active Projects Slider", icon: "🚀", desc: "Active project cards slider with progress status." },
   { id: "activity_feed", title: "Today's Activity Feed", icon: "⚡", desc: "Real-time timeline feed of recent system actions." },
   { id: "calendar_events", title: "Calendar & Upcoming Events", icon: "📅", desc: "Mini monthly calendar & list of upcoming schedule." },
+  { id: "knowledge_base", title: "Knowledge Base", icon: "📖", desc: "Recently added & updated documentation and SOPs." },
 ];
 
-const DEFAULT_DASHBOARD_LAYOUT = ["summary_cards", "pinned_tasks", "today_tasks", "active_projects", "activity_feed", "calendar", "events"];
+const DEFAULT_DASHBOARD_LAYOUT = ["summary_cards", "pinned_tasks", "today_tasks", "active_projects", "activity_feed", "calendar", "events", "knowledge_base"];
 
 /** Extracts up to 2 initials from a name string (e.g. "John Doe" → "JD") */
 const getInitials = (name) => {
@@ -1239,6 +1240,42 @@ function Admin() {
                       )}
                     </div>
                   )}
+                </div>
+              );
+            }
+
+            if (secKey === "knowledge_base") {
+              if (!isWidgetEnabled("dashboard", "knowledge_base")) return null;
+              return (
+                <div
+                  key="knowledge_base"
+                  draggable={false}
+                  onDragOver={(e) => handleSecDragOver(e, index)}
+                  onDrop={(e) => handleSecDrop(e, index)}
+                  style={sectionWrapperStyle}
+                >
+                  <div className="workload-card" style={{ marginBottom: 0, padding: "16px" }}>
+                    <DragGripHeader title="Knowledge Base & Documentation" />
+                    <KnowledgeBaseWidget />
+                  </div>
+                </div>
+              );
+            }
+
+            if (secKey === "events") {
+              if (!isWidgetEnabled("dashboard", "events")) return null;
+              return (
+                <div
+                  key="events"
+                  draggable={false}
+                  onDragOver={(e) => handleSecDragOver(e, index)}
+                  onDrop={(e) => handleSecDrop(e, index)}
+                  style={sectionWrapperStyle}
+                >
+                  <div className="workload-card" style={{ marginBottom: 0, padding: "16px" }}>
+                    <DragGripHeader title="Upcoming Events & Schedule" />
+                    <EventsWidget />
+                  </div>
                 </div>
               );
             }

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -15,14 +16,20 @@ class Event extends Model
 {
     protected $fillable = [
         'user_id',
+        'organizer_id',
         'title',
         'description',
         'type',
+        'category_id',
+        'location',
+        'meeting_link',
         'color',
         'start_date',
         'end_date',
         'all_day',
         'is_global',
+        'visibility_level',
+        'status',
     ];
 
     protected $casts = [
@@ -80,9 +87,41 @@ class Event extends Model
         return $this->belongsTo(User::class);
     }
 
+    /** The organizer of this event. */
+    public function organizer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'organizer_id');
+    }
+
+    /** Category of this event. */
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(EventCategory::class, 'category_id');
+    }
+
     /** Users assigned to this event. */
     public function assignedUsers(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'event_users')->withTimestamps();
+    }
+
+    /** Granular visibility rules for this event. */
+    public function visibilities(): HasMany
+    {
+        return $this->hasMany(EventVisibility::class, 'event_id');
+    }
+
+    /** Participant records with RSVP and attendance status. */
+    public function participants(): HasMany
+    {
+        return $this->hasMany(EventParticipant::class, 'event_id');
+    }
+
+    /** Participant users many-to-many relationship. */
+    public function participantUsers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'event_participants')
+            ->withPivot(['status', 'response_notes', 'attended'])
+            ->withTimestamps();
     }
 }

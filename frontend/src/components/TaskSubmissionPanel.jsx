@@ -251,6 +251,17 @@ function TaskSubmissionPanel({
               <p className="td-submission-text">{task.abandon_reason}</p>
             </div>
           )}
+          {canApprove && (
+            <div className="td-review-actions" style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center", marginTop: "16px" }}>
+              <button
+                className="td-review-btn td-review-btn--reopen"
+                disabled={acting}
+                onClick={() => setReopenDialog(true)}
+              >
+                Reopen Task
+              </button>
+            </div>
+          )}
         </div>
       )}
       {/* Reopen details for assignee */}

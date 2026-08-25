@@ -67,6 +67,7 @@ const EditProjectModal = ({ project, onClose }) => {
     team_id: project?.team_id || "",
     team_ids: project?.team_ids || [],
     assigned_users: project?.assigned_users || [],
+    followers: project?.followers?.map((f) => f.id || f) || [],
     guest_ids: project?.guest_ids || [],
     priority: project?.priority || "Medium",
     status: project?.status || "Planning",
@@ -478,31 +479,79 @@ const EditProjectModal = ({ project, onClose }) => {
   };
 
   const uploadAttachments = async (projId, token) => {
-    await Promise.all([
-      ...pendingFiles.map((file) => {
+    try {
+      const filePromises = (pendingFiles || []).map(async (item) => {
+        let fileToUpload = null;
+        if (item instanceof File || item instanceof Blob) {
+          fileToUpload = item;
+        } else if (item && (item.file instanceof File || item.file instanceof Blob)) {
+          fileToUpload = item.file;
+        }
+
+        if (!(fileToUpload instanceof File || fileToUpload instanceof Blob)) {
+          console.error("Invalid file object encountered in pendingFiles:", item);
+          throw new Error("Not a valid file object");
+        }
+
         const fd = new FormData();
-        fd.append("file", file.file);
-        fd.append("name", file.customName || file.name);
-        return fetch(`${API_URL}/projects/${projId}/files`, {
+        fd.append("file", fileToUpload);
+        const customName = item.customName || item.name || fileToUpload.name || "";
+        if (customName) {
+          fd.append("name", customName);
+        }
+
+        const res = await fetch(`${API_URL}/projects/${projId}/files`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
           body: fd,
           _notifHandled: true,
-        }).catch(() => {});
-      }),
-      ...links.map((link) => {
-        return fetch(`${API_URL}/projects/${projId}/links`, {
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          console.error("File upload error status:", res.status, "data:", data);
+          if (data.errors) {
+            console.error("Laravel validation errors:", data.errors);
+          }
+          const errorsMsg = data.errors ? Object.values(data.errors).flat().join(". ") : "";
+          throw new Error(errorsMsg || data.message || `File upload failed (${res.status})`);
+        }
+        return data;
+      });
+
+      const linkPromises = (links || []).map(async (link) => {
+        const url = (link.url || "").trim();
+        if (!url) return Promise.resolve();
+        const fullUrl = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+        const res = await fetch(`${API_URL}/projects/${projId}/links`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Accept: "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ url: link.url, name: link.customName || link.name }),
+          body: JSON.stringify({ url: fullUrl, name: link.customName || link.name || fullUrl }),
           _notifHandled: true,
-        }).catch(() => {});
-      }),
-    ]);
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          console.error("Link upload error status:", res.status, "data:", data);
+          if (data.errors) {
+            console.error("Laravel validation errors:", data.errors);
+          }
+          const errorsMsg = data.errors ? Object.values(data.errors).flat().join(". ") : "";
+          throw new Error(errorsMsg || data.message || `Link upload failed (${res.status})`);
+        }
+        return data;
+      });
+
+      await Promise.all([...filePromises, ...linkPromises]);
+    } catch (err) {
+      console.error("Upload attachments error:", err);
+      notify.error(err.message || "Failed to upload attachments");
+      throw err;
+    }
   };
 
   /**
@@ -541,6 +590,7 @@ const EditProjectModal = ({ project, onClose }) => {
           team_id: form.team_id ? parseInt(form.team_id) : null,
           team_ids: form.team_ids,
           assigned_users: form.assigned_users.length > 0 ? form.assigned_users : [],
+          followers: form.followers || [],
           guest_ids: form.guest_ids.length > 0 ? form.guest_ids : [],
           client_name: form.client_name.trim() || null,
           priority: form.priority,
@@ -552,12 +602,13 @@ const EditProjectModal = ({ project, onClose }) => {
             milestone_deadline: m.due_date ? toUTCIso(m.due_date) : null,
             status: m.status || "planned",
           })),
-          existing_file_names: existingFiles.reduce((acc, f) => {
-            if (f.customName && f.customName !== f.name) {
-              acc.push({ id: f.id, name: f.customName });
-            }
-            return acc;
-          }, []),
+          existing_file_names: (existingFiles || [])
+            .filter((f) => f && f.id && !isNaN(Number(f.id)))
+            .map((f) => ({
+              id: Number(f.id),
+              name: f.customName || f.name || "",
+              url: f.url || null,
+            })),
         };
 
         const response = await fetch(`${API_URL}/projects/${project.id}`, {
@@ -1210,6 +1261,16 @@ const EditProjectModal = ({ project, onClose }) => {
                 selectedIds={form.guest_ids}
                 onChange={(ids) => { markDirty(); setForm(prev => ({ ...prev, guest_ids: ids })); }}
                 placeholder="Click to select guests"
+              />
+            </div>
+
+            <div className="cp-field">
+              <label>Followers (Optional)</label>
+              <UserSelectDropdown
+                users={allUsers.filter(u => !form.assigned_users.includes(u.id))}
+                selectedIds={form.followers || []}
+                onChange={(ids) => { markDirty(); setForm(prev => ({ ...prev, followers: ids })); }}
+                placeholder="Click to select followers"
               />
             </div>
 

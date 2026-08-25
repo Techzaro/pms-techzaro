@@ -259,16 +259,8 @@ class Deliverable extends Model
         if (!empty($userIds)) {
             $ids = is_array($userIds) ? $userIds : explode(',', (string) $userIds);
             $ids = array_values(array_filter(array_map('intval', $ids)));
-            if (count($ids) === 1) {
-                $query->where(function ($q) use ($ids) {
-                    $q->where('assigned_to', $ids[0])
-                      ->orWhere('created_by', $ids[0]);
-                });
-            } elseif (count($ids) > 1) {
-                $query->where(function ($q) use ($ids) {
-                    $q->whereIn('assigned_to', $ids)
-                      ->orWhereIn('created_by', $ids);
-                });
+            if (!empty($ids)) {
+                $query->whereIn('assigned_to', $ids);
             }
         }
 

@@ -11,7 +11,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useLocation, useNavigate, Link } from "react-router-dom";
-import { BarChart3, Calendar, Check, CheckCircle2, ChevronLeft, ChevronRight, Copy, Download, ExternalLink, FileText, FolderOpen, Lock, Pause, Pencil, Play, RefreshCw, Timer, Trash2, XCircle } from "lucide-react";
+import { BarChart3, Calendar, Check, CheckCircle2, ChevronLeft, ChevronRight, Copy, Download, ExternalLink, FileText, FolderOpen, Lock, Pause, Pencil, Play, RefreshCw, Timer, Trash2, XCircle, Activity } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import ConfirmModal from "../components/ConfirmModal";
@@ -21,6 +21,7 @@ import TransferTaskDialog from "../components/TransferTaskDialog";
 import DelegationChain from "../components/DelegationChain";
 import TaskDiscussion from "../components/TaskDiscussion";
 import FileUploadSection from "../components/FileUploadSection";
+import UnifiedActivityFeed from "../components/UnifiedActivityFeed";
 import CreateDeliverableModel from "../components/layout/CreateDeliverableModel";
 import API_URL from "../config/api";
 const API_BASE = API_URL.replace(/\/api\/?$/, "");
@@ -395,13 +396,13 @@ function SubtaskDetails() {
         if (res.ok) {
           publish('deliverable:updated', data.deliverable || data);
           publish('data:changed', { type: 'deliverable', action: 'updated' });
-          showSuccessMessage("Subtask", "placed on hold");
+          showSuccessMessage("Subtask", "paused");
           fetchSubtask();
         } else {
-          notify.error(data.message || "Failed to place subtask on hold.");
+          notify.error(data.message || "Failed to pause subtask.");
         }
       } catch {
-        notify.error("Failed to place subtask on hold.");
+        notify.error("Failed to pause subtask.");
       }
     });
   };
@@ -517,7 +518,7 @@ function SubtaskDetails() {
   const workflowEvents = Array.isArray(subtask.workflow_events) ? subtask.workflow_events : [];
   const canSubmit = isAssignee && ["rejected", "in_progress", "paused"].includes(subtask.status);
   const isAssignerLocked = !!subtask.assigner_paused;
-  const canAssignerPause = readOnly ? false : (isCreator && !subtask.assigner_paused && ["pending", "in_progress", "reopened", "paused"].includes(subtask.status));
+  const canAssignerPause = readOnly ? false : (isCreator && !subtask.assigner_paused && ["pending", "in_progress", "reopened", "paused", "submitted"].includes(subtask.status));
   const canAssignerResume = readOnly ? false : (isCreator && subtask.assigner_paused);
   const isApproved = subtask.status === "approved";
   const isSubmitted = subtask.status === "submitted";
@@ -527,7 +528,7 @@ function SubtaskDetails() {
   const timerRunning = timerState === "running";
   const timerPaused = timerState === "paused";
   const isAdminOrManager = currentUser && ["admin", "manager"].includes(currentUser.role);
-  const canPauseSubtask = !readOnly && (isAssignee || isAdminOrManager) && isInProgress && !isAssignerLocked && (!isTransferor || transferorHasApproved) && !subtask?.active_outgoing_delegation;
+  const canPauseSubtask = !readOnly && (isAssignee || isAdminOrManager) && ["in_progress", "submitted"].includes(subtask.status) && !isAssignerLocked && (!isTransferor || transferorHasApproved) && !subtask?.active_outgoing_delegation;
   const canResumeSubtask = !readOnly && (isAssignee || isAdminOrManager) && subtask.status === "paused" && !isAssignerLocked && (!isTransferor || transferorHasApproved) && !subtask?.active_outgoing_delegation && !hasPendingDelegation;
 
   return (
@@ -594,16 +595,16 @@ function SubtaskDetails() {
                   <button className="td-nav-btn" onClick={() => goToSubtask(prevSubtaskId)} disabled={!prevSubtaskId}><ChevronLeft size={18} /></button>
                   <button className="td-nav-btn" onClick={() => goToSubtask(nextSubtaskId)} disabled={!nextSubtaskId}><ChevronRight size={18} /></button>
                   {isCreator && !readOnly && !["approved", "submitted"].includes(subtask.status) && (
-                    <>
-                      <button className="td-btn-outline" onClick={() => setShowEditModal(true)}>
-                        <Pencil size={15} strokeWidth={2.5} />
-                        Edit
-                      </button>
-                      <button className="td-btn-danger" onClick={() => setDeleteConfirmOpen(true)}>
-                        <Trash2 size={15} />
-                        Delete
-                      </button>
-                    </>
+                    <button className="td-btn-outline" onClick={() => setShowEditModal(true)}>
+                      <Pencil size={15} strokeWidth={2.5} />
+                      Edit
+                    </button>
+                  )}
+                  {!readOnly && (isCreator || isAdminManager) && (
+                    <button className="td-btn-danger" onClick={() => setDeleteConfirmOpen(true)}>
+                      <Trash2 size={15} />
+                      Delete
+                    </button>
                   )}
                   {!readOnly && isAssignee && subtask?.allow_transfer === true && !["approved", "rejected", "pending", "submitted"].includes(subtask.status) && !isTransferor && !subtask?.active_outgoing_delegation && !hasPendingDelegation && !isDelegatee && (
                     <button className="td-btn-outline" onClick={() => setTransferDialog(true)}>
@@ -613,7 +614,7 @@ function SubtaskDetails() {
                   {canAssignerPause && !isTransferor && !subtask?.active_outgoing_delegation && (
                     <button className="td-btn-primary" onClick={() => setAssignerPauseModalOpen(true)} disabled={assignerPausing} style={{ backgroundColor: assignerPausing ? "var(--text-muted)" : "var(--color-primary)", borderColor: assignerPausing ? "var(--text-muted)" : "var(--color-primary)", opacity: assignerPausing ? 0.7 : 1, cursor: assignerPausing ? "not-allowed" : "pointer" }}>
                       <Lock size={15} />
-                      {assignerPausing ? "Pausing..." : "Put On Hold"}
+                      {assignerPausing ? "Pausing..." : "Pause"}
                     </button>
                   )}
                   {canAssignerResume && !isTransferor && !subtask?.active_outgoing_delegation && (
@@ -625,7 +626,7 @@ function SubtaskDetails() {
                   {isAssignerLocked && !isCreator && (
                     <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 14px", borderRadius: "6px", backgroundColor: "var(--color-warning-bg)", color: "var(--color-warning)", fontSize: "13px", fontWeight: 600, border: "1px solid var(--color-warning)" }}>
                       <Lock size={14} />
-                      On Hold by Assigner
+                      Paused by Assigner
                     </span>
                   )}
                   {isPending && !readOnly && isAssignee && !isTransferor && !subtask?.active_outgoing_delegation && (
@@ -731,6 +732,7 @@ function SubtaskDetails() {
                   {[
                     { id: "overview", label: "Overview", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg> },
                     { id: "files", label: "Platform files & links", icon: <FolderOpen size={16} /> },
+                    { id: "activity", label: "Activity", icon: <Activity size={16} /> },
                   ].map(({ id, label, icon }) => (
                     <button key={id} className={`td-tab ${tab === id ? "td-tab--on" : ""}`} onClick={() => setTab(id)}>
                       {icon}
@@ -829,6 +831,16 @@ function SubtaskDetails() {
 
                   {tab === "files" && (
                     <FileUploadSection entityType="deliverable" entityId={subtask.id} files={files} onReorder={handleFileReorder} onFilesChange={fetchSubtask} readOnly={true} />
+                  )}
+
+                  {tab === "activity" && (
+                    <div className="td-overview" style={{ padding: "20px" }}>
+                      <UnifiedActivityFeed
+                        module="deliverable"
+                        entityId={subtask.id}
+                        initialUsers={[subtask.assignee, subtask.assigner].filter(Boolean)}
+                      />
+                    </div>
                   )}
                 </div>
 
@@ -979,7 +991,7 @@ function SubtaskDetails() {
                     rejected: "Declined",
                     reopened: "Reopened",
                     created: "Created",
-                    assigner_paused: "On Hold",
+                    assigner_paused: "Paused by Assigner",
                     assigner_resumed: "Resumed",
                   };
                   return map[action] || action?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());

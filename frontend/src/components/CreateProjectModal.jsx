@@ -61,6 +61,7 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
     team_id: initialTeamId ? String(initialTeamId) : "",
     team_ids: initialTeamId ? [Number(initialTeamId)] : [],
     assigned_users: [],
+    followers: [],
     guest_ids: [],
     priority: "Medium",
     status: "Planning",
@@ -482,19 +483,28 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
    * @param {string} token - Auth token
    */
   const uploadAttachments = async (projectId, token) => {
-    await Promise.all([
-      ...pendingFiles.map((file) => {
+    try {
+      const filePromises = (pendingFiles || []).map((item) => {
+        const rawFile = item instanceof File ? item : (item?.file instanceof File ? item.file : item?.file);
+        if (!rawFile) return Promise.resolve();
         const fd = new FormData();
-        fd.append("file", file.file);
-        fd.append("name", file.customName || file.name);
+        fd.append("file", rawFile);
+        const customName = item.customName || item.name || rawFile.name || "";
+        if (customName) {
+          fd.append("name", customName);
+        }
         return fetch(`${API_URL}/projects/${projectId}/files`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
           body: fd,
           _notifHandled: true,
-        }).catch(() => {});
-      }),
-      ...links.map((link) => {
+        }).catch((e) => console.error("File upload error:", e));
+      });
+
+      const linkPromises = (links || []).map((link) => {
+        const url = (link.url || "").trim();
+        if (!url) return Promise.resolve();
+        const fullUrl = /^https?:\/\//i.test(url) ? url : `https://${url}`;
         return fetch(`${API_URL}/projects/${projectId}/links`, {
           method: "POST",
           headers: {
@@ -502,11 +512,15 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
             Accept: "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ url: link.url, name: link.customName || link.name }),
+          body: JSON.stringify({ url: fullUrl, name: link.customName || link.name || fullUrl }),
           _notifHandled: true,
-        }).catch(() => {});
-      }),
-    ]);
+        }).catch((e) => console.error("Link upload error:", e));
+      });
+
+      await Promise.all([...filePromises, ...linkPromises]);
+    } catch (err) {
+      console.error("Upload attachments error:", err);
+    }
   };
 
   /**
@@ -545,6 +559,7 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
           team_id: form.team_id ? parseInt(form.team_id) : null,
           team_ids: form.team_ids,
           assigned_users: form.assigned_users.length > 0 ? form.assigned_users : [],
+          followers: form.followers || [],
           guest_ids: form.guest_ids.length > 0 ? form.guest_ids : [],
           client_name: form.client_name.trim() || null,
           priority: form.priority,
@@ -1163,6 +1178,16 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
                 selectedIds={form.guest_ids}
                 onChange={(ids) => { markDirty(); setForm(prev => ({ ...prev, guest_ids: ids })); }}
                 placeholder="Click to select guests"
+              />
+            </div>
+
+            <div className="cp-field">
+              <label>Followers (Optional)</label>
+              <UserSelectDropdown
+                users={allUsers.filter(u => !form.assigned_users.includes(u.id))}
+                selectedIds={form.followers || []}
+                onChange={(ids) => { markDirty(); setForm(prev => ({ ...prev, followers: ids })); }}
+                placeholder="Click to select followers"
               />
             </div>
 

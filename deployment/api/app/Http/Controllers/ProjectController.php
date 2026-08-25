@@ -256,6 +256,8 @@ class ProjectController extends Controller
             'team_ids' => 'nullable|array',
             'team_ids.*' => 'exists:teams,id',
             'assigned_users' => 'nullable|array',
+            'followers' => 'nullable|array',
+            'followers.*' => 'exists:users,id',
             'status' => 'nullable|string|max:64',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date',
@@ -269,6 +271,8 @@ class ProjectController extends Controller
 
         $milestones = $validated['milestones'] ?? null;
         unset($validated['milestones']);
+        $followers = $validated['followers'] ?? null;
+        unset($validated['followers']);
         $existingFileNames = $validated['existing_file_names'] ?? null;
         unset($validated['existing_file_names']);
 
@@ -293,6 +297,9 @@ class ProjectController extends Controller
         }
 
         $project = Project::create($validated);
+        if (! empty($followers)) {
+            $project->followers()->sync($followers);
+        }
         $this->replaceProjectMilestones($project, $milestones);
 
         $assigneeNames = ! empty($validated['assigned_users'])
@@ -440,6 +447,7 @@ class ProjectController extends Controller
             'team.members:id,name,email,role,department',
             'milestones',
             'files',
+            'followers:id,name,email,avatar,role',
             'deliverables' => fn ($q) => $q->with(['assignee:id,name,role', 'creator:id,name,role'])->orderBy('sort_order'),
             'tasks' => fn ($q) => $q->with(['assignees:id,name', 'assigner:id,name,role'])->withCount([
                 'deliverables as total_deliverables',
@@ -548,6 +556,32 @@ class ProjectController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
+        // Decode JSON-encoded array fields if passed as strings (e.g. from FormData or stringified payloads)
+        foreach (['existing_file_names', 'links', 'attachments', 'milestones', 'assigned_users', 'team_ids', 'guest_ids', 'view_only_users', 'followers'] as $field) {
+            if (is_string($request->input($field))) {
+                $decoded = json_decode($request->input($field), true);
+                if (is_array($decoded)) {
+                    $request->merge([$field => $decoded]);
+                }
+            }
+        }
+
+        foreach (['assigned_users', 'view_only_users', 'team_ids', 'guest_ids', 'followers'] as $idListField) {
+            $val = $request->input($idListField);
+            if (is_array($val)) {
+                $cleaned = array_values(array_filter(array_map(function ($item) {
+                    if (is_array($item) && isset($item['id'])) {
+                        return is_numeric($item['id']) ? (int) $item['id'] : null;
+                    }
+                    if (is_object($item) && isset($item->id)) {
+                        return is_numeric($item->id) ? (int) $item->id : null;
+                    }
+                    return is_numeric($item) ? (int) $item : null;
+                }, $val), fn ($id) => ! is_null($id) && $id > 0));
+                $request->merge([$idListField => $cleaned]);
+            }
+        }
+
         $validated = $request->validate([
             'title' => 'sometimes|required|string|max:255',
             'description' => 'nullable|string',
@@ -567,6 +601,8 @@ class ProjectController extends Controller
             'assigned_users' => 'nullable|array',
             'view_only_users' => 'nullable|array',
             'view_only_users.*' => 'exists:users,id',
+            'followers' => 'nullable|array',
+            'followers.*' => 'exists:users,id',
             'created_by' => 'nullable|exists:users,id',
             'status' => 'sometimes|nullable|string|max:64',
             'start_date' => 'nullable|date',
@@ -578,8 +614,8 @@ class ProjectController extends Controller
             'milestones.*.milestone_deadline' => 'nullable|date',
             'milestones.*.status' => 'nullable|string|max:32',
             'existing_file_names' => 'nullable|array',
-            'existing_file_names.*.id' => 'required_with:existing_file_names|exists:project_files,id',
-            'existing_file_names.*.name' => 'required_with:existing_file_names|string|max:255',
+            'existing_file_names.*.id' => 'nullable',
+            'existing_file_names.*.name' => 'nullable|string|max:255',
             'links' => 'nullable|array',
             'links.*.url' => 'required_with:links|url|max:2048',
             'links.*.name' => 'nullable|string|max:255',
@@ -590,6 +626,8 @@ class ProjectController extends Controller
 
         $milestones = $validated['milestones'] ?? null;
         unset($validated['milestones']);
+        $followers = $validated['followers'] ?? null;
+        unset($validated['followers']);
         $existingFileNames = $validated['existing_file_names'] ?? null;
         unset($validated['existing_file_names']);
         $newLinks = $validated['links'] ?? null;
@@ -615,6 +653,10 @@ class ProjectController extends Controller
         $oldTeamId = $project->team_id;
         $validated['updated_by'] = $user->id;
         $project->update($validated);
+
+        if ($request->has('followers')) {
+            $project->followers()->sync($followers ?? []);
+        }
 
         // Rename existing files/links if provided
         if ($existingFileNames) {
@@ -1010,26 +1052,80 @@ class ProjectController extends Controller
      */
     public function uploadFile(Request $request, Project $project)
     {
-        $request->validate(['file' => 'required|file|max:10240']);
-        $file = $request->file('file');
-
-        $storageCheck = $this->checkStorageLimit($request, $file);
-        if ($storageCheck && !$storageCheck['allowed']) {
-            return response()->json(['success' => false, 'message' => $storageCheck['message']], 422);
+        if (! $request->hasFile('file')) {
+            if ($request->hasFile('files')) {
+                $f = $request->file('files');
+                $request->files->set('file', is_array($f) ? $f[0] : $f);
+            } elseif ($request->hasFile('attachment')) {
+                $f = $request->file('attachment');
+                $request->files->set('file', is_array($f) ? $f[0] : $f);
+            } elseif ($request->hasFile('attachments')) {
+                $f = $request->file('attachments');
+                $request->files->set('file', is_array($f) ? $f[0] : $f);
+            } elseif ($request->hasFile('document')) {
+                $f = $request->file('document');
+                $request->files->set('file', is_array($f) ? $f[0] : $f);
+            }
         }
+
+        // Check if file is present and has PHP upload errors before running validation
+        if ($request->hasFile('file') && ! $request->file('file')->isValid()) {
+            return response()->json(['message' => 'PHP Upload Error: ' . $request->file('file')->getErrorMessage()], 422);
+        }
+
+        $nameInput = $request->input('name');
+        if ($nameInput === 'null' || $nameInput === 'undefined' || trim((string) $nameInput) === '') {
+            $request->merge(['name' => null]);
+        }
+
+        $request->validate([
+            'file' => 'required',
+            'name' => 'nullable|string|max:255',
+        ]);
 
         $org = $request->attributes->get('currentOrganization');
-        if ($org) {
-            $path = StorageDiskResolver::store($org, $file, 'project-files');
-            $fileUrl = StorageDiskResolver::isS3($org) ? $path : '/storage/'.$path;
-        } else {
-            $path = $file->store('project-files', 'public');
+
+        if ($request->hasFile('file')) {
+            $file = $request->file('file');
+            $storageCheck = $this->checkStorageLimit($request, $file);
+            if ($storageCheck && ! $storageCheck['allowed']) {
+                return response()->json(['success' => false, 'message' => $storageCheck['message']], 422);
+            }
+
+            if ($org) {
+                $path = StorageDiskResolver::store($org, $file, 'project-files');
+                $fileUrl = StorageDiskResolver::isS3($org) ? $path : '/storage/'.$path;
+            } else {
+                $path = $file->store('project-files', 'public');
+                $fileUrl = '/storage/'.$path;
+            }
+            $this->trackFileUpload($request, 'attachments', $fileUrl, $file->getClientOriginalName(), $file->getMimeType(), $file->getSize());
+
+            $fileName = $request->input('name') ?: $file->getClientOriginalName();
+        } elseif (is_string($request->input('file')) && ! empty($request->input('file'))) {
+            $fileData = $request->input('file');
+            $fileName = $request->input('name') ?: 'file_'.time();
+
+            if (preg_match('/^data:([a-zA-Z0-9\/+.-]+);base64,(.+)$/', $fileData, $matches)) {
+                $mime = $matches[1];
+                $decodedContent = base64_decode($matches[2]);
+            } else {
+                $decodedContent = base64_decode($fileData, true) ?: $fileData;
+                $mime = 'application/octet-stream';
+            }
+
+            $ext = pathinfo($fileName, PATHINFO_EXTENSION) ?: 'bin';
+            $uniqueFilename = \Illuminate\Support\Str::random(40).'.'.$ext;
+            $path = 'project-files/'.$uniqueFilename;
+            \Illuminate\Support\Facades\Storage::disk('public')->put($path, $decodedContent);
             $fileUrl = '/storage/'.$path;
+            $this->trackFileUpload($request, 'attachments', $fileUrl, $fileName, $mime, strlen($decodedContent));
+        } else {
+            return response()->json(['success' => false, 'message' => 'No valid file was provided for upload.'], 422);
         }
-        try { $this->trackFileUpload($request, 'attachments', $fileUrl, $file->getClientOriginalName(), $file->getMimeType(), $file->getSize()); } catch (\Throwable $e) { \Log::warning('trackFileUpload failed: '.$e->getMessage()); }
 
         $attachment = $project->files()->create([
-            'name' => $file->getClientOriginalName(),
+            'name' => $fileName,
             'url' => $fileUrl,
         ]);
 
@@ -1042,7 +1138,7 @@ class ProjectController extends Controller
             'project_id' => $project->id,
             'field_name' => 'file_uploaded',
             'old_value' => null,
-            'new_value' => $file->getClientOriginalName(),
+            'new_value' => $fileName,
             'modified_by' => $user->id,
             'is_viewed' => false,
         ]);
@@ -1050,7 +1146,7 @@ class ProjectController extends Controller
             'project_id' => $project->id,
             'user_id' => $user->id,
             'action' => 'field_changed',
-            'comment' => 'File uploaded: '.$file->getClientOriginalName(),
+            'comment' => 'File uploaded: '.$fileName,
         ]);
 
         return response()->json(['success' => true, 'message' => 'File uploaded successfully', 'file' => $attachment], 201);
@@ -1065,6 +1161,18 @@ class ProjectController extends Controller
      */
     public function addLink(Request $request, Project $project)
     {
+        if (is_string($request->input('url'))) {
+            $rawUrl = trim($request->input('url'));
+            if ($rawUrl !== '' && ! preg_match('~^(?:f|ht)tps?://~i', $rawUrl)) {
+                $request->merge(['url' => 'https://' . $rawUrl]);
+            }
+        }
+
+        $nameInput = $request->input('name');
+        if ($nameInput === 'null' || $nameInput === 'undefined' || trim((string) $nameInput) === '') {
+            $request->merge(['name' => null]);
+        }
+
         $validated = $request->validate([
             'url' => 'required|url|max:2048',
             'name' => 'nullable|string|max:255',

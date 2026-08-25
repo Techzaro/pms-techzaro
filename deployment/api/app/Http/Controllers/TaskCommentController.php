@@ -121,6 +121,8 @@ class TaskCommentController extends Controller
             'body' => 'required|string|max:10000',
             'parent_id' => 'nullable|exists:task_comments,id',
             'file' => 'nullable|file|max:20480',
+            'mentioned_user_ids' => 'nullable|array',
+            'mentioned_user_ids.*' => 'integer|exists:users,id',
         ]);
 
         if (! empty($validated['parent_id'])) {
@@ -170,6 +172,11 @@ class TaskCommentController extends Controller
 
         $comment = TaskComment::create($commentData);
         $comment->load('user:id,name,role,avatar');
+
+        // Mention notifications
+        if (! empty($validated['mentioned_user_ids'])) {
+            $this->notifyMentionedUsers($validated['mentioned_user_ids'], $user, $comment, $taskId, $deliverableId, $deliverable);
+        }
 
         if ($deliverableId && $deliverable) {
             $this->notifyDeliverableParticipants($deliverable, $user, $comment);
@@ -371,7 +378,7 @@ class TaskCommentController extends Controller
 
     private function getTaskParticipants(Task $task): Collection
     {
-        $task->load(['assignees:id,name,role,avatar', 'assigner:id,name,role,avatar']);
+        $task->load(['assignees:id,name,role,avatar', 'assigner:id,name,role,avatar', 'followers:id,name,role,avatar']);
 
         $participants = collect();
 
@@ -382,6 +389,12 @@ class TaskCommentController extends Controller
         foreach ($task->assignees as $assignee) {
             if (! $participants->contains('id', $assignee->id)) {
                 $participants->push($assignee);
+            }
+        }
+
+        foreach ($task->followers as $follower) {
+            if (! $participants->contains('id', $follower->id)) {
+                $participants->push($follower);
             }
         }
 
@@ -418,6 +431,10 @@ class TaskCommentController extends Controller
         }
 
         if ($task->assignees()->where('users.id', $user->id)->exists()) {
+            return true;
+        }
+
+        if ($task->followers()->where('users.id', $user->id)->exists()) {
             return true;
         }
 
@@ -481,6 +498,51 @@ class TaskCommentController extends Controller
         return false;
     }
 
+    private function notifyMentionedUsers(array $mentionedUserIds, User $poster, TaskComment $comment, ?int $taskId, ?int $deliverableId, ?Deliverable $deliverable = null): void
+    {
+        $filteredIds = array_unique(array_filter(
+            $mentionedUserIds,
+            fn ($id) => ! empty($id) && (int) $id !== (int) $poster->id
+        ));
+
+        if (empty($filteredIds)) {
+            return;
+        }
+
+        $task = null;
+        if ($taskId) {
+            $task = Task::with('project')->find($taskId);
+        } elseif ($deliverableId && $deliverable) {
+            $deliverable->load('task.project');
+            $task = $deliverable->task;
+        }
+
+        $entityTitle = $task ? $task->title : ($deliverable ? $deliverable->title : 'Task');
+        $module = $taskId ? 'task' : 'deliverable';
+        $relatedId = $taskId ?: $deliverableId;
+        $title = 'You were mentioned in a comment';
+        $message = "{$poster->name} mentioned you in a comment on " . ($taskId ? "task \"{$entityTitle}\"" : "subtask \"{$entityTitle}\"");
+        $link = $taskId ? "/tasks/task-details/{$taskId}" : "/deliveries/deliverable-details/{$deliverableId}";
+
+        $this->notificationService->notifyMultiple(
+            array_values($filteredIds),
+            $poster->id,
+            'task_mention',
+            $module,
+            $relatedId,
+            $title,
+            $message,
+            $link,
+            [
+                'comment_text' => $comment->body,
+                'comment_by' => $poster->name,
+                'comment_at' => $comment->created_at ? $comment->created_at->format('d M Y, g:i A') : now()->format('d M Y, g:i A'),
+                'task_name' => $entityTitle,
+                'project_name' => $task?->project?->title ?? null,
+            ]
+        );
+    }
+
     private function notifyTaskParticipants(Task $task, User $poster, TaskComment $comment): void
     {
         $notifyUserIds = [];
@@ -489,10 +551,16 @@ class TaskCommentController extends Controller
             $notifyUserIds[] = $task->assigner->id;
         }
 
-        $task->load('assignees');
+        $task->load(['assignees', 'followers']);
         foreach ($task->assignees as $assignee) {
             if ((int) $assignee->id !== (int) $poster->id) {
                 $notifyUserIds[] = $assignee->id;
+            }
+        }
+
+        foreach ($task->followers as $follower) {
+            if ((int) $follower->id !== (int) $poster->id) {
+                $notifyUserIds[] = $follower->id;
             }
         }
 

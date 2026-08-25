@@ -22,6 +22,7 @@ use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\TaskCommentController;
+use App\Http\Controllers\TaskFollowerController;
 use App\Http\Controllers\DraftController;
 use App\Http\Controllers\CredentialController;
 use App\Http\Controllers\NotificationSettingController;
@@ -437,11 +438,24 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/comments/{comment}', [TaskCommentController::class, 'destroy']); // Delete a comment
     Route::get('/comments/{comment}/file', [TaskCommentController::class, 'downloadFile']); // Download attachment
 
+    // Task followers
+    Route::get('/tasks/{task}/followers', [TaskFollowerController::class, 'index']); // List followers
+    Route::post('/tasks/{task}/followers', [TaskFollowerController::class, 'addFollower']); // Add follower
+    Route::delete('/tasks/{task}/followers', [TaskFollowerController::class, 'removeFollower']); // Remove follower
+    Route::delete('/tasks/{task}/followers/{user}', [TaskFollowerController::class, 'removeFollower']); // Remove follower by user ID
+
     // Personal user notes on tasks (private per user)
     Route::get('/tasks/{task}/my-note', [\App\Http\Controllers\TaskUserNoteController::class, 'show']); // View own note
     Route::post('/tasks/{task}/my-note', [\App\Http\Controllers\TaskUserNoteController::class, 'store']); // Create own note
     Route::put('/tasks/{task}/my-note/{note}', [\App\Http\Controllers\TaskUserNoteController::class, 'update']); // Update own note
     Route::delete('/tasks/{task}/my-note/{note}', [\App\Http\Controllers\TaskUserNoteController::class, 'destroy']); // Delete own note
+
+        // Task Saved Views Routes (SRS Section 11)
+    Route::get('/task-saved-views', [\App\Http\Controllers\TaskSavedViewController::class, 'index']);
+    Route::post('/task-saved-views', [\App\Http\Controllers\TaskSavedViewController::class, 'store']);
+    Route::put('/task-saved-views/{taskSavedView}', [\App\Http\Controllers\TaskSavedViewController::class, 'update']);
+    Route::delete('/task-saved-views/{taskSavedView}', [\App\Http\Controllers\TaskSavedViewController::class, 'destroy']);
+    Route::get('/tasks', [TaskController::class, 'allTasks']);
 
     // Task filtering routes
     Route::get('/my-tasks', [TaskController::class, 'myTasks']); // Tasks assigned to me
@@ -595,12 +609,18 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /*
     | Calendar / Event Routes
-    | CRUD operations for calendar events.
+    | CRUD operations for calendar events and event categories.
     */
+    Route::get('/event-categories', [\App\Http\Controllers\EventCategoryController::class, 'index']);
+    Route::get('/event-categories/{eventCategory}', [\App\Http\Controllers\EventCategoryController::class, 'show']);
+    Route::post('/event-categories', [\App\Http\Controllers\EventCategoryController::class, 'store'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
+    Route::match(['put', 'post'], '/event-categories/{eventCategory}', [\App\Http\Controllers\EventCategoryController::class, 'update'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
+    Route::delete('/event-categories/{eventCategory}', [\App\Http\Controllers\EventCategoryController::class, 'destroy'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
+
     Route::get('/events', [EventController::class, 'index']); // List all events
     Route::get('/events/{event}', [EventController::class, 'show']); // View event details
     Route::post('/events', [EventController::class, 'store'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Create new event
-    Route::put('/events/{event}', [EventController::class, 'update'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Update event
+    Route::match(['put', 'post'], '/events/{event}', [EventController::class, 'update'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Update event
     Route::delete('/events/{event}', [EventController::class, 'destroy'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Delete event
 
     /*
@@ -644,8 +664,16 @@ Route::middleware('auth:sanctum')->group(function () {
     | Knowledge Base Management Routes
     | Tiered visibility knowledge sharing system for articles, documentation, and resources.
     */
+    Route::get('/kb-categories', [\App\Http\Controllers\KbCategoryController::class, 'index']);
+    Route::get('/kb-categories/{kbCategory}', [\App\Http\Controllers\KbCategoryController::class, 'show']);
+    Route::post('/kb-categories', [\App\Http\Controllers\KbCategoryController::class, 'store'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
+    Route::match(['put', 'post'], '/kb-categories/{kbCategory}', [\App\Http\Controllers\KbCategoryController::class, 'update'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
+    Route::delete('/kb-categories/{kbCategory}', [\App\Http\Controllers\KbCategoryController::class, 'destroy'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
+
     Route::get('/knowledge-base', [\App\Http\Controllers\KnowledgeBaseController::class, 'index']); // List visible knowledge base items
     Route::get('/knowledge-base/{knowledgeBase}', [\App\Http\Controllers\KnowledgeBaseController::class, 'show']); // View article details
+    Route::get('/knowledge-base/{knowledgeBase}/versions', [\App\Http\Controllers\KnowledgeBaseController::class, 'getVersions']); // View article versions
+    Route::post('/knowledge-base/{knowledgeBase}/versions/{versionId}/restore', [\App\Http\Controllers\KnowledgeBaseController::class, 'restoreVersion'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Restore version
     Route::post('/knowledge-base', [\App\Http\Controllers\KnowledgeBaseController::class, 'store'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Create article
     Route::match(['put', 'post'], '/knowledge-base/{knowledgeBase}', [\App\Http\Controllers\KnowledgeBaseController::class, 'update'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Update article
     Route::delete('/knowledge-base/{knowledgeBase}', [\App\Http\Controllers\KnowledgeBaseController::class, 'destroy'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Delete article

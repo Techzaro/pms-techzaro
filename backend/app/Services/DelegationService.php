@@ -75,6 +75,7 @@ class DelegationService
             'approval_chain' => $approvalChain,
             'delegation_count' => $level,
             'status' => 'paused',
+            'states' => array_values(array_unique(array_merge(is_array($task->states) ? $task->states : [], ['Transferred']))),
         ]);
         $task->stopTimer();
 
@@ -192,6 +193,7 @@ class DelegationService
             'approval_chain' => $approvalChain,
             'delegation_count' => $level,
             'status' => 'paused',
+            'states' => array_values(array_unique(array_merge(is_array($task->states) ? $task->states : [], ['Transferred']))),
         ]);
 
         if (empty($deliverable->original_assigner)) {

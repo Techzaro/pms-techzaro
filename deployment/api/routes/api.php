@@ -22,9 +22,11 @@ use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\TaskCommentController;
+use App\Http\Controllers\TaskFollowerController;
 use App\Http\Controllers\DraftController;
 use App\Http\Controllers\CredentialController;
 use App\Http\Controllers\NotificationSettingController;
+use App\Http\Controllers\FeedbackController;
 use App\Http\Controllers\OrganizationSettingsController;
 use App\Http\Controllers\OrganizationOrgController;
 
@@ -182,8 +184,8 @@ Route::middleware('auth:sanctum')->group(function () {
     | Admin and manager only: CRUD operations for managing users.
     */
     Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager')->group(function () {
-        // Create new user
-        Route::post('/users', [UserController::class, 'store']);
+        // Create new user (enforces plan user limit)
+        Route::post('/users', [UserController::class, 'store'])->middleware(\App\Http\Middleware\CheckPlanLimits::class . ':users');
         // View user details
         Route::get('/users/{user}', [UserController::class, 'show']);
         // Update user information
@@ -208,9 +210,13 @@ Route::middleware('auth:sanctum')->group(function () {
         // Reorder users list
         Route::post('/users/reorder', [UserController::class, 'reorder']);
 
+        // Request user deletion (for Manager role)
+        Route::post('/users/{user}/request-deletion', [UserController::class, 'requestDeletion']);
+
         // Guest (Client Portal) management
-        Route::post('/guests', [UserController::class, 'storeGuest']);
+        Route::post('/guests', [UserController::class, 'storeGuest'])->middleware(\App\Http\Middleware\CheckPlanLimits::class . ':users');
         Route::put('/guests/{user}', [UserController::class, 'updateGuest']);
+        Route::delete('/guests/{user}', [UserController::class, 'destroyGuest']);
         Route::post('/guests/{user}/resend-invitation', [UserController::class, 'resendInvitation']);
         Route::post('/guests/{user}/reset-password', [UserController::class, 'resetGuestPassword']);
         Route::put('/guests/{user}/toggle-status', [UserController::class, 'toggleGuestStatus']);
@@ -250,6 +256,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/my-team', [TeamController::class, 'myTeam']);
 
     /*
+    | User Feedback & Product Improvement Routes
+    */
+    Route::post('/feedback', [FeedbackController::class, 'store']);
+    Route::get('/feedback', [FeedbackController::class, 'index']);
+    Route::get('/feedback/{id}', [FeedbackController::class, 'show']);
+    Route::patch('/feedback/{id}', [FeedbackController::class, 'update']);
+    Route::post('/feedback/{id}/notes', [FeedbackController::class, 'addNote']);
+
+    /*
     | Team Management Routes
     | Admin and manager only: CRUD operations for managing teams and members.
     */
@@ -287,8 +302,8 @@ Route::middleware('auth:sanctum')->group(function () {
     | Admin and manager only: create, update, delete projects and manage files.
     */
     Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager')->group(function () {
-        // Create new project
-        Route::post('/projects', [ProjectController::class, 'store']);
+        // Create new project (enforces plan project limit)
+        Route::post('/projects', [ProjectController::class, 'store'])->middleware(\App\Http\Middleware\CheckPlanLimits::class . ':projects');
         // Update project
         Route::put('/projects/{project}', [ProjectController::class, 'update']);
         // Partial update project
@@ -368,6 +383,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/tasks/{task}/timer', [TaskController::class, 'timer']); // Get live timer state
     Route::get('/tasks/{task}/timer-sessions', [TaskController::class, 'timerSessions']); // Get pause session history
     Route::get('/tasks/{task}/latest-submission', [TaskController::class, 'latestSubmission']); // Get latest submission
+    Route::match(['put', 'post'], '/tasks/submissions/{submission}', [TaskController::class, 'updateSubmission']); // Edit submission
     Route::post('/tasks/{task}/approve', [TaskController::class, 'approve'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Approve submitted task
     Route::post('/tasks/{task}/reject', [TaskController::class, 'reject'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Reject submitted task
     Route::post('/tasks/{task}/reopen', [TaskController::class, 'reopen'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Reopen rejected task
@@ -422,11 +438,24 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/comments/{comment}', [TaskCommentController::class, 'destroy']); // Delete a comment
     Route::get('/comments/{comment}/file', [TaskCommentController::class, 'downloadFile']); // Download attachment
 
+    // Task followers
+    Route::get('/tasks/{task}/followers', [TaskFollowerController::class, 'index']); // List followers
+    Route::post('/tasks/{task}/followers', [TaskFollowerController::class, 'addFollower']); // Add follower
+    Route::delete('/tasks/{task}/followers', [TaskFollowerController::class, 'removeFollower']); // Remove follower
+    Route::delete('/tasks/{task}/followers/{user}', [TaskFollowerController::class, 'removeFollower']); // Remove follower by user ID
+
     // Personal user notes on tasks (private per user)
     Route::get('/tasks/{task}/my-note', [\App\Http\Controllers\TaskUserNoteController::class, 'show']); // View own note
     Route::post('/tasks/{task}/my-note', [\App\Http\Controllers\TaskUserNoteController::class, 'store']); // Create own note
     Route::put('/tasks/{task}/my-note/{note}', [\App\Http\Controllers\TaskUserNoteController::class, 'update']); // Update own note
     Route::delete('/tasks/{task}/my-note/{note}', [\App\Http\Controllers\TaskUserNoteController::class, 'destroy']); // Delete own note
+
+        // Task Saved Views Routes (SRS Section 11)
+    Route::get('/task-saved-views', [\App\Http\Controllers\TaskSavedViewController::class, 'index']);
+    Route::post('/task-saved-views', [\App\Http\Controllers\TaskSavedViewController::class, 'store']);
+    Route::put('/task-saved-views/{taskSavedView}', [\App\Http\Controllers\TaskSavedViewController::class, 'update']);
+    Route::delete('/task-saved-views/{taskSavedView}', [\App\Http\Controllers\TaskSavedViewController::class, 'destroy']);
+    Route::get('/tasks', [TaskController::class, 'allTasks']);
 
     // Task filtering routes
     Route::get('/my-tasks', [TaskController::class, 'myTasks']); // Tasks assigned to me
@@ -451,12 +480,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/self-deliverables', [DeliverableController::class, 'mySelfDeliverables']); // Deliverables I created for myself
     Route::post('/deliverables/reorder', [DeliverableController::class, 'reorder']); // Reorder deliverables
 
-    // Write routes (admin, manager, team lead only)
-    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager,team_lead')->group(function () {
+    // Deliverable creation & update routes (accessible to non-guest authenticated users)
+    Route::middleware(\App\Http\Middleware\EnsureNotGuest::class)->group(function () {
         Route::post('/projects/{project}/deliverables', [DeliverableController::class, 'store']); // Create deliverable (project-scoped)
         Route::post('/deliverables', [DeliverableController::class, 'storeStandalone']); // Create deliverable (no project, task_id required)
         Route::put('/deliverables/{deliverable}', [DeliverableController::class, 'update']); // Update deliverable
         Route::delete('/deliverables/{deliverable}', [DeliverableController::class, 'destroy']); // Delete deliverable
+    });
+
+    // Deliverable review routes (admin, manager, team lead only)
+    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager,team_lead')->group(function () {
         Route::post('/deliverables/{deliverable}/approve', [DeliverableController::class, 'approve']); // Approve deliverable
         Route::post('/deliverables/{deliverable}/reject', [DeliverableController::class, 'reject']); // Reject deliverable
         Route::post('/deliverables/{deliverable}/reopen', [DeliverableController::class, 'reopen']); // Reopen deliverable
@@ -515,6 +548,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/notifications/latest', [\App\Http\Controllers\NotificationController::class, 'latest']); // Get latest unread for desktop notifications
     Route::post('/notifications/{notification}/read', [\App\Http\Controllers\NotificationController::class, 'markAsRead']); // Mark notification as read
     Route::post('/notifications/read-all', [\App\Http\Controllers\NotificationController::class, 'markAllAsRead']); // Mark all as read
+    Route::get('/notifications/{notification}/comments', [\App\Http\Controllers\NotificationController::class, 'getComments']); // List comments on a notification
+    Route::post('/notifications/{notification}/comments', [\App\Http\Controllers\NotificationController::class, 'storeComment']); // Add comment to a notification
 
     // Device tokens for push notifications (all authenticated users)
     Route::post('/device-tokens', [\App\Http\Controllers\DeviceTokenController::class, 'store']); // Register device token
@@ -549,6 +584,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/activities/today', [ActivityController::class, 'today']); // Today's activities
     Route::get('/activities/past', [ActivityController::class, 'past']); // Past activities
     Route::get('/activities', [ActivityController::class, 'index']); // All activities
+    Route::get('/tasks/{task}/unified-activity', [TaskController::class, 'unifiedActivity']);
+    Route::get('/projects/{project}/unified-activity', [ProjectController::class, 'unifiedActivity']);
 
     /*
     | My Activity (all authenticated users)
@@ -572,12 +609,18 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /*
     | Calendar / Event Routes
-    | CRUD operations for calendar events.
+    | CRUD operations for calendar events and event categories.
     */
+    Route::get('/event-categories', [\App\Http\Controllers\EventCategoryController::class, 'index']);
+    Route::get('/event-categories/{eventCategory}', [\App\Http\Controllers\EventCategoryController::class, 'show']);
+    Route::post('/event-categories', [\App\Http\Controllers\EventCategoryController::class, 'store'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
+    Route::match(['put', 'post'], '/event-categories/{eventCategory}', [\App\Http\Controllers\EventCategoryController::class, 'update'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
+    Route::delete('/event-categories/{eventCategory}', [\App\Http\Controllers\EventCategoryController::class, 'destroy'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
+
     Route::get('/events', [EventController::class, 'index']); // List all events
     Route::get('/events/{event}', [EventController::class, 'show']); // View event details
     Route::post('/events', [EventController::class, 'store'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Create new event
-    Route::put('/events/{event}', [EventController::class, 'update'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Update event
+    Route::match(['put', 'post'], '/events/{event}', [EventController::class, 'update'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Update event
     Route::delete('/events/{event}', [EventController::class, 'destroy'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Delete event
 
     /*
@@ -621,8 +664,16 @@ Route::middleware('auth:sanctum')->group(function () {
     | Knowledge Base Management Routes
     | Tiered visibility knowledge sharing system for articles, documentation, and resources.
     */
+    Route::get('/kb-categories', [\App\Http\Controllers\KbCategoryController::class, 'index']);
+    Route::get('/kb-categories/{kbCategory}', [\App\Http\Controllers\KbCategoryController::class, 'show']);
+    Route::post('/kb-categories', [\App\Http\Controllers\KbCategoryController::class, 'store'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
+    Route::match(['put', 'post'], '/kb-categories/{kbCategory}', [\App\Http\Controllers\KbCategoryController::class, 'update'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
+    Route::delete('/kb-categories/{kbCategory}', [\App\Http\Controllers\KbCategoryController::class, 'destroy'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
+
     Route::get('/knowledge-base', [\App\Http\Controllers\KnowledgeBaseController::class, 'index']); // List visible knowledge base items
     Route::get('/knowledge-base/{knowledgeBase}', [\App\Http\Controllers\KnowledgeBaseController::class, 'show']); // View article details
+    Route::get('/knowledge-base/{knowledgeBase}/versions', [\App\Http\Controllers\KnowledgeBaseController::class, 'getVersions']); // View article versions
+    Route::post('/knowledge-base/{knowledgeBase}/versions/{versionId}/restore', [\App\Http\Controllers\KnowledgeBaseController::class, 'restoreVersion'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Restore version
     Route::post('/knowledge-base', [\App\Http\Controllers\KnowledgeBaseController::class, 'store'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Create article
     Route::match(['put', 'post'], '/knowledge-base/{knowledgeBase}', [\App\Http\Controllers\KnowledgeBaseController::class, 'update'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Update article
     Route::delete('/knowledge-base/{knowledgeBase}', [\App\Http\Controllers\KnowledgeBaseController::class, 'destroy'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Delete article

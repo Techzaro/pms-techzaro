@@ -8,6 +8,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use App\Models\User;
 use App\Services\BusinessIdService;
 
 /**
@@ -257,7 +259,7 @@ class Project extends Model
     }
 
     /**
-     * Get all active members of this project (assigned_users + team members).
+     * Get all active members of this project (assigned_users + team members + team leaders).
      * Returns a Collection of User models.
      */
     public function getMembers()
@@ -271,17 +273,19 @@ class Project extends Model
         $teamIds = array_unique(array_filter($teamIds));
 
         if (! empty($teamIds)) {
-            $teamMemberIds = \App\Models\Team::whereIn('id', $teamIds)
+            $teams = \App\Models\Team::whereIn('id', $teamIds)
                 ->with('members:id')
-                ->get()
-                ->flatMap(fn ($team) => $team->members->pluck('id'))
+                ->get();
+            $teamMemberIds = $teams->flatMap(fn ($team) => $team->members->pluck('id'))
+                ->merge($teams->pluck('leader_id'))
+                ->filter()
                 ->unique()
                 ->values();
 
             $memberIds = $memberIds->merge($teamMemberIds);
         }
 
-        $memberIds = $memberIds->unique()->values()->all();
+        $memberIds = $memberIds->filter()->unique()->values()->all();
 
         if (empty($memberIds)) {
             return collect();
@@ -292,5 +296,11 @@ class Project extends Model
             ->select('id', 'name', 'email', 'role', 'department')
             ->orderBy('name')
             ->get();
+    }
+
+    /** All users following this project (many-to-many). */
+    public function followers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'project_followers')->withTimestamps();
     }
 }

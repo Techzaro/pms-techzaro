@@ -1494,11 +1494,12 @@ background: var(--color-success-bg);
   word-break: break-word;
 }
 .td-comment-mention {
-  color: var(--color-primary);
+  color: #2563eb;
   font-weight: 600;
-  background: var(--color-primary-bg);
-  padding: 1px 4px;
+  background: #eff6ff;
+  padding: 1px 6px;
   border-radius: 4px;
+  display: inline-block;
 }
 
 /* Comment Actions Menu */

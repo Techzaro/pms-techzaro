@@ -14,13 +14,13 @@ import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
-import { CheckCircle2, Lock, Pause, Play, StickyNote, Users, ArrowUpRight, ChevronDown, XCircle, RotateCcw, AlertOctagon, Sliders, Pin } from "lucide-react";
-import { togglePinTask, isTaskPinned, usePinnedTasks } from "../utils/pinnedTasks";
-import { useNotification } from "../context/NotificationContext";
-import { showSuccessMessage } from "../utils/notify";
+import { CheckCircle2, Lock, Pause, Play, StickyNote, Users, ArrowUpRight, ChevronDown, XCircle, RotateCcw, AlertOctagon, Sliders, Pin, Trash2 } from "lucide-react";
+import { usePinnedTasks, togglePinTask, isTaskPinned } from "../utils/pinnedTasks";
+import { showSuccessMessage, notify, toast } from "../utils/notify";
 import { publish } from "../utils/eventBus";
 import CreateTaskModal from "../components/CreateTaskModal";
 import SubmitTaskModal from "../components/SubmitTaskModal";
+import ConfirmModal from "../components/ConfirmModal";
 import SortableTableWrapper from "../components/SortableTableWrapper";
 import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
@@ -110,7 +110,6 @@ function Tasks() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isWidgetEnabled } = usePersonalization();
-  const { notify } = useNotification();
   const [searchParams, setSearchParams] = useSearchParams();
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [items, setItems] = useState([]);
@@ -133,6 +132,8 @@ function Tasks() {
   const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
   const [transferDialog, setTransferDialog] = useState({ open: false, task: null });
   const [pinnedTasks] = usePinnedTasks();
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState(null);
 
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
@@ -141,13 +142,26 @@ function Tasks() {
   const [advancedFilters, setAdvancedFilters] = useState({
     user_id: [],
     project_id: [],
+    statuses: [],
     status: [],
+    states: [],
+    due_states: [],
     start_date: "",
     end_date: "",
   });
 
-  const [sortBy, setSortBy] = useState("due_date");
-  const [sortOrder, setSortOrder] = useState("asc");
+  const [sortBy, setSortBy] = useState("");
+  const [sortDirection, setSortDirection] = useState("desc");
+
+  const handleSort = (column) => {
+    if (sortBy === column) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(column);
+      setSortDirection("asc");
+    }
+    setPage(1);
+  };
 
   const handleReorder = (newItems) => {
     setItems(newItems);
@@ -159,42 +173,82 @@ function Tasks() {
   }, [search]);
 
   /** Fetch tasks assigned to the current user from the API. */
-  const fetchTasks = () => {
-    setLoading(true);
-    const token = authToken();
-    const params = new URLSearchParams();
-    params.append("per_page", itemsPerPage);
-    if (debouncedSearch) params.append("search", debouncedSearch);
-    if (advancedFilters.user_id && advancedFilters.user_id.length > 0) {
-      params.append("user_id", Array.isArray(advancedFilters.user_id) ? advancedFilters.user_id.join(",") : advancedFilters.user_id);
-    }
-    if (advancedFilters.project_id && advancedFilters.project_id.length > 0) {
-      params.append("project_id", Array.isArray(advancedFilters.project_id) ? advancedFilters.project_id.join(",") : advancedFilters.project_id);
-    }
-    if (advancedFilters.status && advancedFilters.status.length > 0) {
-      params.append("status", Array.isArray(advancedFilters.status) ? advancedFilters.status.join(",") : advancedFilters.status);
-    }
-    if (advancedFilters.start_date) params.append("start_date", advancedFilters.start_date);
-    if (advancedFilters.end_date) params.append("end_date", advancedFilters.end_date);
-    if (sortBy) params.append("sort_by", sortBy);
-    if (sortOrder) params.append("sort_order", sortOrder);
+  const fetchTasks = useCallback(() => {
+    try {
+      setLoading(true);
+      const token = authToken();
+      const params = new URLSearchParams();
+      if (timeFilter) params.append("time_filter", timeFilter);
+      if (debouncedSearch) params.append("search", debouncedSearch);
+      if (statusFilter && (!advancedFilters.statuses || advancedFilters.statuses.length === 0)) {
+        params.append("status", statusFilter);
+      }
 
-    fetch(`${API_URL}/my-tasks?${params.toString()}`, {
-      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-      skipLoader: true,
-    })
-      .then((res) => (res.ok ? res.json() : { data: [] }))
-      .then((data) => {
-        setItems(data?.data || []);
-        setTotalCount(data?.total ?? 0);
+      const stList = Array.isArray(advancedFilters.statuses)
+        ? advancedFilters.statuses
+        : Array.isArray(advancedFilters.status)
+        ? advancedFilters.status
+        : [];
+      if (stList.length > 0) {
+        stList.forEach((st) => params.append("statuses[]", st));
+        params.append("statuses", stList.join(","));
+      }
+
+      const statesList = Array.isArray(advancedFilters.states) ? advancedFilters.states : [];
+      if (statesList.length > 0) {
+        statesList.forEach((st) => params.append("states[]", st));
+        params.append("states", statesList.join(","));
+      }
+
+      const dueList = Array.isArray(advancedFilters.due_states) ? advancedFilters.due_states : [];
+      if (dueList.length > 0) {
+        dueList.forEach((st) => params.append("due_states[]", st));
+        params.append("due_states", dueList.join(","));
+      }
+
+      const uList = Array.isArray(advancedFilters.user_id) ? advancedFilters.user_id : [];
+      if (uList.length > 0) {
+        params.append("user_id", uList.join(","));
+      }
+
+      const pList = Array.isArray(advancedFilters.project_id) ? advancedFilters.project_id : [];
+      if (pList.length > 0) {
+        params.append("project_id", pList.join(","));
+      }
+
+      if (advancedFilters.start_date) params.append("start_date", advancedFilters.start_date);
+      if (advancedFilters.end_date) params.append("end_date", advancedFilters.end_date);
+      if (sortBy) {
+        params.append("sort_by", sortBy);
+        params.append("sort_direction", sortDirection);
+        params.append("sort_dir", sortDirection);
+        params.append("sort_order", sortDirection);
+      }
+
+      fetch(`${API_URL}/my-tasks?${params.toString()}`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
       })
-      .catch(() => setItems([]))
-      .finally(() => setLoading(false));
-  };
+        .then((res) => (res.ok ? res.json() : { data: [] }))
+        .then((data) => {
+          setItems(Array.isArray(data?.data) ? data.data : []);
+          setTotalCount(typeof data?.total === "number" ? data.total : Array.isArray(data?.data) ? data.data.length : 0);
+        })
+        .catch((err) => {
+          console.warn("Failed to fetch tasks:", err);
+          setItems([]);
+        })
+        .finally(() => setLoading(false));
+    } catch (err) {
+      console.error("fetchTasks exception:", err);
+      setLoading(false);
+      setItems([]);
+    }
+  }, [debouncedSearch, timeFilter, statusFilter, advancedFilters, sortBy, sortDirection]);
 
   useEffect(() => {
     fetchTasks();
-  }, [debouncedSearch, itemsPerPage, advancedFilters, sortBy, sortOrder]);
+  }, [fetchTasks]);
 
   useAutoRefresh(fetchTasks, {
     events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
@@ -336,7 +390,11 @@ function Tasks() {
     }
   };
 
-  const handleAcknowledge = async (taskId) => {
+  const handleAcknowledge = async (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
     try {
       const token = authToken();
       const res = await fetch(`${API_URL}/tasks/${taskId}/acknowledge`, {
@@ -356,15 +414,23 @@ function Tasks() {
         showSuccessMessage("Task", "acknowledged");
       } else {
         const errorMsg = data?.message || data?.error || (data?.errors ? Object.values(data.errors).flat().join(", ") : null) || "Failed to acknowledge task.";
-        notify.error(errorMsg);
+        if (notify?.error) {
+          notify.error(errorMsg);
+        }
       }
     } catch (err) {
       const errorMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed to acknowledge task.";
-      notify.error(errorMsg);
+      if (notify?.error) {
+        notify.error(errorMsg);
+      }
     }
   };
 
-  const handleContinue = async (taskId) => {
+  const handleContinue = async (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
     try {
       const token = authToken();
       const res = await fetch(`${API_URL}/tasks/${taskId}/continue`, {
@@ -392,30 +458,70 @@ function Tasks() {
     }
   };
 
-  const handlePause = async (taskId) => {
+  const handlePause = async (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
     try {
       const token = authToken();
       const res = await fetch(`${API_URL}/tasks/${taskId}/pause`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ reason: "other" }),
+        body: JSON.stringify({ reason: "other", reason_detail: "Paused from task list" }),
         _notifHandled: true,
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setItems((prev) =>
           prev.map((item) =>
-            item.id === taskId ? { ...item, status: "paused", ...data.task } : item
+            item.id === taskId ? { ...item, status: "paused", ...(data.task || {}) } : item
           )
         );
         publish('task:updated', { id: taskId, status: 'paused' });
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage("Task", "paused");
       } else {
-        notify.error(data.message || "Failed to pause task.");
+        notify.error(data?.message || data?.error || "Failed to pause task.");
       }
     } catch {
       notify.error("Failed to pause task.");
+    }
+  };
+
+  const handleDelete = (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    setDeleteTargetId(taskId);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    const taskId = deleteTargetId;
+    setDeleteConfirmOpen(false);
+    setDeleteTargetId(null);
+    if (!taskId) return;
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      if (res.ok) {
+        setItems((prev) => prev.filter((item) => String(item.id) !== String(taskId)));
+        setOrderedItems((prev) => prev.filter((item) => String(item.id) !== String(taskId)));
+        publish('task:deleted', { id: taskId });
+        publish('data:changed', { type: 'task', action: 'deleted' });
+        toast.success("Task deleted successfully");
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.message || "Failed to delete task.");
+      }
+    } catch {
+      toast.error("Failed to delete task.");
     }
   };
 
@@ -435,67 +541,8 @@ function Tasks() {
   const rejectedCount = baseItems.filter((i) => i.status === "rejected").length;
   const abandonedCount = baseItems.filter((i) => i.status === "abandoned" || i.status === "abandon_requested").length;
   const searchFilteredItems = useMemo(() => {
-    let list = baseItems;
-    if (debouncedSearch) {
-      const q = debouncedSearch.toLowerCase();
-      list = list.filter((item) => {
-        const titleMatch = (item.title || "").toLowerCase().includes(q);
-        const assigneeMatch = (item.assignees || []).some((a) => (a.name || "").toLowerCase().includes(q));
-        const assignerMatch = (item.assigner?.name || "").toLowerCase().includes(q);
-        const projectMatch = (item.project?.title || "").toLowerCase().includes(q);
-        return titleMatch || assigneeMatch || assignerMatch || projectMatch;
-      });
-    }
-    if (advancedFilters.user_id && advancedFilters.user_id.length > 0) {
-      const uids = (Array.isArray(advancedFilters.user_id) ? advancedFilters.user_id : [advancedFilters.user_id]).map(Number);
-      list = list.filter((item) => {
-        return (item.assignees || []).some((a) => uids.includes(Number(a.id))) ||
-          uids.includes(Number(item.assigned_to)) ||
-          uids.includes(Number(item.assigned_by));
-      });
-    }
-    if (advancedFilters.project_id && advancedFilters.project_id.length > 0) {
-      const pids = (Array.isArray(advancedFilters.project_id) ? advancedFilters.project_id : [advancedFilters.project_id]).map(Number);
-      list = list.filter((item) => {
-        const projId = Number(item.project_id || item.project?.id);
-        return pids.includes(projId);
-      });
-    }
-    if (advancedFilters.status && advancedFilters.status.length > 0) {
-      const sts = Array.isArray(advancedFilters.status) ? advancedFilters.status : [advancedFilters.status];
-      list = list.filter((item) => {
-        return sts.some((st) => {
-          if (st === "due_today") {
-            const d = item.end_date || item.due_date || item.start_date ? new Date(item.end_date || item.due_date || item.start_date) : null;
-            const isToday = d && d.toDateString() === new Date().toDateString();
-            const isDone = ["approved", "completed", "done"].includes((item.status || "").toLowerCase());
-            return isToday && !isDone;
-          }
-          if (st === "pending") return ["pending", "planned", "Planning", "Planned"].includes(item.status);
-          if (st === "in_progress") return ["in_progress", "In Progress", "in-progress"].includes(item.status);
-          if (st === "paused") return ["paused", "pause", "Pause"].includes(item.status);
-          if (st === "transferred") return Array.isArray(item.delegation_chain) && item.delegation_chain.length > 0;
-          if (st === "rejected" || st === "declined") return item.status === "rejected" || item.status === "declined";
-          if (st === "abandoned") return item.status === "abandoned" || item.status === "abandon_requested";
-          if (st === "approved") return item.status === "approved" || item.status === "completed";
-          return item.status === st;
-        });
-      });
-    }
-    if (advancedFilters.start_date) {
-      list = list.filter((item) => {
-        const itemDate = item.start_date ? new Date(item.start_date) : null;
-        return itemDate && itemDate >= new Date(advancedFilters.start_date);
-      });
-    }
-    if (advancedFilters.end_date) {
-      list = list.filter((item) => {
-        const itemDate = item.end_date || item.due_date ? new Date(item.end_date || item.due_date) : null;
-        return itemDate && itemDate <= new Date(advancedFilters.end_date);
-      });
-    }
-    return list;
-  }, [baseItems, debouncedSearch, advancedFilters]);
+    return baseItems;
+  }, [baseItems]);
 
   const filteredItems = statusFilter
     ? searchFilteredItems.filter((item) => {
@@ -542,8 +589,9 @@ function Tasks() {
 
         <div className="task-btns">
           <div className="all-time">
-            <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}>
+            <select value={timeFilter} onChange={(e) => { setTimeFilter(e.target.value); setPage(1); }}>
               <option value="">All Time</option>
+              <option value="today">Today</option>
               <option value="7">Last 7 Days</option>
               <option value="30">Last 30 Days</option>
               <option value="180">Last 6 Months</option>
@@ -565,20 +613,17 @@ function Tasks() {
 
       {isWidgetEnabled("tasks", "stats_cards") && (
         <DraggableStatusBadges
-          badges={[
-            { id: "due_today", label: "Due Today", count: dueTodayCount, className: "DueToday", dotColor: "#EF4444" },
-            { id: "pending", label: "Pending", count: pendingCount, className: "Pending" },
-            { id: "in_progress", label: "In Progress", count: inProgressCount, className: "InProgress" },
-            { id: "paused", label: "Paused", count: pausedCount, className: "Paused" },
-            { id: "submitted", label: "Submitted", count: submittedCount, className: "Submitted" },
-            { id: "reopened", label: "Reopened", count: reopenedCount, className: "Reopened" },
-            { id: "transferred", label: "Transferred", count: transferredCount, className: "Transferred" },
-            { id: "approved", label: "Approved", count: approvedCount, className: "Approved" },
-            { id: "rejected", label: "Declined", count: rejectedCount, className: "Rejected" },
-            { id: "abandoned", label: "Abandoned", count: abandonedCount, className: "Abandoned", dotColor: "#DC2626" },
-            { id: "", label: "All", count: allCount, className: "All" },
-          ]}
-          activeStatus={statusFilter}
+        badges={[
+          { id: "", label: "All", count: allCount, className: "All" },
+          { id: "pending", label: "Pending", count: pendingCount, className: "Pending" },
+          { id: "in_progress", label: "In Progress", count: inProgressCount, className: "InProgress" },
+          { id: "submitted", label: "Submitted", count: submittedCount, className: "Submitted" },
+          { id: "approved", label: "Approved", count: approvedCount, className: "Approved" },
+          { id: "paused", label: "Paused", count: pausedCount, className: "Paused" },
+          { id: "rejected", label: "Declined", count: rejectedCount, className: "Rejected" },
+          { id: "abandoned", label: "Abandoned", count: abandonedCount, className: "Abandoned", dotColor: "#DC2626" },
+        ]}
+        activeStatus={statusFilter}
           onSelectStatus={selectStatusFilter}
           storageKey="pms_tasks_status_order"
           containerClassName="task-progress"
@@ -603,12 +648,22 @@ function Tasks() {
       <div className="container">
         <div className="table-header1">
           <div style={{ fontSize: 12, fontWeight: 600 }}>ID</div>
-          <div>Assigned by</div>
-          <div className="task-name-column">Task Name</div>
-          <div className="status-column">Status</div>
+          <div style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("assigned_by")}>
+            Assigned by
+          </div>
+          <div className="task-name-column" style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("title")}>
+            Task Name
+          </div>
+          <div className="status-column" style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("status")}>
+            Status
+          </div>
           <div>Progress</div>
-          <div className="priority-column">Priority</div>
-          <div className="date-column">Start & Due Date</div>
+          <div className="priority-column" style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("priority")}>
+            Priority
+          </div>
+          <div className="date-column" style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("due_date")}>
+            Start & Due Date
+          </div>
           <div>Action</div>
         </div>
 
@@ -661,17 +716,23 @@ function Tasks() {
                     <TaskMultiStatusBadges item={item} />
                   </div>
                   
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
-                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>
-                      {item.deliverables_progress || 0}%
-                    </div>
-                    <div className="progress-bar-track">
-                      <div className="progress-bar-fill" style={{ width: `${item.deliverables_progress || 0}%` }}></div>
-                    </div>
-                    <div style={{ fontSize: "12px", color: "#6b7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {item.approved_deliverables || 0}/{item.total_deliverables || 0} subtasks
-                    </div>
-                  </div>
+                  {(() => {
+                    const isTerminal = ["completed", "approved", "submitted", "submitted_late", "done"].includes((item.status || "").toLowerCase());
+                    const prog = isTerminal ? 100 : (item.deliverables_progress || 0);
+                    return (
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+                        <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>
+                          {prog}%
+                        </div>
+                        <div className="progress-bar-track">
+                          <div className="progress-bar-fill" style={{ width: `${prog}%` }}></div>
+                        </div>
+                        <div style={{ fontSize: "12px", color: "#6b7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {item.approved_deliverables || 0}/{item.total_deliverables || 0} subtasks
+                        </div>
+                      </div>
+                    );
+                  })()}
                   
                   <div className="col-priority">
                     <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
@@ -734,7 +795,7 @@ function Tasks() {
                                 <XCircle size={16} />
                               </button>
                             )}
-                            {canUserApprove && (item.status === "approved" || item.status === "submitted" || item.status === "reopened") && (
+                            {canUserApprove && (item.status === "approved" || item.status === "submitted" || item.status === "reopened" || item.status === "abandoned") && (
                               <button
                                 className="action-icon-btn"
                                 title="Reopen Task"
@@ -770,27 +831,27 @@ function Tasks() {
                           return (
                             <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#92400E", fontSize: "11px", fontWeight: 600, border: "1px solid #F59E0B" }}>
                               <Lock size={12} />
-                              On Hold
+                              Paused by Assigner
                             </span>
                           );
                         }
                         if (item.status === "pending") {
                           return (
-                            <button className="action-icon-btn action-submit" title="Acknowledge Task" onClick={() => handleAcknowledge(item.id)}>
+                            <button className="action-icon-btn action-submit" title="Acknowledge Task" onClick={(e) => handleAcknowledge(e, item.id)}>
                               <CheckCircle2 size={16} />
                             </button>
                           );
                         }
                         if (item.status === "paused" && canUserPauseResume(item, currentUser)) {
                           return (
-                            <button className="action-icon-btn action-submit" title="Continue Task" onClick={() => handleContinue(item.id)}>
+                            <button className="action-icon-btn action-submit" title="Continue Task" onClick={(e) => handleContinue(e, item.id)}>
                               <Play size={16} />
                             </button>
                           );
                         }
-                        if (item.status === "in_progress" && !item.assigner_paused && canUserPauseResume(item, currentUser)) {
+                        if (["in_progress", "submitted"].includes(item.status?.toLowerCase()) && !item.assigner_paused && canUserPauseResume(item, currentUser)) {
                           return (
-                            <button className="action-icon-btn action-submit" title="Pause Task" onClick={() => handlePause(item.id)} style={{ color: "#D97706" }}>
+                            <button className="action-icon-btn action-submit" title="Pause Task" onClick={(e) => handlePause(e, item.id)} style={{ color: "#D97706" }}>
                               <Pause size={16} />
                             </button>
                           );
@@ -800,9 +861,9 @@ function Tasks() {
                             <div style={{ position: "relative", display: "inline-flex" }}>
                               <button
                                 className="action-icon-btn action-submit"
-                                title={item.pending_deliverables_count > 0 ? "Submit all subtasks first" : item.status === "paused" || item.assigner_paused ? "Task is paused/on-hold. Resume first." : "Submit Task"}
+                                title={item.pending_deliverables_count > 0 ? "Submit all subtasks first" : item.status === "paused" || item.assigner_paused ? "Task is paused. Resume first." : "Submit Task"}
                                 disabled={item.pending_deliverables_count > 0 || item.status === "paused" || item.assigner_paused}
-                                onClick={() => !item.pending_deliverables_count && item.status !== "paused" && !item.assigner_paused && setSubmitTaskModal({ open: true, task: item })}
+                                onClick={(e) => { e.stopPropagation(); !item.pending_deliverables_count && item.status !== "paused" && !item.assigner_paused && setSubmitTaskModal({ open: true, task: item }); }}
                                 style={item.pending_deliverables_count > 0 || item.status === "paused" || item.assigner_paused ? { opacity: 0.4, cursor: "not-allowed" } : {}}
                               >
                                 <LuSend size={16} />
@@ -812,11 +873,24 @@ function Tasks() {
                         }
                         return null;
                       })()}
+                      {(() => {
+                        const canDelete = ["admin", "manager", "super_admin"].includes(currentUser?.role) || (item.created_by && Number(item.created_by) === Number(currentUser?.id)) || (item.assigned_by && Number(item.assigned_by) === Number(currentUser?.id));
+                        if (!canDelete) return null;
+                        return (
+                          <button
+                            className="action-icon-btn action-delete"
+                            title="Delete Task"
+                            onClick={(e) => handleDelete(e, item.id)}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        );
+                      })()}
                       {!["approved", "rejected", "pending", "submitted"].includes(item.status) && !item.is_transferor && (
                         <button
                           className="action-icon-btn"
                           title="Transfer Task"
-                          onClick={() => setTransferDialog({ open: true, task: item })}
+                          onClick={(e) => { e.stopPropagation(); setTransferDialog({ open: true, task: item }); }}
                           style={{ color: "#2563EB", cursor: "pointer" }}
                         >
                           <Users size={16} />
@@ -841,7 +915,16 @@ function Tasks() {
         />
       )}
 
-
+      <ConfirmModal
+        isOpen={deleteConfirmOpen}
+        onClose={() => { setDeleteConfirmOpen(false); setDeleteTargetId(null); }}
+        onConfirm={confirmDelete}
+        title="Confirm Deletion"
+        message="Are you sure you want to delete this task? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        danger
+      />
 
       <SubmitTaskModal
         key={`tasks-submit-${submitTaskModal.task?.id || "none"}`}
