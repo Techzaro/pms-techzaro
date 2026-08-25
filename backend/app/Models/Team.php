@@ -24,6 +24,12 @@ class Team extends Model
         'created_by',
         'status',
         'is_draft',
+        'working_hours',
+    ];
+
+    protected $casts = [
+        'is_draft'      => 'boolean',
+        'working_hours' => 'array',
     ];
 
     /** Projects owned by this team. */

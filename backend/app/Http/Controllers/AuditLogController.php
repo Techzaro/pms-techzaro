@@ -102,11 +102,28 @@ class AuditLogController extends Controller
             'search' => 'nullable|string|max:200',
             'sort_field' => 'nullable|string|in:created_at,module,action,status',
             'sort_order' => 'nullable|string|in:asc,desc',
+            'timezone' => 'nullable|string',
         ]);
+
+        $timezone = $request->input('timezone');
+        if (empty($timezone) || !in_array($timezone, \DateTimeZone::listIdentifiers(), true)) {
+            $user = $request->user();
+            $timezone = $user?->timezone;
+            if (empty($timezone) && $user?->organization_id) {
+                try {
+                    $timezone = \App\Models\Master\Organization::where('id', $user->organization_id)->value('default_timezone');
+                } catch (\Throwable $e) {
+                    // Fallback
+                }
+            }
+            if (empty($timezone)) {
+                $timezone = config('app.timezone', 'UTC');
+            }
+        }
 
         $paginator = $this->auditService->getLogs($filters, 10000);
         $logs = $paginator instanceof \Illuminate\Pagination\AbstractPaginator ? $paginator->getCollection() : $paginator;
 
-        return $this->exportService->exportExcel($logs);
+        return $this->exportService->exportExcel($logs, $timezone);
     }
 }

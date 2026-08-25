@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { authToken } from "../utils/auth";
+import { authToken, getUser } from "../utils/auth";
 import API_URL from "../config/api";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { useSubmit } from "../hooks/useSubmit";
@@ -20,6 +20,13 @@ import useDraftGuard from "../hooks/useDraftGuard";
 import useAutoSave from "../hooks/useAutoSave";
 import AutoSaveIndicator from "./AutoSaveIndicator";
 import RichTextEditor from "./RichTextEditor";
+import { Globe, AlertTriangle } from "lucide-react";
+import {
+  convertToLocal,
+  convertToUTC,
+  getTimezoneOffsetDisplay,
+  checkWorkingHoursCompliance,
+} from "../utils/timezoneUtils";
 import "./Event.css";
 
 const TYPE_MAP = {
@@ -82,6 +89,9 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
   const [assignedUserIds, setAssignedUserIds] = useState([]);
   const [isGlobal, setIsGlobal] = useState(false);
   const [draftId, setDraftId] = useState(null);
+  const [timezonesList, setTimezonesList] = useState([]);
+  const [enforceOrgHours, setEnforceOrgHours] = useState(false);
+
   const getLocalDateStr = (d) => {
     const pad = (n) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -98,6 +108,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
     eventType: "Meeting",
     eventTypeCustom: "",
     allDay: false,
+    eventTimezone: getUser()?.timezone || "UTC",
   });
 
   const autoSaveData = useMemo(() => {
@@ -113,6 +124,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
       event_type: finalType || "Meeting",
       event_type_custom: formData.eventTypeCustom,
       all_day: formData.allDay,
+      event_timezone: formData.eventTimezone,
       assigned_user_ids: assignedUserIds,
       is_global: isGlobal,
     };
@@ -145,6 +157,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
         event_type: finalType || "Meeting",
         event_type_custom: formData.eventTypeCustom,
         all_day: formData.allDay,
+        event_timezone: formData.eventTimezone,
         assigned_user_ids: assignedUserIds,
         is_global: isGlobal,
       };
@@ -189,6 +202,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
         eventType: isKnownType || "__custom__",
         eventTypeCustom: isKnownType ? "" : (editEvent.type || ""),
         allDay: editEvent.all_day || false,
+        eventTimezone: editEvent.event_timezone || editEvent.timezone || getUser()?.timezone || "UTC",
       });
       setAssignedUserIds(editEvent.assigned_user_ids || []);
       setIsGlobal(Boolean(editEvent.is_global));
@@ -204,6 +218,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
         eventType: "Meeting",
         eventTypeCustom: "",
         allDay: false,
+        eventTimezone: getUser()?.timezone || "UTC",
       });
       setAssignedUserIds([]);
       setIsGlobal(false);
@@ -222,7 +237,59 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
       .then((res) => (res.ok ? res.json() : { users: [] }))
       .then((data) => setUsers(Array.isArray(data) ? data : (data.users || [])))
       .catch(() => setUsers([]));
+
+    // Fetch timezones list & Organization regional enforcement policy
+    fetch(`${API_URL}/regional-settings/timezones`, { headers: { Authorization: `Bearer ${token}` }, skipLoader: true })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.data && Array.isArray(d.data)) setTimezonesList(d.data);
+      })
+      .catch(() => {});
+
+    fetch(`${API_URL}/organization-settings/regional`, { headers: { Authorization: `Bearer ${token}` }, skipLoader: true })
+      .then((r) => r.json())
+      .then((d) => {
+        const reg = d?.data || d?.regional_settings;
+        if (reg && reg.enforce_working_hours !== undefined) {
+          setEnforceOrgHours(Boolean(reg.enforce_working_hours));
+        }
+      })
+      .catch(() => {});
   }, [isOpen]);
+
+  // Compute UTC strings and check Working Hours Compliance (SRS Sec 11, 13, 15, 16)
+  const startDateTimeUtc = useMemo(() => {
+    if (!formData.startDate) return null;
+    const time = formData.allDay ? "00:00:00" : `${formData.startTime}:00`;
+    return convertToUTC(`${formData.startDate} ${time}`, formData.eventTimezone || "UTC");
+  }, [formData.startDate, formData.startTime, formData.allDay, formData.eventTimezone]);
+
+  const endDateTimeUtc = useMemo(() => {
+    if (!formData.startDate) return null;
+    const endD = formData.hasEndDate ? formData.endDate : formData.startDate;
+    const endT = formData.hasEndDate ? formData.endTime : (formData.allDay ? "23:59:59" : `${formData.startTime}:00`);
+    return convertToUTC(`${endD} ${endT}`, formData.eventTimezone || "UTC");
+  }, [formData.startDate, formData.endDate, formData.endTime, formData.startTime, formData.hasEndDate, formData.allDay, formData.eventTimezone]);
+
+  const participantWarnings = useMemo(() => {
+    if (formData.allDay || !startDateTimeUtc || isGlobal) return [];
+    const warnings = [];
+    const selectedUsers = users.filter((u) => assignedUserIds.includes(u.id));
+    selectedUsers.forEach((u) => {
+      const uTz = u.timezone || "UTC";
+      const comp = checkWorkingHoursCompliance(startDateTimeUtc, endDateTimeUtc, u.working_hours, uTz);
+      if (!comp.isCompliant) {
+        warnings.push({
+          user: u,
+          reason: comp.reason,
+          localTime: comp.localTimeFormatted,
+          localDay: comp.localDay,
+          scheduleText: comp.scheduleText,
+        });
+      }
+    });
+    return warnings;
+  }, [formData.allDay, startDateTimeUtc, endDateTimeUtc, isGlobal, users, assignedUserIds]);
 
   // Restore draft data when opened from DraftCenter
   useEffect(() => {
@@ -302,6 +369,14 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
       return;
     }
 
+    // Check organization policy enforcement for working hours (SRS Sec 11, 15, 16)
+    if (enforceOrgHours && participantWarnings.length > 0) {
+      notify.error(
+        `Cannot schedule event: Organization strictly enforces working hours policy, and ${participantWarnings.length} participant(s) are outside their scheduled hours.`
+      );
+      return;
+    }
+
     await run(async () => {
       try {
         // Build start datetime; all-day events use 00:00
@@ -322,6 +397,8 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
           color: COLOR_MAP[TYPE_MAP[formData.eventType]] || "#6b7280",
           start_date: startDateTime,
           end_date: endDateTime,
+          event_timezone: formData.eventTimezone || "UTC",
+          timezone: formData.eventTimezone || "UTC",
           all_day: formData.allDay,
           is_global: isGlobal,
           assigned_user_ids: isGlobal ? [] : assignedUserIds,
@@ -490,6 +567,29 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
               </div>
             )}
 
+            {/* Event Timezone Selector (SRS Sec 11) */}
+            <div style={{ marginBottom: 12 }}>
+              <label className="event-label" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <Globe size={13} style={{ color: "var(--color-primary, #4f46e5)" }} /> Event Timezone (IANA)
+              </label>
+              <select
+                className="event-input"
+                value={formData.eventTimezone}
+                onChange={(e) => handleChange("eventTimezone", e.target.value)}
+                style={{ marginBottom: 0 }}
+              >
+                {timezonesList.length > 0 ? (
+                  timezonesList.map((tz) => (
+                    <option key={tz} value={tz}>{tz} {getTimezoneOffsetDisplay(tz)}</option>
+                  ))
+                ) : (
+                  ['UTC', 'America/New_York', 'America/Chicago', 'America/Los_Angeles', 'Europe/London', 'Europe/Berlin', 'Asia/Dubai', 'Asia/Karachi', 'Asia/Kolkata', 'Asia/Tokyo'].map((tz) => (
+                    <option key={tz} value={tz}>{tz} {getTimezoneOffsetDisplay(tz)}</option>
+                  ))
+                )}
+              </select>
+            </div>
+
             <label className="event-label">Event Type</label>
             {formData.eventType === "__custom__" ? (
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
@@ -553,6 +653,77 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
                   onChange={(ids) => { setIsDirty(true); setAssignedUserIds(ids); }}
                   placeholder="Select users to assign"
                 />
+
+                {/* Selected Attendees Working Hours & Local Event Time (SRS Sec 13 & 15) */}
+                {assignedUserIds.length > 0 && startDateTimeUtc && (
+                  <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+                    {users
+                      .filter((u) => assignedUserIds.includes(u.id))
+                      .map((u) => {
+                        const uTz = u.timezone || "UTC";
+                        const comp = checkWorkingHoursCompliance(startDateTimeUtc, endDateTimeUtc, u.working_hours, uTz);
+                        return (
+                          <div
+                            key={u.id}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              padding: "4px 8px",
+                              borderRadius: 6,
+                              background: comp.isCompliant ? "var(--bg-hover, #f8fafc)" : "rgba(239, 68, 68, 0.08)",
+                              border: `1px solid ${comp.isCompliant ? "var(--border-light, #e2e8f0)" : "rgba(239, 68, 68, 0.3)"}`,
+                              fontSize: 11,
+                              flexWrap: "wrap",
+                              gap: 4,
+                            }}
+                          >
+                            <span style={{ fontWeight: 600 }}>{u.name}</span>
+                            <span style={{ color: "var(--text-secondary)" }}>
+                              Local: <strong>{comp.localTimeFormatted}</strong> ({uTz})
+                            </span>
+                            <span style={{ color: comp.isCompliant ? "var(--color-success, #10b981)" : "var(--color-danger, #ef4444)", fontWeight: 600 }}>
+                              {comp.isCompliant ? `✓ ${comp.scheduleText}` : `⚠ Outside Hours (${comp.scheduleText})`}
+                            </span>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* WORKING HOURS WARNING BANNER (SRS Sec 15 & 16) */}
+            {participantWarnings.length > 0 && (
+              <div
+                style={{
+                  marginTop: 14,
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  background: enforceOrgHours ? "rgba(239, 68, 68, 0.1)" : "rgba(245, 158, 11, 0.1)",
+                  border: `1px solid ${enforceOrgHours ? "#ef4444" : "#f59e0b"}`,
+                  color: enforceOrgHours ? "#b91c1c" : "#b45309",
+                  fontSize: 12,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 700, marginBottom: 4 }}>
+                  <AlertTriangle size={15} />
+                  {enforceOrgHours
+                    ? "Strict Organization Policy: Outside Working Hours"
+                    : "Working Hours Warning (Non-Blocking)"}
+                </div>
+                <ul style={{ margin: 0, paddingLeft: 16, display: "flex", flexDirection: "column", gap: 2 }}>
+                  {participantWarnings.map((w, idx) => (
+                    <li key={idx}>
+                      <strong>{w.user.name}</strong>'s local time will be <strong>{w.localTime}</strong> ({w.localDay}), outside their working hours of <em>{w.scheduleText}</em>.
+                    </li>
+                  ))}
+                </ul>
+                {enforceOrgHours && (
+                  <p style={{ margin: "6px 0 0 0", fontSize: 11, fontWeight: 600 }}>
+                    ⛔ Organization policy strictly enforces working hours. Submission blocked.
+                  </p>
+                )}
               </div>
             )}
 

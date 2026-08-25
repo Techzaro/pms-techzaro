@@ -5,6 +5,7 @@ import autoTable from "jspdf-autotable";
 import DonutChart from "../components/DonutChart";
 import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import { useEscapeKey } from "../hooks/useEscapeKey";
+import { getUserTimezone, convertToLocal } from "../utils/timezoneUtils";
 import "../components/Charts.css";
 import "../pages/ExportReport.css";
 
@@ -72,9 +73,9 @@ function TeamExportReport({ isOpen, onClose, team }) {
   const totalPending = team.pending || 0;
   const totalOverdue = team.overdue || 0;
 
-  const now = new Date();
-  const genDate = now.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-  const genTime = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+  const userTz = getUserTimezone();
+  const genDate = convertToLocal(new Date().toISOString(), userTz, "MMMM DD, YYYY");
+  const genTime = convertToLocal(new Date().toISOString(), userTz, "hh:mm A");
 
   const dateRangeLabels = {
     all: "All Time", today: "Today", week: "This Week", month: "This Month",
@@ -368,9 +369,8 @@ function TeamExportReport({ isOpen, onClose, team }) {
       doc.setFontSize(5); doc.setFont("helvetica", "bold"); doc.setTextColor(107, 114, 128);
       doc.text("Techxaro", M + 8.5, fY + 4);
       doc.setFontSize(4.5); doc.setFont("helvetica", "normal"); doc.setTextColor(156, 163, 175);
-      doc.text("PMS Portal", M + 8.5, fY + 7.5);
-      doc.text(`Generated Date:   ${genDate}  |  Generated Time:   ${genTime}`, M + 38, fY + 4);
-      doc.text(`Report Type:  Team Performance Report — ${team.name || "Team"}`, PW - M - 50, fY + 4);
+      doc.text(`Generated Date: ${genDate} | Generated Time: ${genTime} (${userTz})`, M + 38, fY + 4);
+      doc.text(`Timezone: ${userTz} | Report: Team Performance — ${team.name || "Team"}`, PW - M - 60, fY + 4);
       doc.text("Page 1 of 1", PW - M, fY + 7.5, { align: "right" });
 
       doc.save(`Team-Performance-Report-${(team.name || "team").replace(/\s+/g, "-")}.pdf`);
@@ -658,8 +658,8 @@ function TeamExportReport({ isOpen, onClose, team }) {
                   <span style={{ fontWeight: 600, color: "var(--text-secondary)" }}>Techxaro</span>
                   <span>PMS Portal</span>
                 </div>
-                <div>Generated Date:  {genDate} | Generated Time:  {genTime}</div>
-                <div>Report Type:  Team Performance Report — {team.name} | Page 1 of 1</div>
+                <div>Generated Date: {genDate} | Generated Time: {genTime} ({userTz})</div>
+                <div>Timezone: {userTz} | Report Type: Team Performance Report — {team.name} | Page 1 of 1</div>
               </div>
 
               {/* ═══ ACTIONS ═══ */}

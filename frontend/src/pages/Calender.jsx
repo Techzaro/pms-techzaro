@@ -16,23 +16,30 @@ import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { useUnifiedSummary } from "../hooks/useUnifiedSummary";
 import "../pages/Calender.css";
 import "../components/Event.css";
-import { ChevronLeft, ChevronRight, Search, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, Plus, Calendar as CalendarIcon, Clock, Globe } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import Event from "../components/Event";
 import EventInfoPopup from "../components/EventInfoPopup";
 import ItemDetailPopup from "../components/ItemDetailPopup";
 import DayPopup from "../components/DayPopup";
-import { formatEventDateTime } from "../utils/formatDateTime";
+import { formatLocalDate, convertToLocal, getUserTimezone, getTimezoneOffsetDisplay } from "../utils/timezoneUtils";
 import { authToken, getCurrentRole, getUser } from "../utils/auth";
 import API_URL from "../config/api";
 import { publish } from "../utils/eventBus";
 import { showSuccessMessage } from "../utils/notify";
 import { DEFAULT_EVENT_COLOR, TYPE_COLORS, TYPE_LABELS } from "../utils/calendarConstants";
 
+const CALENDAR_VIEWS = [
+  { key: "Day", label: "Daily" },
+  { key: "Week", label: "Weekly" },
+  { key: "Month", label: "Monthly" },
+  { key: "Upcoming", label: "Upcoming" },
+];
+
 /** Formats a Date to YYYY-MM-DD for API parameters */
 function formatDate(d) {
-    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 }
 
 /** Formats a Date to a display string like "June 29, 2026" */
@@ -96,6 +103,8 @@ function Calender() {
   const location = useLocation();
   const currentRole = getCurrentRole();
   const currentUser = getUser(currentRole);
+  const userTimezone = getUserTimezone() || "UTC";
+
   // Only admins and managers can create/edit/delete events
   const canManageEvents = ["admin", "manager"].includes(currentRole);
 
@@ -109,6 +118,12 @@ function Calender() {
     if (viewMode === "Week") {
       const start = getWeekStart(currentDate);
       const end = getWeekEnd(currentDate);
+      return { from: formatDate(start), to: formatDate(end) };
+    }
+    if (viewMode === "Upcoming") {
+      const start = new Date();
+      const end = new Date();
+      end.setMonth(end.getMonth() + 3);
       return { from: formatDate(start), to: formatDate(end) };
     }
     const d = formatDate(currentDate);
@@ -174,6 +189,7 @@ function Calender() {
 
   // Navigate to previous month/week/day
   const handlePrev = () => {
+    if (viewMode === "Upcoming") return;
     const d = new Date(currentDate);
     if (viewMode === "Month") d.setMonth(d.getMonth() - 1);
     else if (viewMode === "Week") d.setDate(d.getDate() - 7);
@@ -182,6 +198,7 @@ function Calender() {
   };
 
   const handleNext = () => {
+    if (viewMode === "Upcoming") return;
     const d = new Date(currentDate);
     if (viewMode === "Month") d.setMonth(d.getMonth() + 1);
     else if (viewMode === "Week") d.setDate(d.getDate() + 7);
@@ -231,17 +248,20 @@ function Calender() {
     setShowEventModal(true);
   };
 
-  // Filter events that fall within a given date (handles multi-day events)
+  // Filter events that fall within a given date using user local timezone (SRS Sec 20)
   const getEventsForDate = (date) => {
     const dateStr = formatDate(date);
     return events.filter((ev) => {
-      const start = ev.start_date?.split("T")[0];
-      const end = ev.end_date?.split("T")[0] || start;
+      const start = formatLocalDate(ev.start_date, userTimezone, "YYYY-MM-DD");
+      const end = ev.end_date ? formatLocalDate(ev.end_date, userTimezone, "YYYY-MM-DD") : start;
       return dateStr >= start && dateStr <= end;
     });
   };
 
   const getHeaderTitle = () => {
+    if (viewMode === "Upcoming") {
+      return "Upcoming Agenda & Deadlines";
+    }
     if (viewMode === "Month") {
       return currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
     }
@@ -280,6 +300,25 @@ function Calender() {
     return [new Date(currentDate)];
   }, [currentDate, viewMode]);
 
+  // Group events for Upcoming View (SRS Sec 20)
+  const upcomingGrouped = useMemo(() => {
+    if (viewMode !== "Upcoming") return [];
+    const sorted = [...events].sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
+    const groups = {};
+    sorted.forEach((ev) => {
+      const dayKey = formatLocalDate(ev.start_date, userTimezone, "YYYY-MM-DD");
+      if (!groups[dayKey]) {
+        groups[dayKey] = {
+          dateStr: dayKey,
+          displayDate: formatLocalDate(ev.start_date, userTimezone, "dddd, MMMM DD, YYYY"),
+          items: [],
+        };
+      }
+      groups[dayKey].items.push(ev);
+    });
+    return Object.values(groups);
+  }, [events, viewMode, userTimezone]);
+
   const { today: unifiedToday, upcoming: unifiedUpcoming } = useUnifiedSummary();
   const todayEvents = unifiedToday;
   const upcomingEvents = useMemo(() => {
@@ -296,7 +335,7 @@ function Calender() {
           <div className="calendar-header">
             <div>
               <h1>Calendar</h1>
-              <p>Manage schedules, deadlines and upcoming tasks.</p>
+              <p>Manage schedules, deadlines and upcoming tasks in your local timezone ({userTimezone}).</p>
             </div>
             <div className="calendar-header-actions">
               <button className="today-btn" onClick={handleToday}>Today</button>
@@ -313,23 +352,49 @@ function Calender() {
 
             <div className="calendar-topbar">
               <div className="calendar-month">
-                <button onClick={handlePrev} style={{ border: "none", background: "none", cursor: "pointer", padding: 4 }}>
-                  <ChevronLeft size={20} color="var(--text-secondary)" />
-                </button>
+                {viewMode !== "Upcoming" && (
+                  <button onClick={handlePrev} style={{ border: "none", background: "none", cursor: "pointer", padding: 4 }}>
+                    <ChevronLeft size={20} color="var(--text-secondary)" />
+                  </button>
+                )}
                 <h2>{getHeaderTitle()}</h2>
-                <button onClick={handleNext} style={{ border: "none", background: "none", cursor: "pointer", padding: 4 }}>
-                  <ChevronRight size={20} color="var(--text-secondary)" />
-                </button>
+                {viewMode !== "Upcoming" && (
+                  <button onClick={handleNext} style={{ border: "none", background: "none", cursor: "pointer", padding: 4 }}>
+                    <ChevronRight size={20} color="var(--text-secondary)" />
+                  </button>
+                )}
               </div>
               <div className="calendar-top-actions">
+                {/* Active Timezone Indicator (SRS Sec 20) */}
+                <div
+                  className="calendar-tz-indicator"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "7px 12px",
+                    borderRadius: "12px",
+                    background: "var(--bg-hover, #f1f5f9)",
+                    border: "1px solid var(--border-color, #e2e8f0)",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    color: "var(--color-primary, #4f46e5)",
+                    whiteSpace: "nowrap",
+                  }}
+                  title={`Active timezone: ${userTimezone} ${getTimezoneOffsetDisplay(userTimezone)}. All schedule times are rendered in your local time.`}
+                >
+                  <Globe size={14} style={{ color: "var(--color-primary, #4f46e5)", flexShrink: 0 }} />
+                  <span>Timezone: <strong>{userTimezone}</strong> {getTimezoneOffsetDisplay(userTimezone)}</span>
+                </div>
+
                 <div className="calendar-tabs">
-                  {["Month", "Week", "Day"].map((item) => (
+                  {CALENDAR_VIEWS.map((item) => (
                     <button
-                      key={item}
-                      className={item === viewMode ? "active-tab" : ""}
-                      onClick={() => setViewMode(item)}
+                      key={item.key}
+                      className={item.key === viewMode ? "active-tab" : ""}
+                      onClick={() => setViewMode(item.key)}
                     >
-                      {item}
+                      {item.label}
                     </button>
                   ))}
                 </div>
@@ -348,6 +413,70 @@ function Calender() {
             {loading ? (
               <div style={{ padding: "60px 20px", textAlign: "center", color: "var(--text-muted)" }}>
                 Loading events...
+              </div>
+            ) : viewMode === "Upcoming" ? (
+              /* Dedicated Upcoming View (SRS Sec 20) */
+              <div className="calendar-upcoming-view" style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "16px", minHeight: 400 }}>
+                {upcomingGrouped.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)" }}>
+                    No upcoming events or task deadlines in the next 3 months.
+                  </div>
+                ) : (
+                  upcomingGrouped.map((group) => (
+                    <div key={group.dateStr} style={{ background: "var(--bg-card)", borderRadius: "10px", border: "1px solid var(--border-light, #e2e8f0)", overflow: "hidden" }}>
+                      <div style={{ padding: "10px 16px", background: "var(--bg-hover, #f8fafc)", borderBottom: "1px solid var(--border-light, #e2e8f0)", fontWeight: 700, fontSize: "14px", color: "var(--text-heading)", display: "flex", alignItems: "center", gap: "8px" }}>
+                        <CalendarIcon size={15} style={{ color: "var(--color-primary, #4f46e5)" }} />
+                        {group.displayDate}
+                      </div>
+                      <div style={{ padding: "10px 16px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                        {group.items.map((ev) => {
+                          const colors = TYPE_COLORS[ev.type] || DEFAULT_EVENT_COLOR;
+                          const sourceIcon = ev.source === "task" ? "📋" : ev.source === "deliverable" ? "📦" : ev.source === "project" ? "🚀" : "📅";
+                          const timeStr = ev.all_day ? "All Day" : convertToLocal(ev.start_date, userTimezone, "hh:mm A");
+                          return (
+                            <div
+                              key={ev.id}
+                              onClick={() => setSelectedItem(ev)}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                padding: "10px 14px",
+                                borderRadius: "8px",
+                                background: colors.bg || "var(--bg-hover)",
+                                border: `1px solid ${colors.border || "var(--border-light)"}`,
+                                cursor: "pointer",
+                                gap: "12px",
+                              }}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                                <span style={{ fontSize: "16px" }}>{sourceIcon}</span>
+                                <div>
+                                  <div style={{ fontWeight: 600, fontSize: "13px", color: colors.text || "var(--text-primary)" }}>
+                                    {ev.title}
+                                  </div>
+                                  {ev.project_title && (
+                                    <div style={{ fontSize: "11px", color: "var(--text-secondary)" }}>
+                                      Project: {ev.project_title}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: "4px" }}>
+                                  <Clock size={12} /> {timeStr}
+                                </span>
+                                <span style={{ fontSize: "11px", fontWeight: 600, background: colors.dot || "var(--color-primary)", color: "#fff", padding: "2px 8px", borderRadius: "10px" }}>
+                                  {TYPE_LABELS[ev.type] || ev.type || "Event"}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             ) : (
               <div className="calendar-grid">
@@ -429,6 +558,7 @@ function Calender() {
               ) : (
                 todayEvents.map((ev) => {
                   const colors = TYPE_COLORS[ev.type] || DEFAULT_EVENT_COLOR;
+                  const timeFormatted = ev.all_day ? "All Day" : convertToLocal(ev.start_date, userTimezone, "hh:mm A");
                   return (
                     <div className="agenda-item" key={ev.id}>
                       <span className="agenda-dot" style={{ background: colors.dot }} />
@@ -442,7 +572,7 @@ function Calender() {
                           {ev.title}
                         </p>
                         <p style={{ margin: "2px 0 0", fontSize: "12px", color: "var(--text-secondary)" }}>
-                          {formatEventDateTime(ev)}
+                          {timeFormatted}
                         </p>
                         <span style={{ fontSize: "11px", color: colors.text, fontWeight: 600 }}>
                           {TYPE_LABELS[ev.type] || ev.type}
@@ -467,6 +597,7 @@ function Calender() {
               ) : (
                 upcomingEvents.map((ev) => {
                   const colors = TYPE_COLORS[ev.type] || DEFAULT_EVENT_COLOR;
+                  const timeFormatted = ev.all_day ? "All Day" : convertToLocal(ev.start_date, userTimezone, "DD MMM, hh:mm A");
                   return (
                     <div className="deadline-item" key={ev.id}>
                       <div style={{ flex: 1 }}>
@@ -479,7 +610,7 @@ function Calender() {
                           {ev.title}
                         </p>
                         <div className="dealine-date" style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-                          <span className="deadline-date" style={{ color: colors.dot, fontSize: "13px" }}>{formatEventDateTime(ev)}</span>
+                          <span className="deadline-date" style={{ color: colors.dot, fontSize: "13px" }}>{timeFormatted}</span>
                           <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>{TYPE_LABELS[ev.type] || ev.type}</span>
                         </div>
                       </div>

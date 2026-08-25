@@ -8,7 +8,7 @@
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useEscapeKey } from "../hooks/useEscapeKey";
-import { formatEventDate, formatEventTime } from "../utils/formatDateTime";
+import { formatLocalDate, convertToLocal, getUserTimezone } from "../utils/timezoneUtils";
 
 /** Icon mapping for each item source type */
 const SOURCE_ICONS = {
@@ -60,30 +60,51 @@ function ItemDetailPopup({ item, role, onClose, onEdit }) {
     navigate(`${path}?from=${from}`, { state: { from } });
   };
 
-  /** Format a date string using the shared formatEventDate utility */
+  const viewerTz = getUserTimezone() || "UTC";
+
+  /** Format a date string using timezoneUtils */
   const formatDateStr = (dateStr) => {
     if (!dateStr) return "—";
-    return formatEventDate({ start_date: dateStr });
+    return formatLocalDate(dateStr, viewerTz, "DD MMM, YYYY");
   };
 
   const formatTimeStr = (dateStr) => {
     if (!dateStr) return "—";
-    return new Date(dateStr).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    return convertToLocal(dateStr, viewerTz, "hh:mm A");
   };
 
   /** Render metadata rows specific to each source type */
   const renderMeta = () => {
     switch (source) {
       case "manual": {
-        const time = item.all_day ? "All Day" : formatTimeStr(item.start_date);
-        const endTime = item.end_date && !item.all_day ? formatTimeStr(item.end_date) : null;
+        const isAllDay = Boolean(item.all_day);
+        const time = isAllDay ? "All Day" : formatTimeStr(item.start_date);
+        const endTime = item.end_date && !isAllDay ? formatTimeStr(item.end_date) : null;
         const assignedNames = item.assigned_users && item.assigned_users.length > 0
           ? item.assigned_users.map((u) => u.name).join(", ")
           : item.is_global ? "All Users" : null;
+
+        const origTz = item.event_timezone || item.timezone;
+        const hasDualTz = Boolean(origTz && origTz !== viewerTz);
+        const origTime = origTz && !isAllDay ? convertToLocal(item.start_date, origTz, "hh:mm A") : null;
+        const origEndTime = origTz && !isAllDay && item.end_date ? convertToLocal(item.end_date, origTz, "hh:mm A") : null;
+
         return (
           <>
             <MetaRow label="Date" value={formatDateStr(item.start_date)} />
-            <MetaRow label="Time" value={endTime ? `${time} - ${endTime}` : time} />
+            <MetaRow
+              label="Time"
+              value={
+                <div>
+                  <div>{endTime ? `${time} - ${endTime}` : time} <span style={{ fontSize: 11, color: "var(--color-primary, #4f46e5)" }}>({viewerTz})</span></div>
+                  {hasDualTz && (
+                    <div style={{ fontSize: 11, color: "var(--text-muted, #64748b)", marginTop: 2 }}>
+                      Original: {origEndTime ? `${origTime} - ${origEndTime}` : origTime} ({origTz})
+                    </div>
+                  )}
+                </div>
+              }
+            />
             {item.description && <MetaRow label="Description" value={item.description} />}
             {assignedNames && <MetaRow label="Assigned To" value={assignedNames} />}
             <MetaRow label="Created By" value={item.creator_name || item.user_name || "—"} />

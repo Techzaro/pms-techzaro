@@ -97,6 +97,7 @@ class TeamController extends Controller
             'team_lead_id' => 'nullable|integer|exists:users,id',
             'status' => 'nullable|string|max:50',
             'is_draft' => 'nullable|boolean',
+            'working_hours' => 'nullable|array',
         ], [
             'member_ids.required' => 'At least one team member is required.',
             'member_ids.min' => 'At least one team member is required.',
@@ -118,6 +119,7 @@ class TeamController extends Controller
             'created_by' => $user->id,
             'status' => $isDraft ? 'draft' : ($validated['status'] ?? 'active'),
             'is_draft' => $isDraft,
+            'working_hours' => $validated['working_hours'] ?? null,
         ]);
 
         if (!empty($validated['member_ids'])) {
@@ -217,6 +219,7 @@ class TeamController extends Controller
             'member_ids.*' => 'integer|exists:users,id',
             'leader_id' => 'nullable|integer|exists:users,id',
             'team_lead_id' => 'nullable|integer|exists:users,id',
+            'working_hours' => 'nullable|array',
         ], [
             'member_ids.required' => 'At least one team member is required.',
             'member_ids.min' => 'At least one team member is required.',
@@ -235,11 +238,16 @@ class TeamController extends Controller
         $descriptionChanged = ($oldDescription ?? '') !== ($validated['description'] ?? '');
         $leaderChanged = (int) $oldLeaderId !== (int) $newLeaderId;
 
-        $team->update([
+        $teamUpdateData = [
             'name' => $validated['name'],
             'description' => $validated['description'] ?? null,
             'leader_id' => $newLeaderId,
-        ]);
+        ];
+        if (array_key_exists('working_hours', $validated)) {
+            $teamUpdateData['working_hours'] = $validated['working_hours'];
+        }
+
+        $team->update($teamUpdateData);
 
         $newMemberIds = [];
         $removedMemberIds = [];
@@ -843,4 +851,75 @@ class TeamController extends Controller
 
         return response()->json(['message' => 'Team deleted successfully']);
     }
+
+    /**
+     * Get working hours for a specific team.
+     */
+    public function getWorkingHours(Team $team)
+    {
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'team_id'       => $team->id,
+                'team_name'     => $team->name,
+                'working_hours' => $team->working_hours,
+            ],
+            'working_hours' => $team->working_hours,
+        ]);
+    }
+
+    /**
+     * Update working hours for a specific team.
+     * Accessible by Admin, Manager, or the designated Team Lead of this team.
+     */
+    public function updateWorkingHours(Request $request, Team $team)
+    {
+        $user = $request->user();
+        $isAdmin = in_array($user->role, ['admin', 'manager']);
+        $isTeamLead = (int) $team->leader_id === (int) $user->id;
+
+        if (!$isAdmin && !$isTeamLead) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only Team Lead or Admin/Manager can update team working hours.',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'working_hours' => 'nullable|array',
+        ]);
+
+        $oldWorkingHours = $team->working_hours;
+        $team->update([
+            'working_hours' => $validated['working_hours'] ?? null,
+        ]);
+
+        try {
+            $this->auditService->log(
+                module: 'team_management',
+                action: 'update_working_hours',
+                description: "Updated working hours for team {$team->name}",
+                user: $user,
+                entityType: 'Team',
+                entityId: $team->id,
+                oldValues: ['working_hours' => $oldWorkingHours],
+                newValues: ['working_hours' => $team->working_hours],
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Team working hours updated successfully.',
+            'data' => [
+                'team_id'       => $team->id,
+                'team_name'     => $team->name,
+                'working_hours' => $team->working_hours,
+            ],
+            'team' => $team,
+        ]);
+    }
 }
+

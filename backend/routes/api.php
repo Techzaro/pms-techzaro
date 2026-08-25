@@ -29,6 +29,7 @@ use App\Http\Controllers\NotificationSettingController;
 use App\Http\Controllers\FeedbackController;
 use App\Http\Controllers\OrganizationSettingsController;
 use App\Http\Controllers\OrganizationOrgController;
+use App\Http\Controllers\RegionalSettingsController;
 
 /*
 | Public Routes
@@ -90,7 +91,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/notification-settings', [NotificationSettingController::class, 'update']);
     Route::post('/notification-settings/test-webhook', [NotificationSettingController::class, 'testWebhook']);
 
-    // Organization settings (branding, subscription, email policy)
+    // User Regional Settings (Timezone, Language, Working Hours, Date & Time Formats)
+    Route::get('/regional-settings', [RegionalSettingsController::class, 'getSettings']);
+    Route::put('/regional-settings', [RegionalSettingsController::class, 'updateSettings']);
+    Route::post('/regional-settings', [RegionalSettingsController::class, 'updateSettings']);
+    Route::get('/regional-settings/timezones', [RegionalSettingsController::class, 'getTimezones']);
+    Route::get('/user/regional-settings', [RegionalSettingsController::class, 'getSettings']);
+    Route::put('/user/regional-settings', [RegionalSettingsController::class, 'updateSettings']);
+
+    // Organization settings (branding, subscription, email policy, regional & working hours)
     Route::get('/organization-settings/email-policy', [OrganizationSettingsController::class, 'getEmailPolicy']);
     Route::put('/organization-settings/email-policy', [OrganizationSettingsController::class, 'updateEmailPolicy']);
     Route::get('/organization-settings/branding', [OrganizationSettingsController::class, 'getBranding']);
@@ -100,6 +109,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/organization-settings/details', [OrganizationSettingsController::class, 'getOrganizationDetails']);
     Route::get('/organization-settings/billing-history', [OrganizationSettingsController::class, 'getBillingHistory']);
     Route::put('/organization-settings/timezone', [OrganizationSettingsController::class, 'updateTimezone']);
+    Route::get('/organization-settings/regional', [OrganizationSettingsController::class, 'getRegionalSettings']);
+    Route::put('/organization-settings/regional', [OrganizationSettingsController::class, 'updateRegionalSettings']);
+    Route::get('/organization-settings/working-hours', [OrganizationSettingsController::class, 'getRegionalSettings']);
+    Route::put('/organization-settings/working-hours', [OrganizationSettingsController::class, 'updateRegionalSettings']);
 
     // Organization Storage Management
     Route::get('/organization/storage', [OrganizationOrgController::class, 'getStorageUsage']);
@@ -286,6 +299,11 @@ Route::middleware('auth:sanctum')->group(function () {
         // Delete team
         Route::delete('/teams/{team}', [TeamController::class, 'destroy']);
     });
+
+    // Team Working Hours (Accessible to Admin, Manager, and Team Leads)
+    Route::get('/teams/{team}/working-hours', [TeamController::class, 'getWorkingHours']);
+    Route::put('/teams/{team}/working-hours', [TeamController::class, 'updateWorkingHours'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
+    Route::post('/teams/{team}/working-hours', [TeamController::class, 'updateWorkingHours'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
 
     /*
     | Project Management Routes (Read)

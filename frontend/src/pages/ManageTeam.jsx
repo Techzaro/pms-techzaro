@@ -16,9 +16,9 @@
  */
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { Crown } from "lucide-react";
+import { Crown, Clock } from "lucide-react";
 import TeamExportReport from "./TeamExportReport";
+import TeamWorkingHoursModal from "../components/TeamWorkingHoursModal";
 import {
   MdAdd,
   MdDelete,
@@ -128,6 +128,8 @@ function ManageTeam() {
   const [showTeamExportModal, setShowTeamExportModal] = useState(false);
   const [deleteTeamId, setDeleteTeamId] = useState(null);
   const [leaderConfirmOpen, setLeaderConfirmOpen] = useState(false);
+  const [workingHoursModalOpen, setWorkingHoursModalOpen] = useState(false);
+  const [workingHoursTeam, setWorkingHoursTeam] = useState(null);
   const [leaderConfirmData, setLeaderConfirmData] = useState({ teamId: null, memberId: null, memberName: "" });
   const [removeMemberConfirmOpen, setRemoveMemberConfirmOpen] = useState(false);
   const [removeMemberData, setRemoveMemberData] = useState({ teamId: null, memberId: null, memberName: "" });
@@ -640,6 +642,17 @@ function ManageTeam() {
                       </div>
                     </div>
                     <div className="mt-card-actions">
+                      <button
+                        className="mt-icon-btn"
+                        style={{ color: "var(--color-primary, #4f46e5)" }}
+                        title="Team Working Hours"
+                        onClick={() => {
+                          setWorkingHoursTeam(team);
+                          setWorkingHoursModalOpen(true);
+                        }}
+                      >
+                        <Clock size={18} />
+                      </button>
                       <button className="mt-icon-btn mt-icon-edit" title="Edit Team" onClick={() => openEditTeamModal(team)}>
                         <MdEdit size={18} />
                       </button>
@@ -1131,6 +1144,16 @@ function ManageTeam() {
       confirmText="Remove"
       cancelText="Cancel"
       danger
+    />
+
+    <TeamWorkingHoursModal
+      isOpen={workingHoursModalOpen}
+      onClose={() => {
+        setWorkingHoursModalOpen(false);
+        setWorkingHoursTeam(null);
+      }}
+      team={workingHoursTeam}
+      onSaved={() => fetchTeams()}
     />
     </>
   );

@@ -8,6 +8,7 @@ use App\Models\Task;
 use App\Models\TaskWorkflowEvent;
 use App\Models\Team;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,6 +25,38 @@ use Illuminate\Support\Facades\DB;
 class ReportController extends Controller
 {
     /**
+     * Resolves the report timezone according to SRS Section 22.
+     * Priority: request timezone -> Organization default_timezone -> User timezone -> UTC.
+     *
+     * @param Request $request
+     * @return string
+     */
+    protected function resolveReportTimezone(Request $request): string
+    {
+        $requested = $request->input('timezone', $request->input('tz'));
+        if (!empty($requested) && in_array($requested, \DateTimeZone::listIdentifiers(), true)) {
+            return $requested;
+        }
+
+        $user = $request->user();
+        if ($user && !empty($user->organization_id)) {
+            try {
+                $orgTz = \App\Models\Master\Organization::where('id', $user->organization_id)->value('default_timezone');
+                if (!empty($orgTz)) {
+                    return $orgTz;
+                }
+            } catch (\Throwable $e) {
+                // Fallback
+            }
+        }
+
+        if ($user && !empty($user->timezone)) {
+            return $user->timezone;
+        }
+
+        return config('app.timezone', 'UTC');
+    }
+    /**
      * Get team performance report with task stats per member.
      *
      * Team leads only see members from their teams and tasks they assigned.
@@ -38,9 +71,10 @@ class ReportController extends Controller
         $timeFilter = $request->input('time_filter', $request->input('period', 'all'));
         $startDate = $request->input('start_date', $request->input('startDate', ''));
         $endDate = $request->input('end_date', $request->input('endDate', ''));
-        $cacheKey = "report_team_perf_{$user->id}_{$timeFilter}_{$startDate}_{$endDate}";
+        $timezone = $this->resolveReportTimezone($request);
+        $cacheKey = "report_team_perf_{$user->id}_{$timeFilter}_{$startDate}_{$endDate}_{$timezone}";
 
-        return Cache::remember($cacheKey, 300, function () use ($user, $timeFilter, $startDate, $endDate) {
+        return Cache::remember($cacheKey, 300, function () use ($user, $timeFilter, $startDate, $endDate, $timezone) {
             $isTeamLead = $user->role === 'team_lead' || $user->role === 'teamlead';
 
             $query = User::select('id', 'name', 'email', 'role')
@@ -118,6 +152,7 @@ class ReportController extends Controller
             $totalCompleted = $result->sum('completed');
 
             return [
+                'timezone' => $timezone,
                 'summary' => [
                     'total_assigned' => $totalAssigned,
                     'total_completed' => $totalCompleted,
@@ -151,6 +186,7 @@ class ReportController extends Controller
     {
         $requestingUser = $request->user();
         $timeFilter = $request->input('time_filter', $request->input('period', 'all'));
+        $timezone = $this->resolveReportTimezone($request);
         $isTeamLeadViewingMember = ($requestingUser->role === 'team_lead' || $requestingUser->role === 'teamlead')
             && $requestingUser->id !== $user->id;
 
@@ -205,7 +241,7 @@ class ReportController extends Controller
                 'project' => $t->project?->title ?? '—',
                 'status' => $t->status,
                 'priority' => $t->priority ?? 'Medium',
-                'end_date' => $t->end_date,
+                'end_date' => $t->end_date ? Carbon::parse($t->end_date)->setTimezone($timezone)->toIso8601String() : null,
                 'item_type' => 'task',
             ]);
 
@@ -309,8 +345,8 @@ class ReportController extends Controller
                 'task' => $d->task?->title ?? null,
                 'project' => $d->project?->title ?? null,
                 'status' => $d->status,
-                'submitted_at' => $d->submitted_at,
-                'approved_at' => $d->approved_at,
+                'submitted_at' => $d->submitted_at ? Carbon::parse($d->submitted_at)->setTimezone($timezone)->toIso8601String() : null,
+                'approved_at' => $d->approved_at ? Carbon::parse($d->approved_at)->setTimezone($timezone)->toIso8601String() : null,
             ]);
 
         // Reporting To (team leader)
@@ -323,14 +359,14 @@ class ReportController extends Controller
         // --- WORKLOAD BY DAY ---
         $workloadPeriod = $request->query('workload_period', 'week');
         if ($workloadPeriod === 'month') {
-            $workloadStart = now()->startOfMonth();
-            $workloadEnd = now()->endOfMonth();
+            $workloadStart = now()->setTimezone($timezone)->startOfMonth()->setTimezone('UTC');
+            $workloadEnd = now()->setTimezone($timezone)->endOfMonth()->setTimezone('UTC');
         } elseif ($workloadPeriod === 'last_week') {
-            $workloadStart = now()->subWeek()->startOfWeek();
-            $workloadEnd = now()->subWeek()->endOfWeek();
+            $workloadStart = now()->setTimezone($timezone)->subWeek()->startOfWeek()->setTimezone('UTC');
+            $workloadEnd = now()->setTimezone($timezone)->subWeek()->endOfWeek()->setTimezone('UTC');
         } else {
-            $workloadStart = now()->startOfWeek();
-            $workloadEnd = now()->endOfWeek();
+            $workloadStart = now()->setTimezone($timezone)->startOfWeek()->setTimezone('UTC');
+            $workloadEnd = now()->setTimezone($timezone)->endOfWeek()->setTimezone('UTC');
         }
 
         $workloadData = [['day' => 'Mon', 'count' => 0], ['day' => 'Tue', 'count' => 0], ['day' => 'Wed', 'count' => 0], ['day' => 'Thu', 'count' => 0], ['day' => 'Fri', 'count' => 0], ['day' => 'Sat', 'count' => 0], ['day' => 'Sun', 'count' => 0]];
@@ -357,11 +393,13 @@ class ReportController extends Controller
         }
 
         return response()->json([
+            'timezone' => $timezone,
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
                 'role' => $user->role,
+                'timezone' => $user->timezone ?? $timezone,
                 'employee_id' => $user->employee_id ?? 'EMP-'.str_pad($user->id, 4, '0', STR_PAD_LEFT),
                 'team' => $team?->name ?? null,
                 'reporting_to' => $reportingTo,
@@ -396,11 +434,12 @@ class ReportController extends Controller
      * @param  Project  $project  The project to generate the report for.
      * @return JsonResponse JSON response with project summary, per-assignee stats, and tasks.
      */
-    public function projectReport(Project $project)
+    public function projectReport(Request $request, Project $project)
     {
-        $cacheKey = "report_project_{$project->id}";
+        $timezone = $this->resolveReportTimezone($request);
+        $cacheKey = "report_project_{$project->id}_{$timezone}";
 
-        return Cache::remember($cacheKey, 300, function () use ($project) {
+        return Cache::remember($cacheKey, 300, function () use ($project, $timezone) {
             $tasks = $project->tasks()->with('assignees:id,name,email,role')->get();
 
             $total = $tasks->count();
@@ -418,7 +457,14 @@ class ReportController extends Controller
                 })->values();
 
             return [
-                'project' => ['id' => $project->id, 'title' => $project->title, 'status' => $project->status],
+                'timezone' => $timezone,
+                'project' => [
+                    'id' => $project->id,
+                    'title' => $project->title,
+                    'status' => $project->status,
+                    'start_date' => $project->start_date ? Carbon::parse($project->start_date)->setTimezone($timezone)->toIso8601String() : null,
+                    'end_date' => $project->end_date ? Carbon::parse($project->end_date)->setTimezone($timezone)->toIso8601String() : null,
+                ],
                 'summary' => [
                     'total' => $total, 'completed' => $completed,
                     'pending' => $total - $completed - $failed, 'failed' => $failed,
@@ -441,7 +487,8 @@ class ReportController extends Controller
      */
     public function summaryReport(Request $request)
     {
-        return Cache::remember('report_summary', 300, function () {
+        $timezone = $this->resolveReportTimezone($request);
+        return Cache::remember("report_summary_{$timezone}", 300, function () use ($timezone) {
             $totalTeams = Team::count();
 
             $projectStats = Project::selectRaw("
@@ -467,17 +514,19 @@ class ReportController extends Controller
                 ->latest()
                 ->limit(10)
                 ->get()
-                ->map(function ($p) {
+                ->map(function ($p) use ($timezone) {
                     $total = $p->total_tasks;
                     $done = $p->completed_tasks;
 
                     return [
                         'title' => $p->title, 'completion' => $total > 0 ? (int) round(($done / $total) * 100) : 0,
-                        'completed_tasks' => $done, 'total_tasks' => $total, 'end_date' => $p->end_date,
+                        'completed_tasks' => $done, 'total_tasks' => $total,
+                        'end_date' => $p->end_date ? Carbon::parse($p->end_date)->setTimezone($timezone)->toIso8601String() : null,
                     ];
                 });
 
             return [
+                'timezone' => $timezone,
                 'total_teams' => $totalTeams,
                 'active_projects' => (int) $projectStats->active,
                 'tasks_created' => $totalTasks,
@@ -497,7 +546,8 @@ class ReportController extends Controller
      */
     public function detailedReport(Request $request)
     {
-        return Cache::remember('report_detailed', 300, function () {
+        $timezone = $this->resolveReportTimezone($request);
+        return Cache::remember("report_detailed_{$timezone}", 300, function () use ($timezone) {
             $totalTeams = Team::count();
 
             $taskStats = Task::selectRaw("
@@ -512,12 +562,13 @@ class ReportController extends Controller
 
             $projects = Project::withCount(['tasks as total_tasks', 'tasks as completed_tasks' => function ($q) {
                 $q->whereIn('status', ['done', 'completed']);
-            }])->latest()->limit(10)->get()->map(function ($p) {
+            }])->latest()->limit(10)->get()->map(function ($p) use ($timezone) {
                 $total = $p->total_tasks;
                 $done = $p->completed_tasks;
 
                 return ['title' => $p->title, 'completion' => $total > 0 ? (int) round(($done / $total) * 100) : 0,
-                    'completed_tasks' => $done, 'total_tasks' => $total, 'status' => $p->status];
+                    'completed_tasks' => $done, 'total_tasks' => $total, 'status' => $p->status,
+                    'end_date' => $p->end_date ? Carbon::parse($p->end_date)->setTimezone($timezone)->toIso8601String() : null];
             });
 
             $teams = $this->getTeamsWithTaskStats();
@@ -530,9 +581,11 @@ class ReportController extends Controller
             $recentTasks = Task::with(['project:id,title', 'assignees:id,name'])
                 ->latest()->limit(10)->get()
                 ->map(fn ($t) => ['title' => $t->title, 'project' => $t->project?->title ?? '—',
-                    'assignee' => $t->assignees->pluck('name')->join(', ') ?: '—', 'status' => $t->status, 'end_date' => $t->end_date]);
+                    'assignee' => $t->assignees->pluck('name')->join(', ') ?: '—', 'status' => $t->status,
+                    'end_date' => $t->end_date ? Carbon::parse($t->end_date)->setTimezone($timezone)->toIso8601String() : null]);
 
             return compact('totalTeams', 'completedTasks', 'overdueTasks', 'projects', 'teams', 'overdueList', 'recentTasks') + [
+                'timezone' => $timezone,
                 'active_projects' => Project::whereIn('status', ['In Progress', 'Active', 'planned'])->count(),
                 'tasks_created' => $totalTasks, 'tasks_completed' => $completedTasks,
                 'completion_rate' => $totalTasks > 0 ? (int) round(($completedTasks / $totalTasks) * 100) : 0,
@@ -548,7 +601,8 @@ class ReportController extends Controller
      */
     public function performanceReport(Request $request)
     {
-        return Cache::remember('report_performance', 300, function () {
+        $timezone = $this->resolveReportTimezone($request);
+        return Cache::remember("report_performance_{$timezone}", 300, function () use ($timezone) {
             $taskStats = Task::selectRaw("
                 COUNT(*) as total,
                 SUM(CASE WHEN status IN ('completed','done') THEN 1 ELSE 0 END) as completed
@@ -589,6 +643,7 @@ class ReportController extends Controller
                     'priority' => $t->priority ?? 'Medium', 'days_late' => now()->diffInDays($t->end_date)]);
 
             return [
+                'timezone' => $timezone,
                 'overview' => ['assigned' => $totalAssigned, 'completed' => $totalCompleted,
                     'pending' => max($totalAssigned - $totalCompleted, 0), 'overdue' => $totalOverdue,
                     'completion_rate' => $totalAssigned > 0 ? (int) round(($totalCompleted / $totalAssigned) * 100) : 0],
@@ -605,7 +660,8 @@ class ReportController extends Controller
      */
     public function progressReport(Request $request)
     {
-        return Cache::remember('report_progress', 300, function () {
+        $timezone = $this->resolveReportTimezone($request);
+        return Cache::remember("report_progress_{$timezone}", 300, function () use ($timezone) {
             $taskStats = Task::selectRaw("
                 COUNT(*) as total,
                 SUM(CASE WHEN status IN ('completed','done') THEN 1 ELSE 0 END) as completed
@@ -626,10 +682,12 @@ class ReportController extends Controller
                 $memberCount = is_array($topProject->assigned_users) ? count($topProject->assigned_users) : 0;
                 $projectOverview = ['name' => $topProject->title, 'client' => $topProject->client_name ?? '—',
                     'team_lead' => $topProject->creator?->name ?? '—', 'members' => $memberCount,
-                    'start_date' => $topProject->start_date, 'end_date' => $topProject->end_date];
+                    'start_date' => $topProject->start_date ? Carbon::parse($topProject->start_date)->setTimezone($timezone)->toIso8601String() : null,
+                    'end_date' => $topProject->end_date ? Carbon::parse($topProject->end_date)->setTimezone($timezone)->toIso8601String() : null];
                 $milestones = $topProject->milestones()->limit(10)->get()->map(fn ($m) => [
                     'title' => $m->title ?? '—', 'status' => $m->status ?? 'Pending',
-                    'target_date' => $m->due_date, 'due_date' => $m->due_date,
+                    'target_date' => $m->due_date ? Carbon::parse($m->due_date)->setTimezone($timezone)->toIso8601String() : null,
+                    'due_date' => $m->due_date ? Carbon::parse($m->due_date)->setTimezone($timezone)->toIso8601String() : null,
                 ])->toArray();
             }
 
@@ -654,6 +712,7 @@ class ReportController extends Controller
                     'priority' => $t->priority ?? 'Medium', 'days_late' => now()->diffInDays($t->end_date)]);
 
             return [
+                'timezone' => $timezone,
                 'overview' => ['assigned' => $totalAssigned, 'completed' => $totalCompleted,
                     'pending' => max($totalAssigned - $totalCompleted, 0), 'overdue' => $totalOverdue],
                 'project' => $projectOverview, 'members' => $memberResults,
@@ -677,6 +736,7 @@ class ReportController extends Controller
         $timeFilter = $request->input('time_filter', $request->input('period', 'all'));
         $view = $request->query('view', 'self'); // 'self' or 'team'
         $role = $user->role === 'teamlead' ? 'team_lead' : $user->role;
+        $timezone = $this->resolveReportTimezone($request);
 
         // For team_lead viewing 'team' tab, get stats for team members
         $isTeamView = ($role === 'team_lead' && $view === 'team');
@@ -739,6 +799,7 @@ class ReportController extends Controller
         $lowPriority = (int) $taskStats->p_low;
 
         return response()->json([
+            'timezone' => $timezone,
             'total_assigned' => $totalAssigned,
             'approved' => $approved,
             'in_review' => $inReview,
@@ -748,7 +809,8 @@ class ReportController extends Controller
             'high_priority' => $highPriority,
             'medium_priority' => $mediumPriority,
             'low_priority' => $lowPriority,
-        ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+        ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+          ->header('X-Report-Timezone', $timezone);
     }
 
     /**
@@ -763,6 +825,7 @@ class ReportController extends Controller
     {
         $user = $request->user();
         $timeFilter = $request->input('time_filter', $request->input('period', 'all'));
+        $timezone = $this->resolveReportTimezone($request);
 
         // For team_lead, only show members from their teams
         if ($user->role === 'team_lead' || $user->role === 'teamlead') {
@@ -838,7 +901,8 @@ class ReportController extends Controller
         })->values();
 
         return response()->json($stats)
-            ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+            ->header('X-Report-Timezone', $timezone);
     }
 
     /**
@@ -852,9 +916,10 @@ class ReportController extends Controller
         $timeFilter = $request->input('time_filter', $request->input('period', 'all'));
         $startDate = $request->input('start_date', $request->input('startDate', ''));
         $endDate = $request->input('end_date', $request->input('endDate', ''));
-        $cacheKey = "report_company_employees_{$timeFilter}_{$startDate}_{$endDate}";
+        $timezone = $this->resolveReportTimezone($request);
+        $cacheKey = "report_company_employees_{$timeFilter}_{$startDate}_{$endDate}_{$timezone}";
 
-        $data = Cache::remember($cacheKey, 300, function () use ($timeFilter, $startDate, $endDate) {
+        $data = Cache::remember($cacheKey, 300, function () use ($timeFilter, $startDate, $endDate, $timezone) {
         $allUsers = User::where('active', true)->select('id', 'name', 'role')->orderBy('name')->get();
         $totalEmployees = $allUsers->count();
 
@@ -934,7 +999,7 @@ class ReportController extends Controller
         });
 
         // --- TASKS TREND (weekly data by day of week) ---
-        $weekStart = now()->startOfWeek();
+        $weekStart = now()->setTimezone($timezone)->startOfWeek()->setTimezone('UTC');
         $tasksTrend = Task::where('created_at', '>=', $weekStart)
             ->selectRaw('DAYNAME(created_at) as day_name, COUNT(*) as count')
             ->groupBy('day_name')
@@ -946,6 +1011,7 @@ class ReportController extends Controller
         $trendData = collect($dayOrder)->map(fn ($d) => $tasksTrend[$d] ?? 0)->values();
 
         return [
+            'timezone' => $timezone,
             'overview' => [
                 'total_employees' => $totalEmployees,
                 'company_name' => 'Techxaro Solutions',
@@ -1034,6 +1100,7 @@ class ReportController extends Controller
     {
         $user = $request->user();
         $role = $user->role === 'teamlead' ? 'team_lead' : $user->role;
+        $timezone = $this->resolveReportTimezone($request);
 
         if (! in_array($role, ['admin', 'manager', 'team_lead'])) {
             return response()->json(['message' => 'Unauthorized'], 403);
@@ -1131,7 +1198,7 @@ class ReportController extends Controller
             }
         }
 
-        $result = $teams->map(function ($team) use ($teamMemberMap, $userTaskCounts, $teamStatusBreakdown, $teamPriorityDistribution) {
+        $result = $teams->map(function ($team) use ($teamMemberMap, $userTaskCounts, $teamStatusBreakdown, $teamPriorityDistribution, $timezone) {
             $memberIds = $teamMemberMap[$team->id] ?? [];
             $totalAssigned = 0;
             $totalCompleted = 0;
@@ -1165,7 +1232,7 @@ class ReportController extends Controller
                 'name' => $team->name,
                 'description' => $team->description,
                 'member_count' => $memberCount,
-                'created_at' => $team->created_at,
+                'created_at' => $team->created_at ? Carbon::parse($team->created_at)->setTimezone($timezone)->toIso8601String() : null,
                 'leader' => $team->leader ? ['id' => $team->leader->id, 'name' => $team->leader->name] : null,
                 'members' => $membersBrief,
                 'assigned' => $totalAssigned,
@@ -1178,7 +1245,7 @@ class ReportController extends Controller
             ];
         })->values();
 
-        return response()->json($result);
+        return response()->json($result)->header('X-Report-Timezone', $timezone);
     }
 
     /**

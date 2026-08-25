@@ -10,11 +10,12 @@
  */
 import { useEffect, useState } from "react";
 import { MdPeople, MdCalendarToday, MdGroup, MdEmail, MdInfoOutline, MdSearch } from "react-icons/md";
-import { Crown } from "lucide-react";
+import { Crown, Clock } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
-import { authToken, rolePath } from "../utils/auth";
+import { authToken, rolePath, getUser } from "../utils/auth";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
+import TeamWorkingHoursModal from "../components/TeamWorkingHoursModal";
 import API_URL from "../config/api";
 import "./MemberTeam.css";
 
@@ -47,6 +48,8 @@ function MemberTeam() {
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [workingHoursModalOpen, setWorkingHoursModalOpen] = useState(false);
+  const [selectedTeamForHours, setSelectedTeamForHours] = useState(null);
 
   const fetchTeams = async () => {
     const token = authToken();
@@ -114,19 +117,39 @@ function MemberTeam() {
         ) : (
           <div className="mt-team-list">
             {teams.map((team) => (
-              <TeamCard key={team.id} team={team} search={search} />
+              <TeamCard
+                key={team.id}
+                team={team}
+                search={search}
+                onOpenHours={(t) => {
+                  setSelectedTeamForHours(t);
+                  setWorkingHoursModalOpen(true);
+                }}
+              />
             )).filter(Boolean)}
           </div>
         )}
       </div>
+
+      <TeamWorkingHoursModal
+        isOpen={workingHoursModalOpen}
+        onClose={() => {
+          setWorkingHoursModalOpen(false);
+          setSelectedTeamForHours(null);
+        }}
+        team={selectedTeamForHours}
+        onSaved={() => fetchTeams()}
+      />
     </DashboardLayout>
   );
 }
 
-function TeamCard({ team, search }) {
+function TeamCard({ team, search, onOpenHours }) {
   const leader = team.leader;
   const members = team.members || [];
   const q = (search || "").toLowerCase().trim();
+  const authUser = getUser();
+  const isTeamLead = leader && Number(leader.id) === Number(authUser?.id);
 
   const teamNameMatch = q && team.name.toLowerCase().includes(q);
 
@@ -169,6 +192,30 @@ function TeamCard({ team, search }) {
             <span className="mt-member-count">{q ? sortedMembers.length : members.length} of {members.length} member{members.length !== 1 ? "s" : ""}</span>
           </div>
         </div>
+
+        {isTeamLead && (
+          <button
+            type="button"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "6px 14px",
+              borderRadius: "8px",
+              background: "var(--color-primary-bg, rgba(79, 70, 229, 0.1))",
+              color: "var(--color-primary, #4f46e5)",
+              border: "1px solid var(--color-primary, #4f46e5)",
+              fontSize: "12px",
+              fontWeight: 600,
+              cursor: "pointer",
+              marginLeft: "auto",
+            }}
+            onClick={() => onOpenHours && onOpenHours(team)}
+          >
+            <Clock size={14} />
+            Set Working Hours
+          </button>
+        )}
       </div>
 
       {/* Description */}

@@ -15,6 +15,7 @@ import autoTable from "jspdf-autotable";
 import "../pages/ExportReport.css";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import { getUserTimezone, convertToLocal } from "../utils/timezoneUtils";
 
 /** Color palette for user avatar backgrounds */
 const AVATAR_COLORS = ["#f59e0b", "#3b82f6", "#10b981", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316"];
@@ -63,9 +64,9 @@ function ExportReport({ isOpen, onClose, summary = {}, users = [] }) {
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
 
-  const now = new Date();
-  const genDate = now.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-  const genTime = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+  const userTz = getUserTimezone();
+  const genDate = convertToLocal(new Date().toISOString(), userTz, "MMMM DD, YYYY");
+  const genTime = convertToLocal(new Date().toISOString(), userTz, "hh:mm A");
 
   const cardData = [
     { key: "total_assigned", label: "Total Assigned", value: summary?.total_assigned ?? 0, color: "var(--color-primary)", bg: "#EEF2FF" },
@@ -177,8 +178,8 @@ function ExportReport({ isOpen, onClose, summary = {}, users = [] }) {
       doc.setFontSize(4.5); doc.setFont("helvetica", "normal"); doc.setTextColor(156, 163, 175);
       doc.text("PMS Portal", M + 8.5, fY + 7.5);
       doc.text(`Generated Date:   ${genDate}`, M + 38, fY + 4);
-      doc.text(`Generated Time:   ${genTime}`, M + 38, fY + 7.5);
-      doc.text("Report Type:  Performance Report", PW - M - 42, fY + 4);
+      doc.text(`Generated Time:   ${genTime} (${userTz})`, M + 38, fY + 7.5);
+      doc.text(`Timezone: ${userTz} | Report: Performance Report`, PW - M - 60, fY + 4);
       doc.text("Page 1 of 1", PW - M, fY + 7.5, { align: "right" });
 
       doc.save("Performance-Report.pdf");
@@ -330,8 +331,8 @@ function ExportReport({ isOpen, onClose, summary = {}, users = [] }) {
                   <span style={{ fontWeight: 600, color: "var(--text-secondary)" }}>Techxaro</span>
                   <span>PMS Portal</span>
                 </div>
-                <div>Generated Date:  {genDate} | Generated Time:  {genTime}</div>
-                <div>Report Type:  Performance Report</div>
+                <div>Generated Date: {genDate} | Generated Time: {genTime} ({userTz})</div>
+                <div>Timezone: {userTz} | Report Type: Performance Report</div>
               </div>
 
               {/* ACTIONS */}

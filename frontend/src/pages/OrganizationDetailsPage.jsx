@@ -5,8 +5,14 @@ import api from '../lib/api';
 import {
   Building2, CreditCard, HardDrive, Users, FolderKanban, Calendar, Clock,
   Globe, Mail, Phone, Shield, Check, X, Database, FileText, Loader2,
-  Info, CheckCircle, AlertTriangle, Settings, User, MailCheck, Trash2, Bell, Eye, Download, Receipt,
+  Info, CheckCircle, AlertTriangle, Settings, User, MailCheck, Trash2, Bell, Eye, Download, Receipt, RotateCcw, Save,
 } from 'lucide-react';
+import {
+  DEFAULT_WORKING_HOURS,
+  normalizeWorkingHoursSchedule,
+  getTimezoneOffsetDisplay,
+} from '../utils/timezoneUtils';
+import WorkingHoursScheduleEditor from '../components/WorkingHoursScheduleEditor';
 
 const STATUS_MAP = {
   active: { bg: 'rgba(16,185,129,0.1)', color: '#059669', label: 'Active' },
@@ -63,19 +69,83 @@ export default function OrganizationDetailsPage() {
   const [savTz,setSavTz]=useState(false);
   const [toast,setToast]=useState(null);
 
+  // Regional & Working Hours state
+  const [orgTz, setOrgTz] = useState('UTC');
+  const [enforceHours, setEnforceHours] = useState(false);
+  const [orgWorkingHours, setOrgWorkingHours] = useState(DEFAULT_WORKING_HOURS);
+  const [timezonesList, setTimezonesList] = useState([]);
+  const [savingRegional, setSavingRegional] = useState(false);
+
   useEffect(()=>{const t=setInterval(()=>setNow(new Date()),1000);return()=>clearInterval(t);},[]);
 
   const load=useCallback(async()=>{
     setLd(true);
     try{
       const[dR,sR]=await Promise.all([api.get('/organization-settings/details'),api.get('/organization/storage/summary')]);
-      if(dR.success)setData(dR);
+      if(dR.success) {
+        setData(dR);
+        if (dR.organization) {
+          if (dR.organization.default_timezone || dR.organization.timezone) {
+            setOrgTz(dR.organization.default_timezone || dR.organization.timezone);
+          }
+          if (dR.organization.enforce_working_hours !== undefined) {
+            setEnforceHours(Boolean(dR.organization.enforce_working_hours));
+          }
+          if (dR.organization.working_hours) {
+            setOrgWorkingHours(normalizeWorkingHoursSchedule(dR.organization.working_hours));
+          }
+        }
+      }
       if(sR.success)setStSum(sR);
     }catch{}
     setLd(false);
   },[]);
 
   useEffect(()=>{load();},[load]);
+
+  const loadRegional=useCallback(async()=>{
+    try {
+      const [tzRes, regRes] = await Promise.all([
+        api.get('/regional-settings/timezones'),
+        api.get('/organization-settings/regional')
+      ]);
+      if (tzRes?.data && Array.isArray(tzRes.data)) {
+        setTimezonesList(tzRes.data);
+      }
+      if (regRes?.success && (regRes?.data || regRes?.regional_settings)) {
+        const d = regRes.data || regRes.regional_settings;
+        if (d.default_timezone || d.timezone) setOrgTz(d.default_timezone || d.timezone);
+        if (d.enforce_working_hours !== undefined) setEnforceHours(Boolean(d.enforce_working_hours));
+        if (d.working_hours) setOrgWorkingHours(normalizeWorkingHoursSchedule(d.working_hours));
+      }
+    } catch {}
+  },[]);
+
+  useEffect(()=>{if(tab==='regional')loadRegional();},[tab,loadRegional]);
+
+  const saveOrgRegional = async (e) => {
+    if (e) e.preventDefault();
+    setSavingRegional(true);
+    try {
+      const payload = {
+        default_timezone: orgTz,
+        timezone: orgTz,
+        enforce_working_hours: enforceHours,
+        working_hours: orgWorkingHours,
+      };
+      const res = await api.put('/organization-settings/regional', payload);
+      if (res?.success) {
+        setToast({ t: 's', m: 'Organization regional settings updated successfully.' });
+        load();
+      } else {
+        setToast({ t: 'e', m: res?.message || 'Failed to update regional settings.' });
+      }
+    } catch (err) {
+      setToast({ t: 'e', m: 'Error saving organization regional settings.' });
+    } finally {
+      setSavingRegional(false);
+    }
+  };
 
   const loadBill=useCallback(async()=>{try{const r=await api.get('/organization-settings/billing-history');if(r.success)setBill(r);}catch{}},[]);
   const loadHist=useCallback(async()=>{try{const r=await api.get('/organization-settings/subscription-history');if(r.success)setHist(r);}catch{}},[]);
@@ -121,7 +191,7 @@ export default function OrganizationDetailsPage() {
           <p className="text-sm mt-0.5" style={sc.ts}>{o?.domain}</p>
         </div>
         <div className="flex items-center gap-1 p-1 rounded-xl" style={{background:'var(--bg-hover)',border:'1px solid var(--border-light)'}}>
-          {[{k:'details',l:'Details'},{k:'storage',l:'Storage',i:HardDrive},{k:'bill',l:'Billing',i:CreditCard},{k:'hist',l:'History',i:Clock}].map(t=>
+          {[{k:'details',l:'Details'},{k:'regional',l:'Regional & Hours',i:Globe},{k:'storage',l:'Storage',i:HardDrive},{k:'bill',l:'Billing',i:CreditCard},{k:'hist',l:'History',i:Clock}].map(t=>
             <button key={t.k} onClick={()=>setTab(t.k)} className={`px-4 py-2 rounded-lg text-[13px] font-semibold transition-all${t.i?' flex items-center gap-1.5':''}`} style={tab===t.k?{background:'#4f46e5',color:'#fff',boxShadow:'0 2px 6px rgba(79,70,229,0.25)'}:{background:'#f1f5f9',color:'#334155',border:'1px solid #cbd5e1'}}>{t.i&&<t.i className="w-4 h-4"/>}{t.l}</button>
           )}
         </div>
@@ -219,6 +289,95 @@ export default function OrganizationDetailsPage() {
               </div>
             }
           </div>:<p className="text-sm" style={sc.ts}>No subscription plan assigned</p>}
+        </div>
+      </div>}
+
+      {tab==='regional'&&<div className="flex flex-col gap-6">
+        <div className="rounded-xl p-6 shadow-sm" style={sc.card}>
+          <div className="flex items-center justify-between pb-4 mb-5" style={{borderBottom:'1px solid var(--border-light)'}}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={sc.infoBox}>
+                <Globe className="w-5 h-5" style={{color:'var(--color-primary)'}}/>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold" style={sc.th}>Organization Timezone &amp; Working Hours</h3>
+                <p className="text-xs" style={sc.ts}>Configure default timezone and working availability policy for all organization members</p>
+              </div>
+            </div>
+          </div>
+
+          <form onSubmit={saveOrgRegional} className="space-y-6">
+            {/* Default Timezone */}
+            <div className="p-4 rounded-xl" style={{background:'var(--bg-hover)',border:'1px solid var(--border-light)'}}>
+              <label className="block text-sm font-semibold mb-1" style={sc.th}>Organization Default Timezone (IANA)</label>
+              <p className="text-xs mb-3" style={sc.ts}>Applied as the fallback default for all teams, new accounts, and organization reports.</p>
+              <select
+                value={orgTz}
+                onChange={(e)=>setOrgTz(e.target.value)}
+                className="w-full sm:w-80 h-11 px-3 rounded-lg text-sm border outline-none"
+                style={{background:'var(--bg-card)',borderColor:'var(--border-color)',color:'var(--text-primary)'}}
+              >
+                {timezonesList.length > 0 ? (
+                  timezonesList.map(t=>(
+                    <option key={t} value={t}>{t} {getTimezoneOffsetDisplay(t)}</option>
+                  ))
+                ) : (
+                  ['UTC', 'America/New_York', 'America/Chicago', 'America/Los_Angeles', 'Europe/London', 'Europe/Berlin', 'Asia/Dubai', 'Asia/Karachi', 'Asia/Kolkata', 'Asia/Tokyo'].map(t=>(
+                    <option key={t} value={t}>{t} {getTimezoneOffsetDisplay(t)}</option>
+                  ))
+                )}
+              </select>
+            </div>
+
+            {/* Enforce Working Hours Toggle */}
+            <div className="p-4 rounded-xl flex items-start justify-between gap-4" style={{background:'var(--bg-hover)',border:'1px solid var(--border-light)'}}>
+              <div>
+                <h4 className="text-sm font-semibold mb-0.5" style={sc.th}>Enforce Working Hours Policy</h4>
+                <p className="text-xs" style={sc.ts}>
+                  When enabled, deadlines, assignment calendars, and task alerts across the organization will strictly align with configured working hours.
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                <input
+                  type="checkbox"
+                  checked={enforceHours}
+                  onChange={(e)=>setEnforceHours(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+              </label>
+            </div>
+
+            {/* Organization Default Schedule */}
+            <div className="p-5 rounded-xl" style={{background:'var(--bg-hover)',border:'1px solid var(--border-light)'}}>
+              <WorkingHoursScheduleEditor
+                schedule={orgWorkingHours}
+                onChange={setOrgWorkingHours}
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-3 pt-3" style={{borderTop:'1px solid var(--border-light)'}}>
+              <button
+                type="button"
+                onClick={loadRegional}
+                disabled={savingRegional}
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                style={{background:'var(--bg-hover)',color:'var(--text-secondary)',border:'1px solid var(--border-light)'}}
+              >
+                Discard Changes
+              </button>
+              <button
+                type="submit"
+                disabled={savingRegional}
+                className="px-5 py-2 rounded-lg text-sm font-medium text-white flex items-center gap-2 transition-opacity"
+                style={{background:'var(--color-primary)',opacity:savingRegional?0.7:1}}
+              >
+                {savingRegional ? <Loader2 className="w-4 h-4 animate-spin"/> : <Save className="w-4 h-4"/>}
+                {savingRegional ? 'Saving...' : 'Save Organization Regional Settings'}
+              </button>
+            </div>
+          </form>
         </div>
       </div>}
 

@@ -6,6 +6,7 @@ import { authToken } from "../utils/auth";
 import API_URL from "../config/api";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { getUserTimezone, convertToLocal } from "../utils/timezoneUtils";
 import "./AuditLogExportModal.css";
 
 function AuditLogExportModal({ onClose }) {
@@ -23,6 +24,7 @@ function AuditLogExportModal({ onClose }) {
     const token = authToken();
     if (!token) return;
     try {
+      const userTz = getUserTimezone();
       const res = await fetch(`${API_URL}/audit-logs?per_page=10000`, {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         skipLoader: true,
@@ -35,8 +37,8 @@ function AuditLogExportModal({ onClose }) {
       const PW = doc.internal.pageSize.getWidth();
       const PH = doc.internal.pageSize.getHeight();
       const M = 14;
-      const genDate = new Date().toLocaleDateString();
-      const genTime = new Date().toLocaleTimeString();
+      const genDate = convertToLocal(new Date().toISOString(), userTz, "DD/MM/YYYY");
+      const genTime = convertToLocal(new Date().toISOString(), userTz, "hh:mm A");
 
       // ── HEADER ──
       doc.setFillColor(15, 23, 42); doc.rect(0, 0, PW, 14, "F");
@@ -51,9 +53,9 @@ function AuditLogExportModal({ onClose }) {
       doc.text("APPLICATION AUDIT LOGS REPORT", PW / 2, 8, { align: "center" });
 
       // ── TABLE ──
-      const headers = ["Date & Time", "User", "Module", "Action", "Description", "Status", "IP Address", "Browser", "Device"];
+      const headers = [`Date & Time (${userTz})`, "User", "Module", "Action", "Description", "Status", "IP Address", "Browser", "Device"];
       const rows = logs.map((l) => [
-        l.created_at ? new Date(l.created_at).toLocaleString() : "-",
+        l.created_at ? convertToLocal(l.created_at, userTz, "DD/MM/YYYY, hh:mm A") : "-",
         l.user?.name || "System",
         l.module || "-",
         l.action || "-",
@@ -98,8 +100,8 @@ function AuditLogExportModal({ onClose }) {
         doc.setFontSize(4.5); doc.setFont("helvetica", "normal"); doc.setTextColor(156, 163, 175);
         doc.text("PMS Portal", M + 8.5, fY + 7.5);
         doc.text(`Generated Date:   ${genDate}`, M + 38, fY + 4);
-        doc.text(`Generated Time:   ${genTime}`, M + 38, fY + 7.5);
-        doc.text("Report Type:  Application Audit Logs", PW - M - 42, fY + 4);
+        doc.text(`Generated Time:   ${genTime} (${userTz})`, M + 38, fY + 7.5);
+        doc.text(`Timezone: ${userTz} | Report Type: Application Audit Logs`, PW - M - 60, fY + 4);
         doc.text(`Page ${i} of ${totalPages}`, PW - M, fY + 7.5, { align: "right" });
       }
 
@@ -113,13 +115,14 @@ function AuditLogExportModal({ onClose }) {
     const token = authToken();
     if (!token) return;
     try {
+      const userTz = getUserTimezone();
       const res = await fetch(`${API_URL}/audit-logs/export`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ format: "xlsx" }),
+        body: JSON.stringify({ format: "xlsx", timezone: userTz }),
       });
       if (!res.ok) throw new Error("Export failed");
       const resBlob = await res.blob();

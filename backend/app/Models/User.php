@@ -81,6 +81,13 @@ class User extends Authenticatable
         'bank_account_number',
         'bank_account_title',
 
+        // Regional & Working Hours
+        'timezone',
+        'language',
+        'date_format',
+        'time_format',
+        'working_hours',
+
         // Documents
         'employment_contract',
         'offer_letter',
@@ -107,6 +114,7 @@ class User extends Authenticatable
         'password_changed_at' => 'datetime',
         'last_login_at' => 'datetime',
         'notification_preferences' => 'array',
+        'working_hours' => 'array',
     ];
 
     /**

@@ -281,20 +281,24 @@
 
                                                 {{-- Timeline --}}
                                                 @if ($entity->start_date || $entity->end_date || $entity->due_date)
+                                                    @php
+                                                        $tz = $recipientTimezone ?? ($notification->user?->timezone ?: 'UTC');
+                                                    @endphp
                                                     <tr>
                                                         <td style="padding:6px 0;color:#64748b;font-size:12px;font-weight:700;font-family:Arial,Helvetica,sans-serif;">Timeline</td>
                                                         <td style="padding:6px 0;color:#0f172a;font-size:13px;font-family:Arial,Helvetica,sans-serif;">
                                                             @if ($entity->start_date)
-                                                                {{ \Carbon\Carbon::parse($entity->start_date)->format('d M Y') }}
+                                                                {{ \Carbon\Carbon::parse($entity->start_date)->setTimezone($tz)->format('d M Y, g:i A') }}
                                                             @endif
                                                             @if ($entity->start_date && ($entity->end_date || $entity->due_date))
                                                                 &rarr;
                                                             @endif
                                                             @if ($entity->end_date)
-                                                                {{ \Carbon\Carbon::parse($entity->end_date)->format('d M Y') }}
+                                                                {{ \Carbon\Carbon::parse($entity->end_date)->setTimezone($tz)->format('d M Y, g:i A') }}
                                                             @elseif ($entity->due_date)
-                                                                {{ \Carbon\Carbon::parse($entity->due_date)->format('d M Y') }}
+                                                                {{ \Carbon\Carbon::parse($entity->due_date)->setTimezone($tz)->format('d M Y, g:i A') }}
                                                             @endif
+                                                            <span style="font-size:11px;color:#64748b;margin-left:4px;">({{ $tz }})</span>
                                                         </td>
                                                     </tr>
                                                 @endif

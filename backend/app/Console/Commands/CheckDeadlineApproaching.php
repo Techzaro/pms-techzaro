@@ -57,6 +57,11 @@ class CheckDeadlineApproaching extends Command
                         continue;
                     }
 
+                    // Resolve recipient timezone and format localized deadline (SRS Sec 21)
+                    $userTz = \App\Services\NotificationService::resolveUserTimezone($targetUserId);
+                    $localDeadline = $task->end_date ? \Carbon\Carbon::parse($task->end_date)->setTimezone($userTz)->format('d M Y, g:i A') : '';
+                    $timeSuffix = $localDeadline ? " (Deadline: {$localDeadline} {$userTz})" : '';
+
                     Notification::create([
                         'user_id' => $targetUserId,
                         'sender_user_id' => $task->assigned_by ?? $targetUserId,
@@ -64,7 +69,7 @@ class CheckDeadlineApproaching extends Command
                         'related_module' => 'task',
                         'related_id' => $task->id,
                         'title' => 'Deadline Approaching',
-                        'message' => "Deadline Approaching: Task '{$task->title}' is due in {$threshold['label']}.",
+                        'message' => "Deadline Approaching: Task '{$task->title}' is due in {$threshold['label']}{$timeSuffix}.",
                         'link' => '/tasks/task-details/'.$task->id.'?from=tasks',
                     ]);
 

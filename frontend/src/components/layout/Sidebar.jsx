@@ -531,7 +531,7 @@ function Sidebar() {
           )}
 
           {/* Settings dropdown – click to toggle like Tasks */}
-          <div className={`sidebar-dropdown-group ${settingsOpen || isActive("audit-logs") || isActive("settings/notifications") || isActive("branding") || isActive("subscription") || isActive("organization-details") ? "open active" : ""}`}>
+          <div className={`sidebar-dropdown-group ${settingsOpen || isActive("audit-logs") || isActive("settings/notifications") || isActive("settings/regional") || isActive("regional-settings") || isActive("branding") || isActive("subscription") || isActive("organization-details") ? "open active" : ""}`}>
             <div
               className="sidebar-dropdown-header"
               onClick={() => setSettingsOpen((p) => !p)}
@@ -566,6 +566,13 @@ function Sidebar() {
                     User Feedback
                   </Link>
                 )}
+                <Link
+                  to={rolePath("settings/regional")}
+                  className={`sidebar-sub-link ${isActive("settings/regional") || isActive("regional-settings") ? "active" : ""}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Regional Settings
+                </Link>
                 <Link
                   to={rolePath("settings/notifications")}
                   className={`sidebar-sub-link ${isActive("settings/notifications") ? "active" : ""}`}

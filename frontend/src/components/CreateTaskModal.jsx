@@ -14,6 +14,8 @@ import LoadingButton from "./LoadingButton";
 import ConfirmModal from "./ConfirmModal";
 
 import { formatDateTime, toDatetimeLocal, toUTCIso, getNowDatetimeLocal } from "../utils/formatDateTime";
+import { convertToLocal, convertToUTC, getTimezoneOffsetDisplay, formatWorkingHoursSummary } from "../utils/timezoneUtils";
+import { Clock } from "lucide-react";
 import { publish } from "../utils/eventBus";
 import { notify, showSuccessMessage } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
@@ -719,6 +721,46 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                   <UserSelectDropdown users={displayUsers} selectedIds={form.assigned_to} onChange={handleAssignedToChange}
                     placeholder="Click to select members" error={!!formErrors.assigned_to} />
                   {formErrors.assigned_to && <span className="field-error-text">{formErrors.assigned_to}</span>}
+
+                  {/* Assignee Timezone, Current Time & Working Hours (SRS Sec 13 & 17) */}
+                  {form.assigned_to && form.assigned_to.length > 0 && (
+                    <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                      {displayUsers
+                        .filter((u) => form.assigned_to.includes(u.id))
+                        .map((u) => {
+                          const tz = u.timezone || "UTC";
+                          const uTime = convertToLocal(new Date().toISOString(), tz, "hh:mm A");
+                          const workingHoursStr = formatWorkingHoursSummary(u.working_hours, tz);
+                          return (
+                            <div
+                              key={u.id}
+                              style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "3px",
+                                fontSize: "12px",
+                                color: "var(--text-secondary, #4b5563)",
+                                background: "var(--bg-hover, #f8fafc)",
+                                padding: "6px 10px",
+                                borderRadius: "6px",
+                                border: "1px solid var(--border-light, #e2e8f0)",
+                              }}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                                <Clock size={13} style={{ color: "var(--color-primary, #4f46e5)", flexShrink: 0 }} />
+                                <span>
+                                  <strong>{u.name}</strong>'s Time:{" "}
+                                  <span style={{ color: "var(--color-primary, #4f46e5)", fontWeight: 600 }}>{uTime}</span> ({tz})
+                                </span>
+                              </div>
+                              <div style={{ fontSize: "11px", color: "var(--text-secondary)", paddingLeft: "19px" }}>
+                                🕒 Working Hours: <span style={{ fontWeight: 500, color: "var(--text-primary, #1e293b)" }}>{workingHoursStr}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -885,6 +927,27 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                     {projectEndDate && <span style={{ fontSize: 11, color: "#9ca3af", marginTop: 2, display: "block" }}>Max: {new Date(projectEndDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>}
                   </div>
                 </div>
+
+                {/* Assignee Deadline Conversion (SRS Sec 13 & 17) */}
+                {(form.end_date || form.recurrence_end_date) && form.assigned_to && form.assigned_to.length > 0 && (
+                  <div style={{ marginTop: "10px", padding: "8px 10px", background: "var(--color-primary-bg, rgba(79, 70, 229, 0.08))", border: "1px solid var(--color-primary, #4f46e5)", borderRadius: "8px", fontSize: "12px" }}>
+                    <div style={{ fontWeight: 600, color: "var(--color-primary, #4f46e5)", marginBottom: "4px", display: "flex", alignItems: "center", gap: "4px" }}>
+                      <Clock size={13} /> Assignee Deadline Equivalent
+                    </div>
+                    {displayUsers
+                      .filter((u) => form.assigned_to.includes(u.id))
+                      .map((u) => {
+                        const tz = u.timezone || "UTC";
+                        const targetDate = form.end_date || form.recurrence_end_date;
+                        const assigneeDeadline = convertToLocal(convertToUTC(targetDate), tz, "DD/MM/YYYY, hh:mm A");
+                        return (
+                          <div key={u.id} style={{ color: "var(--text-primary, #1e293b)", fontSize: "11px", marginTop: "2px" }}>
+                            • <strong>{u.name}</strong>: {assigneeDeadline} ({tz})
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
               </div>
 
               <div className="task-card">

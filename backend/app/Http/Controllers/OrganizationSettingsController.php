@@ -571,7 +571,10 @@ class OrganizationSettingsController extends Controller
                 'type' => $org->type,
                 'database_name' => $org->database_name,
                 'email_policy' => $org->email_policy ?? 'standard',
-                'timezone' => $org->timezone ?? 'Asia/Karachi',
+                'timezone' => $org->timezone ?? 'UTC',
+                'default_timezone' => $org->default_timezone ?? $org->timezone ?? 'UTC',
+                'enforce_working_hours' => (bool) ($org->enforce_working_hours ?? false),
+                'working_hours' => $org->working_hours,
                 'created_at' => $org->created_at?->toISOString(),
                 'admin_name' => $adminName,
                 'admin_email' => $adminEmail,
@@ -649,12 +652,46 @@ class OrganizationSettingsController extends Controller
     }
 
     /**
-     * Update organization timezone preference.
+     * Get organization regional settings (default timezone and working hours).
      */
-    public function updateTimezone(Request $request): JsonResponse
+    public function getRegionalSettings(Request $request): JsonResponse
     {
-        $request->validate([
-            'timezone' => ['required', 'string', 'max:50'],
+        $org = $this->resolveOrganization($request);
+
+        if (!$org) {
+            return response()->json(['success' => false, 'message' => 'Organization not found.'], 404);
+        }
+
+        $defaultTimezone = $org->default_timezone ?? $org->timezone ?? 'UTC';
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'default_timezone'      => $defaultTimezone,
+                'timezone'              => $defaultTimezone,
+                'enforce_working_hours' => (bool) ($org->enforce_working_hours ?? false),
+                'working_hours'         => $org->working_hours,
+            ],
+            'regional_settings' => [
+                'default_timezone'      => $defaultTimezone,
+                'timezone'              => $defaultTimezone,
+                'enforce_working_hours' => (bool) ($org->enforce_working_hours ?? false),
+                'working_hours'         => $org->working_hours,
+            ],
+        ]);
+    }
+
+    /**
+     * Update organization regional settings (default timezone, enforce_working_hours, working_hours).
+     * Admin/Manager access only.
+     */
+    public function updateRegionalSettings(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'default_timezone'      => ['sometimes', 'nullable', 'string', 'timezone:all'],
+            'timezone'              => ['sometimes', 'nullable', 'string', 'timezone:all'],
+            'enforce_working_hours' => ['sometimes', 'boolean'],
+            'working_hours'         => ['sometimes', 'nullable', 'array'],
         ]);
 
         $org = $this->resolveOrganization($request);
@@ -663,12 +700,94 @@ class OrganizationSettingsController extends Controller
             return response()->json(['success' => false, 'message' => 'Organization not found.'], 404);
         }
 
-        $org->update(['timezone' => $request->input('timezone')]);
+        $oldValues = [
+            'default_timezone'      => $org->default_timezone ?? $org->timezone ?? 'UTC',
+            'timezone'              => $org->timezone ?? 'UTC',
+            'enforce_working_hours' => (bool) ($org->enforce_working_hours ?? false),
+            'working_hours'         => $org->working_hours,
+        ];
+
+        $updateData = [];
+
+        if (array_key_exists('default_timezone', $validated) || array_key_exists('timezone', $validated)) {
+            $tz = $validated['default_timezone'] ?? $validated['timezone'] ?? 'UTC';
+            $updateData['default_timezone'] = $tz;
+            $updateData['timezone'] = $tz;
+        }
+
+        if (array_key_exists('enforce_working_hours', $validated)) {
+            $updateData['enforce_working_hours'] = (bool) $validated['enforce_working_hours'];
+        }
+
+        if (array_key_exists('working_hours', $validated)) {
+            $updateData['working_hours'] = $validated['working_hours'];
+        }
+
+        $org->update($updateData);
+
+        try {
+            $this->auditService->log(
+                module: 'organization_settings',
+                action: 'update_regional_settings',
+                description: "Updated organization regional settings and working hours",
+                user: $request->user(),
+                entityType: 'Organization',
+                entityId: $org->id,
+                oldValues: $oldValues,
+                newValues: $updateData,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log organization regional settings change audit', ['error' => $e->getMessage()]);
+        }
+
+        $defaultTimezone = $org->default_timezone ?? $org->timezone ?? 'UTC';
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Organization regional settings updated successfully.',
+            'data' => [
+                'default_timezone'      => $defaultTimezone,
+                'timezone'              => $defaultTimezone,
+                'enforce_working_hours' => (bool) ($org->enforce_working_hours ?? false),
+                'working_hours'         => $org->working_hours,
+            ],
+            'regional_settings' => [
+                'default_timezone'      => $defaultTimezone,
+                'timezone'              => $defaultTimezone,
+                'enforce_working_hours' => (bool) ($org->enforce_working_hours ?? false),
+                'working_hours'         => $org->working_hours,
+            ],
+        ]);
+    }
+
+    /**
+     * Update organization timezone preference.
+     */
+    public function updateTimezone(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'timezone' => ['required', 'string', 'timezone:all'],
+        ]);
+
+        $org = $this->resolveOrganization($request);
+
+        if (!$org) {
+            return response()->json(['success' => false, 'message' => 'Organization not found.'], 404);
+        }
+
+        $tz = $validated['timezone'];
+        $org->update([
+            'timezone'         => $tz,
+            'default_timezone' => $tz,
+        ]);
 
         return response()->json([
             'success' => true,
             'message' => 'Timezone updated successfully.',
             'timezone' => $org->timezone,
+            'default_timezone' => $org->default_timezone,
         ]);
     }
 }
+
