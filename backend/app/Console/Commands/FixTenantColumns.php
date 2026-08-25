@@ -28,6 +28,8 @@ class FixTenantColumns extends Command
             ['name' => 'recurrence_start_date',         'definition' => "TIMESTAMP NULL AFTER `recurrence_settings`"],
             ['name' => 'recurrence_end_date',           'definition' => "TIMESTAMP NULL AFTER `recurrence_start_date`"],
             ['name' => 'has_edited_submission',         'definition' => "TINYINT(1) DEFAULT 0 AFTER `status`"],
+            ['name' => 'status',                        'definition' => "VARCHAR(64) DEFAULT 'Pending' AFTER `requirements`", 'skip_if_exists' => true],
+            ['name' => 'states',                        'definition' => "JSON NULL AFTER `status`", 'skip_if_exists' => true],
         ],
         'deliverables' => [
             ['name' => 'has_edited_submission',         'definition' => "TINYINT(1) DEFAULT 0 AFTER `status`"],
@@ -38,6 +40,23 @@ class FixTenantColumns extends Command
         ],
         'conversations' => [
             ['name' => 'org_id',                        'definition' => "BIGINT UNSIGNED NULL AFTER `created_by`"],
+        ],
+        'knowledge_bases' => [
+            ['name' => 'slug',                          'definition' => "VARCHAR(255) NULL AFTER `title`"],
+            ['name' => 'category_id',                   'definition' => "BIGINT UNSIGNED NULL AFTER `category`"],
+            ['name' => 'status',                        'definition' => "VARCHAR(32) DEFAULT 'published' AFTER `visibility_level`"],
+            ['name' => 'is_pinned',                     'definition' => "TINYINT(1) DEFAULT 0"],
+            ['name' => 'views_count',                   'definition' => "BIGINT UNSIGNED DEFAULT 0"],
+            ['name' => 'tags',                          'definition' => "JSON NULL"],
+            ['name' => 'reference_link',                'definition' => "VARCHAR(2048) NULL AFTER `file_name`"],
+        ],
+        'events' => [
+            ['name' => 'organizer_id',                  'definition' => "BIGINT UNSIGNED NULL AFTER `user_id`"],
+            ['name' => 'category_id',                   'definition' => "BIGINT UNSIGNED NULL AFTER `type`"],
+            ['name' => 'location',                      'definition' => "VARCHAR(255) NULL AFTER `description`"],
+            ['name' => 'meeting_link',                  'definition' => "VARCHAR(2048) NULL AFTER `description`"],
+            ['name' => 'visibility_level',              'definition' => "VARCHAR(32) DEFAULT 'public' AFTER `is_global`"],
+            ['name' => 'status',                        'definition' => "VARCHAR(32) DEFAULT 'scheduled' AFTER `visibility_level`"],
         ],
     ];
 
@@ -160,6 +179,146 @@ class FixTenantColumns extends Command
             FOREIGN KEY (`feedback_id`) REFERENCES `feedback`(`id`) ON DELETE CASCADE,
             FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'kb_categories' => "CREATE TABLE IF NOT EXISTS `kb_categories` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `name` VARCHAR(255) NOT NULL,
+            `slug` VARCHAR(255) NULL,
+            `description` TEXT NULL,
+            `icon` VARCHAR(255) NULL,
+            `color` VARCHAR(32) NULL,
+            `sort_order` INT DEFAULT 0,
+            `is_active` TINYINT(1) DEFAULT 1,
+            `created_by` BIGINT UNSIGNED NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'event_categories' => "CREATE TABLE IF NOT EXISTS `event_categories` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `name` VARCHAR(255) NOT NULL,
+            `slug` VARCHAR(255) NULL,
+            `description` TEXT NULL,
+            `icon` VARCHAR(255) NULL,
+            `color` VARCHAR(32) NULL,
+            `sort_order` INT DEFAULT 0,
+            `is_active` TINYINT(1) DEFAULT 1,
+            `created_by` BIGINT UNSIGNED NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'kb_visibilities' => "CREATE TABLE IF NOT EXISTS `kb_visibilities` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `knowledge_base_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NULL,
+            `team_id` BIGINT UNSIGNED NULL,
+            `department` VARCHAR(100) NULL,
+            `role` VARCHAR(50) NULL,
+            `is_visible` TINYINT(1) DEFAULT 1,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            FOREIGN KEY (`knowledge_base_id`) REFERENCES `knowledge_bases`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`team_id`) REFERENCES `teams`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'event_visibilities' => "CREATE TABLE IF NOT EXISTS `event_visibilities` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `event_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NULL,
+            `team_id` BIGINT UNSIGNED NULL,
+            `department` VARCHAR(100) NULL,
+            `role` VARCHAR(50) NULL,
+            `is_visible` TINYINT(1) DEFAULT 1,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            FOREIGN KEY (`event_id`) REFERENCES `events`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`team_id`) REFERENCES `teams`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'event_participants' => "CREATE TABLE IF NOT EXISTS `event_participants` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `event_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `status` VARCHAR(32) DEFAULT 'invited',
+            `response_notes` TEXT NULL,
+            `attended` TINYINT(1) DEFAULT 0,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `event_participants_event_id_user_id_unique` (`event_id`, `user_id`),
+            FOREIGN KEY (`event_id`) REFERENCES `events`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'kb_versions' => "CREATE TABLE IF NOT EXISTS `kb_versions` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `knowledge_base_id` BIGINT UNSIGNED NOT NULL,
+            `version_number` INT DEFAULT 1,
+            `title` VARCHAR(255) NOT NULL,
+            `content` LONGTEXT NULL,
+            `file_path` VARCHAR(255) NULL,
+            `file_name` VARCHAR(255) NULL,
+            `change_summary` VARCHAR(255) NULL,
+            `created_by` BIGINT UNSIGNED NOT NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            FOREIGN KEY (`knowledge_base_id`) REFERENCES `knowledge_bases`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'task_followers' => "CREATE TABLE IF NOT EXISTS `task_followers` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `task_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `task_followers_task_id_user_id_unique` (`task_id`, `user_id`),
+            FOREIGN KEY (`task_id`) REFERENCES `tasks`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'project_followers' => "CREATE TABLE IF NOT EXISTS `project_followers` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `project_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `project_followers_project_id_user_id_unique` (`project_id`, `user_id`),
+            FOREIGN KEY (`project_id`) REFERENCES `projects`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'task_saved_views' => "CREATE TABLE IF NOT EXISTS `task_saved_views` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `name` VARCHAR(255) NOT NULL,
+            `filters` JSON NULL,
+            `is_default` TINYINT(1) DEFAULT 0,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            INDEX `task_saved_views_user_id_is_default_index` (`user_id`, `is_default`),
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+    ];
+
+    protected array $tableSizeFixes = [
+        'project_files'       => ['column' => 'url', 'definition' => "VARCHAR(4096) NULL"],
+        'deliverable_files'   => ['column' => 'url', 'definition' => "VARCHAR(4096) NULL"],
+        'submission_attachments' => ['column' => 'url', 'definition' => "VARCHAR(4096) NULL"],
+        'task_files'          => ['column' => 'url', 'definition' => "VARCHAR(4096) NULL"],
     ];
 
     public function handle(): int
@@ -250,6 +409,12 @@ class FixTenantColumns extends Command
 
         foreach ($instance->columnFixes as $table => $columns) {
             foreach ($columns as $col) {
+                if (!self::tableExists($databaseName, $table)) {
+                    continue;
+                }
+                if (isset($col['skip_if_exists']) && $col['skip_if_exists'] && self::columnExists($databaseName, $table, $col['name'])) {
+                    continue;
+                }
                 if (!self::columnExists($databaseName, $table, $col['name'])) {
                     try {
                         $escapedTable = str_replace('`', '``', $table);
@@ -261,6 +426,27 @@ class FixTenantColumns extends Command
                         $logs[] = ['type' => 'error', 'message' => "Failed to add `{$table}`.`{$col['name']}`: {$e->getMessage()}"];
                     }
                 }
+            }
+        }
+
+        foreach ($instance->tableSizeFixes as $table => $colInfo) {
+            if (!self::tableExists($databaseName, $table)) {
+                continue;
+            }
+            if (!self::columnExists($databaseName, $table, $colInfo['column'])) {
+                continue;
+            }
+            try {
+                $currentLength = self::getColumnLength($databaseName, $table, $colInfo['column']);
+                if ($currentLength !== false && $currentLength < 4096) {
+                    $escapedTable = str_replace('`', '``', $table);
+                    $escapedCol = str_replace('`', '``', $colInfo['column']);
+                    $pdo->exec("ALTER TABLE `{$escapedTable}` MODIFY COLUMN `{$escapedCol}` {$colInfo['definition']}");
+                    $logs[] = ['type' => 'info', 'message' => "~ Increased `{$table}`.`{$colInfo['column']}` from VARCHAR({$currentLength}) to VARCHAR(4096)"];
+                    $fixed++;
+                }
+            } catch (\Throwable $e) {
+                $logs[] = ['type' => 'error', 'message' => "Failed to resize `{$table}`.`{$colInfo['column']}`: {$e->getMessage()}"];
             }
         }
 
@@ -308,5 +494,13 @@ class FixTenantColumns extends Command
             ->select("SELECT COUNT(*) as cnt FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?", [$database, $table]);
 
         return $result[0]->cnt > 0;
+    }
+
+    private static function getColumnLength(string $database, string $table, string $column): int|false
+    {
+        $result = DB::connection('tenant_fix')
+            ->select("SELECT CHARACTER_MAXIMUM_LENGTH as len FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?", [$database, $table, $column]);
+
+        return isset($result[0]) ? (int) $result[0]->len : false;
     }
 }

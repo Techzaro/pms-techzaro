@@ -739,9 +739,11 @@ export default function OrganizationDetailPage() {
                           <div className="flex items-center gap-3 flex-shrink-0">
                             <span className="text-xs" style={s.textSecondary}>{file.file_size_mb} MB</span>
                             <span className="text-xs" style={s.textMuted}>{new Date(file.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                            <button onClick={() => setStorageFileDeleteConfirm({ open: true, id: file.id })}
-                              className="p-1 rounded-md hover:bg-red-50 transition-colors" title="Delete">
-                              <Trash2 className="w-3.5 h-3.5" style={{ color: 'var(--color-danger)' }} />
+                            <button type="button"
+                              onClick={() => { console.log('[DELETE] file clicked', file.id, file.file_name); setStorageFileDeleteConfirm({ open: true, id: file.id }); }}
+                              className="p-1 rounded-md hover:bg-red-50 transition-colors"
+                              title="Delete">
+                              <Trash2 className="w-3.5 h-3.5" style={{ color: '#ef4444' }} />
                             </button>
                           </div>
                         </div>
