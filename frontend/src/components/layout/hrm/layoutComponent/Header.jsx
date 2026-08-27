@@ -781,7 +781,7 @@ function Header() {
         <div className="header-right">
 
           {/* Quick-create: post a job opening – recruiter/admin/manager only */}
-          {["admin", "manager", "recruiter"].includes(getCurrentRole()) && (
+          {/* {["admin", "manager", "recruiter"].includes(getCurrentRole()) && (
           <button
             className="task-btn1"
             onClick={() => setShowJobOpeningModal(true)}
@@ -789,9 +789,7 @@ function Header() {
             <Briefcase size={16} style={{ marginRight: 4, verticalAlign: -2 }} /> + Job Opening
           </button>
           )}
-
-          {/* Quick-create: add employee – admin/manager (HR) only */}
-          {["admin", "manager"].includes(getCurrentRole()) && (
+  {["admin", "manager"].includes(getCurrentRole()) && (
           <button
             className="task-btn1"
             style={{ background: "#10b981" }}
@@ -799,7 +797,9 @@ function Header() {
           >
             + Employee
           </button>
-          )}
+          )} */}
+          {/* Quick-create: add employee – admin/manager (HR) only */}
+        
 
           {/* Quick-create: post a notice – admin/manager only */}
           {["admin", "manager"].includes(getCurrentRole()) && (
@@ -891,12 +891,7 @@ function Header() {
 
           <hr />
 
-        </div>
-
-        {/* User info is a direct header child so it always owns a visible
-            column and cannot be pushed out by search or notification actions. */}
-
-        <div
+          <div
             className="user-info hrm-header-profile-trigger"
             ref={profileRef}
             onClick={toggleProfileModal}
@@ -906,7 +901,6 @@ function Header() {
             aria-label={`Open profile menu for ${user.name}`}
             aria-expanded={isProfileOpen}
           >
-
             <div className="user-avatar hrm-header-profile-avatar">
               {user.avatar && failedAvatarPath !== user.avatar ? (
                 <img
@@ -921,26 +915,17 @@ function Header() {
             </div>
 
             <div className="user-text">
-
               <h6>{user.name}</h6>
-
               <span>{normalizeRole(user.role)}</span>
               {user.department && <span style={{ fontSize: 11, fontWeight: 500, color: "var(--color-primary)", background: "var(--color-primary-bg)", padding: "1px 6px", borderRadius: 4, marginLeft: 6 }}>{user.department}</span>}
-
             </div>
 
             <div className="arrow-icon">
-              <ChevronDown
-                size={25}
-              />
+              <ChevronDown size={25} />
             </div>
 
             {isProfileOpen && (
-
-              <div
-                className="header-modal-card"
-                ref={profileMenuRef}
-              >
+              <div className="header-modal-card" ref={profileMenuRef}>
                 {/* Profile header: gradient with photo + name + role */}
                 <div className="hmc-header">
                   <div className="hmc-avatar">
@@ -975,7 +960,7 @@ function Header() {
                   <Lock size={20} />
                   <span>Change Password</span>
                 </button>
-                <button className={`hmc-menu-item${profileHighlightIndex === 2 ? ' hmc-menu-item--highlighted' : ''}`} onClick={() => { setIsProfileOpen(false); navigate(rolePath("history")); }} onMouseEnter={() => setProfileHighlightIndex(2)}>
+                <button className={`hmc-menu-item${profileHighlightIndex === 2 ? ' hmc-menu-item--highlighted' : ''}`} onClick={() => { setIsProfileOpen(false); navigate(`${rolePath("hrm/history")}?mode=my`); }} onMouseEnter={() => setProfileHighlightIndex(2)}>
                   <Clock size={20} />
                   <span>My Activity</span>
                 </button>
@@ -1000,9 +985,9 @@ function Header() {
                     <span>Logout</span>
                   </button>
                 </div>
-
               </div>
             )}
+          </div>
 
         </div>
 

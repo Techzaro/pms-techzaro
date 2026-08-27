@@ -84,8 +84,15 @@ class TenantMailManager
                 'encryption' => $config['encryption'],
                 'username'   => $config['username'],
                 'password'   => $config['password'],
-                'timeout'    => null,
+                'timeout'    => 15,
                 'local_domain' => null,
+                'stream'     => [
+                    'ssl' => [
+                        'allow_self_signed' => true,
+                        'verify_peer' => false,
+                        'verify_peer_name' => false,
+                    ],
+                ],
             ]);
 
             config()->set('mail.default', 'tenant_smtp');

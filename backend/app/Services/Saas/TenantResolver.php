@@ -83,7 +83,16 @@ class TenantResolver
         $path = $request->path();
 
         // Match pattern: org/{slug} or org/{slug}/...
-        if (preg_match('#^org/([a-z0-9](?:[a-z0-9\-]*[a-z0-9])?)(?:/.*)?$#', $path, $matches)) {
+        if (preg_match('#^org/([a-z0-9](?:[a-z0-9\-]*[a-z0-9])?)(?:/.*)?$#i', $path, $matches)) {
+            $slug = $matches[1];
+            $org = Organization::where('slug', $slug)->first();
+            if ($org) {
+                return $org;
+            }
+        }
+
+        // Match pattern: api/public/esign/{slug}/{token}, public/esign/{slug}/{token}, or esign/{slug}/{token}
+        if (preg_match('#^(?:api/)?(?:public/)?esign/([a-z0-9\-_]+)/[a-zA-Z0-9]{30,}#i', $path, $matches)) {
             $slug = $matches[1];
             $org = Organization::where('slug', $slug)->first();
             if ($org) {

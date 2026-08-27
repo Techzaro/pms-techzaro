@@ -96,8 +96,8 @@ function HRMAdmin() {
       fetch(`${API_URL}/hrm/notices`, { headers }).then((r) => (r.ok ? r.json() : null)),
     ])
       .then(([statsRes, noticesRes]) => {
-        if (statsRes?.data) setStats(statsRes.data);
-        if (noticesRes?.data) setNotices(Array.isArray(noticesRes.data) ? noticesRes.data : []);
+        if (statsRes) setStats(statsRes.data || statsRes);
+        if (noticesRes) setNotices(Array.isArray(noticesRes.data) ? noticesRes.data : (Array.isArray(noticesRes) ? noticesRes : []));
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -118,7 +118,7 @@ function HRMAdmin() {
           <Link to={rolePath("hrm/recruitment")} className="hero-btn hero-btn--primary">
             <Plus size={16} /> Post Job Position
           </Link>
-          <Link to={rolePath("hrm/attendance?tab=pending")} className="hero-btn hero-btn--secondary">
+          <Link to={rolePath("hrm/applications")} className="hero-btn hero-btn--secondary">
             <Send size={16} /> Member Requests Queue
           </Link>
           <Link to={rolePath("hrm/attendance?tab=attendance")} className="hero-btn hero-btn--secondary">
@@ -152,7 +152,9 @@ function HRMAdmin() {
             <span>⏳ Member Requests Queue</span>
             <AlertTriangle size={18} color="#f59e0b" />
           </div>
-          <div className="top-metric-val" style={{ color: "#d97706" }}>{loading ? "…" : (stats?.documents_pending || 0) + (stats?.offer_letters_pending || 0)} Action Needed</div>
+          <div className="top-metric-val" style={{ color: "#d97706" }}>
+            {loading ? "…" : `${stats?.pending_applications !== undefined ? stats.pending_applications : ((stats?.documents_pending || 0) + (stats?.offer_letters_pending || 0))} Action Needed`}
+          </div>
           <span className="top-metric-sub">Leaves, Advances &amp; Corrections</span>
         </div>
 

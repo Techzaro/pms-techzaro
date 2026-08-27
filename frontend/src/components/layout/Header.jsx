@@ -623,7 +623,7 @@ function Header() {
 
             <div className={"logo-text" + (showFullLogo || isSmallScreen ? "" : " logo-text--hidden")}>
               <h3>{branding?.subtitle || "PMS Portal"}</h3>
-              <span>{branding?.org_name || "Organization"}</span>
+              <span>{branding?.org_name ? `${branding.org_name} • PMS` : "PMS Portal"}</span>
             </div>
 
             <MdKeyboardArrowDown

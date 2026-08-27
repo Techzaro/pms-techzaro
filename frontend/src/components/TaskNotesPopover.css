@@ -100,7 +100,7 @@
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  opacity: 0;
+  opacity: 0.8;
   transition: opacity 0.15s, background 0.15s;
 }
 

@@ -199,10 +199,57 @@ class SuperAdminController extends Controller
     public function myProfile(Request $request): JsonResponse
     {
         $email = $request->input('email') ?? $request->query('email');
+        if (!$email && $request->user()) {
+            $email = $request->user()->email ?? null;
+        }
+
         if (!$email) {
             return response()->json(['success' => false, 'message' => 'Email is required'], 422);
         }
 
+        // 1. Check super_admin_users table in master DB first
+        try {
+            $superAdmin = DB::connection('mysql_master')
+                ->table('super_admin_users')
+                ->where('email', $email)
+                ->first();
+
+            if (!$superAdmin && $request->user() && isset($request->user()->email) && strtolower($request->user()->email) === strtolower($email)) {
+                $superAdmin = $request->user();
+            }
+
+            if ($superAdmin) {
+                return response()->json([
+                    'success' => true,
+                    'user' => [
+                        'id'                         => (int) $superAdmin->id,
+                        'name'                       => $superAdmin->name,
+                        'email'                      => $superAdmin->email,
+                        'role'                       => $superAdmin->role ?? 'super_admin',
+                        'active'                     => (bool) ($superAdmin->active ?? true),
+                        'avatar'                     => $superAdmin->avatar ?? null,
+                        'phone_number'               => $superAdmin->phone_number ?? null,
+                        'father_name'                => $superAdmin->father_name ?? null,
+                        'id_card_number'             => $superAdmin->id_card_number ?? null,
+                        'present_address'            => $superAdmin->present_address ?? null,
+                        'permanent_address'          => $superAdmin->permanent_address ?? null,
+                        'emergency_contact_name'     => $superAdmin->emergency_contact_name ?? null,
+                        'emergency_contact_relation' => $superAdmin->emergency_contact_relation ?? null,
+                        'emergency_contact_phone'    => $superAdmin->emergency_contact_phone ?? null,
+                        'created_at'                 => $superAdmin->created_at ?? null,
+                        'last_login_at'              => $superAdmin->last_login_at ?? null,
+                    ],
+                    'account' => [
+                        'status'     => ($superAdmin->active ?? true) ? 'Active' : 'Inactive',
+                        'last_login' => $superAdmin->last_login_at ?? null,
+                    ],
+                ]);
+            }
+        } catch (\Throwable $e) {
+            // Log or ignore master DB lookup error and fall through to tenant DB check
+        }
+
+        // 2. If not found in master DB, check tenant DBs (fallback for tenant users)
         $orgs = Organization::where('status', '!=', 'deleted')->get();
 
         foreach ($orgs as $org) {

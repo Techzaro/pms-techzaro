@@ -31,29 +31,23 @@ export function isAdminDomain() {
 
   // Local development — both domains on same host
   if (host === 'localhost' || host === '127.0.0.1') {
-    // In local mode, check if URL starts with /super-admin
     return window.location.pathname.startsWith('/super-admin');
   }
 
-  // Production/Staging admin domains
-  return host.startsWith('admin.');
+  // Production/Staging admin domains (e.g. admin.one.staging.techxaro.com)
+  return host.startsWith('admin.') || host.includes('admin');
 }
 
-/**
- * Check if current domain is an organization (PMS) domain.
- * Matches: app.one.techxaro.com, app.one.staging.techxaro.com, localhost
- */
 export function isOrgDomain() {
   const host = getHostname();
 
   // Local development — both domains on same host
   if (host === 'localhost' || host === '127.0.0.1') {
-    // In local mode, check if URL does NOT start with /super-admin
     return !window.location.pathname.startsWith('/super-admin');
   }
 
-  // Production/Staging org domains
-  return host.startsWith('app.');
+  // Production/Staging org domains (e.g. app.one.staging.techxaro.com)
+  return host.startsWith('app.') || (!host.includes('admin') && !window.location.pathname.startsWith('/super-admin'));
 }
 
 /**
@@ -69,18 +63,36 @@ export function getEnvironment() {
 
 /**
  * Get the admin base URL for the current environment.
- * Uses window.location.origin since both staging and production
- * run on their respective domains with relative /api paths.
  */
 export function getAdminBaseUrl() {
+  const host = getHostname();
+  const protocol = window.location.protocol;
+  if (host === 'localhost' || host === '127.0.0.1') {
+    return `${protocol}//${window.location.host}`;
+  }
+  if (host.startsWith('admin.')) {
+    return window.location.origin;
+  }
+  if (host.startsWith('app.')) {
+    return `${protocol}//${host.replace(/^app\./, 'admin.')}`;
+  }
   return window.location.origin;
 }
 
 /**
  * Get the org base URL for the current environment.
- * Uses window.location.origin since both staging and production
- * run on their respective domains with relative /api paths.
  */
 export function getOrgBaseUrl() {
+  const host = getHostname();
+  const protocol = window.location.protocol;
+  if (host === 'localhost' || host === '127.0.0.1') {
+    return `${protocol}//${window.location.host}`;
+  }
+  if (host.startsWith('app.')) {
+    return window.location.origin;
+  }
+  if (host.startsWith('admin.')) {
+    return `${protocol}//${host.replace(/^admin\./, 'app.')}`;
+  }
   return window.location.origin;
 }

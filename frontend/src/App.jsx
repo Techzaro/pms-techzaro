@@ -115,6 +115,8 @@ const OfferLetters = lazy(() => import("./pages/HRM/Offerletter"));
 const CandidateOfferPortal = lazy(
   () => import("./pages/HRM/CandidateOfferPortal"),
 );
+const HrmEsign = lazy(() => import("./pages/HRM/Esign"));
+const EsignPortal = lazy(() => import("./pages/HRM/EsignPortal"));
 const Workforce = lazy(() => import("./pages/HRM/Workforce"));
 const EmployeeDocuments = lazy(() => import("./pages/HRM/EmployeeDocuments"));
 const Attendance = lazy(() => import("./pages/HRM/Attendance"));
@@ -212,12 +214,12 @@ function AuthSecurityGuard({ children }) {
       // Admin domain detection
       const isOnAdminDomain = isLocal
         ? currentPath.startsWith("/super-admin")
-        : host.startsWith("admin.");
+        : (host.startsWith("admin.") || host.includes("admin"));
 
       // Org domain detection
       const isOnOrgDomain = isLocal
         ? !currentPath.startsWith("/super-admin")
-        : host.startsWith("app.");
+        : (host.startsWith("app.") || (!host.includes("admin") && !currentPath.startsWith("/super-admin")));
 
       const publicPaths = [
         "/login",
@@ -232,6 +234,7 @@ function AuthSecurityGuard({ children }) {
         "/super-admin/reset-password",
       ];
       const isPublic = publicPaths.includes(currentPath) || currentPath === "/";
+      const isPublicEsign = currentPath.toLowerCase().includes("/esign/") || currentPath.toLowerCase().includes("/offer-letter/portal/");
       const isSuperAdminPublic = superAdminPublicPaths.includes(currentPath);
 
       // On admin domain: only check super admin session
@@ -239,6 +242,7 @@ function AuthSecurityGuard({ children }) {
         const isSuperAdminProtected =
           currentPath.startsWith("/super-admin") &&
           !isSuperAdminPublic &&
+          !isPublicEsign &&
           currentPath !== "/super-admin";
         if (isSuperAdminProtected && !superAdminAuthToken()) {
           try {
@@ -257,6 +261,7 @@ function AuthSecurityGuard({ children }) {
         const isOrgRoute = currentPath.startsWith("/org/");
         if (
           !isPublic &&
+          !isPublicEsign &&
           !isOrgRoute &&
           !currentPath.startsWith("/super-admin") &&
           !authToken()
@@ -275,41 +280,36 @@ function AuthSecurityGuard({ children }) {
 
     // 1. Check BFCache (pageshow event when restored via browser Back/Forward button)
     const handlePageShow = (e) => {
-      if (
-        e.persisted ||
-        (window.performance &&
-          window.performance.getEntriesByType("navigation")[0]?.type ===
-            "back_forward")
-      ) {
+      if (e.persisted) {
         verifySession();
       }
     };
 
-    // 2. Check history popstate navigation
-    const handlePopState = () => {
-      verifySession();
-    };
-
-    // 3. Check visibility change (tab focus)
+    // 2. Check tab visibility (switching back to tab)
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         verifySession();
       }
     };
 
+    // 3. Check browser back/forward navigation
+    const handlePopState = () => {
+      verifySession();
+    };
+
     window.addEventListener("pageshow", handlePageShow);
-    window.addEventListener("popstate", handlePopState);
     document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("popstate", handlePopState);
 
     // Initial route check
     verifySession();
 
     return () => {
       window.removeEventListener("pageshow", handlePageShow);
-      window.removeEventListener("popstate", handlePopState);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("popstate", handlePopState);
     };
-  }, [location.pathname]);
+  }, [location]);
 
   return children;
 }
@@ -339,6 +339,10 @@ function App() {
               {/* ═══ ADMIN DOMAIN ROUTES ═══ */}
               {onAdmin && (
                 <>
+                  {/* Root and /login redirects for admin domain */}
+                  <Route path="/" element={<Navigate to="/super-admin/login" replace />} />
+                  <Route path="/login" element={<Navigate to="/super-admin/login" replace />} />
+
                   {/* Admin login */}
                   <Route
                     path="/super-admin/login"
@@ -356,6 +360,11 @@ function App() {
                     path="/super-admin/reset-password"
                     element={<SuperAdminResetPassword />}
                   />
+
+                  {/* Public candidate portals accessible on admin domain */}
+                  <Route path="/esign/:slug/:token" element={<EsignPortal />} />
+                  <Route path="/esign/:token" element={<EsignPortal />} />
+                  <Route path="/offer-letter/portal/:id" element={<CandidateOfferPortal />} />
 
                   {/* Admin protected */}
                   <Route path="/super-admin" element={<SuperAdminWrapper />}>
@@ -406,6 +415,8 @@ function App() {
                   <Route path="/logged-out" element={<LoggedOut />} />
                   <Route path="/forgot-password" element={<ForgotPassword />} />
                   <Route path="/reset-password" element={<ResetPassword />} />
+                  <Route path="/esign/:slug/:token" element={<EsignPortal />} />
+                  <Route path="/esign/:token" element={<EsignPortal />} />
 
                   {/* Organization routes - nested under /org/:slug */}
                   <Route
@@ -605,6 +616,14 @@ function App() {
                       }
                     />
                     <Route
+                      path="esign"
+                      element={
+                        <RoleProtectedRoute allowedRoles={["admin", "manager", "owner", "hr_manager"]}>
+                          <HrmEsign />
+                        </RoleProtectedRoute>
+                      }
+                    />
+                    <Route
                       path="workforce"
                       element={
                         <RoleProtectedRoute allowedRoles={["admin", "manager"]}>
@@ -704,6 +723,8 @@ function App() {
                     path="/offer-letter/portal/:id"
                     element={<CandidateOfferPortal />}
                   />
+                  <Route path="/esign/:slug/:token" element={<EsignPortal />} />
+                  <Route path="/esign/:token" element={<EsignPortal />} />
 
                   {/* Org catch-all */}
                   <Route path="*" element={<Navigate to="/login" replace />} />
@@ -719,6 +740,8 @@ function App() {
                   <Route path="/logged-out" element={<LoggedOut />} />
                   <Route path="/forgot-password" element={<ForgotPassword />} />
                   <Route path="/reset-password" element={<ResetPassword />} />
+                  <Route path="/esign/:slug/:token" element={<EsignPortal />} />
+                  <Route path="/esign/:token" element={<EsignPortal />} />
 
                   {/* Organization routes */}
                   <Route

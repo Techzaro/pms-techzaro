@@ -4,6 +4,8 @@ import { X, FileText, Award, Calendar, Send, Edit3, Save } from "lucide-react";
 const STAGE_TABS = ["Applied", "Screening", "Interview", "Offer", "Hired", "Rejected"];
 
 export default function CandidateProfileModal({
+  
+  
   candidate,
   onClose,
   onUpdateStage,

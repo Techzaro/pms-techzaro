@@ -1,1 +1,0 @@
-import{Ft as e,I as t,Nt as n,Pt as r}from"./index-DfiBs_JC.js";function i(e,n,i,a={}){return r({queryKey:Array.isArray(e)?e:[e,i],queryFn:()=>t.get(n,i),...a})}function a(r,i={}){return e(),n({mutationFn:({path:e,body:n})=>t[r](e,n),...i,onSuccess:(e,t,n)=>{i.onSuccess?.(e,t,n)}})}export{i as n,a as t};

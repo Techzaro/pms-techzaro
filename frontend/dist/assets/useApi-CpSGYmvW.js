@@ -1,1 +1,0 @@
-import{a as e,i as t,r as n}from"./useOrgBranding-DFro376A.js";import{R as r}from"./index-DewAXyAM.js";function i(t,r,i,a={}){return e({queryKey:Array.isArray(t)?t:[t,i],queryFn:()=>n.get(r,i),...a})}function a(e,i={}){return r(),t({mutationFn:({path:t,body:r})=>n[e](t,r),...i,onSuccess:(e,t,n)=>{i.onSuccess?.(e,t,n)}})}export{i as n,a as t};

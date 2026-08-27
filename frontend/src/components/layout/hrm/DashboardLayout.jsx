@@ -14,7 +14,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import Header from "./layoutComponent/Header";
 import Sidebar from "./layoutComponent/Sidebar";
 import RightSidebar from "../RightSidebar";
-import ChatWidget from "../ChatWidget";
+// import ChatWidget from "../ChatWidget";
 import { authToken } from "../../../utils/auth";
 import { publish } from "../../../utils/eventBus";
 import API_URL from "../../../config/api";
@@ -125,7 +125,7 @@ function DashboardLayout({ hideRightSidebar = false }) {
 
     
 
-      <ChatWidget />
+      {/* <ChatWidget /> */}
 
     </div>
   );

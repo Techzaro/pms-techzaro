@@ -344,6 +344,7 @@ class AuthController extends Controller
         }
 
         try {
+            $this->activityService->log($user->id, 'auth', 'Logged out of system', 'auth', $user->id, 'logout');
             $this->auditService->log(
                 module: 'auth',
                 action: 'logout',
@@ -352,7 +353,7 @@ class AuthController extends Controller
                 status: 'success'
             );
         } catch (\Throwable $e) {
-            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+            \Log::error('Failed to log audit on logout', ['error' => $e->getMessage()]);
         }
 
         return response()->json([

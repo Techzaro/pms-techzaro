@@ -447,6 +447,34 @@ class ApplicationController extends Controller
                 'comments' => 'Application submitted by employee.'
             ]);
 
+            \App\Services\HrmAuditLogger::log(
+                $request->application_type,
+                $memberRequest->id,
+                $user,
+                'Submitted',
+                null,
+                'Pending',
+                $request->description,
+                ['request_number' => $requestNumber, 'title' => $request->title],
+                $request
+            );
+
+            try {
+                app(\App\Services\ActivityService::class)->log(
+                    $user->id,
+                    'application',
+                    "Submitted {$request->application_type} application: {$request->title}",
+                    'hrm_applications',
+                    $memberRequest->id,
+                    'submitted',
+                    $request->application_type,
+                    null,
+                    ['request_number' => $requestNumber, 'status' => 'Pending']
+                );
+            } catch (\Throwable $actErr) {
+                \Log::warning('ActivityService log failed: ' . $actErr->getMessage());
+            }
+
             // Instantiate Approval Workflow Chain.
             // Stage 1: Workflow explicitly targeted at this specific user ID
             $workflowQuery = \App\Models\HrmWorkflow::where('organization_id', $organizationId)
@@ -483,6 +511,14 @@ class ApplicationController extends Controller
             if (!$workflow && $user->department) {
                 $workflow = (clone $workflowQuery)
                     ->where('department', $user->department)
+                    ->latest('created_at')
+                    ->first();
+            }
+
+            // Stage 5: "All Departments" fallback workflow
+            if (!$workflow) {
+                $workflow = (clone $workflowQuery)
+                    ->where('department', 'All Departments')
                     ->latest('created_at')
                     ->first();
             }

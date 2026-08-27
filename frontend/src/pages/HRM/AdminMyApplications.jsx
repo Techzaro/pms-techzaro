@@ -42,6 +42,13 @@ export default function AdminMyApplications() {
     if (id) {
       setSelectedHistoryId(Number(id));
     }
+    const tab = params.get('tab');
+    if (tab === 'history') {
+      setTimeout(() => {
+        const el = document.getElementById('history-section');
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+      }, 300);
+    }
   }, [location.search]);
 
   // Search & Filter State matching Member HRM Dashboard
@@ -158,19 +165,23 @@ export default function AdminMyApplications() {
       .sort((a,b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
   }, [allHistoryItems, appHistoryFilter, appHistorySearch]);
 
+  const isHistoryTab = new URLSearchParams(location.search).get('tab') === 'history';
+
   return (
     <div className="my-apps-page-container">
       {toast && <div className={`mem-toast mem-toast--${toast.kind}`} role="alert">{toast.message}</div>}
 
-      <Breadcrumb items={[{ label: "Enterprise HRM", path: rolePath("hrm") }, { label: "My Applications" }]} />
+      <Breadcrumb items={[{ label: "Enterprise HRM", path: rolePath("hrm") }, { label: isHistoryTab ? "My Requests History" : "My Applications" }]} />
       
       <header className="att-header" style={{ marginBottom: "20px", marginTop: "15px", padding: '20px', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
         <div>
           <div className="att-title-row">
-            <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#0f172a', margin: 0 }}>My Application Requests</h1>
+            <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#0f172a', margin: 0 }}>
+              {isHistoryTab ? "View All My Requests" : "My Application Requests"}
+            </h1>
           </div>
           <p style={{ margin: '8px 0 0', color: '#64748b', fontSize: '14.5px' }}>
-            Submit and track your own personal leave, advance salary, and HR requests directly from your dashboard.
+            {isHistoryTab ? "Track and view the status of all your submitted leave, advance salary, and HR requests." : "Submit and track your own personal leave, advance salary, and HR requests directly from your dashboard."}
           </p>
         </div>
       </header>
@@ -184,121 +195,124 @@ export default function AdminMyApplications() {
       ) : (
         <section className="mem-card" id="section-applications">
           <div className="mem-card-header">
-            <h2 className="mem-card-title"><FileText size={19} /> Application Requests &amp; History</h2>
+            <h2 className="mem-card-title"><FileText size={19} /> {isHistoryTab ? "Application History" : "New Application Request"}</h2>
             <p className="mem-card-desc">
-              Submit and manage your leave, advance salary, expense, and other HR requests dynamically.
+              {isHistoryTab ? "View all your past and pending HR request applications." : "Submit your leave, advance salary, expense, and other HR requests dynamically."}
             </p>
           </div>
 
-          <div className="my-apps-form-card">
-            <p className="mem-section-sub" style={{ margin: "0 0 16px" }}>
-              <FileText size={16} /> New Application Request
-            </p>
-            <div className="hrm-application-form-wrapper" style={{ pointerEvents: submittingReq ? 'none' : 'auto', opacity: submittingReq ? 0.7 : 1 }}>
-              <HRMDynamicFormRenderer key={formResetKey} onSubmit={handleDynamicFormSubmit} />
-            </div>
-          </div>
-
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-            <p className="mem-section-sub" style={{ margin: 0 }}>
-              <List size={16} /> Application History
-            </p>
-          </div>
-
-          {/* Member Side Metric Stats Grid */}
-          <div className="mem-stat-grid">
-
-            <div style={{ padding: '16px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', textAlign: 'center' }}>
-              <div style={{ fontSize: '24px', fontWeight: '700', color: '#1e293b' }}>{historyTotal}</div>
-              <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Applications</div>
-            </div>
-            <div style={{ padding: '16px', background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: '8px', textAlign: 'center' }}>
-              <div style={{ fontSize: '24px', fontWeight: '700', color: '#b45309' }}>{historyPending}</div>
-              <div style={{ fontSize: '12px', color: '#b45309', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Pending Review</div>
-            </div>
-            <div style={{ padding: '16px', background: '#ecfdf5', border: '1px solid #d1fae5', borderRadius: '8px', textAlign: 'center' }}>
-              <div style={{ fontSize: '24px', fontWeight: '700', color: '#047857' }}>{historyApproved}</div>
-              <div style={{ fontSize: '12px', color: '#047857', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Approved</div>
-            </div>
-            <div style={{ padding: '16px', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '8px', textAlign: 'center' }}>
-              <div style={{ fontSize: '24px', fontWeight: '700', color: '#b91c1c' }}>{historyRejected}</div>
-              <div style={{ fontSize: '12px', color: '#b91c1c', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Rejected</div>
-            </div>
-          </div>
-
-          {/* Search & Status Filter Controls */}
-          <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
-            <div style={{ flex: 1, minWidth: '200px', position: 'relative' }}>
-              <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted, #64748b)' }} />
-              <input 
-                type="text" 
-                placeholder="Search applications..." 
-                value={appHistorySearch}
-                onChange={(e) => setAppHistorySearch(e.target.value)}
-                style={{ width: '100%', padding: '10px 10px 10px 36px', border: '1px solid var(--border-color, #cbd5e1)', borderRadius: '6px', fontSize: '13px' }}
-              />
-            </div>
-            <select 
-              value={appHistoryFilter}
-              onChange={(e) => setAppHistoryFilter(e.target.value)}
-              style={{ padding: '10px 16px', border: '1px solid var(--border-color, #cbd5e1)', borderRadius: '6px', fontSize: '13px', background: 'white' }}
-            >
-              <option value="All">All Statuses</option>
-              <option value="Pending">Pending</option>
-              <option value="Approved">Approved</option>
-              <option value="Rejected">Rejected</option>
-            </select>
-          </div>
-
-          {loading && !data ? (
-            <div className="mem-table-empty">Loading applications...</div>
-          ) : filteredHistory.length === 0 ? (
-            <div className="mem-table-empty">
-              {allHistoryItems.length === 0 ? "No applications submitted yet." : "No applications found matching your criteria."}
+          {!isHistoryTab ? (
+            <div className="my-apps-form-card">
+              <p className="mem-section-sub" style={{ margin: "0 0 16px" }}>
+                <FileText size={16} /> New Application Request Form
+              </p>
+              <div className="hrm-application-form-wrapper" style={{ pointerEvents: submittingReq ? 'none' : 'auto', opacity: submittingReq ? 0.7 : 1 }}>
+                <HRMDynamicFormRenderer key={formResetKey} onSubmit={handleDynamicFormSubmit} />
+              </div>
             </div>
           ) : (
-            <div className="mem-table-wrap">
-              <table className="mem-table">
-                <thead>
-                  <tr>
-                    <th>Request Type</th>
-                    <th>Subject / Details</th>
-                    <th>Status</th>
-                    <th>Submitted Date</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredHistory.map((r) => (
-                    <tr key={r.id}>
-                      <td style={{ fontWeight: "600", color: "var(--text-heading, #0f172a)" }}>
-                        {r.category || r.leave_type || r.application_type || r.name}
-                      </td>
-                      <td style={{ fontWeight: "600", color: "var(--text-dark, #334155)", maxWidth: "250px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {r.subject || r.title || r.reason || "-"}
-                      </td>
-                      <td>
-                        <span className={`mem-badge ${
-                          r.status === "Approved" || r.status === "Completed" ? "mem-badge--success" : 
-                          r.status === "Rejected" || r.status === "Cancelled" ? "mem-badge--danger" : 
-                          "mem-badge--warning"
-                        }`}>
-                          {r.status || "Pending"}
-                        </span>
-                      </td>
-                      <td style={{ fontSize: "11.5px", color: "var(--text-muted, #64748b)" }}>
-                        {r.created_at ? new Date(r.created_at).toLocaleDateString() : "-"}
-                      </td>
-                      <td>
-                        <button className="mem-btn mem-btn--secondary" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={() => setSelectedHistoryId(r.id)}>
-                          <Eye size={14} style={{ marginRight: '4px' }} /> View Details
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <>
+              <div id="history-section" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                <p className="mem-section-sub" style={{ margin: 0 }}>
+                  <List size={16} /> Application History
+                </p>
+              </div>
+
+              {/* Member Side Metric Stats Grid */}
+              <div className="mem-stat-grid">
+                <div style={{ padding: '16px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '24px', fontWeight: '700', color: '#1e293b' }}>{historyTotal}</div>
+                  <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Applications</div>
+                </div>
+                <div style={{ padding: '16px', background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: '8px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '24px', fontWeight: '700', color: '#b45309' }}>{historyPending}</div>
+                  <div style={{ fontSize: '12px', color: '#b45309', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Pending Review</div>
+                </div>
+                <div style={{ padding: '16px', background: '#ecfdf5', border: '1px solid #d1fae5', borderRadius: '8px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '24px', fontWeight: '700', color: '#047857' }}>{historyApproved}</div>
+                  <div style={{ fontSize: '12px', color: '#047857', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Approved</div>
+                </div>
+                <div style={{ padding: '16px', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '8px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '24px', fontWeight: '700', color: '#b91c1c' }}>{historyRejected}</div>
+                  <div style={{ fontSize: '12px', color: '#b91c1c', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Rejected</div>
+                </div>
+              </div>
+
+              {/* Search & Status Filter Controls */}
+              <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: '200px', position: 'relative' }}>
+                  <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted, #64748b)' }} />
+                  <input 
+                    type="text" 
+                    placeholder="Search applications..." 
+                    value={appHistorySearch}
+                    onChange={(e) => setAppHistorySearch(e.target.value)}
+                    style={{ width: '100%', padding: '10px 10px 10px 36px', border: '1px solid var(--border-color, #cbd5e1)', borderRadius: '6px', fontSize: '13px' }}
+                  />
+                </div>
+                <select 
+                  value={appHistoryFilter}
+                  onChange={(e) => setAppHistoryFilter(e.target.value)}
+                  style={{ padding: '10px 16px', border: '1px solid var(--border-color, #cbd5e1)', borderRadius: '6px', fontSize: '13px', background: 'white' }}
+                >
+                  <option value="All">All Statuses</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Approved">Approved</option>
+                  <option value="Rejected">Rejected</option>
+                </select>
+              </div>
+
+              {loading && !data ? (
+                <div className="mem-table-empty">Loading applications...</div>
+              ) : filteredHistory.length === 0 ? (
+                <div className="mem-table-empty">
+                  {allHistoryItems.length === 0 ? "No applications submitted yet." : "No applications found matching your criteria."}
+                </div>
+              ) : (
+                <div className="mem-table-wrap">
+                  <table className="mem-table">
+                    <thead>
+                      <tr>
+                        <th>Request Type</th>
+                        <th>Subject / Details</th>
+                        <th>Status</th>
+                        <th>Submitted Date</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredHistory.map((r) => (
+                        <tr key={r.id}>
+                          <td style={{ fontWeight: "600", color: "var(--text-heading, #0f172a)" }}>
+                            {r.category || r.leave_type || r.application_type || r.name}
+                          </td>
+                          <td style={{ fontWeight: "600", color: "var(--text-dark, #334155)", maxWidth: "250px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {r.subject || r.title || r.reason || "-"}
+                          </td>
+                          <td>
+                            <span className={`mem-badge ${
+                              r.status === "Approved" || r.status === "Completed" ? "mem-badge--success" : 
+                              r.status === "Rejected" || r.status === "Cancelled" ? "mem-badge--danger" : 
+                              "mem-badge--warning"
+                            }`}>
+                              {r.status || "Pending"}
+                            </span>
+                          </td>
+                          <td style={{ fontSize: "11.5px", color: "var(--text-muted, #64748b)" }}>
+                            {r.created_at ? new Date(r.created_at).toLocaleDateString() : "-"}
+                          </td>
+                          <td>
+                            <button className="mem-btn mem-btn--secondary" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={() => setSelectedHistoryId(r.id)}>
+                              <Eye size={14} style={{ marginRight: '4px' }} /> View Details
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
           )}
         </section>
       )}

@@ -1,0 +1,1 @@
+import{i as e,r as t}from"./useOrgBranding-CjWfyhvE.js";import{L as n}from"./index-C_aPOBL0.js";import{t as r}from"./api-Bp-r5hjE.js";function i(t,n,i,a={}){return e({queryKey:Array.isArray(t)?t:[t,i],queryFn:()=>r.get(n,i),...a})}function a(e,i={}){return n(),t({mutationFn:({path:t,body:n})=>r[e](t,n),...i,onSuccess:(e,t,n)=>{i.onSuccess?.(e,t,n)}})}export{i as n,a as t};

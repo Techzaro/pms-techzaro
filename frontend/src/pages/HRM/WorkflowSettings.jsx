@@ -1,5 +1,5 @@
-import  { useState, useEffect, useRef } from "react";
-import { Plus, Trash2, Save, GripVertical, Settings, Users, ArrowUp, ArrowDown, Building2, CheckSquare, ChevronDown } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Plus, Trash2, Save, GripVertical, Settings, Users, ArrowUp, ArrowDown, Building2, CheckSquare, ChevronDown, Search } from "lucide-react";
 import API_URL from "../../config/api";
 import { authToken } from "../../utils/auth";
 import Breadcrumb from "../../components/Breadcrumb";
@@ -9,7 +9,7 @@ import "./WorkflowSettings.css";
 
 export default function WorkflowSettings() {
   const [departments, setDepartments] = useState([]);
-  const [selectedDepartment, setSelectedDepartment] = useState("");
+  const [selectedDepartment, setSelectedDepartment] = useState("All Departments");
   const [submitterRole, setSubmitterRole] = useState([]);
   const [submitterDropdownOpen, setSubmitterDropdownOpen] = useState(false);
   const [openUserSelect, setOpenUserSelect] = useState(null);
@@ -21,6 +21,9 @@ export default function WorkflowSettings() {
   const [users, setUsers] = useState([]);
   const [steps, setSteps] = useState([]);
   const [orgRoles, setOrgRoles] = useState([]);
+  
+  const [submitterSearch, setSubmitterSearch] = useState("");
+  const [stepUserSearch, setStepUserSearch] = useState("");
   
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -47,8 +50,7 @@ export default function WorkflowSettings() {
 
   useEffect(() => {
     fetchDepartments();
-    fetchOrgRoles("");
-    checkExistingWorkflows();
+    fetchOrgRoles("All Departments");
   }, []);
 
   useEffect(() => {
@@ -63,13 +65,11 @@ export default function WorkflowSettings() {
       setDepartmentWorkflows([]);
       setSubmitterRole([]);
     }
-    // selectedDepartment is the complete trigger for this coordinated reload.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDepartment]);
 
   useEffect(() => {
     applyWorkflowData();
-    // Apply only when the selected role or fetched workflow data changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [submitterRole, departmentWorkflows]);
 
@@ -79,7 +79,12 @@ export default function WorkflowSettings() {
       const headers = { Accept: "application/json", Authorization: `Bearer ${token}` };
       const res = await fetch(`${API_URL}/hrm/workflows/departments`, { headers });
       const json = await res.json();
-      if (json.success) setDepartments(json.data);
+      if (json.success) {
+        setDepartments(json.data);
+        if (!selectedDepartment && json.data.length > 0) {
+          setSelectedDepartment(json.data[0]);
+        }
+      }
     } catch (err) {
       console.error("Failed to fetch departments", err);
     }
@@ -93,20 +98,6 @@ export default function WorkflowSettings() {
       const res = await fetch(url, { headers });
       const json = await res.json();
       if (json.success) setOrgRoles(json.data);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const checkExistingWorkflows = async () => {
-    try {
-      const token = authToken();
-      const headers = { Accept: "application/json", Authorization: `Bearer ${token}` };
-      const res = await fetch(`${API_URL}/hrm/workflows`, { headers });
-      const json = await res.json();
-      if (json.success && json.data.length > 0) {
-        setSelectedDepartment(json.data[0].department);
-      }
     } catch (err) {
       console.error(err);
     }
@@ -142,15 +133,12 @@ export default function WorkflowSettings() {
 
   const applyWorkflowData = () => {
     if (!departmentWorkflows || departmentWorkflows.length === 0) {
-        setSelectedTypes([]);
-        setSteps([]);
-        return;
+      setSelectedTypes([]);
+      return;
     }
     const currentRole = submitterRole.length === 0 ? null : submitterRole;
     const wf = departmentWorkflows.find(w => {
-      // Both null
       if (!w.submitter_role && !currentRole) return true;
-      // Compare arrays
       if (Array.isArray(w.submitter_role) && Array.isArray(currentRole)) {
         if (w.submitter_role.length !== currentRole.length) return false;
         const sortedW = [...w.submitter_role].sort();
@@ -168,19 +156,19 @@ export default function WorkflowSettings() {
     }
   };
 
-    const toggleSubmitterRole = (role) => {
-      if (role === "") {
-        setSubmitterRole([]);
-        return;
+  const toggleSubmitterRole = (role) => {
+    if (role === "") {
+      setSubmitterRole([]);
+      return;
+    }
+    setSubmitterRole(prev => {
+      if (prev.includes(role)) {
+        return prev.filter(r => r !== role);
+      } else {
+        return [...prev, role];
       }
-      setSubmitterRole(prev => {
-        if (prev.includes(role)) {
-          return prev.filter(r => r !== role);
-        } else {
-          return [...prev, role];
-        }
-      });
-    };
+    });
+  };
 
   const handleSave = async () => {
     if (!selectedDepartment) return alert("Please select a department.");
@@ -188,8 +176,19 @@ export default function WorkflowSettings() {
     
     // Validate steps
     for (let i = 0; i < steps.length; i++) {
-      if (steps[i].approver_type === 'User' && !steps[i].approver_id) {
-        return alert(`Please select a specific user for Step ${i + 1}`);
+      if (steps[i].approver_type === 'User') {
+        if (!steps[i].approver_id) {
+          return alert(`Please select a specific user for Step ${i + 1}`);
+        }
+        const u = users.find(user => String(user.id) === String(steps[i].approver_id));
+        if (u) {
+          if (submitterRole.includes(String(u.id))) {
+            return alert(`Step ${i + 1}: ${u.name} is selected as a submitter and cannot approve their own request.`);
+          }
+          if (u.role === 'member') {
+            return alert(`Step ${i + 1}: ${u.name} is a regular member and does not have application approval access in their sidebar.`);
+          }
+        }
       }
     }
 
@@ -232,7 +231,7 @@ export default function WorkflowSettings() {
 
   const addStep = () => {
     setSubmitterDropdownOpen(false);
-    setSteps([...steps, { id: Date.now(), approver_type: "Designation", approver_id: "" }]);
+    setSteps([...steps, { id: Date.now(), approver_type: "User", approver_id: "" }]);
   };
 
   const removeStep = (id) => {
@@ -242,7 +241,6 @@ export default function WorkflowSettings() {
   const updateStep = (id, field, value) => {
     setSteps(steps.map(s => s.id === id ? { ...s, [field]: value } : s));
   };
-
   const moveStep = (index, direction) => {
     if (direction === -1 && index === 0) return;
     if (direction === 1 && index === steps.length - 1) return;
@@ -346,33 +344,51 @@ export default function WorkflowSettings() {
                         ) : (
                           submitterRole.map(r => {
                             const u = users.find(user => String(user.id) === String(r));
-                            return <span key={r} className="ws-badge ws-badge-selected">{u ? u.name : r}</span>;
+                            return <span key={r} className="ws-badge ws-badge-selected">{u ? `${u.name} (${u.designation || 'Staff'} • ${u.department || 'General'})` : r}</span>;
                           })
                         )}
                       </div>
                       <ChevronDown size={18} color="#94a3b8" />
                     </div>
                     {submitterDropdownOpen && (
-                      <div className="ws-multiselect-dropdown" style={{ zIndex: 100, maxHeight: '250px' }}>
-                        {users.map(u => {
-                          const isMgr = u.role === 'manager' || u.designation === 'Manager';
-                          const isTL = !isMgr && u.role === 'team_lead';
-                          return (
-                           <label key={u.id} className="ws-multiselect-option" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                             <input 
-                               type="checkbox" 
-                               checked={submitterRole.includes(String(u.id))} 
-                               onChange={() => toggleSubmitterRole(String(u.id))} 
-                             />
-                             <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flex: 1, justifyContent: 'space-between' }}>
-                               <span>{u.name} <small style={{ color: '#64748b', fontSize: '11px', marginLeft: '4px' }}>({u.designation || 'Staff'})</small></span>
-                               <div style={{ display: 'flex', gap: '4px' }}>
-                                 {isMgr ? <span className="ws-mgr-badge">Department Manager</span> : isTL ? <span className="ws-tl-badge">Team Leader</span> : null}
-                               </div>
-                             </div>
-                           </label>
-                          );
-                        })}
+                      <div className="ws-multiselect-dropdown" style={{ zIndex: 100, maxHeight: '280px', overflowY: 'auto' }}>
+                        <div className="ws-dropdown-search">
+                          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                            <Search size={14} style={{ position: 'absolute', left: '10px', color: '#94a3b8' }} />
+                            <input 
+                              type="text" 
+                              placeholder="Search user, department, or designation..." 
+                              value={submitterSearch}
+                              onChange={(e) => setSubmitterSearch(e.target.value)}
+                              className="ws-dropdown-search-input"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                        </div>
+                        {(selectedDepartment && selectedDepartment !== 'All Departments' && selectedDepartment !== 'All' 
+                          ? users.filter(u => u.department === selectedDepartment) 
+                          : users)
+                          .filter(u => {
+                            if (!submitterSearch.trim()) return true;
+                            const q = submitterSearch.toLowerCase();
+                            return (
+                              u.name?.toLowerCase().includes(q) ||
+                              u.department?.toLowerCase().includes(q) ||
+                              u.designation?.toLowerCase().includes(q)
+                            );
+                          })
+                          .map(u => (
+                            <label key={u.id} className="ws-multiselect-option" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <input 
+                                type="checkbox" 
+                                checked={submitterRole.includes(String(u.id))} 
+                                onChange={() => toggleSubmitterRole(String(u.id))} 
+                              />
+                              <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flex: 1, justifyContent: 'space-between' }}>
+                                <span>{u.name} <small style={{ color: '#64748b', fontSize: '11px', marginLeft: '4px' }}>({u.designation || 'Staff'} • {u.department || 'General'})</small></span>
+                              </div>
+                            </label>
+                          ))}
                       </div>
                     )}
                   </div>
@@ -381,7 +397,21 @@ export default function WorkflowSettings() {
               </div>
               
               {loading ? (
-                <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>Loading workflow data...</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '12px 0' }}>
+                  <div className="ws-skeleton" style={{ width: '40%', height: '24px', marginBottom: '8px' }}></div>
+                  <div className="ws-skeleton-card">
+                    <div className="ws-skeleton" style={{ width: '30%', height: '16px' }}></div>
+                    <div className="ws-skeleton" style={{ width: '100%', height: '42px', borderRadius: '10px' }}></div>
+                  </div>
+                  <div className="ws-skeleton-card">
+                    <div className="ws-skeleton" style={{ width: '25%', height: '16px' }}></div>
+                    <div className="ws-skeleton" style={{ width: '100%', height: '42px', borderRadius: '10px' }}></div>
+                  </div>
+                  <div className="ws-skeleton-card">
+                    <div className="ws-skeleton" style={{ width: '35%', height: '16px' }}></div>
+                    <div className="ws-skeleton" style={{ width: '100%', height: '42px', borderRadius: '10px' }}></div>
+                  </div>
+                </div>
               ) : steps.length === 0 ? (
                 <div className="ws-empty-state" style={{ height: "auto", padding: "60px 0" }}>
                   <div className="ws-empty-icon" style={{ background: "#f0fdf4", color: "#22c55e" }}>
@@ -427,26 +457,42 @@ export default function WorkflowSettings() {
                               style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', background: 'white' }}
                               onClick={() => setOpenDesignationSelect(openDesignationSelect === step.id ? null : step.id)}
                             >
-                              {step.approver_id ? (
-                                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
-                                  <span>{step.approver_id}</span>
-                                  <div style={{ display: 'flex', gap: '4px' }}>
-                                    {users.some(u => u.designation === step.approver_id && u.role === 'team_lead') && (
-                                      <span className="ws-tl-badge">Team Leader</span>
-                                    )}
-                                    {(step.approver_id === 'Manager' || users.some(u => u.designation === step.approver_id && (u.role === 'manager' || u.designation === 'Manager'))) && (
-                                      <span className="ws-mgr-badge">Department Manager</span>
-                                    )}
+                              {step.approver_id ? (() => {
+                                const matching = users.filter(u => u.designation === step.approver_id);
+                                const userText = matching.length > 0
+                                  ? matching.map(u => `${u.name} • ${u.department || 'General'}`).join(', ')
+                                  : '';
+                                return (
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                                    <span><strong>{step.approver_id}</strong>{userText && <small style={{ color: '#64748b', fontSize: '12px', marginLeft: '6px' }}>— {userText}</small>}</span>
                                   </div>
-                                </div>
-                              ) : <span style={{ color: '#94a3b8' }}>Select Designation...</span>}
+                                );
+                              })() : <span style={{ color: '#94a3b8' }}>Select Designation...</span>}
                               <ChevronDown size={18} color="#94a3b8" style={{ marginLeft: 'auto' }} />
                             </div>
                             {openDesignationSelect === step.id && (
-                              <div className="ws-multiselect-dropdown" style={{ zIndex: 100, maxHeight: '200px' }}>
-                                {Array.from(new Set([...orgRoles, 'Admin', 'Manager'])).map(r => {
-                                  const isMgr = r === 'Manager';
-                                  const isSubmitter = users.some(u => u.designation === r && submitterRole.includes(String(u.id)));
+                              <div className="ws-multiselect-dropdown" style={{ zIndex: 100, maxHeight: '220px', overflowY: 'auto' }}>
+                                {orgRoles.map(r => {
+                                  const desigUsers = users.filter(u => u.designation === r);
+                                  const userText = desigUsers.length > 0
+                                    ? desigUsers.map(u => `${u.name} • ${u.department || 'General'}`).join(', ')
+                                    : '';
+                                  const isSubmitterDesig = desigUsers.length > 0 && desigUsers.some(u => submitterRole.includes(String(u.id)));
+                                  const allUsersAreMembers = desigUsers.length > 0 && desigUsers.every(u => u.role === 'member');
+                                  const isDesigAlreadyAdded = steps.some(s => 
+                                    s.id !== step.id && 
+                                    (
+                                      (s.approver_type === 'Designation' && s.approver_id === r) ||
+                                      (s.approver_type === 'User' && desigUsers.some(u => String(u.id) === String(s.approver_id)))
+                                    )
+                                  );
+                                  const isDisabled = isSubmitterDesig || allUsersAreMembers || isDesigAlreadyAdded;
+
+                                  let disableTitle = "";
+                                  if (isSubmitterDesig) disableTitle = "All users under this designation are submitters";
+                                  else if (allUsersAreMembers) disableTitle = "Users with the Member role do not have access to approve applications in their portal.";
+                                  else if (isDesigAlreadyAdded) disableTitle = "This designation or user is already added in another approval step.";
+
                                   return (
                                     <div 
                                       key={r} 
@@ -455,20 +501,39 @@ export default function WorkflowSettings() {
                                         display: 'flex', 
                                         justifyContent: 'space-between', 
                                         alignItems: 'center',
-                                        opacity: isSubmitter ? 0.4 : 1,
-                                        cursor: isSubmitter ? 'not-allowed' : 'pointer',
-                                        background: isSubmitter ? '#f8fafc' : undefined
+                                        gap: '12px',
+                                        padding: '8px 12px',
+                                        opacity: isDisabled ? 0.5 : 1,
+                                        cursor: isDisabled ? 'not-allowed' : 'pointer',
+                                        background: isDisabled ? '#f8fafc' : undefined
                                       }}
-                                      title={isSubmitter ? 'Includes a selected submitter user' : ''}
+                                      title={disableTitle}
                                       onClick={() => {
-                                        if (isSubmitter) return;
+                                        if (isDisabled) return;
                                         updateStep(step.id, 'approver_id', r);
                                         setOpenDesignationSelect(null);
                                       }}
                                     >
-                                      <span>{r}</span>
-                                      <div style={{ display: 'flex', gap: '4px' }}>
-                                        {isMgr ? <span className="ws-mgr-badge">Department Manager</span> : null}
+                                      <span>
+                                        <strong style={{ fontWeight: '600' }}>{r}</strong>
+                                        {userText && <small style={{ color: '#64748b', fontSize: '11px', marginLeft: '6px' }}>({userText})</small>}
+                                      </span>
+                                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
+                                        {isSubmitterDesig && (
+                                          <span style={{ fontSize: '11px', color: '#dc2626', background: '#fef2f2', border: '1px solid #fca5a5', padding: '2px 8px', borderRadius: '4px', fontWeight: '600', whiteSpace: 'nowrap' }}>
+                                            Submitter
+                                          </span>
+                                        )}
+                                        {isDesigAlreadyAdded && !isSubmitterDesig && (
+                                          <span style={{ fontSize: '11px', color: '#d97706', background: '#fffbeb', border: '1px solid #fef3c7', padding: '2px 8px', borderRadius: '4px', fontWeight: '600', whiteSpace: 'nowrap' }}>
+                                            Already Added
+                                          </span>
+                                        )}
+                                        {allUsersAreMembers && !isSubmitterDesig && !isDesigAlreadyAdded && (
+                                          <span style={{ fontSize: '11px', color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', padding: '2px 8px', borderRadius: '4px', fontWeight: '600', whiteSpace: 'nowrap' }}>
+                                            No Approval Rights (Member Role)
+                                          </span>
+                                        )}
                                       </div>
                                     </div>
                                   );
@@ -487,51 +552,102 @@ export default function WorkflowSettings() {
                                 const u = users.find(user => String(user.id) === String(step.approver_id));
                                 return u ? (
                                   <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
-                                    <span>{u.name} {u.designation ? `- ${u.designation}` : (u.role === 'admin' ? '- Admin' : '')}</span>
-                                    <div style={{ display: 'flex', gap: '4px' }}>
-                                      {(u.role === 'manager' || u.designation === 'Manager') ? (
-                                        <span className="ws-mgr-badge">Department Manager</span>
-                                      ) : u.role === 'team_lead' ? (
-                                        <span className="ws-tl-badge">Team Leader</span>
-                                      ) : null}
-                                    </div>
+                                    <span><strong>{u.name}</strong> <small style={{ color: '#64748b', fontSize: '12px', marginLeft: '6px' }}>({u.designation || 'Staff'} • {u.department || 'General'})</small></span>
+                                    {u.role === 'member' && (
+                                      <span style={{ fontSize: '11px', color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', padding: '2px 8px', borderRadius: '4px', fontWeight: '600' }}>
+                                        No Approval Rights (Member Role)
+                                      </span>
+                                    )}
                                   </div>
                                 ) : <span style={{ color: '#94a3b8' }}>Select User...</span>;
                               })() : <span style={{ color: '#94a3b8' }}>Select User...</span>}
                               <ChevronDown size={18} color="#94a3b8" style={{ marginLeft: 'auto' }} />
                             </div>
                             {openUserSelect === step.id && (
-                              <div className="ws-multiselect-dropdown" style={{ zIndex: 100, maxHeight: '200px' }}>
-                                {users.filter(u => !steps.some(s => s.approver_type === 'User' && s.id !== step.id && String(s.approver_id) === String(u.id))).map(u => {
-                                  const isSubmitter = submitterRole.includes(String(u.id));
-                                  const isMgr = u.role === 'manager' || u.designation === 'Manager';
-                                  const isTL = !isMgr && u.role === 'team_lead';
-                                  return (
-                                    <div 
-                                      key={u.id} 
-                                      className="ws-multiselect-option" 
-                                      style={{ 
-                                        display: 'flex', 
-                                        justifyContent: 'space-between', 
-                                        alignItems: 'center',
-                                        opacity: isSubmitter ? 0.4 : 1,
-                                        cursor: isSubmitter ? 'not-allowed' : 'pointer',
-                                        background: isSubmitter ? '#f8fafc' : undefined
-                                      }}
-                                      title={isSubmitter ? 'Cannot approve their own request' : ''}
-                                      onClick={() => {
-                                        if (isSubmitter) return;
-                                        updateStep(step.id, 'approver_id', String(u.id));
-                                        setOpenUserSelect(null);
-                                      }}
-                                    >
-                                      <span>{u.name} {u.designation ? `- ${u.designation}` : (u.role === 'admin' ? '- Admin' : '')}</span>
-                                      <div style={{ display: 'flex', gap: '4px' }}>
-                                        {isMgr ? <span className="ws-mgr-badge">Department Manager</span> : isTL ? <span className="ws-tl-badge">Team Leader</span> : null}
+                              <div className="ws-multiselect-dropdown" style={{ zIndex: 100, maxHeight: '280px', overflowY: 'auto' }}>
+                                <div className="ws-dropdown-search">
+                                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                    <Search size={14} style={{ position: 'absolute', left: '10px', color: '#94a3b8' }} />
+                                    <input 
+                                      type="text" 
+                                      placeholder="Search approver by name, designation, or department..." 
+                                      value={stepUserSearch}
+                                      onChange={(e) => setStepUserSearch(e.target.value)}
+                                      className="ws-dropdown-search-input"
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                  </div>
+                                </div>
+                                {users
+                                  .filter(u => {
+                                    if (!stepUserSearch.trim()) return true;
+                                    const q = stepUserSearch.toLowerCase();
+                                    return (
+                                      u.name?.toLowerCase().includes(q) ||
+                                      u.department?.toLowerCase().includes(q) ||
+                                      u.designation?.toLowerCase().includes(q)
+                                    );
+                                  })
+                                  .map(u => {
+                                    const isSubmitter = submitterRole.includes(String(u.id));
+                                    const isAlreadyAdded = steps.some(s => 
+                                      s.id !== step.id && 
+                                      (
+                                        (s.approver_type === 'User' && String(s.approver_id) === String(u.id)) ||
+                                        (s.approver_type === 'Designation' && s.approver_id === u.designation)
+                                      )
+                                    );
+                                    const isMemberRole = u.role === 'member';
+                                    const isDisabled = isSubmitter || isAlreadyAdded || isMemberRole;
+
+                                    let disableReason = "";
+                                    if (isSubmitter) disableReason = "Cannot approve their own request";
+                                    else if (isAlreadyAdded) disableReason = "Already added in another step";
+                                    else if (isMemberRole) disableReason = "Users with the Member role do not have access to approve applications in their portal.";
+
+                                    return (
+                                      <div 
+                                        key={u.id} 
+                                        className="ws-multiselect-option" 
+                                        style={{ 
+                                          display: 'flex', 
+                                          justifyContent: 'space-between', 
+                                          alignItems: 'center',
+                                          gap: '12px',
+                                          padding: '8px 12px',
+                                          opacity: isDisabled ? 0.5 : 1,
+                                          cursor: isDisabled ? 'not-allowed' : 'pointer',
+                                          background: isDisabled ? '#f8fafc' : undefined
+                                        }}
+                                        title={disableReason}
+                                        onClick={() => {
+                                          if (isDisabled) return;
+                                          updateStep(step.id, 'approver_id', String(u.id));
+                                          setOpenUserSelect(null);
+                                          setStepUserSearch("");
+                                        }}
+                                      >
+                                        <span>{u.name} <small style={{ color: '#64748b', fontSize: '11px', marginLeft: '4px' }}>({u.designation || 'Staff'} • {u.department || 'General'})</small></span>
+                                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
+                                          {isSubmitter && (
+                                            <span style={{ fontSize: '11px', color: '#dc2626', background: '#fef2f2', border: '1px solid #fca5a5', padding: '2px 8px', borderRadius: '4px', fontWeight: '600', whiteSpace: 'nowrap' }}>
+                                              Submitter
+                                            </span>
+                                          )}
+                                          {isAlreadyAdded && !isSubmitter && (
+                                            <span style={{ fontSize: '11px', color: '#d97706', background: '#fffbeb', border: '1px solid #fef3c7', padding: '2px 8px', borderRadius: '4px', fontWeight: '600', whiteSpace: 'nowrap' }}>
+                                              Already Added
+                                            </span>
+                                          )}
+                                          {isMemberRole && !isSubmitter && !isAlreadyAdded && (
+                                            <span style={{ fontSize: '11px', color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', padding: '2px 8px', borderRadius: '4px', fontWeight: '600', whiteSpace: 'nowrap' }}>
+                                              No Approval Rights (Member Role)
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
-                                    </div>
-                                  );
-                                })}
+                                    );
+                                  })}
                               </div>
                             )}
                           </div>

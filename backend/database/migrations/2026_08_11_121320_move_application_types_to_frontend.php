@@ -11,9 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-
-
-
+        Schema::disableForeignKeyConstraints();
 
         // 3. Drop hrm_workflow_application_types
         Schema::dropIfExists('hrm_workflow_application_types');
@@ -23,6 +21,8 @@ return new class extends Migration
 
         // 4. Drop hrm_application_types
         Schema::dropIfExists('hrm_application_types');
+
+        Schema::enableForeignKeyConstraints();
     }
 
     /**
