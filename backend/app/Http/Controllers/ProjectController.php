@@ -759,6 +759,7 @@ class ProjectController extends Controller
         }
 
         // Sync uploaded files if sent as multipart files
+        $filesSkipped = false;
         if ($request->hasFile('files')) {
             foreach ($request->file('files') as $idx => $uploadedFile) {
                 $storageCheck = $this->checkStorageLimit($request, $uploadedFile);
@@ -770,6 +771,8 @@ class ProjectController extends Controller
                         'name' => $customName,
                         'url' => '/storage/'.$path,
                     ]);
+                } else {
+                    $filesSkipped = true;
                 }
             }
         }
@@ -882,9 +885,15 @@ class ProjectController extends Controller
             'workflowEvents' => fn ($q) => $q->with('user:id,name'),
         ]);
 
+        $projectMessage = $changeCount > 0 ? 'Project updated — '.$changeCount.' change(s) made' : 'Project updated successfully';
+        if ($filesSkipped) {
+            $projectMessage = $this->buildFileSkippedMessage('project');
+        }
+
         return response()->json([
             'success' => true,
-            'message' => $changeCount > 0 ? 'Project updated — '.$changeCount.' change(s) made' : 'Project updated successfully',
+            'message' => $projectMessage,
+            'file_skipped' => $filesSkipped,
             'project' => $project,
             'changes_count' => $changeCount,
         ]);
@@ -1190,7 +1199,13 @@ class ProjectController extends Controller
             $file = $request->file('file');
             $storageCheck = $this->checkStorageLimit($request, $file);
             if ($storageCheck && ! $storageCheck['allowed']) {
-                return response()->json(['success' => false, 'message' => $storageCheck['message']], 422);
+                return response()->json([
+                    'success' => true,
+                    'message' => $this->buildFileSkippedMessage('project'),
+                    'file' => null,
+                    'file_skipped' => true,
+                    'storage_warning' => $storageCheck['message'],
+                ], 200);
             }
 
             if ($org) {

@@ -331,7 +331,7 @@ export default function SubscriptionPage() {
             icon={<HardDrive style={{ width: '20px', height: '20px' }} />}
             label="Storage"
             value={plan.max_storage_gb}
-            suffix="GB"
+            suffix={plan.storage_unit || 'GB'}
             color="var(--color-success)"
           />
         </div>
@@ -433,7 +433,7 @@ export default function SubscriptionPage() {
           />
           <BenefitItem
             icon={<HardDrive style={{ width: '16px', height: '16px' }} />}
-            text={`${plan.max_storage_gb} GB file storage`}
+            text={`${plan.max_storage_gb} ${plan.storage_unit || 'GB'} file storage`}
           />
           <BenefitItem
             icon={<Star style={{ width: '16px', height: '16px' }} />}

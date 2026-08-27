@@ -87,7 +87,7 @@ export default function PlansPage() {
               {[
                 { icon: Users, text: `${plan.max_users === 9999 ? 'Unlimited' : plan.max_users} users` },
                 { icon: FolderKanban, text: `${plan.max_projects === 9999 ? 'Unlimited' : plan.max_projects} projects` },
-                { icon: HardDrive, text: `${plan.max_storage_gb} GB storage` },
+                { icon: HardDrive, text: `${plan.max_storage_gb} ${plan.storage_unit || 'GB'} storage` },
               ].map((item, i) => (
                 <div key={i} className="flex items-center gap-2 text-sm" style={s.textSecondary}>
                   <item.icon className="w-4 h-4" /> {item.text}
@@ -124,6 +124,7 @@ function EditPlanModal({ plan, allModules, saving, onSave, onClose }) {
   const [maxUsers, setMaxUsers] = useState(plan.max_users === 9999 ? '' : plan.max_users);
   const [maxProjects, setMaxProjects] = useState(plan.max_projects === 9999 ? '' : plan.max_projects);
   const [maxStorage, setMaxStorage] = useState(plan.max_storage_gb);
+  const [storageUnit, setStorageUnit] = useState(plan.storage_unit || 'GB');
   const [trialDuration, setTrialDuration] = useState(plan.trial_duration || 14);
   const [trialDurationUnit, setTrialDurationUnit] = useState(plan.trial_duration_unit || 'days');
   const [isActive, setIsActive] = useState(plan.is_active);
@@ -166,7 +167,8 @@ function EditPlanModal({ plan, allModules, saving, onSave, onClose }) {
       price_monthly: isTrial ? 0 : parseFloat(priceMonthly),
       price_yearly: isTrial ? 0 : parseFloat(priceYearly),
       max_users: maxUsers === '' ? 9999 : parseInt(maxUsers), max_projects: maxProjects === '' ? 9999 : parseInt(maxProjects),
-      max_storage_gb: parseInt(maxStorage),
+      max_storage_gb: parseFloat(maxStorage),
+      storage_unit: storageUnit,
       trial_duration: isTrial ? parseInt(trialDuration) || 14 : undefined,
       trial_duration_unit: isTrial ? trialDurationUnit : undefined,
       is_active: isActive, is_default: isDefault, module_ids: selectedModules,
@@ -248,14 +250,26 @@ function EditPlanModal({ plan, allModules, saving, onSave, onClose }) {
             {[
               { label: 'Max Users', value: maxUsers, set: setMaxUsers, ph: 'Unlimited' },
               { label: 'Max Projects', value: maxProjects, set: setMaxProjects, ph: 'Unlimited' },
-              { label: 'Storage (GB)', value: maxStorage, set: setMaxStorage, required: true },
             ].map((f) => (
               <div key={f.label}>
                 <label className="block text-xs font-medium mb-1.5" style={s.textMuted}>{f.label}</label>
-                <input type="number" min="1" value={f.value} onChange={e => f.set(e.target.value)} placeholder={f.ph} required={f.required} style={inputStyle} />
+                <input type="number" min="1" value={f.value} onChange={e => f.set(e.target.value)} placeholder={f.ph} required style={inputStyle} />
                 <p className="text-[11px] mt-1" style={s.textMuted}>Leave empty = unlimited</p>
               </div>
             ))}
+          </div>
+          {/* Storage with unit selector */}
+          <div>
+            <label className="block text-xs font-medium mb-1.5" style={s.textMuted}>Storage Limit ({storageUnit})</label>
+            <div className="flex gap-2">
+              <input type="number" min="0.001" step="any" value={maxStorage} onChange={e => setMaxStorage(e.target.value)} required style={{ ...inputStyle, flex: 1 }} />
+              <select value={storageUnit} onChange={e => setStorageUnit(e.target.value)}
+                style={{ ...inputStyle, width: 'auto', cursor: 'pointer', minWidth: '70px' }}>
+                <option value="KB">KB</option>
+                <option value="MB">MB</option>
+                <option value="GB">GB</option>
+              </select>
+            </div>
           </div>
           <div className="flex gap-4">
             {[

@@ -20,7 +20,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property float  $price_yearly
  * @property int    $max_users
  * @property int    $max_projects
- * @property int    $max_storage_gb
+ * @property float  $max_storage_gb
+ * @property string $storage_unit
  * @property int    $trial_duration
  * @property string $trial_duration_unit
  * @property bool   $is_active
@@ -40,6 +41,7 @@ class OrganizationPlan extends Model
         'max_users',
         'max_projects',
         'max_storage_gb',
+        'storage_unit',
         'trial_duration',
         'trial_duration_unit',
         'is_active',
@@ -52,7 +54,8 @@ class OrganizationPlan extends Model
         'price_yearly'  => 'float',
         'max_users'     => 'integer',
         'max_projects'  => 'integer',
-        'max_storage_gb' => 'integer',
+        'max_storage_gb' => 'float',
+        'storage_unit' => 'string',
         'trial_duration' => 'integer',
         'is_active'     => 'boolean',
         'is_default'    => 'boolean',

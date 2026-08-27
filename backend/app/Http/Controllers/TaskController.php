@@ -2868,14 +2868,33 @@ class TaskController extends Controller
         ]);
 
         $filePath = $fileName = null;
+        $fileSkipped = false;
         $org = $request->attributes->get('currentOrganization');
         if ($request->hasFile('file')) {
             $file = $request->file('file');
-            $fileName = $file->getClientOriginalName();
-            if ($org) {
-                $filePath = StorageDiskResolver::store($org, $file, 'task-submissions/'.$task->id);
+            $storageCheck = $this->checkStorageLimit($request, $file);
+            if ($storageCheck && !$storageCheck['allowed']) {
+                $fileSkipped = true;
             } else {
-                $filePath = $file->store('task-submissions/'.$task->id, 'public');
+                $fileName = $file->getClientOriginalName();
+                if ($org) {
+                    $filePath = StorageDiskResolver::store($org, $file, 'task-submissions/'.$task->id);
+                } else {
+                    $filePath = $file->store('task-submissions/'.$task->id, 'public');
+                }
+            }
+        }
+
+        $filesSkipped = false;
+        if ($request->hasFile('files')) {
+            $storedFiles = [];
+            foreach ($request->file('files') as $f) {
+                $sc = $this->checkStorageLimit($request, $f);
+                if ($sc && !$sc['allowed']) {
+                    $filesSkipped = true;
+                } else {
+                    $storedFiles[] = $f;
+                }
             }
         }
 
@@ -2886,9 +2905,9 @@ class TaskController extends Controller
             'status' => 'pending',
         ]);
 
-        if ($request->hasFile('files')) {
+        if (!empty($storedFiles)) {
             $submission->attachments()->createMany(
-                collect($request->file('files'))->map(fn ($file) => [
+                collect($storedFiles)->map(fn ($file) => [
                     'submission_type' => 'task',
                     'file_name' => basename($path = $org
                         ? StorageDiskResolver::store($org, $file, 'task-submissions/'.$task->id)
@@ -3057,9 +3076,15 @@ class TaskController extends Controller
             \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
         }
 
+        $responseMessage = 'Task submitted successfully';
+        if ($fileSkipped || $filesSkipped) {
+            $responseMessage = $this->buildFileSkippedMessage('task');
+        }
+
         return response()->json([
             'success' => true,
-            'message' => 'Task submitted successfully',
+            'message' => $responseMessage,
+            'file_skipped' => $fileSkipped || $filesSkipped,
             'task' => $this->taskWithTimer($task->fresh()->load([
                 'assignees:id,name,email,role', 'assigner:id,name',
                 'submissions' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments'])->latest(),
@@ -3465,6 +3490,7 @@ class TaskController extends Controller
         $filePaths = [];
         $fileNames = [];
         $uploadedFiles = [];
+        $fileSkipped = false;
         $org = $request->attributes->get('currentOrganization');
         if ($request->hasFile('files')) {
             $uploadedFiles = $request->file('files');
@@ -3474,6 +3500,11 @@ class TaskController extends Controller
 
         foreach ($uploadedFiles as $uploadedFile) {
             if ($uploadedFile && $uploadedFile->isValid()) {
+                $storageCheck = $this->checkStorageLimit($request, $uploadedFile);
+                if ($storageCheck && !$storageCheck['allowed']) {
+                    $fileSkipped = true;
+                    continue;
+                }
                 $fileNames[] = $uploadedFile->getClientOriginalName();
                 if ($org) {
                     $filePaths[] = StorageDiskResolver::store($org, $uploadedFile, 'task-reopen/'.$task->id);
@@ -3607,9 +3638,15 @@ class TaskController extends Controller
             \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
         }
 
+        $reopenMessage = 'Task reopened successfully';
+        if ($fileSkipped) {
+            $reopenMessage = $this->buildFileSkippedMessage('task');
+        }
+
         return response()->json([
             'success' => true,
-            'message' => 'Task reopened successfully',
+            'message' => $reopenMessage,
+            'file_skipped' => $fileSkipped,
             'task' => $this->taskWithTimer($task->fresh()->load(['assignees:id,name,email,role', 'assigner:id,name', 'reopenedBy:id,name',
                 'submissions' => fn ($q) => $q->with(['submittedBy:id,name,email', 'approvedBy:id,name', 'reopenedBy:id,name'])->latest(),
                 'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
@@ -3795,7 +3832,13 @@ class TaskController extends Controller
 
         $storageCheck = $this->checkStorageLimit($request, $file);
         if ($storageCheck && !$storageCheck['allowed']) {
-            return response()->json(['success' => false, 'message' => $storageCheck['message']], 422);
+            return response()->json([
+                'success' => true,
+                'message' => $this->buildFileSkippedMessage('task'),
+                'file' => null,
+                'file_skipped' => true,
+                'storage_warning' => $storageCheck['message'],
+            ], 200);
         }
 
         $org = $request->attributes->get('currentOrganization');

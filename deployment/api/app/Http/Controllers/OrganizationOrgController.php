@@ -347,6 +347,9 @@ class OrganizationOrgController extends Controller
             return response()->json(['success' => false, 'message' => 'Organization not found.'], 404);
         }
 
+        // Trigger fresh notification check to dismiss stale notifications
+        \App\Services\StorageNotificationService::checkAndNotify($org);
+
         $notifications = \App\Services\StorageNotificationService::getActiveNotifications($org->id);
         $pinned = \App\Services\StorageNotificationService::getPinnedNotifications($org->id);
 

@@ -516,6 +516,9 @@ const EditProjectModal = ({ project, onClose }) => {
           const errorsMsg = data.errors ? Object.values(data.errors).flat().join(". ") : "";
           throw new Error(errorsMsg || data.message || `File upload failed (${res.status})`);
         }
+        if (data.file_skipped) {
+          notify.warning(data.message || "File could not be uploaded due to storage limit.");
+        }
         return data;
       });
 
@@ -634,7 +637,11 @@ const EditProjectModal = ({ project, onClose }) => {
           await uploadAttachments(project.id, token);
         }
 
-        showSuccessMessage("Project", "updated");
+        if (data.file_skipped) {
+          notify.warning(data.message || "Project updated but file could not be saved due to storage limit.");
+        } else {
+          showSuccessMessage("Project", "updated");
+        }
         publish('project:updated', data.project || data);
         publish('data:changed', { type: 'project', action: 'updated' });
         onClose(true);

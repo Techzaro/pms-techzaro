@@ -44,6 +44,7 @@ class EntitlementService
                 'max_users'      => -1,
                 'max_projects'   => -1,
                 'max_storage_gb' => 10,
+                'storage_unit'   => 'GB',
                 'current_users'      => $this->countUsers($organization),
                 'current_projects'   => $this->countProjects($organization),
                 'current_storage_gb' => $this->calculateStorageUsage($organization),
@@ -56,11 +57,13 @@ class EntitlementService
         $maxUsers = $plan->max_users;
         $maxProjects = $plan->max_projects;
         $maxStorage = $plan->max_storage_gb;
+        $storageUnit = $plan->storage_unit ?? 'GB';
 
         if ($subscription->is_custom) {
             $maxUsers = $subscription->custom_max_users ?? $maxUsers;
             $maxProjects = $subscription->custom_max_projects ?? $maxProjects;
             $maxStorage = $subscription->custom_max_storage_gb ?? $maxStorage;
+            $storageUnit = $subscription->storage_unit ?? $storageUnit;
         }
 
         // For trial plans, apply trial-specific overrides if they exist
@@ -73,6 +76,7 @@ class EntitlementService
                 $maxUsers = $trialSetting->max_users;
                 $maxProjects = $trialSetting->max_projects;
                 $maxStorage = $trialSetting->max_storage_gb;
+                $storageUnit = $trialSetting->storage_unit ?? $storageUnit;
             }
         }
 
@@ -81,6 +85,7 @@ class EntitlementService
             'max_users'      => $maxUsers,
             'max_projects'   => $maxProjects,
             'max_storage_gb' => $maxStorage,
+            'storage_unit'   => $storageUnit,
             'current_users'      => $this->countUsers($organization),
             'current_projects'   => $this->countProjects($organization),
             'current_storage_gb' => $this->calculateStorageUsage($organization),
@@ -196,7 +201,7 @@ class EntitlementService
     }
 
     /**
-     * Count all users in the tenant database.
+     * Count active users in the tenant database (excludes inactive/resigned/draft).
      */
     private function countUsers(Organization $organization): int
     {
@@ -204,7 +209,7 @@ class EntitlementService
             $dbName = $organization->database_name;
             $escaped = str_replace('`', '``', $dbName);
             $pdo = DB::connection('mysql_master')->getPdo();
-            $stmt = $pdo->prepare("SELECT COUNT(*) FROM `{$escaped}`.`users`");
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM `{$escaped}`.`users` WHERE `active` = 1");
             $stmt->execute();
             return (int) $stmt->fetchColumn();
         } catch (\Throwable $e) {

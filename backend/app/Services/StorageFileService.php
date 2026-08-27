@@ -107,7 +107,7 @@ class StorageFileService
         }
 
         // Remove tenant DB references (non-fatal if it fails)
-        self::removeProjectFileReference($org, $record->file_path);
+        self::removeProjectFileReference($org, $record->file_path, $record->file_name);
 
         // Always delete the storage record
         $record->delete();
@@ -120,29 +120,63 @@ class StorageFileService
 
     /**
      * Remove file records that reference the given file path from the tenant DB.
-     * Cleans up project_files, task_files, and deliverable_files tables.
+     * Cleans up project_files, task_files, deliverable_files, and submission_attachments tables.
+     * Tries all possible path format variants plus filename matching as fallback.
      */
-    private static function removeProjectFileReference(Organization $org, string $filePath): void
+    private static function removeProjectFileReference(Organization $org, string $filePath, ?string $fileName = null): void
     {
         try {
             $connectionName = 'tenant_' . $org->id;
 
-            // Register and connect to tenant DB
             config()->set("database.connections.{$connectionName}", $org->getDatabaseConfig());
             DB::purge($connectionName);
             DB::reconnect($connectionName);
 
             $tenantDb = DB::connection($connectionName);
 
-            // Delete matching rows from all file tables
+            $normalized = ltrim($filePath, '/');
+            $withoutStorage = preg_replace('#^storage/#', '', $normalized);
+
+            // All possible path variants stored in DB columns
+            $variants = array_unique([
+                $filePath,
+                '/' . $normalized,
+                $normalized,
+                '/' . $withoutStorage,
+                $withoutStorage,
+                '/storage/' . $withoutStorage,
+                'storage/' . $withoutStorage,
+            ]);
+
             foreach (['project_files', 'task_files', 'deliverable_files', 'submission_attachments'] as $table) {
                 if ($tenantDb->getSchemaBuilder()->hasTable($table)) {
-                    $column = $tenantDb->getSchemaBuilder()->hasColumn($table, 'url') ? 'url' : 'file_path';
-                    $tenantDb->table($table)->where($column, $filePath)->delete();
+                    $urlColumn = $tenantDb->getSchemaBuilder()->hasColumn($table, 'url') ? 'url' : 'file_path';
+                    $hasNameColumn = $tenantDb->getSchemaBuilder()->hasColumn($table, 'name');
+
+                    // Build query: match by path variants OR by filename as fallback
+                    $deleted = $tenantDb->table($table)
+                        ->where(function ($q) use ($urlColumn, $variants) {
+                            $first = true;
+                            foreach ($variants as $v) {
+                                if ($first) {
+                                    $q->where($urlColumn, $v);
+                                    $first = false;
+                                } else {
+                                    $q->orWhere($urlColumn, $v);
+                                }
+                            }
+                        })
+                        ->delete();
+
+                    // If no path match found and we have a filename, try matching by name
+                    if ($deleted === 0 && $hasNameColumn && $fileName) {
+                        $tenantDb->table($table)
+                            ->where('name', $fileName)
+                            ->delete();
+                    }
                 }
             }
 
-            // Purge tenant connection to avoid leaking
             DB::purge($connectionName);
         } catch (\Throwable $e) {
             Log::warning("Failed to remove file reference for path '{$filePath}': " . $e->getMessage());
@@ -163,9 +197,9 @@ class StorageFileService
         $deletedCount = 0;
         $freedBytes = 0;
 
-        foreach ($records as $record) {
+            foreach ($records as $record) {
             StorageDiskResolver::delete($org, $record->file_path);
-            self::removeProjectFileReference($org, $record->file_path);
+            self::removeProjectFileReference($org, $record->file_path, $record->file_name);
             $freedBytes += $record->file_size_bytes;
             $record->delete();
             $deletedCount++;
@@ -196,7 +230,7 @@ class StorageFileService
 
         foreach ($records as $record) {
             StorageDiskResolver::delete($org, $record->file_path);
-            self::removeProjectFileReference($org, $record->file_path);
+            self::removeProjectFileReference($org, $record->file_path, $record->file_name);
             $freedBytes += $record->file_size_bytes;
             $record->delete();
             $deletedCount++;
@@ -231,7 +265,7 @@ class StorageFileService
             if ($freed >= $remaining) break;
 
             StorageDiskResolver::delete($org, $record->file_path);
-            self::removeProjectFileReference($org, $record->file_path);
+            self::removeProjectFileReference($org, $record->file_path, $record->file_name);
             $freed += $record->file_size_bytes;
             $record->delete();
         }
@@ -261,7 +295,7 @@ class StorageFileService
 
         $freed = $oldestFile->file_size_bytes;
         StorageDiskResolver::delete($org, $oldestFile->file_path);
-        self::removeProjectFileReference($org, $oldestFile->file_path);
+        self::removeProjectFileReference($org, $oldestFile->file_path, $oldestFile->file_name);
         $oldestFile->delete();
 
         self::invalidateCache($org->id);
@@ -319,8 +353,16 @@ class StorageFileService
                 ->latest()
                 ->first();
 
-            $maxStorageGb = $subscription?->getEffectiveMaxStorageGb() ?? 10;
-            $maxBytes = (int) ($maxStorageGb * 1024 * 1024 * 1024);
+            $maxStorageGb = $subscription?->getEffectiveMaxStorageValue() ?? 10;
+            $storageUnit = $subscription?->getEffectiveStorageUnit() ?? 'GB';
+
+            // Org-level storage override (highest priority)
+            if ($org->custom_max_storage_gb !== null) {
+                $maxStorageGb = $org->custom_max_storage_gb;
+                $storageUnit = $org->storage_unit ?? $storageUnit;
+            }
+
+            $maxBytes = \App\Models\Master\OrganizationSubscription::convertToBytes($maxStorageGb, $storageUnit);
 
             $currentUsedBytes = OrganizationStorageUsage::on('mysql_master')
                 ->where('organization_id', $org->id)
@@ -334,6 +376,7 @@ class StorageFileService
                 'remaining_bytes' => $remainingBytes,
                 'usage_percent'   => $maxBytes > 0 ? round(($currentUsedBytes / $maxBytes) * 100, 1) : 0,
                 'max_storage_gb'  => $maxStorageGb,
+                'storage_unit'    => $storageUnit,
                 'used_gb'         => round($currentUsedBytes / (1024 * 1024 * 1024), 4),
                 'remaining_gb'    => round($remainingBytes / (1024 * 1024 * 1024), 4),
             ];

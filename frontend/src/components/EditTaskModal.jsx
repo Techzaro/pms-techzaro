@@ -547,6 +547,7 @@ export default function EditTaskModal({ task, onClose }) {
           }).then(async (res) => {
             const data = await res.json();
             if (!res.ok) throw new Error(data.message || "File upload failed");
+            if (data.file_skipped) notify.warning(data.message || "File could not be uploaded due to storage limit.");
             return data;
           });
         })

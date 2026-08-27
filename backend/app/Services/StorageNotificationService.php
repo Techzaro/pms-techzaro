@@ -22,6 +22,13 @@ class StorageNotificationService
         $usage = StorageEnforcementService::getCurrentUsage($org->id);
         $percent = $usage['usage_percent'];
         $settings = $org->getStorageSettings();
+        $unit = $usage['storage_unit'] ?? 'GB';
+        $usedVal = $usage['used_value'] ?? 0;
+        $maxVal = $usage['max_value'] ?? 0;
+        $remainingVal = $usage['remaining_value'] ?? 0;
+
+        // Auto-dismiss stale notifications when storage drops below their threshold
+        self::dismissStaleNotifications($org->id, $percent, $settings);
 
         $notifications = [];
 
@@ -32,9 +39,9 @@ class StorageNotificationService
                 'storage_warning',
                 'warning',
                 'Storage Warning',
-                "Your storage is {$percent}% full ({$usage['used_gb']} GB / {$usage['max_storage_gb']} GB). " .
+                "Your storage is almost full. " .
                 "Consider cleaning up files or contacting admin to increase your limit.",
-                ['usage_percent' => $percent, 'used_gb' => $usage['used_gb'], 'max_gb' => $usage['max_storage_gb']]
+                ['usage_percent' => $percent, 'used_value' => $usedVal, 'max_value' => $maxVal, 'storage_unit' => $unit]
             );
             if ($n) $notifications[] = $n;
         }
@@ -46,9 +53,9 @@ class StorageNotificationService
                 'storage_critical',
                 'critical',
                 'Storage Critical',
-                "Your storage is {$percent}% full ({$usage['used_gb']} GB / {$usage['max_storage_gb']} GB). " .
-                "You are approaching your storage limit. Uploads may fail soon. Please free up space immediately.",
-                ['usage_percent' => $percent, 'used_gb' => $usage['used_gb'], 'max_gb' => $usage['max_storage_gb']]
+                "Your storage is critically low. " .
+                "Uploads may fail soon. Please free up space immediately.",
+                ['usage_percent' => $percent, 'used_value' => $usedVal, 'max_value' => $maxVal, 'storage_unit' => $unit]
             );
             if ($n) $notifications[] = $n;
 
@@ -63,9 +70,9 @@ class StorageNotificationService
                 'storage_pinned',
                 'critical',
                 'Storage Almost Full',
-                "Your storage is {$percent}% full! Only " . round($usage['remaining_bytes'] / (1024 * 1024), 2) . " MB remaining. " .
+                "Your storage is almost full! " .
                 "New uploads will be blocked. Please delete files or contact admin immediately.",
-                ['usage_percent' => $percent, 'used_gb' => $usage['used_gb'], 'max_gb' => $usage['max_storage_gb'], 'remaining_mb' => round($usage['remaining_bytes'] / (1024 * 1024), 2)]
+                ['usage_percent' => $percent, 'used_value' => $usedVal, 'max_value' => $maxVal, 'remaining_value' => $remainingVal, 'storage_unit' => $unit]
             );
             if ($n) $notifications[] = $n;
 
@@ -80,9 +87,9 @@ class StorageNotificationService
                 'storage_exceeded',
                 'critical',
                 'Storage Limit Reached',
-                "Your storage limit has been reached ({$usage['max_storage_gb']} GB). All uploads are now blocked. " .
+                "Your storage limit has been reached. All uploads are now blocked. " .
                 "Please delete files or contact admin to increase your storage limit.",
-                ['usage_percent' => $percent, 'used_gb' => $usage['used_gb'], 'max_gb' => $usage['max_storage_gb']]
+                ['usage_percent' => $percent, 'used_value' => $usedVal, 'max_value' => $maxVal, 'storage_unit' => $unit]
             );
             if ($n) $notifications[] = $n;
 
@@ -90,6 +97,42 @@ class StorageNotificationService
         }
 
         return $notifications;
+    }
+
+    /**
+     * Auto-dismiss notifications that are no longer applicable because storage dropped below threshold.
+     */
+    private static function dismissStaleNotifications(int $orgId, float $percent, array $settings): void
+    {
+        $typesToDismiss = [];
+
+        // If below pin threshold, dismiss pinned + exceeded notifications
+        if ($percent < $settings['pin_threshold']) {
+            $typesToDismiss[] = 'storage_pinned';
+        }
+
+        // If below critical threshold, dismiss critical notifications
+        if ($percent < $settings['critical_threshold']) {
+            $typesToDismiss[] = 'storage_critical';
+        }
+
+        // If below 100%, dismiss exceeded notifications
+        if ($percent < 100) {
+            $typesToDismiss[] = 'storage_exceeded';
+        }
+
+        // If below warning threshold, dismiss warning notifications
+        if ($percent < $settings['warn_threshold']) {
+            $typesToDismiss[] = 'storage_warning';
+        }
+
+        if (!empty($typesToDismiss)) {
+            OrganizationStorageNotification::on('mysql_master')
+                ->where('organization_id', $orgId)
+                ->whereIn('type', $typesToDismiss)
+                ->where('is_dismissed', false)
+                ->update(['is_dismissed' => true, 'dismissed_at' => now()]);
+        }
     }
 
     /**
@@ -162,9 +205,9 @@ class StorageNotificationService
                 orgName: $org->name,
                 planName: $subscription?->plan?->name ?? 'Unknown',
                 usagePercent: $percent,
-                usedGb: $usage['used_gb'],
-                maxGb: $usage['max_storage_gb'],
-                remainingMb: round($usage['remaining_bytes'] / (1024 * 1024), 2),
+                usedGb: $usage['used_value'] ?? 0,
+                maxGb: $usage['max_value'] ?? $usage['max_storage_gb'] ?? 0,
+                remainingMb: $usage['remaining_value'] ?? round(($usage['remaining_bytes'] ?? 0) / (1024 * 1024), 2),
                 level: $level,
                 frontendUrl: $frontendUrl,
                 superAdminTenant: $superAdminTenant

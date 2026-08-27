@@ -20,6 +20,13 @@ import CountrySelect from '../../components/CountrySelect';
 const flagMap = { PK:'🇵🇰', US:'🇺🇸', GB:'🇬🇧', IN:'🇮🇳', AE:'🇦🇪', SA:'🇸🇦', CA:'🇨🇦', AU:'🇦🇺', DE:'🇩🇪', FR:'🇫🇷', TR:'🇹🇷', CN:'🇨🇳', JP:'🇯🇵', BR:'🇧🇷', NG:'🇳🇬', ZA:'🇿🇦', EG:'🇪🇬', KE:'🇰🇪', PH:'🇵🇭', MY:'🇲🇾', BD:'🇧🇩', NP:'🇳🇵', LK:'🇱🇰', SG:'🇸🇬', HK:'🇭🇰', NZ:'🇳🇿', IT:'🇮🇹', ES:'🇪🇸', NL:'🇳🇱', SE:'🇸🇪', CH:'🇨🇭', PL:'🇵🇱', RU:'🇷🇺', KR:'🇰🇷', TH:'🇹🇭', ID:'🇮🇩', VN:'🇻🇳', MX:'🇲🇽', AR:'🇦🇷', CO:'🇨🇴', GH:'🇬🇭', TZ:'🇹🇿', UG:'🇺🇬', ET:'🇪🇹', JO:'🇯🇴', KW:'🇰🇼', BH:'🇧🇭', QA:'🇶🇦', OM:'🇴🇲', LB:'🇱🇧', IQ:'🇮🇶', MA:'🇲🇦', DZ:'🇩🇿', TN:'🇹🇳' };
 const flagEmoji = (code) => flagMap[code] || '🌍';
 
+const fmtBytesToUnit = (bytes, unit = 'GB') => {
+  if (!bytes) return `0 ${unit}`;
+  const divisors = { KB: 1024, MB: 1024**2, GB: 1024**3 };
+  const divisor = divisors[unit] || divisors.GB;
+  return `${(bytes / divisor).toFixed(2)} ${unit}`;
+};
+
 function formatCurrency(amount, currency = 'USD') {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency, minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(amount || 0);
 }
@@ -527,7 +534,7 @@ export default function OrganizationDetailPage() {
                 {[
                   { icon: Users, label: 'Users', value: org.effective_plan?.is_custom ? org.effective_plan.max_users : (org.subscription.plan.slug === 'trial' && org.trial_config ? org.trial_config.max_users : (org.subscription.plan.max_users === 9999 ? 'Unlimited' : org.subscription.plan.max_users)) },
                   { icon: FolderKanban, label: 'Projects', value: org.effective_plan?.is_custom ? org.effective_plan.max_projects : (org.subscription.plan.slug === 'trial' && org.trial_config ? org.trial_config.max_projects : (org.subscription.plan.max_projects === 9999 ? 'Unlimited' : org.subscription.plan.max_projects)) },
-                  { icon: HardDrive, label: 'Storage', value: `${org.effective_plan?.is_custom ? org.effective_plan.max_storage_gb : (org.subscription.plan.slug === 'trial' && org.trial_config ? org.trial_config.max_storage_gb : org.subscription.plan.max_storage_gb)} GB` },
+                  { icon: HardDrive, label: 'Storage', value: `${(() => { if (org.custom_max_storage_gb) { return `${org.custom_max_storage_gb} ${org.storage_unit || 'GB'}`; } const v = org.effective_plan?.is_custom ? org.effective_plan.max_storage_gb : (org.subscription.plan.slug === 'trial' && org.trial_config ? org.trial_config.max_storage_gb : org.subscription.plan.max_storage_gb); const u = org.effective_plan?.is_custom ? org.effective_plan.storage_unit : (org.subscription.plan.slug === 'trial' && org.trial_config ? org.trial_config.storage_unit : org.subscription.plan.storage_unit); return `${v} ${u || 'GB'}`; })()}` },
                 ].map((item) => (
                   <div key={item.label} className="p-3 rounded-lg" style={s.infoBox}>
                     <div className="flex items-center gap-2 mb-1">
@@ -629,8 +636,8 @@ export default function OrganizationDetailPage() {
                   </div>
                   <div className="mb-3">
                     <div className="flex justify-between mb-1">
-                      <span className="text-sm font-semibold" style={s.text}>{storageSummary.total_gb} GB used</span>
-                      <span className="text-sm" style={s.textSecondary}>of {storageSummary.max_storage_gb} GB</span>
+                      <span className="text-sm font-semibold" style={s.text}>{fmtBytesToUnit(storageSummary.total_bytes, storageSummary.storage_unit || 'GB')} used</span>
+                      <span className="text-sm" style={s.textSecondary}>of {storageSummary.max_storage_gb} {storageSummary.storage_unit || 'GB'}</span>
                     </div>
                     <div className="w-full h-3 rounded-full" style={{ background: 'var(--bg-hover)' }}>
                       <div className="h-3 rounded-full transition-all" style={{
@@ -640,15 +647,15 @@ export default function OrganizationDetailPage() {
                     </div>
                     <div className="flex justify-between mt-1">
                       <span className="text-xs" style={s.textMuted}>{storageSummary.usage_percent}% used</span>
-                      <span className="text-xs" style={s.textMuted}>{storageSummary.remaining_gb} GB remaining</span>
+                      <span className="text-xs" style={s.textMuted}>{fmtBytesToUnit(storageSummary.remaining_bytes, storageSummary.storage_unit || 'GB')} remaining</span>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {[
                       { label: 'Total Files', value: storageSummary.total_files, color: 'var(--color-primary)' },
-                      { label: 'Used Space', value: `${storageSummary.total_gb} GB`, color: 'var(--color-blue)' },
-                      { label: 'Storage Limit', value: `${storageSummary.max_storage_gb} GB`, color: 'var(--color-success)' },
-                      { label: 'Remaining', value: `${storageSummary.remaining_gb} GB`, color: storageSummary.usage_percent > 95 ? 'var(--color-danger)' : 'var(--color-warning)' },
+                      { label: 'Used Space', value: fmtBytesToUnit(storageSummary.total_bytes, storageSummary.storage_unit || 'GB'), color: 'var(--color-blue)' },
+                      { label: 'Storage Limit', value: `${storageSummary.max_storage_gb} ${storageSummary.storage_unit || 'GB'}`, color: 'var(--color-success)' },
+                      { label: 'Remaining', value: fmtBytesToUnit(storageSummary.remaining_bytes, storageSummary.storage_unit || 'GB'), color: storageSummary.usage_percent > 95 ? 'var(--color-danger)' : 'var(--color-warning)' },
                     ].map((item) => (
                       <div key={item.label} className="p-3 rounded-lg" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-light)' }}>
                         <p className="text-xs" style={{ color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{item.label}</p>
@@ -1127,14 +1134,23 @@ export default function OrganizationDetailPage() {
                           <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>Override the plan storage limit for this specific organization</p>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                              <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Custom Max Storage (GB)</label>
-                              <input type="number" name="custom_max_storage_gb" min="1" max="9999" defaultValue={storagePreferences.custom_max_storage_gb || ''} placeholder="Leave empty to use plan limit"
-                                className="w-full mt-1.5 p-2.5 rounded-lg text-sm transition-all"
-                                style={{ background: 'var(--bg-primary)', border: '2px solid #64748b', color: 'var(--text-primary)' }}
-                                onFocus={(e) => { e.target.style.borderColor = 'var(--color-primary)'; e.target.style.boxShadow = '0 0 0 3px var(--color-primary-bg)'; }}
-                                onBlur={(e) => { e.target.style.borderColor = '#64748b'; e.target.style.boxShadow = 'none'; }}
-                                onMouseEnter={(e) => { if (document.activeElement !== e.target) e.target.style.borderColor = '#94a3b8'; }}
-                                onMouseLeave={(e) => { if (document.activeElement !== e.target) e.target.style.borderColor = '#64748b'; }} />
+                              <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Custom Max Storage</label>
+                              <div className="flex gap-2 mt-1.5">
+                                <input type="number" name="custom_max_storage_gb" min="0.001" step="any" max="9999" defaultValue={storagePreferences.custom_max_storage_gb || ''} placeholder="Leave empty to use plan limit"
+                                  className="flex-1 p-2.5 rounded-lg text-sm transition-all"
+                                  style={{ background: 'var(--bg-primary)', border: '2px solid #64748b', color: 'var(--text-primary)' }}
+                                  onFocus={(e) => { e.target.style.borderColor = 'var(--color-primary)'; e.target.style.boxShadow = '0 0 0 3px var(--color-primary-bg)'; }}
+                                  onBlur={(e) => { e.target.style.borderColor = '#64748b'; e.target.style.boxShadow = 'none'; }}
+                                  onMouseEnter={(e) => { if (document.activeElement !== e.target) e.target.style.borderColor = '#94a3b8'; }}
+                                  onMouseLeave={(e) => { if (document.activeElement !== e.target) e.target.style.borderColor = '#64748b'; }} />
+                                <select name="custom_storage_unit" defaultValue={storagePreferences.storage_unit || 'GB'}
+                                  className="p-2.5 rounded-lg text-sm transition-all"
+                                  style={{ background: 'var(--bg-primary)', border: '2px solid #64748b', color: 'var(--text-primary)', minWidth: '70px' }}>
+                                  <option value="KB">KB</option>
+                                  <option value="MB">MB</option>
+                                  <option value="GB">GB</option>
+                                </select>
+                              </div>
                             </div>
                             <div>
                               <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Auto-delete when full</label>
@@ -1179,7 +1195,8 @@ export default function OrganizationDetailPage() {
                                   warning_threshold_percent: parseInt(getVal('warning_threshold_percent')) || 80,
                                   critical_threshold_percent: parseInt(getVal('critical_threshold_percent')) || 95,
                                   auto_delete_enabled: isChecked('auto_delete_enabled'),
-                                  custom_max_storage_gb: getVal('custom_max_storage_gb') ? parseInt(getVal('custom_max_storage_gb')) : null,
+                                  custom_max_storage_gb: getVal('custom_max_storage_gb') ? parseFloat(getVal('custom_max_storage_gb')) : null,
+                                  custom_storage_unit: getVal('custom_max_storage_gb') ? (getVal('custom_storage_unit') || 'GB') : null,
                                 };
 
                                 await api.updateOrgStoragePreferences(id, payload);
@@ -2056,15 +2073,15 @@ function EditOrganizationModal({ org, plans, saving, onSave, onClose }) {
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
-                        <div className="text-right text-xs" style={s.textMuted}>{storage === 9999 ? 'Unlimited' : storage} GB storage</div>
+                        <div className="text-right text-xs" style={s.textMuted}>{storage === 9999 ? 'Unlimited' : `${storage} ${plan.storage_unit || 'GB'}`}</div>
                         {isSelected && (
-                          <button type="button" onClick={(e) => { e.stopPropagation(); isTrial ? setShowTrialModal(true) : setShowPlanCustomModal(true); }}
-                            className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors"
-                            style={{
-                              background: hasCustom ? (isTrial ? 'rgba(147,51,234,0.1)' : 'rgba(245,158,11,0.1)') : 'var(--bg-hover)',
-                              color: hasCustom ? (isTrial ? '#9333ea' : '#d97706') : 'var(--text-secondary)',
-                              border: hasCustom ? (isTrial ? '1px solid rgba(147,51,234,0.3)' : '1px solid rgba(245,158,11,0.3)') : '1px solid var(--border-light)',
-                            }}>
+                            <button type="button" onClick={(e) => { e.stopPropagation(); isTrial ? setShowTrialModal(true) : setShowPlanCustomModal(true); }}
+                              className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg transition-colors"
+                              style={{
+                                background: hasCustom ? (isTrial ? 'rgba(147,51,234,0.15)' : 'rgba(245,158,11,0.15)') : '#fff',
+                                color: hasCustom ? (isTrial ? '#7c3aed' : '#d97706') : '#6b7280',
+                                border: hasCustom ? (isTrial ? '2px solid #7c3aed' : '2px solid #f59e0b') : '2px solid #d1d5db',
+                              }}>
                             <Sliders className="w-3.5 h-3.5" />
                             {hasCustom ? 'Edit Custom' : 'Custom'}
                           </button>

@@ -761,6 +761,32 @@ class UserController extends Controller
             return response()->json(['success' => false, 'message' => 'You cannot delete your own account.'], 403);
         }
 
+        // Prevent deleting the founding/first admin of the organization
+        $org = $request->attributes->get('currentOrganization');
+        if ($org) {
+            // Auto-backfill founding_admin_id if NULL (for orgs created before this feature)
+            if (!$org->founding_admin_id) {
+                try {
+                    $dbName = $org->database_name;
+                    $escaped = str_replace('`', '``', $dbName);
+                    $pdo = DB::connection('mysql_master')->getPdo();
+                    $stmt = $pdo->prepare("SELECT id FROM `{$escaped}`.`users` WHERE role = 'admin' AND active = 1 ORDER BY created_at ASC LIMIT 1");
+                    $stmt->execute();
+                    $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+                    if ($row && !empty($row['id'])) {
+                        $org->update(['founding_admin_id' => $row['id']]);
+                        $org->founding_admin_id = $row['id'];
+                    }
+                } catch (\Throwable $e) {
+                    \Log::warning("Failed to auto-backfill founding_admin_id for org {$org->id}: " . $e->getMessage());
+                }
+            }
+
+            if ($org->founding_admin_id && $org->founding_admin_id === $user->id) {
+                return response()->json(['success' => false, 'message' => 'Cannot delete the founding admin of this organization. This user registered the organization and is protected from deletion.'], 403);
+            }
+        }
+
         // Delete associated files
         $this->deleteAllFiles($user);
 
@@ -932,6 +958,35 @@ class UserController extends Controller
                     'success' => false,
                     'message' => 'Managers cannot resign administrators or other managers.',
                 ], 403);
+            }
+
+            // Prevent resigning the founding admin of the organization
+            $org = $request->attributes->get('currentOrganization');
+            if ($org) {
+                // Auto-backfill founding_admin_id if NULL (for orgs created before this feature)
+                if (!$org->founding_admin_id) {
+                    try {
+                        $dbName = $org->database_name;
+                        $escaped = str_replace('`', '``', $dbName);
+                        $pdo = DB::connection('mysql_master')->getPdo();
+                        $stmt = $pdo->prepare("SELECT id FROM `{$escaped}`.`users` WHERE role = 'admin' AND active = 1 ORDER BY created_at ASC LIMIT 1");
+                        $stmt->execute();
+                        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+                        if ($row && !empty($row['id'])) {
+                            $org->update(['founding_admin_id' => $row['id']]);
+                            $org->founding_admin_id = $row['id'];
+                        }
+                    } catch (\Throwable $e) {
+                        \Log::warning("Failed to auto-backfill founding_admin_id for org {$org->id}: " . $e->getMessage());
+                    }
+                }
+
+                if ($org->founding_admin_id && $org->founding_admin_id === $user->id) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Cannot resign the founding admin of this organization. This user registered the organization and is protected.',
+                    ], 403);
+                }
             }
 
             $service = app(\App\Services\ResignationWorkflowService::class);

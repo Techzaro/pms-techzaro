@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { AlertTriangle, AlertCircle, X, HardDrive, ChevronDown, ChevronUp } from 'lucide-react';
+import { orgPath } from '../utils/urls';
 import api from '../lib/api';
 
 const SEVERITY_CONFIG = {
@@ -116,14 +117,14 @@ export default function StorageNotificationBanner() {
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-          <a href={`/${import.meta.env.VITE_SUPER_ADMIN_TENANT || 'techxaro'}/storage`} style={{
+          <a href={orgPath('organization-details') + '?tab=storage'} style={{
             fontSize: '12px',
             fontWeight: 600,
             color: config.badgeColor,
             textDecoration: 'underline',
             whiteSpace: 'nowrap',
           }}>
-            Manage Storage
+            Manage
           </a>
           <button onClick={() => handleDismiss(pinnedNotif.id)} style={{
             background: 'none',
@@ -227,7 +228,7 @@ export default function StorageNotificationBanner() {
           <strong>{latest.title}</strong> — {latest.message}
         </span>
         <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-          <a href={`/${import.meta.env.VITE_SUPER_ADMIN_TENANT || 'techxaro'}/storage`} style={{
+          <a href={orgPath('organization-details') + '?tab=storage'} style={{
             fontSize: '12px', fontWeight: 600, color: config.badgeColor, textDecoration: 'underline',
           }}>Manage</a>
           <button onClick={() => handleDismiss(latest.id)} style={{

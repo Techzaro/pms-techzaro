@@ -80,6 +80,7 @@ export function usePlanLimits() {
   const usage = data?.usage || { users: 0, projects: 0 };
   const organization = data?.organization;
   const isOwner = organization?.is_owner ?? false;
+  const foundingAdminId = organization?.founding_admin_id ?? null;
 
   const maxUsers = plan?.max_users ?? 9999;
   const maxProjects = plan?.max_projects ?? 9999;
@@ -112,6 +113,7 @@ export function usePlanLimits() {
     plan,
     usage,
     isOwner,
+    foundingAdminId,
     maxUsers: isUnlimited(maxUsers) ? null : maxUsers,
     maxProjects: isUnlimited(maxProjects) ? null : maxProjects,
     currentUsers,

@@ -19,6 +19,7 @@ export default function PlanCustomizeModal({ plan, billingPeriod = 'monthly', in
   const [maxUsers, setMaxUsers] = useState(initialData?.custom_max_users ?? plan.max_users ?? 5);
   const [maxProjects, setMaxProjects] = useState(initialData?.custom_max_projects ?? plan.max_projects ?? 5);
   const [maxStorage, setMaxStorage] = useState(initialData?.custom_max_storage_gb ?? plan.max_storage_gb ?? 5);
+  const [storageUnit, setStorageUnit] = useState(initialData?.custom_storage_unit ?? plan.storage_unit ?? 'GB');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
@@ -30,7 +31,8 @@ export default function PlanCustomizeModal({ plan, billingPeriod = 'monthly', in
       custom_price_yearly: parseFloat(priceYearly),
       custom_max_users: parseInt(maxUsers),
       custom_max_projects: parseInt(maxProjects),
-      custom_max_storage_gb: parseInt(maxStorage),
+      custom_max_storage_gb: parseFloat(maxStorage),
+      custom_storage_unit: storageUnit,
     });
   };
 
@@ -124,11 +126,10 @@ export default function PlanCustomizeModal({ plan, billingPeriod = 'monthly', in
           </div>
 
           {/* Limits */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             {[
               { icon: Users, label: 'User Limit', value: maxUsers, set: setMaxUsers, unlimitedValue: 9999 },
               { icon: FolderKanban, label: 'Project Limit', value: maxProjects, set: setMaxProjects, unlimitedValue: 9999 },
-              { icon: HardDrive, label: 'Storage (GB)', value: maxStorage, set: setMaxStorage, unlimitedValue: null },
             ].map((f) => (
               <div key={f.label}>
                 <label className="block text-xs font-medium mb-1.5" style={s.textMuted}>
@@ -144,7 +145,7 @@ export default function PlanCustomizeModal({ plan, billingPeriod = 'monthly', in
                       f.set(parseInt(val) || 1);
                     }
                   }}
-                  required style={inputStyle} />
+                  style={inputStyle} />
                 {f.unlimitedValue && (
                   <button type="button" onClick={() => f.set(f.unlimitedValue)}
                     className="mt-1 text-xs font-medium transition-colors"
@@ -154,6 +155,23 @@ export default function PlanCustomizeModal({ plan, billingPeriod = 'monthly', in
                 )}
               </div>
             ))}
+          </div>
+          {/* Storage Limit (full width, separate row) */}
+          <div>
+            <label className="block text-xs font-medium mb-1.5" style={s.textMuted}>
+              <HardDrive className="w-3.5 h-3.5 inline mr-1" /> Storage Limit ({storageUnit})
+            </label>
+            <div className="flex gap-2">
+              <input type="number" min="0.001" step="any" value={maxStorage}
+                onChange={(e) => setMaxStorage(e.target.value)}
+                required style={{ ...inputStyle, flex: 1 }} />
+              <select value={storageUnit} onChange={(e) => setStorageUnit(e.target.value)}
+                style={{ ...inputStyle, width: 'auto', cursor: 'pointer', minWidth: '70px' }}>
+                <option value="KB">KB</option>
+                <option value="MB">MB</option>
+                <option value="GB">GB</option>
+              </select>
+            </div>
           </div>
 
           {/* Info text */}

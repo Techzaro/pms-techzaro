@@ -117,7 +117,11 @@ function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess, sub
 
         const data = await res.json();
         if (res.ok) {
-          showSuccessMessage("Submission", submissionToEdit ? "updated" : "submitted");
+          if (data.file_skipped) {
+            notify.warning(data.message || "Deliverable submitted, but file could not be uploaded due to storage limit.");
+          } else {
+            showSuccessMessage("Submission", submissionToEdit ? "updated" : "submitted");
+          }
           markSaved();
           onSubmitSuccess(data.deliverable || subtask);
           onClose();

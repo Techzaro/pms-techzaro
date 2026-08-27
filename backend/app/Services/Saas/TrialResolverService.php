@@ -55,6 +55,7 @@ class TrialResolverService
                 'max_users'           => $orgSetting->max_users,
                 'max_projects'        => $orgSetting->max_projects,
                 'max_storage_gb'      => $orgSetting->max_storage_gb,
+                'storage_unit'        => $orgSetting->storage_unit ?? 'GB',
                 'trial_label'         => $orgSetting->getTrialLabel(),
                 'trial_minutes'       => $orgSetting->getTrialMinutes(),
             ];
@@ -85,6 +86,7 @@ class TrialResolverService
                 'max_users'           => $data['max_users'],
                 'max_projects'        => $data['max_projects'],
                 'max_storage_gb'      => $data['max_storage_gb'],
+                'storage_unit'        => $data['storage_unit'] ?? 'GB',
             ]
         );
     }
@@ -135,6 +137,7 @@ class TrialResolverService
                 'max_users'           => 5,
                 'max_projects'        => 5,
                 'max_storage_gb'      => 5,
+                'storage_unit'        => 'GB',
                 'trial_label'         => '14 days',
                 'trial_minutes'       => 14 * 24 * 60,
             ];
@@ -150,6 +153,7 @@ class TrialResolverService
             'max_users'           => $plan->max_users,
             'max_projects'        => $plan->max_projects,
             'max_storage_gb'      => $plan->max_storage_gb,
+            'storage_unit'        => $plan->storage_unit ?? 'GB',
             'trial_label'         => $plan->getTrialLabel(),
             'trial_minutes'       => $minutes,
         ];

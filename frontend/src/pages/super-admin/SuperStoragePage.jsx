@@ -85,7 +85,7 @@ export default function SuperStoragePage() {
                 <>
                   <div className="mb-3">
                     <div className="flex justify-between mb-1">
-                      <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>{s.total_gb} GB / {s.max_storage_gb} GB</span>
+                      <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>{formatBytes(s.total_bytes || 0)} / {s.max_storage_gb} {s.storage_unit || 'GB'}</span>
                       <span className="text-xs" style={{ color: isCritical ? 'var(--color-danger)' : isWarning ? 'var(--color-warning)' : 'var(--text-muted)' }}>{usagePercent}%</span>
                     </div>
                     <div className="w-full h-2 rounded-full" style={{ background: 'var(--bg-hover)' }}>
@@ -97,7 +97,7 @@ export default function SuperStoragePage() {
                   </div>
                   <div className="flex justify-between text-xs" style={{ color: 'var(--text-muted)' }}>
                     <span>{s.total_files} files</span>
-                    <span>{s.remaining_gb} GB left</span>
+                    <span>{formatBytes(s.remaining_bytes || 0)} left</span>
                   </div>
                 </>
               ) : (

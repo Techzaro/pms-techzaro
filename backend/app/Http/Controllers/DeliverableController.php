@@ -1067,16 +1067,35 @@ class DeliverableController extends Controller
         ]);
 
         $filePath = $fileName = $fileUrl = null;
+        $fileSkipped = false;
+        $filesSkipped = false;
         if ($request->hasFile('file')) {
             $file = $request->file('file');
-            $fileName = $file->getClientOriginalName();
-            $org = $request->attributes->get('currentOrganization');
-            if ($org) {
-                $filePath = StorageDiskResolver::store($org, $file, 'deliverable-submissions/'.$deliverable->id);
-                $fileUrl = StorageDiskResolver::isS3($org) ? $filePath : '/storage/'.$filePath;
+            $storageCheck = $this->checkStorageLimit($request, $file);
+            if ($storageCheck && !$storageCheck['allowed']) {
+                $fileSkipped = true;
             } else {
-                $filePath = $file->store('deliverable-submissions/'.$deliverable->id, 'public');
-                $fileUrl = '/storage/'.$filePath;
+                $fileName = $file->getClientOriginalName();
+                $org = $request->attributes->get('currentOrganization');
+                if ($org) {
+                    $filePath = StorageDiskResolver::store($org, $file, 'deliverable-submissions/'.$deliverable->id);
+                    $fileUrl = StorageDiskResolver::isS3($org) ? $filePath : '/storage/'.$filePath;
+                } else {
+                    $filePath = $file->store('deliverable-submissions/'.$deliverable->id, 'public');
+                    $fileUrl = '/storage/'.$filePath;
+                }
+            }
+        }
+
+        $storedFiles = [];
+        if ($request->hasFile('files')) {
+            foreach ($request->file('files') as $f) {
+                $sc = $this->checkStorageLimit($request, $f);
+                if ($sc && !$sc['allowed']) {
+                    $filesSkipped = true;
+                } else {
+                    $storedFiles[] = $f;
+                }
             }
         }
 
@@ -1087,10 +1106,10 @@ class DeliverableController extends Controller
             'status' => 'pending',
         ]);
 
-        if ($request->hasFile('files')) {
+        if (!empty($storedFiles)) {
             $org = $request->attributes->get('currentOrganization');
             $submission->attachments()->createMany(
-                collect($request->file('files'))->map(function ($file) use ($deliverable, $org) {
+                collect($storedFiles)->map(function ($file) use ($deliverable, $org) {
                     if ($org) {
                         $path = StorageDiskResolver::store($org, $file, 'deliverable-submissions/'.$deliverable->id);
                         $url = StorageDiskResolver::isS3($org) ? $path : '/storage/'.$path;
@@ -1224,9 +1243,15 @@ class DeliverableController extends Controller
             \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
         }
 
+        $responseMessage = 'Deliverable submitted successfully';
+        if ($fileSkipped || $filesSkipped) {
+            $responseMessage = $this->buildFileSkippedMessage('deliverable');
+        }
+
         return response()->json([
             'success' => true,
-            'message' => 'Deliverable submitted successfully',
+            'message' => $responseMessage,
+            'file_skipped' => $fileSkipped || $filesSkipped,
             'deliverable' => $deliverable->fresh()->load([
                 'assignee:id,name,email,role', 'creator:id,name',
                 'submissions' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments'])->latest(),
@@ -1497,6 +1522,7 @@ class DeliverableController extends Controller
         $filePaths = [];
         $fileNames = [];
         $uploadedFiles = [];
+        $fileSkipped = false;
         if ($request->hasFile('files')) {
             $uploadedFiles = $request->file('files');
         } elseif ($request->hasFile('file')) {
@@ -1506,6 +1532,11 @@ class DeliverableController extends Controller
         $org = $request->attributes->get('currentOrganization');
         foreach ($uploadedFiles as $uploadedFile) {
             if ($uploadedFile && $uploadedFile->isValid()) {
+                $storageCheck = $this->checkStorageLimit($request, $uploadedFile);
+                if ($storageCheck && !$storageCheck['allowed']) {
+                    $fileSkipped = true;
+                    continue;
+                }
                 $fileNames[] = $uploadedFile->getClientOriginalName();
                 if ($org) {
                     $filePaths[] = StorageDiskResolver::store($org, $uploadedFile, 'deliverable-reopen/'.$deliverable->id);
@@ -1617,9 +1648,15 @@ class DeliverableController extends Controller
             \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
         }
 
+        $reopenMessage = 'Subtask reopened successfully';
+        if ($fileSkipped) {
+            $reopenMessage = $this->buildFileSkippedMessage('deliverable');
+        }
+
         return response()->json([
             'success' => true,
-            'message' => 'Subtask reopened successfully',
+            'message' => $reopenMessage,
+            'file_skipped' => $fileSkipped,
             'deliverable' => $deliverable->fresh()->load(['assignee:id,name,email,role', 'creator:id,name', 'reopenedBy:id,name',
                 'submissions' => fn ($q) => $q->with(['submittedBy:id,name,email', 'approvedBy:id,name', 'reopenedBy:id,name'])->latest(),
             ]),
@@ -1697,6 +1734,7 @@ class DeliverableController extends Controller
         $filePaths = [];
         $fileNames = [];
         $uploadedFiles = [];
+        $fileSkipped = false;
         if ($request->hasFile('files')) {
             $uploadedFiles = $request->file('files');
         } elseif ($request->hasFile('file')) {
@@ -1706,6 +1744,11 @@ class DeliverableController extends Controller
         $org = $request->attributes->get('currentOrganization');
         foreach ($uploadedFiles as $uploadedFile) {
             if ($uploadedFile && $uploadedFile->isValid()) {
+                $storageCheck = $this->checkStorageLimit($request, $uploadedFile);
+                if ($storageCheck && !$storageCheck['allowed']) {
+                    $fileSkipped = true;
+                    continue;
+                }
                 $fileNames[] = $uploadedFile->getClientOriginalName();
                 if ($org) {
                     $filePaths[] = StorageDiskResolver::store($org, $uploadedFile, 'deliverable-rework/'.$deliverable->id);
@@ -1738,9 +1781,15 @@ class DeliverableController extends Controller
             'new_deadline' => $validated['new_deadline'] ?? null, 'file_path' => $filePath, 'file_name' => $fileName,
         ]);
 
+        $reworkMessage = 'Deliverable marked for rework';
+        if ($fileSkipped) {
+            $reworkMessage = $this->buildFileSkippedMessage('deliverable');
+        }
+
         return response()->json([
             'success' => true,
-            'message' => 'Deliverable marked for rework',
+            'message' => $reworkMessage,
+            'file_skipped' => $fileSkipped,
             'deliverable' => $deliverable->fresh()->load(['assignee:id,name,email,role', 'creator:id,name']),
         ]);
     }
@@ -2240,7 +2289,13 @@ class DeliverableController extends Controller
 
         $storageCheck = $this->checkStorageLimit($request, $file);
         if ($storageCheck && !$storageCheck['allowed']) {
-            return response()->json(['success' => false, 'message' => $storageCheck['message']], 422);
+            return response()->json([
+                'success' => true,
+                'message' => $this->buildFileSkippedMessage('deliverable'),
+                'file' => null,
+                'file_skipped' => true,
+                'storage_warning' => $storageCheck['message'],
+            ], 200);
         }
 
         $org = $request->attributes->get('currentOrganization');

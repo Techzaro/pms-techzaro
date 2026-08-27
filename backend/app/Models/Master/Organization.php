@@ -19,6 +19,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string $slug
  * @property string|null $admin_name
  * @property string|null $admin_email
+ * @property int|null    $founding_admin_id
  * @property string $database_name
  * @property string $database_host
  * @property int    $database_port
@@ -46,6 +47,7 @@ class Organization extends Model
         'slug',
         'admin_name',
         'admin_email',
+        'founding_admin_id',
         'type',
         'database_name',
         'database_host',
@@ -75,6 +77,7 @@ class Organization extends Model
         'storage_large_file_threshold_mb',
         'storage_auto_cleanup',
         'custom_max_storage_gb',
+        'storage_unit',
     ];
 
     protected $hidden = [
@@ -91,6 +94,7 @@ class Organization extends Model
         'storage_warn_threshold'     => 'integer',
         'storage_critical_threshold' => 'integer',
         'storage_pin_threshold'      => 'integer',
+        'custom_max_storage_gb'      => 'float',
     ];
 
     /*

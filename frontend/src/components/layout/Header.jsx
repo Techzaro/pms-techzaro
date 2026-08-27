@@ -19,6 +19,7 @@ import { formatDateTimeInline } from "../../utils/formatDateTime";
 import { getNotificationDestination } from "../../utils/navigation";
 import { useTheme } from "../../context/ThemeContext.jsx";
 import { useOrgBranding } from "../../hooks/useOrgBranding";
+import { useOrgSubscription } from "../../hooks/useOrgSubscription";
 import "./Header.css";
 
 import CreateTaskModal from "../CreateTaskModal";
@@ -40,6 +41,15 @@ function Header() {
   const profileMenuRef = useRef(null);
   const { theme, toggleTheme } = useTheme();
   const { data: branding } = useOrgBranding();
+  const { data: subData } = useOrgSubscription();
+
+  const enabledModules = useMemo(() => {
+    const mods = subData?.modules?.enabled;
+    if (!Array.isArray(mods) || mods.length === 0) return null;
+    return new Set(mods.filter(m => m.is_enabled !== false).map(m => m.slug));
+  }, [subData]);
+
+  const hasModule = (slug) => enabledModules === null || enabledModules.has(slug);
 
   // ── State ──
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -657,7 +667,7 @@ function Header() {
 
           {/* Quick-create task button – not for guests */}
 
-          {getCurrentRole() !== "guest" && (
+          {getCurrentRole() !== "guest" && hasModule("tasks") && (
           <button
             className="task-btn1"
             title="Create Task"
@@ -670,7 +680,7 @@ function Header() {
           </button>
           )}
 
-          {getCurrentRole() !== "guest" && (
+          {getCurrentRole() !== "guest" && hasModule("deliverables") && (
           <button
             className="task-btn1"
             style={{ background: "#7c3aed" }}
@@ -686,7 +696,7 @@ function Header() {
 
           {/* Quick-create project button – visible to admin/manager only */}
 
-          {["admin", "manager"].includes(getCurrentRole()) && (
+          {["admin", "manager"].includes(getCurrentRole()) && hasModule("projects") && (
           <button
             className="project-btn"
             title="Create Project"

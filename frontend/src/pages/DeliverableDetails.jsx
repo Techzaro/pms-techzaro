@@ -306,7 +306,11 @@ function SubtaskDetails() {
         method: "POST", headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, body: formData, _notifHandled: true,
       });
       const data = await res.json();
-      if (res.ok) { publish('deliverable:updated', data.deliverable || data); publish('data:changed', { type: 'deliverable', action: 'updated' }); showSuccessMessage("Subtask", "submitted"); setShowSubmitForm(false); setSubmitComment(""); setSubmitFile(null); setSubmitFiles([]); setLinks([]); setLinkInput(""); fetchSubtask(); }
+      if (res.ok) {
+        if (data.file_skipped) notify.warning(data.message || "Submission saved but file could not be attached due to storage limit.");
+        else showSuccessMessage("Subtask", "submitted");
+        publish('deliverable:updated', data.deliverable || data); publish('data:changed', { type: 'deliverable', action: 'updated' }); setShowSubmitForm(false); setSubmitComment(""); setSubmitFile(null); setSubmitFiles([]); setLinks([]); setLinkInput(""); fetchSubtask();
+      }
       else { notify.error(data.message || "Failed to submit"); }
     } catch { notify.error("An error occurred"); } finally { setSubmitting(false); }
   };

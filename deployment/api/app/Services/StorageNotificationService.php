@@ -23,6 +23,9 @@ class StorageNotificationService
         $percent = $usage['usage_percent'];
         $settings = $org->getStorageSettings();
 
+        // Auto-dismiss stale notifications when storage drops below their threshold
+        self::dismissStaleNotifications($org->id, $percent, $settings);
+
         $notifications = [];
 
         // Warn threshold (80% default)
@@ -90,6 +93,35 @@ class StorageNotificationService
         }
 
         return $notifications;
+    }
+
+    /**
+     * Auto-dismiss notifications that are no longer applicable because storage dropped below threshold.
+     */
+    private static function dismissStaleNotifications(int $orgId, float $percent, array $settings): void
+    {
+        $typesToDismiss = [];
+
+        if ($percent < $settings['pin_threshold']) {
+            $typesToDismiss[] = 'storage_pinned';
+        }
+        if ($percent < $settings['critical_threshold']) {
+            $typesToDismiss[] = 'storage_critical';
+        }
+        if ($percent < 100) {
+            $typesToDismiss[] = 'storage_exceeded';
+        }
+        if ($percent < $settings['warn_threshold']) {
+            $typesToDismiss[] = 'storage_warning';
+        }
+
+        if (!empty($typesToDismiss)) {
+            OrganizationStorageNotification::on('mysql_master')
+                ->where('organization_id', $orgId)
+                ->whereIn('type', $typesToDismiss)
+                ->where('is_dismissed', false)
+                ->update(['is_dismissed' => true, 'dismissed_at' => now()]);
+        }
     }
 
     /**

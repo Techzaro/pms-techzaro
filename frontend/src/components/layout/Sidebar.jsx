@@ -11,10 +11,11 @@
  */
 
 import { Link, useLocation, useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import API_URL from "../../config/api";
 import { authToken, getCurrentRole, getUser, setUser, rolePath, getUrlRole, getTenantSlug } from "../../utils/auth";
 import { useOrgBranding } from "../../hooks/useOrgBranding";
+import { useOrgSubscription } from "../../hooks/useOrgSubscription";
 
 import {
   MdDashboard,
@@ -43,6 +44,17 @@ import "./Sidebar.css";
  */
 function Sidebar() {
   const { data: branding } = useOrgBranding();
+  const { data: subData } = useOrgSubscription();
+
+  // ── Enabled module slugs from the org's plan ──
+  const enabledModules = useMemo(() => {
+    const mods = subData?.modules?.enabled;
+    if (!Array.isArray(mods) || mods.length === 0) return null; // null = no data yet, show all
+    return new Set(mods.filter(m => m.is_enabled !== false).map(m => m.slug));
+  }, [subData]);
+
+  /** Returns true if the given module slug is enabled (or if data hasn't loaded yet). */
+  const hasModule = (slug) => enabledModules === null || enabledModules.has(slug);
 
   // ── Viewport mode state ──
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -259,6 +271,7 @@ function Sidebar() {
           </Link>
 
           {/* Projects link */}
+          {hasModule("projects") && (
           <Link
             to={rolePath("projects")}
             className={`sidebar-link ${isActiveOrStart("projects") || (user.role === "guest" && location.pathname.startsWith(`${rolePrefix}/tasks/task-details/`)) ? "active" : ""}`}
@@ -267,9 +280,10 @@ function Sidebar() {
             <MdOutlineDescription />
             <span>Projects</span>
           </Link>
+          )}
 
           {/* Tasks link for guest – simple link below Projects */}
-          {user.role === "guest" && (
+          {user.role === "guest" && hasModule("tasks") && (
           <Link
             to={rolePath("guest-tasks")}
             className={`sidebar-link ${isActive("guest-tasks") && !location.pathname.startsWith(`${rolePrefix}/tasks/task-details/`) ? "active" : ""}`}
@@ -281,7 +295,7 @@ function Sidebar() {
           )}
 
           {/* Tasks dropdown – sub-links for assigned/by-you/self/all; hidden for guest */}
-          {user.role !== "guest" && (
+          {user.role !== "guest" && hasModule("tasks") && (
           <div className={`sidebar-dropdown-group ${tasksOpen || isActive("tasks") || isActive("taskby") || isActive("self-tasks") || isActive("all-tasks") || location.pathname.startsWith(`${rolePrefix}/tasks/task-details/`) ? "open active" : ""}`}>
             <div
               className="sidebar-dropdown-header"
@@ -337,7 +351,7 @@ function Sidebar() {
           )}
 
           {/* Subtasks dropdown – sub-links for assigned/by-you/self; hidden for guest */}
-          {user.role !== "guest" && (
+          {user.role !== "guest" && hasModule("deliverables") && (
           <div className={`sidebar-dropdown-group ${subtasksOpen || isActive("deliveries") || isActive("deliveries-by-you") || isActive("self-deliveries") || isActive("all-deliverables") || location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`) ? "open active" : ""}`}>
             <div
               className="sidebar-dropdown-header"
@@ -393,6 +407,7 @@ function Sidebar() {
           )}
 
           {/* Drafts link */}
+          {hasModule("drafts") && (
           <Link
             to={rolePath("drafts")}
             className={`sidebar-link ${isActiveOrStart("drafts") ? "active" : ""}`}
@@ -401,6 +416,7 @@ function Sidebar() {
             <MdEditNote />
             <span>Drafts</span>
           </Link>
+          )}
 
           {/* Templates link */}
           <Link
@@ -413,6 +429,7 @@ function Sidebar() {
           </Link>
 
           {/* Calendar link */}
+          {hasModule("calendar-events") && (
           <Link
             to={rolePath("calendar")}
             className={`sidebar-link ${isActive("calendar") || isActive("calender") ? "active" : ""}`}
@@ -421,8 +438,10 @@ function Sidebar() {
             <MdCalendarToday />
             <span>Calendar</span>
           </Link>
+          )}
 
           {/* Events link */}
+          {hasModule("calendar-events") && (
           <Link
             to={rolePath("events")}
             className={`sidebar-link ${isActive("events") ? "active" : ""}`}
@@ -431,6 +450,7 @@ function Sidebar() {
             <MdEvent />
             <span>Events</span>
           </Link>
+          )}
 
           <hr />
 
@@ -447,7 +467,7 @@ function Sidebar() {
           )}
 
           {/* Admin/Manager only – Team link */}
-          {(user.role === "admin" || user.role === "manager") && (
+          {(user.role === "admin" || user.role === "manager") && hasModule("teams") && (
             <Link
               to={rolePath("manage-team")}
               className={`sidebar-link ${isActive("manage-team") ? "active" : ""}`}
@@ -459,7 +479,7 @@ function Sidebar() {
           )}
 
           {/* Member/Team Lead – read-only Team link */}
-          {(user.role === "member" || user.role === "team_lead" || user.role === "teamlead") && (
+          {(user.role === "member" || user.role === "team_lead" || user.role === "teamlead") && hasModule("teams") && (
             <Link
               to={rolePath("my-team")}
               className={`sidebar-link ${isActive("my-team") ? "active" : ""}`}
@@ -471,7 +491,7 @@ function Sidebar() {
           )}
 
           {/* Reports – dropdown for team_lead, simple link for others; hidden for guest */}
-          {user.role !== "guest" && (user.role === "team_lead" || user.role === "teamlead") && (
+          {user.role !== "guest" && (user.role === "team_lead" || user.role === "teamlead") && hasModule("reports") && (
             <div className={`sidebar-dropdown-group ${reportsOpen || isActive("reports") || isActive("team-members-report") || location.pathname.startsWith(`${rolePrefix}/reports/team-members/`) || location.pathname.startsWith(`${rolePrefix}/reports/user-performance/`) ? "open active" : ""}`}>
               <div
                 className="sidebar-dropdown-header"
@@ -508,7 +528,7 @@ function Sidebar() {
             </div>
           )}
 
-          {user.role !== "guest" && user.role !== "team_lead" && user.role !== "teamlead" && (
+          {user.role !== "guest" && user.role !== "team_lead" && user.role !== "teamlead" && hasModule("reports") && (
             <Link
               to={user.role === "member" ? rolePath("reports/user-performance/me") : rolePath("reports")}
               className={`sidebar-link ${isActive("reports") || location.pathname.startsWith(`${rolePrefix}/reports/team-members/`) || location.pathname.startsWith(`${rolePrefix}/reports/user-performance/`) ? "active" : ""}`}

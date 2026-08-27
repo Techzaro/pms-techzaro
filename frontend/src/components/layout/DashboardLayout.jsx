@@ -9,7 +9,7 @@
  * This replaces 20+ independent page polls with ONE app-level poll.
  */
 
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import { Outlet } from "react-router-dom";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
@@ -18,6 +18,7 @@ import StorageNotificationBanner from "../StorageNotificationBanner";
 import { authToken } from "../../utils/auth";
 import { publish } from "../../utils/eventBus";
 import API_URL from "../../config/api";
+import { useOrgSubscription } from "../../hooks/useOrgSubscription";
 
 import "./DashboardLayout.css";
 
@@ -25,6 +26,15 @@ const POLL_INTERVAL = 20000; // 20 seconds
 
 function DashboardLayout({ children }) {
   const prevCountRef = useRef(null);
+  const { data: subData } = useOrgSubscription();
+
+  const enabledModules = useMemo(() => {
+    const mods = subData?.modules?.enabled;
+    if (!Array.isArray(mods) || mods.length === 0) return null;
+    return new Set(mods.filter(m => m.is_enabled !== false).map(m => m.slug));
+  }, [subData]);
+
+  const hasModule = (slug) => enabledModules === null || enabledModules.has(slug);
 
   // Immediate layout check: if no token exists, immediately redirect to login & replace history
   useLayoutEffect(() => {
@@ -94,17 +104,17 @@ function DashboardLayout({ children }) {
       </svg>
 
       <Header />
-      <StorageNotificationBanner />
 
       <div className="main-layout main-layout--no-right">
         <Sidebar />
 
         <div className="dashboard-content">
+          <StorageNotificationBanner />
           {children || <Outlet />}
         </div>
       </div>
 
-      <ChatWidget />
+      {hasModule("chat") && <ChatWidget />}
     </div>
   );
 }

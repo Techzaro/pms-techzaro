@@ -262,7 +262,7 @@ class OrganizationSettingsController extends Controller
             ->first();
 
         if (!$subscription) {
-            $currentUsers = \App\Models\User::count();
+            $currentUsers = \App\Models\User::where('active', true)->count();
             $currentProjects = \App\Models\Project::count();
 
             return response()->json([
@@ -280,6 +280,7 @@ class OrganizationSettingsController extends Controller
                     'status' => $org->status,
                     'is_owner' => $org->isOwner(),
                     'trial_ends_at' => $org->trial_ends_at?->toISOString(),
+                    'founding_admin_id' => $org->founding_admin_id,
                 ],
             ]);
         }
@@ -299,15 +300,16 @@ class OrganizationSettingsController extends Controller
         $enabledModules = $modules->where('is_enabled', true);
         $disabledModules = $modules->where('is_enabled', false);
 
-        // Count ALL active users and projects (not scoped to subscription period)
-        // This ensures limits are enforced against total resource count
-        $currentUsers = \App\Models\User::count();
+        // Count active users and projects (not scoped to subscription period)
+        // Resigned/inactive users are excluded from limit enforcement
+        $currentUsers = \App\Models\User::where('active', true)->count();
         $currentProjects = \App\Models\Project::count();
 
         // Check for org-specific trial config overrides
         $effectiveMaxUsers = $plan?->max_users;
         $effectiveMaxProjects = $plan?->max_projects;
         $effectiveMaxStorage = $plan?->max_storage_gb;
+        $effectiveStorageUnit = $plan?->storage_unit ?? 'GB';
         $effectivePriceMonthly = $plan?->price_monthly;
         $effectivePriceYearly = $plan?->price_yearly;
         $isCustomPlan = $subscription->is_custom;
@@ -318,6 +320,7 @@ class OrganizationSettingsController extends Controller
             $effectiveMaxUsers = $subscription->custom_max_users ?? $effectiveMaxUsers;
             $effectiveMaxProjects = $subscription->custom_max_projects ?? $effectiveMaxProjects;
             $effectiveMaxStorage = $subscription->custom_max_storage_gb ?? $effectiveMaxStorage;
+            $effectiveStorageUnit = $subscription->storage_unit ?? $effectiveStorageUnit;
             $effectivePriceMonthly = $subscription->custom_price_monthly ?? $effectivePriceMonthly;
             $effectivePriceYearly = $subscription->custom_price_yearly ?? $effectivePriceYearly;
         }
@@ -331,6 +334,7 @@ class OrganizationSettingsController extends Controller
                 $effectiveMaxUsers = $trialSetting->max_users;
                 $effectiveMaxProjects = $trialSetting->max_projects;
                 $effectiveMaxStorage = $trialSetting->max_storage_gb;
+                $effectiveStorageUnit = $trialSetting->storage_unit ?? $effectiveStorageUnit;
                 $trialConfig = [
                     'is_custom' => true,
                     'trial_duration' => $trialSetting->trial_duration,
@@ -338,6 +342,7 @@ class OrganizationSettingsController extends Controller
                     'max_users' => $trialSetting->max_users,
                     'max_projects' => $trialSetting->max_projects,
                     'max_storage_gb' => $trialSetting->max_storage_gb,
+                    'storage_unit' => $trialSetting->storage_unit ?? 'GB',
                 ];
             } else {
                 $trialConfig = [
@@ -347,8 +352,15 @@ class OrganizationSettingsController extends Controller
                     'max_users' => $plan->max_users,
                     'max_projects' => $plan->max_projects,
                     'max_storage_gb' => $plan->max_storage_gb,
+                    'storage_unit' => $plan->storage_unit ?? 'GB',
                 ];
             }
+        }
+
+        // Org-level storage override (highest priority)
+        if ($org->custom_max_storage_gb !== null) {
+            $effectiveMaxStorage = $org->custom_max_storage_gb;
+            $effectiveStorageUnit = $org->storage_unit ?? $effectiveStorageUnit;
         }
 
         return response()->json([
@@ -375,6 +387,7 @@ class OrganizationSettingsController extends Controller
                 'max_users' => $effectiveMaxUsers,
                 'max_projects' => $effectiveMaxProjects,
                 'max_storage_gb' => $effectiveMaxStorage,
+                'storage_unit' => $effectiveStorageUnit,
                 'is_custom' => $isCustomPlan,
             ] : null,
             'trial_config' => $trialConfig,
@@ -393,6 +406,7 @@ class OrganizationSettingsController extends Controller
                 'status' => $org->status,
                 'is_owner' => $org->isOwner(),
                 'trial_ends_at' => $org->trial_ends_at?->toISOString(),
+                'founding_admin_id' => $org->founding_admin_id,
             ],
         ]);
     }
@@ -458,6 +472,7 @@ class OrganizationSettingsController extends Controller
             'organization' => [
                 'name' => $org->name,
                 'created_at' => $org->created_at?->toISOString(),
+                'founding_admin_id' => $org->founding_admin_id,
             ],
         ]);
     }
@@ -490,7 +505,7 @@ class OrganizationSettingsController extends Controller
                 'is_verified' => $d->is_verified,
             ]);
 
-        $currentUsers = \App\Models\User::count();
+        $currentUsers = \App\Models\User::where('active', true)->count();
         $currentProjects = \App\Models\Project::count();
 
         $plan = $subscription?->plan;
@@ -504,6 +519,7 @@ class OrganizationSettingsController extends Controller
         $effectiveMaxUsers = $plan?->max_users;
         $effectiveMaxProjects = $plan?->max_projects;
         $effectiveMaxStorage = $plan?->max_storage_gb;
+        $effectiveStorageUnit = $plan?->storage_unit ?? 'GB';
         $effectivePriceMonthly = $plan?->price_monthly;
         $effectivePriceYearly = $plan?->price_yearly;
         $isCustomPlan = $subscription?->is_custom ?? false;
@@ -512,6 +528,7 @@ class OrganizationSettingsController extends Controller
             $effectiveMaxUsers = $subscription->custom_max_users ?? $effectiveMaxUsers;
             $effectiveMaxProjects = $subscription->custom_max_projects ?? $effectiveMaxProjects;
             $effectiveMaxStorage = $subscription->custom_max_storage_gb ?? $effectiveMaxStorage;
+            $effectiveStorageUnit = $subscription->storage_unit ?? $effectiveStorageUnit;
             $effectivePriceMonthly = $subscription->custom_price_monthly ?? $effectivePriceMonthly;
             $effectivePriceYearly = $subscription->custom_price_yearly ?? $effectivePriceYearly;
         }
@@ -527,6 +544,7 @@ class OrganizationSettingsController extends Controller
                 'max_users' => $trialSetting->max_users,
                 'max_projects' => $trialSetting->max_projects,
                 'max_storage_gb' => $trialSetting->max_storage_gb,
+                'storage_unit' => $trialSetting->storage_unit ?? 'GB',
             ] : [
                 'is_custom' => false,
                 'trial_duration' => $plan->trial_duration ?? 14,
@@ -534,7 +552,14 @@ class OrganizationSettingsController extends Controller
                 'max_users' => $plan->max_users,
                 'max_projects' => $plan->max_projects,
                 'max_storage_gb' => $plan->max_storage_gb,
+                'storage_unit' => $plan->storage_unit ?? 'GB',
             ];
+        }
+
+        // Org-level storage override (highest priority)
+        if ($org->custom_max_storage_gb !== null) {
+            $effectiveMaxStorage = $org->custom_max_storage_gb;
+            $effectiveStorageUnit = $org->storage_unit ?? $effectiveStorageUnit;
         }
 
         $settings = $org->settings ?? [];
@@ -578,6 +603,7 @@ class OrganizationSettingsController extends Controller
                 'admin_phone' => $adminPhone,
                 'country_code' => $org->country_code,
                 'is_owner' => $org->isOwner(),
+                'founding_admin_id' => $org->founding_admin_id,
                 'settings' => $settings,
                 'domain' => \App\Helpers\UrlHelper::getOrganizationUrl($org->slug),
             ],
@@ -600,6 +626,7 @@ class OrganizationSettingsController extends Controller
                 'max_users' => $effectiveMaxUsers,
                 'max_projects' => $effectiveMaxProjects,
                 'max_storage_gb' => $effectiveMaxStorage,
+                'storage_unit' => $effectiveStorageUnit,
                 'is_custom' => $isCustomPlan,
             ] : null,
             'trial_config' => $trialConfig,

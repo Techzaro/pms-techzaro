@@ -368,6 +368,10 @@ class SuperAdminController extends Controller
             $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
             $stmt = $pdo->prepare("INSERT INTO `{$escaped}`.`users` (name, email, personal_email, professional_email, phone_number, contact_no, password, role, active, must_change_password, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'admin', 1, 1, NOW(), NOW())");
             $stmt->execute([$validated['name'], $email, $email, $email, $phone, $phone, $hashedPassword]);
+            $foundingAdminId = $pdo->lastInsertId();
+
+            // Save founding admin ID to org record
+            $org->update(['founding_admin_id' => $foundingAdminId]);
 
             // Step 7: Send welcome email with credentials (non-blocking via queue)
             $loginUrl = \App\Helpers\UrlHelper::getLoginUrl();
@@ -568,13 +572,15 @@ class SuperAdminController extends Controller
             'trial_duration_unit'  => 'nullable|string|in:minutes,hours,days',
             'trial_max_users'      => 'nullable|integer|min:1',
             'trial_max_projects'   => 'nullable|integer|min:1',
-            'trial_max_storage_gb' => 'nullable|integer|min:1',
+            'trial_max_storage_gb' => 'nullable|numeric|min:0.001',
+            'trial_storage_unit'   => 'nullable|string|in:KB,MB,GB',
             'is_custom'            => 'nullable|boolean',
             'custom_price_monthly' => 'nullable|numeric|min:0',
             'custom_price_yearly'  => 'nullable|numeric|min:0',
             'custom_max_users'     => 'nullable|integer|min:1',
             'custom_max_projects'  => 'nullable|integer|min:1',
-            'custom_max_storage_gb'=> 'nullable|integer|min:1',
+            'custom_max_storage_gb'=> 'nullable|numeric|min:0.001',
+            'custom_storage_unit'  => 'nullable|string|in:KB,MB,GB',
             'password_type'        => 'nullable|string|in:auto,manual',
             'password'             => 'nullable|string|min:6|max:255',
         ]);
@@ -665,6 +671,10 @@ class SuperAdminController extends Controller
             $escaped = str_replace('`', '``', $dbName);
             $stmt = $pdo->prepare("INSERT INTO `{$escaped}`.`users` (name, email, personal_email, professional_email, phone_number, contact_no, password, role, active, must_change_password, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'admin', 1, 1, NOW(), NOW())");
             $stmt->execute([$validated['admin_name'], $validated['admin_email'], $validated['admin_email'], $validated['admin_email'], $adminPhone, $adminPhone, $hashedPassword]);
+            $foundingAdminId = $pdo->lastInsertId();
+
+            // Save founding admin ID to org record
+            $org->update(['founding_admin_id' => $foundingAdminId]);
 
             // Step 7: Assign selected plan to organization
             $plan = OrganizationPlan::find($validated['plan_id']);
@@ -680,6 +690,7 @@ class SuperAdminController extends Controller
                     'custom_max_users'      => $validated['custom_max_users'] ?? $plan->max_users,
                     'custom_max_projects'   => $validated['custom_max_projects'] ?? $plan->max_projects,
                     'custom_max_storage_gb' => $validated['custom_max_storage_gb'] ?? $plan->max_storage_gb,
+                    'storage_unit'          => $validated['custom_storage_unit'] ?? $plan->storage_unit ?? 'GB',
                 ];
             }
 
@@ -701,6 +712,7 @@ class SuperAdminController extends Controller
                 'custom_max_users'      => $customOverrides['custom_max_users'] ?? null,
                 'custom_max_projects'   => $customOverrides['custom_max_projects'] ?? null,
                 'custom_max_storage_gb' => $customOverrides['custom_max_storage_gb'] ?? null,
+                'storage_unit'          => $customOverrides['storage_unit'] ?? null,
                 'starts_at'             => now(),
                 'ends_at'               => $isTrial ? now()->addMinutes($trialMinutes) : ($billingPeriod === 'yearly' ? now()->addYear() : now()->addMonth()),
                 'trial_ends_at'         => $isTrial ? now()->addMinutes($trialMinutes) : null,
@@ -730,6 +742,7 @@ class SuperAdminController extends Controller
                     'max_users'           => $validated['trial_max_users'] ?? $plan->max_users,
                     'max_projects'        => $validated['trial_max_projects'] ?? $plan->max_projects,
                     'max_storage_gb'      => $validated['trial_max_storage_gb'] ?? $plan->max_storage_gb,
+                    'storage_unit'        => $validated['trial_storage_unit'] ?? $plan->storage_unit ?? 'GB',
                 ]);
             }
 
@@ -789,13 +802,15 @@ class SuperAdminController extends Controller
             'custom_price_yearly'  => 'nullable|numeric|min:0',
             'custom_max_users'     => 'nullable|integer|min:1',
             'custom_max_projects'  => 'nullable|integer|min:1',
-            'custom_max_storage_gb'=> 'nullable|integer|min:1',
+            'custom_max_storage_gb'=> 'nullable|numeric|min:0.001',
+            'custom_storage_unit'  => 'nullable|string|in:KB,MB,GB',
             'customize_trial'      => 'nullable|boolean',
             'trial_duration'       => 'nullable|integer|min:1',
             'trial_duration_unit'  => 'nullable|string|in:minutes,hours,days',
             'trial_max_users'      => 'nullable|integer|min:1',
             'trial_max_projects'   => 'nullable|integer|min:1',
-            'trial_max_storage_gb' => 'nullable|integer|min:1',
+            'trial_max_storage_gb' => 'nullable|numeric|min:0.001',
+            'trial_storage_unit'   => 'nullable|string|in:KB,MB,GB',
             'password_type'        => 'nullable|string|in:auto,manual',
             'password'             => 'nullable|string|min:6|max:255',
         ]);
@@ -853,6 +868,7 @@ class SuperAdminController extends Controller
                         'custom_max_users'      => $validated['custom_max_users'] ?? $plan->max_users,
                         'custom_max_projects'   => $validated['custom_max_projects'] ?? $plan->max_projects,
                         'custom_max_storage_gb' => $validated['custom_max_storage_gb'] ?? $plan->max_storage_gb,
+                        'storage_unit'          => $validated['custom_storage_unit'] ?? $plan->storage_unit ?? 'GB',
                     ];
                 }
 
@@ -885,6 +901,7 @@ class SuperAdminController extends Controller
                     'custom_max_users'      => $customOverrides['custom_max_users'] ?? null,
                     'custom_max_projects'   => $customOverrides['custom_max_projects'] ?? null,
                     'custom_max_storage_gb' => $customOverrides['custom_max_storage_gb'] ?? null,
+                    'storage_unit'          => $customOverrides['storage_unit'] ?? null,
                     'starts_at'             => now(),
                     'ends_at'               => $isTrial ? now()->addMinutes($trialMinutes) : ($bp === 'yearly' ? now()->addYear() : now()->addMonth()),
                     'trial_ends_at'         => $isTrial ? now()->addMinutes($trialMinutes) : null,
@@ -899,6 +916,7 @@ class SuperAdminController extends Controller
                             'max_users'           => $validated['trial_max_users'] ?? $plan->max_users,
                             'max_projects'        => $validated['trial_max_projects'] ?? $plan->max_projects,
                             'max_storage_gb'      => $validated['trial_max_storage_gb'] ?? $plan->max_storage_gb,
+                            'storage_unit'        => $validated['trial_storage_unit'] ?? $plan->storage_unit ?? 'GB',
                         ]);
                     }
                 }
@@ -1027,7 +1045,8 @@ class SuperAdminController extends Controller
             'price_yearly'         => ['sometimes', 'numeric', 'min:0'],
             'max_users'            => ['sometimes', 'integer', 'min:1'],
             'max_projects'         => ['sometimes', 'integer', 'min:1'],
-            'max_storage_gb'       => ['sometimes', 'integer', 'min:1'],
+            'max_storage_gb'       => ['sometimes', 'numeric', 'min:0.001'],
+            'storage_unit'         => ['sometimes', 'string', 'in:KB,MB,GB'],
             'trial_duration'       => ['sometimes', 'integer', 'min:1'],
             'trial_duration_unit'  => ['sometimes', 'string', 'in:minutes,hours,days'],
             'is_active'            => ['sometimes', 'boolean'],
@@ -1174,7 +1193,7 @@ class SuperAdminController extends Controller
     {
         try {
             $dbName = $org->database_name;
-            $result = DB::connection('mysql')->select("SELECT COUNT(*) as c FROM `{$dbName}`.`users`");
+            $result = DB::connection('mysql')->select("SELECT COUNT(*) as c FROM `{$dbName}`.`users` WHERE `active` = 1");
             return $result[0]->c ?? 0;
         } catch (\Throwable $e) {
             return 0;
@@ -1245,8 +1264,11 @@ class SuperAdminController extends Controller
         // Strip ALL MySQL dump conditional comment lines (/*!...*/) that cause issues
         $sql = preg_replace('/\/\*!\d+\s+.*?\*\//', '', $sql);
 
+        // Strip -- comment lines (MariaDB dump header comments)
+        $sql = preg_replace('/^--.*$/m', '', $sql);
+
         // Execute in large batches (much faster than line-by-line)
-        $statements = array_filter(array_map('trim', explode(';', $sql)), fn($s) => $s !== '' && !str_starts_with($s, '--'));
+        $statements = array_filter(array_map('trim', explode(';', $sql)), fn($s) => $s !== '' && $s !== '--');
         $batch = '';
         $batchSize = 0;
         foreach ($statements as $statement) {
@@ -1360,7 +1382,8 @@ class SuperAdminController extends Controller
             'trial_duration_unit' => 'required|string|in:minutes,hours,days',
             'max_users'           => 'required|integer|min:1',
             'max_projects'        => 'required|integer|min:1',
-            'max_storage_gb'      => 'required|integer|min:1',
+            'max_storage_gb'      => 'required|numeric|min:0.001',
+            'storage_unit'        => 'required|string|in:KB,MB,GB',
         ]);
 
         $setting = $this->trialResolver->setOverride($org, $validated);
@@ -1829,7 +1852,14 @@ class SuperAdminController extends Controller
             ->latest()
             ->first();
 
-        $maxStorageGb = $subscription?->getEffectiveMaxStorageGb() ?? 10;
+        $maxStorageGb = $subscription?->getEffectiveMaxStorageValue() ?? 10;
+        $storageUnit = $subscription?->getEffectiveStorageUnit() ?? 'GB';
+
+        // Org-level storage override (highest priority)
+        if ($org->custom_max_storage_gb !== null) {
+            $maxStorageGb = $org->custom_max_storage_gb;
+            $storageUnit = $org->storage_unit ?? $storageUnit;
+        }
 
         $storageFiles = \App\Models\Master\OrganizationStorageUsage::on('mysql_master')
             ->where('organization_id', $org->id)
@@ -1838,6 +1868,10 @@ class SuperAdminController extends Controller
         $totalBytes = $storageFiles->sum('file_size_bytes');
         $totalMb = round($totalBytes / (1024 * 1024), 2);
         $totalGb = round($totalBytes / (1024 * 1024 * 1024), 4);
+
+        $maxBytes = \App\Models\Master\OrganizationSubscription::convertToBytes($maxStorageGb, $storageUnit);
+        $remainingBytes = max(0, $maxBytes - $totalBytes);
+        $remainingGb = round($remainingBytes / (1024 * 1024 * 1024), 4);
 
         $byCategory = $storageFiles->groupBy('category')->map(function ($files, $category) {
             $bytes = $files->sum('file_size_bytes');
@@ -1875,8 +1909,10 @@ class SuperAdminController extends Controller
                 'total_mb'         => $totalMb,
                 'total_gb'         => $totalGb,
                 'max_storage_gb'   => $maxStorageGb,
-                'usage_percent'    => $maxStorageGb > 0 ? round(($totalGb / $maxStorageGb) * 100, 1) : 0,
-                'remaining_gb'     => max(0, round($maxStorageGb - $totalGb, 4)),
+                'storage_unit'     => $storageUnit,
+                'usage_percent'    => $maxBytes > 0 ? round(($totalBytes / $maxBytes) * 100, 1) : 0,
+                'remaining_bytes'  => $remainingBytes,
+                'remaining_gb'     => $remainingGb,
                 'by_category'      => $byCategory,
                 'recent_files'     => $recentFiles,
                 'total_files'      => $storageFiles->count(),
@@ -1950,7 +1986,14 @@ class SuperAdminController extends Controller
             ->latest()
             ->first();
 
-        $maxStorageGb = $subscription?->getEffectiveMaxStorageGb() ?? 10;
+        $maxStorageGb = $subscription?->getEffectiveMaxStorageValue() ?? 10;
+        $storageUnit = $subscription?->getEffectiveStorageUnit() ?? 'GB';
+
+        // Org-level storage override (highest priority)
+        if ($org->custom_max_storage_gb !== null) {
+            $maxStorageGb = $org->custom_max_storage_gb;
+            $storageUnit = $org->storage_unit ?? $storageUnit;
+        }
 
         $storageFiles = \App\Models\Master\OrganizationStorageUsage::on('mysql_master')
             ->where('organization_id', $org->id)
@@ -1958,7 +2001,11 @@ class SuperAdminController extends Controller
 
         $totalBytes = $storageFiles->sum('file_size_bytes');
         $totalGb = round($totalBytes / (1024 * 1024 * 1024), 4);
-        $usagePercent = $maxStorageGb > 0 ? round(($totalGb / $maxStorageGb) * 100, 1) : 0;
+
+        $maxBytes = \App\Models\Master\OrganizationSubscription::convertToBytes($maxStorageGb, $storageUnit);
+        $remainingBytes = max(0, $maxBytes - $totalBytes);
+        $remainingGb = round($remainingBytes / (1024 * 1024 * 1024), 4);
+        $usagePercent = $maxBytes > 0 ? round(($totalBytes / $maxBytes) * 100, 1) : 0;
 
         $old3 = \App\Models\Master\OrganizationStorageUsage::on('mysql_master')->where('organization_id', $org->id)->where('created_at', '<', now()->subMonths(3))->count();
         $old3Size = \App\Models\Master\OrganizationStorageUsage::on('mysql_master')->where('organization_id', $org->id)->where('created_at', '<', now()->subMonths(3))->sum('file_size_bytes');
@@ -1979,8 +2026,10 @@ class SuperAdminController extends Controller
                 'total_bytes' => $totalBytes,
                 'total_gb' => $totalGb,
                 'max_storage_gb' => $maxStorageGb,
+                'storage_unit' => $storageUnit,
                 'usage_percent' => $usagePercent,
-                'remaining_gb' => max(0, round($maxStorageGb - $totalGb, 4)),
+                'remaining_bytes'=> $remainingBytes,
+                'remaining_gb' => $remainingGb,
                 'total_files' => $storageFiles->count(),
                 'old_files' => [
                     '3_months' => ['count' => $old3, 'size_mb' => round($old3Size / (1024*1024), 2)],
@@ -2081,6 +2130,7 @@ class SuperAdminController extends Controller
                 'critical_threshold_percent'  => $org->storage_critical_threshold ?? 95,
                 'auto_delete_enabled'         => $org->storage_auto_delete ?? false,
                 'custom_max_storage_gb'       => $org->custom_max_storage_gb ?? null,
+                'storage_unit'                => $org->storage_unit ?? 'GB',
             ],
         ]);
     }
@@ -2101,7 +2151,8 @@ class SuperAdminController extends Controller
             'warning_threshold_percent'  => 'nullable|integer|min:50|max:95',
             'critical_threshold_percent' => 'nullable|integer|min:60|max:100',
             'auto_delete_enabled'        => 'nullable|boolean',
-            'custom_max_storage_gb'      => 'nullable|integer|min:1|max:9999',
+            'custom_max_storage_gb'      => 'nullable|numeric|min:0.001|max:9999',
+            'custom_storage_unit'        => 'nullable|string|in:KB,MB,GB',
         ]);
 
         $org = Organization::on('mysql_master')->find($id);
@@ -2124,9 +2175,18 @@ class SuperAdminController extends Controller
             'storage_critical_threshold'     => $request->input('critical_threshold_percent'),
             'storage_auto_delete'            => $request->boolean('auto_delete_enabled'),
             'custom_max_storage_gb'          => $request->input('custom_max_storage_gb'),
+            'storage_unit'                   => $request->has('custom_storage_unit') ? ($request->input('custom_storage_unit') ?: 'GB') : null,
         ];
 
         $org->update(array_filter($fields, fn($v) => $v !== null));
+
+        // Dismiss old storage notifications so new ones with correct unit get created
+        \App\Models\Master\OrganizationStorageNotification::on('mysql_master')
+            ->where('organization_id', $org->id)
+            ->update(['is_dismissed' => true]);
+
+        // Trigger fresh notification check with new limits
+        \App\Services\StorageNotificationService::checkAndNotify($org);
 
         return response()->json([
             'success' => true,
@@ -2144,6 +2204,7 @@ class SuperAdminController extends Controller
                 'critical_threshold_percent'  => $org->storage_critical_threshold,
                 'auto_delete_enabled'         => $org->storage_auto_delete,
                 'custom_max_storage_gb'       => $org->custom_max_storage_gb,
+                'storage_unit'                => $org->storage_unit,
             ],
         ]);
     }

@@ -532,7 +532,12 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
         const fd = new FormData();
         fd.append("file", file.file);
         fd.append("name", file.customName || file.name);
-        return fetch(`${API_URL}/tasks/${taskId}/files`, { method: "POST", headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, body: fd, _notifHandled: true }).catch(() => {});
+        return fetch(`${API_URL}/tasks/${taskId}/files`, { method: "POST", headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, body: fd, _notifHandled: true })
+          .then(res => res.json().catch(() => ({})).then(d => {
+            if (d.file_skipped) notify.warning(d.message || "File could not be uploaded due to storage limit.");
+            return d;
+          }))
+          .catch(() => {});
       }),
       ...links.map((link) => fetch(`${API_URL}/tasks/${taskId}/links`, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ url: link.url, name: link.customName || link.name }), _notifHandled: true }).catch(() => {})),
     ]);

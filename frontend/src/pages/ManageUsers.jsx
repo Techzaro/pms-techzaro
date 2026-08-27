@@ -73,7 +73,7 @@ const stripDashes = (value) => value.replace(/-/g, "");
  * Handles CRUD operations for users, role assignment, resignation, and profile viewing.
  */
 function ManageUsers() {
-  const { canCreateUser, maxUsers, currentUsers, usersRemaining, getLimitMessage } = usePlanLimits();
+  const { canCreateUser, maxUsers, currentUsers, usersRemaining, getLimitMessage, foundingAdminId } = usePlanLimits();
   const notify = useNotification();
   const [users, setUsers] = useState([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -1191,9 +1191,13 @@ function ManageUsers() {
             {currentUserRole === "admin" && !isSelf && (
               <button
                 className="btn-view"
-                style={{ color: "#ef4444" }}
-                onClick={() => handleAdminDeleteUser(user)}
-                title={user.deletion_requested ? "Approve & Delete User" : "Delete User"}
+                style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#ef4444" }}
+                onClick={() => {
+                  if (foundingAdminId && user.id === foundingAdminId) return;
+                  handleAdminDeleteUser(user);
+                }}
+                disabled={foundingAdminId && user.id === foundingAdminId}
+                title={foundingAdminId && user.id === foundingAdminId ? "Founding admin cannot be deleted" : (user.deletion_requested ? "Approve & Delete User" : "Delete User")}
               >
                 <Trash2 size={18} />
               </button>
@@ -1305,9 +1309,13 @@ function ManageUsers() {
             {currentUserRole === "admin" && !isSelf && (
               <button
                 className="btn-view"
-                style={{ color: "#ef4444" }}
-                onClick={() => handleAdminDeleteUser(user)}
-                title={user.deletion_requested ? "Approve & Delete User" : "Delete User"}
+                style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#ef4444" }}
+                onClick={() => {
+                  if (foundingAdminId && user.id === foundingAdminId) return;
+                  handleAdminDeleteUser(user);
+                }}
+                disabled={foundingAdminId && user.id === foundingAdminId}
+                title={foundingAdminId && user.id === foundingAdminId ? "Founding admin cannot be deleted" : (user.deletion_requested ? "Approve & Delete User" : "Delete User")}
               >
                 <Trash2 size={18} />
               </button>

@@ -205,7 +205,7 @@ export default function SuperAdminSubscriptionPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
           <LimitCard icon={<Users style={{ width: 20, height: 20 }} />} label="Users" value={plan.max_users} color="#4f46e5" />
           <LimitCard icon={<FolderKanban style={{ width: 20, height: 20 }} />} label="Projects" value={plan.max_projects} color="#2563eb" />
-          <LimitCard icon={<HardDrive style={{ width: 20, height: 20 }} />} label="Storage" value={plan.max_storage_gb} suffix="GB" color="#16a34a" />
+          <LimitCard icon={<HardDrive style={{ width: 20, height: 20 }} />} label="Storage" value={plan.max_storage_gb} suffix={plan.storage_unit || 'GB'} color="#16a34a" />
         </div>
       </div>
 
@@ -370,7 +370,7 @@ function PlanChangeModal({ plans, selectedPlanId, setSelectedPlanId, selectedBil
                   <div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
                     <span>{p.max_users >= 9999 ? 'Unlimited' : p.max_users} users</span>
                     <span>{p.max_projects >= 9999 ? 'Unlimited' : p.max_projects} projects</span>
-                    <span>{p.max_storage_gb} GB storage</span>
+                    <span>{p.max_storage_gb} {p.storage_unit || 'GB'} storage</span>
                   </div>
                 </div>
               );
