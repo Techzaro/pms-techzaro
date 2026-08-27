@@ -1,19 +1,12 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X, Loader2, DollarSign, Users, FolderKanban, HardDrive, RotateCcw } from 'lucide-react';
 
 /**
  * PlanCustomizeModal — Reusable modal for customizing a plan's pricing and limits per organization.
- *
- * Props:
- *   plan          — the plan object { name, price_monthly, price_yearly, max_users, max_projects, max_storage_gb }
- *   billingPeriod — 'monthly' or 'yearly'
- *   initialData   — existing custom overrides { custom_price_monthly, custom_price_yearly, custom_max_users, custom_max_projects, custom_max_storage_gb } or null
- *   isCustom      — whether org currently has custom overrides for this plan
- *   onSaved       — callback with the custom data object
- *   onReset       — callback when user resets to default
- *   onClose       — close callback
  */
 export default function PlanCustomizeModal({ plan, billingPeriod = 'monthly', initialData, isCustom = false, onSaved, onReset, onClose }) {
+  const { t } = useTranslation();
   const [priceMonthly, setPriceMonthly] = useState(initialData?.custom_price_monthly ?? plan.price_monthly ?? 0);
   const [priceYearly, setPriceYearly] = useState(initialData?.custom_price_yearly ?? plan.price_yearly ?? 0);
   const [maxUsers, setMaxUsers] = useState(initialData?.custom_max_users ?? plan.max_users ?? 5);
@@ -69,16 +62,16 @@ export default function PlanCustomizeModal({ plan, billingPeriod = 'monthly', in
         <div className="flex items-center justify-between p-5" style={s.divider}>
           <div>
             <h2 className="text-lg font-semibold" style={s.textHeading}>
-              Customize {plan.name} Plan
+              {t('Customize {{name}} Plan', { name: plan.name, defaultValue: `Customize ${plan.name} Plan` })}
             </h2>
             <p className="text-xs mt-0.5" style={s.textMuted}>
-              {isCustom ? 'Custom settings for this organization' : 'Override plan defaults for this organization'}
+              {isCustom ? t('Custom settings for this organization', { defaultValue: 'Custom settings for this organization' }) : t('Override plan defaults for this organization', { defaultValue: 'Override plan defaults for this organization' })}
             </p>
           </div>
           <div className="flex items-center gap-2">
             <button type="submit" form="planCustomForm"
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center gap-2">
-              Save
+              {t('Save', { defaultValue: 'Save' })}
             </button>
             <button onClick={() => setShowCloseConfirm(true)} className="p-1.5 rounded-lg transition-colors"
               style={{ color: 'var(--text-muted)' }}
@@ -96,7 +89,7 @@ export default function PlanCustomizeModal({ plan, billingPeriod = 'monthly', in
               ? 'bg-amber-50 text-amber-700 border border-amber-200'
               : 'bg-gray-50 text-gray-600 border border-gray-200'
           }`}>
-            {isCustom ? 'Custom Plan' : 'Default Plan'}
+            {isCustom ? t('Custom Plan', { defaultValue: 'Custom Plan' }) : t('Default Plan', { defaultValue: 'Default Plan' })}
           </span>
         </div>
 
@@ -105,17 +98,17 @@ export default function PlanCustomizeModal({ plan, billingPeriod = 'monthly', in
           {/* Pricing */}
           <div>
             <label className="block text-xs font-medium mb-1.5" style={s.textMuted}>
-              <DollarSign className="w-3.5 h-3.5 inline mr-1" /> Pricing
+              <DollarSign className="w-3.5 h-3.5 inline mr-1" /> {t('Pricing', { defaultValue: 'Pricing' })}
             </label>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs mb-1" style={s.textMuted}>Monthly ($)</label>
+                <label className="block text-xs mb-1" style={s.textMuted}>{t('Monthly ($)', { defaultValue: 'Monthly ($)' })}</label>
                 <input type="number" min="0" step="0.01" value={priceMonthly}
                   onChange={(e) => setPriceMonthly(e.target.value)}
                   required style={inputStyle} />
               </div>
               <div>
-                <label className="block text-xs mb-1" style={s.textMuted}>Yearly ($)</label>
+                <label className="block text-xs mb-1" style={s.textMuted}>{t('Yearly ($)', { defaultValue: 'Yearly ($)' })}</label>
                 <input type="number" min="0" step="0.01" value={priceYearly}
                   onChange={(e) => setPriceYearly(e.target.value)}
                   required style={inputStyle} />
@@ -126,16 +119,16 @@ export default function PlanCustomizeModal({ plan, billingPeriod = 'monthly', in
           {/* Limits */}
           <div className="grid grid-cols-3 gap-3">
             {[
-              { icon: Users, label: 'User Limit', value: maxUsers, set: setMaxUsers, unlimitedValue: 9999 },
-              { icon: FolderKanban, label: 'Project Limit', value: maxProjects, set: setMaxProjects, unlimitedValue: 9999 },
-              { icon: HardDrive, label: 'Storage (GB)', value: maxStorage, set: setMaxStorage, unlimitedValue: null },
+              { icon: Users, labelKey: 'User Limit', defaultLabel: 'User Limit', value: maxUsers, set: setMaxUsers, unlimitedValue: 9999 },
+              { icon: FolderKanban, labelKey: 'Project Limit', defaultLabel: 'Project Limit', value: maxProjects, set: setMaxProjects, unlimitedValue: 9999 },
+              { icon: HardDrive, labelKey: 'Storage (GB)', defaultLabel: 'Storage (GB)', value: maxStorage, set: setMaxStorage, unlimitedValue: null },
             ].map((f) => (
-              <div key={f.label}>
+              <div key={f.labelKey}>
                 <label className="block text-xs font-medium mb-1.5" style={s.textMuted}>
-                  <f.icon className="w-3.5 h-3.5 inline mr-1" /> {f.label}
+                  <f.icon className="w-3.5 h-3.5 inline mr-1" /> {t(f.labelKey, { defaultValue: f.defaultLabel })}
                 </label>
                 <input type="number" min="1" value={f.value === 9999 ? '' : f.value}
-                  placeholder={f.value === 9999 || (f.unlimitedValue && f.value === f.unlimitedValue) ? 'Unlimited' : ''}
+                  placeholder={f.value === 9999 || (f.unlimitedValue && f.value === f.unlimitedValue) ? t('Unlimited', { defaultValue: 'Unlimited' }) : ''}
                   onChange={(e) => {
                     const val = e.target.value;
                     if (val === '') {
@@ -149,7 +142,7 @@ export default function PlanCustomizeModal({ plan, billingPeriod = 'monthly', in
                   <button type="button" onClick={() => f.set(f.unlimitedValue)}
                     className="mt-1 text-xs font-medium transition-colors"
                     style={{ color: 'var(--color-primary)' }}>
-                    Set Unlimited
+                    {t('Set Unlimited', { defaultValue: 'Set Unlimited' })}
                   </button>
                 )}
               </div>
@@ -158,7 +151,7 @@ export default function PlanCustomizeModal({ plan, billingPeriod = 'monthly', in
 
           {/* Info text */}
           <p className="text-xs" style={s.textMuted}>
-            These settings apply only to this organization and do not affect the global plan defaults.
+            {t('These settings apply only to this organization and do not affect the global plan defaults.', { defaultValue: 'These settings apply only to this organization and do not affect the global plan defaults.' })}
           </p>
         </form>
 
@@ -170,7 +163,7 @@ export default function PlanCustomizeModal({ plan, billingPeriod = 'monthly', in
               style={{ color: '#dc2626', background: 'rgba(220,38,38,0.08)' }}
               onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(220,38,38,0.15)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(220,38,38,0.08)'; }}>
-              <RotateCcw className="w-4 h-4" /> Reset to Default Plan
+              <RotateCcw className="w-4 h-4" /> {t('Reset to Default Plan', { defaultValue: 'Reset to Default Plan' })}
             </button>
           </div>
         )}
@@ -183,12 +176,12 @@ export default function PlanCustomizeModal({ plan, billingPeriod = 'monthly', in
               <div className="mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4" style={{ background: 'rgba(220,38,38,0.1)' }}>
                 <X className="w-6 h-6 text-red-600" />
               </div>
-              <h3 className="text-lg font-semibold mb-2" style={s.textHeading}>Close without saving?</h3>
-              <p className="text-sm mb-6" style={s.textSecondary}>You have unsaved changes. Are you sure you want to close?</p>
+              <h3 className="text-lg font-semibold mb-2" style={s.textHeading}>{t('Close without saving?', { defaultValue: 'Close without saving?' })}</h3>
+              <p className="text-sm mb-6" style={s.textSecondary}>{t('You have unsaved changes. Are you sure you want to close?', { defaultValue: 'You have unsaved changes. Are you sure you want to close?' })}</p>
               <div className="flex gap-3">
                 <button onClick={() => setShowCloseConfirm(false)} className="flex-1 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors"
-                  style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)' }}>Keep Editing</button>
-                <button onClick={onClose} className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors">Close</button>
+                  style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)' }}>{t('Keep Editing', { defaultValue: 'Keep Editing' })}</button>
+                <button onClick={onClose} className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors">{t('Close', { defaultValue: 'Close' })}</button>
               </div>
             </div>
           </div>
@@ -202,17 +195,16 @@ export default function PlanCustomizeModal({ plan, billingPeriod = 'monthly', in
               <div className="mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4" style={{ background: 'rgba(147,51,234,0.1)' }}>
                 <RotateCcw className="w-6 h-6" style={{ color: '#9333ea' }} />
               </div>
-              <h3 className="text-lg font-semibold mb-2" style={s.textHeading}>Reset to Default Plan?</h3>
+              <h3 className="text-lg font-semibold mb-2" style={s.textHeading}>{t('Reset to Default Plan?', { defaultValue: 'Reset to Default Plan?' })}</h3>
               <p className="text-sm mb-6" style={s.textSecondary}>
-                This organization will use the default {plan.name} plan settings.
-                Custom overrides will be removed.
+                {t('This organization will use the default {{name}} plan settings. Custom overrides will be removed.', { name: plan.name, defaultValue: `This organization will use the default ${plan.name} plan settings. Custom overrides will be removed.` })}
               </p>
               <div className="flex gap-3">
                 <button onClick={() => setShowResetConfirm(false)} className="flex-1 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors"
-                  style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)' }}>Cancel</button>
+                  style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)' }}>{t('Cancel', { defaultValue: 'Cancel' })}</button>
                 <button onClick={handleReset}
                   className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors flex items-center justify-center gap-2">
-                  <RotateCcw className="w-4 h-4" /> Reset
+                  <RotateCcw className="w-4 h-4" /> {t('Reset', { defaultValue: 'Reset' })}
                 </button>
               </div>
             </div>

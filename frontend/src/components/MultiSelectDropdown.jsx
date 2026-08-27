@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import "./MultiSelectDropdown.css";
 
 const MultiSelectDropdown = ({ value = [], onChange, options = [], placeholder = "Select...", searchPlaceholder = "Search...", name, size = "md", className = "" }) => {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(0);
@@ -119,8 +121,8 @@ const MultiSelectDropdown = ({ value = [], onChange, options = [], placeholder =
       const opt = options.find((o) => String(o.value) === String(value[0]));
       return opt?.label || String(value[0]);
     }
-    return `${value.length} selected`;
-  }, [value, options]);
+    return `${value.length} ${t("selected", { defaultValue: "selected" })}`;
+  }, [value, options, t]);
 
   return (
     <div className={`msd-wrap ${size === "sm" ? "msd-sm" : ""} ${className} ${open ? "msd-open" : ""}`} ref={ref} tabIndex={0}>
@@ -130,7 +132,7 @@ const MultiSelectDropdown = ({ value = [], onChange, options = [], placeholder =
             ref={inputRef}
             type="text"
             className="msd-combo-input"
-            placeholder={searchPlaceholder}
+            placeholder={t(searchPlaceholder)}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -138,11 +140,11 @@ const MultiSelectDropdown = ({ value = [], onChange, options = [], placeholder =
         ) : displayText ? (
           <span className="msd-selected-text">{displayText}</span>
         ) : (
-          <span className="msd-placeholder-text">{placeholder}</span>
+          <span className="msd-placeholder-text">{t(placeholder)}</span>
         )}
         <div className="msd-trigger-right">
           {value.length > 0 && !open && (
-            <span className="msd-clear-btn" onClick={handleClearAll} title="Clear all">
+            <span className="msd-clear-btn" onClick={handleClearAll} title={t("Clear all")}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
               </svg>
@@ -165,12 +167,12 @@ const MultiSelectDropdown = ({ value = [], onChange, options = [], placeholder =
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12" /></svg>
                 )}
               </span>
-              <span className="msd-select-all-text">{allVisibleSelected ? "Deselect All" : "Select All"}</span>
+              <span className="msd-select-all-text">{allVisibleSelected ? t("Deselect All") : t("Select All")}</span>
             </div>
           )}
           <div className="msd-options-list" ref={listRef}>
             {filtered.length === 0 ? (
-              <div className="msd-empty">No matches found</div>
+              <div className="msd-empty">{t("No matches found")}</div>
             ) : (
               filtered.map((opt, idx) => {
                 const isSelected = selectedSet.has(String(opt.value));

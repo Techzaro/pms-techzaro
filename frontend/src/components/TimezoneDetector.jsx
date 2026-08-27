@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { Globe, Clock, Check, X } from "lucide-react";
 import { detectDeviceTimezone } from "../utils/timezoneUtils";
 import { getUser, setUser, getCurrentRole, authToken } from "../utils/auth";
@@ -13,6 +14,7 @@ import API_URL from "../config/api";
 import { notify } from "../utils/notify";
 
 export default function TimezoneDetector() {
+  const { t } = useTranslation();
   const [showPrompt, setShowPrompt] = useState(false);
   const [deviceTz, setDeviceTz] = useState("");
   const [savedTz, setSavedTz] = useState("");
@@ -89,14 +91,14 @@ export default function TimezoneDetector() {
 
         sessionStorage.setItem("tx_tz_prompt_dismissed", "true");
         setShowPrompt(false);
-        notify.success(`Timezone successfully updated to ${deviceTz}`);
+        notify.success(t("Timezone successfully updated to {{tz}}", { tz: deviceTz, defaultValue: `Timezone successfully updated to ${deviceTz}` }));
         window.dispatchEvent(new CustomEvent("regional-settings:updated", { detail: { timezone: deviceTz } }));
       } else {
-        notify.error("Failed to update timezone setting.");
+        notify.error(t("Failed to update timezone setting.", { defaultValue: "Failed to update timezone setting." }));
       }
     } catch (err) {
       console.error("Error updating timezone:", err);
-      notify.error("Network error while updating timezone.");
+      notify.error(t("Network error while updating timezone.", { defaultValue: "Network error while updating timezone." }));
     } finally {
       setUpdating(false);
     }
@@ -147,7 +149,7 @@ export default function TimezoneDetector() {
             <Globe size={20} />
           </div>
           <h4 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "var(--text-heading, #0f172a)" }}>
-            Timezone Update
+            {t("Timezone Update", { defaultValue: "Timezone Update" })}
           </h4>
         </div>
         <button
@@ -163,16 +165,19 @@ export default function TimezoneDetector() {
             alignItems: "center",
             justifyContent: "center",
           }}
-          title="Dismiss"
-          aria-label="Dismiss timezone prompt"
+          title={t("Dismiss", { defaultValue: "Dismiss" })}
+          aria-label={t("Dismiss timezone prompt", { defaultValue: "Dismiss timezone prompt" })}
         >
           <X size={18} />
         </button>
       </div>
 
       <p style={{ margin: "0 0 14px 0", fontSize: "13px", lineHeight: "1.5", color: "var(--text-secondary, #475569)" }}>
-        Your device is currently in <strong style={{ color: "var(--text-heading, #0f172a)" }}>{deviceTz}</strong>, but your account timezone is set to{" "}
-        <strong style={{ color: "var(--text-heading, #0f172a)" }}>{savedTz || "Not set (UTC)"}</strong>. Would you like to update it?
+        {t("Your device is currently in {{deviceTz}}, but your account timezone is set to {{savedTz}}. Would you like to update it?", {
+          defaultValue: `Your device is currently in ${deviceTz}, but your account timezone is set to ${savedTz || "Not set (UTC)"}. Would you like to update it?`,
+          deviceTz,
+          savedTz: savedTz || t("Not set (UTC)", { defaultValue: "Not set (UTC)" }),
+        })}
       </p>
 
       <div style={{ display: "flex", alignItems: "center", gap: "10px", justifyContent: "flex-end" }}>
@@ -190,7 +195,7 @@ export default function TimezoneDetector() {
             transition: "background 0.2s",
           }}
         >
-          Keep {savedTz || "Current"}
+          {t("Keep {{tz}}", { tz: savedTz || t("Current", { defaultValue: "Current" }), defaultValue: `Keep ${savedTz || "Current"}` })}
         </button>
 
         <button
@@ -212,7 +217,12 @@ export default function TimezoneDetector() {
           }}
         >
           <Check size={14} />
-          {updating ? "Updating..." : `Update to ${deviceTz.split("/").pop().replace(/_/g, " ")}`}
+          {updating
+            ? t("Updating...", { defaultValue: "Updating..." })
+            : t("Update to {{tz}}", {
+                tz: deviceTz.split("/").pop().replace(/_/g, " "),
+                defaultValue: `Update to ${deviceTz.split("/").pop().replace(/_/g, " ")}`,
+              })}
         </button>
       </div>
     </div>

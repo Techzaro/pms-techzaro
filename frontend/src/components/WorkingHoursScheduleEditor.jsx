@@ -5,10 +5,12 @@
  */
 
 import { Plus, Trash2, RotateCcw, Clock, Copy } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { DEFAULT_WORKING_HOURS } from "../utils/timezoneUtils";
 import { notify } from "../utils/notify";
 
 export default function WorkingHoursScheduleEditor({ schedule, onChange, readOnly = false }) {
+  const { t } = useTranslation();
   const currentSchedule = Array.isArray(schedule) && schedule.length === 7 ? schedule : DEFAULT_WORKING_HOURS;
 
   const handleToggleDay = (dayIndex) => {
@@ -114,13 +116,13 @@ export default function WorkingHoursScheduleEditor({ schedule, onChange, readOnl
       return item;
     });
     onChange(next);
-    notify.success("Monday's schedule applied to all weekdays (Mon-Fri).");
+    notify.success(t("Monday's schedule applied to all weekdays (Mon-Fri).", { defaultValue: "Monday's schedule applied to all weekdays (Mon-Fri)." }));
   };
 
   const resetToDefaults = () => {
     if (readOnly) return;
     onChange(JSON.parse(JSON.stringify(DEFAULT_WORKING_HOURS)));
-    notify.success("Working hours reset to standard Mon-Fri 9AM-5PM.");
+    notify.success(t("Working hours reset to standard Mon-Fri 9AM-5PM.", { defaultValue: "Working hours reset to standard Mon-Fri 9AM-5PM." }));
   };
 
   return (
@@ -129,7 +131,7 @@ export default function WorkingHoursScheduleEditor({ schedule, onChange, readOnl
       {!readOnly && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px", flexWrap: "wrap", gap: "8px" }}>
           <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-heading, #1e293b)" }}>
-            Daily Schedule &amp; Shifts
+            {t("Daily Schedule & Shifts", { defaultValue: "Daily Schedule & Shifts" })}
           </span>
           <div style={{ display: "flex", gap: "8px" }}>
             <button
@@ -149,7 +151,7 @@ export default function WorkingHoursScheduleEditor({ schedule, onChange, readOnl
                 gap: "5px",
               }}
             >
-              <Copy size={13} /> Copy Mon to Weekdays
+              <Copy size={13} /> {t("Copy Mon to Weekdays", { defaultValue: "Copy Mon to Weekdays" })}
             </button>
             <button
               type="button"
@@ -168,7 +170,7 @@ export default function WorkingHoursScheduleEditor({ schedule, onChange, readOnl
                 gap: "5px",
               }}
             >
-              <RotateCcw size={13} /> Reset
+              <RotateCcw size={13} /> {t("Reset")}
             </button>
           </div>
         </div>
@@ -197,7 +199,7 @@ export default function WorkingHoursScheduleEditor({ schedule, onChange, readOnl
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px", marginBottom: dayItem.is_working ? "10px" : "0" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                   <span style={{ fontSize: "14px", fontWeight: 700, minWidth: "90px", color: "var(--text-heading, #0f172a)" }}>
-                    {dayItem.day}
+                    {t(dayItem.day)}
                   </span>
 
                   <label className="rs-switch" style={{ margin: 0 }}>
@@ -211,7 +213,7 @@ export default function WorkingHoursScheduleEditor({ schedule, onChange, readOnl
                   </label>
 
                   <span style={{ fontSize: "12px", fontWeight: 600, color: dayItem.is_working ? "var(--color-success, #10b981)" : "var(--text-secondary, #64748b)" }}>
-                    {dayItem.is_working ? "Working Day" : "Day Off"}
+                    {dayItem.is_working ? t("Working Day") : t("Day Off")}
                   </span>
                 </div>
 
@@ -234,7 +236,7 @@ export default function WorkingHoursScheduleEditor({ schedule, onChange, readOnl
                       gap: "4px",
                     }}
                   >
-                    <Plus size={12} /> Add Shift / Hours
+                    <Plus size={12} /> {t("Add Shift / Hours")}
                   </button>
                 )}
               </div>
@@ -253,7 +255,7 @@ export default function WorkingHoursScheduleEditor({ schedule, onChange, readOnl
                       }}
                     >
                       <span style={{ fontSize: "11px", color: "var(--text-secondary, #64748b)", minWidth: "45px" }}>
-                        Shift {intIdx + 1}:
+                        {t("Shift")} {intIdx + 1}:
                       </span>
                       <input
                         type="time"
@@ -271,7 +273,7 @@ export default function WorkingHoursScheduleEditor({ schedule, onChange, readOnl
                           outline: "none",
                         }}
                       />
-                      <span style={{ fontSize: "12px", color: "var(--text-secondary, #64748b)" }}>to</span>
+                      <span style={{ fontSize: "12px", color: "var(--text-secondary, #64748b)" }}>{t("to")}</span>
                       <input
                         type="time"
                         value={interval.end || "17:00"}
@@ -304,7 +306,7 @@ export default function WorkingHoursScheduleEditor({ schedule, onChange, readOnl
                             alignItems: "center",
                             justifyContent: "center",
                           }}
-                          title="Remove this shift interval"
+                          title={t("Remove this shift interval", { defaultValue: "Remove this shift interval" })}
                         >
                           <Trash2 size={14} />
                         </button>

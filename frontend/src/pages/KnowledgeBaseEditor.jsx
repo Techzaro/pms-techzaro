@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import ReactQuill from "react-quill-new";
 import "react-quill-new/dist/quill.snow.css";
@@ -56,6 +57,7 @@ const quillFormats = [
 ];
 
 export default function KnowledgeBaseEditor() {
+  const { t } = useTranslation();
   const { id } = useParams();
   const location = useLocation();
   const isEditMode = Boolean(id);
@@ -192,12 +194,12 @@ export default function KnowledgeBaseEditor() {
           setSavingStatus("saved");
           setLastSavedTime(new Date());
         } else {
-          notify.error("Article not found.");
+          notify.error(t("Article not found.", { defaultValue: "Article not found." }));
           navigate(rolePath("knowledge-base"));
         }
       })
       .catch(() => {
-        notify.error("Failed to load article.");
+        notify.error(t("Failed to load article.", { defaultValue: "Failed to load article." }));
       })
       .finally(() => {
         setLoading(false);
@@ -207,7 +209,7 @@ export default function KnowledgeBaseEditor() {
       });
   }, [id, isEditMode]);
 
-    // Inline Category Creation
+  // Inline Category Creation
   const handleCreateCategory = async (e) => {
     if (e) e.preventDefault();
     if (!newCatName.trim()) return;
@@ -231,13 +233,13 @@ export default function KnowledgeBaseEditor() {
         setCategoryId(String(newCat.id));
         setNewCatName("");
         setShowNewCatInput(false);
-        notify.success("Category created successfully");
+        notify.success(t("Category created successfully", { defaultValue: "Category created successfully" }));
       } else {
-        notify.error(data.message || "Failed to create category");
+        notify.error(data.message || t("Failed to create category", { defaultValue: "Failed to create category" }));
       }
     } catch (err) {
       console.error("Create category error:", err);
-      notify.error("Network error while creating category");
+      notify.error(t("Network error while creating category", { defaultValue: "Network error while creating category" }));
     } finally {
       setSavingNewCat(false);
     }
@@ -247,7 +249,7 @@ export default function KnowledgeBaseEditor() {
   const saveArticle = useCallback(
     async (isManual = false, overrideStatus = null) => {
       if (!title.trim()) {
-        if (isManual) notify.error("Document title is required.");
+        if (isManual) notify.error(t("Document title is required.", { defaultValue: "Document title is required." }));
         return;
       }
 
@@ -312,15 +314,15 @@ export default function KnowledgeBaseEditor() {
           }
 
           if (isManual) {
-            notify.success(activeId ? "Article updated successfully!" : "Article created successfully!");
+            notify.success(activeId ? t("Article updated successfully!", { defaultValue: "Article updated successfully!" }) : t("Article created successfully!", { defaultValue: "Article created successfully!" }));
           }
         } else {
           setSavingStatus("error");
-          if (isManual) notify.error(data.message || "Failed to save article.");
+          if (isManual) notify.error(data.message || t("Failed to save article.", { defaultValue: "Failed to save article." }));
         }
       } catch (e) {
         setSavingStatus("error");
-        if (isManual) notify.error("An error occurred while saving.");
+        if (isManual) notify.error(t("An error occurred while saving.", { defaultValue: "An error occurred while saving." }));
       }
     },
     [title, content, categoryId, visibilityLevel, projectId, status, isPinned, tags, selectedTeamIds, selectedUserIds, deleteExistingFile, file]
@@ -367,7 +369,7 @@ export default function KnowledgeBaseEditor() {
         setVersionsList(Array.isArray(data.data) ? data.data : []);
       }
     } catch (e) {
-      notify.error("Failed to load versions history.");
+      notify.error(t("Failed to load versions history.", { defaultValue: "Failed to load versions history." }));
     } finally {
       setLoadingVersions(false);
     }
@@ -386,7 +388,7 @@ export default function KnowledgeBaseEditor() {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        notify.success("Version restored successfully!");
+        notify.success(t("Version restored successfully!", { defaultValue: "Version restored successfully!" }));
         if (data.data) {
           setTitle(data.data.title || "");
           setContent(data.data.content || "");
@@ -394,10 +396,10 @@ export default function KnowledgeBaseEditor() {
         setVersionsModalOpen(false);
         setSavingStatus("saved");
       } else {
-        notify.error(data.message || "Failed to restore version.");
+        notify.error(data.message || t("Failed to restore version.", { defaultValue: "Failed to restore version." }));
       }
     } catch (e) {
-      notify.error("Error restoring version.");
+      notify.error(t("Error restoring version.", { defaultValue: "Error restoring version." }));
     } finally {
       setRestoringVersionId(null);
     }
@@ -416,7 +418,7 @@ export default function KnowledgeBaseEditor() {
   };
 
   const handleRemoveTag = (tagToRemove) => {
-    setTags(tags.filter((t) => t !== tagToRemove));
+    setTags(tags.filter((tItem) => tItem !== tagToRemove));
   };
 
   const categoryOptions = categories.map((c) => ({
@@ -425,16 +427,16 @@ export default function KnowledgeBaseEditor() {
   }));
 
   const visibilityOptions = [
-    { value: "organization", label: "Organization (Everyone in Company)" },
-    { value: "department_team", label: "Department Team (My Department)" },
-    { value: "project_team", label: "Project Team (Target Project Members)" },
-    { value: "team", label: "Team (Specific Team Members)" },
-    { value: "custom", label: "Custom (Select Specific Users & Teams)" },
-    { value: "private", label: "Private (Only Me)" },
+    { value: "organization", label: t("Organization (Everyone in Company)", { defaultValue: "Organization (Everyone in Company)" }) },
+    { value: "department_team", label: t("Department Team (My Department)", { defaultValue: "Department Team (My Department)" }) },
+    { value: "project_team", label: t("Project Team (Target Project Members)", { defaultValue: "Project Team (Target Project Members)" }) },
+    { value: "team", label: t("Team (Specific Team Members)", { defaultValue: "Team (Specific Team Members)" }) },
+    { value: "custom", label: t("Custom (Select Specific Users & Teams)", { defaultValue: "Custom (Select Specific Users & Teams)" }) },
+    { value: "private", label: t("Private (Only Me)", { defaultValue: "Private (Only Me)" }) },
   ];
 
   const projectOptions = [
-    { value: "", label: "Select Target Project..." },
+    { value: "", label: t("Select Target Project...", { defaultValue: "Select Target Project..." }) },
     ...projects.map((p) => ({ value: String(p.id), label: p.title })),
   ];
 
@@ -443,15 +445,15 @@ export default function KnowledgeBaseEditor() {
       <DashboardLayout>
         <div style={{ textAlign: "center", padding: "100px 0", color: "var(--text-secondary)" }}>
           <Loader2 className="animate-spin" size={36} style={{ margin: "0 auto 12px" }} />
-          Loading document editor...
+          {t("Loading document editor...", { defaultValue: "Loading document editor..." })}
         </div>
       </DashboardLayout>
     );
   }
 
   const breadcrumbs = [
-    { label: "Knowledge Base", path: rolePath("knowledge-base") },
-    { label: isEditMode ? "Edit Document" : "New Document" },
+    { label: t("Knowledge Base", { defaultValue: "Knowledge Base" }), path: rolePath("knowledge-base") },
+    { label: isEditMode ? t("Edit Document", { defaultValue: "Edit Document" }) : t("New Document", { defaultValue: "New Document" }) },
   ];
 
   return (
@@ -466,7 +468,7 @@ export default function KnowledgeBaseEditor() {
               onClick={() => navigate(rolePath("knowledge-base"))}
               style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)", fontSize: "13px", fontWeight: 600 }}
             >
-              <ArrowLeft size={16} /> Back to List
+              <ArrowLeft size={16} /> {t("Back to List", { defaultValue: "Back to List" })}
             </button>
 
             <span style={{ width: "1px", height: "18px", background: "var(--border-color)" }} />
@@ -476,25 +478,25 @@ export default function KnowledgeBaseEditor() {
               {savingStatus === "saving" && (
                 <>
                   <Loader2 className="animate-spin" size={14} color="#2563eb" />
-                  <span style={{ color: "#2563eb", fontWeight: 500 }}>Saving...</span>
+                  <span style={{ color: "#2563eb", fontWeight: 500 }}>{t("Saving...", { defaultValue: "Saving..." })}</span>
                 </>
               )}
               {savingStatus === "saved" && (
                 <>
                   <CheckCircle2 size={14} color="#10b981" />
                   <span style={{ color: "#10b981", fontWeight: 500 }}>
-                    {lastSavedTime ? `Saved at ${lastSavedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : "All changes saved"}
+                    {lastSavedTime ? t("Saved at {{time}}", { time: lastSavedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }), defaultValue: `Saved at ${lastSavedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` }) : t("All changes saved", { defaultValue: "All changes saved" })}
                   </span>
                 </>
               )}
               {savingStatus === "unsaved" && (
                 <>
                   <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#f59e0b" }} />
-                  <span style={{ color: "#d97706" }}>Unsaved changes...</span>
+                  <span style={{ color: "#d97706" }}>{t("Unsaved changes...", { defaultValue: "Unsaved changes..." })}</span>
                 </>
               )}
               {savingStatus === "error" && (
-                <span style={{ color: "#ef4444", fontWeight: 600 }}>Failed to autosave</span>
+                <span style={{ color: "#ef4444", fontWeight: 600 }}>{t("Failed to autosave", { defaultValue: "Failed to autosave" })}</span>
               )}
             </div>
           </div>
@@ -522,7 +524,7 @@ export default function KnowledgeBaseEditor() {
                   cursor: "pointer",
                 }}
               >
-                <History size={14} /> Version History
+                <History size={14} /> {t("Version History", { defaultValue: "Version History" })}
               </button>
             )}
 
@@ -540,9 +542,9 @@ export default function KnowledgeBaseEditor() {
                 color: status === "published" ? "#10b981" : "#f59e0b",
               }}
             >
-              <option value="published">Status: Published</option>
-              <option value="draft">Status: Draft</option>
-              <option value="archived">Status: Archived</option>
+              <option value="published">{t("Status: Published", { defaultValue: "Status: Published" })}</option>
+              <option value="draft">{t("Status: Draft", { defaultValue: "Status: Draft" })}</option>
+              <option value="archived">{t("Status: Archived", { defaultValue: "Status: Archived" })}</option>
             </select>
 
             {/* MANUAL SAVE & PUBLISH BUTTON */}
@@ -564,7 +566,7 @@ export default function KnowledgeBaseEditor() {
                 boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
               }}
             >
-              <Save size={14} /> {isEditMode ? "Save Changes" : "Publish Document"}
+              <Save size={14} /> {isEditMode ? t("Save Changes", { defaultValue: "Save Changes" }) : t("Publish Document", { defaultValue: "Publish Document" })}
             </button>
           </div>
         </div>
@@ -576,7 +578,7 @@ export default function KnowledgeBaseEditor() {
             <input
               type="text"
               className="kb-editor-title-input"
-              placeholder="Untitled Document..."
+              placeholder={t("Untitled Document...", { defaultValue: "Untitled Document..." })}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               autoFocus
@@ -588,21 +590,21 @@ export default function KnowledgeBaseEditor() {
               onChange={setContent}
               modules={quillModules}
               formats={quillFormats}
-              placeholder="Start writing rich documentation, guidelines, code snippets, or SOPs..."
+              placeholder={t("Start writing rich documentation, guidelines, code snippets, or SOPs...", { defaultValue: "Start writing rich documentation, guidelines, code snippets, or SOPs..." })}
             />
           </div>
 
           {/* RIGHT SETTINGS SIDEBAR */}
           <div style={{ width: "300px", borderLeft: "1px solid var(--border-color)", padding: "24px 20px", display: "flex", flexDirection: "column", gap: "20px", background: "var(--bg-card)" }}>
             <h4 style={{ margin: 0, fontSize: "13px", fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)", letterSpacing: "0.5px" }}>
-              Document Settings
+              {t("Document Settings", { defaultValue: "Document Settings" })}
             </h4>
 
             {/* CATEGORY (Dynamic from API) */}
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
                 <label style={{ fontSize: "12px", fontWeight: 600, margin: 0 }}>
-                  Category <span style={{ color: "#ef4444" }}>*</span>
+                  {t("Category", { defaultValue: "Category" })} <span style={{ color: "#ef4444" }}>*</span>
                 </label>
                 <button
                   type="button"
@@ -620,7 +622,7 @@ export default function KnowledgeBaseEditor() {
                     gap: "2px",
                   }}
                 >
-                  <Plus size={12} /> {showNewCatInput ? "Cancel" : "Add New"}
+                  <Plus size={12} /> {showNewCatInput ? t("Cancel", { defaultValue: "Cancel" }) : t("Add New", { defaultValue: "Add New" })}
                 </button>
               </div>
 
@@ -628,7 +630,7 @@ export default function KnowledgeBaseEditor() {
                 <div style={{ display: "flex", gap: "6px", marginBottom: "8px" }}>
                   <input
                     type="text"
-                    placeholder="New category name..."
+                    placeholder={t("New category name...", { defaultValue: "New category name..." })}
                     value={newCatName}
                     onChange={(e) => setNewCatName(e.target.value)}
                     style={{
@@ -662,7 +664,7 @@ export default function KnowledgeBaseEditor() {
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {savingNewCat ? "..." : "Save"}
+                    {savingNewCat ? "..." : t("Save", { defaultValue: "Save" })}
                   </button>
                 </div>
               )}
@@ -678,7 +680,7 @@ export default function KnowledgeBaseEditor() {
             {/* VISIBILITY LEVEL */}
             <div>
               <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
-                Visibility Setting <span style={{ color: "#ef4444" }}>*</span>
+                {t("Visibility Setting", { defaultValue: "Visibility Setting" })} <span style={{ color: "#ef4444" }}>*</span>
               </label>
               <CustomSelect
                 name="visibility_level"
@@ -692,7 +694,7 @@ export default function KnowledgeBaseEditor() {
             {visibilityLevel === "project_team" && (
               <div>
                 <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
-                  Target Project <span style={{ color: "#ef4444" }}>*</span>
+                  {t("Target Project", { defaultValue: "Target Project" })} <span style={{ color: "#ef4444" }}>*</span>
                 </label>
                 <CustomSelect
                   name="project_id"
@@ -707,16 +709,16 @@ export default function KnowledgeBaseEditor() {
             {visibilityLevel === "team" && (
               <div>
                 <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
-                  Target Team <span style={{ color: "#ef4444" }}>*</span>
+                  {t("Target Team", { defaultValue: "Target Team" })} <span style={{ color: "#ef4444" }}>*</span>
                 </label>
                 <select
                   value={selectedTeamIds[0] || ""}
                   onChange={(e) => setSelectedTeamIds(e.target.value ? [Number(e.target.value)] : [])}
                   style={{ width: "100%", padding: "8px 10px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "13px", color: "var(--text-primary)" }}
                 >
-                  <option value="">Select Team...</option>
-                  {teams.map((t) => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
+                  <option value="">{t("Select Team...", { defaultValue: "Select Team..." })}</option>
+                  {teams.map((tItem) => (
+                    <option key={tItem.id} value={tItem.id}>{tItem.name}</option>
                   ))}
                 </select>
               </div>
@@ -727,7 +729,7 @@ export default function KnowledgeBaseEditor() {
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 <div>
                   <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>
-                    Visible Teams
+                    {t("Visible Teams", { defaultValue: "Visible Teams" })}
                   </label>
                   <select
                     multiple
@@ -738,15 +740,15 @@ export default function KnowledgeBaseEditor() {
                     }}
                     style={{ width: "100%", padding: "6px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "12px", height: "80px" }}
                   >
-                    {teams.map((t) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
+                    {teams.map((tItem) => (
+                      <option key={tItem.id} value={tItem.id}>{tItem.name}</option>
                     ))}
                   </select>
                 </div>
 
                 <div>
                   <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>
-                    Visible Users
+                    {t("Visible Users", { defaultValue: "Visible Users" })}
                   </label>
                   <select
                     multiple
@@ -767,7 +769,7 @@ export default function KnowledgeBaseEditor() {
 
             {/* TAGS INPUT */}
             <div>
-              <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "6px" }}>Tags</label>
+              <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "6px" }}>{t("Tags", { defaultValue: "Tags" })}</label>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", padding: "6px 8px", border: "1px solid var(--border-color)", borderRadius: "6px", background: "var(--bg-card)" }}>
                 {tags.map((tag) => (
                   <span key={tag} className="kb-tag-pill" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
@@ -779,7 +781,7 @@ export default function KnowledgeBaseEditor() {
                 ))}
                 <input
                   type="text"
-                  placeholder="Type tag & press Enter..."
+                  placeholder={t("Type tag & press Enter...", { defaultValue: "Type tag & press Enter..." })}
                   value={tagInput}
                   onChange={(e) => setTagInput(e.target.value)}
                   onKeyDown={handleAddTag}
@@ -798,14 +800,14 @@ export default function KnowledgeBaseEditor() {
                 style={{ width: "16px", height: "16px", cursor: "pointer" }}
               />
               <label htmlFor="pinDoc" style={{ fontSize: "13px", fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
-                <Pin size={14} color="#f59e0b" /> Pin to Top of Category
+                <Pin size={14} color="#f59e0b" /> {t("Pin to Top of Category", { defaultValue: "Pin to Top of Category" })}
               </label>
             </div>
 
             {/* FILE ATTACHMENT */}
             <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "16px" }}>
               <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
-                Attachment File
+                {t("Attachment File", { defaultValue: "Attachment File" })}
               </label>
               {file || (existingFilePath && !deleteExistingFile) ? (
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", background: "var(--bg-hover)", borderRadius: "6px", border: "1px solid var(--border-color)" }}>
@@ -840,7 +842,7 @@ export default function KnowledgeBaseEditor() {
             {/* REFERENCE / EXTERNAL LINK */}
             <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "16px" }}>
               <label style={{ fontSize: "12px", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
-                <ExternalLink size={13} color="#2563eb" /> Reference / External Link
+                <ExternalLink size={13} color="#2563eb" /> {t("Reference / External Link", { defaultValue: "Reference / External Link" })}
               </label>
               <input
                 type="url"
@@ -860,7 +862,7 @@ export default function KnowledgeBaseEditor() {
                 }}
               />
               <span style={{ fontSize: "11px", color: "var(--text-muted)", display: "block", marginTop: "4px" }}>
-                External specs, shared documents, or Figma links.
+                {t("External specs, shared documents, or Figma links.", { defaultValue: "External specs, shared documents, or Figma links." })}
               </span>
             </div>
           </div>
@@ -873,7 +875,7 @@ export default function KnowledgeBaseEditor() {
           <div style={{ background: "var(--bg-card)", borderRadius: "12px", width: "100%", maxWidth: "600px", maxHeight: "85vh", display: "flex", flexDirection: "column", border: "1px solid var(--border-color)", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)" }}>
             <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 600, display: "flex", alignItems: "center", gap: "8px" }}>
-                <History size={18} color="#2563eb" /> Document Version History
+                <History size={18} color="#2563eb" /> {t("Document Version History", { defaultValue: "Document Version History" })}
               </h3>
               <button onClick={() => setVersionsModalOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)" }}>
                 <X size={18} />
@@ -883,11 +885,11 @@ export default function KnowledgeBaseEditor() {
             <div style={{ padding: "20px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: "12px" }}>
               {loadingVersions ? (
                 <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-secondary)" }}>
-                  Loading version logs...
+                  {t("Loading version logs...", { defaultValue: "Loading version logs..." })}
                 </div>
               ) : versionsList.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-secondary)" }}>
-                  No historical versions found for this article.
+                  {t("No historical versions found for this article.", { defaultValue: "No historical versions found for this article." })}
                 </div>
               ) : (
                 versionsList.map((ver) => (
@@ -907,12 +909,12 @@ export default function KnowledgeBaseEditor() {
                     <div>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                         <span style={{ fontSize: "12px", fontWeight: 700, color: "#2563eb", background: "#eff6ff", padding: "2px 8px", borderRadius: "4px" }}>
-                          Version {ver.version_number}
+                          {t("Version {{number}}", { number: ver.version_number, defaultValue: `Version ${ver.version_number}` })}
                         </span>
                         <span style={{ fontSize: "13px", fontWeight: 600 }}>{ver.title}</span>
                       </div>
                       <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px" }}>
-                        Saved by {ver.creator?.name || "User"} on {new Date(ver.created_at).toLocaleString()}
+                        {t("Saved by {{user}} on {{time}}", { user: ver.creator?.name || t("User", { defaultValue: "User" }), time: new Date(ver.created_at).toLocaleString(), defaultValue: `Saved by ${ver.creator?.name || "User"} on ${new Date(ver.created_at).toLocaleString()}` })}
                         {ver.change_summary && <span> &bull; {ver.change_summary}</span>}
                       </div>
                     </div>
@@ -935,7 +937,7 @@ export default function KnowledgeBaseEditor() {
                         cursor: restoringVersionId === ver.id ? "not-allowed" : "pointer",
                       }}
                     >
-                      <RotateCcw size={13} /> {restoringVersionId === ver.id ? "Restoring..." : "Restore"}
+                      <RotateCcw size={13} /> {restoringVersionId === ver.id ? t("Restoring...", { defaultValue: "Restoring..." }) : t("Restore", { defaultValue: "Restore" })}
                     </button>
                   </div>
                 ))
@@ -948,7 +950,7 @@ export default function KnowledgeBaseEditor() {
                 onClick={() => setVersionsModalOpen(false)}
                 style={{ padding: "7px 16px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-hover)", color: "var(--text-primary)", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
               >
-                Close
+                {t("Close", { defaultValue: "Close" })}
               </button>
             </div>
           </div>

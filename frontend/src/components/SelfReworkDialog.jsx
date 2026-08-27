@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
@@ -25,6 +26,7 @@ import { toDatetimeLocal, toUTCIso } from "../utils/formatDateTime";
  * @param {Function} onReworkSuccess - Callback after successful rework, receives updated deliverable.
  */
 function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
+  const { t } = useTranslation();
   const [comment, setComment] = useState("");
   const [instructions, setInstructions] = useState("");
   const [newDeadline, setNewDeadline] = useState("");
@@ -55,7 +57,7 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
   /** Submits the rework request with notes, instructions, new deadline, and file */
   const handleSubmit = async () => {
     if (!comment.trim() && !instructions.trim()) {
-      notify.error("Please provide rework notes or improvement instructions.");
+      notify.error(t("Please provide rework notes or improvement instructions.", { defaultValue: "Please provide rework notes or improvement instructions." }));
       return;
     }
     await run(async () => {
@@ -84,10 +86,10 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
           onReworkSuccess(data.deliverable);
           onClose();
         } else {
-          notify.error(data.message || "Failed to mark subtask for rework.");
+          notify.error(data.message || t("Failed to mark subtask for rework.", { defaultValue: "Failed to mark subtask for rework." }));
         }
       } catch {
-        notify.error("An error occurred. Please try again.");
+        notify.error(t("An error occurred. Please try again.", { defaultValue: "An error occurred. Please try again." }));
       }
     });
   };
@@ -98,16 +100,16 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
     <div className="rd-overlay">
       <div className="rd-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="rd-header">
-          <h2 className="rd-title">Rework Required</h2>
+          <h2 className="rd-title">{t("Rework Required", { defaultValue: "Rework Required" })}</h2>
           <p className="rd-subtitle">{deliverable.title}</p>
         </div>
 
         <div className="rd-body">
           <div className="rd-field">
-            <label className="rd-label">Rework Notes</label>
+            <label className="rd-label">{t("Rework Notes", { defaultValue: "Rework Notes" })}</label>
             <textarea
               className="rd-textarea"
-              placeholder="Explain what needs to be improved..."
+              placeholder={t("Explain what needs to be improved...", { defaultValue: "Explain what needs to be improved..." })}
               value={comment}
               onChange={(e) => { setComment(e.target.value); }}
               rows={3}
@@ -115,10 +117,10 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
           </div>
 
           <div className="rd-field">
-            <label className="rd-label">Improvement Instructions</label>
+            <label className="rd-label">{t("Improvement Instructions", { defaultValue: "Improvement Instructions" })}</label>
             <textarea
               className="rd-textarea"
-              placeholder="Provide specific instructions for resubmission..."
+              placeholder={t("Provide specific instructions for resubmission...", { defaultValue: "Provide specific instructions for resubmission..." })}
               value={instructions}
               onChange={(e) => { setInstructions(e.target.value); }}
               rows={3}
@@ -126,7 +128,7 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
           </div>
 
           <div className="rd-field">
-            <label className="rd-label">Attach Link / Reference URL</label>
+            <label className="rd-label">{t("Attach Link / Reference URL", { defaultValue: "Attach Link / Reference URL" })}</label>
             <input
               type="url"
               className="rd-input"
@@ -137,7 +139,7 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
           </div>
 
           <div className="rd-field">
-            <label className="rd-label">New Target Date & Time (optional)</label>
+            <label className="rd-label">{t("New Target Date & Time (optional)", { defaultValue: "New Target Date & Time (optional)" })}</label>
             <input
               type="datetime-local"
               className="rd-input"
@@ -148,7 +150,7 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
           </div>
 
           <div className="rd-field">
-            <label className="rd-label">Attach Files</label>
+            <label className="rd-label">{t("Attach Files", { defaultValue: "Attach Files" })}</label>
             <div
               className="rd-dropzone"
               onClick={() => fileInputRef.current?.click()}
@@ -160,13 +162,13 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
                   {files.map((f, idx) => (
                     <div key={idx} className="rd-file-info" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--bg-card-alt, #f9fafb)", padding: "6px 12px", borderRadius: 8, border: "1px solid var(--border-color, #e5e7eb)" }}>
                       <span className="rd-file-name" style={{ fontSize: 13, fontWeight: 500, color: "var(--text-dark)" }}>{f.name}</span>
-                      <button type="button" className="rd-file-remove" onClick={(e) => { e.stopPropagation(); setFiles((prev) => prev.filter((_, i) => i !== idx)); }}>Remove</button>
+                      <button type="button" className="rd-file-remove" onClick={(e) => { e.stopPropagation(); setFiles((prev) => prev.filter((_, i) => i !== idx)); }}>{t("Remove", { defaultValue: "Remove" })}</button>
                     </div>
                   ))}
-                  <button type="button" className="rd-browse" style={{ alignSelf: "flex-end", fontSize: 12, marginTop: 4, background: "none", border: "none" }} onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}>+ Add more files</button>
+                  <button type="button" className="rd-browse" style={{ alignSelf: "flex-end", fontSize: 12, marginTop: 4, background: "none", border: "none" }} onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}>{t("+ Add more files", { defaultValue: "+ Add more files" })}</button>
                 </div>
               ) : (
-                <p className="rd-dropzone-text">Drag & drop files or <span className="rd-browse">browse</span></p>
+                <p className="rd-dropzone-text">{t("Drag & drop files or", { defaultValue: "Drag & drop files or" })} <span className="rd-browse">{t("browse", { defaultValue: "browse" })}</span></p>
               )}
             </div>
             <input
@@ -180,9 +182,9 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
         </div>
 
         <div className="rd-footer">
-          <button className="rd-cancel-btn" onClick={handleClose} disabled={submitting}>Cancel</button>
+          <button className="rd-cancel-btn" onClick={handleClose} disabled={submitting}>{t("Cancel")}</button>
           <LoadingButton className="rd-submit-btn" onClick={handleSubmit} loading={submitting}>
-            Confirm Rework
+            {t("Confirm Rework", { defaultValue: "Confirm Rework" })}
           </LoadingButton>
         </div>
         {ConfirmDialog}

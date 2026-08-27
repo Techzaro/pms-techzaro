@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
@@ -29,6 +30,7 @@ import {
 } from "lucide-react";
 
 export default function EventsList() {
+  const { t } = useTranslation();
   const user = getUser();
   const notify = useNotification();
   const navigate = useNavigate();
@@ -80,7 +82,7 @@ export default function EventsList() {
         setEvents(Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : []);
       }
     } catch (e) {
-      notify.error("Failed to load events.");
+      notify.error(t("Failed to load events.", { defaultValue: "Failed to load events." }));
     } finally {
       setLoading(false);
     }
@@ -100,13 +102,13 @@ export default function EventsList() {
         headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
       });
       if (res.ok) {
-        notify.success("Event deleted successfully.");
+        notify.success(t("Event deleted successfully.", { defaultValue: "Event deleted successfully." }));
         fetchEvents();
       } else {
-        notify.error("Failed to delete event.");
+        notify.error(t("Failed to delete event.", { defaultValue: "Failed to delete event." }));
       }
     } catch (e) {
-      notify.error("An error occurred while deleting event.");
+      notify.error(t("An error occurred while deleting event.", { defaultValue: "An error occurred while deleting event." }));
     } finally {
       setDeletingEvent(null);
     }
@@ -175,7 +177,7 @@ export default function EventsList() {
     if (isGlobal || level === "organization") {
       return (
         <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: "12px", background: "#fef3c7", color: "#b45309" }}>
-          <ShieldCheck size={12} /> Organization
+          <ShieldCheck size={12} /> {t("Organization", { defaultValue: "Organization" })}
         </span>
       );
     }
@@ -183,31 +185,31 @@ export default function EventsList() {
       case "private":
         return (
           <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: "12px", background: "#f3f4f6", color: "#4b5563" }}>
-            <Lock size={12} /> Private
+            <Lock size={12} /> {t("Private", { defaultValue: "Private" })}
           </span>
         );
       case "project_team":
         return (
           <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: "12px", background: "#eff6ff", color: "#1d4ed8" }}>
-            <Users size={12} /> Project Team
+            <Users size={12} /> {t("Project Team", { defaultValue: "Project Team" })}
           </span>
         );
       case "team":
         return (
           <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: "12px", background: "#ede9fe", color: "#6d28d9" }}>
-            <Users size={12} /> Team
+            <Users size={12} /> {t("Team", { defaultValue: "Team" })}
           </span>
         );
       case "department_team":
         return (
           <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: "12px", background: "#f0fdf4", color: "#15803d" }}>
-            <Building size={12} /> Department
+            <Building size={12} /> {t("Department", { defaultValue: "Department" })}
           </span>
         );
       case "custom":
         return (
           <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: "12px", background: "#fdf2f8", color: "#be185d" }}>
-            <Users size={12} /> Custom
+            <Users size={12} /> {t("Custom", { defaultValue: "Custom" })}
           </span>
         );
       default:
@@ -215,7 +217,7 @@ export default function EventsList() {
     }
   };
 
-  const breadcrumbs = [{ label: "Events & Announcements" }];
+  const breadcrumbs = [{ label: t("Events & Announcements", { defaultValue: "Events & Announcements" }) }];
 
   return (
     <DashboardLayout>
@@ -226,10 +228,10 @@ export default function EventsList() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "12px" }}>
           <div>
             <h2 style={{ fontSize: "22px", fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
-              <Calendar size={24} color="#2563eb" /> Events & Announcements
+              <Calendar size={24} color="#2563eb" /> {t("Events & Announcements", { defaultValue: "Events & Announcements" })}
             </h2>
             <p style={{ fontSize: "13px", color: "var(--text-secondary)", margin: "4px 0 0" }}>
-              Stay updated on company announcements, workshops, meetings, and project milestones.
+              {t("Stay updated on company announcements, workshops, meetings, and project milestones.", { defaultValue: "Stay updated on company announcements, workshops, meetings, and project milestones." })}
             </p>
           </div>
 
@@ -254,7 +256,7 @@ export default function EventsList() {
                   boxShadow: viewMode === "list" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
                 }}
               >
-                <List size={14} /> Cards
+                <List size={14} /> {t("Cards", { defaultValue: "Cards" })}
               </button>
               <button
                 type="button"
@@ -274,7 +276,7 @@ export default function EventsList() {
                   boxShadow: viewMode === "grouped" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
                 }}
               >
-                <CalendarDays size={14} /> Grouped by Month
+                <CalendarDays size={14} /> {t("Grouped by Month", { defaultValue: "Grouped by Month" })}
               </button>
             </div>
 
@@ -295,7 +297,7 @@ export default function EventsList() {
                 boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
               }}
             >
-              <Plus size={16} /> New Event / Announcement
+              <Plus size={16} /> {t("New Event / Announcement", { defaultValue: "New Event / Announcement" })}
             </button>
           </div>
         </div>
@@ -307,7 +309,7 @@ export default function EventsList() {
             <Search style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#9ca3af" }} size={16} />
             <input
               type="text"
-              placeholder="Search by title, location, description, or category..."
+              placeholder={t("Search by title, location, description, or category...", { defaultValue: "Search by title, location, description, or category..." })}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               style={{ width: "100%", padding: "8px 12px 8px 34px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "13px", color: "var(--text-primary)" }}
@@ -322,27 +324,27 @@ export default function EventsList() {
           {/* TYPE TOGGLE */}
           <div style={{ display: "flex", background: "var(--bg-hover)", padding: "3px", borderRadius: "6px", border: "1px solid var(--border-color)" }}>
             {[
-              { key: "all", label: "All" },
-              { key: "event", label: "📅 Events" },
-              { key: "announcement", label: "📢 Announcements" },
-            ].map((t) => (
+              { key: "all", label: t("All", { defaultValue: "All" }) },
+              { key: "event", label: t("📅 Events", { defaultValue: "📅 Events" }) },
+              { key: "announcement", label: t("📢 Announcements", { defaultValue: "📢 Announcements" }) },
+            ].map((tItem) => (
               <button
-                key={t.key}
+                key={tItem.key}
                 type="button"
-                onClick={() => setTypeFilter(t.key)}
+                onClick={() => setTypeFilter(tItem.key)}
                 style={{
                   padding: "5px 12px",
                   borderRadius: "5px",
                   border: "none",
                   fontSize: "12px",
-                  fontWeight: typeFilter === t.key ? 600 : 500,
-                  background: typeFilter === t.key ? "#2563eb" : "transparent",
-                  color: typeFilter === t.key ? "#ffffff" : "var(--text-secondary)",
+                  fontWeight: typeFilter === tItem.key ? 600 : 500,
+                  background: typeFilter === tItem.key ? "#2563eb" : "transparent",
+                  color: typeFilter === tItem.key ? "#ffffff" : "var(--text-secondary)",
                   cursor: "pointer",
                   transition: "all 0.15s ease",
                 }}
               >
-                {t.label}
+                {tItem.label}
               </button>
             ))}
           </div>
@@ -353,7 +355,7 @@ export default function EventsList() {
             onChange={(e) => setCategoryFilter(e.target.value)}
             style={{ padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "13px", color: "var(--text-primary)" }}
           >
-            <option value="all">All Categories</option>
+            <option value="all">{t("All Categories", { defaultValue: "All Categories" })}</option>
             {categories.map((cat) => (
               <option key={cat.id} value={cat.id}>{cat.name}</option>
             ))}
@@ -365,13 +367,13 @@ export default function EventsList() {
             onChange={(e) => setVisibilityFilter(e.target.value)}
             style={{ padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "13px", color: "var(--text-primary)" }}
           >
-            <option value="all">All Visibilities</option>
-            <option value="organization">Organization</option>
-            <option value="department_team">Department Team</option>
-            <option value="project_team">Project Team</option>
-            <option value="team">Team</option>
-            <option value="custom">Custom</option>
-            <option value="private">Private</option>
+            <option value="all">{t("All Visibilities", { defaultValue: "All Visibilities" })}</option>
+            <option value="organization">{t("Organization", { defaultValue: "Organization" })}</option>
+            <option value="department_team">{t("Department Team", { defaultValue: "Department Team" })}</option>
+            <option value="project_team">{t("Project Team", { defaultValue: "Project Team" })}</option>
+            <option value="team">{t("Team", { defaultValue: "Team" })}</option>
+            <option value="custom">{t("Custom", { defaultValue: "Custom" })}</option>
+            <option value="private">{t("Private", { defaultValue: "Private" })}</option>
           </select>
         </div>
 
@@ -379,20 +381,20 @@ export default function EventsList() {
         {loading ? (
           <div style={{ textAlign: "center", padding: "80px 0", color: "var(--text-secondary)" }}>
             <Loader2 className="animate-spin" size={36} style={{ margin: "0 auto 12px", color: "#2563eb" }} />
-            Loading events and announcements...
+            {t("Loading events and announcements...", { defaultValue: "Loading events and announcements..." })}
           </div>
         ) : filteredEvents.length === 0 ? (
           <div style={{ textAlign: "center", padding: "70px 20px", background: "var(--bg-card)", borderRadius: "12px", border: "1px solid var(--border-color)" }}>
             <Calendar size={48} style={{ color: "#9ca3af", margin: "0 auto 12px" }} />
-            <h3 style={{ margin: "0 0 6px", fontSize: "16px", fontWeight: 600 }}>No events or announcements found</h3>
+            <h3 style={{ margin: "0 0 6px", fontSize: "16px", fontWeight: 600 }}>{t("No events or announcements found", { defaultValue: "No events or announcements found" })}</h3>
             <p style={{ margin: "0 0 16px", fontSize: "13px", color: "var(--text-secondary)" }}>
-              Create an event or company announcement to notify team members.
+              {t("Create an event or company announcement to notify team members.", { defaultValue: "Create an event or company announcement to notify team members." })}
             </p>
             <button
               onClick={() => navigate(rolePath("events/create"))}
               style={{ padding: "8px 18px", borderRadius: "6px", background: "#2563eb", color: "#ffffff", border: "none", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
             >
-              <Plus size={14} style={{ display: "inline", verticalAlign: "-2px", marginRight: "4px" }} /> Create Event
+              <Plus size={14} style={{ display: "inline", verticalAlign: "-2px", marginRight: "4px" }} /> {t("Create Event", { defaultValue: "Create Event" })}
             </button>
           </div>
         ) : viewMode === "list" ? (
@@ -426,11 +428,11 @@ export default function EventsList() {
                 <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "8px", flexWrap: "wrap" }}>
                   {viewingEvent.is_announcement ? (
                     <span style={{ fontSize: "11px", fontWeight: 600, color: "#d97706", background: "#fef3c7", padding: "2px 8px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                      <Megaphone size={12} /> Company Announcement
+                      <Megaphone size={12} /> {t("Company Announcement", { defaultValue: "Company Announcement" })}
                     </span>
                   ) : (
                     <span style={{ fontSize: "11px", fontWeight: 600, color: viewingEvent.category?.color || "#2563eb", background: "#eff6ff", padding: "2px 8px", borderRadius: "4px" }}>
-                      {viewingEvent.category?.name || viewingEvent.type || "Event"}
+                      {viewingEvent.category?.name || t(viewingEvent.type || "Event", { defaultValue: viewingEvent.type || "Event" })}
                     </span>
                   )}
                   {visibilityBadge(viewingEvent.visibility_level, viewingEvent.is_global)}
@@ -447,11 +449,11 @@ export default function EventsList() {
               <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--text-primary)" }}>
                 <Clock size={16} color="#2563eb" />
                 <span>
-                  {viewingEvent.start_date ? new Date(viewingEvent.start_date).toLocaleString([], { dateStyle: "full", timeStyle: viewingEvent.all_day ? undefined : "short" }) : "Date not set"}
+                  {viewingEvent.start_date ? new Date(viewingEvent.start_date).toLocaleString([], { dateStyle: "full", timeStyle: viewingEvent.all_day ? undefined : "short" }) : t("Date not set", { defaultValue: "Date not set" })}
                   {viewingEvent.end_date && viewingEvent.end_date !== viewingEvent.start_date && (
                     <span> &ndash; {new Date(viewingEvent.end_date).toLocaleString([], { dateStyle: "medium", timeStyle: viewingEvent.all_day ? undefined : "short" })}</span>
                   )}
-                  {viewingEvent.all_day && <span style={{ marginLeft: "6px", fontWeight: 600, color: "#2563eb" }}>(All Day)</span>}
+                  {viewingEvent.all_day && <span style={{ marginLeft: "6px", fontWeight: 600, color: "#2563eb" }}>{t("(All Day)", { defaultValue: "(All Day)" })}</span>}
                 </span>
               </div>
 
@@ -471,7 +473,7 @@ export default function EventsList() {
                     rel="noopener noreferrer"
                     style={{ color: "#2563eb", fontWeight: 600, textDecoration: "underline", display: "inline-flex", alignItems: "center", gap: "4px" }}
                   >
-                    Join Video Meeting <ExternalLink size={12} />
+                    {t("Join Video Meeting", { defaultValue: "Join Video Meeting" })} <ExternalLink size={12} />
                   </a>
                 </div>
               )}
@@ -488,7 +490,7 @@ export default function EventsList() {
             {Array.isArray(viewingEvent.assigned_users) && viewingEvent.assigned_users.length > 0 && (
               <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "14px", marginBottom: "16px" }}>
                 <h4 style={{ margin: "0 0 8px", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)" }}>
-                  Invited Attendees ({viewingEvent.assigned_users.length})
+                  {t("Invited Attendees ({{count}})", { count: viewingEvent.assigned_users.length, defaultValue: `Invited Attendees (${viewingEvent.assigned_users.length})` })}
                 </h4>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
                   {viewingEvent.assigned_users.map((u) => (
@@ -496,7 +498,7 @@ export default function EventsList() {
                       <span style={{ width: "18px", height: "18px", borderRadius: "50%", background: "#2563eb", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "10px", fontWeight: 700 }}>
                         {u?.name?.charAt(0).toUpperCase() || "U"}
                       </span>
-                      {u?.name || "User"}
+                      {u?.name || t("User", { defaultValue: "User" })}
                     </span>
                   ))}
                 </div>
@@ -506,7 +508,7 @@ export default function EventsList() {
             {/* FOOTER ACTIONS */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid var(--border-color)", paddingTop: "16px", marginTop: "16px" }}>
               <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                Organized by <strong>{viewingEvent.organizer_name || viewingEvent.creator_name || "System"}</strong>
+                {t("Organized by", { defaultValue: "Organized by" })} <strong>{viewingEvent.organizer_name || viewingEvent.creator_name || t("System", { defaultValue: "System" })}</strong>
               </div>
 
               <div style={{ display: "flex", gap: "8px" }}>
@@ -519,14 +521,14 @@ export default function EventsList() {
                     }}
                     style={{ padding: "6px 14px", borderRadius: "6px", border: "1px solid #bfdbfe", background: "#eff6ff", color: "#1d4ed8", fontSize: "12px", fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px" }}
                   >
-                    <Edit size={14} /> Edit
+                    <Edit size={14} /> {t("Edit", { defaultValue: "Edit" })}
                   </button>
                 )}
                 <button
                   onClick={() => setViewingEvent(null)}
                   style={{ padding: "6px 16px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-hover)", color: "var(--text-primary)", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
                 >
-                  Close
+                  {t("Close", { defaultValue: "Close" })}
                 </button>
               </div>
             </div>
@@ -539,10 +541,10 @@ export default function EventsList() {
         isOpen={!!deletingEvent}
         onClose={() => setDeletingEvent(null)}
         onConfirm={handleDeleteConfirm}
-        title="Delete Event / Announcement"
-        message={`Are you sure you want to delete "${deletingEvent?.title}"? This will cancel notifications and delete all attendee records.`}
-        confirmText="Delete"
-        cancelText="Cancel"
+        title={t("Delete Event / Announcement", { defaultValue: "Delete Event / Announcement" })}
+        message={t('Are you sure you want to delete "{{title}}"? This will cancel notifications and delete all attendee records.', { title: deletingEvent?.title, defaultValue: `Are you sure you want to delete "${deletingEvent?.title}"? This will cancel notifications and delete all attendee records.` })}
+        confirmText={t("Delete", { defaultValue: "Delete" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
         danger
       />
     </DashboardLayout>
@@ -556,7 +558,7 @@ export default function EventsList() {
     const startDateObj = ev.start_date ? new Date(ev.start_date) : null;
     const monthStr = startDateObj && !isNaN(startDateObj.getTime()) ? startDateObj.toLocaleString("default", { month: "short" }).toUpperCase() : "DATE";
     const dayStr = startDateObj && !isNaN(startDateObj.getTime()) ? startDateObj.getDate() : "--";
-    const timeStr = startDateObj && !isNaN(startDateObj.getTime()) && !ev.all_day ? startDateObj.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : (ev.all_day ? "All Day" : "");
+    const timeStr = startDateObj && !isNaN(startDateObj.getTime()) && !ev.all_day ? startDateObj.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : (ev.all_day ? t("All Day", { defaultValue: "All Day" }) : "");
 
     return (
       <div
@@ -579,11 +581,11 @@ export default function EventsList() {
             <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
               {isAnnounce ? (
                 <span style={{ fontSize: "11px", fontWeight: 700, color: "#d97706", background: "#fef3c7", padding: "2px 8px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                  <Megaphone size={12} /> Announcement
+                  <Megaphone size={12} /> {t("Announcement", { defaultValue: "Announcement" })}
                 </span>
               ) : (
                 <span style={{ fontSize: "11px", fontWeight: 700, color: ev.category?.color || "#2563eb", background: "#eff6ff", padding: "2px 8px", borderRadius: "4px" }}>
-                  {ev.category?.name || ev.type || "Event"}
+                  {ev.category?.name || t(ev.type || "Event", { defaultValue: ev.type || "Event" })}
                 </span>
               )}
               {visibilityBadge(ev.visibility_level, ev.is_global)}
@@ -594,14 +596,14 @@ export default function EventsList() {
                 <button
                   onClick={() => navigate(rolePath(`events/edit/${ev.id}`))}
                   style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "2px" }}
-                  title="Edit Event"
+                  title={t("Edit Event", { defaultValue: "Edit Event" })}
                 >
                   <Edit size={15} />
                 </button>
                 <button
                   onClick={() => setDeletingEvent(ev)}
                   style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", padding: "2px" }}
-                  title="Delete Event"
+                  title={t("Delete Event", { defaultValue: "Delete Event" })}
                 >
                   <Trash2 size={15} />
                 </button>
@@ -621,7 +623,7 @@ export default function EventsList() {
                 onClick={() => setViewingEvent(ev)}
                 style={{ margin: "0 0 4px", fontSize: "15px", fontWeight: 700, color: "var(--text-primary)", cursor: "pointer", lineHeight: 1.3 }}
               >
-                {ev.title || "Untitled Event"}
+                {ev.title || t("Untitled Event", { defaultValue: "Untitled Event" })}
               </h3>
               {timeStr && (
                 <div style={{ fontSize: "12px", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "4px" }}>
@@ -647,7 +649,7 @@ export default function EventsList() {
             )}
             {ev.meeting_link && (
               <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", color: "#2563eb", fontWeight: 500 }}>
-                <Video size={13} color="#10b981" /> Virtual Meeting
+                <Video size={13} color="#10b981" /> {t("Virtual Meeting", { defaultValue: "Virtual Meeting" })}
               </span>
             )}
           </div>
@@ -683,12 +685,12 @@ export default function EventsList() {
                   ))}
                 </div>
                 <span style={{ fontSize: "11px", color: "var(--text-muted)", marginLeft: "4px" }}>
-                  {ev.assigned_users.length} {ev.assigned_users.length === 1 ? "attendee" : "attendees"}
+                  {t("{{count}} attendees", { count: ev.assigned_users.length, defaultValue: `${ev.assigned_users.length} attendees` })}
                 </span>
               </div>
             ) : (
               <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                By: {ev.organizer_name || ev.creator_name || "System"}
+                {t("By: {{name}}", { name: ev.organizer_name || ev.creator_name || t("System", { defaultValue: "System" }), defaultValue: `By: ${ev.organizer_name || ev.creator_name || "System"}` })}
               </span>
             )}
           </div>
@@ -706,10 +708,11 @@ export default function EventsList() {
               cursor: "pointer",
             }}
           >
-            Details
+            {t("Details", { defaultValue: "Details" })}
           </button>
         </div>
       </div>
     );
   }
 }
+

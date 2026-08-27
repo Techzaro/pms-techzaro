@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
@@ -6,6 +7,7 @@ import CustomSelect from "./CustomSelect";
 import { X, Plus, Trash2, Edit, Paperclip, FileText } from "lucide-react";
 
 export default function CreateTemplateModal({ isOpen, onClose, onSuccess, initialTemplate }) {
+  const { t } = useTranslation();
   const notify = useNotification();
   const [loading, setLoading] = useState(false);
   const [projects, setProjects] = useState([]);
@@ -65,24 +67,24 @@ export default function CreateTemplateModal({ isOpen, onClose, onSuccess, initia
   if (!isOpen) return null;
 
   const visibilityOptions = [
-    { value: "private", label: "Private (Only for me)" },
-    { value: "project_team", label: "Project Team (Only for members working on assigned project)" },
-    { value: "department_team", label: "Department Team (Only for members within my department)" },
-    { value: "organization", label: "Organization (Only for members within my organization)" },
+    { value: "private", label: t("Private (Only for me)", { defaultValue: "Private (Only for me)" }) },
+    { value: "project_team", label: t("Project Team (Only for members working on assigned project)", { defaultValue: "Project Team (Only for members working on assigned project)" }) },
+    { value: "department_team", label: t("Department Team (Only for members within my department)", { defaultValue: "Department Team (Only for members within my department)" }) },
+    { value: "organization", label: t("Organization (Only for members within my organization)", { defaultValue: "Organization (Only for members within my organization)" }) },
   ];
 
   const categoryOptions = [
-    { value: "General", label: "General" },
-    { value: "Development", label: "Development" },
-    { value: "Design", label: "Design" },
-    { value: "QA & Testing", label: "QA & Testing" },
-    { value: "Operations", label: "Operations" },
-    { value: "Marketing", label: "Marketing" },
-    { value: "custom", label: "+ Add Custom / New Category..." },
+    { value: "General", label: t("General") },
+    { value: "Development", label: t("Development", { defaultValue: "Development" }) },
+    { value: "Design", label: t("Design", { defaultValue: "Design" }) },
+    { value: "QA & Testing", label: t("QA & Testing", { defaultValue: "QA & Testing" }) },
+    { value: "Operations", label: t("Operations", { defaultValue: "Operations" }) },
+    { value: "Marketing", label: t("Marketing", { defaultValue: "Marketing" }) },
+    { value: "custom", label: t("+ Add Custom / New Category...", { defaultValue: "+ Add Custom / New Category..." }) },
   ];
 
   const projectOptions = [
-    { value: "", label: "Select Target Project..." },
+    { value: "", label: t("Select Target Project...", { defaultValue: "Select Target Project..." }) },
     ...projects.map((p) => ({ value: String(p.id), label: p.title })),
   ];
 
@@ -100,83 +102,83 @@ export default function CreateTemplateModal({ isOpen, onClose, onSuccess, initia
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.title.trim()) {
-      notify.error("Template title is required.");
+      notify.error(t("Template title is required.", { defaultValue: "Template title is required." }));
       return;
     }
 
     const finalCategory = form.category === "custom" ? customCategory.trim() : form.category;
     if (!finalCategory) {
-      notify.error("Please enter a custom category name.");
+      notify.error(t("Please enter a custom category name.", { defaultValue: "Please enter a custom category name." }));
       return;
     }
 
     if (form.visibility_level === "project_team" && !form.project_id) {
-      notify.error("Please select a target project for Project Team visibility.");
+      notify.error(t("Please select a target project for Project Team visibility.", { defaultValue: "Please select a target project for Project Team visibility." }));
       return;
     }
 
     setLoading(true);
     try {
       const token = authToken();
-      const validSubtasks = subtasks.filter((s) => s.title.trim());
+      const payloadData = {
+        subtasks: subtasks.filter((s) => s.title.trim()).map((s) => ({ title: s.title.trim() })),
+        requirements: requirements.filter(Boolean),
+      };
 
-      const fd = new FormData();
-      fd.append("title", form.title.trim());
-      fd.append("description", form.description || "");
-      fd.append("category", finalCategory);
-      fd.append("visibility_level", form.visibility_level);
-      if (form.project_id) fd.append("project_id", form.project_id);
-      if (deleteExistingFile) fd.append("delete_file", "1");
-
-      validSubtasks.forEach((st, idx) => {
-        fd.append(`subtasks[${idx}][title]`, st.title);
-      });
-
-      requirements.forEach((req, idx) => {
-        fd.append(`requirements[${idx}]`, req);
-      });
+      const formData = new FormData();
+      formData.append("title", form.title.trim());
+      formData.append("description", form.description || "");
+      formData.append("category", finalCategory);
+      formData.append("visibility_level", form.visibility_level);
+      if (form.visibility_level === "project_team" && form.project_id) {
+        formData.append("project_id", form.project_id);
+      }
+      formData.append("data", JSON.stringify(payloadData));
 
       if (file) {
-        fd.append("file", file);
+        formData.append("file", file);
+      }
+      if (deleteExistingFile) {
+        formData.append("delete_file", "1");
       }
 
-      const url = initialTemplate ? `${API_URL}/templates/${initialTemplate.id}` : `${API_URL}/templates`;
+      let res;
       if (initialTemplate) {
-        fd.append("_method", "PUT");
-      }
-
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-        body: fd,
-      });
-
-      const data = await res.json();
-      if (res.ok && data.success) {
-        notify.success(initialTemplate ? "Template updated successfully!" : "Template created successfully!");
-        onSuccess && onSuccess();
-        onClose();
+        formData.append("_method", "PUT");
+        res = await fetch(`${API_URL}/templates/${initialTemplate.id}`, {
+          method: "POST",
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          body: formData,
+        });
       } else {
-        notify.error(data.message || "Failed to save template.");
+        res = await fetch(`${API_URL}/templates`, {
+          method: "POST",
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          body: formData,
+        });
       }
+
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.message || "Failed to save template.");
+
+      notify.success(initialTemplate ? t("Template updated successfully.", { defaultValue: "Template updated successfully." }) : t("Template created successfully.", { defaultValue: "Template created successfully." }));
+      if (onSuccess) onSuccess(d);
+      onClose();
     } catch (err) {
-      notify.error("An error occurred while saving template.");
+      notify.error(err.message || t("Error saving template.", { defaultValue: "Error saving template." }));
     } finally {
       setLoading(false);
     }
   };
 
-  const hasAttachedFile = file || (initialTemplate?.file_path && !deleteExistingFile);
+  const hasAttachedFile = !deleteExistingFile && (file || (initialTemplate && (initialTemplate.file_path || initialTemplate.file_name)));
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
-      <div style={{ background: "var(--bg-card)", borderRadius: "12px", width: "100%", maxWidth: "620px", maxHeight: "90vh", overflowY: "auto", border: "1px solid var(--border-color)", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)" }}>
+    <div className="modal-overlay" style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
+      <div className="modal-content" style={{ background: "var(--bg-card)", color: "var(--text-primary)", borderRadius: "12px", width: "100%", maxWidth: "680px", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)" }}>
         {/* HEADER */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid var(--border-color)" }}>
-          <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 600 }}>{initialTemplate ? "Edit Template" : "Create New Template"}</h3>
+          <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 600 }}>{initialTemplate ? t("Edit Task Template", { defaultValue: "Edit Task Template" }) : t("Create Task Template", { defaultValue: "Create Task Template" })}</h3>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)" }}>
             <X size={20} />
           </button>
@@ -187,11 +189,11 @@ export default function CreateTemplateModal({ isOpen, onClose, onSuccess, initia
           {/* Title */}
           <div>
             <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>
-              Template Title <span style={{ color: "#ef4444" }}>*</span>
+              {t("Template Title", { defaultValue: "Template Title" })} <span style={{ color: "#ef4444" }}>*</span>
             </label>
             <input
               type="text"
-              placeholder="e.g. Standard Web Development Workflow"
+              placeholder={t("e.g. Standard Web Development Workflow", { defaultValue: "e.g. Standard Web Development Workflow" })}
               value={form.title}
               onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
               style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", color: "var(--text-primary)", fontSize: "13px" }}
@@ -201,9 +203,9 @@ export default function CreateTemplateModal({ isOpen, onClose, onSuccess, initia
 
           {/* Description */}
           <div>
-            <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>Description</label>
+            <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>{t("Description")}</label>
             <textarea
-              placeholder="Brief summary of what this template contains..."
+              placeholder={t("Brief summary of what this template contains...", { defaultValue: "Brief summary of what this template contains..." })}
               value={form.description}
               onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
               rows={3}
@@ -214,7 +216,7 @@ export default function CreateTemplateModal({ isOpen, onClose, onSuccess, initia
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
             {/* Category */}
             <div>
-              <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>Category</label>
+              <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>{t("Category")}</label>
               <CustomSelect
                 name="category"
                 value={form.category}
@@ -224,7 +226,7 @@ export default function CreateTemplateModal({ isOpen, onClose, onSuccess, initia
               {form.category === "custom" && (
                 <input
                   type="text"
-                  placeholder="Enter custom category name..."
+                  placeholder={t("Enter custom category name...", { defaultValue: "Enter custom category name..." })}
                   value={customCategory}
                   onChange={(e) => setCustomCategory(e.target.value)}
                   style={{ width: "100%", marginTop: "6px", padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "12px" }}
@@ -236,7 +238,7 @@ export default function CreateTemplateModal({ isOpen, onClose, onSuccess, initia
             {/* Template Visibility */}
             <div>
               <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>
-                Template Visibility <span style={{ color: "#ef4444" }}>*</span>
+                {t("Template Visibility", { defaultValue: "Template Visibility" })} <span style={{ color: "#ef4444" }}>*</span>
               </label>
               <CustomSelect
                 name="visibility_level"
@@ -251,7 +253,7 @@ export default function CreateTemplateModal({ isOpen, onClose, onSuccess, initia
           {form.visibility_level === "project_team" && (
             <div>
               <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>
-                Target Project <span style={{ color: "#ef4444" }}>*</span>
+                {t("Target Project", { defaultValue: "Target Project" })} <span style={{ color: "#ef4444" }}>*</span>
               </label>
               <CustomSelect
                 name="project_id"
@@ -265,9 +267,9 @@ export default function CreateTemplateModal({ isOpen, onClose, onSuccess, initia
           {/* Subtasks */}
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-              <label style={{ fontSize: "12px", fontWeight: 600 }}>Default Subtasks / Deliverables</label>
+              <label style={{ fontSize: "12px", fontWeight: 600 }}>{t("Default Subtasks / Deliverables", { defaultValue: "Default Subtasks / Deliverables" })}</label>
               <button type="button" onClick={handleAddSubtask} style={{ background: "none", border: "none", color: "#3b82f6", cursor: "pointer", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px", fontWeight: 600 }}>
-                <Plus size={14} /> Add Subtask
+                <Plus size={14} /> {t("Add Subtask", { defaultValue: "Add Subtask" })}
               </button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -275,7 +277,7 @@ export default function CreateTemplateModal({ isOpen, onClose, onSuccess, initia
                 <div key={i} style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                   <input
                     type="text"
-                    placeholder={`Subtask #${i + 1} Title`}
+                    placeholder={t("Subtask #{{num}} Title", { defaultValue: `Subtask #${i + 1} Title`, num: i + 1 })}
                     value={st.title}
                     onChange={(e) => handleSubtaskChange(i, e.target.value)}
                     style={{ flex: 1, padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", color: "var(--text-primary)", fontSize: "12px" }}
@@ -292,18 +294,18 @@ export default function CreateTemplateModal({ isOpen, onClose, onSuccess, initia
 
           {/* Requirements */}
           <div>
-            <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>Requirements & Guidelines</label>
+            <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>{t("Requirements & Guidelines", { defaultValue: "Requirements & Guidelines" })}</label>
             <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
               <input
                 type="text"
-                placeholder="Add a requirement bullet point..."
+                placeholder={t("Add a requirement bullet point...", { defaultValue: "Add a requirement bullet point..." })}
                 value={newReq}
                 onChange={(e) => setNewReq(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddReq(); } }}
                 style={{ flex: 1, padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", color: "var(--text-primary)", fontSize: "12px" }}
               />
               <button type="button" onClick={handleAddReq} style={{ padding: "6px 12px", borderRadius: "6px", background: "var(--bg-hover)", border: "1px solid var(--border-color)", cursor: "pointer", fontSize: "12px" }}>
-                Add
+                {t("Add", { defaultValue: "Add" })}
               </button>
             </div>
             {requirements.map((req, idx) => (
@@ -319,14 +321,14 @@ export default function CreateTemplateModal({ isOpen, onClose, onSuccess, initia
           {/* Attached File with Edit & Delete Action Icon Buttons */}
           <div>
             <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
-              Attach Document / Resource File (Optional)
+              {t("Attach Document / Resource File (Optional)", { defaultValue: "Attach Document / Resource File (Optional)" })}
             </label>
 
             {hasAttachedFile ? (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "var(--bg-hover)", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "13px" }}>
                   <Paperclip size={16} color="#2563eb" />
-                  <span style={{ fontWeight: 600 }}>{file ? file.name : initialTemplate.file_path.split("/").pop()}</span>
+                  <span style={{ fontWeight: 600 }}>{file ? file.name : (initialTemplate.file_name || (initialTemplate.file_path ? initialTemplate.file_path.split("/").pop() : ""))}</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   {/* EDIT ICON BUTTON */}
@@ -341,9 +343,9 @@ export default function CreateTemplateModal({ isOpen, onClose, onSuccess, initia
                       input.click();
                     }}
                     style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "5px 10px", borderRadius: "6px", border: "1px solid #bfdbfe", background: "#eff6ff", color: "#1d4ed8", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
-                    title="Edit / Replace File"
+                    title={t("Edit / Replace File", { defaultValue: "Edit / Replace File" })}
                   >
-                    <Edit size={14} /> Edit
+                    <Edit size={14} /> {t("Edit")}
                   </button>
 
                   {/* DELETE ICON BUTTON */}
@@ -356,9 +358,9 @@ export default function CreateTemplateModal({ isOpen, onClose, onSuccess, initia
                       }
                     }}
                     style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "5px 10px", borderRadius: "6px", border: "1px solid #fecaca", background: "#fef2f2", color: "#dc2626", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
-                    title="Delete File"
+                    title={t("Delete File", { defaultValue: "Delete File" })}
                   >
-                    <Trash2 size={14} /> Delete
+                    <Trash2 size={14} /> {t("Delete")}
                   </button>
                 </div>
               </div>
@@ -376,10 +378,10 @@ export default function CreateTemplateModal({ isOpen, onClose, onSuccess, initia
           {/* FOOTER */}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "12px", paddingTop: "12px", borderTop: "1px solid var(--border-color)" }}>
             <button type="button" onClick={onClose} style={{ padding: "8px 16px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-hover)", color: "var(--text-primary)", fontSize: "13px", cursor: "pointer" }}>
-              Cancel
+              {t("Cancel")}
             </button>
             <button type="submit" disabled={loading} style={{ padding: "8px 20px", borderRadius: "6px", border: "none", background: "#2563eb", color: "#ffffff", fontSize: "13px", fontWeight: 600, cursor: loading ? "not-allowed" : "pointer" }}>
-              {loading ? "Saving..." : initialTemplate ? "Update Template" : "Create Template"}
+              {loading ? t("Saving...", { defaultValue: "Saving..." }) : initialTemplate ? t("Update Template", { defaultValue: "Update Template" }) : t("Create Template", { defaultValue: "Create Template" })}
             </button>
           </div>
         </form>

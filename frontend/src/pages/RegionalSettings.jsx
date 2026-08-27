@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import {
@@ -34,10 +35,13 @@ import {
 import { getUser, setUser, getCurrentRole, rolePath } from "../utils/auth";
 import api from "../lib/api";
 import { notify } from "../utils/notify";
+import { i18n } from "../utils/i18n";
+import { queryClient } from "../lib/queryClient";
 import dayjs from "dayjs";
 import "./RegionalSettings.css";
 
 export default function RegionalSettings() {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [timezones, setTimezones] = useState([]);
@@ -53,9 +57,9 @@ export default function RegionalSettings() {
   const deviceTz = useMemo(() => detectDeviceTimezone(), []);
 
   const breadcrumbs = [
-    { label: "Dashboard", path: rolePath("dashboard") },
-    { label: "Settings", path: rolePath("settings/notifications") },
-    { label: "Regional Settings" },
+    { label: t("Dashboard"), path: rolePath("dashboard") },
+    { label: t("Settings"), path: rolePath("settings/notifications") },
+    { label: t("Regional Settings") },
   ];
 
   // Load User Settings & Available Timezones
@@ -90,7 +94,10 @@ export default function RegionalSettings() {
       const settingsRes = await api.get("/regional-settings");
       const data = settingsRes?.data || settingsRes?.settings || {};
 
-      if (data.language) setLanguage(data.language);
+      if (data.language) {
+        setLanguage(data.language);
+        i18n.changeLanguage(data.language);
+      }
       if (data.timezone) setTimezone(data.timezone);
       else if (deviceTz) setTimezone(deviceTz);
 
@@ -102,12 +109,19 @@ export default function RegionalSettings() {
       } else {
         setWorkingHours(DEFAULT_WORKING_HOURS);
       }
+
+      // Sync active user session storage
+      const role = getCurrentRole();
+      setUser(role, data);
     } catch (err) {
       console.error("Error loading regional settings:", err);
       // Fallback from localStorage user
       const u = getUser();
       if (u) {
-        if (u.language) setLanguage(u.language);
+        if (u.language) {
+          setLanguage(u.language);
+          i18n.changeLanguage(u.language);
+        }
         if (u.timezone) setTimezone(u.timezone);
         if (u.date_format) setDateFormat(u.date_format);
         if (u.time_format) setTimeFormat(u.time_format);
@@ -141,17 +155,13 @@ export default function RegionalSettings() {
       if (res?.success) {
         // Update user in session storage
         const role = getCurrentRole();
-        const user = getUser(role);
-        if (user) {
-          user.language = language;
-          user.timezone = timezone;
-          user.date_format = dateFormat;
-          user.time_format = timeFormat;
-          user.working_hours = workingHours;
-          setUser(role, user);
-        }
+        setUser(role, payload);
+        i18n.changeLanguage(language, true);
 
-        notify.success("Regional settings saved successfully!");
+        // Invalidate query caches for instant UI updates across the entire app
+        queryClient.invalidateQueries();
+
+        notify.success(t("Regional settings saved successfully!", { defaultValue: "Regional settings saved successfully!" }));
         window.dispatchEvent(new CustomEvent("regional-settings:updated", { detail: payload }));
       }
     } catch (err) {
@@ -176,15 +186,15 @@ export default function RegionalSettings() {
         <Breadcrumb items={breadcrumbs} />
 
         <div className="rs-header">
-          <h1 className="rs-title">Regional & Timezone Settings</h1>
+          <h1 className="rs-title">{t("Regional & Timezone Settings", { defaultValue: "Regional & Timezone Settings" })}</h1>
           <p className="rs-subtitle">
-            Configure your preferred language, time zone, date/time formatting, and daily working hours.
+            {t("Regional Subtitle", { defaultValue: "Configure your preferred language, local timezone, date/time display formats, and working hours." })}
           </p>
         </div>
 
         {loading ? (
           <div className="rs-card" style={{ textAlign: "center", padding: "60px 20px" }}>
-            <p style={{ color: "var(--text-secondary)" }}>Loading regional preferences...</p>
+            <p style={{ color: "var(--text-secondary)" }}>{t("Saving...", { defaultValue: "Saving..." })}</p>
           </div>
         ) : (
           <form onSubmit={handleSave}>
@@ -195,8 +205,8 @@ export default function RegionalSettings() {
                   <Globe size={20} />
                 </div>
                 <div>
-                  <h2 className="rs-card-title">Locale & Timezone</h2>
-                  <p className="rs-card-desc">Choose your preferred display language and timezone</p>
+                  <h2 className="rs-card-title">{t("Locale & Timezone", { defaultValue: "Locale & Timezone" })}</h2>
+                  <p className="rs-card-desc">{t("Locale & Timezone Desc", { defaultValue: "Set your display language and primary timezone for timestamps." })}</p>
                 </div>
               </div>
 
@@ -204,7 +214,7 @@ export default function RegionalSettings() {
                 {/* Language Selection */}
                 <div className="rs-form-group">
                   <label className="rs-label flex items-center gap-1.5">
-                    <Languages size={15} /> Preferred Language
+                    <Languages size={15} /> {t("Preferred Language", { defaultValue: "Preferred Language" })}
                   </label>
                   <select
                     className="rs-select"
@@ -213,12 +223,12 @@ export default function RegionalSettings() {
                   >
                     {SUPPORTED_LANGUAGES.map((lang) => (
                       <option key={lang.value} value={lang.value}>
-                        {lang.label}
+                        {t(lang.label, { defaultValue: lang.label })}
                       </option>
                     ))}
                   </select>
                   <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>
-                    Select the interface display language for your account.
+                    {t("Language Desc", { defaultValue: "Choose the interface language for your portal." })}
                   </p>
                 </div>
 
@@ -226,7 +236,7 @@ export default function RegionalSettings() {
                 <div className="rs-form-group">
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
                     <label className="rs-label" style={{ margin: 0 }}>
-                      Timezone (IANA)
+                      {t("Timezone (IANA)", { defaultValue: "Timezone (IANA)" })}
                     </label>
                     {deviceTz && deviceTz !== timezone && (
                       <button
@@ -244,7 +254,7 @@ export default function RegionalSettings() {
                           gap: "4px",
                         }}
                       >
-                        <Laptop size={13} /> Use Device ({deviceTz})
+                        <Laptop size={13} /> {t("Use Device", { defaultValue: "Use Device" })} ({deviceTz})
                       </button>
                     )}
                   </div>
@@ -261,7 +271,7 @@ export default function RegionalSettings() {
                     ))}
                   </select>
                   <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>
-                    All task deadlines and event schedules will be rendered in this timezone.
+                    {t("Timezone Desc", { defaultValue: "All task deadlines and dates will adjust to this timezone." })}
                   </p>
                 </div>
               </div>
@@ -274,14 +284,14 @@ export default function RegionalSettings() {
                   <Calendar size={20} />
                 </div>
                 <div>
-                  <h2 className="rs-card-title">Date & Time Formats</h2>
-                  <p className="rs-card-desc">Choose how dates and times appear throughout the system</p>
+                  <h2 className="rs-card-title">{t("Date & Time Formats", { defaultValue: "Date & Time Formats" })}</h2>
+                  <p className="rs-card-desc">{t("Date & Time Formats Desc", { defaultValue: "Customize how dates and times are formatted across the portal." })}</p>
                 </div>
               </div>
 
               {/* Date Format */}
               <div className="rs-form-group">
-                <label className="rs-label">Date Format</label>
+                <label className="rs-label">{t("Date Format", { defaultValue: "Date Format" })}</label>
                 <div className="rs-radio-grid">
                   {SUPPORTED_DATE_FORMATS.map((df) => {
                     const isSelected = dateFormat === df.value;
@@ -300,7 +310,7 @@ export default function RegionalSettings() {
                         />
                         <div>
                           <div className="rs-radio-title">{df.value}</div>
-                          <div className="rs-radio-preview">Preview: {previewText}</div>
+                          <div className="rs-radio-preview">{t("Preview", { defaultValue: "Preview" })}: {previewText}</div>
                         </div>
                       </div>
                     );
@@ -310,7 +320,7 @@ export default function RegionalSettings() {
 
               {/* Time Format */}
               <div className="rs-form-group" style={{ marginTop: "24px" }}>
-                <label className="rs-label">Time Format</label>
+                <label className="rs-label">{t("Time Format", { defaultValue: "Time Format" })}</label>
                 <div className="rs-radio-grid">
                   {SUPPORTED_TIME_FORMATS.map((tf) => {
                     const isSelected = timeFormat === tf.value;
@@ -328,8 +338,8 @@ export default function RegionalSettings() {
                           onChange={() => setTimeFormat(tf.value)}
                         />
                         <div>
-                          <div className="rs-radio-title">{tf.label}</div>
-                          <div className="rs-radio-preview">Preview: {previewText}</div>
+                          <div className="rs-radio-title">{t(tf.label, { defaultValue: tf.label })}</div>
+                          <div className="rs-radio-preview">{t("Preview", { defaultValue: "Preview" })}: {previewText}</div>
                         </div>
                       </div>
                     );
@@ -345,8 +355,8 @@ export default function RegionalSettings() {
                   <Clock size={20} />
                 </div>
                 <div>
-                  <h2 className="rs-card-title">Daily Working Hours &amp; Shifts</h2>
-                  <p className="rs-card-desc">Set your working availability with support for multiple shifts and split hours</p>
+                  <h2 className="rs-card-title">{t("Daily Working Hours & Shifts", { defaultValue: "Daily Working Hours & Shifts" })}</h2>
+                  <p className="rs-card-desc">{t("Working Hours Desc", { defaultValue: "Define your working availability and non-working days." })}</p>
                 </div>
               </div>
 
@@ -364,7 +374,7 @@ export default function RegionalSettings() {
                 onClick={loadData}
                 disabled={saving}
               >
-                Discard Changes
+                {t("Discard Changes", { defaultValue: "Discard Changes" })}
               </button>
               <button
                 type="submit"
@@ -372,7 +382,7 @@ export default function RegionalSettings() {
                 disabled={saving}
               >
                 <Save size={16} />
-                {saving ? "Saving..." : "Save Regional Settings"}
+                {saving ? t("Saving...", { defaultValue: "Saving..." }) : t("Save Regional Settings", { defaultValue: "Save Regional Settings" })}
               </button>
             </div>
           </form>

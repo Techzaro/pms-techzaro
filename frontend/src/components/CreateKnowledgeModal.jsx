@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
@@ -6,6 +7,7 @@ import CustomSelect from "./CustomSelect";
 import { X, Edit, Trash2, Paperclip } from "lucide-react";
 
 export default function CreateKnowledgeModal({ isOpen, onClose, onSuccess, initialItem }) {
+  const { t } = useTranslation();
   const notify = useNotification();
   const [loading, setLoading] = useState(false);
   const [projects, setProjects] = useState([]);
@@ -58,97 +60,100 @@ export default function CreateKnowledgeModal({ isOpen, onClose, onSuccess, initi
   if (!isOpen) return null;
 
   const visibilityOptions = [
-    { value: "organization", label: "Organization (Only for members within my organization)" },
-    { value: "department_team", label: "Department Team (Only for members within my department)" },
-    { value: "project_team", label: "Project Team (Only for members working on a specific project)" },
-    { value: "private", label: "Private (Only for me)" },
+    { value: "organization", label: t("Organization (Only for members within my organization)", { defaultValue: "Organization (Only for members within my organization)" }) },
+    { value: "department_team", label: t("Department Team (Only for members within my department)", { defaultValue: "Department Team (Only for members within my department)" }) },
+    { value: "project_team", label: t("Project Team (Only for members working on a specific project)", { defaultValue: "Project Team (Only for members working on a specific project)" }) },
+    { value: "private", label: t("Private (Only for me)", { defaultValue: "Private (Only for me)" }) },
   ];
 
   const categoryOptions = [
-    { value: "General", label: "General" },
-    { value: "Best Practices", label: "Best Practices" },
-    { value: "Technical Documentation", label: "Technical Documentation" },
-    { value: "Onboarding", label: "Onboarding" },
-    { value: "Guidelines", label: "Guidelines" },
-    { value: "Process & SOPs", label: "Process & SOPs" },
-    { value: "custom", label: "+ Add Custom / New Category..." },
+    { value: "General", label: t("General") },
+    { value: "Best Practices", label: t("Best Practices", { defaultValue: "Best Practices" }) },
+    { value: "Technical Documentation", label: t("Technical Documentation", { defaultValue: "Technical Documentation" }) },
+    { value: "Onboarding", label: t("Onboarding", { defaultValue: "Onboarding" }) },
+    { value: "Guidelines", label: t("Guidelines", { defaultValue: "Guidelines" }) },
+    { value: "Process & SOPs", label: t("Process & SOPs", { defaultValue: "Process & SOPs" }) },
+    { value: "custom", label: t("+ Add Custom / New Category...", { defaultValue: "+ Add Custom / New Category..." }) },
   ];
 
   const projectOptions = [
-    { value: "", label: "Select Target Project..." },
+    { value: "", label: t("Select Target Project...", { defaultValue: "Select Target Project..." }) },
     ...projects.map((p) => ({ value: String(p.id), label: p.title })),
   ];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.title.trim()) {
-      notify.error("Article title is required.");
+      notify.error(t("Article title is required.", { defaultValue: "Article title is required." }));
       return;
     }
 
     const finalCategory = form.category === "custom" ? customCategory.trim() : form.category;
     if (!finalCategory) {
-      notify.error("Please enter a custom category name.");
+      notify.error(t("Please enter a custom category name.", { defaultValue: "Please enter a custom category name." }));
       return;
     }
 
     if (form.visibility_level === "project_team" && !form.project_id) {
-      notify.error("Please select a target project for Project Team visibility.");
+      notify.error(t("Please select a target project for Project Team visibility.", { defaultValue: "Please select a target project for Project Team visibility." }));
       return;
     }
 
     setLoading(true);
     try {
       const token = authToken();
-      const fd = new FormData();
-      fd.append("title", form.title.trim());
-      fd.append("content", form.content || "");
-      fd.append("category", finalCategory);
-      fd.append("visibility_level", form.visibility_level);
-      if (form.project_id) fd.append("project_id", form.project_id);
-      if (deleteExistingFile) fd.append("delete_file", "1");
-
+      const formData = new FormData();
+      formData.append("title", form.title.trim());
+      formData.append("content", form.content || "");
+      formData.append("category", finalCategory);
+      formData.append("visibility_level", form.visibility_level);
+      if (form.visibility_level === "project_team" && form.project_id) {
+        formData.append("project_id", form.project_id);
+      }
       if (file) {
-        fd.append("file", file);
+        formData.append("file", file);
+      }
+      if (deleteExistingFile) {
+        formData.append("delete_file", "1");
       }
 
-      const url = initialItem ? `${API_URL}/knowledge-base/${initialItem.id}` : `${API_URL}/knowledge-base`;
+      let res;
       if (initialItem) {
-        fd.append("_method", "PUT");
-      }
-
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-        body: fd,
-      });
-
-      const data = await res.json();
-      if (res.ok && data.success) {
-        notify.success(initialItem ? "Knowledge article updated successfully!" : "Knowledge article created successfully!");
-        onSuccess && onSuccess();
-        onClose();
+        formData.append("_method", "PUT");
+        res = await fetch(`${API_URL}/knowledge-base/${initialItem.id}`, {
+          method: "POST",
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          body: formData,
+        });
       } else {
-        notify.error(data.message || "Failed to save article.");
+        res = await fetch(`${API_URL}/knowledge-base`, {
+          method: "POST",
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          body: formData,
+        });
       }
+
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.message || "Failed to save article.");
+
+      notify.success(initialItem ? t("Knowledge article updated successfully.", { defaultValue: "Knowledge article updated successfully." }) : t("Knowledge article created successfully.", { defaultValue: "Knowledge article created successfully." }));
+      if (onSuccess) onSuccess(d);
+      onClose();
     } catch (err) {
-      notify.error("An error occurred while saving knowledge article.");
+      notify.error(err.message || t("Error saving article.", { defaultValue: "Error saving article." }));
     } finally {
       setLoading(false);
     }
   };
 
-  const hasAttachedFile = file || (initialItem?.file_path && !deleteExistingFile);
+  const hasAttachedFile = !deleteExistingFile && (file || (initialItem && (initialItem.file_path || initialItem.file_name)));
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
-      <div style={{ background: "var(--bg-card)", borderRadius: "12px", width: "100%", maxWidth: "680px", maxHeight: "90vh", overflowY: "auto", border: "1px solid var(--border-color)", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)" }}>
+    <div className="modal-overlay" style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
+      <div className="modal-content" style={{ background: "var(--bg-card)", color: "var(--text-primary)", borderRadius: "12px", width: "100%", maxWidth: "680px", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)" }}>
         {/* HEADER */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid var(--border-color)" }}>
-          <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 600 }}>{initialItem ? "Edit Knowledge Article" : "Create Knowledge Article"}</h3>
+          <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 600 }}>{initialItem ? t("Edit Knowledge Article", { defaultValue: "Edit Knowledge Article" }) : t("Create Knowledge Article", { defaultValue: "Create Knowledge Article" })}</h3>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)" }}>
             <X size={20} />
           </button>
@@ -159,11 +164,11 @@ export default function CreateKnowledgeModal({ isOpen, onClose, onSuccess, initi
           {/* Article Title */}
           <div>
             <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>
-              Article Title <span style={{ color: "#ef4444" }}>*</span>
+              {t("Article Title", { defaultValue: "Article Title" })} <span style={{ color: "#ef4444" }}>*</span>
             </label>
             <input
               type="text"
-              placeholder="e.g. Deployment Guidelines & Code Quality Standards"
+              placeholder={t("e.g. Deployment Guidelines & Code Quality Standards", { defaultValue: "e.g. Deployment Guidelines & Code Quality Standards" })}
               value={form.title}
               onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
               style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", color: "var(--text-primary)", fontSize: "13px" }}
@@ -174,7 +179,7 @@ export default function CreateKnowledgeModal({ isOpen, onClose, onSuccess, initi
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
             {/* Category */}
             <div>
-              <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>Category</label>
+              <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>{t("Category")}</label>
               <CustomSelect
                 name="category"
                 value={form.category}
@@ -184,7 +189,7 @@ export default function CreateKnowledgeModal({ isOpen, onClose, onSuccess, initi
               {form.category === "custom" && (
                 <input
                   type="text"
-                  placeholder="Enter custom category name..."
+                  placeholder={t("Enter custom category name...", { defaultValue: "Enter custom category name..." })}
                   value={customCategory}
                   onChange={(e) => setCustomCategory(e.target.value)}
                   style={{ width: "100%", marginTop: "6px", padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "12px" }}
@@ -196,7 +201,7 @@ export default function CreateKnowledgeModal({ isOpen, onClose, onSuccess, initi
             {/* Visibility Level */}
             <div>
               <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>
-                Visibility Level <span style={{ color: "#ef4444" }}>*</span>
+                {t("Visibility Level", { defaultValue: "Visibility Level" })} <span style={{ color: "#ef4444" }}>*</span>
               </label>
               <CustomSelect
                 name="visibility_level"
@@ -211,7 +216,7 @@ export default function CreateKnowledgeModal({ isOpen, onClose, onSuccess, initi
           {form.visibility_level === "project_team" && (
             <div>
               <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>
-                Target Project <span style={{ color: "#ef4444" }}>*</span>
+                {t("Target Project", { defaultValue: "Target Project" })} <span style={{ color: "#ef4444" }}>*</span>
               </label>
               <CustomSelect
                 name="project_id"
@@ -224,9 +229,9 @@ export default function CreateKnowledgeModal({ isOpen, onClose, onSuccess, initi
 
           {/* Content / Article Body */}
           <div>
-            <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>Article Content / Documentation</label>
+            <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>{t("Article Content / Documentation", { defaultValue: "Article Content / Documentation" })}</label>
             <textarea
-              placeholder="Write the full documentation, article body, or instructions here..."
+              placeholder={t("Write the full documentation, article body, or instructions here...", { defaultValue: "Write the full documentation, article body, or instructions here..." })}
               value={form.content}
               onChange={(e) => setForm((p) => ({ ...p, content: e.target.value }))}
               rows={8}
@@ -237,7 +242,7 @@ export default function CreateKnowledgeModal({ isOpen, onClose, onSuccess, initi
           {/* Attached File with Edit & Delete Action Icon Buttons */}
           <div>
             <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
-              Attach Document / Resource File (Optional)
+              {t("Attach Document / Resource File (Optional)", { defaultValue: "Attach Document / Resource File (Optional)" })}
             </label>
 
             {hasAttachedFile ? (
@@ -245,7 +250,7 @@ export default function CreateKnowledgeModal({ isOpen, onClose, onSuccess, initi
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "13px" }}>
                   <Paperclip size={16} color="#2563eb" />
                   <span style={{ fontWeight: 600 }}>
-                    {file ? file.name : (initialItem.file_name || initialItem.file_path.split("/").pop())}
+                    {file ? file.name : (initialItem.file_name || (initialItem.file_path ? initialItem.file_path.split("/").pop() : ""))}
                   </span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -261,9 +266,9 @@ export default function CreateKnowledgeModal({ isOpen, onClose, onSuccess, initi
                       input.click();
                     }}
                     style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "5px 10px", borderRadius: "6px", border: "1px solid #bfdbfe", background: "#eff6ff", color: "#1d4ed8", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
-                    title="Edit / Replace File"
+                    title={t("Edit / Replace File", { defaultValue: "Edit / Replace File" })}
                   >
-                    <Edit size={14} /> Edit
+                    <Edit size={14} /> {t("Edit")}
                   </button>
 
                   {/* DELETE ICON BUTTON */}
@@ -276,9 +281,9 @@ export default function CreateKnowledgeModal({ isOpen, onClose, onSuccess, initi
                       }
                     }}
                     style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "5px 10px", borderRadius: "6px", border: "1px solid #fecaca", background: "#fef2f2", color: "#dc2626", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
-                    title="Delete File"
+                    title={t("Delete File", { defaultValue: "Delete File" })}
                   >
-                    <Trash2 size={14} /> Delete
+                    <Trash2 size={14} /> {t("Delete")}
                   </button>
                 </div>
               </div>
@@ -296,10 +301,10 @@ export default function CreateKnowledgeModal({ isOpen, onClose, onSuccess, initi
           {/* FOOTER */}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "12px", paddingTop: "12px", borderTop: "1px solid var(--border-color)" }}>
             <button type="button" onClick={onClose} style={{ padding: "8px 16px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-hover)", color: "var(--text-primary)", fontSize: "13px", cursor: "pointer" }}>
-              Cancel
+              {t("Cancel")}
             </button>
             <button type="submit" disabled={loading} style={{ padding: "8px 20px", borderRadius: "6px", border: "none", background: "#2563eb", color: "#ffffff", fontSize: "13px", fontWeight: 600, cursor: loading ? "not-allowed" : "pointer" }}>
-              {loading ? "Saving..." : initialItem ? "Update Article" : "Create Article"}
+              {loading ? t("Saving...", { defaultValue: "Saving..." }) : initialItem ? t("Update Article", { defaultValue: "Update Article" }) : t("Create Article", { defaultValue: "Create Article" })}
             </button>
           </div>
         </form>

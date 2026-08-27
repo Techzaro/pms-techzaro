@@ -1,3 +1,17 @@
+import { useTranslation } from "react-i18next";
+import { useState, useCallback, useEffect } from "react";
+import ConfirmModal from "../components/ConfirmModal";
+
+/**
+ * Reusable hook that adds "are you sure?" confirmation when closing a modal
+ * that has unsaved changes.
+ *
+ * Usage:
+ *   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
+ *
+ *   // Track changes
+ *   useEffect(() => { setIsDirty(true); }, [someField]);
+ *
 import { useState, useCallback, useEffect } from "react";
 import ConfirmModal from "../components/ConfirmModal";
 
@@ -18,6 +32,7 @@ import ConfirmModal from "../components/ConfirmModal";
  *   {ConfirmDialog}
  */
 export default function useConfirmOnClose(onClose) {
+  const { t } = useTranslation();
   const [isDirty, setIsDirty] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -44,10 +59,10 @@ export default function useConfirmOnClose(onClose) {
       isOpen={showConfirm}
       onClose={cancelConfirm}
       onConfirm={confirmClose}
-      title="Unsaved Changes"
-      message="You have unsaved changes. Are you sure you want to close? All changes will be lost."
-      confirmText="Yes, Discard"
-      cancelText="Keep Editing"
+      title={t("Unsaved Changes", { defaultValue: "Unsaved Changes" })}
+      message={t("You have unsaved changes. Are you sure you want to close? All changes will be lost.", { defaultValue: "You have unsaved changes. Are you sure you want to close? All changes will be lost." })}
+      confirmText={t("Yes, Discard", { defaultValue: "Yes, Discard" })}
+      cancelText={t("Keep Editing", { defaultValue: "Keep Editing" })}
       danger
     />
   );

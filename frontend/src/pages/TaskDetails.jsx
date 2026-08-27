@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage, notify, toast } from "../utils/notify";
 import {
@@ -87,27 +88,32 @@ import "./TaskDetails.css";
 import "./Deliveries.css";
 
 /** Convert an ISO timestamp to a human-friendly "X time ago" string. */
-function timeAgo(iso) {
+function timeAgo(iso, t) {
   if (!iso) return "";
   const then = new Date(iso).getTime();
   const sec = Math.max(0, Math.floor((Date.now() - then) / 1000));
-  if (sec < 60) return "just now";
+  if (sec < 60) return t ? t("just now", { defaultValue: "just now" }) : "just now";
   if (sec < 3600) return `${Math.floor(sec / 60)} min ago`;
   if (sec < 86400) return `${Math.floor(sec / 3600)} hours ago`;
   return `${Math.floor(sec / 86400)} days ago`;
 }
 
 /** Map a raw status string to a display-friendly label. */
-function statusLabel(status) {
+function statusLabel(status, t) {
   const s = (status || "").toLowerCase();
-  if (s === "pending") return "Pending";
-  if (s === "in_progress" || s === "acknowledged") return "In Progress";
-  if (s === "paused") return "Paused";
-  if (s === "submitted") return "Submitted";
-  if (s === "reopened") return "Reopened";
-  if (s === "approved") return "Approved";
-  if (s === "rejected") return "Declined";
-  return status || "Pending";
+  const map = {
+    pending: "Pending",
+    in_progress: "In Progress",
+    acknowledged: "In Progress",
+    paused: "Paused",
+    submitted: "Submitted",
+    reopened: "Reopened",
+    approved: "Approved",
+    rejected: "Declined",
+    abandoned: "Abandoned",
+  };
+  const label = map[s] || status || "Pending";
+  return t ? t(label, { defaultValue: label }) : label;
 }
 
 /** Return text colour for a given task status. */
@@ -171,6 +177,7 @@ function formatShortDate(dateString) {
 }
 
 function CredentialRow({ credential, onDelete }) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const [copiedUser, setCopiedUser] = useState(false);
 
@@ -219,11 +226,11 @@ function CredentialRow({ credential, onDelete }) {
           <Globe size={18} />
           <span className="td-cred-name">{credential.website_name}</span>
           {credential.website_url && (
-            <a href={credential.website_url} target="_blank" rel="noopener noreferrer" className="td-cred-link">Visit</a>
+            <a href={credential.website_url} target="_blank" rel="noopener noreferrer" className="td-cred-link">{t("Visit", { defaultValue: "Visit" })}</a>
           )}
         </div>
         {onDelete && (
-          <button className="td-cred-delete" onClick={onDelete} title="Delete credential">
+          <button className="td-cred-delete" onClick={onDelete} title={t("Delete credential", { defaultValue: "Delete credential" })}>
             <Trash2 size={14} />
           </button>
         )}
@@ -231,29 +238,29 @@ function CredentialRow({ credential, onDelete }) {
 
       <div className="td-cred-fields">
         <div className="td-cred-field">
-          <label>Username / Email</label>
+          <label>{t("Username / Email", { defaultValue: "Username / Email" })}</label>
           <div className="td-cred-value-row">
             <span className="td-cred-value">{credential.username}</span>
-            <button className={`td-cred-copy ${copiedUser ? "td-cred-copied" : ""}`} onClick={copyUsername} title="Copy username">
+            <button className={`td-cred-copy ${copiedUser ? "td-cred-copied" : ""}`} onClick={copyUsername} title={t("Copy username", { defaultValue: "Copy username" })}>
               {copiedUser ? <Check size={14} /> : <Copy size={14} />}
             </button>
           </div>
         </div>
 
         <div className="td-cred-field">
-          <label>Password</label>
+          <label>{t("Password", { defaultValue: "Password" })}</label>
           <div className="td-cred-value-row">
             <span className="td-cred-value">{"\u2022".repeat(12)}</span>
-            <button className={`td-cred-copy ${copied ? "td-cred-copied" : ""}`} onClick={copyPassword} title="Copy password">
+            <button className={`td-cred-copy ${copied ? "td-cred-copied" : ""}`} onClick={copyPassword} title={t("Copy password", { defaultValue: "Copy password" })}>
               {copied ? <Check size={14} /> : <Copy size={14} />}
             </button>
           </div>
-          <span className="td-cred-hint">{copied ? "Copied!" : "Click copy to use this password"}</span>
+          <span className="td-cred-hint">{copied ? t("Copied!", { defaultValue: "Copied!" }) : t("Click copy to use this password", { defaultValue: "Click copy to use this password" })}</span>
         </div>
 
         {credential.assigned_users && credential.assigned_users.length > 0 && (
           <div className="td-cred-field">
-            <label>Assigned To</label>
+            <label>{t("Assigned To", { defaultValue: "Assigned To" })}</label>
             <div className="td-cred-assigned">
               {credential.assigned_users.map((u) => (
                 <span key={u.id} className="td-cred-badge">{u.name}</span>
@@ -271,16 +278,17 @@ function CredentialRow({ credential, onDelete }) {
  * sidebar, tabs, subtasks table and submission workflow.
  */
 function TaskDetails() {
+  const { t } = useTranslation();
   const { taskId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const notify = useNotification();
   const taskIds = location.state?.taskIds || [];
   const sourcePages = {
-    tasks: { label: "Assigned To You", path: rolePath("tasks") },
-    taskby: { label: "Assigned By You", path: rolePath("taskby") },
-    "self-tasks": { label: "Self Tasks", path: rolePath("self-tasks") },
-    "all-tasks": { label: "All Tasks", path: rolePath("all-tasks") },
+    tasks: { label: t("Assigned To You", { defaultValue: "Assigned To You" }), path: rolePath("tasks") },
+    taskby: { label: t("Assigned By You", { defaultValue: "Assigned By You" }), path: rolePath("taskby") },
+    "self-tasks": { label: t("Self Tasks", { defaultValue: "Self Tasks" }), path: rolePath("self-tasks") },
+    "all-tasks": { label: t("All Tasks", { defaultValue: "All Tasks" }), path: rolePath("all-tasks") },
   };
   const isDeletingRef = useRef(false);
   const [task, setTask] = useState(null);
@@ -351,13 +359,13 @@ function TaskDetails() {
       } else if (res.status === 404) {
         setTask(null);
         if (!isDeletingRef.current) {
-          notify.error("This task has been deleted.");
+          notify.error(t("This task has been deleted.", { defaultValue: "This task has been deleted." }));
           setTimeout(() => navigate(rolePath("tasks")), 1500);
         }
       } else if (res.status === 403) {
         setTask(null);
         if (!isDeletingRef.current) {
-          notify.error("You don't have permission to view this task.");
+          notify.error(t("You don't have permission to view this task.", { defaultValue: "You don't have permission to view this task." }));
           setTimeout(() => navigate(rolePath("tasks")), 1500);
         }
       } else {
@@ -369,7 +377,7 @@ function TaskDetails() {
     } finally {
       setLoading(false);
     }
-  }, [taskId, navigate]);
+  }, [taskId, navigate, t, notify]);
 
   useEffect(() => {
     if (task?.followers) {
@@ -431,13 +439,13 @@ function TaskDetails() {
           const addedUser = (teamUsers.length ? teamUsers : (task?.project?.team?.members || [])).find((u) => parseInt(u.id, 10) === parseInt(userId, 10));
           if (addedUser) setFollowers((prev) => [...prev, addedUser]);
         }
-        toast.success("Follower added successfully");
+        toast.success(t("Follower added successfully", { defaultValue: "Follower added successfully" }));
         setFollowerDropdownOpen(false);
       } else {
-        toast.error(data.message || "Failed to add follower.");
+        toast.error(data.message || t("Failed to add follower.", { defaultValue: "Failed to add follower." }));
       }
     } catch {
-      toast.error("Failed to add follower.");
+      toast.error(t("Failed to add follower.", { defaultValue: "Failed to add follower." }));
     }
   };
 
@@ -459,12 +467,12 @@ function TaskDetails() {
         } else {
           setFollowers((prev) => prev.filter((f) => parseInt(f.id, 10) !== parseInt(userId, 10)));
         }
-        toast.success("Follower removed successfully");
+        toast.success(t("Follower removed successfully", { defaultValue: "Follower removed successfully" }));
       } else {
-        toast.error(data.message || "Failed to remove follower.");
+        toast.error(data.message || t("Failed to remove follower.", { defaultValue: "Failed to remove follower." }));
       }
     } catch {
-      toast.error("Failed to remove follower.");
+      toast.error(t("Failed to remove follower.", { defaultValue: "Failed to remove follower." }));
     }
   };
 
@@ -670,7 +678,7 @@ function TaskDetails() {
         setNoteInput("");
       }
     } catch {
-      notify.error("Could not save note.");
+      notify.error(t("Could not save note.", { defaultValue: "Could not save note." }));
     }
     setNoteSaving(false);
   };
@@ -689,7 +697,7 @@ function TaskDetails() {
         setNotes(data.notes || []);
       }
     } catch {
-      notify.error("Could not delete note.");
+      notify.error(t("Could not delete note.", { defaultValue: "Could not delete note." }));
     }
   };
 
@@ -740,10 +748,10 @@ function TaskDetails() {
         handleSubtaskActionSuccess(updated);
         showSuccessMessage("Subtask", "acknowledged");
       } else {
-        notify.error(data.message || "Failed to acknowledge subtask.");
+        notify.error(data.message || t("Failed to acknowledge subtask.", { defaultValue: "Failed to acknowledge subtask." }));
       }
     } catch {
-      notify.error("Failed to acknowledge subtask.");
+      notify.error(t("Failed to acknowledge subtask.", { defaultValue: "Failed to acknowledge subtask." }));
     }
     setActingSubtaskId(null);
   };
@@ -764,10 +772,10 @@ function TaskDetails() {
         handleSubtaskActionSuccess(updated);
         showSuccessMessage("Subtask", "paused");
       } else {
-        notify.error(data.message || "Failed to pause subtask.");
+        notify.error(data.message || t("Failed to pause subtask.", { defaultValue: "Failed to pause subtask." }));
       }
     } catch {
-      notify.error("Failed to pause subtask.");
+      notify.error(t("Failed to pause subtask.", { defaultValue: "Failed to pause subtask." }));
     }
     setActingSubtaskId(null);
   };
@@ -787,10 +795,10 @@ function TaskDetails() {
         handleSubtaskActionSuccess(updated);
         showSuccessMessage("Subtask", "resumed");
       } else {
-        notify.error(data.message || "Failed to resume subtask.");
+        notify.error(data.message || t("Failed to resume subtask.", { defaultValue: "Failed to resume subtask." }));
       }
     } catch {
-      notify.error("Failed to resume subtask.");
+      notify.error(t("Failed to resume subtask.", { defaultValue: "Failed to resume subtask." }));
     }
     setActingSubtaskId(null);
   };
@@ -810,10 +818,10 @@ function TaskDetails() {
         handleSubtaskActionSuccess(updated);
         showSuccessMessage("Subtask", "approved");
       } else {
-        notify.error(data.message || "Failed to approve subtask.");
+        notify.error(data.message || t("Failed to approve subtask.", { defaultValue: "Failed to approve subtask." }));
       }
     } catch {
-      notify.error("Failed to approve subtask.");
+      notify.error(t("Failed to approve subtask.", { defaultValue: "Failed to approve subtask." }));
     }
     setActingSubtaskId(null);
   };
@@ -833,10 +841,10 @@ function TaskDetails() {
         handleSubtaskActionSuccess(updated);
         showSuccessMessage("Subtask", "declined");
       } else {
-        notify.error(data.message || "Failed to decline subtask.");
+        notify.error(data.message || t("Failed to decline subtask.", { defaultValue: "Failed to decline subtask." }));
       }
     } catch {
-      notify.error("Failed to decline subtask.");
+      notify.error(t("Failed to decline subtask.", { defaultValue: "Failed to decline subtask." }));
     }
     setActingSubtaskId(null);
   };
@@ -856,10 +864,10 @@ function TaskDetails() {
         handleSubtaskActionSuccess(updated);
         showSuccessMessage("Subtask", "paused");
       } else {
-        notify.error(data.message || "Failed to pause subtask.");
+        notify.error(data.message || t("Failed to pause subtask.", { defaultValue: "Failed to pause subtask." }));
       }
     } catch {
-      notify.error("Failed to pause subtask.");
+      notify.error(t("Failed to pause subtask.", { defaultValue: "Failed to pause subtask." }));
     }
     setActingSubtaskId(null);
   };
@@ -879,10 +887,10 @@ function TaskDetails() {
         handleSubtaskActionSuccess(updated);
         showSuccessMessage("Subtask", "resumed");
       } else {
-        notify.error(data.message || "Failed to resume subtask.");
+        notify.error(data.message || t("Failed to resume subtask.", { defaultValue: "Failed to resume subtask." }));
       }
     } catch {
-      notify.error("Failed to resume subtask.");
+      notify.error(t("Failed to resume subtask.", { defaultValue: "Failed to resume subtask." }));
     }
     setActingSubtaskId(null);
   };
@@ -913,10 +921,10 @@ function TaskDetails() {
         showSuccessMessage("Subtask", "deleted");
       } else {
         const data = await res.json();
-        notify.error(data.message || "Failed to delete subtask.");
+        notify.error(data.message || t("Failed to delete subtask.", { defaultValue: "Failed to delete subtask." }));
       }
     } catch {
-      notify.error("Failed to delete subtask.");
+      notify.error(t("Failed to delete subtask.", { defaultValue: "Failed to delete subtask." }));
     }
     setActingSubtaskId(null);
   };
@@ -959,18 +967,18 @@ function TaskDetails() {
           _notifHandled: true,
         });
         if (res.ok) {
-          toast.success("Task deleted successfully");
+          toast.success(t("Task deleted successfully", { defaultValue: "Task deleted successfully" }));
           publish('task:deleted', { id: taskId });
           publish('data:changed', { type: 'task', action: 'deleted' });
           navigate(rolePath("tasks"), { replace: true });
         } else {
           isDeletingRef.current = false;
           const data = await res.json().catch(() => ({}));
-          toast.error(data.message || "Failed to delete task.");
+          toast.error(data.message || t("Failed to delete task.", { defaultValue: "Failed to delete task." }));
         }
       } catch {
         isDeletingRef.current = false;
-        toast.error("Failed to delete task.");
+        toast.error(t("Failed to delete task.", { defaultValue: "Failed to delete task." }));
       }
     });
   };
@@ -991,10 +999,10 @@ function TaskDetails() {
           publish('data:changed', { type: 'task', action: 'updated' });
           showSuccessMessage("Task", "acknowledged");
         } else {
-          notify.error(data.message || "Failed to acknowledge task.");
+          notify.error(data.message || t("Failed to acknowledge task.", { defaultValue: "Failed to acknowledge task." }));
         }
       } catch {
-        notify.error("Failed to acknowledge task.");
+        notify.error(t("Failed to acknowledge task.", { defaultValue: "Failed to acknowledge task." }));
       }
     });
   };
@@ -1010,13 +1018,13 @@ function TaskDetails() {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        notify.success("Transfer acknowledged and accepted");
-        loadTaskDetails();
+        notify.success(t("Transfer acknowledged and accepted", { defaultValue: "Transfer acknowledged and accepted" }));
+        fetchTask(true);
       } else {
-        notify.error(data.message || "Failed to acknowledge transfer");
+        notify.error(data.message || t("Failed to acknowledge transfer", { defaultValue: "Failed to acknowledge transfer" }));
       }
     } catch {
-      notify.error("Error acknowledging transfer");
+      notify.error(t("Error acknowledging transfer", { defaultValue: "Error acknowledging transfer" }));
     } finally {
       setTaskActing(false);
     }
@@ -1039,10 +1047,10 @@ function TaskDetails() {
           publish('data:changed', { type: 'task', action: 'updated' });
           showSuccessMessage("Task", "paused");
         } else {
-          notify.error(data.message || "Failed to pause task.");
+          notify.error(data.message || t("Failed to pause task.", { defaultValue: "Failed to pause task." }));
         }
       } catch {
-        notify.error("Failed to pause task.");
+        notify.error(t("Failed to pause task.", { defaultValue: "Failed to pause task." }));
       }
     });
   };
@@ -1063,10 +1071,10 @@ function TaskDetails() {
           publish('data:changed', { type: 'task', action: 'updated' });
           showSuccessMessage("Task", "resumed");
         } else {
-          notify.error(data.message || "Failed to continue task.");
+          notify.error(data.message || t("Failed to continue task.", { defaultValue: "Failed to continue task." }));
         }
       } catch {
-        notify.error("Failed to continue task.");
+        notify.error(t("Failed to continue task.", { defaultValue: "Failed to continue task." }));
       }
     });
   };
@@ -1088,10 +1096,10 @@ function TaskDetails() {
           publish('data:changed', { type: 'task', action: 'updated' });
           showSuccessMessage("Task", "paused");
         } else {
-          notify.error(data.message || "Failed to pause task.");
+          notify.error(data.message || t("Failed to pause task.", { defaultValue: "Failed to pause task." }));
         }
       } catch {
-        notify.error("Failed to pause task.");
+        notify.error(t("Failed to pause task.", { defaultValue: "Failed to pause task." }));
       }
     });
   };
@@ -1112,10 +1120,10 @@ function TaskDetails() {
           publish('data:changed', { type: 'task', action: 'updated' });
           showSuccessMessage("Task", "resumed by assigner");
         } else {
-          notify.error(data.message || "Failed to resume task.");
+          notify.error(data.message || t("Failed to resume task.", { defaultValue: "Failed to resume task." }));
         }
       } catch {
-        notify.error("Failed to resume task.");
+        notify.error(t("Failed to resume task.", { defaultValue: "Failed to resume task." }));
       }
     });
   };
@@ -1137,10 +1145,10 @@ function TaskDetails() {
           publish('data:changed', { type: 'task', action: 'updated' });
           showSuccessMessage("Delegation", "revoked");
         } else {
-          notify.error(data.message || "Failed to revoke delegation.");
+          notify.error(data.message || t("Failed to revoke delegation.", { defaultValue: "Failed to revoke delegation." }));
         }
       } catch {
-        notify.error("Failed to revoke delegation.");
+        notify.error(t("Failed to revoke delegation.", { defaultValue: "Failed to revoke delegation." }));
       }
     });
   };
@@ -1161,10 +1169,10 @@ function TaskDetails() {
           publish('data:changed', { type: 'task', action: 'updated' });
           showSuccessMessage("Task", "approved");
         } else {
-          notify.error(data.message || "Failed to approve task.");
+          notify.error(data.message || t("Failed to approve task.", { defaultValue: "Failed to approve task." }));
         }
       } catch {
-        notify.error("Failed to approve task.");
+        notify.error(t("Failed to approve task.", { defaultValue: "Failed to approve task." }));
       }
     });
   };
@@ -1187,10 +1195,10 @@ function TaskDetails() {
           publish('data:changed', { type: 'task', action: 'updated' });
           showSuccessMessage("Task", "abandoned");
         } else {
-          notify.error(data.message || "Failed to abandon task.");
+          notify.error(data.message || t("Failed to abandon task.", { defaultValue: "Failed to abandon task." }));
         }
       } catch {
-        notify.error("Failed to abandon task.");
+        notify.error(t("Failed to abandon task.", { defaultValue: "Failed to abandon task." }));
       }
     });
   };
@@ -1211,10 +1219,10 @@ function TaskDetails() {
           publish('data:changed', { type: 'task', action: 'updated' });
           showSuccessMessage("Task", "declined");
         } else {
-          notify.error(data.message || "Failed to decline task.");
+          notify.error(data.message || t("Failed to decline task.", { defaultValue: "Failed to decline task." }));
         }
       } catch {
-        notify.error("Failed to decline task.");
+        notify.error(t("Failed to decline task.", { defaultValue: "Failed to decline task." }));
       }
     });
   };
@@ -1246,10 +1254,10 @@ function TaskDetails() {
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage("Task", "reopened for revision");
       } else {
-        notify.error(data.message || "Failed to reopen task.");
+        notify.error(data.message || t("Failed to reopen task.", { defaultValue: "Failed to reopen task." }));
       }
     } catch {
-      notify.error("Failed to reopen task.");
+      notify.error(t("Failed to reopen task.", { defaultValue: "Failed to reopen task." }));
     }
     setTaskReopenDialog(false);
   };
@@ -1264,11 +1272,11 @@ function TaskDetails() {
         _notifHandled: true,
       });
       if (res.ok) { publish('task:updated', { id: taskId, status: newStatus }); publish('data:changed', { type: 'task', action: 'updated' }); setTask((p) => p ? { ...p, status: newStatus } : p); showSuccessMessage("Task", "status updated"); }
-    } catch { notify.error("Failed to update status."); }
+    } catch { notify.error(t("Failed to update status.", { defaultValue: "Failed to update status." })); }
   };
 
-  if (loading) return <DashboardLayout hideRightSidebar><div className="td-loading">Loading task...</div></DashboardLayout>;
-  if (!task) return <DashboardLayout hideRightSidebar><div className="td-loading td-error">This task has been deleted. Redirecting...</div></DashboardLayout>;
+  if (loading) return <DashboardLayout hideRightSidebar><div className="td-loading">{t("Loading task...", { defaultValue: "Loading task..." })}</div></DashboardLayout>;
+  if (!task) return <DashboardLayout hideRightSidebar><div className="td-loading td-error">{t("This task has been deleted. Redirecting...", { defaultValue: "This task has been deleted. Redirecting..." })}</div></DashboardLayout>;
 
   return (
     <>
@@ -1279,12 +1287,10 @@ function TaskDetails() {
             {/* ===== LEFT ===== */}
             <div className="td-main">
               <Breadcrumb items={[
-                { label: "Tasks", path: rolePath("tasks") },
+                { label: t("Tasks", { defaultValue: "Tasks" }), path: rolePath("tasks") },
                 ...(source ? [{ label: source.label, path: source.path }] : []),
                 { label: task.title },
               ]} />
-
-
 
               <div className="td-title-row">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
@@ -1295,9 +1301,9 @@ function TaskDetails() {
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 700, background: '#eff6ff', color: '#2563eb', whiteSpace: 'nowrap', flexShrink: 0 }}>
                       {task.business_id}
                       <button
-                        onClick={() => { navigator.clipboard.writeText(task.business_id); notify.success("Task ID copied!"); }}
+                        onClick={() => { navigator.clipboard.writeText(task.business_id); notify.success(t("Task ID copied!", { defaultValue: "Task ID copied!" })); }}
                         style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
-                        title="Copy Task ID"
+                        title={t("Copy Task ID", { defaultValue: "Copy Task ID" })}
                       >
                         <Copy size={13} color="#2563eb" />
                       </button>
@@ -1310,18 +1316,18 @@ function TaskDetails() {
                   {canEdit && (
                     <button className="td-btn-outline" onClick={() => setShowEditModal(true)}>
                       <Pencil size={15} strokeWidth={2.5} />
-                      Edit
+                      {t("Edit", { defaultValue: "Edit" })}
                     </button>
                   )}
                   {canDelete && (
                     <button className="td-btn-danger" onClick={handleDeleteTask} disabled={deleting} style={deleting ? { opacity: 0.6, cursor: "not-allowed" } : {}}>
-                      {deleting ? "Deleting..." : "Delete"}
+                      {deleting ? t("Deleting...", { defaultValue: "Deleting..." }) : t("Delete", { defaultValue: "Delete" })}
                     </button>
                   )}
                   {!readOnly && isAssignee && task?.allow_transfer === true && !["approved", "rejected", "pending", "submitted"].includes(task?.status) && task?.my_status !== "submitted" && !isTransferor && !task?.active_outgoing_delegation && !hasPendingDelegation && !isDelegatee && (
                     <button className="td-btn-outline" onClick={() => setTransferDialog(true)}>
                       <Users size={15} />
-                      Transfer
+                      {t("Transfer", { defaultValue: "Transfer" })}
                     </button>
                   )}
                   {hasPendingDelegation && (
@@ -1332,55 +1338,55 @@ function TaskDetails() {
                       style={{ backgroundColor: "var(--color-success)", borderColor: "var(--color-success)" }}
                     >
                       <CheckCircle2 size={15} />
-                      {taskActing ? "Acknowledging..." : "Acknowledge Transfer"}
+                      {taskActing ? t("Acknowledging...", { defaultValue: "Acknowledging..." }) : t("Acknowledge Transfer", { defaultValue: "Acknowledge Transfer" })}
                     </button>
                   )}
                   {canAcknowledge && !isTransferor && !task?.active_outgoing_delegation && !hasPendingDelegation && (
                     <button className="td-btn-primary" onClick={handleAcknowledge} disabled={acknowledging || isAssignerLocked} style={acknowledging || isAssignerLocked ? { opacity: 0.6, cursor: "not-allowed" } : {}}>
                       <CheckCircle2 size={15} />
-                      {acknowledging ? "Acknowledging..." : "Acknowledge"}
+                      {acknowledging ? t("Acknowledging...", { defaultValue: "Acknowledging..." }) : t("Acknowledge", { defaultValue: "Acknowledge" })}
                     </button>
                   )}
                   {canPause && (!isTransferor || transferorHasApproved) && !task?.active_outgoing_delegation && (
                     <button className="td-btn-primary" onClick={() => setPauseModalOpen(true)} disabled={pausing} style={{ backgroundColor: pausing ? "var(--text-muted)" : "var(--color-warning)", borderColor: pausing ? "var(--text-muted)" : "var(--color-warning)", opacity: pausing ? 0.7 : 1, cursor: pausing ? "not-allowed" : "pointer" }}>
                       <Pause size={15} />
-                      {pausing ? "Pausing..." : "Pause"}
+                      {pausing ? t("Pausing...", { defaultValue: "Pausing..." }) : t("Pause", { defaultValue: "Pause" })}
                     </button>
                   )}
                   {canContinue && (!isTransferor || transferorHasApproved) && !task?.active_outgoing_delegation && !hasPendingDelegation && (
                     <button className="td-btn-primary" onClick={handleContinue} disabled={continuing} style={continuing ? { opacity: 0.6, cursor: "not-allowed" } : {}}>
                       <Play size={15} />
-                      {continuing ? "Resuming..." : "Resume"}
+                      {continuing ? t("Resuming...", { defaultValue: "Resuming..." }) : t("Resume", { defaultValue: "Resume" })}
                     </button>
                   )}
                   {canAssignerPause && !isTransferor && !task?.active_outgoing_delegation && (
                     <button className="td-btn-primary" onClick={() => setAssignerPauseModalOpen(true)} disabled={assignerPausing} style={{ backgroundColor: assignerPausing ? "var(--text-muted)" : "var(--color-primary)", borderColor: assignerPausing ? "var(--text-muted)" : "var(--color-primary)", opacity: assignerPausing ? 0.7 : 1, cursor: assignerPausing ? "not-allowed" : "pointer" }}>
                       <Lock size={15} />
-                      {assignerPausing ? "Pausing..." : "Pause"}
+                      {assignerPausing ? t("Pausing...", { defaultValue: "Pausing..." }) : t("Pause", { defaultValue: "Pause" })}
                     </button>
                   )}
                   {canAssignerResume && !isTransferor && !task?.active_outgoing_delegation && (
                     <button className="td-btn-primary" onClick={handleAssignerResume} disabled={assignerResuming} style={{ backgroundColor: assignerResuming ? "var(--text-muted)" : "var(--color-success)", borderColor: assignerResuming ? "var(--text-muted)" : "var(--color-success)", opacity: assignerResuming ? 0.7 : 1, cursor: assignerResuming ? "not-allowed" : "pointer" }}>
                       <Play size={15} />
-                      {assignerResuming ? "Resuming..." : "Resume"}
+                      {assignerResuming ? t("Resuming...", { defaultValue: "Resuming..." }) : t("Resume", { defaultValue: "Resume" })}
                     </button>
                   )}
                   {isAssignerLocked && !isCreator && (
                     <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 14px", borderRadius: "6px", backgroundColor: "var(--color-warning-bg)", color: "var(--color-warning)", fontSize: "13px", fontWeight: 600, border: "1px solid var(--color-warning)" }}>
                       <Lock size={14} />
-                      Paused by Assigner
+                      {t("Paused by Assigner", { defaultValue: "Paused by Assigner" })}
                     </span>
                   )}
                   {canSubmitTask && !task?.active_outgoing_delegation && !hasPendingDelegation && (
                     <button
                       className="td-btn-primary"
                       disabled={task?.status === "paused" || isAssignerLocked}
-                      title={isAssignerLocked ? "Task is paused by the assigner" : task?.status === "paused" ? "Continue the task first to submit" : ""}
+                      title={isAssignerLocked ? t("Task is paused by the assigner", { defaultValue: "Task is paused by the assigner" }) : task?.status === "paused" ? t("Continue the task first to submit", { defaultValue: "Continue the task first to submit" }) : ""}
                       onClick={() => !isAssignerLocked && setTaskSubmitModalOpen(true)}
                       style={task?.status === "paused" || isAssignerLocked ? { opacity: 0.5, cursor: "not-allowed" } : {}}
                     >
                       <LuSend size={15} />
-                      {task.status === "reopened" ? "Resubmit Task" : "Submit Task"}
+                      {task.status === "reopened" ? t("Resubmit Task", { defaultValue: "Resubmit Task" }) : t("Submit Task", { defaultValue: "Submit Task" })}
                     </button>
                   )}
                   {canApprove && (task?.status === "submitted" || task?.status === "reopened") && (
@@ -1391,7 +1397,7 @@ function TaskDetails() {
                       onClick={handleTaskApprove}
                     >
                       <CheckCircle2 size={15} />
-                      {approvingTask ? "Approving..." : "Approve Task"}
+                      {approvingTask ? t("Approving...", { defaultValue: "Approving..." }) : t("Approve Task", { defaultValue: "Approve Task" })}
                     </button>
                   )}
                   {canApprove && (task?.status === "approved" || task?.status === "abandoned") && (
@@ -1401,7 +1407,7 @@ function TaskDetails() {
                       onClick={() => setTaskReopenDialog(true)}
                     >
                       <RotateCcw size={15} />
-                      Reopen Task
+                      {t("Reopen Task", { defaultValue: "Reopen Task" })}
                     </button>
                   )}
                   {canApprove && task?.status !== "abandoned" && task?.status !== "approved" && (
@@ -1411,14 +1417,14 @@ function TaskDetails() {
                       onClick={() => setAbandonModalOpen(true)}
                     >
                       <Trash2 size={15} />
-                      Abandon Task
+                      {t("Abandon Task", { defaultValue: "Abandon Task" })}
                     </button>
                   )}
                   {task && (
                     <button
                       className="td-btn-secondary"
                       onClick={() => togglePinTask(task)}
-                      title={isPinned ? "Unpin from Dashboard" : "Pin to Dashboard"}
+                      title={isPinned ? t("Unpin from Dashboard", { defaultValue: "Unpin from Dashboard" }) : t("Pin to Dashboard", { defaultValue: "Pin to Dashboard" })}
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
@@ -1434,23 +1440,23 @@ function TaskDetails() {
                       }}
                     >
                       <Pin size={15} style={{ fill: isPinned ? "currentColor" : "none" }} />
-                      {isPinned ? "Pinned to Dashboard" : "Pin to Dashboard"}
+                      {isPinned ? t("Pinned to Dashboard", { defaultValue: "Pinned to Dashboard" }) : t("Pin to Dashboard", { defaultValue: "Pin to Dashboard" })}
                     </button>
                   )}
                   {isTransferor && task?.status === "submitted" && !transferorHasApproved && (
                     <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 14px", borderRadius: "6px", backgroundColor: "#EFF6FF", color: "#1D4ED8", fontSize: "13px", fontWeight: 600 }}>
-                      Transferred
+                      {t("Transferred", { defaultValue: "Transferred" })}
                     </span>
                   )}
                   {!transferorHasApproved && (isTransferor || task?.active_outgoing_delegation) && !(isTransferor && transferorReturnToSelf && task?.status === "submitted") && (
                     <>
                       <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 14px", borderRadius: "6px", backgroundColor: "#EFF6FF", color: "#1D4ED8", fontSize: "13px", fontWeight: 600 }}>
-                        Transferred
+                        {t("Transferred", { defaultValue: "Transferred" })}
                       </span>
                       {task?.can_revoke_delegation && task?.active_outgoing_delegation_id && (
                         <button className="td-btn-danger" onClick={handleRevokeDelegation} disabled={revoking}>
                           <Trash2 size={15} />
-                          {revoking ? "Revoking..." : "Revoke"}
+                          {revoking ? t("Revoking...", { defaultValue: "Revoking..." }) : t("Revoke", { defaultValue: "Revoke" })}
                         </button>
                       )}
                     </>
@@ -1461,30 +1467,30 @@ function TaskDetails() {
               <div className="td-badges">
                 <span className="td-badge" style={{ background: statusBgColor(task?.status), color: statusColor(task?.status) }}>
                   <span className="td-badge-dot" style={{ background: statusColor(task?.status) }} />
-                  {statusLabel(task?.status || "Pending")}
+                  {statusLabel(task?.status || "Pending", t)}
                 </span>
                 {Array.isArray(task?.states) && task.states.map((st, idx) => (
                   <span key={idx} className="td-badge" style={{ background: "#EDE9FE", color: "#6D28D9", border: "1px solid #DDD6FE" }}>
                     <span className="td-badge-dot" style={{ background: "#6D28D9" }} />
-                    {st}
+                    {t(st, { defaultValue: st })}
                   </span>
                 ))}
                 {task?.priority && (
                   <span className="td-badge" style={{ background: priorityBgColor(task.priority), color: priorityColor(task.priority) }}>
                     <span className="td-badge-dot" style={{ background: priorityColor(task.priority) }} />
-                    {task.priority} Priority
+                    {t("{{priority}} Priority", { priority: t(task.priority, { defaultValue: task.priority }), defaultValue: `${task.priority} Priority` })}
                   </span>
                 )}
                 <span className="td-badge" style={{ background: task?.allow_transfer ? "#f0fdf4" : "#fef2f2", color: task?.allow_transfer ? "#16a34a" : "#dc2626" }}>
                   <span className="td-badge-dot" style={{ background: task?.allow_transfer ? "#16a34a" : "#dc2626" }} />
-                  {task?.allow_transfer ? "Transfer Allowed" : "Transfer Not Allowed"}
+                  {task?.allow_transfer ? t("Transfer Allowed", { defaultValue: "Transfer Allowed" }) : t("Transfer Not Allowed", { defaultValue: "Transfer Not Allowed" })}
                 </span>
               </div>
 
               {/* STATS */}
               <div className="td-stats">
                 <div className="td-stat td-stat--progress">
-                  <span className="td-stat-label">Overall Progress</span>
+                  <span className="td-stat-label">{t("Overall Progress", { defaultValue: "Overall Progress" })}</span>
                   <div className="td-progress"><span style={{ width: `${progress}%` }} /></div>
                   <span className="td-stat-big">{progress}%</span>
                 </div>
@@ -1493,14 +1499,14 @@ function TaskDetails() {
                     <div className="td-stat-ic td-stat-ic--orange"><FolderOpen size={18} /></div>
                     <div>
                       <span className="td-stat-big">{files.length}</span>
-                      <span className="td-stat-label">Attachments</span>
+                      <span className="td-stat-label">{t("Attachments", { defaultValue: "Attachments" })}</span>
                     </div>
                   </div>
                   <div className="td-trio-item">
                     <div className="td-stat-ic td-stat-ic--green"><Calendar size={18} /></div>
                     <div>
                       <span className="td-stat-big td-stat-big--sm">{formatDateTimeShort(task.end_date)}</span>
-                      <span className="td-stat-label">Deadline</span>
+                      <span className="td-stat-label">{t("Deadline", { defaultValue: "Deadline" })}</span>
                     </div>
                   </div>
                 </div>
@@ -1532,20 +1538,20 @@ function TaskDetails() {
                 {/* Heading based on source page */}
                 <div style={{ marginBottom: "16px", marginTop: "4px", paddingLeft: "4px" }}>
                   <h2 style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-heading)", margin: 0 }}>
-                    {location.state?.from === "taskby" && "Assigned by You"}
-                    {location.state?.from === "tasks" && "Assigned to You"}
-                    {location.state?.from === "self-tasks" && "Self Tasks"}
-                    {location.state?.from === "all-tasks" && "All Tasks"}
+                    {location.state?.from === "taskby" && t("Assigned by You", { defaultValue: "Assigned by You" })}
+                    {location.state?.from === "tasks" && t("Assigned to You", { defaultValue: "Assigned to You" })}
+                    {location.state?.from === "self-tasks" && t("Self Tasks", { defaultValue: "Self Tasks" })}
+                    {location.state?.from === "all-tasks" && t("All Tasks", { defaultValue: "All Tasks" })}
                   </h2>
                 </div>
                 {/* TABS */}
                 <div className="td-tabs">
                   {[
-                    { id: "overview", label: "Overview", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg> },
-                    { id: "subtasks", label: "Subtasks", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg> },
-                    { id: "files", label: "Platform files & links", icon: <FolderOpen size={16} /> },
-                    { id: "access", label: "Access", icon: <Shield size={16} /> },
-                    { id: "activity", label: "Activity", icon: <Activity size={16} /> },
+                    { id: "overview", label: t("Overview", { defaultValue: "Overview" }), icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg> },
+                    { id: "subtasks", label: t("Subtasks", { defaultValue: "Subtasks" }), icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg> },
+                    { id: "files", label: t("Platform files & links", { defaultValue: "Platform files & links" }), icon: <FolderOpen size={16} /> },
+                    { id: "access", label: t("Access", { defaultValue: "Access" }), icon: <Shield size={16} /> },
+                    { id: "activity", label: t("Activity", { defaultValue: "Activity" }), icon: <Activity size={16} /> },
                   ].filter((t) => currentUser?.role !== "guest" || t.id !== "subtasks").map(({ id, label, icon }) => (
                     <button key={id} className={`td-tab ${tab === id ? "td-tab--on" : ""}`} onClick={() => setTab(id)}>
                       {icon}
@@ -1558,11 +1564,11 @@ function TaskDetails() {
                   {tab === "overview" && (
                     <div className="td-overview">
                       <div className="td-section-header">
-                        <h2 className="td-section-title">Task Details</h2>
+                        <h2 className="td-section-title">{t("Task Details", { defaultValue: "Task Details" })}</h2>
                         {Array.isArray(task.requirements) && task.requirements.length > 0 && (
                           <div className="pd-files-search" >
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                            <input type="text" placeholder="Search by requirement text..." value={overviewSearch} onChange={(e) => setOverviewSearch(e.target.value)} />
+                            <input type="text" placeholder={t("Search by requirement text...", { defaultValue: "Search by requirement text..." })} value={overviewSearch} onChange={(e) => setOverviewSearch(e.target.value)} />
                           </div>
                         )}
                       </div>
@@ -1571,11 +1577,11 @@ function TaskDetails() {
                           <div
                             className="rte-display"
                             dangerouslySetInnerHTML={{
-                              __html: task.description || "No description provided for this task.",
+                              __html: task.description || t("No description provided for this task.", { defaultValue: "No description provided for this task." }),
                             }}
                           />
                           <div className="td-reqs">
-                            <h3>Requirements</h3>
+                            <h3>{t("Requirements", { defaultValue: "Requirements" })}</h3>
                             {(() => {
                               const allReqs = Array.isArray(task.requirements) ? task.requirements : [];
                               const filteredReqs = overviewSearch ? allReqs.filter((r) => r.toLowerCase().includes(overviewSearch.toLowerCase())) : allReqs;
@@ -1586,7 +1592,7 @@ function TaskDetails() {
                                   ))}
                                 </ul>
                               ) : (
-                                <p style={{ color: "var(--text-secondary)", fontSize: "14px" }}>{overviewSearch ? "No requirements match your search." : "No requirements added."}</p>
+                                <p style={{ color: "var(--text-secondary)", fontSize: "14px" }}>{overviewSearch ? t("No requirements match your search.", { defaultValue: "No requirements match your search." }) : t("No requirements added.", { defaultValue: "No requirements added." })}</p>
                               );
                             })()}
                           </div>
@@ -1601,17 +1607,17 @@ function TaskDetails() {
                   {tab === "subtasks" && currentUser?.role !== "guest" && (
                     <div>
                       <div className="td-section-header">
-                        <h2 className="td-section-title">Subtasks <span className="td-section-count">({(() => { const all = orderedSubtasks.length ? orderedSubtasks : (task.deliverables || []); const filtered = subtaskSearch ? all.filter((d) => { const q = subtaskSearch.toLowerCase(); return (d.title || "").toLowerCase().includes(q) || (d.description || "").toLowerCase().includes(q); }) : all; return filtered.length; })()})</span></h2>
+                        <h2 className="td-section-title">{t("Subtasks", { defaultValue: "Subtasks" })} <span className="td-section-count">({(() => { const all = orderedSubtasks.length ? orderedSubtasks : (task.deliverables || []); const filtered = subtaskSearch ? all.filter((d) => { const q = subtaskSearch.toLowerCase(); return (d.title || "").toLowerCase().includes(q) || (d.description || "").toLowerCase().includes(q); }) : all; return filtered.length; })()})</span></h2>
                         <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                          <input type="text" placeholder="Search subtasks..." value={subtaskSearch} onChange={(e) => setSubtaskSearch(e.target.value)} />
+                          <input type="text" placeholder={t("Search subtasks...", { defaultValue: "Search subtasks..." })} value={subtaskSearch} onChange={(e) => setSubtaskSearch(e.target.value)} />
                         </div>
                         {!readOnly && isCreator && (
                           <button
                             onClick={() => setShowCreateSubtaskModal(true)}
                             style={{ marginLeft: 12, display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", background: "var(--color-primary)", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap" }}
                           >
-                            <Plus size={15} /> Create Subtask
+                            <Plus size={15} /> {t("Create Subtask", { defaultValue: "Create Subtask" })}
                           </button>
                         )}
                       </div>
@@ -1622,16 +1628,16 @@ function TaskDetails() {
                           return (d.title || "").toLowerCase().includes(q) || (d.description || "").toLowerCase().includes(q);
                         }) : allSubtasks;
                         return subtasksSearch.length === 0 ? (
-                          <p className="td-empty">{subtaskSearch ? "No subtasks match your search." : "No subtasks linked to this task."}</p>
+                          <p className="td-empty">{subtaskSearch ? t("No subtasks match your search.", { defaultValue: "No subtasks match your search." }) : t("No subtasks linked to this task.", { defaultValue: "No subtasks linked to this task." })}</p>
                         ) : (
                           <div className="pd-table-wrap">
                             <div className="deliveries-table-header" style={{ gridTemplateColumns: "80px 2fr 1.2fr 110px 130px 50px", alignItems: "center" }}>
-                              <div>ID</div>
-                              <div>Subtask</div>
-                              <div>{isCreator ? "Assigned To" : "Assigned By"}</div>
-                              <div>Status</div>
-                              <div>Start & Due Date</div>
-                              <div>Action</div>
+                              <div>{t("ID", { defaultValue: "ID" })}</div>
+                              <div>{t("Subtask", { defaultValue: "Subtask" })}</div>
+                              <div>{isCreator ? t("Assigned To", { defaultValue: "Assigned To" }) : t("Assigned By", { defaultValue: "Assigned By" })}</div>
+                              <div>{t("Status", { defaultValue: "Status" })}</div>
+                              <div>{t("Start & Due Date", { defaultValue: "Start & Due Date" })}</div>
+                              <div>{t("Action", { defaultValue: "Action" })}</div>
                             </div>
                               <SortableTableWrapper
                                 items={subtasksSearch}
@@ -1659,7 +1665,7 @@ function TaskDetails() {
                                 <div>
                                   <span className="badge" style={{ background: statusBgColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), color: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), fontSize: 12, padding: "4px 10px", borderRadius: 999 }}>
                                     <span className="dot" style={{ background: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) }} />
-                                    {statusLabel(d.status)}
+                                    {statusLabel(d.status, t)}
                                   </span>
                                 </div>
                                  <div>
@@ -1668,7 +1674,7 @@ function TaskDetails() {
                                 <div className="action-btns">
                                   <ActionPopover
                                     trigger={
-                                      <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
+                                      <button className="action-icon-btn action-view action-trigger-lg" title={t("Actions", { defaultValue: "Actions" })}>
                                         <IoEyeOutline size={20} />
                                       </button>
                                     }
@@ -1679,38 +1685,38 @@ function TaskDetails() {
                                       navigate(rolePath(`deliveries/deliverable-details/${d.id}`), { state: { from: subtaskFrom, subtaskIds: deliverableIds, readOnly: isGuest } });
                                     }}
                                   >
-                                    <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: d.id })}>
+                                    <button className="action-icon-btn action-note" title={t("Add Note", { defaultValue: "Add Note" })} onClick={() => setNoteModal({ open: true, itemId: d.id })}>
                                       <StickyNote size={14} />
                                     </button>
                                     {isCreator ? (
                                       <>
                                         {d.status?.toLowerCase() !== "approved" && (
-                                          <button className="action-icon-btn action-edit" title="Edit Subtask">
+                                          <button className="action-icon-btn action-edit" title={t("Edit Subtask", { defaultValue: "Edit Subtask" })}>
                                             <Pencil size={16} />
                                           </button>
                                         )}
                                         <button
                                           className="action-icon-btn action-delete"
-                                          title="Delete Subtask"
+                                          title={t("Delete Subtask", { defaultValue: "Delete Subtask" })}
                                           disabled={actingSubtaskId === d.id}
                                           onClick={() => handleSubtaskDelete(d.id)}
                                         >
                                           <Trash2 size={16} />
                                         </button>
                                         {d.status === "submitted" && (
-                                          <button className="action-icon-btn action-submit" title="Approve" disabled={actingSubtaskId === d.id} onClick={() => handleSubtaskApprove(d.id)} style={{ color: "#16A34A" }}>
+                                          <button className="action-icon-btn action-submit" title={t("Approve", { defaultValue: "Approve" })} disabled={actingSubtaskId === d.id} onClick={() => handleSubtaskApprove(d.id)} style={{ color: "#16A34A" }}>
                                             <CheckCircle2 size={16} />
                                           </button>
                                         )}
                                         {d.status === "submitted" && (
-                                          <button className="action-icon-btn action-submit" title="Decline" disabled={actingSubtaskId === d.id} onClick={() => handleSubtaskReject(d.id)} style={{ color: "#DC2626" }}>
+                                          <button className="action-icon-btn action-submit" title={t("Decline", { defaultValue: "Decline" })} disabled={actingSubtaskId === d.id} onClick={() => handleSubtaskReject(d.id)} style={{ color: "#DC2626" }}>
                                             <XCircle size={16} />
                                           </button>
                                         )}
                                         {["pending", "in_progress", "reopened", "paused", "submitted"].includes(d.status) && !d.assigner_paused && (
                                           <button
                                             className="action-icon-btn"
-                                            title="Pause"
+                                            title={t("Pause", { defaultValue: "Pause" })}
                                             disabled={actingSubtaskId === d.id}
                                             onClick={() => handleSubtaskAssignerPause(d.id)}
                                             style={{ color: "#7C3AED", cursor: actingSubtaskId === d.id ? "not-allowed" : "pointer" }}
@@ -1721,7 +1727,7 @@ function TaskDetails() {
                                         {d.assigner_paused && (
                                           <button
                                             className="action-icon-btn"
-                                            title="Resume"
+                                            title={t("Resume", { defaultValue: "Resume" })}
                                             disabled={actingSubtaskId === d.id}
                                             onClick={() => handleSubtaskAssignerResume(d.id)}
                                             style={{ color: "#059669", cursor: actingSubtaskId === d.id ? "not-allowed" : "pointer" }}
@@ -1735,28 +1741,28 @@ function TaskDetails() {
                                         {d.assigner_paused && (
                                           <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#92400E", fontSize: "11px", fontWeight: 600, border: "1px solid #F59E0B" }}>
                                             <Lock size={12} />
-                                            Paused by Assigner
+                                            {t("Paused by Assigner", { defaultValue: "Paused by Assigner" })}
                                           </span>
                                         )}
                                         {!d.assigner_paused && d.status === "pending" && (
-                                          <button className="action-icon-btn action-submit" title="Acknowledge" disabled={actingSubtaskId === d.id} onClick={() => handleSubtaskAcknowledge(d.id)}>
+                                          <button className="action-icon-btn action-submit" title={t("Acknowledge", { defaultValue: "Acknowledge" })} disabled={actingSubtaskId === d.id} onClick={() => handleSubtaskAcknowledge(d.id)}>
                                             <CheckCircle2 size={16} />
                                           </button>
                                         )}
                                         {!d.assigner_paused && ["in_progress", "submitted"].includes(d.status) && (
-                                          <button className="action-icon-btn action-submit" title="Pause" disabled={actingSubtaskId === d.id} onClick={() => handleSubtaskPause(d.id)} style={{ color: "#D97706" }}>
+                                          <button className="action-icon-btn action-submit" title={t("Pause", { defaultValue: "Pause" })} disabled={actingSubtaskId === d.id} onClick={() => handleSubtaskPause(d.id)} style={{ color: "#D97706" }}>
                                             <Pause size={16} />
                                           </button>
                                         )}
                                         {!d.assigner_paused && d.status === "paused" && (
-                                          <button className="action-icon-btn action-submit" title="Resume" disabled={actingSubtaskId === d.id} onClick={() => handleSubtaskResume(d.id)} style={{ color: "#059669" }}>
+                                          <button className="action-icon-btn action-submit" title={t("Resume", { defaultValue: "Resume" })} disabled={actingSubtaskId === d.id} onClick={() => handleSubtaskResume(d.id)} style={{ color: "#059669" }}>
                                             <Play size={16} />
                                           </button>
                                         )}
                                         {(d.status === "pending" || d.status === "rejected" || d.status === "reopened") && (
                                           <button
                                             className="action-icon-btn action-submit"
-                                            title={task?.status === "paused" ? "Task is paused. Resume the task first." : task?.assigner_paused ? "Task is paused by assigner." : "Submit"}
+                                            title={task?.status === "paused" ? t("Task is paused. Resume the task first.", { defaultValue: "Task is paused. Resume the task first." }) : task?.assigner_paused ? t("Task is paused by assigner.", { defaultValue: "Task is paused by assigner." }) : t("Submit", { defaultValue: "Submit" })}
                                             disabled={task?.status === "paused" || task?.assigner_paused}
                                             onClick={() => setSubmitModal({ open: true, subtask: d })}
                                             style={task?.status === "paused" || task?.assigner_paused ? { opacity: 0.4, cursor: "not-allowed" } : {}}
@@ -1782,21 +1788,21 @@ function TaskDetails() {
                   {tab === "access" && (
                     <div className="td-access-section">
                       <div className="td-section-header">
-                        <h2 className="td-section-title">Task Access Credentials</h2>
+                        <h2 className="td-section-title">{t("Task Access Credentials", { defaultValue: "Task Access Credentials" })}</h2>
                         <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                          <input type="text" placeholder="Search by credential name, URL, or username..." value={accessSearch} onChange={(e) => setAccessSearch(e.target.value)} />
+                          <input type="text" placeholder={t("Search by credential name, URL, or username...", { defaultValue: "Search by credential name, URL, or username..." })} value={accessSearch} onChange={(e) => setAccessSearch(e.target.value)} />
                         </div>
                         {!readOnly && isCreator && (
                           <button className="td-access-add-btn" onClick={() => setShowAddAccessModal(true)}>
-                            <Plus size={16} /> Add Access
+                            <Plus size={16} /> {t("Add Access", { defaultValue: "Add Access" })}
                           </button>
                         )}
                       </div>
                       {loadingCredentials ? (
-                        <p className="td-muted">Loading credentials...</p>
+                        <p className="td-muted">{t("Loading credentials...", { defaultValue: "Loading credentials..." })}</p>
                       ) : accessCredentials.length === 0 ? (
-                        <p className="td-muted">No access credentials added yet. Click "Add Access" to store login details.</p>
+                        <p className="td-muted">{t('No access credentials added yet. Click "Add Access" to store login details.', { defaultValue: 'No access credentials added yet. Click "Add Access" to store login details.' })}</p>
                       ) : (
                         <div className="td-credentials-list">
                           {accessCredentials.filter((cred) => {
@@ -1817,7 +1823,7 @@ function TaskDetails() {
                             const q = accessSearch.toLowerCase();
                             return (cred.name || "").toLowerCase().includes(q) || (cred.url || "").toLowerCase().includes(q) || (cred.username || "").toLowerCase().includes(q);
                           }).length === 0 && (
-                            <p className="td-muted" style={{ textAlign: "center" }}>No credentials match your search.</p>
+                            <p className="td-muted" style={{ textAlign: "center" }}>{t("No credentials match your search.", { defaultValue: "No credentials match your search." })}</p>
                           )}
                         </div>
                       )}
@@ -1850,7 +1856,7 @@ function TaskDetails() {
               <div className="td-card">
                 <h3 className="td-card-title" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <Timer size={16} />
-                  {timerState === 'completed' ? 'Time Summary' : 'Work Duration'}
+                  {timerState === 'completed' ? t('Time Summary', { defaultValue: 'Time Summary' }) : t('Work Duration', { defaultValue: 'Work Duration' })}
                 </h3>
                 <div className="td-timer-display">
                   <span className={`td-timer-value ${timerState === 'running' ? 'td-timer-running' : ''} ${timerState === 'completed' ? 'td-timer-completed' : ''}`}>
@@ -1863,24 +1869,24 @@ function TaskDetails() {
 
                 <div className="td-timer-metrics">
                   <div className="td-timer-metric">
-                    <span className="td-timer-metric-label">Elapsed</span>
+                    <span className="td-timer-metric-label">{t("Elapsed", { defaultValue: "Elapsed" })}</span>
                     <span className="td-timer-metric-value">{elapsedDisplay}</span>
                   </div>
                   <div className="td-timer-metric">
-                    <span className="td-timer-metric-label">Pauses</span>
+                    <span className="td-timer-metric-label">{t("Pauses", { defaultValue: "Pauses" })}</span>
                     <span className="td-timer-metric-value">{pauseCount} ({pauseDisplay})</span>
                   </div>
                   <div className="td-timer-metric">
-                    <span className="td-timer-metric-label">Resumes</span>
+                    <span className="td-timer-metric-label">{t("Resumes", { defaultValue: "Resumes" })}</span>
                     <span className="td-timer-metric-value">{task?.timer?.resume_count || 0}</span>
                   </div>
                 </div>
 
                 {task?.timer?.work_started_at && (
                   <div className="td-timer-meta">
-                    <span>Started: {formatDateTime(task.timer.work_started_at)}</span>
+                    <span>{t("Started: {{time}}", { time: formatDateTime(task.timer.work_started_at), defaultValue: `Started: ${formatDateTime(task.timer.work_started_at)}` })}</span>
                     {task?.timer?.work_completed_at && (
-                      <span>Finished: {formatDateTime(task.timer.work_completed_at)}</span>
+                      <span>{t("Finished: {{time}}", { time: formatDateTime(task.timer.work_completed_at), defaultValue: `Finished: ${formatDateTime(task.timer.work_completed_at)}` })}</span>
                     )}
                   </div>
                 )}
@@ -1888,12 +1894,12 @@ function TaskDetails() {
             )}
 
             <div className="td-card">
-              <h3 className="td-card-title">Task Information</h3>
+              <h3 className="td-card-title">{t("Task Information", { defaultValue: "Task Information" })}</h3>
               <ul className="td-info">
                 <li>
                   <span className="td-dot" style={{ background: "var(--color-blue-text)" }} />
                   <div>
-                    <span className="td-info-label">Project</span>
+                    <span className="td-info-label">{t("Project", { defaultValue: "Project" })}</span>
                     <span className="td-info-val">
                       {project ? (
                         <Link to={rolePath(`projects/project-details/${project.id}`)} className="td-project-link">
@@ -1906,14 +1912,14 @@ function TaskDetails() {
                 <li>
                   <span className="td-dot" style={{ background: "var(--color-orange-text)" }} />
                   <div>
-                    <span className="td-info-label">Created By</span>
+                    <span className="td-info-label">{t("Created By", { defaultValue: "Created By" })}</span>
                     <span className="td-info-val">{assigner?.name || "—"}</span>
                   </div>
                 </li>
                 <li>
                   <span className="td-dot" style={{ background: "var(--color-primary)" }} />
                   <div>
-                    <span className="td-info-label">Assigned To</span>
+                    <span className="td-info-label">{t("Assigned To", { defaultValue: "Assigned To" })}</span>
                     <span className="td-info-val" style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                       {assignees.length > 0 ? assignees.map((a) => (
                         <span key={a.id} style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
@@ -1932,7 +1938,7 @@ function TaskDetails() {
                   <span className="td-dot" style={{ background: "#8b5cf6" }} />
                   <div style={{ width: "100%" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                      <span className="td-info-label">Followers</span>
+                      <span className="td-info-label">{t("Followers", { defaultValue: "Followers" })}</span>
                       {!readOnly && (isAdminOrManager || isCreator || isAssignee) && (
                         <button
                           type="button"
@@ -1950,7 +1956,7 @@ function TaskDetails() {
                             gap: "2px",
                           }}
                         >
-                          + Add Follower
+                          {t("+ Add Follower", { defaultValue: "+ Add Follower" })}
                         </button>
                       )}
                     </div>
@@ -1977,7 +1983,7 @@ function TaskDetails() {
                         <div style={{ padding: "8px", borderBottom: "1px solid #f3f4f6" }}>
                           <input
                             type="text"
-                            placeholder="Search users..."
+                            placeholder={t("Search users...", { defaultValue: "Search users..." })}
                             value={followerSearch}
                             onChange={(e) => setFollowerSearch(e.target.value)}
                             autoFocus
@@ -2043,7 +2049,7 @@ function TaskDetails() {
                             ))
                           ) : (
                             <div style={{ padding: "8px 12px", fontSize: "12px", color: "#9ca3af", textAlign: "center" }}>
-                              No users available
+                              {t("No users available", { defaultValue: "No users available" })}
                             </div>
                           )}
                         </div>
@@ -2095,7 +2101,7 @@ function TaskDetails() {
                               <button
                                 type="button"
                                 onClick={() => handleRemoveFollower(f.id)}
-                                title="Remove follower"
+                                title={t("Remove follower", { defaultValue: "Remove follower" })}
                                 style={{
                                   background: "none",
                                   border: "none",
@@ -2114,7 +2120,7 @@ function TaskDetails() {
                           </span>
                         ))
                       ) : (
-                        <span className="td-info-val" style={{ color: "var(--text-muted, #9ca3af)", fontSize: "13px" }}>No followers yet</span>
+                        <span className="td-info-val" style={{ color: "var(--text-muted, #9ca3af)", fontSize: "13px" }}>{t("No followers yet", { defaultValue: "No followers yet" })}</span>
                       )}
                     </div>
                   </div>
@@ -2122,21 +2128,21 @@ function TaskDetails() {
                 <li>
                   <span className="td-dot" style={{ background: "var(--color-success)" }} />
                   <div>
-                    <span className="td-info-label">Last Updated</span>
-                    <span className="td-info-val">{task.updated_at ? timeAgo(task.updated_at) : "—"}</span>
+                    <span className="td-info-label">{t("Last Updated", { defaultValue: "Last Updated" })}</span>
+                    <span className="td-info-val">{task.updated_at ? timeAgo(task.updated_at, t) : "—"}</span>
                   </div>
                 </li>
                 <li>
                   <span className="td-dot" style={{ background: "var(--color-blue-text)" }} />
                   <div>
-                    <span className="td-info-label">Start Date</span>
+                    <span className="td-info-label">{t("Start Date", { defaultValue: "Start Date" })}</span>
                     <span className="td-info-val">{task.start_date ? formatDateTime(task.start_date) : "—"}</span>
                   </div>
                 </li>
                 <li>
                   <span className="td-dot" style={{ background: "var(--color-danger)" }} />
                   <div>
-                    <span className="td-info-label">Due Date</span>
+                    <span className="td-info-label">{t("Due Date", { defaultValue: "Due Date" })}</span>
                     <span className="td-info-val">{task.end_date ? formatDateTime(task.end_date) : "—"}</span>
                   </div>
                 </li>
@@ -2145,23 +2151,23 @@ function TaskDetails() {
 
             <div className="td-card">
               <div className="td-card-head">
-                <h3 className="td-card-title">Notes</h3>
+                <h3 className="td-card-title">{t("Notes", { defaultValue: "Notes" })}</h3>
               </div>
               <textarea
                 className="td-notes-textarea"
                 rows={3}
-                placeholder="Write a note..."
+                placeholder={t("Write a note...", { defaultValue: "Write a note..." })}
                 value={noteInput}
                 onChange={(e) => setNoteInput(e.target.value)}
               />
               <button type="button" className="td-save-notes-btn" disabled={noteSaving || !noteInput.trim()} onClick={saveNote}>
-                {noteSaving ? "Saving…" : "Add Note"}
+                {noteSaving ? t("Saving…", { defaultValue: "Saving…" }) : t("Add Note", { defaultValue: "Add Note" })}
               </button>
               {notes.length > 0 && (
                 <div className="td-notes-list">
                   {notes.map((n) => (
                     <div key={n.id} className="td-saved-note">
-                       <button type="button" className="td-note-delete" onClick={() => { setPendingNoteId(n.id); setNoteDeleteOpen(true); }} title="Delete note">&times;</button>
+                       <button type="button" className="td-note-delete" onClick={() => { setPendingNoteId(n.id); setNoteDeleteOpen(true); }} title={t("Delete note", { defaultValue: "Delete note" })}>&times;</button>
                       <p className="td-notes">{n.note}</p>
                     </div>
                   ))}
@@ -2218,30 +2224,30 @@ function TaskDetails() {
         isOpen={deleteTaskConfirmOpen}
         onClose={() => setDeleteTaskConfirmOpen(false)}
         onConfirm={confirmDeleteTask}
-        title="Confirm Deletion"
-        message="Are you sure you want to delete this task? This action cannot be undone."
-        confirmText="Delete"
-        cancelText="Cancel"
+        title={t("Confirm Deletion", { defaultValue: "Confirm Deletion" })}
+        message={t("Are you sure you want to delete this task? This action cannot be undone.", { defaultValue: "Are you sure you want to delete this task? This action cannot be undone." })}
+        confirmText={t("Delete", { defaultValue: "Delete" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
         danger
       />
       <ConfirmModal
         isOpen={deleteSubtaskConfirmOpen}
         onClose={() => { setDeleteSubtaskConfirmOpen(false); setDeleteSubtaskTargetId(null); }}
         onConfirm={confirmSubtaskDelete}
-        title="Confirm Deletion"
-        message="Are you sure you want to delete this subtask? This action cannot be undone."
-        confirmText="Delete"
-        cancelText="Cancel"
+        title={t("Confirm Deletion", { defaultValue: "Confirm Deletion" })}
+        message={t("Are you sure you want to delete this subtask? This action cannot be undone.", { defaultValue: "Are you sure you want to delete this subtask? This action cannot be undone." })}
+        confirmText={t("Delete", { defaultValue: "Delete" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
         danger
       />
       <ConfirmModal
         isOpen={noteDeleteOpen}
         onClose={() => { setNoteDeleteOpen(false); setPendingNoteId(null); }}
         onConfirm={() => { deleteNote(pendingNoteId); setNoteDeleteOpen(false); setPendingNoteId(null); }}
-        title="Delete Note"
-        message="Are you sure you want to delete this note? This action cannot be undone."
-        confirmText="Delete"
-        cancelText="Cancel"
+        title={t("Delete Note", { defaultValue: "Delete Note" })}
+        message={t("Are you sure you want to delete this note? This action cannot be undone.", { defaultValue: "Are you sure you want to delete this note? This action cannot be undone." })}
+        confirmText={t("Delete", { defaultValue: "Delete" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
         danger
       />
 
@@ -2262,9 +2268,9 @@ function TaskDetails() {
           setDeleteCredentialConfirmOpen(false);
           setPendingDeleteCredential(null);
         }}
-        title="Delete Credential"
-        message="Are you sure you want to delete this access credential? This action cannot be undone."
-        confirmText="Delete"
+        title={t("Delete Credential", { defaultValue: "Delete Credential" })}
+        message={t("Are you sure you want to delete this access credential? This action cannot be undone.", { defaultValue: "Are you sure you want to delete this access credential? This action cannot be undone." })}
+        confirmText={t("Delete", { defaultValue: "Delete" })}
         danger
       />
 
@@ -2278,9 +2284,9 @@ function TaskDetails() {
       <AbandonModal
         isOpen={abandonModalOpen}
         onClose={() => setAbandonModalOpen(false)}
-        title="Abandon Task"
+        title={t("Abandon Task", { defaultValue: "Abandon Task" })}
         subtitle={task?.title}
-        actionLabel="Abandon Task"
+        actionLabel={t("Abandon Task", { defaultValue: "Abandon Task" })}
         onSubmit={handleAbandonTask}
         loading={abandoningTask}
       />

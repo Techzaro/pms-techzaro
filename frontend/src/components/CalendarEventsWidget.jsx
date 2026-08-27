@@ -4,6 +4,7 @@
  */
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -24,6 +25,7 @@ import "./CalendarEventsWidget.css";
 
 /** 1. Standalone Calendar Widget (Mini Monthly Grid) */
 export function CalendarWidget() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(new Date());
 
@@ -52,13 +54,13 @@ export function CalendarWidget() {
           <button onClick={handlePrevMonth} style={{ background: "transparent", border: "1px solid var(--border-color)", borderRadius: "4px", padding: "2px 6px", cursor: "pointer" }}><ChevronLeft size={14} /></button>
           <button onClick={handleNextMonth} style={{ background: "transparent", border: "1px solid var(--border-color)", borderRadius: "4px", padding: "2px 6px", cursor: "pointer" }}><ChevronRight size={14} /></button>
           <button onClick={() => navigate(rolePath("calendar"))} style={{ background: "#2563eb", color: "#fff", border: "none", borderRadius: "6px", padding: "4px 8px", fontSize: "12px", fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px", marginLeft: "4px" }}>
-            Full <ArrowUpRight size={12} />
+            {t("Full", { defaultValue: "Full" })} <ArrowUpRight size={12} />
           </button>
         </div>
       </div>
 
       <div className="cew-weekdays">
-        <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+        <span>{t("S")}</span><span>{t("M")}</span><span>{t("T")}</span><span>{t("W")}</span><span>{t("T")}</span><span>{t("F")}</span><span>{t("S")}</span>
       </div>
 
       <div className="cew-days-grid">
@@ -85,6 +87,7 @@ export function CalendarWidget() {
 
 /** 2. Standalone Events Widget (Upcoming Schedule & Announcements) */
 export function EventsWidget() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -117,34 +120,34 @@ export function EventsWidget() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <CalendarIcon size={18} style={{ color: "#2563eb" }} />
-          <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-heading)" }}>Upcoming Events</span>
+          <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-heading)" }}>{t("Upcoming Events", { defaultValue: "Upcoming Events" })}</span>
         </div>
         <div style={{ display: "flex", gap: "6px" }}>
           <button
             onClick={() => navigate(rolePath("events/create"))}
             style={{ background: "transparent", border: "1px solid var(--border-color)", borderRadius: "6px", padding: "3px 8px", fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "2px" }}
           >
-            <Plus size={13} /> Add
+            <Plus size={13} /> {t("Add", { defaultValue: "Add" })}
           </button>
           <button
             onClick={() => navigate(rolePath("events"))}
             style={{ background: "#2563eb", color: "#fff", border: "none", borderRadius: "6px", padding: "4px 10px", fontSize: "12px", fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px" }}
           >
-            View All <ArrowUpRight size={12} />
+            {t("View All", { defaultValue: "View All" })} <ArrowUpRight size={12} />
           </button>
         </div>
       </div>
 
       {loading ? (
-        <p style={{ fontSize: "13px", color: "var(--text-secondary)", textAlign: "center", padding: "20px 0" }}>Loading events...</p>
+        <p style={{ fontSize: "13px", color: "var(--text-secondary)", textAlign: "center", padding: "20px 0" }}>{t("Loading events...", { defaultValue: "Loading events..." })}</p>
       ) : !Array.isArray(events) || events.length === 0 ? (
         <div style={{ textAlign: "center", padding: "20px 0", background: "var(--bg-card-subtle)", borderRadius: "8px" }}>
-          <p style={{ margin: "0 0 8px 0", fontSize: "13px", color: "var(--text-secondary)" }}>No upcoming events scheduled.</p>
+          <p style={{ margin: "0 0 8px 0", fontSize: "13px", color: "var(--text-secondary)" }}>{t("No upcoming events scheduled.", { defaultValue: "No upcoming events scheduled." })}</p>
           <button
             onClick={() => navigate(rolePath("events/create"))}
             style={{ background: "transparent", border: "1px solid #2563eb", color: "#2563eb", borderRadius: "6px", padding: "4px 12px", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
           >
-            + Create Event
+            {t("+ Create Event", { defaultValue: "+ Create Event" })}
           </button>
         </div>
       ) : (
@@ -152,7 +155,7 @@ export function EventsWidget() {
           {events.map((ev) => {
             if (!ev) return null;
             const isAnnounce = ev.type === "announcement" || ev.type === "Company Announcement" || ev.is_announcement || ev.is_global;
-            const dateStr = ev.start_date ? new Date(ev.start_date).toLocaleDateString([], { month: "short", day: "numeric" }) : "Upcoming";
+            const dateStr = ev.start_date ? new Date(ev.start_date).toLocaleDateString([], { month: "short", day: "numeric" }) : t("Upcoming", { defaultValue: "Upcoming" });
 
             return (
               <div
@@ -169,9 +172,9 @@ export function EventsWidget() {
                     <div style={{ fontSize: "11px", color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: "6px" }}>
                       <span><Clock size={11} style={{ display: "inline", verticalAlign: "-1px" }} /> {dateStr}</span>
                       {isAnnounce ? (
-                        <span style={{ color: "#d97706", fontWeight: 600 }}>Announcement</span>
+                        <span style={{ color: "#d97706", fontWeight: 600 }}>{t("Announcement", { defaultValue: "Announcement" })}</span>
                       ) : (
-                        <span>{ev.category?.name || ev.type || "Event"}</span>
+                        <span>{t(ev.category?.name || ev.type || "Event")}</span>
                       )}
                     </div>
                   </div>
@@ -188,6 +191,7 @@ export function EventsWidget() {
 
 /** 3. Standalone Knowledge Base Widget (Recently Added/Updated Docs) */
 export function KnowledgeBaseWidget() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [articles, setArticles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -220,34 +224,34 @@ export function KnowledgeBaseWidget() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <BookOpen size={18} style={{ color: "#2563eb" }} />
-          <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-heading)" }}>Knowledge Base</span>
+          <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-heading)" }}>{t("Knowledge Base", { defaultValue: "Knowledge Base" })}</span>
         </div>
         <div style={{ display: "flex", gap: "6px" }}>
           <button
             onClick={() => navigate(rolePath("knowledge-base/create"))}
             style={{ background: "transparent", border: "1px solid var(--border-color)", borderRadius: "6px", padding: "3px 8px", fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "2px" }}
           >
-            <Plus size={13} /> Add
+            <Plus size={13} /> {t("Add", { defaultValue: "Add" })}
           </button>
           <button
             onClick={() => navigate(rolePath("knowledge-base"))}
             style={{ background: "#2563eb", color: "#fff", border: "none", borderRadius: "6px", padding: "4px 10px", fontSize: "12px", fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px" }}
           >
-            View All <ArrowUpRight size={12} />
+            {t("View All", { defaultValue: "View All" })} <ArrowUpRight size={12} />
           </button>
         </div>
       </div>
 
       {loading ? (
-        <p style={{ fontSize: "13px", color: "var(--text-secondary)", textAlign: "center", padding: "20px 0" }}>Loading articles...</p>
+        <p style={{ fontSize: "13px", color: "var(--text-secondary)", textAlign: "center", padding: "20px 0" }}>{t("Loading articles...", { defaultValue: "Loading articles..." })}</p>
       ) : !Array.isArray(articles) || articles.length === 0 ? (
         <div style={{ textAlign: "center", padding: "20px 0", background: "var(--bg-card-subtle)", borderRadius: "8px" }}>
-          <p style={{ margin: "0 0 8px 0", fontSize: "13px", color: "var(--text-secondary)" }}>No documents published yet.</p>
+          <p style={{ margin: "0 0 8px 0", fontSize: "13px", color: "var(--text-secondary)" }}>{t("No documents published yet.", { defaultValue: "No documents published yet." })}</p>
           <button
             onClick={() => navigate(rolePath("knowledge-base/create"))}
             style={{ background: "transparent", border: "1px solid #2563eb", color: "#2563eb", borderRadius: "6px", padding: "4px 12px", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
           >
-            + Create Document
+            {t("+ Create Document", { defaultValue: "+ Create Document" })}
           </button>
         </div>
       ) : (
@@ -270,9 +274,9 @@ export function KnowledgeBaseWidget() {
                       {item.title}
                     </div>
                     <div style={{ fontSize: "11px", color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: "8px" }}>
-                      <span style={{ color: "#2563eb", fontWeight: 500 }}>{catName}</span>
+                      <span style={{ color: "#2563eb", fontWeight: 500 }}>{t(catName)}</span>
                       {updatedDate && <span>&bull; {updatedDate}</span>}
-                      {item.views_count > 0 && <span>&bull; {item.views_count} views</span>}
+                      {item.views_count > 0 && <span>&bull; {t("{{count}} views", { defaultValue: `${item.views_count} views`, count: item.views_count })}</span>}
                     </div>
                   </div>
                 </div>
@@ -288,6 +292,7 @@ export function KnowledgeBaseWidget() {
 
 /** 4. Combined Calendar & Events Widget */
 export default function CalendarEventsWidget() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState([]);
@@ -335,13 +340,13 @@ export default function CalendarEventsWidget() {
       <div className="cew-header">
         <div className="cew-title">
           <CalendarIcon size={20} className="cew-icon" />
-          <h3>Calendar & Upcoming Events</h3>
+          <h3>{t("Calendar & Upcoming Events", { defaultValue: "Calendar & Upcoming Events" })}</h3>
         </div>
         <button
           className="cew-view-full-btn"
           onClick={() => navigate(rolePath("calendar"))}
         >
-          Full Calendar <ArrowUpRight size={14} />
+          {t("Full Calendar", { defaultValue: "Full Calendar" })} <ArrowUpRight size={14} />
         </button>
       </div>
 
@@ -350,12 +355,12 @@ export default function CalendarEventsWidget() {
           <div className="cew-cal-nav">
             <span className="cew-month-label">{monthName}</span>
             <div className="cew-nav-arrows">
-              <button onClick={handlePrevMonth} title="Previous Month"><ChevronLeft size={16} /></button>
-              <button onClick={handleNextMonth} title="Next Month"><ChevronRight size={16} /></button>
+              <button onClick={handlePrevMonth} title={t("Previous Month", { defaultValue: "Previous Month" })}><ChevronLeft size={16} /></button>
+              <button onClick={handleNextMonth} title={t("Next Month", { defaultValue: "Next Month" })}><ChevronRight size={16} /></button>
             </div>
           </div>
           <div className="cew-weekdays">
-            <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+            <span>{t("S")}</span><span>{t("M")}</span><span>{t("T")}</span><span>{t("W")}</span><span>{t("T")}</span><span>{t("F")}</span><span>{t("S")}</span>
           </div>
           <div className="cew-days-grid">
             {Array.from({ length: startDayOfWeek }).map((_, i) => (
@@ -378,13 +383,13 @@ export default function CalendarEventsWidget() {
         </div>
 
         <div className="cew-events-list">
-          <h4>Upcoming Schedule</h4>
+          <h4>{t("Upcoming Schedule", { defaultValue: "Upcoming Schedule" })}</h4>
           {loading ? (
-            <p className="cew-empty-msg">Loading upcoming schedule...</p>
+            <p className="cew-empty-msg">{t("Loading upcoming schedule...", { defaultValue: "Loading upcoming schedule..." })}</p>
           ) : !Array.isArray(events) || events.length === 0 ? (
             <div className="cew-no-events">
-              <p>No upcoming events scheduled.</p>
-              <button onClick={() => navigate(rolePath("events/create"))}>+ Add Event</button>
+              <p>{t("No upcoming events scheduled.", { defaultValue: "No upcoming events scheduled." })}</p>
+              <button onClick={() => navigate(rolePath("events/create"))}>{t("+ Add Event", { defaultValue: "+ Add Event" })}</button>
             </div>
           ) : (
             <div className="cew-events-items">
@@ -394,7 +399,7 @@ export default function CalendarEventsWidget() {
                   <div className="cew-event-details">
                     <div className="cew-event-title">{ev?.title}</div>
                     <div className="cew-event-time">
-                      <Clock size={12} /> {ev?.start_date ? new Date(ev.start_date).toLocaleDateString([], { month: "short", day: "numeric" }) : "Today"}
+                      <Clock size={12} /> {ev?.start_date ? new Date(ev.start_date).toLocaleDateString([], { month: "short", day: "numeric" }) : t("Today", { defaultValue: "Today" })}
                     </div>
                   </div>
                 </div>

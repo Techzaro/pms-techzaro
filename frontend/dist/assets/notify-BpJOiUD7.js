@@ -1,1 +1,0 @@
-var e={success:null,error:null,warning:null,info:null};function t(t){e.success=t.success,e.error=t.error,e.warning=t.warning,e.info=t.info}var n={success:(t,n)=>e.success?.(t,n),error:(t,n)=>e.error?.(t,n),warning:(t,n)=>e.warning?.(t,n),info:(t,n)=>e.info?.(t,n)},r=n;function i(e,t){n.success(`${e} ${t} successfully`)}export{r as i,t as n,i as r,n as t};

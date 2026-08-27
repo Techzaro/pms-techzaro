@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import Pagination from "../components/Pagination";
@@ -26,31 +27,31 @@ import {
 import "./DraftCenter.css";
 
 const MODULE_TYPES = [
-  { value: "", label: "All Modules" },
-  { value: "project", label: "Project" },
-  { value: "task", label: "Task" },
-  { value: "deliverable", label: "Subtask" },
-  { value: "event", label: "Calendar Event" },
-  { value: "user", label: "User" },
-  { value: "team", label: "Team" },
+  { value: "", labelKey: "All Modules", defaultLabel: "All Modules" },
+  { value: "project", labelKey: "Project", defaultLabel: "Project" },
+  { value: "task", labelKey: "Task", defaultLabel: "Task" },
+  { value: "deliverable", labelKey: "Subtask", defaultLabel: "Subtask" },
+  { value: "event", labelKey: "Calendar Event", defaultLabel: "Calendar Event" },
+  { value: "user", labelKey: "User", defaultLabel: "User" },
+  { value: "team", labelKey: "Team", defaultLabel: "Team" },
 ];
 
 const STATUS_OPTIONS = [
-  { value: "", label: "All Statuses" },
-  { value: "draft", label: "Draft" },
-  { value: "auto_saved", label: "Auto Saved" },
-  { value: "ready_to_publish", label: "Ready to Publish" },
-  { value: "published", label: "Published" },
-  { value: "archived", label: "Archived" },
+  { value: "", labelKey: "All Statuses", defaultLabel: "All Statuses" },
+  { value: "draft", labelKey: "Draft", defaultLabel: "Draft" },
+  { value: "auto_saved", labelKey: "Auto Saved", defaultLabel: "Auto Saved" },
+  { value: "ready_to_publish", labelKey: "Ready to Publish", defaultLabel: "Ready to Publish" },
+  { value: "published", labelKey: "Published", defaultLabel: "Published" },
+  { value: "archived", labelKey: "Archived", defaultLabel: "Archived" },
 ];
 
 const SORT_OPTIONS = [
-  { value: "updated_at_desc", label: "Recently Edited" },
-  { value: "updated_at_asc", label: "Oldest Edited" },
-  { value: "created_at_desc", label: "Newest" },
-  { value: "created_at_asc", label: "Oldest" },
-  { value: "title_asc", label: "Alphabetical (A-Z)" },
-  { value: "title_desc", label: "Alphabetical (Z-A)" },
+  { value: "updated_at_desc", labelKey: "Recently Edited", defaultLabel: "Recently Edited" },
+  { value: "updated_at_asc", labelKey: "Oldest Edited", defaultLabel: "Oldest Edited" },
+  { value: "created_at_desc", labelKey: "Newest", defaultLabel: "Newest" },
+  { value: "created_at_asc", labelKey: "Oldest", defaultLabel: "Oldest" },
+  { value: "title_asc", labelKey: "Alphabetical (A-Z)", defaultLabel: "Alphabetical (A-Z)" },
+  { value: "title_desc", labelKey: "Alphabetical (Z-A)", defaultLabel: "Alphabetical (Z-A)" },
 ];
 
 const MODULE_BADGE_COLORS = {
@@ -85,6 +86,7 @@ const STATUS_BADGE_CLASSES = {
 };
 
 function DraftCenter() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const currentUser = getUser();
 
@@ -177,7 +179,7 @@ function DraftCenter() {
     if (!deleteConfirm) return;
     try {
       await draftService.delete(deleteConfirm.id);
-      notify.success("Draft deleted successfully");
+      notify.success(t("Draft deleted successfully", { defaultValue: "Draft deleted successfully" }));
       setDeleteConfirm(null);
       fetchDrafts(page);
       publish("drafts:changed");
@@ -203,7 +205,7 @@ function DraftCenter() {
     const date = new Date(dateStr);
     const now = new Date();
     const diff = Math.floor((now - date) / 1000);
-    if (diff < 60) return "just now";
+    if (diff < 60) return t("just now", { defaultValue: "just now" });
     if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
     if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
     if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
@@ -212,7 +214,7 @@ function DraftCenter() {
 
   return (
     <DashboardLayout hideRightSidebar={true}>
-      <Breadcrumb items={[{ label: "Drafts" }]} />
+      <Breadcrumb items={[{ label: t("Drafts", { defaultValue: "Drafts" }) }]} />
 
       <div className="dc-layout">
         <div className="dc-header">
@@ -221,8 +223,8 @@ function DraftCenter() {
               <MdEditNote size={22} />
             </div>
             <div>
-              <h1 className="dc-title">Drafts</h1>
-              <p className="dc-subtitle">{total} draft(s) in total</p>
+              <h1 className="dc-title">{t("Drafts", { defaultValue: "Drafts" })}</h1>
+              <p className="dc-subtitle">{t("{{count}} draft(s) in total", { count: total, defaultValue: `${total} draft(s) in total` })}</p>
             </div>
           </div>
         </div>
@@ -232,13 +234,13 @@ function DraftCenter() {
             className={`dc-tab ${activeTab === "all" ? "dc-tab-active" : ""}`}
             onClick={() => setActiveTab("all")}
           >
-            All Drafts
+            {t("All Drafts", { defaultValue: "All Drafts" })}
           </button>
           <button
             className={`dc-tab ${activeTab === "returned" ? "dc-tab-active" : ""}`}
             onClick={() => setActiveTab("returned")}
           >
-            Returned from Resignation
+            {t("Returned from Resignation", { defaultValue: "Returned from Resignation" })}
             {returnedCount > 0 && <span className="dc-tab-badge">{returnedCount}</span>}
           </button>
         </div>
@@ -249,7 +251,7 @@ function DraftCenter() {
               <MdSearch className="dc-search-icon" size={18} />
               <input
                 type="text"
-                placeholder="Search drafts by title or code..."
+                placeholder={t("Search drafts by title or code...", { defaultValue: "Search drafts by title or code..." })}
                 value={searchInput}
                 onChange={(e) => handleSearchChange(e.target.value)}
               />
@@ -273,7 +275,7 @@ function DraftCenter() {
             >
               {MODULE_TYPES.map((m) => (
                 <option key={m.value} value={m.value}>
-                  {m.label}
+                  {t(m.labelKey, { defaultValue: m.defaultLabel })}
                 </option>
               ))}
             </select>
@@ -285,7 +287,7 @@ function DraftCenter() {
             >
               {STATUS_OPTIONS.map((s) => (
                 <option key={s.value} value={s.value}>
-                  {s.label}
+                  {t(s.labelKey, { defaultValue: s.defaultLabel })}
                 </option>
               ))}
             </select>
@@ -297,7 +299,7 @@ function DraftCenter() {
             >
               {SORT_OPTIONS.map((s) => (
                 <option key={s.value} value={s.value}>
-                  {s.label}
+                  {t(s.labelKey, { defaultValue: s.defaultLabel })}
                 </option>
               ))}
             </select>
@@ -307,14 +309,14 @@ function DraftCenter() {
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
-                title="From date"
+                title={t("From date", { defaultValue: "From date" })}
               />
-              <span className="dc-date-sep">to</span>
+              <span className="dc-date-sep">{t("to", { defaultValue: "to" })}</span>
               <input
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
-                title="To date"
+                title={t("To date", { defaultValue: "To date" })}
               />
             </div>
           </div>
@@ -324,16 +326,16 @@ function DraftCenter() {
           {loading ? (
             <div className="dc-empty">
               <div className="dc-spinner"></div>
-              <p>Loading drafts...</p>
+              <p>{t("Loading drafts...", { defaultValue: "Loading drafts..." })}</p>
             </div>
           ) : drafts.length === 0 ? (
             <div className="dc-empty">
               <MdEditNote size={48} className="dc-empty-icon" />
-              <h3>No drafts found</h3>
+              <h3>{t("No drafts found", { defaultValue: "No drafts found" })}</h3>
               <p>
-                Drafts are automatically saved when you create or edit items.
+                {t("Drafts are automatically saved when you create or edit items.", { defaultValue: "Drafts are automatically saved when you create or edit items." })}
                 <br />
-                Start creating a project, task, or event and save it as a draft.
+                {t("Start creating a project, task, or event and save it as a draft.", { defaultValue: "Start creating a project, task, or event and save it as a draft." })}
               </p>
             </div>
           ) : (
@@ -342,14 +344,14 @@ function DraftCenter() {
                 <table className="dc-table">
                   <thead>
                     <tr>
-                      <th>Draft Title</th>
-                      <th>Module</th>
-                      <th>Project</th>
-                      <th>Status</th>
-                      <th>Created By</th>
-                      <th>Last Edited By</th>
-                      <th>Last Saved</th>
-                      <th>Version</th>
+                      <th>{t("Draft Title", { defaultValue: "Draft Title" })}</th>
+                      <th>{t("Module", { defaultValue: "Module" })}</th>
+                      <th>{t("Project", { defaultValue: "Project" })}</th>
+                      <th>{t("Status", { defaultValue: "Status" })}</th>
+                      <th>{t("Created By", { defaultValue: "Created By" })}</th>
+                      <th>{t("Last Edited By", { defaultValue: "Last Edited By" })}</th>
+                      <th>{t("Last Saved", { defaultValue: "Last Saved" })}</th>
+                      <th>{t("Version", { defaultValue: "Version" })}</th>
                       <th></th>
                     </tr>
                   </thead>
@@ -358,7 +360,7 @@ function DraftCenter() {
                       <tr key={draft.id} className={draft.is_returned ? "dc-row-returned" : ""}>
                         <td>
                           <div className="dc-draft-title">
-                            <span className="dc-draft-name">{draft.title || "Untitled Draft"}</span>
+                            <span className="dc-draft-name">{draft.title || t("Untitled Draft", { defaultValue: "Untitled Draft" })}</span>
                             <span className="dc-draft-code">{draft.draft_code}</span>
                             <span
                               className="dc-action-type-badge"
@@ -368,17 +370,17 @@ function DraftCenter() {
                               }}
                             >
                               {draft.original_record_id
-                                ? (MODULE_EDIT_LABELS[draft.module_type] || "Edit")
-                                : (MODULE_CREATE_LABELS[draft.module_type] || "Create New")}
+                                ? t(MODULE_EDIT_LABELS[draft.module_type] || "Edit", { defaultValue: MODULE_EDIT_LABELS[draft.module_type] || "Edit" })
+                                : t(MODULE_CREATE_LABELS[draft.module_type] || "Create New", { defaultValue: MODULE_CREATE_LABELS[draft.module_type] || "Create New" })}
                             </span>
                             {draft.is_returned && (
                               <div className="dc-returned-info" style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", marginTop: "4px" }}>
-                                <span className="dc-returned-badge">Returned from Resignation</span>
+                                <span className="dc-returned-badge">{t("Returned from Resignation", { defaultValue: "Returned from Resignation" })}</span>
                                 <span className="dc-assignee-required-badge" style={{ backgroundColor: "#FEE2E2", color: "#991B1B", border: "1px solid #F87171", padding: "2px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                                  <MdPersonAdd size={13} /> Assignee Required
+                                  <MdPersonAdd size={13} /> {t("Assignee Required", { defaultValue: "Assignee Required" })}
                                 </span>
                                 {draft.returned_from_user && (
-                                  <span className="dc-returned-user">Former assignee: {draft.returned_from_user.name}</span>
+                                  <span className="dc-returned-user">{t("Former assignee: {{name}}", { name: draft.returned_from_user.name, defaultValue: `Former assignee: ${draft.returned_from_user.name}` })}</span>
                                 )}
                               </div>
                             )}
@@ -392,7 +394,7 @@ function DraftCenter() {
                               color: MODULE_BADGE_COLORS[draft.module_type] || "#6b7280",
                             }}
                           >
-                            {draft.module_label || draft.module_type}
+                            {t(draft.module_label || draft.module_type, { defaultValue: draft.module_label || draft.module_type })}
                           </span>
                         </td>
                         <td>
@@ -408,7 +410,7 @@ function DraftCenter() {
                           <span
                             className={`dc-status-badge ${STATUS_BADGE_CLASSES[draft.status] || ""}`}
                           >
-                            {draft.status_label || draft.status}
+                            {t(draft.status_label || draft.status, { defaultValue: draft.status_label || draft.status })}
                           </span>
                         </td>
                         <td>
@@ -453,14 +455,14 @@ function DraftCenter() {
                           <div className="action-btns">
                             <button
                               className="action-icon-btn action-edit"
-                              title={draft.original_record_id ? (MODULE_EDIT_LABELS[draft.module_type] || "Edit") : (MODULE_CREATE_LABELS[draft.module_type] || "Create New")}
+                              title={draft.original_record_id ? t(MODULE_EDIT_LABELS[draft.module_type] || "Edit", { defaultValue: MODULE_EDIT_LABELS[draft.module_type] || "Edit" }) : t(MODULE_CREATE_LABELS[draft.module_type] || "Create New", { defaultValue: MODULE_CREATE_LABELS[draft.module_type] || "Create New" })}
                               onClick={() => handleEdit(draft)}
                             >
                               <MdEdit size={16} />
                             </button>
                             <button
                               className="action-icon-btn action-delete"
-                              title="Delete Draft"
+                              title={t("Delete Draft", { defaultValue: "Delete Draft" })}
                               onClick={() => setDeleteConfirm(draft)}
                             >
                               <MdDelete size={16} />
@@ -493,10 +495,10 @@ function DraftCenter() {
           isOpen={!!deleteConfirm}
           onClose={() => setDeleteConfirm(null)}
           onConfirm={handleDelete}
-          title="Delete Draft"
-          message={`Are you sure you want to delete "${deleteConfirm.title || deleteConfirm.draft_code}"? This action cannot be undone.`}
-          confirmText="Delete"
-          cancelText="Cancel"
+          title={t("Delete Draft", { defaultValue: "Delete Draft" })}
+          message={t("Are you sure you want to delete \"{{title}}\"? This action cannot be undone.", { title: deleteConfirm.title || deleteConfirm.draft_code, defaultValue: `Are you sure you want to delete "${deleteConfirm.title || deleteConfirm.draft_code}"? This action cannot be undone.` })}
+          confirmText={t("Delete", { defaultValue: "Delete" })}
+          cancelText={t("Cancel", { defaultValue: "Cancel" })}
           danger
         />
       )}

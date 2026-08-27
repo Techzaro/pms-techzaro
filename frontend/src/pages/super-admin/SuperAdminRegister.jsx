@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 import { saveSuperAdminSession } from "../../utils/auth";
 import { api } from "./api/superAdminApi";
 import "../../pages/Login.css";
 
 function SuperAdminRegister() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [companyName, setCompanyName] = useState("");
   const [name, setName] = useState("");
@@ -17,9 +19,9 @@ function SuperAdminRegister() {
 
   const handleRegister = async () => {
     const errors = {};
-    if (!companyName.trim()) errors.companyName = "Company name is required.";
-    if (!name.trim()) errors.name = "Admin name is required.";
-    if (!email.trim()) errors.email = "Email is required.";
+    if (!companyName.trim()) errors.companyName = t("Company name is required.", { defaultValue: "Company name is required." });
+    if (!name.trim()) errors.name = t("Admin name is required.", { defaultValue: "Admin name is required." });
+    if (!email.trim()) errors.email = t("Email is required.", { defaultValue: "Email is required." });
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       return;
@@ -41,13 +43,13 @@ function SuperAdminRegister() {
         const pwd = result.data?.password || "";
         setGeneratedPassword(pwd);
         setSuccessMsg(
-          `Organization created! You can now login with the password shown below.`
+          t("Organization created! You can now login with the password shown below.", { defaultValue: "Organization created! You can now login with the password shown below." })
         );
       } else {
-        setFieldErrors({ form: result.message || "Registration failed." });
+        setFieldErrors({ form: t(result.message || "Registration failed.", { defaultValue: result.message || "Registration failed." }) });
       }
     } catch (err) {
-      setFieldErrors({ form: err.message || "Something went wrong." });
+      setFieldErrors({ form: t(err.message || "Something went wrong.", { defaultValue: err.message || "Something went wrong." }) });
     } finally {
       setLoading(false);
     }
@@ -62,15 +64,15 @@ function SuperAdminRegister() {
             alt="TechXaro Logo"
             className="logo"
           />
-          <h1>TECHXARO</h1>
-          <p>Organization Management System</p>
+          <h1>{t('TECHXARO', { defaultValue: 'TECHXARO' })}</h1>
+          <p>{t('Organization Management System', { defaultValue: 'Organization Management System' })}</p>
         </div>
       </div>
 
       <div className="login-right">
         <div className="login-box">
-          <h2>Create Organization</h2>
-          <p className="subtitle">Register a new organization to get started</p>
+          <h2>{t('Create Organization', { defaultValue: 'Create Organization' })}</h2>
+          <p className="subtitle">{t('Register a new organization to get started', { defaultValue: 'Register a new organization to get started' })}</p>
 
           {fieldErrors.form && (
             <span className="field-error-text form-error">{fieldErrors.form}</span>
@@ -80,8 +82,8 @@ function SuperAdminRegister() {
               {successMsg}
               {generatedPassword && (
                 <div style={{ marginTop: "8px", padding: "8px 12px", background: "#f8fafc", borderRadius: "6px", border: "1px dashed #cbd5e1" }}>
-                  <strong>Email:</strong> {email}<br />
-                  <strong>Password:</strong> <code style={{ fontSize: "14px", background: "#e2e8f0", padding: "2px 6px", borderRadius: "4px" }}>{generatedPassword}</code>
+                  <strong>{t('Email:', { defaultValue: 'Email:' })}</strong> {email}<br />
+                  <strong>{t('Password:', { defaultValue: 'Password:' })}</strong> <code style={{ fontSize: "14px", background: "#e2e8f0", padding: "2px 6px", borderRadius: "4px" }}>{generatedPassword}</code>
                 </div>
               )}
             </div>
@@ -89,7 +91,7 @@ function SuperAdminRegister() {
 
           <input
             type="text"
-            placeholder="Company Name"
+            placeholder={t("Company Name", { defaultValue: "Company Name" })}
             value={companyName}
             onChange={(e) => { setCompanyName(e.target.value); setFieldErrors((p) => ({ ...p, companyName: "", form: "" })); }}
             className={fieldErrors.companyName ? "field-error" : ""}
@@ -98,7 +100,7 @@ function SuperAdminRegister() {
 
           <input
             type="text"
-            placeholder="Admin Full Name"
+            placeholder={t("Admin Full Name", { defaultValue: "Admin Full Name" })}
             value={name}
             onChange={(e) => { setName(e.target.value); setFieldErrors((p) => ({ ...p, name: "", form: "" })); }}
             className={fieldErrors.name ? "field-error" : ""}
@@ -107,7 +109,7 @@ function SuperAdminRegister() {
 
           <input
             type="email"
-            placeholder="Admin Email"
+            placeholder={t("Admin Email", { defaultValue: "Admin Email" })}
             value={email}
             onChange={(e) => { setEmail(e.target.value); setFieldErrors((p) => ({ ...p, email: "", form: "" })); }}
             className={fieldErrors.email ? "field-error" : ""}
@@ -116,7 +118,7 @@ function SuperAdminRegister() {
 
           <input
             type="text"
-            placeholder="Phone (optional)"
+            placeholder={t("Phone (optional)", { defaultValue: "Phone (optional)" })}
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
           />
@@ -137,7 +139,7 @@ function SuperAdminRegister() {
                   cursor: "pointer",
                 }}
               >
-                Go to Login
+                {t('Go to Login', { defaultValue: 'Go to Login' })}
               </button>
             ) : (
               <button
@@ -156,14 +158,14 @@ function SuperAdminRegister() {
                   transition: "background 0.2s",
                 }}
               >
-                {loading ? "Creating..." : "Create Organization"}
+                {loading ? t("Creating...", { defaultValue: "Creating..." }) : t("Create Organization", { defaultValue: "Create Organization" })}
               </button>
             )}
           </div>
 
           <div style={{ textAlign: "center", marginTop: "24px" }}>
             <Link to="/super-admin/login" style={{ color: "#4f46e5", fontSize: "14px", textDecoration: "none" }}>
-              ← Back to Login
+              {t('← Back to Login', { defaultValue: '← Back to Login' })}
             </Link>
           </div>
         </div>

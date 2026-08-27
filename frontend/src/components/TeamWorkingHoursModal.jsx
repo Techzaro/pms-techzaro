@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { Clock, X, Save, Loader2 } from "lucide-react";
 import {
   DEFAULT_WORKING_HOURS,
@@ -16,6 +17,7 @@ import { notify } from "../utils/notify";
 import WorkingHoursScheduleEditor from "./WorkingHoursScheduleEditor";
 
 export default function TeamWorkingHoursModal({ isOpen, onClose, team, onSaved }) {
+  const { t } = useTranslation();
   const [schedule, setSchedule] = useState(DEFAULT_WORKING_HOURS);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -74,14 +76,14 @@ export default function TeamWorkingHoursModal({ isOpen, onClose, team, onSaved }
 
       const data = await res.json();
       if (res.ok && data?.success !== false) {
-        notify.success(`Working hours for "${team.name}" updated successfully.`);
+        notify.success(t('Working hours for "{{name}}" updated successfully.', { defaultValue: `Working hours for "${team.name}" updated successfully.`, name: team.name }));
         if (onSaved) onSaved(schedule);
         onClose();
       } else {
-        notify.error(data?.message || "Failed to update team working hours.");
+        notify.error(data?.message || t("Failed to update team working hours.", { defaultValue: "Failed to update team working hours." }));
       }
     } catch (err) {
-      notify.error("Network error while saving team working hours.");
+      notify.error(t("Network error while saving team working hours.", { defaultValue: "Network error while saving team working hours." }));
     } finally {
       setSaving(false);
     }
@@ -148,10 +150,10 @@ export default function TeamWorkingHoursModal({ isOpen, onClose, team, onSaved }
             </div>
             <div>
               <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "var(--text-heading, #0f172a)" }}>
-                Team Working Hours: {team.name}
+                {t("Team Working Hours: {{name}}", { defaultValue: `Team Working Hours: ${team.name}`, name: team.name })}
               </h3>
               <p style={{ margin: "2px 0 0 0", fontSize: "12px", color: "var(--text-secondary, #64748b)" }}>
-                Set customized work schedule and split shifts for members of this team
+                {t("Set customized work schedule and split shifts for members of this team", { defaultValue: "Set customized work schedule and split shifts for members of this team" })}
               </p>
             </div>
           </div>
@@ -175,7 +177,7 @@ export default function TeamWorkingHoursModal({ isOpen, onClose, team, onSaved }
           {loading ? (
             <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-secondary)" }}>
               <Loader2 className="w-5 h-5 animate-spin" style={{ margin: "0 auto 8px" }} />
-              Loading team schedule...
+              {t("Loading team schedule...", { defaultValue: "Loading team schedule..." })}
             </div>
           ) : (
             <WorkingHoursScheduleEditor
@@ -212,7 +214,7 @@ export default function TeamWorkingHoursModal({ isOpen, onClose, team, onSaved }
               cursor: "pointer",
             }}
           >
-            Cancel
+            {t("Cancel")}
           </button>
           <button
             type="button"
@@ -235,7 +237,7 @@ export default function TeamWorkingHoursModal({ isOpen, onClose, team, onSaved }
             }}
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save size={15} />}
-            {saving ? "Saving..." : "Save Working Hours"}
+            {saving ? t("Saving...", { defaultValue: "Saving..." }) : t("Save Working Hours", { defaultValue: "Save Working Hours" })}
           </button>
         </div>
       </div>

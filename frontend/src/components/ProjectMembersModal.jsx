@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import UserSelectDropdown from "./UserSelectDropdown";
 import { authToken } from "../utils/auth";
 import API_URL from "../config/api";
 
 export default function ProjectMembersModal({ isOpen, onClose, project, onSuccess }) {
+  const { t } = useTranslation();
   const [teams, setTeams] = useState([]);
   const [users, setUsers] = useState([]);
   const [selectedTeamIds, setSelectedTeamIds] = useState([]);
@@ -105,13 +107,13 @@ export default function ProjectMembersModal({ isOpen, onClose, project, onSucces
       const data = await res.json();
       if (!res.ok || data.success === false) {
         const errorMsg = data.errors ? Object.values(data.errors).flat().join(". ") : data.message;
-        throw new Error(errorMsg || "Failed to update project members");
+        throw new Error(errorMsg || t("Failed to update project members", { defaultValue: "Failed to update project members" }));
       }
 
       if (onSuccess) onSuccess();
       onClose();
     } catch (err) {
-      setError(err.message || "An error occurred while saving project members.");
+      setError(err.message || t("An error occurred while saving project members.", { defaultValue: "An error occurred while saving project members." }));
     } finally {
       setSaving(false);
     }
@@ -121,7 +123,7 @@ export default function ProjectMembersModal({ isOpen, onClose, project, onSucces
     <div className="cp-overlay" onClick={onClose}>
       <div className="cp-modal" style={{ maxWidth: 540 }} onClick={(e) => e.stopPropagation()}>
         <div className="cp-header">
-          <h2>Manage Project Members</h2>
+          <h2>{t("Manage Project Members", { defaultValue: "Manage Project Members" })}</h2>
           <button type="button" className="cp-close-btn" onClick={onClose}>
             &times;
           </button>
@@ -132,16 +134,16 @@ export default function ProjectMembersModal({ isOpen, onClose, project, onSucces
 
           {/* Teams Selection */}
           <div className="cp-field" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-            <label style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-dark, #1f2937)" }}>Assigned Teams</label>
+            <label style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-dark, #1f2937)" }}>{t("Assigned Teams", { defaultValue: "Assigned Teams" })}</label>
             {teams.length === 0 ? (
-              <div style={{ fontSize: 13, color: "#888", fontStyle: "italic" }}>No teams available</div>
+              <div style={{ fontSize: 13, color: "#888", fontStyle: "italic" }}>{t("No teams available", { defaultValue: "No teams available" })}</div>
             ) : (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 2 }}>
-                {teams.map((t) => {
-                  const isSelected = selectedTeamIds.includes(Number(t.id));
+                {teams.map((tItem) => {
+                  const isSelected = selectedTeamIds.includes(Number(tItem.id));
                   return (
                     <label
-                      key={t.id}
+                      key={tItem.id}
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
@@ -160,10 +162,10 @@ export default function ProjectMembersModal({ isOpen, onClose, project, onSucces
                       <input
                         type="checkbox"
                         checked={isSelected}
-                        onChange={() => toggleTeam(t.id)}
+                        onChange={() => toggleTeam(tItem.id)}
                         style={{ accentColor: "var(--color-primary, #3b82f6)" }}
                       />
-                      <span>{t.name}</span>
+                      <span>{tItem.name}</span>
                     </label>
                   );
                 })}
@@ -173,23 +175,23 @@ export default function ProjectMembersModal({ isOpen, onClose, project, onSucces
 
           {/* Assigned Members */}
           <div className="cp-field" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-            <label style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-dark, #1f2937)" }}>Assigned Members (Full Access)</label>
+            <label style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-dark, #1f2937)" }}>{t("Assigned Members (Full Access)", { defaultValue: "Assigned Members (Full Access)" })}</label>
             <UserSelectDropdown
               users={users}
               selectedIds={assignedUsers}
               onChange={setAssignedUsers}
-              placeholder="Select project members..."
+              placeholder={t("Select project members...", { defaultValue: "Select project members..." })}
             />
           </div>
 
           {/* View-Only Users */}
           <div className="cp-field" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-            <label style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-dark, #1f2937)" }}>View-Only Users</label>
+            <label style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-dark, #1f2937)" }}>{t("View-Only Users", { defaultValue: "View-Only Users" })}</label>
             <UserSelectDropdown
               users={users}
               selectedIds={viewOnlyUsers}
               onChange={setViewOnlyUsers}
-              placeholder="Select view-only users..."
+              placeholder={t("Select view-only users...", { defaultValue: "Select view-only users..." })}
             />
           </div>
 
@@ -200,14 +202,14 @@ export default function ProjectMembersModal({ isOpen, onClose, project, onSucces
               onClick={onClose}
               disabled={saving}
             >
-              Cancel
+              {t("Cancel")}
             </button>
             <button
               type="submit"
               style={{ padding: "8px 20px", borderRadius: 6, background: "var(--color-primary, #3b82f6)", color: "#fff", border: "none", cursor: "pointer", fontWeight: 600, fontSize: 14, boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}
               disabled={saving}
             >
-              {saving ? "Saving..." : "Save Members"}
+              {saving ? t("Saving...", { defaultValue: "Saving..." }) : t("Save Members", { defaultValue: "Save Members" })}
             </button>
           </div>
         </form>

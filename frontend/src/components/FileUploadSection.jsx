@@ -11,6 +11,7 @@
  *   readOnly    - Boolean
  */
 import { useState, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { FolderOpen, Upload, Link as LinkIcon, X } from "lucide-react";
 import SortableTableWrapper, { DragHandle } from "./SortableTableWrapper";
 import ConfirmModal from "./ConfirmModal";
@@ -32,6 +33,7 @@ const boxColors = [
 ];
 
 export default function FileUploadSection({ entityType, entityId, files, onReorder, onFilesChange, readOnly }) {
+  const { t } = useTranslation();
   const [fileSearch, setFileSearch] = useState("");
   const [editItem, setEditItem] = useState(null);
   const [editName, setEditName] = useState("");
@@ -74,15 +76,15 @@ export default function FileUploadSection({ entityType, entityId, files, onReord
         body: JSON.stringify({ name: editName.trim(), url: editUrl.trim() || null }),
       });
       if (res.ok) {
-        showSuccessMessage("File renamed successfully");
+        showSuccessMessage(t("File renamed successfully", { defaultValue: "File renamed successfully" }));
         setEditItem(null);
         if (onFilesChange) onFilesChange();
       } else {
         const data = await res.json().catch(() => ({}));
-        notify.error(data.message || "Failed to rename file");
+        notify.error(data.message || t("Failed to rename file", { defaultValue: "Failed to rename file" }));
       }
     } catch {
-      notify.error("Failed to rename file");
+      notify.error(t("Failed to rename file", { defaultValue: "Failed to rename file" }));
     }
     setEditSaving(false);
   };
@@ -101,16 +103,16 @@ export default function FileUploadSection({ entityType, entityId, files, onReord
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
-        showSuccessMessage("File deleted successfully");
+        showSuccessMessage(t("File deleted successfully", { defaultValue: "File deleted successfully" }));
         setDeleteConfirmOpen(false);
         setPendingDelete(null);
         if (onFilesChange) onFilesChange();
       } else {
         const data = await res.json().catch(() => ({}));
-        notify.error(data.message || "Failed to delete file");
+        notify.error(data.message || t("Failed to delete file", { defaultValue: "Failed to delete file" }));
       }
     } catch {
-      notify.error("Failed to delete file");
+      notify.error(t("Failed to delete file", { defaultValue: "Failed to delete file" }));
     }
     done?.();
   };
@@ -130,14 +132,14 @@ export default function FileUploadSection({ entityType, entityId, files, onReord
         body: formData,
       });
       if (res.ok) {
-        showSuccessMessage("File uploaded successfully");
+        showSuccessMessage(t("File uploaded successfully", { defaultValue: "File uploaded successfully" }));
         if (onFilesChange) onFilesChange();
       } else {
         const data = await res.json().catch(() => ({}));
-        notify.error(data.message || "Failed to upload file");
+        notify.error(data.message || t("Failed to upload file", { defaultValue: "Failed to upload file" }));
       }
     } catch {
-      notify.error("Failed to upload file");
+      notify.error(t("Failed to upload file", { defaultValue: "Failed to upload file" }));
     }
     setUploading(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -156,17 +158,17 @@ export default function FileUploadSection({ entityType, entityId, files, onReord
         body: JSON.stringify({ url, name: linkName.trim() || null }),
       });
       if (res.ok) {
-        showSuccessMessage("Link added successfully");
+        showSuccessMessage(t("Link added successfully", { defaultValue: "Link added successfully" }));
         setLinkInput("");
         setLinkName("");
         setShowLinkForm(false);
         if (onFilesChange) onFilesChange();
       } else {
         const data = await res.json().catch(() => ({}));
-        notify.error(data.message || "Failed to add link");
+        notify.error(data.message || t("Failed to add link", { defaultValue: "Failed to add link" }));
       }
     } catch {
-      notify.error("Failed to add link");
+      notify.error(t("Failed to add link", { defaultValue: "Failed to add link" }));
     }
     setAddingLink(false);
   };
@@ -174,13 +176,13 @@ export default function FileUploadSection({ entityType, entityId, files, onReord
   return (
     <div>
       <div className="td-section-header">
-        <h2 className="td-section-title">Platform files & links</h2>
+        <h2 className="td-section-title">{t("Platform files & links", { defaultValue: "Platform files & links" })}</h2>
         {files.length > 0 && (
           <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
             <input
               type="text"
-              placeholder="Search files & links..."
+              placeholder={t("Search files & links...", { defaultValue: "Search files & links..." })}
               value={fileSearch}
               onChange={(e) => setFileSearch(e.target.value)}
             />
@@ -198,7 +200,7 @@ export default function FileUploadSection({ entityType, entityId, files, onReord
             style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", fontSize: 13, borderRadius: 8, border: "1px solid var(--border-color, #e2e8f0)", background: "#fff", cursor: uploading ? "not-allowed" : "pointer" }}
           >
             <Upload size={14} />
-            {uploading ? "Uploading..." : "Upload File"}
+            {uploading ? t("Uploading...", { defaultValue: "Uploading..." }) : t("Upload File", { defaultValue: "Upload File" })}
           </button>
           <button
             className="td-btn-outline"
@@ -206,7 +208,7 @@ export default function FileUploadSection({ entityType, entityId, files, onReord
             style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", fontSize: 13, borderRadius: 8, border: "1px solid var(--border-color, #e2e8f0)", background: "#fff", cursor: "pointer" }}
           >
             <LinkIcon size={14} />
-            Add Link
+            {t("Add Link", { defaultValue: "Add Link" })}
           </button>
         </div>
       )}
@@ -223,7 +225,7 @@ export default function FileUploadSection({ entityType, entityId, files, onReord
           />
           <input
             type="text"
-            placeholder="Link name (optional)"
+            placeholder={t("Link name (optional)", { defaultValue: "Link name (optional)" })}
             value={linkName}
             onChange={(e) => setLinkName(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") handleAddLink(); }}
@@ -235,7 +237,7 @@ export default function FileUploadSection({ entityType, entityId, files, onReord
             disabled={addingLink || !linkInput.trim()}
             style={{ padding: "6px 14px", fontSize: 13, borderRadius: 8 }}
           >
-            {addingLink ? "Adding..." : "Add"}
+            {addingLink ? t("Adding...", { defaultValue: "Adding..." }) : t("Add", { defaultValue: "Add" })}
           </button>
           <button
             onClick={() => { setShowLinkForm(false); setLinkInput(""); setLinkName(""); }}
@@ -247,9 +249,9 @@ export default function FileUploadSection({ entityType, entityId, files, onReord
       )}
 
       {files.length === 0 ? (
-        <p className="td-empty">No files attached.</p>
+        <p className="td-empty">{t("No files attached.", { defaultValue: "No files attached." })}</p>
       ) : filteredFiles.length === 0 ? (
-        <p className="td-empty">No files match your search.</p>
+        <p className="td-empty">{t("No files match your search.", { defaultValue: "No files match your search." })}</p>
       ) : (
         <SortableTableWrapper
           items={filteredFiles}
@@ -279,7 +281,7 @@ export default function FileUploadSection({ entityType, entityId, files, onReord
                   <div style={{ display: "flex", gap: 6, marginLeft: "auto", flexShrink: 0 }}>
                     <button
                       className="action-icon-btn"
-                      title="Rename"
+                      title={t("Rename", { defaultValue: "Rename" })}
                       onClick={() => openEdit(f)}
                       style={{ padding: "4px 6px", fontSize: 12 }}
                     >
@@ -287,7 +289,7 @@ export default function FileUploadSection({ entityType, entityId, files, onReord
                     </button>
                     <button
                       className="action-icon-btn"
-                      title="Delete"
+                      title={t("Delete", { defaultValue: "Delete" })}
                       onClick={() => openDelete(f)}
                       style={{ padding: "4px 6px", fontSize: 12 }}
                     >
@@ -305,9 +307,9 @@ export default function FileUploadSection({ entityType, entityId, files, onReord
       {editItem && (
         <div className="pd-edit-overlay" onClick={() => setEditItem(null)}>
           <div className="pd-edit-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="pd-edit-modal__title">Rename File</h3>
+            <h3 className="pd-edit-modal__title">{t("Rename File", { defaultValue: "Rename File" })}</h3>
             <div className="pd-edit-modal__field">
-              <label className="pd-edit-modal__label">Name</label>
+              <label className="pd-edit-modal__label">{t("Name", { defaultValue: "Name" })}</label>
               <input
                 className="pd-edit-modal__input"
                 type="text"
@@ -319,7 +321,7 @@ export default function FileUploadSection({ entityType, entityId, files, onReord
             </div>
             {editItem.url && (
               <div className="pd-edit-modal__field">
-                <label className="pd-edit-modal__label">URL</label>
+                <label className="pd-edit-modal__label">{t("URL", { defaultValue: "URL" })}</label>
                 <input
                   className="pd-edit-modal__input"
                   type="text"
@@ -330,9 +332,9 @@ export default function FileUploadSection({ entityType, entityId, files, onReord
               </div>
             )}
             <div className="pd-edit-modal__actions">
-              <button className="pd-edit-modal__cancel" onClick={() => setEditItem(null)} disabled={editSaving}>Cancel</button>
+              <button className="pd-edit-modal__cancel" onClick={() => setEditItem(null)} disabled={editSaving}>{t("Cancel")}</button>
               <button className="pd-edit-modal__save" onClick={handleRename} disabled={editSaving || !editName.trim()}>
-                {editSaving ? "Saving..." : "Save"}
+                {editSaving ? t("Saving...", { defaultValue: "Saving..." }) : t("Save", { defaultValue: "Save" })}
               </button>
             </div>
           </div>
@@ -344,10 +346,10 @@ export default function FileUploadSection({ entityType, entityId, files, onReord
         isOpen={deleteConfirmOpen}
         onClose={() => { setDeleteConfirmOpen(false); setPendingDelete(null); }}
         onConfirm={handleDelete}
-        title="Delete File"
-        message={`Are you sure you want to delete "${pendingDelete?.name || ""}"? This action cannot be undone.`}
-        confirmText="Delete"
-        cancelText="Cancel"
+        title={t("Delete File", { defaultValue: "Delete File" })}
+        message={t('Are you sure you want to delete "{{name}}"? This action cannot be undone.', { defaultValue: `Are you sure you want to delete "${pendingDelete?.name || ""}"? This action cannot be undone.`, name: pendingDelete?.name || "" })}
+        confirmText={t("Delete", { defaultValue: "Delete" })}
+        cancelText={t("Cancel")}
         danger
       />
     </div>

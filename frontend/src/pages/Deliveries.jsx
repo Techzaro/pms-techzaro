@@ -14,6 +14,7 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import DraggableStatusBadges from "../components/DraggableStatusBadges";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { Link, useSearchParams, useLocation, useNavigate } from "react-router-dom";
 import { GoDotFill } from "react-icons/go";
@@ -84,6 +85,7 @@ const STATUS_TEXT_COLORS = {
  * Supports filtering, searching, pagination, sortable reordering, and submit/view modals.
  */
 function Deliveries() {
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -263,10 +265,10 @@ function Deliveries() {
         publish('data:changed', { type: 'deliverable', action: 'updated' });
         showSuccessMessage("Subtask", "acknowledged");
       } else {
-        notify.error(data.message || "Failed to acknowledge.");
+        notify.error(data.message || t("Failed to acknowledge.", { defaultValue: "Failed to acknowledge." }));
       }
     } catch {
-      notify.error("Failed to acknowledge.");
+      notify.error(t("Failed to acknowledge.", { defaultValue: "Failed to acknowledge." }));
     } finally {
       setActingId(null);
       setActingType(null);
@@ -291,10 +293,10 @@ function Deliveries() {
         publish('data:changed', { type: 'deliverable', action: 'updated' });
         showSuccessMessage("Subtask", "paused");
       } else {
-        notify.error(data.message || "Failed to pause.");
+        notify.error(data.message || t("Failed to pause.", { defaultValue: "Failed to pause." }));
       }
     } catch {
-      notify.error("Failed to pause.");
+      notify.error(t("Failed to pause.", { defaultValue: "Failed to pause." }));
     } finally {
       setActingId(null);
       setActingType(null);
@@ -318,10 +320,10 @@ function Deliveries() {
         publish('data:changed', { type: 'deliverable', action: 'updated' });
         showSuccessMessage("Subtask", "resumed");
       } else {
-        notify.error(data.message || "Failed to resume.");
+        notify.error(data.message || t("Failed to resume.", { defaultValue: "Failed to resume." }));
       }
     } catch {
-      notify.error("Failed to resume.");
+      notify.error(t("Failed to resume.", { defaultValue: "Failed to resume." }));
     } finally {
       setActingId(null);
       setActingType(null);
@@ -361,7 +363,8 @@ function Deliveries() {
       abandon_requested: "Abandon Requested",
       abandoned: "Abandoned",
     };
-    return map[status] || status;
+    const label = map[status] || status;
+    return t(label, { defaultValue: label });
   };
 
   // Update local state after successful submission to reflect new status
@@ -491,8 +494,8 @@ function Deliveries() {
   const paginatedItems = showAll ? safeFilteredItems : safeFilteredItems.slice((page - 1) * (ITEMS_PER_PAGE || 10), page * (ITEMS_PER_PAGE || 10));
 
   const breadcrumbs = [
-    { label: "Subtasks", path: rolePath("deliveries") },
-    { label: "Assigned To You" },
+    { label: t("Subtasks", { defaultValue: "Subtasks" }), path: rolePath("deliveries") },
+    { label: t("Assigned To You", { defaultValue: "Assigned To You" }) },
   ];
 
   return (
@@ -501,32 +504,32 @@ function Deliveries() {
       <div className="projects-page">
         <div className="projects-header">
           <div>
-            <h1>Subtasks Assigned To You</h1>
-            <p>Manage and track your subtasks</p>
+            <h1>{t("Subtasks Assigned To You", { defaultValue: "Subtasks Assigned To You" })}</h1>
+            <p>{t("Manage and track your subtasks", { defaultValue: "Manage and track your subtasks" })}</p>
           </div>
           <div className="header-actions">
             <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)} className="reports-filter">
-              <option value="">All Time</option>
-              <option value="7">Last 7 Days</option>
-              <option value="30">Last 30 Days</option>
-              <option value="180">Last 6 Months</option>
+              <option value="">{t("All Time", { defaultValue: "All Time" })}</option>
+              <option value="7">{t("Last 7 Days", { defaultValue: "Last 7 Days" })}</option>
+              <option value="30">{t("Last 30 Days", { defaultValue: "Last 30 Days" })}</option>
+              <option value="180">{t("Last 6 Months", { defaultValue: "Last 6 Months" })}</option>
             </select>
           </div>
         </div>
 
         <DraggableStatusBadges
           badges={[
-            { id: "due_today", label: "Due Today", count: dueTodayCount, className: "DueToday", dotColor: "#EF4444" },
-            { id: "pending", label: "Pending", count: pendingCount, className: "Pending" },
-            { id: "in_progress", label: "In Progress", count: inProgressCount, className: "InProgress" },
-            { id: "paused", label: "Paused", count: pausedCount, className: "Paused" },
-            { id: "submitted", label: "Submitted", count: submittedCount, className: "Submitted" },
-            { id: "reopened", label: "Reopened", count: reopenedCount, className: "Reopened" },
-            { id: "transferred", label: "Transferred", count: transferredCount, className: "Transferred" },
-            { id: "approved", label: "Approved", count: approvedCount, className: "Approved" },
-            { id: "rejected", label: "Declined", count: rejectedCount, className: "Rejected" },
-            { id: "abandoned", label: "Abandoned", count: abandonedCount, className: "Abandoned", dotColor: "#DC2626" },
-            { id: "", label: "All", count: allCount, className: "All" },
+            { id: "due_today", label: t("Due Today", { defaultValue: "Due Today" }), count: dueTodayCount, className: "DueToday", dotColor: "#EF4444" },
+            { id: "pending", label: t("Pending", { defaultValue: "Pending" }), count: pendingCount, className: "Pending" },
+            { id: "in_progress", label: t("In Progress", { defaultValue: "In Progress" }), count: inProgressCount, className: "InProgress" },
+            { id: "paused", label: t("Paused", { defaultValue: "Paused" }), count: pausedCount, className: "Paused" },
+            { id: "submitted", label: t("Submitted", { defaultValue: "Submitted" }), count: submittedCount, className: "Submitted" },
+            { id: "reopened", label: t("Reopened", { defaultValue: "Reopened" }), count: reopenedCount, className: "Reopened" },
+            { id: "transferred", label: t("Transferred", { defaultValue: "Transferred" }), count: transferredCount, className: "Transferred" },
+            { id: "approved", label: t("Approved", { defaultValue: "Approved" }), count: approvedCount, className: "Approved" },
+            { id: "rejected", label: t("Declined", { defaultValue: "Declined" }), count: rejectedCount, className: "Rejected" },
+            { id: "abandoned", label: t("Abandoned", { defaultValue: "Abandoned" }), count: abandonedCount, className: "Abandoned", dotColor: "#DC2626" },
+            { id: "", label: t("All", { defaultValue: "All" }), count: allCount, className: "All" },
           ]}
           activeStatus={statusFilter}
           onSelectStatus={selectStatusFilter}
@@ -548,26 +551,26 @@ function Deliveries() {
 
         <div className="container">
           <div className="deliveries-table-header">
-            <div>ID</div>
-            <div>Assigned By</div>
-            <div>Subtask</div>
-            <div>Task</div>
-            <div>Status</div>
-            <div>Start & Due Date</div>
-            <div style={{ textAlign: "center" }}>Action</div>
+            <div>{t("ID", { defaultValue: "ID" })}</div>
+            <div>{t("Assigned By", { defaultValue: "Assigned By" })}</div>
+            <div>{t("Subtask", { defaultValue: "Subtask" })}</div>
+            <div>{t("Task", { defaultValue: "Task" })}</div>
+            <div>{t("Status", { defaultValue: "Status" })}</div>
+            <div>{t("Start & Due Date", { defaultValue: "Start & Due Date" })}</div>
+            <div style={{ textAlign: "center" }}>{t("Action", { defaultValue: "Action" })}</div>
           </div>
 
           {loading ? (
-            <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
+            <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>{t("Loading...", { defaultValue: "Loading..." })}</div>
           ) : filteredItems.length === 0 ? (
-            <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No subtasks found</div>
+            <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>{t("No subtasks found", { defaultValue: "No subtasks found" })}</div>
           ) : (
             <SortableTableWrapper items={paginatedItems} onReorder={handleSubtaskReorder} as="div" handleOnly>
               {(item, idx, dndProps) => {
                 const colors = getRandomColors(item.id);
                 const hasChain = item.delegation_chain && item.delegation_chain.length > 0;
                 const displayName = item.transferred_by_name || item.creator?.name || "-";
-                const displayRole = item.transferred_by_name ? "Transferred" : (item.creator?.role ? item.creator.role.replace("_", " ") : "");
+                const displayRole = item.transferred_by_name ? t("Transferred", { defaultValue: "Transferred" }) : (item.creator?.role ? item.creator.role.replace("_", " ") : "");
                 return (
                   <div className="deliveries-table-row" key={item.id}>
                     <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={item.id} businessId={item.business_id} color="#16a34a" />
@@ -606,7 +609,7 @@ function Deliveries() {
                     <div className="col-action" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%" }}>
                       <ActionPopover
                         trigger={
-                          <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
+                          <button className="action-icon-btn action-view action-trigger-lg" title={t("Actions", { defaultValue: "Actions" })}>
                             <IoEyeOutline size={20} />
                           </button>
                         }
@@ -615,37 +618,37 @@ function Deliveries() {
                         {(() => {
                           if (item.is_transferor) return (
                             <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "6px", backgroundColor: "#EFF6FF", color: "#1D4ED8", fontSize: "11px", fontWeight: 600 }}>
-                              Transferred
+                              {t("Transferred", { defaultValue: "Transferred" })}
                             </span>
                           );
                           return (
                         <>
-                        <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
+                        <button className="action-icon-btn action-note" title={t("Add Note", { defaultValue: "Add Note" })} onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
                         {item.status === "pending" && (
-                          <button className="action-icon-btn action-submit" title="Acknowledge" disabled={actingId === item.id} onClick={() => handleAcknowledge(item.id)}>
+                          <button className="action-icon-btn action-submit" title={t("Acknowledge", { defaultValue: "Acknowledge" })} disabled={actingId === item.id} onClick={() => handleAcknowledge(item.id)}>
                             <CheckCircle2 size={16} />
                           </button>
                         )}
                         {["in_progress", "submitted"].includes(item.status) && !item.assigner_paused && canUserPauseResume(item, currentUser) && (
-                          <button className="action-icon-btn action-submit" title="Pause" disabled={actingId === item.id} onClick={() => handlePause(item.id)} style={{ color: "#D97706" }}>
+                          <button className="action-icon-btn action-submit" title={t("Pause", { defaultValue: "Pause" })} disabled={actingId === item.id} onClick={() => handlePause(item.id)} style={{ color: "#D97706" }}>
                             <Pause size={16} />
                           </button>
                         )}
                         {item.status === "paused" && !item.assigner_paused && canUserPauseResume(item, currentUser) && (
-                          <button className="action-icon-btn action-submit" title="Resume" disabled={actingId === item.id} onClick={() => handleResume(item.id)} style={{ color: "#059669" }}>
+                          <button className="action-icon-btn action-submit" title={t("Resume", { defaultValue: "Resume" })} disabled={actingId === item.id} onClick={() => handleResume(item.id)} style={{ color: "#059669" }}>
                             <Play size={16} />
                           </button>
                         )}
                         {item.assigner_paused && (
                           <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#92400E", fontSize: "11px", fontWeight: 600, border: "1px solid #F59E0B" }}>
                             <Lock size={12} />
-                            Paused by Assigner
+                            {t("Paused by Assigner", { defaultValue: "Paused by Assigner" })}
                           </span>
                         )}
                         {(item.status === "in_progress" || item.status === "rejected" || item.status === "reopened") && (
                           <button
                             className="action-icon-btn action-submit"
-                            title={item.task?.status === "paused" ? "Parent task is paused. Resume the task first." : item.task?.assigner_paused ? "Parent task is paused by assigner." : "Submit Subtask"}
+                            title={item.task?.status === "paused" ? t("Parent task is paused. Resume the task first.", { defaultValue: "Parent task is paused. Resume the task first." }) : item.task?.assigner_paused ? t("Parent task is paused by assigner.", { defaultValue: "Parent task is paused by assigner." }) : t("Submit Subtask", { defaultValue: "Submit Subtask" })}
                             disabled={item.task?.status === "paused" || item.task?.assigner_paused}
                             onClick={() => setSubmitModal({ open: true, subtask: item })}
                             style={item.task?.status === "paused" || item.task?.assigner_paused ? { opacity: 0.4, cursor: "not-allowed" } : {}}
@@ -656,7 +659,7 @@ function Deliveries() {
                         {!["approved", "rejected", "pending", "submitted"].includes(item.status) && !item.is_transferor && (
                           <button
                             className="action-icon-btn"
-                            title="Transfer Subtask"
+                            title={t("Transfer Subtask", { defaultValue: "Transfer Subtask" })}
                             onClick={() => setTransferDialog({ open: true, subtask: item })}
                             style={{ color: "#2563EB", cursor: "pointer" }}
                           >
@@ -724,3 +727,4 @@ function Deliveries() {
 }
 
 export default Deliveries;
+

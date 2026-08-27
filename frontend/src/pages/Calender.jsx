@@ -11,6 +11,7 @@
  * - Auto-refreshes on event CRUD via event bus
  */
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useSearchParams, useLocation } from "react-router-dom";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { useUnifiedSummary } from "../hooks/useUnifiedSummary";
@@ -23,7 +24,7 @@ import Event from "../components/Event";
 import EventInfoPopup from "../components/EventInfoPopup";
 import ItemDetailPopup from "../components/ItemDetailPopup";
 import DayPopup from "../components/DayPopup";
-import { formatLocalDate, convertToLocal, getUserTimezone, getTimezoneOffsetDisplay } from "../utils/timezoneUtils";
+import { formatLocalDate, formatLocalTime, convertToLocal, getUserTimezone, getTimezoneOffsetDisplay } from "../utils/timezoneUtils";
 import { authToken, getCurrentRole, getUser } from "../utils/auth";
 import API_URL from "../config/api";
 import { publish } from "../utils/eventBus";
@@ -42,9 +43,15 @@ function formatDate(d) {
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 }
 
-/** Formats a Date to a display string like "June 29, 2026" */
+/** Formats a Date to a display string using user's date format */
 function formatDisplayDate(d) {
-  return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  if (!d) return "—";
+  try {
+    const iso = d instanceof Date ? d.toISOString() : String(d);
+    return formatLocalDate(iso);
+  } catch {
+    return String(d);
+  }
 }
 
 function getMonthStart(date) {
@@ -84,6 +91,7 @@ function isToday(d) {
  * and renders the calendar grid, sidebar, and modals.
  */
 function Calender() {
+  const { t } = useTranslation();
   const [viewMode, setViewMode] = useState("Month");
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState([]);
@@ -218,7 +226,7 @@ function Calender() {
 
   // Delete an event after confirmation, then refresh and close popups
   const handleDelete = async (eventId) => {
-    if (!window.confirm("Are you sure you want to delete this event?")) return;
+    if (!window.confirm(t("Are you sure you want to delete this event?", { defaultValue: "Are you sure you want to delete this event?" }))) return;
     setDeleteLoading(eventId);
     try {
       const token = authToken();
@@ -260,7 +268,7 @@ function Calender() {
 
   const getHeaderTitle = () => {
     if (viewMode === "Upcoming") {
-      return "Upcoming Agenda & Deadlines";
+      return t("Upcoming Agenda & Deadlines", { defaultValue: "Upcoming Agenda & Deadlines" });
     }
     if (viewMode === "Month") {
       return currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
@@ -327,22 +335,22 @@ function Calender() {
 
   return (
     <DashboardLayout hideRightSidebar={true}>
-      <Breadcrumb items={[{ label: "Calendar" }]} />
+      <Breadcrumb items={[{ label: t("Calendar", { defaultValue: "Calendar" }) }]} />
       <div className="calender-layout">
 
         <div className="calendar-main">
 
           <div className="calendar-header">
             <div>
-              <h1>Calendar</h1>
-              <p>Manage schedules, deadlines and upcoming tasks in your local timezone ({userTimezone}).</p>
+              <h1>{t("Calendar", { defaultValue: "Calendar" })}</h1>
+              <p>{t("Manage schedules, deadlines and upcoming tasks in your local timezone ({{tz}}).", { tz: userTimezone, defaultValue: `Manage schedules, deadlines and upcoming tasks in your local timezone (${userTimezone}).` })}</p>
             </div>
             <div className="calendar-header-actions">
-              <button className="today-btn" onClick={handleToday}>Today</button>
+              <button className="today-btn" onClick={handleToday}>{t("Today", { defaultValue: "Today" })}</button>
               {canManageEvents && (
                 <button className="add-event-btn" onClick={() => { setEditEvent(null); setShowEventModal(true); }}>
                   <Plus size={18} />
-                  Add Event
+                  {t("Add Event", { defaultValue: "Add Event" })}
                 </button>
               )}
             </div>
@@ -381,10 +389,10 @@ function Calender() {
                     color: "var(--color-primary, #4f46e5)",
                     whiteSpace: "nowrap",
                   }}
-                  title={`Active timezone: ${userTimezone} ${getTimezoneOffsetDisplay(userTimezone)}. All schedule times are rendered in your local time.`}
+                  title={t("Active timezone: {{tz}} {{offset}}. All schedule times are rendered in your local time.", { tz: userTimezone, offset: getTimezoneOffsetDisplay(userTimezone), defaultValue: `Active timezone: ${userTimezone} ${getTimezoneOffsetDisplay(userTimezone)}. All schedule times are rendered in your local time.` })}
                 >
                   <Globe size={14} style={{ color: "var(--color-primary, #4f46e5)", flexShrink: 0 }} />
-                  <span>Timezone: <strong>{userTimezone}</strong> {getTimezoneOffsetDisplay(userTimezone)}</span>
+                  <span>{t("Timezone:", { defaultValue: "Timezone:" })} <strong>{userTimezone}</strong> {getTimezoneOffsetDisplay(userTimezone)}</span>
                 </div>
 
                 <div className="calendar-tabs">
@@ -394,7 +402,7 @@ function Calender() {
                       className={item.key === viewMode ? "active-tab" : ""}
                       onClick={() => setViewMode(item.key)}
                     >
-                      {item.label}
+                      {t(item.label, { defaultValue: item.label })}
                     </button>
                   ))}
                 </div>
@@ -402,7 +410,7 @@ function Calender() {
                   <Search size={18} color="var(--text-muted)" />
                   <input
                     type="text"
-                    placeholder="Search by event title or description..."
+                    placeholder={t("Search by event title or description...", { defaultValue: "Search by event title or description..." })}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                   />
@@ -412,14 +420,14 @@ function Calender() {
 
             {loading ? (
               <div style={{ padding: "60px 20px", textAlign: "center", color: "var(--text-muted)" }}>
-                Loading events...
+                {t("Loading events...", { defaultValue: "Loading events..." })}
               </div>
             ) : viewMode === "Upcoming" ? (
               /* Dedicated Upcoming View (SRS Sec 20) */
               <div className="calendar-upcoming-view" style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "16px", minHeight: 400 }}>
                 {upcomingGrouped.length === 0 ? (
                   <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)" }}>
-                    No upcoming events or task deadlines in the next 3 months.
+                    {t("No upcoming events or task deadlines in the next 3 months.", { defaultValue: "No upcoming events or task deadlines in the next 3 months." })}
                   </div>
                 ) : (
                   upcomingGrouped.map((group) => (
@@ -432,7 +440,7 @@ function Calender() {
                         {group.items.map((ev) => {
                           const colors = TYPE_COLORS[ev.type] || DEFAULT_EVENT_COLOR;
                           const sourceIcon = ev.source === "task" ? "📋" : ev.source === "deliverable" ? "📦" : ev.source === "project" ? "🚀" : "📅";
-                          const timeStr = ev.all_day ? "All Day" : convertToLocal(ev.start_date, userTimezone, "hh:mm A");
+                          const timeStr = ev.all_day ? t("All Day", { defaultValue: "All Day" }) : formatLocalTime(ev.start_date, userTimezone);
                           return (
                             <div
                               key={ev.id}
@@ -457,7 +465,7 @@ function Calender() {
                                   </div>
                                   {ev.project_title && (
                                     <div style={{ fontSize: "11px", color: "var(--text-secondary)" }}>
-                                      Project: {ev.project_title}
+                                      {t("Project: {{title}}", { title: ev.project_title, defaultValue: `Project: ${ev.project_title}` })}
                                     </div>
                                   )}
                                 </div>
@@ -467,7 +475,7 @@ function Calender() {
                                   <Clock size={12} /> {timeStr}
                                 </span>
                                 <span style={{ fontSize: "11px", fontWeight: 600, background: colors.dot || "var(--color-primary)", color: "#fff", padding: "2px 8px", borderRadius: "10px" }}>
-                                  {TYPE_LABELS[ev.type] || ev.type || "Event"}
+                                  {t(TYPE_LABELS[ev.type] || ev.type || "Event", { defaultValue: TYPE_LABELS[ev.type] || ev.type || "Event" })}
                                 </span>
                               </div>
                             </div>
@@ -481,7 +489,7 @@ function Calender() {
             ) : (
               <div className="calendar-grid">
                 {days.map((day) => (
-                  <div key={day} className="calendar-day-name">{day}</div>
+                  <div key={day} className="calendar-day-name">{t(day, { defaultValue: day })}</div>
                 ))}
 
                 {calendarDays.map((date, index) => {
@@ -524,7 +532,7 @@ function Calender() {
                       })}
                       {dayEvents.length > 2 && (
                         <p style={{ margin: 0, fontSize: 11, color: "var(--text-secondary)" }}>
-                          +{dayEvents.length - 2} more
+                          {t("+{{count}} more", { count: dayEvents.length - 2, defaultValue: `+${dayEvents.length - 2} more` })}
                         </p>
                       )}
                     </div>
@@ -537,7 +545,7 @@ function Calender() {
               {Object.entries(TYPE_LABELS).map(([key, label]) => (
                 <div key={key}>
                   <span className="dot" style={{ background: TYPE_COLORS[key]?.dot || "var(--text-muted)" }} />
-                  {label}
+                  {t(label, { defaultValue: label })}
                 </div>
               ))}
             </div>
@@ -548,17 +556,17 @@ function Calender() {
         <div className="calender-sidebar">
           <div className="task-card">
             <h3>
-              Today <span className="today-date">• {formatDisplayDate(new Date())}</span>
+              {t("Today", { defaultValue: "Today" })} <span className="today-date">• {formatDisplayDate(new Date())}</span>
             </h3>
              <div className="agenda-list">
               {todayEvents.length === 0 ? (
                 <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>
-                  No events scheduled for today.
+                  {t("No events scheduled for today.", { defaultValue: "No events scheduled for today." })}
                 </p>
               ) : (
                 todayEvents.map((ev) => {
                   const colors = TYPE_COLORS[ev.type] || DEFAULT_EVENT_COLOR;
-                  const timeFormatted = ev.all_day ? "All Day" : convertToLocal(ev.start_date, userTimezone, "hh:mm A");
+                  const timeFormatted = ev.all_day ? t("All Day", { defaultValue: "All Day" }) : formatLocalTime(ev.start_date, userTimezone);
                   return (
                     <div className="agenda-item" key={ev.id}>
                       <span className="agenda-dot" style={{ background: colors.dot }} />
@@ -575,7 +583,7 @@ function Calender() {
                           {timeFormatted}
                         </p>
                         <span style={{ fontSize: "11px", color: colors.text, fontWeight: 600 }}>
-                          {TYPE_LABELS[ev.type] || ev.type}
+                          {t(TYPE_LABELS[ev.type] || ev.type, { defaultValue: TYPE_LABELS[ev.type] || ev.type })}
                         </span>
                       </div>
                     </div>
@@ -588,16 +596,16 @@ function Calender() {
                   <br />
  
            <div className="task-card">
-            <p style={{ fontWeight: "bold", fontSize: "20px", margin: 0 }}>Upcoming Events</p>
+            <p style={{ fontWeight: "bold", fontSize: "20px", margin: 0 }}>{t("Upcoming Events", { defaultValue: "Upcoming Events" })}</p>
             <div className="deadline-list">
               {upcomingEvents.length === 0 ? (
                 <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>
-                  No upcoming events found.
+                  {t("No upcoming events found.", { defaultValue: "No upcoming events found." })}
                 </p>
               ) : (
                 upcomingEvents.map((ev) => {
                   const colors = TYPE_COLORS[ev.type] || DEFAULT_EVENT_COLOR;
-                  const timeFormatted = ev.all_day ? "All Day" : convertToLocal(ev.start_date, userTimezone, "DD MMM, hh:mm A");
+                  const timeFormatted = ev.all_day ? t("All Day", { defaultValue: "All Day" }) : convertToLocal(ev.start_date, userTimezone, "DD MMM, hh:mm A");
                   return (
                     <div className="deadline-item" key={ev.id}>
                       <div style={{ flex: 1 }}>
@@ -611,7 +619,7 @@ function Calender() {
                         </p>
                         <div className="dealine-date" style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
                           <span className="deadline-date" style={{ color: colors.dot, fontSize: "13px" }}>{timeFormatted}</span>
-                          <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>{TYPE_LABELS[ev.type] || ev.type}</span>
+                          <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>{t(TYPE_LABELS[ev.type] || ev.type, { defaultValue: TYPE_LABELS[ev.type] || ev.type })}</span>
                         </div>
                       </div>
                     </div>
@@ -650,3 +658,4 @@ function Calender() {
 }
 
 export default Calender;
+

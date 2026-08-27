@@ -7,6 +7,7 @@
 
 import { useNotification } from "../context/NotificationContext";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import "./Toast.css";
 
 /** SVG icon components for each notification type */
@@ -46,6 +47,7 @@ const ICONS = {
  * @param {Function} onRemove - Callback to remove the notification by id.
  */
 function ToastItem({ notification, onRemove }) {
+  const { t } = useTranslation();
   const [exiting, setExiting] = useState(false);
 
   /** Starts exit animation, then removes the notification after animation completes */
@@ -58,7 +60,7 @@ function ToastItem({ notification, onRemove }) {
     <div className={`toast-item toast-${notification.type}${exiting ? " toast-exit" : ""}`}>
       <div className="toast-icon">{ICONS[notification.type]}</div>
       <div className="toast-message">{notification.message}</div>
-      <button className="toast-close" onClick={handleClose} aria-label="Close notification">
+      <button className="toast-close" onClick={handleClose} aria-label={t("Close notification", { defaultValue: "Close notification" })}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <line x1="18" y1="6" x2="6" y2="18" />
           <line x1="6" y1="6" x2="18" y2="18" />

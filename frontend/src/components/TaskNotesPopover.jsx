@@ -6,12 +6,14 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { StickyNote, Pencil, Trash2, Check, X } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import "./TaskNotesPopover.css";
 
 const TaskNotesPopover = ({ taskId, itemType = "task" }) => {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -219,13 +221,13 @@ const TaskNotesPopover = ({ taskId, itemType = "task" }) => {
           >
             <div className="tnp-popover-header">
               <StickyNote size={14} />
-              <span>Notes ({notes.length})</span>
+              <span>{t("Notes ({{count}})", { defaultValue: `Notes (${notes.length})`, count: notes.length })}</span>
             </div>
             <div className="tnp-popover-body">
               {loading ? (
-                <div className="tnp-loading">Loading...</div>
+                <div className="tnp-loading">{t("Loading...", { defaultValue: "Loading..." })}</div>
               ) : notes.length === 0 ? (
-                <div className="tnp-empty">No notes yet</div>
+                <div className="tnp-empty">{t("No notes yet", { defaultValue: "No notes yet" })}</div>
               ) : (
                 notes.map((n) => (
                   <div key={n.id} className="tnp-note">
@@ -258,10 +260,10 @@ const TaskNotesPopover = ({ taskId, itemType = "task" }) => {
                       <>
                         <p className="tnp-note-text">{n.note}</p>
                         <div style={{ display: "flex", alignItems: "center", gap: "4px", marginLeft: "auto" }}>
-                          <button className="tnp-edit-icon" title="Edit note" onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleEditStart(n); }}>
+                          <button className="tnp-edit-icon" title={t("Edit note", { defaultValue: "Edit note" })} onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleEditStart(n); }}>
                             <Pencil size={12} />
                           </button>
-                          <button className="tnp-edit-icon" title="Delete note" onClick={(e) => handleDeleteNote(e, n.id)} style={{ color: "#ef4444" }}>
+                          <button className="tnp-edit-icon" title={t("Delete note", { defaultValue: "Delete note" })} onClick={(e) => handleDeleteNote(e, n.id)} style={{ color: "#ef4444" }}>
                             <Trash2 size={12} />
                           </button>
                         </div>

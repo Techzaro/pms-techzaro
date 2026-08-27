@@ -19,6 +19,7 @@ import { formatDateTime, toDatetimeLocal, toUTCIso, getNowDatetimeLocal } from "
 import { publish } from "../utils/eventBus";
 import { notify, showSuccessMessage } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
+import { useTranslation } from "react-i18next";
 import useDraftGuard from "../hooks/useDraftGuard";
 import useAutoSave from "../hooks/useAutoSave";
 import AutoSaveIndicator from "./AutoSaveIndicator";
@@ -33,6 +34,7 @@ function isExternalLink(url) {
 }
 
 const EditProjectModal = ({ project, onClose }) => {
+  const { t } = useTranslation();
   const draftSaveRef = useRef(null);
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useDraftGuard(onClose, {
     draftSaveHandler: () => draftSaveRef.current?.(),
@@ -653,17 +655,17 @@ const EditProjectModal = ({ project, onClose }) => {
           <div className="cp-header-left">
             <div className="cp-icon-box">📁</div>
             <div>
-              <h2>Edit Project</h2>
-              <p>Update project details and settings.</p>
+              <h2>{t("Edit Project", { defaultValue: "Edit Project" })}</h2>
+              <p>{t("Update project details and settings.", { defaultValue: "Update project details and settings." })}</p>
             </div>
             <AutoSaveIndicator isSaving={isSaving} lastSaved={lastSaved} />
           </div>
           <div className="cp-header-actions">
             <button className="cp-save-draft-btn" onClick={handleSaveDraft} type="button">
-              Save Draft
+              {t("Save Draft", { defaultValue: "Save Draft" })}
             </button>
             <LoadingButton className="cp-create-btn" onClick={handleSubmit} loading={submitting}>
-              Save Changes
+              {t("Save Changes", { defaultValue: "Save Changes" })}
             </LoadingButton>
             <button className="cp-close-btn" onClick={handleClose}>✕</button>
           </div>
@@ -676,11 +678,11 @@ const EditProjectModal = ({ project, onClose }) => {
           <div className="cp-left">
 
             <div className="cp-field">
-              <label>Project Name <span>*</span></label>
+              <label>{t("Project Name")} <span>*</span></label>
               <input
                 type="text"
                 name="title"
-                placeholder="Enter project name..."
+                placeholder={t("Enter project name...", { defaultValue: "Enter project name..." })}
                 value={form.title}
                 onChange={handleChange}
                 className={formErrors.title ? "field-error" : ""}
@@ -689,25 +691,25 @@ const EditProjectModal = ({ project, onClose }) => {
             </div>
 
             <div className="cp-field">
-              <label>Description</label>
+              <label>{t("Description", { defaultValue: "Description" })}</label>
               <RichTextEditor
                 value={form.description}
                 onChange={(val) => { markDirty(); setForm((prev) => ({ ...prev, description: val })); }}
-                placeholder="Enter project description..."
+                placeholder={t("Enter project description...", { defaultValue: "Enter project description..." })}
               />
             </div>
 
             {/* PROJECT DEADLINE */}
             <div className="cp-field">
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                <label style={{ margin: 0 }}>Project Deadline (Optional)</label>
+                <label style={{ margin: 0 }}>{t("Project Deadline (Optional)", { defaultValue: "Project Deadline (Optional)" })}</label>
                 {form.end_date && (
                   <button
                     type="button"
                     style={{ background: "none", border: "none", color: "#ef4444", fontSize: "12px", cursor: "pointer", fontWeight: 600 }}
                     onClick={() => { markDirty(); setForm((prev) => ({ ...prev, end_date: "" })); }}
                   >
-                    Clear Deadline ✕
+                    {t("Clear Deadline ✕", { defaultValue: "Clear Deadline ✕" })}
                   </button>
                 )}
               </div>
@@ -722,15 +724,15 @@ const EditProjectModal = ({ project, onClose }) => {
             {/* PROJECT MILESTONES */}
             <div className="cp-card">
               <div className="cp-card-top">
-                <span>Project Milestones</span>
+                <span>{t("Project Milestones", { defaultValue: "Project Milestones" })}</span>
               </div>
 
               <div className="cp-deadline-grid">
                 <div className="cp-field" ref={phaseDropdownRef}>
-                  <label style={{ fontSize: "13px" }}>Phase</label>
+                  <label style={{ fontSize: "13px" }}>{t("Phase", { defaultValue: "Phase" })}</label>
                   <input
                     type="text"
-                    placeholder="Enter phase name"
+                    placeholder={t("Enter phase name", { defaultValue: "Enter phase name" })}
                     value={phaseName}
                     onChange={(e) => {
                       setPhaseName(e.target.value);
@@ -760,14 +762,14 @@ const EditProjectModal = ({ project, onClose }) => {
                       ))}
                       {savedMilestones.filter((p) => !phaseSearch.trim() || p.toLowerCase().includes(phaseSearch.toLowerCase())).length === 0 && phaseSearch.trim() && (
                         <div className="cp-dropdown-item" style={{ color: "var(--text-muted)", fontStyle: "italic" }}>
-                          Type and press Enter to add "{phaseSearch}"
+                          {t('Type and press Enter to add "{{phaseSearch}}"', { defaultValue: `Type and press Enter to add "${phaseSearch}"`, phaseSearch })}
                         </div>
                       )}
                     </div>
                   )}
                 </div>
                 <div className="cp-field">
-                  <label style={{ fontSize: "13px" }}>Due Date & Time (Optional)</label>
+                  <label style={{ fontSize: "13px" }}>{t("Due Date & Time (Optional)", { defaultValue: "Due Date & Time (Optional)" })}</label>
                   <input
                     type="datetime-local"
                     value={phaseDate}
@@ -783,7 +785,7 @@ const EditProjectModal = ({ project, onClose }) => {
                 onClick={handleAddPhase}
                 disabled={!phaseName.trim()}
               >
-                + Add Phase
+                {t("+ Add Phase", { defaultValue: "+ Add Phase" })}
               </button>
 
               {milestones.length > 0 && (
@@ -793,19 +795,19 @@ const EditProjectModal = ({ project, onClose }) => {
                       <div className="cp-phase-item-dot" />
                       <div className="cp-phase-item-info">
                         <div className="cp-phase-item-title">{m.title}</div>
-                        <div className="cp-phase-item-date">{m.due_date ? formatDateDisplay(m.due_date) : "No Date"}</div>
+                        <div className="cp-phase-item-date">{m.due_date ? formatDateDisplay(m.due_date) : t("No Date", { defaultValue: "No Date" })}</div>
                       </div>
                       {m.due_date && (
                         <button
                           type="button"
-                          title="Clear Milestone Date"
+                          title={t("Clear Milestone Date", { defaultValue: "Clear Milestone Date" })}
                           style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: "12px", marginRight: "8px", fontWeight: 600 }}
                           onClick={() => {
                             markDirty();
                             setMilestones((prev) => prev.map((item, idx) => idx === index ? { ...item, due_date: "" } : item));
                           }}
                         >
-                          Clear Date
+                          {t("Clear Date", { defaultValue: "Clear Date" })}
                         </button>
                       )}
                       <button
@@ -822,7 +824,7 @@ const EditProjectModal = ({ project, onClose }) => {
 
               {milestones.length > 0 && (
                 <div className="cp-deadline-summary">
-                  <span>Final Deadline:</span>
+                  <span>{t("Final Deadline:", { defaultValue: "Final Deadline:" })}</span>
                   <strong>{formatDateDisplay(milestones[milestones.length - 1].due_date)}</strong>
                 </div>
               )}
@@ -830,7 +832,7 @@ const EditProjectModal = ({ project, onClose }) => {
 
             {/* ATTACHMENTS */}
             <div className="cp-field">
-              <label>Links & Attachment</label>
+              <label>{t("Links & Attachment", { defaultValue: "Links & Attachment" })}</label>
 
               <div
                 className="cp-drop-zone"
@@ -846,9 +848,9 @@ const EditProjectModal = ({ project, onClose }) => {
                     <polyline points="17 8 12 3 7 8" />
                     <line x1="12" y1="3" x2="12" y2="15" />
                   </svg>
-                  <p className="cp-drop-text">Drag & drop files here</p>
+                  <p className="cp-drop-text">{t("Drag & drop files here", { defaultValue: "Drag & drop files here" })}</p>
                 </div>
-                <span className="cp-drop-browse">or browse</span>
+                <span className="cp-drop-browse">{t("or browse", { defaultValue: "or browse" })}</span>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -870,7 +872,7 @@ const EditProjectModal = ({ project, onClose }) => {
                         : "#";
                       return (
                         <div key={file.id} className="cp-attachment-item">
-                          <span className="cp-attachment-drag" title="Drag to reorder">
+                          <span className="cp-attachment-drag" title={t("Drag to reorder", { defaultValue: "Drag to reorder" })}>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
                           </span>
                           <span className="cp-attachment-icon">📄</span>
@@ -880,7 +882,7 @@ const EditProjectModal = ({ project, onClose }) => {
                             </a>
                           </div>
                           <div className="cp-attachment-actions">
-                            <button type="button" className="cp-action-btn cp-action-btn-edit" title="Edit Name" onClick={() => {
+                            <button type="button" className="cp-action-btn cp-action-btn-edit" title={t("Edit Name", { defaultValue: "Edit Name" })} onClick={() => {
                               setEditingFile({ type: "existing", id: file.id, currentName: file.customName || file.name });
                               setEditFileForm({ title: file.customName || file.name.replace(/\.[^.]+$/, "") });
                               setEditFileNewFile(null);
@@ -888,7 +890,7 @@ const EditProjectModal = ({ project, onClose }) => {
                             }}>
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                             </button>
-                            <button type="button" className="cp-action-btn cp-action-btn-delete" title="Delete File" onClick={() => { setPendingRemoveItem({ type: "existing-file", index: -1, id: file.id }); setRemoveConfirmOpen(true); }}>
+                            <button type="button" className="cp-action-btn cp-action-btn-delete" title={t("Delete File", { defaultValue: "Delete File" })} onClick={() => { setPendingRemoveItem({ type: "existing-file", index: -1, id: file.id }); setRemoveConfirmOpen(true); }}>
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                             </button>
                           </div>
@@ -903,7 +905,7 @@ const EditProjectModal = ({ project, onClose }) => {
                 <div className="cp-attachments-list">
                   {pendingFiles.map((file, index) => (
                     <div key={index} className="cp-attachment-item">
-                      <span className="cp-attachment-drag" title="Drag to reorder">
+                      <span className="cp-attachment-drag" title={t("Drag to reorder", { defaultValue: "Drag to reorder" })}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
                       </span>
                       <span className="cp-attachment-icon">📄</span>
@@ -912,7 +914,7 @@ const EditProjectModal = ({ project, onClose }) => {
                         <span className="cp-attachment-size">{(file.size / 1024).toFixed(1)} KB</span>
                       </div>
                       <div className="cp-attachment-actions">
-                        <button type="button" className="cp-action-btn cp-action-btn-edit" title="Edit Name" onClick={() => {
+                        <button type="button" className="cp-action-btn cp-action-btn-edit" title={t("Edit Name", { defaultValue: "Edit Name" })} onClick={() => {
                           setEditingFile({ type: "pending", index, currentName: file.customName || file.name });
                           setEditFileForm({ title: file.customName || file.name.replace(/\.[^.]+$/, "") });
                           setEditFileNewFile(null);
@@ -920,7 +922,7 @@ const EditProjectModal = ({ project, onClose }) => {
                         }}>
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                         </button>
-                        <button type="button" className="cp-action-btn cp-action-btn-delete" title="Delete File" onClick={() => { setPendingRemoveItem({ type: "pending-file", index }); setRemoveConfirmOpen(true); }}>
+                        <button type="button" className="cp-action-btn cp-action-btn-delete" title={t("Delete File", { defaultValue: "Delete File" })} onClick={() => { setPendingRemoveItem({ type: "pending-file", index }); setRemoveConfirmOpen(true); }}>
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                         </button>
                       </div>
@@ -931,21 +933,21 @@ const EditProjectModal = ({ project, onClose }) => {
 
               <div className="cp-or-divider">
                 <span className="cp-or-line"></span>
-                <span className="cp-or-text">OR</span>
+                <span className="cp-or-text">{t("OR", { defaultValue: "OR" })}</span>
                 <span className="cp-or-line"></span>
               </div>
 
               <div className="cp-link-input-row" style={{ flexDirection: "column", gap: "8px" }}>
                 <input
                   type="text"
-                  placeholder="Link title (e.g. Figma Design, Drive Folder)"
+                  placeholder={t("Link title (e.g. Figma Design, Drive Folder)", { defaultValue: "Link title (e.g. Figma Design, Drive Folder)" })}
                   value={linkTitleInput}
                   onChange={(e) => { markDirty(); setLinkTitleInput(e.target.value); }}
                 />
                 <div style={{ display: "flex", gap: "8px" }}>
                   <input
                     type="text"
-                    placeholder="Paste link (Drive, Figma, Website, etc.)"
+                    placeholder={t("Paste link (Drive, Figma, Website, etc.)", { defaultValue: "Paste link (Drive, Figma, Website, etc.)" })}
                     value={linkInput}
                     onChange={(e) => { markDirty(); setLinkInput(e.target.value); }}
                     onKeyDown={handleLinkKeyDown}
@@ -957,7 +959,7 @@ const EditProjectModal = ({ project, onClose }) => {
                     onClick={handleAddLink}
                     disabled={!linkInput.trim()}
                   >
-                    Add Link
+                    {t("Add Link", { defaultValue: "Add Link" })}
                   </button>
                 </div>
               </div>
@@ -970,7 +972,7 @@ const EditProjectModal = ({ project, onClose }) => {
                   <div className="cp-attachments-list" style={{ marginTop: "8px" }}>
                     {existingLinks.map((file) => (
                       <div key={file.id} className="cp-attachment-item">
-                        <span className="cp-attachment-drag" title="Drag to reorder">
+                        <span className="cp-attachment-drag" title={t("Drag to reorder", { defaultValue: "Drag to reorder" })}>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
                         </span>
                         <span className="cp-attachment-icon">🔗</span>
@@ -981,13 +983,13 @@ const EditProjectModal = ({ project, onClose }) => {
                           </a>
                         </div>
                         <div className="cp-attachment-actions">
-                          <button type="button" className="cp-action-btn cp-action-btn-edit" title="Edit Link" onClick={() => {
+                          <button type="button" className="cp-action-btn cp-action-btn-edit" title={t("Edit Link", { defaultValue: "Edit Link" })} onClick={() => {
                             setEditingLink({ type: "existing", index: -1, id: file.id });
                             setEditLinkForm({ title: file.customName || file.name, url: file.url });
                           }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                           </button>
-                          <button type="button" className="cp-action-btn cp-action-btn-delete" title="Delete Link" onClick={() => { setPendingRemoveItem({ type: "existing-link", index: -1, id: file.id }); setRemoveConfirmOpen(true); }}>
+                          <button type="button" className="cp-action-btn cp-action-btn-delete" title={t("Delete Link", { defaultValue: "Delete Link" })} onClick={() => { setPendingRemoveItem({ type: "existing-link", index: -1, id: file.id }); setRemoveConfirmOpen(true); }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                           </button>
                         </div>
@@ -1001,7 +1003,7 @@ const EditProjectModal = ({ project, onClose }) => {
                 <div className="cp-attachments-list">
                   {links.map((link, index) => (
                     <div key={index} className="cp-attachment-item">
-                      <span className="cp-attachment-drag" title="Drag to reorder">
+                      <span className="cp-attachment-drag" title={t("Drag to reorder", { defaultValue: "Drag to reorder" })}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
                       </span>
                       <span className="cp-attachment-icon">🔗</span>
@@ -1012,13 +1014,13 @@ const EditProjectModal = ({ project, onClose }) => {
                         </a>
                       </div>
                       <div className="cp-attachment-actions">
-                        <button type="button" className="cp-action-btn cp-action-btn-edit" title="Edit Link" onClick={() => {
+                        <button type="button" className="cp-action-btn cp-action-btn-edit" title={t("Edit Link", { defaultValue: "Edit Link" })} onClick={() => {
                           setEditingLink({ type: "pending", index });
                           setEditLinkForm({ title: link.customName || link.name, url: link.url });
                         }}>
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                         </button>
-                        <button type="button" className="cp-action-btn cp-action-btn-delete" title="Delete Link" onClick={() => { setPendingRemoveItem({ type: "pending-link", index }); setRemoveConfirmOpen(true); }}>
+                        <button type="button" className="cp-action-btn cp-action-btn-delete" title={t("Delete Link", { defaultValue: "Delete Link" })} onClick={() => { setPendingRemoveItem({ type: "pending-link", index }); setRemoveConfirmOpen(true); }}>
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                         </button>
                       </div>
@@ -1034,43 +1036,43 @@ const EditProjectModal = ({ project, onClose }) => {
 
             {/* PRIORITY */}
             <div className="cp-field">
-              <label>Priority</label>
+              <label>{t("Priority")}</label>
               <CustomSelect
                 name="priority"
                 value={form.priority}
                 onChange={(val) => handleChange({ target: { name: "priority", value: val } })}
                 options={[
-                  { value: "Medium", label: "Medium" },
-                  { value: "Low", label: "Low" },
-                  { value: "High", label: "High" },
+                  { value: "Medium", label: t("Medium") },
+                  { value: "Low", label: t("Low") },
+                  { value: "High", label: t("High") },
                 ]}
               />
             </div>
 
             {/* STATUS */}
             <div className="cp-field">
-              <label>Status</label>
+              <label>{t("Status")}</label>
               <CustomSelect
                 name="status"
                 value={form.status}
                 onChange={(val) => handleChange({ target: { name: "status", value: val } })}
                 options={[
-                  { value: "Planning", label: "Planning" },
-                  { value: "In-progress", label: "In-progress" },
-                  { value: "Pause", label: "Pause" },
-                  { value: "Completed", label: "Completed" },
+                  { value: "Planning", label: t("Planning", { defaultValue: "Planning" }) },
+                  { value: "In-progress", label: t("In Progress") },
+                  { value: "Pause", label: t("Pause", { defaultValue: "Pause" }) },
+                  { value: "Completed", label: t("Completed") },
                 ]}
               />
             </div>
 
             {/* CATEGORY */}
             <div className="cp-field">
-              <label>Category</label>
+              <label>{t("Category", { defaultValue: "Category" })}</label>
               {categoryCustomMode ? (
                 <div className="custom-input-container">
                   <input
                     type="text"
-                    placeholder="Enter custom category"
+                    placeholder={t("Enter custom category", { defaultValue: "Enter custom category" })}
                     value={categoryInput}
                     onChange={(e) => { markDirty(); setCategoryInput(e.target.value); }}
                     onKeyDown={(e) => {
@@ -1079,22 +1081,22 @@ const EditProjectModal = ({ project, onClose }) => {
                     }}
                     autoFocus
                   />
-                  <button type="button" className="custom-input-revert" onClick={() => { setCategoryCustomMode(false); setCategoryInput(""); }} title="Back to list">&times;</button>
+                  <button type="button" className="custom-input-revert" onClick={() => { setCategoryCustomMode(false); setCategoryInput(""); }} title={t("Back to list", { defaultValue: "Back to list" })}>&times;</button>
                 </div>
               ) : (
                 <div className="cp-category-dropdown" ref={categoryDropdownRef}>
                   <div className="cp-category-trigger cp-combo-trigger" onClick={() => { setCategoryDropdownOpen(true); }}>
                     {categoriesList.length > 0 && (
-                      <span className="cp-combo-count">{categoriesList.length} selected</span>
+                      <span className="cp-combo-count">{categoriesList.length} {t("selected")}</span>
                     )}
                     {categoriesList.length === 0 && !categoryDropdownOpen && (
-                      <span className="cp-combo-placeholder">Select category</span>
+                      <span className="cp-combo-placeholder">{t("Select category", { defaultValue: "Select category" })}</span>
                     )}
                     {categoryDropdownOpen && (
                       <input
                         type="text"
                         className="cp-combo-input"
-                        placeholder="Search by category name..."
+                        placeholder={t("Search by category name...", { defaultValue: "Search by category name..." })}
                         value={catSearch}
                         onChange={(e) => { setCatSearch(e.target.value); }}
                         onFocus={() => setCategoryDropdownOpen(true)}
@@ -1144,7 +1146,7 @@ const EditProjectModal = ({ project, onClose }) => {
                             type="button"
                             className="cp-dropdown-item-delete"
                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteCategoryPermanent(cat); }}
-                            title="Delete category"
+                            title={t("Delete category", { defaultValue: "Delete category" })}
                           >
                             ✕
                           </button>
@@ -1155,7 +1157,7 @@ const EditProjectModal = ({ project, onClose }) => {
                         onMouseEnter={() => setCatHighlightedIndex(existingCategories.filter((c) => !categoriesList.includes(c)).filter((c) => !catSearch.trim() || c.toLowerCase().includes(catSearch.toLowerCase())).length)}
                         onClick={() => { setCategoryCustomMode(true); setCategoryDropdownOpen(false); setCategoryInput(""); }}
                       >
-                        Custom / Type Here
+                        {t("Custom / Type Here", { defaultValue: "Custom / Type Here" })}
                       </div>
                     </div>
                   )}
@@ -1181,19 +1183,19 @@ const EditProjectModal = ({ project, onClose }) => {
 
             {/* TEAMS & MEMBERS */}
             <div className="cp-field">
-              <label>Teams (Optional)</label>
+              <label>{t("Teams (Optional)", { defaultValue: "Teams (Optional)" })}</label>
               <div className="cp-dropdown-wrap cp-combo-trigger" ref={teamRolesRef} onClick={() => { if (!teamRolesOpen) { setTeamRolesOpen(true); setTeamRolesSearch(""); } }}>
                 {form.team_ids.length > 0 && (
-                  <span className="cp-combo-count">{form.team_ids.length} selected</span>
+                  <span className="cp-combo-count">{form.team_ids.length} {t("selected")}</span>
                 )}
                 {form.team_ids.length === 0 && !teamRolesOpen && (
-                  <span className="cp-combo-placeholder">Select Teams</span>
+                  <span className="cp-combo-placeholder">{t("Select Teams", { defaultValue: "Select Teams" })}</span>
                 )}
                 {teamRolesOpen && (
                   <input
                     type="text"
                     className="cp-combo-input"
-                    placeholder="Search by team name..."
+                    placeholder={t("Search by team name...", { defaultValue: "Search by team name..." })}
                     value={teamRolesSearch}
                     onChange={(e) => setTeamRolesSearch(e.target.value)}
                     onKeyDown={(e) => {
@@ -1245,47 +1247,47 @@ const EditProjectModal = ({ project, onClose }) => {
             </div>
 
             <div className="cp-field">
-              <label>Team Members (Optional)</label>
+              <label>{t("Team Members (Optional)", { defaultValue: "Team Members (Optional)" })}</label>
               <UserSelectDropdown
                 users={displayUsers}
                 selectedIds={form.assigned_users}
                 onChange={handleAssignedUsersChange}
-                placeholder="Click to select members"
+                placeholder={t("Click to select members", { defaultValue: "Click to select members" })}
               />
             </div>
 
             <div className="cp-field">
-              <label>Guests (Optional)</label>
+              <label>{t("Guests (Optional)", { defaultValue: "Guests (Optional)" })}</label>
               <UserSelectDropdown
                 users={guests}
                 selectedIds={form.guest_ids}
                 onChange={(ids) => { markDirty(); setForm(prev => ({ ...prev, guest_ids: ids })); }}
-                placeholder="Click to select guests"
+                placeholder={t("Click to select guests", { defaultValue: "Click to select guests" })}
               />
             </div>
 
             <div className="cp-field">
-              <label>Followers (Optional)</label>
+              <label>{t("Followers (Optional)", { defaultValue: "Followers (Optional)" })}</label>
               <UserSelectDropdown
                 users={allUsers.filter(u => !form.assigned_users.includes(u.id))}
                 selectedIds={form.followers || []}
                 onChange={(ids) => { markDirty(); setForm(prev => ({ ...prev, followers: ids })); }}
-                placeholder="Click to select followers"
+                placeholder={t("Click to select followers", { defaultValue: "Click to select followers" })}
               />
             </div>
 
             {/* CLIENT INFO */}
             <div className="cp-card">
               <div className="cp-card-top">
-                <span>Client Info</span>
+                <span>{t("Client Info", { defaultValue: "Client Info" })}</span>
               </div>
               <div className="cp-field">
-                <label style={{ fontSize: "13px" }}>Client Name</label>
-                <input type="text" name="client_name" placeholder="Enter client name" value={form.client_name} onChange={handleChange} />
+                <label style={{ fontSize: "13px" }}>{t("Client Name", { defaultValue: "Client Name" })}</label>
+                <input type="text" name="client_name" placeholder={t("Enter client name", { defaultValue: "Enter client name" })} value={form.client_name} onChange={handleChange} />
               </div>
               <div className="cp-field">
-                <label style={{ fontSize: "13px" }}>Budget</label>
-                <input type="number" name="budget" placeholder="Budget amount (PKR)" min="0" step="0.01" value={form.budget} onChange={handleChange} />
+                <label style={{ fontSize: "13px" }}>{t("Budget", { defaultValue: "Budget" })}</label>
+                <input type="number" name="budget" placeholder={t("Budget amount (PKR)", { defaultValue: "Budget amount (PKR)" })} min="0" step="0.01" value={form.budget} onChange={handleChange} />
               </div>
             </div>
 
@@ -1307,20 +1309,20 @@ const EditProjectModal = ({ project, onClose }) => {
         isOpen={catDeleteOpen}
         onClose={() => { setCatDeleteOpen(false); setPendingCatDelete(""); }}
         onConfirm={confirmDeleteCategory}
-        title="Confirm Deletion"
-        message={`Are you sure you want to delete "${pendingCatDelete}"? This action cannot be undone.`}
-        confirmText="Delete"
-        cancelText="Cancel"
+        title={t("Confirm Deletion", { defaultValue: "Confirm Deletion" })}
+        message={t('Are you sure you want to delete "{{cat}}"? This action cannot be undone.', { defaultValue: `Are you sure you want to delete "${pendingCatDelete}"? This action cannot be undone.`, cat: pendingCatDelete })}
+        confirmText={t("Delete")}
+        cancelText={t("Cancel")}
         danger
       />
       <ConfirmModal
         isOpen={removeConfirmOpen}
         onClose={() => { setRemoveConfirmOpen(false); setPendingRemoveItem({ type: "", index: -1, id: "" }); }}
         onConfirm={confirmRemoveItem}
-        title="Remove Item"
-        message="Are you sure you want to remove this item? This action cannot be undone."
-        confirmText="Remove"
-        cancelText="Cancel"
+        title={t("Remove Item", { defaultValue: "Remove Item" })}
+        message={t("Are you sure you want to remove this item? This action cannot be undone.", { defaultValue: "Are you sure you want to remove this item? This action cannot be undone." })}
+        confirmText={t("Remove", { defaultValue: "Remove" })}
+        cancelText={t("Cancel")}
         danger
       />
 
@@ -1328,10 +1330,10 @@ const EditProjectModal = ({ project, onClose }) => {
       {editingLink && createPortal(
         <div style={{ position: "fixed", inset: 0, zIndex: 10003, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => setEditingLink(null)}>
           <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: "24px 28px", width: 400, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>Edit File / Link</h3>
-            <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>Rename or update the URL below.</p>
+            <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>{t("Edit File / Link", { defaultValue: "Edit File / Link" })}</h3>
+            <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>{t("Rename or update the URL below.", { defaultValue: "Rename or update the URL below." })}</p>
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-dark)", marginBottom: 6 }}>Title</label>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-dark)", marginBottom: 6 }}>{t("Title", { defaultValue: "Title" })}</label>
               <input
                 type="text"
                 value={editLinkForm.title}
@@ -1340,7 +1342,7 @@ const EditProjectModal = ({ project, onClose }) => {
               />
             </div>
             <div style={{ marginBottom: 24 }}>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-dark)", marginBottom: 6 }}>URL</label>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-dark)", marginBottom: 6 }}>{t("URL", { defaultValue: "URL" })}</label>
               <input
                 type="url"
                 value={editLinkForm.url}
@@ -1349,7 +1351,7 @@ const EditProjectModal = ({ project, onClose }) => {
               />
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-              <button type="button" onClick={() => setEditingLink(null)} style={{ padding: "9px 20px", borderRadius: 8, border: "var(--border-color)", background: "var(--bg-card)", color: "var(--text-dark)", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "var(--bg-hover)"} onMouseLeave={(e) => e.target.style.background = "var(--bg-card)"}>Cancel</button>
+              <button type="button" onClick={() => setEditingLink(null)} style={{ padding: "9px 20px", borderRadius: 8, border: "var(--border-color)", background: "var(--bg-card)", color: "var(--text-dark)", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "var(--bg-hover)"} onMouseLeave={(e) => e.target.style.background = "var(--bg-card)"}>{t("Cancel")}</button>
               <button type="button" onClick={() => {
                 if (editingLink.type === "existing") {
                   setExistingFiles((p) => p.map((f) => f.id === editingLink.id ? { ...f, customName: editLinkForm.title, url: editLinkForm.url } : f));
@@ -1361,7 +1363,7 @@ const EditProjectModal = ({ project, onClose }) => {
                   });
                 }
                 setEditingLink(null);
-              }} style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: "var(--color-primary)", color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "var(--color-primary)"} onMouseLeave={(e) => e.target.style.background = "var(--color-primary)"}>Save</button>
+              }} style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: "var(--color-primary)", color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "var(--color-primary)"} onMouseLeave={(e) => e.target.style.background = "var(--color-primary)"}>{t("Save", { defaultValue: "Save" })}</button>
             </div>
           </div>
         </div>,
@@ -1372,10 +1374,10 @@ const EditProjectModal = ({ project, onClose }) => {
       {editingFile && createPortal(
         <div style={{ position: "fixed", inset: 0, zIndex: 10003, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => { setEditingFile(null); setEditFileNewFile(null); setEditFileDeleted(false); setEditFileDeleteConfirm(false); }}>
           <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: "24px 28px", width: 420, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>Edit File</h3>
-            <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>Rename or replace this file.</p>
+            <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>{t("Edit File", { defaultValue: "Edit File" })}</h3>
+            <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>{t("Rename or replace this file.", { defaultValue: "Rename or replace this file." })}</p>
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-dark)", marginBottom: 6 }}>Title</label>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-dark)", marginBottom: 6 }}>{t("Title", { defaultValue: "Title" })}</label>
               <input
                 type="text"
                 value={editFileForm.title}
@@ -1385,12 +1387,12 @@ const EditProjectModal = ({ project, onClose }) => {
               />
             </div>
             <div style={{ marginBottom: 24 }}>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-dark)", marginBottom: 6 }}>File</label>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-dark)", marginBottom: 6 }}>{t("File", { defaultValue: "File" })}</label>
               {editingFile.type === "existing" && !editFileDeleted && !editFileNewFile ? (
                 <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "var(--bg-hover)", border: "var(--border-color)", borderRadius: 8 }}>
                   <span style={{ fontSize: 14 }}>📄</span>
-                  <span style={{ flex: 1, fontSize: 13, color: "var(--text-dark)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{editingFile.currentName || "Current file"}</span>
-                  <button type="button" onClick={() => setEditFileDeleteConfirm(true)} className="cp-action-btn cp-action-btn-delete" title="Delete current file" style={{ width: 24, height: 24 }}>
+                  <span style={{ flex: 1, fontSize: 13, color: "var(--text-dark)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{editingFile.currentName || t("Current file", { defaultValue: "Current file" })}</span>
+                  <button type="button" onClick={() => setEditFileDeleteConfirm(true)} className="cp-action-btn cp-action-btn-delete" title={t("Delete current file", { defaultValue: "Delete current file" })} style={{ width: 24, height: 24 }}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                   </button>
                 </div>
@@ -1403,7 +1405,7 @@ const EditProjectModal = ({ project, onClose }) => {
                 </div>
               ) : (
                 <label style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", padding: "10px 12px", border: "1px dashed var(--border-color)", borderRadius: 8, background: "var(--bg-hover)", color: "#6b7280", fontSize: 13, cursor: "pointer", textAlign: "center" }}>
-                  Click to select a file
+                  {t("Click to select a file", { defaultValue: "Click to select a file" })}
                   <input
                     type="file"
                     style={{ display: "none" }}
@@ -1413,7 +1415,7 @@ const EditProjectModal = ({ project, onClose }) => {
               )}
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-              <button type="button" onClick={() => { setEditingFile(null); setEditFileNewFile(null); setEditFileDeleted(false); setEditFileDeleteConfirm(false); }} style={{ padding: "9px 20px", borderRadius: 8, border: "var(--border-color)", background: "var(--bg-card)", color: "var(--text-dark)", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "var(--bg-hover)"} onMouseLeave={(e) => e.target.style.background = "var(--bg-card)"}>Cancel</button>
+              <button type="button" onClick={() => { setEditingFile(null); setEditFileNewFile(null); setEditFileDeleted(false); setEditFileDeleteConfirm(false); }} style={{ padding: "9px 20px", borderRadius: 8, border: "var(--border-color)", background: "var(--bg-card)", color: "var(--text-dark)", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "var(--bg-hover)"} onMouseLeave={(e) => e.target.style.background = "var(--bg-card)"}>{t("Cancel")}</button>
               <button type="button" onClick={async () => {
                 const token = authToken();
                 if (editingFile.type === "existing") {
@@ -1469,7 +1471,7 @@ const EditProjectModal = ({ project, onClose }) => {
                 setEditFileNewFile(null);
                 setEditFileDeleted(false);
                 setEditFileDeleteConfirm(false);
-              }} style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: "var(--color-primary)", color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "var(--color-primary)"} onMouseLeave={(e) => e.target.style.background = "var(--color-primary)"}>Save</button>
+              }} style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: "var(--color-primary)", color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "var(--color-primary)"} onMouseLeave={(e) => e.target.style.background = "var(--color-primary)"}>{t("Save", { defaultValue: "Save" })}</button>
             </div>
           </div>
         </div>,
@@ -1481,10 +1483,10 @@ const EditProjectModal = ({ project, onClose }) => {
         isOpen={editFileDeleteConfirm}
         onClose={() => setEditFileDeleteConfirm(false)}
         onConfirm={() => { setEditFileDeleteConfirm(false); setEditFileDeleted(true); setEditFileNewFile(null); }}
-        title="Delete File"
-        message="Are you sure you want to delete this file? You can upload a new file after."
-        confirmText="Delete"
-        cancelText="Cancel"
+        title={t("Delete File", { defaultValue: "Delete File" })}
+        message={t("Are you sure you want to delete this file? You can upload a new file after.", { defaultValue: "Are you sure you want to delete this file? You can upload a new file after." })}
+        confirmText={t("Delete")}
+        cancelText={t("Cancel")}
         danger
       />
 

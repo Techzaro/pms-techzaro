@@ -6,6 +6,7 @@
  */
 
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { FileText, Download, ExternalLink } from "lucide-react";
 import ConfirmationDialog from "./ConfirmationDialog";
 import TaskReopenDialog from "./TaskReopenDialog";
@@ -71,27 +72,27 @@ function formatDateShort(value) {
   return formatDateTime(value);
 }
 
-function actionLabel(action) {
+function actionLabel(action, t) {
   const map = {
-    submitted: "Submitted",
-    resubmitted: "Resubmitted",
-    acknowledged: "Acknowledged",
-    paused: "Paused",
-    continued: "Continued",
-    approved: "Approved",
-    rejected: "Declined",
-    reopened: "Reopened",
+    submitted: t ? t("Submitted", { defaultValue: "Submitted" }) : "Submitted",
+    resubmitted: t ? t("Resubmitted", { defaultValue: "Resubmitted" }) : "Resubmitted",
+    acknowledged: t ? t("Acknowledged", { defaultValue: "Acknowledged" }) : "Acknowledged",
+    paused: t ? t("Paused", { defaultValue: "Paused" }) : "Paused",
+    continued: t ? t("Continued", { defaultValue: "Continued" }) : "Continued",
+    approved: t ? t("Approved", { defaultValue: "Approved" }) : "Approved",
+    rejected: t ? t("Declined", { defaultValue: "Declined" }) : "Declined",
+    reopened: t ? t("Reopened", { defaultValue: "Reopened" }) : "Reopened",
   };
   return map[action] || action;
 }
 
-function submissionStatusLabel(status) {
+function submissionStatusLabel(status, t) {
   const map = {
-    pending: "Pending Review",
-    approved: "Approved",
-    reopened: "Reopened",
+    pending: t ? t("Pending Review", { defaultValue: "Pending Review" }) : "Pending Review",
+    approved: t ? t("Approved", { defaultValue: "Approved" }) : "Approved",
+    reopened: t ? t("Reopened", { defaultValue: "Reopened" }) : "Reopened",
   };
-  return map[status] || status || "Pending";
+  return map[status] || (t ? t(status || "Pending") : status || "Pending");
 }
 
 function submissionStatusColor(status) {
@@ -129,6 +130,7 @@ function TaskSubmissionPanel({
   hideTimeline,
   onEditSubmissionClick,
 }) {
+  const { t } = useTranslation();
   const latestSubmission = task.latest_submission || task.latestSubmission;
   const workflowEvents = task.workflow_events || task.workflowEvents || [];
   const submissions = task.submissions || [];
@@ -183,8 +185,8 @@ function TaskSubmissionPanel({
   };
 
   const confirmMessages = {
-    approve: "Are you sure you want to approve this task?",
-    reject: "Are you sure you want to decline this task? The assignee will not be able to resubmit.",
+    approve: t("Are you sure you want to approve this task?", { defaultValue: "Are you sure you want to approve this task?" }),
+    reject: t("Are you sure you want to decline this task? The assignee will not be able to resubmit.", { defaultValue: "Are you sure you want to decline this task? The assignee will not be able to resubmit." }),
   };
 
   const historyItems = workflowEvents
@@ -207,22 +209,22 @@ function TaskSubmissionPanel({
       {/* Abandon requested details */}
       {status === "abandon_requested" && (
         <div className="td-card td-submission-card" style={{ borderLeft: "4px solid var(--color-warning, #f59e0b)" }}>
-          <h3 className="td-card-title" style={{ color: "var(--color-warning, #d97706)" }}>Abandon Requested</h3>
+          <h3 className="td-card-title" style={{ color: "var(--color-warning, #d97706)" }}>{t("Abandon Requested", { defaultValue: "Abandon Requested" })}</h3>
           <div className="td-submission-grid">
             <div className="td-submission-item">
-              <span className="td-submission-label">Requested By</span>
+              <span className="td-submission-label">{t("Requested By", { defaultValue: "Requested By" })}</span>
               <span className="td-submission-value">{(task.abandon_requested_by || task.abandonRequestedBy)?.name || "—"}</span>
             </div>
             {task.abandon_requested_at && (
               <div className="td-submission-item">
-                <span className="td-submission-label">Requested On</span>
+                <span className="td-submission-label">{t("Requested On", { defaultValue: "Requested On" })}</span>
                 <span className="td-submission-value">{formatDateTime(task.abandon_requested_at)}</span>
               </div>
             )}
           </div>
           {task.abandon_reason && (
             <div className="td-submission-item" style={{ marginTop: "12px" }}>
-              <span className="td-submission-label">Reason for Abandonment</span>
+              <span className="td-submission-label">{t("Reason for Abandonment", { defaultValue: "Reason for Abandonment" })}</span>
               <p className="td-submission-text">{task.abandon_reason}</p>
             </div>
           )}
@@ -232,22 +234,22 @@ function TaskSubmissionPanel({
       {/* Abandoned details */}
       {status === "abandoned" && (
         <div className="td-card td-submission-card" style={{ borderLeft: "4px solid var(--color-danger, #ef4444)" }}>
-          <h3 className="td-card-title" style={{ color: "var(--color-danger, #dc2626)" }}>Task Abandoned</h3>
+          <h3 className="td-card-title" style={{ color: "var(--color-danger, #dc2626)" }}>{t("Task Abandoned", { defaultValue: "Task Abandoned" })}</h3>
           <div className="td-submission-grid">
             <div className="td-submission-item">
-              <span className="td-submission-label">Abandoned By</span>
+              <span className="td-submission-label">{t("Abandoned By", { defaultValue: "Abandoned By" })}</span>
               <span className="td-submission-value">{(task.abandoned_by || task.abandonedBy)?.name || "—"}</span>
             </div>
             {task.abandoned_at && (
               <div className="td-submission-item">
-                <span className="td-submission-label">Abandoned On</span>
+                <span className="td-submission-label">{t("Abandoned On", { defaultValue: "Abandoned On" })}</span>
                 <span className="td-submission-value">{formatDateTime(task.abandoned_at)}</span>
               </div>
             )}
           </div>
           {task.abandon_reason && (
             <div className="td-submission-item" style={{ marginTop: "12px" }}>
-              <span className="td-submission-label">Reason</span>
+              <span className="td-submission-label">{t("Reason", { defaultValue: "Reason" })}</span>
               <p className="td-submission-text">{task.abandon_reason}</p>
             </div>
           )}
@@ -258,7 +260,7 @@ function TaskSubmissionPanel({
                 disabled={acting}
                 onClick={() => setReopenDialog(true)}
               >
-                Reopen Task
+                {t("Reopen Task", { defaultValue: "Reopen Task" })}
               </button>
             </div>
           )}
@@ -267,44 +269,44 @@ function TaskSubmissionPanel({
       {/* Reopen details for assignee */}
       {status === "reopened" && (
         <div className="td-card td-submission-card">
-          <h3 className="td-card-title">Reopen Details</h3>
+          <h3 className="td-card-title">{t("Reopen Details", { defaultValue: "Reopen Details" })}</h3>
           <div className="td-submission-grid">
             <div className="td-submission-item">
-              <span className="td-submission-label">Reopened By</span>
+              <span className="td-submission-label">{t("Reopened By", { defaultValue: "Reopened By" })}</span>
               <span className="td-submission-value">{(task.reopened_by || task.reopenedBy)?.name || "\u2014"}</span>
             </div>
             <div className="td-submission-item">
-              <span className="td-submission-label">Reopened On</span>
+              <span className="td-submission-label">{t("Reopened On", { defaultValue: "Reopened On" })}</span>
               <span className="td-submission-value">{formatDateTime(task.reopened_at)}</span>
             </div>
           </div>
           {task.reopen_reason && (
             <div className="td-submission-item" style={{ marginTop: "12px" }}>
-              <span className="td-submission-label">Reason</span>
+              <span className="td-submission-label">{t("Reason", { defaultValue: "Reason" })}</span>
               <p className="td-submission-text">{task.reopen_reason}</p>
             </div>
           )}
           {task.reopen_comment && task.reopen_comment !== task.reopen_reason && (
             <div className="td-submission-item" style={{ marginTop: "12px" }}>
-              <span className="td-submission-label">Reopen Comment</span>
+              <span className="td-submission-label">{t("Reopen Comment", { defaultValue: "Reopen Comment" })}</span>
               <p className="td-submission-text">{task.reopen_comment}</p>
             </div>
           )}
           {task.reopen_instructions && (
             <div className="td-submission-item" style={{ marginTop: "12px" }}>
-              <span className="td-submission-label">Additional Instructions</span>
+              <span className="td-submission-label">{t("Additional Instructions", { defaultValue: "Additional Instructions" })}</span>
               <p className="td-submission-text">{task.reopen_instructions}</p>
             </div>
           )}
           {task.reopen_new_deadline && (
             <div className="td-submission-item" style={{ marginTop: "12px" }}>
-              <span className="td-submission-label">New Deadline</span>
+              <span className="td-submission-label">{t("New Deadline", { defaultValue: "New Deadline" })}</span>
               <span className="td-submission-value">{formatDateShort(task.reopen_new_deadline)}</span>
             </div>
           )}
           {task.reopen_link && (
             <div className="td-submission-item" style={{ marginTop: "12px" }}>
-              <span className="td-submission-label">Attached Link</span>
+              <span className="td-submission-label">{t("Attached Link", { defaultValue: "Attached Link" })}</span>
               <a href={task.reopen_link} target="_blank" rel="noopener noreferrer" className="td-submission-value" style={{ color: "#6366f1", textDecoration: "underline", wordBreak: "break-all" }}>
                 {task.reopen_link}
               </a>
@@ -312,7 +314,7 @@ function TaskSubmissionPanel({
           )}
           {task.reopen_file_name && (
             <div className="td-submission-item" style={{ marginTop: "12px" }}>
-              <span className="td-submission-label">Attached File(s) / Screenshots</span>
+              <span className="td-submission-label">{t("Attached File(s) / Screenshots", { defaultValue: "Attached File(s) / Screenshots" })}</span>
               <div className="td-attachments-list" style={{ marginTop: "6px", display: "flex", flexDirection: "column", gap: "6px" }}>
                 {(() => {
                   const paths = (task.reopen_file_path || "").split(",").map((p) => p.trim()).filter(Boolean);
@@ -344,11 +346,10 @@ function TaskSubmissionPanel({
       )}
 
       {/* Submission details */}
-      {/* Submission details */}
       {(status === "submitted" || status === "submitted_late" || status === "approved" || status === "rejected" || status === "in_progress" || status === "reopened") && latestSubmission && (
         <div className="td-card td-submission-card">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-            <h3 className="td-card-title" style={{ margin: 0 }}>Submission Details</h3>
+            <h3 className="td-card-title" style={{ margin: 0 }}>{t("Submission Details", { defaultValue: "Submission Details" })}</h3>
             {!task.has_edited_submission &&
               ((latestSubmission.submitted_by || latestSubmission.submittedBy)?.id === currentUser?.id || latestSubmission.submitted_by === currentUser?.id) && (
                 <button
@@ -357,29 +358,29 @@ function TaskSubmissionPanel({
                   onClick={() => onEditSubmissionClick && onEditSubmissionClick()}
                   style={{ padding: "4px 12px", fontSize: "12px", background: "#6366f1", color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer" }}
                 >
-                  Edit Submission
+                  {t("Edit Submission", { defaultValue: "Edit Submission" })}
                 </button>
               )}
           </div>
           <div className="td-submission-grid">
             <div className="td-submission-item">
-              <span className="td-submission-label">Submitted By</span>
-              <span className="td-submission-value">{(latestSubmission.submitted_by || latestSubmission.submittedBy)?.name || "Unknown"}</span>
+              <span className="td-submission-label">{t("Submitted By", { defaultValue: "Submitted By" })}</span>
+              <span className="td-submission-value">{(latestSubmission.submitted_by || latestSubmission.submittedBy)?.name || t("Unknown", { defaultValue: "Unknown" })}</span>
             </div>
             <div className="td-submission-item">
-              <span className="td-submission-label">Submitted At</span>
+              <span className="td-submission-label">{t("Submitted At", { defaultValue: "Submitted At" })}</span>
               <span className="td-submission-value">{formatDateTime(latestSubmission.created_at)}</span>
             </div>
           </div>
           {latestSubmission.version_number > 1 && (
             <div className="td-submission-item" style={{ marginTop: "8px" }}>
-              <span className="td-submission-label">Submission Version</span>
+              <span className="td-submission-label">{t("Submission Version", { defaultValue: "Submission Version" })}</span>
               <span className="td-submission-value">#{latestSubmission.version_number}</span>
             </div>
           )}
           {latestSubmission.comment && (
             <div className="td-submission-item" style={{ marginTop: "12px" }}>
-              <span className="td-submission-label">Submission Notes</span>
+              <span className="td-submission-label">{t("Submission Notes", { defaultValue: "Submission Notes" })}</span>
               <p className="td-submission-text">{latestSubmission.comment}</p>
             </div>
           )}
@@ -394,7 +395,7 @@ function TaskSubmissionPanel({
               <>
                 {files.length > 0 && (
                   <div className="td-submission-item" style={{ marginTop: "12px" }}>
-                    <span className="td-submission-label">Files ({files.length})</span>
+                    <span className="td-submission-label">{t("Files ({{count}})", { defaultValue: `Files (${files.length})`, count: files.length })}</span>
                     <div className="td-attachments-list">
                       {files.map((att) => {
                         const href = downloadUrl(att.full_url, att.original_name || att.file_name);
@@ -422,7 +423,7 @@ function TaskSubmissionPanel({
 
                 {images.length > 0 && (
                   <div className="td-submission-item" style={{ marginTop: "12px" }}>
-                    <span className="td-submission-label">Images ({images.length})</span>
+                    <span className="td-submission-label">{t("Images ({{count}})", { defaultValue: `Images (${images.length})`, count: images.length })}</span>
                     <div className="td-image-grid">
                       {images.map((att) => {
                         const name = att.original_name || att.file_name;
@@ -435,7 +436,7 @@ function TaskSubmissionPanel({
                               download={name}
                               target="_blank"
                               rel="noopener noreferrer"
-                              title="Download Image"
+                              title={t("Download Image", { defaultValue: "Download Image" })}
                               onClick={(e) => triggerDownload(e, att.full_url, name)}
                               style={{
                                 position: "absolute", bottom: "4px", right: "4px",
@@ -444,7 +445,7 @@ function TaskSubmissionPanel({
                                 alignItems: "center", gap: "4px", fontSize: "11px", cursor: "pointer"
                               }}
                             >
-                              <Download size={13} /> Download
+                              <Download size={13} /> {t("Download", { defaultValue: "Download" })}
                             </a>
                           </div>
                         );
@@ -455,7 +456,7 @@ function TaskSubmissionPanel({
 
                 {links.length > 0 && (
                   <div className="td-submission-item" style={{ marginTop: "12px" }}>
-                    <span className="td-submission-label">Links ({links.length})</span>
+                    <span className="td-submission-label">{t("Links ({{count}})", { defaultValue: `Links (${links.length})`, count: links.length })}</span>
                     <div className="td-attachments-list">
                       {links.map((att) => (
                         <div key={att.id} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -469,10 +470,10 @@ function TaskSubmissionPanel({
                             style={{ padding: "4px 8px", fontSize: "11px", height: "auto", border: "1px solid #D1D5DB" }}
                             onClick={() => {
                               navigator.clipboard.writeText(att.url);
-                              notify.success("Link copied to clipboard!");
+                              notify.success(t("Link copied to clipboard!", { defaultValue: "Link copied to clipboard!" }));
                             }}
                           >
-                            Copy Link
+                            {t("Copy Link", { defaultValue: "Copy Link" })}
                           </button>
                         </div>
                       ))}
@@ -482,7 +483,7 @@ function TaskSubmissionPanel({
 
                 {latestSubmission.file_name && atts.length === 0 && (
                   <div className="td-submission-item" style={{ marginTop: "12px" }}>
-                    <span className="td-submission-label">Attached File</span>
+                    <span className="td-submission-label">{t("Attached File", { defaultValue: "Attached File" })}</span>
                     <a
                       className="td-submission-file-link"
                       href={`${API_URL}/tasks/submission-file/${latestSubmission.id}`}
@@ -509,21 +510,21 @@ function TaskSubmissionPanel({
                   disabled={acting}
                   onClick={() => setConfirmDialog({ open: true, type: "approve" })}
                 >
-                  Approve
+                  {t("Approve", { defaultValue: "Approve" })}
                 </button>
                 <button
                   className="td-review-btn td-review-btn--reject"
                   disabled={acting}
                   onClick={() => setConfirmDialog({ open: true, type: "reject" })}
                 >
-                  Decline
+                  {t("Decline", { defaultValue: "Decline" })}
                 </button>
                 <button
                   className="td-review-btn td-review-btn--reopen"
                   disabled={acting}
                   onClick={() => setReopenDialog(true)}
                 >
-                  Decline & Reopen
+                  {t("Decline & Reopen", { defaultValue: "Decline & Reopen" })}
                 </button>
               </>
             )}
@@ -534,7 +535,7 @@ function TaskSubmissionPanel({
                 disabled={acting}
                 onClick={() => setReopenDialog(true)}
               >
-                Reopen Task
+                {t("Reopen Task", { defaultValue: "Reopen Task" })}
               </button>
             )}
 
@@ -547,7 +548,7 @@ function TaskSubmissionPanel({
                       disabled={acting}
                       onClick={() => handleAction("approve-abandon")}
                     >
-                      Approve Abandon
+                      {t("Approve Abandon", { defaultValue: "Approve Abandon" })}
                     </button>
                     <button
                       className="td-review-btn td-review-btn--reject"
@@ -557,7 +558,7 @@ function TaskSubmissionPanel({
                         setAbandonModalOpen(true);
                       }}
                     >
-                      Decline Abandon
+                      {t("Decline Abandon", { defaultValue: "Decline Abandon" })}
                     </button>
                   </>
                 )}
@@ -572,7 +573,7 @@ function TaskSubmissionPanel({
                       setAbandonModalOpen(true);
                     }}
                   >
-                    Abandon Task
+                    {t("Abandon Task", { defaultValue: "Abandon Task" })}
                   </button>
                 )}
 
@@ -586,7 +587,7 @@ function TaskSubmissionPanel({
                       setAbandonModalOpen(true);
                     }}
                   >
-                    Request Abandon
+                    {t("Request Abandon", { defaultValue: "Request Abandon" })}
                   </button>
                 )}
               </>
@@ -598,7 +599,7 @@ function TaskSubmissionPanel({
       {/* Submission History */}
       {submissions.length > 1 && (
         <div className="td-card td-submission-card">
-          <h3 className="td-card-title">Submission History</h3>
+          <h3 className="td-card-title">{t("Submission History", { defaultValue: "Submission History" })}</h3>
           <div className="td-submission-history">
             {submissions.map((sub, idx) => (
               <div key={sub.id} className="td-history-entry" style={{
@@ -607,7 +608,7 @@ function TaskSubmissionPanel({
               }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
                   <span style={{ fontWeight: 600, fontSize: "13px", color: "var(--text-heading)" }}>
-                    Submission #{sub.version_number || (submissions.length - idx)}
+                    {t("Submission #{{version}}", { defaultValue: `Submission #${sub.version_number || (submissions.length - idx)}`, version: sub.version_number || (submissions.length - idx) })}
                   </span>
                   <span className="badge" style={{
                     background: submissionStatusBg(sub.status),
@@ -617,22 +618,22 @@ function TaskSubmissionPanel({
                     borderRadius: "12px",
                     fontWeight: 600,
                   }}>
-                    {submissionStatusLabel(sub.status)}
+                    {submissionStatusLabel(sub.status, t)}
                   </span>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 16px", fontSize: "12px", color: "var(--text-secondary)" }}>
-                  <span>By: {sub.submitted_by?.name || sub.submittedBy?.name || "Unknown"}</span>
-                  <span>On: {formatDateTime(sub.created_at)}</span>
+                  <span>{t("By: {{name}}", { defaultValue: `By: ${sub.submitted_by?.name || sub.submittedBy?.name || "Unknown"}`, name: sub.submitted_by?.name || sub.submittedBy?.name || t("Unknown") })}</span>
+                  <span>{t("On: {{date}}", { defaultValue: `On: ${formatDateTime(sub.created_at)}`, date: formatDateTime(sub.created_at) })}</span>
                   {sub.approved_by && (
                     <>
-                      <span>Approved by: {sub.approved_by?.name || "Unknown"}</span>
-                      <span>Approved: {formatDateTime(sub.approved_at)}</span>
+                      <span>{t("Approved by: {{name}}", { defaultValue: `Approved by: ${sub.approved_by?.name || "Unknown"}`, name: sub.approved_by?.name || t("Unknown") })}</span>
+                      <span>{t("Approved: {{date}}", { defaultValue: `Approved: ${formatDateTime(sub.approved_at)}`, date: formatDateTime(sub.approved_at) })}</span>
                     </>
                   )}
                   {sub.reopened_by && (
                     <>
-                      <span>Reopened by: {sub.reopened_by?.name || "Unknown"}</span>
-                      <span>Reason: {sub.reopen_reason || "N/A"}</span>
+                      <span>{t("Reopened by: {{name}}", { defaultValue: `Reopened by: ${sub.reopened_by?.name || "Unknown"}`, name: sub.reopened_by?.name || t("Unknown") })}</span>
+                      <span>{t("Reason: {{reason}}", { defaultValue: `Reason: ${sub.reopen_reason || "N/A"}`, reason: sub.reopen_reason || "N/A" })}</span>
                     </>
                   )}
                 </div>
@@ -687,7 +688,7 @@ function TaskSubmissionPanel({
       {(task.reopen_count > 0 || (status !== "reopened" && historyItems.filter(i => i.action === "reopened").length > 0)) && (
         <div className="td-card td-submission-card" style={{ padding: "12px 16px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>Reopen Count</span>
+            <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>{t("Reopen Count", { defaultValue: "Reopen Count" })}</span>
             <span style={{
               fontSize: "18px", fontWeight: 700,
               color: (task.reopen_count || historyItems.filter(i => i.action === "reopened").length) > 0 ? "var(--color-warning)" : "var(--text-primary)",
@@ -701,23 +702,23 @@ function TaskSubmissionPanel({
       {/* Submission history timeline */}
       {!hideTimeline && historyItems.length > 0 && (
         <div className="td-card td-submission-card">
-          <h3 className="td-card-title">Timeline History</h3>
+          <h3 className="td-card-title">{t("Timeline History", { defaultValue: "Timeline History" })}</h3>
           <ul className="td-history-list">
             {historyItems.map((item) => (
               <li key={item.id} className="td-history-item">
                 <div className="td-history-header">
-                  <span className={`td-history-badge td-history-badge--${item.action}`}>{actionLabel(item.action)}</span>
+                  <span className={`td-history-badge td-history-badge--${item.action}`}>{actionLabel(item.action, t)}</span>
                   <span className="td-history-date">{formatDateTime(item.date)}</span>
                 </div>
                 <div className="td-history-meta">
-                  by {item.user?.name || "Unknown"}
+                  {t("by {{name}}", { defaultValue: `by ${item.user?.name || "Unknown"}`, name: item.user?.name || t("Unknown") })}
                 </div>
                 {item.comment && <p className="td-submission-text">{item.comment}</p>}
                 {item.instructions && (
-                  <p className="td-submission-text"><strong>Instructions:</strong> {item.instructions}</p>
+                  <p className="td-submission-text"><strong>{t("Instructions:", { defaultValue: "Instructions:" })}</strong> {item.instructions}</p>
                 )}
                 {item.new_deadline && (
-                  <p className="td-submission-text"><strong>New Deadline:</strong> {formatDateShort(item.new_deadline)}</p>
+                  <p className="td-submission-text"><strong>{t("New Deadline:", { defaultValue: "New Deadline:" })}</strong> {formatDateShort(item.new_deadline)}</p>
                 )}
                 {item.file_name && item.file_path && (
                   <a
@@ -739,8 +740,6 @@ function TaskSubmissionPanel({
         </div>
       )}
 
-
-
       <ConfirmationDialog
         isOpen={confirmDialog.open}
         onClose={() => setConfirmDialog({ open: false, type: null })}
@@ -749,9 +748,10 @@ function TaskSubmissionPanel({
           setConfirmDialog({ open: false, type: null });
           handleAction(type);
         }}
-        title={confirmDialog.type === "approve" ? "Approve Task" : "Decline Task"}
+        title={confirmDialog.type === "approve" ? t("Approve Task", { defaultValue: "Approve Task" }) : t("Decline Task", { defaultValue: "Decline Task" })}
         message={confirmMessages[confirmDialog.type] || ""}
-        confirmText={confirmDialog.type === "approve" ? "Approve" : "Decline"}
+        confirmText={confirmDialog.type === "approve" ? t("Approve", { defaultValue: "Approve" }) : t("Decline", { defaultValue: "Decline" })}
+        cancelText={t("Cancel")}
         confirmColor={confirmDialog.type === "approve" ? "#16A34A" : "#DC2626"}
       />
 
@@ -767,18 +767,18 @@ function TaskSubmissionPanel({
         onClose={() => setAbandonModalOpen(false)}
         title={
           abandonAction === "request"
-            ? "Request to Abandon Task"
+            ? t("Request to Abandon Task", { defaultValue: "Request to Abandon Task" })
             : abandonAction === "decline"
-            ? "Decline Abandon Request"
-            : "Abandon Task"
+            ? t("Decline Abandon Request", { defaultValue: "Decline Abandon Request" })
+            : t("Abandon Task", { defaultValue: "Abandon Task" })
         }
         subtitle={task.title}
         actionLabel={
           abandonAction === "request"
-            ? "Submit Request"
+            ? t("Submit Request", { defaultValue: "Submit Request" })
             : abandonAction === "decline"
-            ? "Decline Request"
-            : "Confirm Abandon"
+            ? t("Decline Request", { defaultValue: "Decline Request" })
+            : t("Confirm Abandon", { defaultValue: "Confirm Abandon" })
         }
         onSubmit={handleAbandonSubmit}
         loading={acting}

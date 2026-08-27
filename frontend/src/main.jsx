@@ -19,6 +19,10 @@ import LoadingSpinner from './components/LoadingSpinner.jsx'
 import ToastContainer from './components/Toast.jsx'
 import { queryClient } from './lib/queryClient.js'
 import { publish } from './utils/eventBus.js'
+import { initI18n } from './utils/i18n.js'
+
+// Initialize localization engine
+initI18n();
 
 // Scoped fetch interceptor — only invalidate related query keys, not ALL queries
 const originalFetch = window.fetch;

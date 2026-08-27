@@ -5,8 +5,9 @@
  */
 
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { useEscapeKey } from "../hooks/useEscapeKey";
-import { formatLocalDate, convertToLocal, getUserTimezone } from "../utils/timezoneUtils";
+import { formatLocalDate, formatLocalTime, formatReadableDateTime, convertToLocal, getUserTimezone } from "../utils/timezoneUtils";
 import { Globe, Clock } from "lucide-react";
 
 /**
@@ -15,6 +16,7 @@ import { Globe, Clock } from "lucide-react";
  * @param {Function} onClose - Callback to close the popup
  */
 function EventInfoPopup({ event, onClose }) {
+  const { t } = useTranslation();
   useEscapeKey(true, onClose);
 
   if (!event) return null;
@@ -24,18 +26,18 @@ function EventInfoPopup({ event, onClose }) {
 
   // Local Timezone calculation
   const isAllDay = Boolean(event.all_day);
-  const localDateStr = formatLocalDate(event.start_date, viewerTz, "DD MMMM, YYYY");
+  const localDateStr = formatLocalDate(event.start_date, viewerTz);
 
-  const localStartTime = !isAllDay ? convertToLocal(event.start_date, viewerTz, "hh:mm A") : "All Day";
-  const localEndTime = !isAllDay && event.end_date ? convertToLocal(event.end_date, viewerTz, "hh:mm A") : null;
+  const localStartTime = !isAllDay ? formatLocalTime(event.start_date, viewerTz) : t("All Day", { defaultValue: "All Day" });
+  const localEndTime = !isAllDay && event.end_date ? formatLocalTime(event.end_date, viewerTz) : null;
   const localTimeRange = localEndTime ? `${localStartTime} - ${localEndTime}` : localStartTime;
 
   // Original Timezone calculation (if different or present)
   const hasDualTimezone = Boolean(origTz && origTz !== viewerTz);
-  const origStartTime = origTz && !isAllDay ? convertToLocal(event.start_date, origTz, "hh:mm A") : null;
-  const origEndTime = origTz && !isAllDay && event.end_date ? convertToLocal(event.end_date, origTz, "hh:mm A") : null;
+  const origStartTime = origTz && !isAllDay ? formatLocalTime(event.start_date, origTz) : null;
+  const origEndTime = origTz && !isAllDay && event.end_date ? formatLocalTime(event.end_date, origTz) : null;
   const origTimeRange = origEndTime ? `${origStartTime} - ${origEndTime}` : origStartTime;
-  const origDateStr = origTz ? formatLocalDate(event.start_date, origTz, "DD MMM, YYYY") : null;
+  const origDateStr = origTz ? formatLocalDate(event.start_date, origTz) : null;
 
   const assignedNames = event.assigned_users && event.assigned_users.length > 0
     ? event.assigned_users.map((u) => u.name).join(", ")
@@ -43,7 +45,7 @@ function EventInfoPopup({ event, onClose }) {
 
   const creatorName = event.creator_name || event.user_name || "—";
   const createdAt = event.created_at
-    ? convertToLocal(event.created_at, viewerTz, "DD MMM YYYY, hh:mm A")
+    ? formatReadableDateTime(event.created_at, viewerTz)
     : "—";
 
   return createPortal(
@@ -83,7 +85,7 @@ function EventInfoPopup({ event, onClose }) {
           {/* Dual Timezone Date & Time Presentation (SRS Sec 12) */}
           <div>
             <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-              Date &amp; Timing
+              {t("Date & Timing", { defaultValue: "Date & Timing" })}
             </span>
             <div style={{ marginTop: 6, padding: "10px 12px", background: "var(--bg-hover, #f8fafc)", borderRadius: 8, border: "1px solid var(--border-light, #e2e8f0)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 600, color: "var(--text-dark)" }}>
@@ -91,14 +93,14 @@ function EventInfoPopup({ event, onClose }) {
                 <span>{localDateStr} • {localTimeRange}</span>
               </div>
               <div style={{ marginTop: 2, fontSize: 11, color: "var(--color-primary, #4f46e5)", fontWeight: 500 }}>
-                Your local timezone: {viewerTz}
+                {t("Your local timezone: {{tz}}", { defaultValue: `Your local timezone: ${viewerTz}`, tz: viewerTz })}
               </div>
 
               {hasDualTimezone && (
                 <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px dashed var(--border-light, #e2e8f0)", display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-secondary)" }}>
                   <Globe size={13} style={{ color: "#64748b" }} />
                   <span>
-                    Original: <strong>{origTimeRange}</strong> ({origDateStr}) — <em>{origTz}</em>
+                    {t("Original", { defaultValue: "Original" })}: <strong>{origTimeRange}</strong> ({origDateStr}) — <em>{origTz}</em>
                   </span>
                 </div>
               )}
@@ -106,19 +108,19 @@ function EventInfoPopup({ event, onClose }) {
           </div>
 
           <div>
-            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Assigned To</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{t("Assigned To", { defaultValue: "Assigned To" })}</span>
             <p style={{ margin: "4px 0 0", fontSize: 14, color: "var(--text-dark)" }}>
-              {event.is_global ? "All Users" : (assignedNames || "—")}
+              {event.is_global ? t("All Users", { defaultValue: "All Users" }) : (assignedNames || "—")}
             </p>
           </div>
 
           <div>
-            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Created By</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{t("Created By", { defaultValue: "Created By" })}</span>
             <p style={{ margin: "4px 0 0", fontSize: 14, color: "var(--text-dark)" }}>{creatorName}</p>
           </div>
 
           <div>
-            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Created At</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{t("Created At", { defaultValue: "Created At" })}</span>
             <p style={{ margin: "4px 0 0", fontSize: 14, color: "var(--text-dark)" }}>{createdAt}</p>
           </div>
         </div>

@@ -298,6 +298,11 @@ class AuthController extends Controller
                     'role' => $role,
                     'active' => (bool) $user->active,
                     'must_change_password' => (bool) $user->must_change_password,
+                    'language' => $user->language ?? 'English',
+                    'timezone' => $user->timezone ?? 'UTC',
+                    'date_format' => $user->date_format ?? 'DD/MM/YYYY',
+                    'time_format' => $user->time_format ?? '12-hour',
+                    'working_hours' => $user->working_hours,
                 ],
             ];
 
@@ -654,6 +659,11 @@ class AuthController extends Controller
                 'created_at' => $user->created_at->toDateTimeString(),
                 'updated_at' => $user->updated_at->toDateTimeString(),
                 'must_change_password' => $user->must_change_password,
+                'language' => $user->language ?? 'English',
+                'timezone' => $user->timezone ?? 'UTC',
+                'date_format' => $user->date_format ?? 'DD/MM/YYYY',
+                'time_format' => $user->time_format ?? '12-hour',
+                'working_hours' => $user->working_hours,
             ],
             'stats' => [
                 'total_assigned_tasks' => (int) $taskStats->total_assigned,

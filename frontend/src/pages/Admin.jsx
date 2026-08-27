@@ -14,6 +14,7 @@
  */
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import "../components/layout/DashboardLayout.css";
@@ -85,6 +86,7 @@ const getRoleLabel = (role) => {
  * Clicking a card with a filter navigates to the corresponding filtered list view.
  */
 const SummaryCard = memo(function SummaryCard({ card, onClick }) {
+  const { t } = useTranslation();
   const isClickable = Boolean(card.filter);
   return (
     <div
@@ -126,7 +128,7 @@ const SummaryCard = memo(function SummaryCard({ card, onClick }) {
               textUnderlineOffset: "2px",
             }}
           >
-            {card.title}
+            {t(card.title, { defaultValue: card.title })}
           </h4>
           <div style={{ marginTop: "5px", fontSize: "36px", fontWeight: "700", color: card.valueColor }}>
             {card.value}
@@ -152,6 +154,7 @@ const AVATAR_COLORS = [
 ];
 
 const WorkloadItem = memo(function WorkloadItem({ item, navigate, getInitials, rolePath, cardWidth, getProgressColor, PROJECTS_PER_VIEW, GAP, currentRole, dashboardMode }) {
+  const { t } = useTranslation();
   const isManager = currentRole === "admin" || currentRole === "manager";
   const assignees = item.assignees || [];
   const isMyDashboard = dashboardMode === "my";
@@ -195,7 +198,7 @@ const WorkloadItem = memo(function WorkloadItem({ item, navigate, getInitials, r
 
       <div className="dash-progress-section">
         <div className="dash-progress-top">
-          <span>Progress</span>
+          <span>{t("Progress", { defaultValue: "Progress" })}</span>
           <span>0%</span>
         </div>
         <div className="dash-progress-bar">
@@ -286,6 +289,7 @@ const STATUS_TEXT_COLORS = {
  * Uses the same card design as the Projects list page for visual consistency.
  */
 const ProjectCard = memo(function ProjectCard({ project, cardWidth, navigate, getProgressColor, rolePath, PROJECTS_PER_VIEW, GAP }) {
+  const { t } = useTranslation();
   const statusKey = project.status || 'In_progress';
   return (
     <div className="dash-project-card" style={{
@@ -303,7 +307,7 @@ const ProjectCard = memo(function ProjectCard({ project, cardWidth, navigate, ge
       {/* PROGRESS */}
       <div className="dash-progress-section">
         <div className="dash-progress-top">
-          <span>Progress</span>
+          <span>{t("Progress", { defaultValue: "Progress" })}</span>
           <span>{project.progress}%</span>
         </div>
         <div className="dash-progress-bar">
@@ -328,14 +332,14 @@ const ProjectCard = memo(function ProjectCard({ project, cardWidth, navigate, ge
               color: STATUS_TEXT_COLORS[project.status] || "var(--text-dark)",
             }}
           >
-            {project.status || "Planning"}
+            {t(project.status || "Planning", { defaultValue: project.status || "Planning" })}
           </span>
           <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
             <span style={{ fontSize: "13px", color: "var(--text-secondary)", fontWeight: 500 }}>
               📅 {project.start_date ? new Date(project.start_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "-"}
             </span>
             <span style={{ fontSize: "13px", color: "var(--text-secondary)", fontWeight: 500 }}>
-              📅 {project.end_date ? new Date(project.end_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "No deadline"}
+              📅 {project.end_date ? new Date(project.end_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : t("No deadline", { defaultValue: "No deadline" })}
             </span>
           </div>
         </div>
@@ -351,6 +355,7 @@ const ProjectCard = memo(function ProjectCard({ project, cardWidth, navigate, ge
  * and activity feeds (today's activity + expandable past activity).
  */
 function Admin() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { isWidgetEnabled } = usePersonalization();
   const [greeting, setGreeting] = useState("Welcome");
@@ -464,9 +469,9 @@ function Admin() {
     // Set greeting with current user's name
     const stored = getUser();
     const name = stored?.name || "User";
-    setGreeting(`Welcome, ${name}`);
+    setGreeting(t("Welcome, {{name}}", { name, defaultValue: `Welcome, ${name}` }));
     return () => window.removeEventListener("modal-state", handler);
-  }, []);
+  }, [t]);
 
   // Tick every second to update relative time displays (e.g. "5 min ago")
   const tick = useRelativeTime();
@@ -604,11 +609,11 @@ function Admin() {
 
   /** Returns a human-readable label for the activity module (task, project, subtask) */
   const getModuleLabel = (module) => {
-    if (module === "task") return "Task";
-    if (module === "project") return "Project";
-    if (module === "deliverable") return "Subtask";
-    if (module === "user") return "User";
-    if (module === "team") return "Team";
+    if (module === "task") return t("Task", { defaultValue: "Task" });
+    if (module === "project") return t("Project", { defaultValue: "Project" });
+    if (module === "deliverable") return t("Subtask", { defaultValue: "Subtask" });
+    if (module === "user") return t("User", { defaultValue: "User" });
+    if (module === "team") return t("Team", { defaultValue: "Team" });
     return module;
   };
 
@@ -625,30 +630,30 @@ function Admin() {
 
     const moduleLabel = getModuleLabel(item.module);
     const titleSpan = <span style={{ fontWeight: 600 }}>"{item.title}"</span>;
-    const actorLabel = item.is_actor ? "You" : item.actor_name;
+    const actorLabel = item.is_actor ? t("You", { defaultValue: "You" }) : item.actor_name;
 
     const verbMap = {
-      created: "created",
-      assigned: "assigned",
-      submitted: "submitted",
-      resubmitted: "resubmitted",
-      approved: "approved",
-      rejected: "declined",
-      reopened: "reopened",
-      rework: "reopened",
-      completed: "completed",
-      status_updated: "updated status of",
-      field_changed: "updated",
-      updated: "updated",
-      resigned: "resigned",
-      deleted: "deleted",
-      leader_changed: "changed team lead for",
-      member_added: "added member(s) to",
-      member_removed: "removed member(s) from",
-      access_granted: "granted access on",
-      access_removed: "removed access from",
+      created: t("created", { defaultValue: "created" }),
+      assigned: t("assigned", { defaultValue: "assigned" }),
+      submitted: t("submitted", { defaultValue: "submitted" }),
+      resubmitted: t("resubmitted", { defaultValue: "resubmitted" }),
+      approved: t("approved", { defaultValue: "approved" }),
+      rejected: t("declined", { defaultValue: "declined" }),
+      reopened: t("reopened", { defaultValue: "reopened" }),
+      rework: t("reopened", { defaultValue: "reopened" }),
+      completed: t("completed", { defaultValue: "completed" }),
+      status_updated: t("updated status of", { defaultValue: "updated status of" }),
+      field_changed: t("updated", { defaultValue: "updated" }),
+      updated: t("updated", { defaultValue: "updated" }),
+      resigned: t("resigned", { defaultValue: "resigned" }),
+      deleted: t("deleted", { defaultValue: "deleted" }),
+      leader_changed: t("changed team lead for", { defaultValue: "changed team lead for" }),
+      member_added: t("added member(s) to", { defaultValue: "added member(s) to" }),
+      member_removed: t("removed member(s) from", { defaultValue: "removed member(s) from" }),
+      access_granted: t("granted access on", { defaultValue: "granted access on" }),
+      access_removed: t("removed access from", { defaultValue: "removed access from" }),
     };
-    const verb = verbMap[item.action] || "updated";
+    const verb = verbMap[item.action] || t("updated", { defaultValue: "updated" });
 
     let suffix = null;
     if (item.comment) {
@@ -656,7 +661,7 @@ function Admin() {
       if (item.action === "assigned" && !item.is_actor) {
         const match = item.comment.match(/^Assigned to (.+)$/);
         if (match) {
-          suffix = <> — Assigned to you</>;
+          suffix = <> — {t("Assigned to you", { defaultValue: "Assigned to you" })}</>;
         } else {
           suffix = <> — {item.comment}</>;
         }
@@ -664,7 +669,7 @@ function Admin() {
         suffix = <> — {item.comment}</>;
       }
     } else if (item.submitted_by_name && ["approved", "rejected", "reopened", "rework"].includes(item.action)) {
-      suffix = <> submitted by {item.submitted_by_name}</>;
+      suffix = <> {t("submitted by {{name}}", { name: item.submitted_by_name, defaultValue: `submitted by ${item.submitted_by_name}` })}</>;
     }
 
     return <>{actorLabel} {verb} {moduleLabel} {titleSpan}{suffix}</>;
@@ -728,27 +733,27 @@ function Admin() {
 
   return (
     <DashboardLayout hideRightSidebar={true}>
-          <Breadcrumb items={[{ label: "Dashboard" }]} />
+          <Breadcrumb items={[{ label: t("Dashboard", { defaultValue: "Dashboard" }) }]} />
           <div className="welcome-box" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div>
               <h1>{greeting}</h1>
               <p>{dashboardMode === "my"
-                ? "Viewing tasks assigned to you."
-                : "Viewing tasks you assigned to others."}</p>
+                ? t("Viewing tasks assigned to you.", { defaultValue: "Viewing tasks assigned to you." })
+                : t("Viewing tasks you assigned to others.", { defaultValue: "Viewing tasks you assigned to others." })}</p>
             </div>
             {/* Dashboard Mode Toggle */}
             <div className="dashboard-toggle-pill" style={{ flexShrink: 0 }}>
               <button
                 onClick={() => setDashboardMode("my")}
                 className={`dashboard-toggle-btn${dashboardMode === "my" ? " active" : ""}`}
-                title="My Dashboard"
+                title={t("My Dashboard", { defaultValue: "My Dashboard" })}
               >
                 <IoPerson size={20} />
               </button>
               <button
                 onClick={() => setDashboardMode("user")}
                 className={`dashboard-toggle-btn${dashboardMode === "user" ? " active" : ""}`}
-                title="User Dashboard"
+                title={t("User Dashboard", { defaultValue: "User Dashboard" })}
               >
                 <IoPeople size={20} />
               </button>
@@ -774,7 +779,7 @@ function Admin() {
                   draggable={true}
                   onDragStart={(e) => handleSecDragStart(e, index)}
                   onDragEnd={() => { setDraggedSecIndex(null); setDragOverSecIndex(null); }}
-                  title="Drag handle to reorder section on dashboard canvas"
+                  title={t("Drag handle to reorder section on dashboard canvas", { defaultValue: "Drag handle to reorder section on dashboard canvas" })}
                   style={{
                     cursor: "grab",
                     color: "var(--text-secondary, #94a3b8)",
@@ -804,12 +809,12 @@ function Admin() {
                       draggable={true}
                       onDragStart={(e) => handleSecDragStart(e, index)}
                       onDragEnd={() => { setDraggedSecIndex(null); setDragOverSecIndex(null); }}
-                      title="Drag handle to reorder section on dashboard canvas"
+                      title={t("Drag handle to reorder section on dashboard canvas", { defaultValue: "Drag handle to reorder section on dashboard canvas" })}
                       style={{ cursor: "grab", color: "var(--text-secondary, #94a3b8)", display: "inline-flex", alignItems: "center" }}
                     >
                       <GripVertical size={20} />
                     </span>
-                    <span style={{ fontSize: "14px", fontWeight: "600", color: "var(--text-secondary)" }}>Metrics Overview</span>
+                    <span style={{ fontSize: "14px", fontWeight: "600", color: "var(--text-secondary)" }}>{t("Metrics Overview", { defaultValue: "Metrics Overview" })}</span>
                   </div>
                   <div
                     className="summary-cards-grid"
@@ -839,13 +844,13 @@ function Admin() {
                 >
                   <div className="pinned-tasks-section" style={{ background: "var(--bg-card, #ffffff)", borderRadius: "20px", padding: "24px", boxShadow: "var(--shadow-sm, 0 4px 14px rgba(0,0,0,0.03))", position: "relative" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                      <DragGripHeader title={`Pinned Tasks (${pinnedTasks.length})`} />
+                      <DragGripHeader title={`${t("Pinned Tasks", { defaultValue: "Pinned Tasks" })} (${pinnedTasks.length})`} />
                       <button
                         className="workload-view-btn"
                         onClick={() => navigate(rolePath("tasks"))}
                         style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "13px", color: "var(--color-primary, #4f46e5)", background: "transparent", border: "none", cursor: "pointer", fontWeight: 600 }}
                       >
-                        All Tasks <ArrowUpRight size={14} />
+                        {t("All Tasks", { defaultValue: "All Tasks" })} <ArrowUpRight size={14} />
                       </button>
                     </div>
 
@@ -854,16 +859,16 @@ function Admin() {
                         <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#eef2ff", color: "#4f46e5", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: "8px" }}>
                           <Pin size={20} />
                         </div>
-                        <h4 style={{ margin: "0 0 4px 0", fontSize: "15px", fontWeight: 700, color: "var(--text-heading)" }}>No tasks pinned yet</h4>
+                        <h4 style={{ margin: "0 0 4px 0", fontSize: "15px", fontWeight: 700, color: "var(--text-heading)" }}>{t("No tasks pinned yet", { defaultValue: "No tasks pinned yet" })}</h4>
                         <p style={{ margin: 0, fontSize: "13px", color: "var(--text-secondary)" }}>
-                          Pin any task from Task Details or Task Lists to keep it pinned to your dashboard.
+                          {t("Pin any task from Task Details or Task Lists to keep it pinned to your dashboard.", { defaultValue: "Pin any task from Task Details or Task Lists to keep it pinned to your dashboard." })}
                         </p>
                       </div>
                     ) : (
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "14px" }}>
-                        {pinnedTasks.map((t) => (
+                        {pinnedTasks.map((tVal) => (
                           <div
-                            key={t.id}
+                            key={tVal.id}
                             style={{
                               background: "var(--bg-card-subtle, #f8fafc)",
                               border: "1px solid var(--border-color, #e2e8f0)",
@@ -879,31 +884,31 @@ function Admin() {
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
                               <div>
                                 <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase" }}>
-                                  #{t.id} {t.project_title ? `• ${t.project_title}` : ""}
+                                  #{tVal.id} {tVal.project_title ? `• ${tVal.project_title}` : ""}
                                 </span>
                                 <h4
-                                  onClick={() => navigate(rolePath(`tasks/task-details/${t.id}`))}
+                                  onClick={() => navigate(rolePath(`tasks/task-details/${tVal.id}`))}
                                   style={{ margin: "4px 0 0 0", fontSize: "14px", fontWeight: 700, color: "var(--text-heading)", cursor: "pointer", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
-                                  title={t.title}
+                                  title={tVal.title}
                                 >
-                                  {t.title}
+                                  {tVal.title}
                                 </h4>
                               </div>
                               <button
-                                onClick={() => togglePinTask(t)}
-                                title="Unpin from Dashboard"
+                                onClick={() => togglePinTask(tVal)}
+                                title={t("Unpin from Dashboard", { defaultValue: "Unpin from Dashboard" })}
                                 style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer", padding: "2px", borderRadius: "4px" }}
                               >
                                 <X size={16} />
                               </button>
                             </div>
                             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: "12px", paddingTop: "8px", borderTop: "1px solid var(--border-color, #e2e8f0)" }}>
-                              <span style={{ padding: "2px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, textTransform: "capitalize", background: t.status === "approved" ? "#DCFCE7" : t.status === "submitted" ? "#FEF3C7" : "#EFF6FF", color: t.status === "approved" ? "#15803D" : t.status === "submitted" ? "#B45309" : "#1D4ED8" }}>
-                                {t.status?.replace("_", " ")}
+                              <span style={{ padding: "2px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, textTransform: "capitalize", background: tVal.status === "approved" ? "#DCFCE7" : tVal.status === "submitted" ? "#FEF3C7" : "#EFF6FF", color: tVal.status === "approved" ? "#15803D" : tVal.status === "submitted" ? "#B45309" : "#1D4ED8" }}>
+                                {t(tVal.status?.replace("_", " ") || "pending", { defaultValue: tVal.status?.replace("_", " ") || "pending" })}
                               </span>
-                              {t.end_date && (
+                              {tVal.end_date && (
                                 <span style={{ fontSize: "11px", color: "var(--text-secondary)" }}>
-                                  Due: {new Date(t.end_date).toLocaleDateString()}
+                                  {t("Due: {{date}}", { date: new Date(tVal.end_date).toLocaleDateString(), defaultValue: `Due: ${new Date(tVal.end_date).toLocaleDateString()}` })}
                                 </span>
                               )}
                             </div>
@@ -928,14 +933,14 @@ function Admin() {
                 >
                   <div className="workload-card" style={{ marginBottom: 0 }}>
                     <div className="workload-card-header">
-                      <DragGripHeader title="Today's Tasks" />
+                      <DragGripHeader title={t("Today's Tasks", { defaultValue: "Today's Tasks" })} />
                       <button className="workload-view-btn" onClick={() => {
                         const isOutgoing = dashboardMode === "user";
                         navigate(rolePath(isOutgoing ? "taskby" : "tasks"));
-                      }}>View All Tasks</button>
+                      }}>{t("View All Tasks", { defaultValue: "View All Tasks" })}</button>
                     </div>
                     {todayWorkload.length === 0 ? (
-                      <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>No tasks due today</p>
+                      <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>{t("No tasks due today", { defaultValue: "No tasks due today" })}</p>
                     ) : (
                       <>
                         <div ref={taskSliderRef} style={{ overflow: "hidden" }}>
@@ -1025,16 +1030,16 @@ function Admin() {
                     boxShadow: "var(--shadow-sm)", marginBottom: 0, overflow: "hidden"
                   }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
-                      <DragGripHeader title="Active Projects" />
+                      <DragGripHeader title={t("Active Projects", { defaultValue: "Active Projects" })} />
                       <button
                         className="workload-view-btn"
                         onClick={() => navigate(`${rolePath("projects")}?filter=active`)}
                       >
-                        View All Projects
+                        {t("View All Projects", { defaultValue: "View All Projects" })}
                       </button>
                     </div>
                     {activeProjects.length === 0 ? (
-                      <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>No active projects</p>
+                      <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>{t("No active projects", { defaultValue: "No active projects" })}</p>
                     ) : (
                       <>
                         <div ref={sliderRef} style={{ overflow: "hidden" }}>
@@ -1118,18 +1123,18 @@ function Admin() {
                 >
                   <div className="today-activity-section" style={{ background: "var(--bg-card)", borderRadius: "20px", padding: "24px", boxShadow: "var(--shadow-sm)", marginBottom: pastActivityOpen ? "30px" : 0, position: "relative" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-                      <DragGripHeader title="Today's Activity" />
+                      <DragGripHeader title={t("Today's Activity", { defaultValue: "Today's Activity" })} />
                       <div>
                         <button
                           onClick={() => setPastActivityOpen(!pastActivityOpen)}
                           style={{ background: "transparent", border: "none", color: "var(--color-primary)", fontWeight: "600", cursor: "pointer", fontSize: "14px" }}
                         >
-                          {pastActivityOpen ? "Hide Past" : "Past Activities"}
+                          {pastActivityOpen ? t("Hide Past", { defaultValue: "Hide Past" }) : t("Past Activities", { defaultValue: "Past Activities" })}
                         </button>
                       </div>
                     </div>
                     {completedToday.length === 0 ? (
-                      <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>No activity today</p>
+                      <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>{t("No activity today", { defaultValue: "No activity today" })}</p>
                     ) : (
                       completedToday.map((item, idx) => {
                         const cfg = activityActionConfig[item.action] || activityActionConfig.submitted;
@@ -1149,7 +1154,7 @@ function Admin() {
                               <div className="activity-icon-circle" style={{
                                 width: "40px", height: "40px", borderRadius: "50%",
                                 background: cfg.bg, display: "flex", alignItems: "center",
-                                justifyContent: "center", flexShrink: 0,
+                                justifyItems: "center", flexShrink: 0,
                               }}>
                                 <span style={{ fontSize: "16px", color: cfg.color }}>{cfg.icon}</span>
                               </div>
@@ -1185,18 +1190,18 @@ function Admin() {
                   {pastActivityOpen && (
                     <div className="past-activity-section" style={{ background: "var(--bg-card)", borderRadius: "20px", padding: "24px", boxShadow: "var(--shadow-sm)", marginTop: "20px" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-                        <h3 style={{ margin: 0, fontSize: "20px", fontWeight: "600", color: "var(--text-heading)" }}>Past Activity</h3>
+                        <h3 style={{ margin: 0, fontSize: "20px", fontWeight: "600", color: "var(--text-heading)" }}>{t("Past Activity", { defaultValue: "Past Activity" })}</h3>
                         <button
                           onClick={() => setPastActivityOpen(false)}
                           style={{ background: "transparent", border: "none", color: "var(--color-primary)", fontWeight: "600", cursor: "pointer", fontSize: "14px" }}
                         >
-                          Collapse
+                          {t("Collapse", { defaultValue: "Collapse" })}
                         </button>
                       </div>
                       {pastLoading ? (
-                        <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>Loading past activities...</p>
+                        <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>{t("Loading past activities...", { defaultValue: "Loading past activities..." })}</p>
                       ) : (pastActivityData?.data || []).length === 0 ? (
-                        <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>No past activities</p>
+                        <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>{t("No past activities", { defaultValue: "No past activities" })}</p>
                       ) : (
                         (pastActivityData?.data || []).map((group, gi) => (
                           <div key={group.date} style={{ marginBottom: gi < (pastActivityData?.data || []).length - 1 ? "24px" : "0" }}>
@@ -1255,7 +1260,7 @@ function Admin() {
                   style={sectionWrapperStyle}
                 >
                   <div className="workload-card" style={{ marginBottom: 0, padding: "16px" }}>
-                    <DragGripHeader title="Knowledge Base & Documentation" />
+                    <DragGripHeader title={t("Knowledge Base & Documentation", { defaultValue: "Knowledge Base & Documentation" })} />
                     <KnowledgeBaseWidget />
                   </div>
                 </div>
@@ -1273,7 +1278,7 @@ function Admin() {
                   style={sectionWrapperStyle}
                 >
                   <div className="workload-card" style={{ marginBottom: 0, padding: "16px" }}>
-                    <DragGripHeader title="Upcoming Events & Schedule" />
+                    <DragGripHeader title={t("Upcoming Events & Schedule", { defaultValue: "Upcoming Events & Schedule" })} />
                     <EventsWidget />
                   </div>
                 </div>
@@ -1294,14 +1299,14 @@ function Admin() {
                       draggable={true}
                       onDragStart={(e) => handleSecDragStart(e, index)}
                       onDragEnd={() => { setDraggedSecIndex(null); setDragOverSecIndex(null); }}
-                      title="Drag handle to reorder section on dashboard canvas"
+                      title={t("Drag handle to reorder section on dashboard canvas", { defaultValue: "Drag handle to reorder section on dashboard canvas" })}
                       style={{ cursor: "grab", color: "var(--text-secondary, #94a3b8)", display: "inline-flex", alignItems: "center" }}
                     >
                       <GripVertical size={20} />
                     </span>
-                    <span style={{ fontSize: "14px", fontWeight: "600", color: "var(--text-secondary)" }}>Custom Widgets & Notes</span>
+                    <span style={{ fontSize: "14px", fontWeight: "600", color: "var(--text-secondary)" }}>{t("Custom Widgets & Notes", { defaultValue: "Custom Widgets & Notes" })}</span>
                   </div>
-                  <DynamicWidgetSection storageKey="pms_dashboard_widgets" sectionTitle="Dashboard Widgets" />
+                  <DynamicWidgetSection storageKey="pms_dashboard_widgets" sectionTitle={t("Dashboard Widgets", { defaultValue: "Dashboard Widgets" })} />
                 </div>
               );
             }

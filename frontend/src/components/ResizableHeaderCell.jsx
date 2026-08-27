@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import "./ResizableHeaderCell.css";
 
 /**
@@ -16,6 +17,7 @@ export default function ResizableHeaderCell({
   as = "div",
   onResize,
 }) {
+  const { t } = useTranslation();
   const [width, setWidth] = useState(defaultWidth || null);
   const [isResizing, setIsResizing] = useState(false);
   const cellRef = useRef(null);
@@ -90,7 +92,7 @@ export default function ResizableHeaderCell({
       <div
         className={`col-resizer-handle ${isResizing ? "active" : ""}`}
         onMouseDown={handleMouseDown}
-        title="Drag to resize column"
+        title={t("Drag to resize column", { defaultValue: "Drag to resize column" })}
       />
     </Component>
   );

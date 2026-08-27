@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Save, Sun, Moon, User, Lock, Loader2 } from 'lucide-react';
 import { useOrgBranding, useUpdateBranding } from '../../hooks/useOrgBranding';
@@ -7,13 +8,14 @@ import { getSuperAdminUser } from '../../utils/auth';
 import { api } from './api/superAdminApi';
 
 const tabs = [
-  { id: 'profile', label: 'Profile' },
-  { id: 'password', label: 'Password' },
-  { id: 'general', label: 'General' },
-  { id: 'branding', label: 'Branding' },
+  { id: 'profile', labelKey: 'Profile', defaultLabel: 'Profile' },
+  { id: 'password', labelKey: 'Password', defaultLabel: 'Password' },
+  { id: 'general', labelKey: 'General', defaultLabel: 'General' },
+  { id: 'branding', labelKey: 'Branding', defaultLabel: 'Branding' },
 ];
 
 export default function SettingsPage() {
+  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const params = new URLSearchParams(location.search);
@@ -34,7 +36,7 @@ export default function SettingsPage() {
                 color: activeTab === tab.id ? 'var(--color-primary)' : 'var(--text-muted)',
                 borderColor: activeTab === tab.id ? 'var(--color-primary)' : 'transparent',
               }}>
-              {tab.label}
+              {t(tab.labelKey, { defaultValue: tab.defaultLabel })}
             </button>
           ))}
         </div>
@@ -47,11 +49,11 @@ export default function SettingsPage() {
           <div className="space-y-5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Platform Name</label>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>{t('Platform Name', { defaultValue: 'Platform Name' })}</label>
                 <input type="text" defaultValue={import.meta.env.VITE_APP_NAME || 'PMS'} className="w-full px-3 py-2 rounded-lg text-sm" style={{ background: 'var(--bg-hover)', color: 'var(--text-dark)', border: '1px solid var(--border-light)' }} />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Support Email</label>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>{t('Support Email', { defaultValue: 'Support Email' })}</label>
                 <input type="email" defaultValue="support@yourdomain.com" className="w-full px-3 py-2 rounded-lg text-sm" style={{ background: 'var(--bg-hover)', color: 'var(--text-dark)', border: '1px solid var(--border-light)' }} />
               </div>
             </div>
@@ -60,7 +62,7 @@ export default function SettingsPage() {
 
             <div className="flex justify-end">
               <button onClick={handleSave} className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
-                <Save className="w-4 h-4" /> {saved ? 'Saved!' : 'Save Changes'}
+                <Save className="w-4 h-4" /> {saved ? t('Saved!', { defaultValue: 'Saved!' }) : t('Save Changes', { defaultValue: 'Save Changes' })}
               </button>
             </div>
           </div>
@@ -73,6 +75,7 @@ export default function SettingsPage() {
 }
 
 function ProfileSection() {
+  const { t } = useTranslation();
   const user = getSuperAdminUser();
   const [name, setName] = useState(user?.name || '');
   const [email, setEmail] = useState(user?.email || '');
@@ -107,8 +110,8 @@ function ProfileSection() {
           <span className="text-xl font-bold text-white">{(name || 'S').charAt(0).toUpperCase()}</span>
         </div>
         <div>
-          <h3 className="text-lg font-semibold" style={{ color: 'var(--text-heading)' }}>{name || 'Super Admin'}</h3>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Super Admin</p>
+          <h3 className="text-lg font-semibold" style={{ color: 'var(--text-heading)' }}>{name || t('Super Admin', { defaultValue: 'Super Admin' })}</h3>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{t('Super Admin', { defaultValue: 'Super Admin' })}</p>
         </div>
       </div>
 
@@ -118,19 +121,19 @@ function ProfileSection() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium mb-1" style={s.label}>Full Name</label>
+          <label className="block text-sm font-medium mb-1" style={s.label}>{t('Full Name', { defaultValue: 'Full Name' })}</label>
           <input type="text" value={name} onChange={(e) => setName(e.target.value)}
             className="w-full px-3 py-2 rounded-lg text-sm" style={s.input} />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-1" style={s.label}>Email</label>
+          <label className="block text-sm font-medium mb-1" style={s.label}>{t('Email', { defaultValue: 'Email' })}</label>
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
             className="w-full px-3 py-2 rounded-lg text-sm" style={s.input} />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-1" style={s.label}>Phone</label>
+          <label className="block text-sm font-medium mb-1" style={s.label}>{t('Phone', { defaultValue: 'Phone' })}</label>
           <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg text-sm" style={s.input} placeholder="Optional" />
+            className="w-full px-3 py-2 rounded-lg text-sm" style={s.input} placeholder={t("Optional", { defaultValue: "Optional" })} />
         </div>
       </div>
 
@@ -138,7 +141,7 @@ function ProfileSection() {
         <button onClick={handleSave} disabled={saving}
           className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Profile'}
+          {saving ? t('Saving...', { defaultValue: 'Saving...' }) : saved ? t('Saved!', { defaultValue: 'Saved!' }) : t('Save Profile', { defaultValue: 'Save Profile' })}
         </button>
       </div>
     </div>
@@ -146,6 +149,7 @@ function ProfileSection() {
 }
 
 function PasswordSection() {
+  const { t } = useTranslation();
   const user = getSuperAdminUser();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -156,11 +160,11 @@ function PasswordSection() {
 
   const handleSave = async () => {
     if (newPassword !== confirmPassword) {
-      setError('New passwords do not match');
+      setError(t('New passwords do not match', { defaultValue: 'New passwords do not match' }));
       return;
     }
     if (newPassword.length < 6) {
-      setError('Password must be at least 6 characters');
+      setError(t('Password must be at least 6 characters', { defaultValue: 'Password must be at least 6 characters' }));
       return;
     }
     setSaving(true);
@@ -191,17 +195,17 @@ function PasswordSection() {
       )}
 
       <div>
-        <label className="block text-sm font-medium mb-1" style={s.label}>Current Password</label>
+        <label className="block text-sm font-medium mb-1" style={s.label}>{t('Current Password', { defaultValue: 'Current Password' })}</label>
         <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)}
           className="w-full px-3 py-2 rounded-lg text-sm" style={s.input} />
       </div>
       <div>
-        <label className="block text-sm font-medium mb-1" style={s.label}>New Password</label>
+        <label className="block text-sm font-medium mb-1" style={s.label}>{t('New Password', { defaultValue: 'New Password' })}</label>
         <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
           className="w-full px-3 py-2 rounded-lg text-sm" style={s.input} />
       </div>
       <div>
-        <label className="block text-sm font-medium mb-1" style={s.label}>Confirm New Password</label>
+        <label className="block text-sm font-medium mb-1" style={s.label}>{t('Confirm New Password', { defaultValue: 'Confirm New Password' })}</label>
         <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
           className="w-full px-3 py-2 rounded-lg text-sm" style={s.input} />
       </div>
@@ -210,7 +214,7 @@ function PasswordSection() {
         <button onClick={handleSave} disabled={saving || !currentPassword || !newPassword || !confirmPassword}
           className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
-          {saving ? 'Saving...' : saved ? 'Updated!' : 'Update Password'}
+          {saving ? t('Saving...', { defaultValue: 'Saving...' }) : saved ? t('Updated!', { defaultValue: 'Updated!' }) : t('Update Password', { defaultValue: 'Update Password' })}
         </button>
       </div>
     </div>
@@ -218,6 +222,7 @@ function PasswordSection() {
 }
 
 function BrandingSection() {
+  const { t } = useTranslation();
   const { data: branding, isLoading } = useOrgBranding();
   const updateBranding = useUpdateBranding();
   const [subtitle, setSubtitle] = useState('');
@@ -278,30 +283,30 @@ function BrandingSection() {
       <div className="flex flex-col sm:flex-row gap-6">
         <div className="flex-1 space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1" style={s.textSecondary}>Subtitle Text</label>
+            <label className="block text-sm font-medium mb-1" style={s.textSecondary}>{t('Subtitle Text', { defaultValue: 'Subtitle Text' })}</label>
             <input type="text" value={subtitle} onChange={(e) => setSubtitle(e.target.value)} maxLength={100}
-              className="w-full px-3 py-2 rounded-lg text-sm" style={s.input} placeholder="e.g. PMS Portal" />
-            <p className="text-xs mt-1" style={s.textMuted}>Shown below the logo in sidebar and header</p>
+              className="w-full px-3 py-2 rounded-lg text-sm" style={s.input} placeholder={t("e.g. PMS Portal", { defaultValue: "e.g. PMS Portal" })} />
+            <p className="text-xs mt-1" style={s.textMuted}>{t('Shown below the logo in sidebar and header', { defaultValue: 'Shown below the logo in sidebar and header' })}</p>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1" style={s.textSecondary}>Organization Logo</label>
+            <label className="block text-sm font-medium mb-1" style={s.textSecondary}>{t('Organization Logo', { defaultValue: 'Organization Logo' })}</label>
             <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/svg+xml" onChange={handleLogoChange} className="hidden" id="logo-upload" />
             <div className="flex items-center gap-3">
               <button onClick={() => fileInputRef.current?.click()}
                 className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
                 style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border-light)' }}>
-                {logoFile ? 'Change Logo' : 'Upload Logo'}
+                {logoFile ? t('Change Logo', { defaultValue: 'Change Logo' }) : t('Upload Logo', { defaultValue: 'Upload Logo' })}
               </button>
               {logoPreview && (
-                <button onClick={handleRemoveLogo} className="px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700 transition-colors">Remove</button>
+                <button onClick={handleRemoveLogo} className="px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700 transition-colors">{t('Remove', { defaultValue: 'Remove' })}</button>
               )}
             </div>
-            <p className="text-xs mt-1" style={s.textMuted}>JPG, PNG, WebP or SVG. Max 2MB.</p>
+            <p className="text-xs mt-1" style={s.textMuted}>{t('JPG, PNG, WebP or SVG. Max 2MB.', { defaultValue: 'JPG, PNG, WebP or SVG. Max 2MB.' })}</p>
           </div>
         </div>
 
         <div className="flex-shrink-0">
-          <p className="text-xs font-medium mb-2" style={s.textMuted}>Preview</p>
+          <p className="text-xs font-medium mb-2" style={s.textMuted}>{t('Preview', { defaultValue: 'Preview' })}</p>
           <div className="flex items-center gap-3 p-3 rounded-xl" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-light)' }}>
             <div className="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden flex-shrink-0"
               style={{ background: 'var(--bg-heading)' }}>
@@ -313,7 +318,7 @@ function BrandingSection() {
             </div>
             <div>
               <h4 className="text-sm font-bold leading-tight" style={s.textHeading}>{subtitle || 'PMS Portal'}</h4>
-              <span className="text-[10px]" style={s.textMuted}>Organization</span>
+              <span className="text-[10px]" style={s.textMuted}>{t('Organization', { defaultValue: 'Organization' })}</span>
             </div>
           </div>
         </div>
@@ -322,7 +327,7 @@ function BrandingSection() {
       <div className="flex justify-end">
         <button onClick={handleSaveBranding} disabled={updateBranding.isPending}
           className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
-          <Save className="w-4 h-4" /> {updateBranding.isPending ? 'Saving...' : 'Save Branding'}
+          <Save className="w-4 h-4" /> {updateBranding.isPending ? t('Saving...', { defaultValue: 'Saving...' }) : t('Save Branding', { defaultValue: 'Save Branding' })}
         </button>
       </div>
     </div>
@@ -330,6 +335,7 @@ function BrandingSection() {
 }
 
 function ThemeToggle() {
+  const { t } = useTranslation();
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === 'dark';
 
@@ -338,8 +344,8 @@ function ThemeToggle() {
       <div className="flex items-center gap-3">
         {isDark ? <Moon className="w-5 h-5" style={{ color: '#818cf8' }} /> : <Sun className="w-5 h-5 text-amber-500" />}
         <div>
-          <p className="text-sm font-medium" style={{ color: 'var(--text-heading)' }}>Appearance</p>
-          <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Switch between light and dark mode</p>
+          <p className="text-sm font-medium" style={{ color: 'var(--text-heading)' }}>{t('Appearance', { defaultValue: 'Appearance' })}</p>
+          <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>{t('Switch between light and dark mode', { defaultValue: 'Switch between light and dark mode' })}</p>
         </div>
       </div>
       <button onClick={toggleTheme}

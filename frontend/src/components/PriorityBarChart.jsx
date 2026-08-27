@@ -4,8 +4,11 @@
  */
 
 import { memo, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 
-const PriorityBarChart = memo(function PriorityBarChart({ bars, totalLabel = "Total Tasks" }) {
+const PriorityBarChart = memo(function PriorityBarChart({ bars, totalLabel }) {
+  const { t } = useTranslation();
+  const displayTotalLabel = totalLabel || t("Total Tasks", { defaultValue: "Total Tasks" });
   const total = useMemo(() => bars.reduce((sum, b) => sum + b.count, 0), [bars]);
 
   const enrichedBars = useMemo(() => {
@@ -20,7 +23,7 @@ const PriorityBarChart = memo(function PriorityBarChart({ bars, totalLabel = "To
       <div className="priority-bars-list">
         {enrichedBars.map((bar) => (
           <div key={bar.label} className="priority-bar-item">
-            <div className="priority-bar-label">{bar.label}</div>
+            <div className="priority-bar-label">{t(bar.label)}</div>
             <div className="priority-bar-track">
               <div
                 className="priority-bar-fill"
@@ -34,7 +37,7 @@ const PriorityBarChart = memo(function PriorityBarChart({ bars, totalLabel = "To
           </div>
         ))}
       </div>
-      <div className="priority-bar-footer">{total} {totalLabel}</div>
+      <div className="priority-bar-footer">{total} {t(displayTotalLabel)}</div>
     </div>
   );
 });

@@ -39,6 +39,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->api(append: [
             \App\Http\Middleware\ResolveTenantDatabase::class,
             \App\Http\Middleware\CheckUserStatus::class,
+            \App\Http\Middleware\LocalizationMiddleware::class,
         ]);
         // CorsMiddleware removed — CORS handled by:
         // 1. public/index.php (OPTIONS preflight at PHP level)

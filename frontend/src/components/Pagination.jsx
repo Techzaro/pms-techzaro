@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useRef, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 
 /**
  * Renders pagination controls for navigating between pages.
@@ -13,6 +14,7 @@ import React, { useState, useRef, useEffect } from "react";
  * @param {Function} onPageChange - Callback invoked with the target page number.
  */
 export default function Pagination({ currentPage, totalPages, onPageChange, itemsPerPage, onItemsPerPageChange }) {
+  const { t } = useTranslation();
   const [jumpIdx, setJumpIdx] = useState(null);
   const [jumpValue, setJumpValue] = useState("");
   const jumpInputRef = useRef(null);
@@ -62,24 +64,26 @@ export default function Pagination({ currentPage, totalPages, onPageChange, item
     const pageNum = parseInt(jumpValue, 10);
     if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
       onPageChange(pageNum);
+      setJumpIdx(null);
+      setJumpValue("");
     }
-    setJumpIdx(null);
-    setJumpValue("");
   };
 
   return (
-    <div style={{
-      display: "flex",
-      justify: "space-between",
-      alignItems: "center",
-      gap: "12px",
-      padding: "16px 0",
-      flexWrap: "wrap",
-      width: "100%",
-    }}>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: onItemsPerPageChange ? "space-between" : "flex-end",
+        gap: "12px",
+        marginTop: "16px",
+        padding: "8px 0",
+        flexWrap: "wrap",
+      }}
+    >
       {onItemsPerPageChange ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "13px", color: "var(--text-secondary)" }}>
-          <span>Rows per page:</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "var(--text-secondary)" }}>
+          <span>{t("Per page")}:</span>
           <select
             value={itemsPerPage || 10}
             onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
@@ -93,10 +97,11 @@ export default function Pagination({ currentPage, totalPages, onPageChange, item
               cursor: "pointer",
             }}
           >
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
+            {[10, 20, 50, 100].map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
           </select>
         </div>
       ) : <div />}
@@ -117,7 +122,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange, item
               fontWeight: 500,
             }}
           >
-            Previous
+            {t("Previous")}
           </button>
 
           {getVisiblePages().map((page, idx) =>
@@ -174,7 +179,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange, item
                       e.preventDefault();
                       handleJump(e);
                     }}
-                    title="Go to page"
+                    title={t("Go")}
                     style={{
                       padding: "2px 6px",
                       borderRadius: "4px",
@@ -186,7 +191,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange, item
                       cursor: "pointer",
                     }}
                   >
-                    Go
+                    {t("Go")}
                   </button>
                 </div>
               ) : (
@@ -194,7 +199,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange, item
                   type="button"
                   key={`dots-${idx}`}
                   onClick={() => { setJumpIdx(idx); setJumpValue(""); }}
-                  title="Click to jump to a page"
+                  title={t("Click to jump to a page")}
                   style={{
                     padding: "4px 6px",
                     color: "var(--text-muted)",
@@ -253,7 +258,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange, item
               fontWeight: 500,
             }}
           >
-            Next
+            {t("Next")}
           </button>
         </div>
       )}

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import "./PasswordInput.css";
 
 const PASSWORD_RULES = [
@@ -45,6 +46,7 @@ export function PasswordInput({
   error,
   disabled,
 }) {
+  const { t } = useTranslation();
   const [show, setShow] = useState(false);
   const strength = getPasswordStrength(value);
   const strengthInfo = getStrengthLabel(strength);
@@ -91,7 +93,7 @@ export function PasswordInput({
               <div key={i} className="pw-strength-seg" style={{ backgroundColor: i <= strength ? strengthInfo.color : "#e5e7eb" }} />
             ))}
           </div>
-          <span className="pw-strength-label" style={{ color: strengthInfo.color }}>{strengthInfo.label}</span>
+          <span className="pw-strength-label" style={{ color: strengthInfo.color }}>{t(strengthInfo.label)}</span>
         </div>
       )}
 
@@ -99,7 +101,7 @@ export function PasswordInput({
         <div className="pw-rules">
           {PASSWORD_RULES.map((rule) => (
             <span key={rule.key} className={value && rule.test(value) ? "pw-rule-met" : ""}>
-              {value && rule.test(value) ? "✓" : "○"} {rule.label}
+              {value && rule.test(value) ? "✓" : "○"} {t(rule.label)}
             </span>
           ))}
         </div>

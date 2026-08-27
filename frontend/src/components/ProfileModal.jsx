@@ -7,7 +7,7 @@
 
 import { useState } from "react";
 import { createPortal } from "react-dom";
-
+import { useTranslation } from "react-i18next";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
@@ -24,60 +24,41 @@ function ProfileModal({
   user,
   onClose,
 }) {
+  const { t } = useTranslation();
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
   useEscapeKey(true, handleClose);
 
-  const [newPassword, setNewPassword] =
-    useState("");
-
-  const [confirmPassword, setConfirmPassword] =
-    useState("");
-
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [saving, setSaving] = useState(false);
-
-  /**
-   * CHANGE PASSWORD
-   */
 
   /**
    * Validates and submits the password change request.
    * Shows error if fields are empty or passwords don't match.
    */
   const handlePasswordChange = async () => {
-
     if (!newPassword || !confirmPassword) {
-
-      notify.error("Please enter and confirm your password.");
-
+      notify.error(t("Please enter and confirm your password.", { defaultValue: "Please enter and confirm your password." }));
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      notify.error("Password confirmation does not match");
+      notify.error(t("Password confirmation does not match", { defaultValue: "Password confirmation does not match" }));
       return;
     }
 
     setSaving(true);
     try {
-
       const token = authToken();
-
       const response = await fetch(
         `${API_URL}/user/change-password`,
         {
           method: "PUT",
-
           headers: {
-            "Content-Type":
-              "application/json",
-
-            Accept:
-              "application/json",
-
-            Authorization:
-              `Bearer ${token}`,
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            Authorization: `Bearer ${token}`,
           },
-
           body: JSON.stringify({
             password: newPassword,
           }),
@@ -85,113 +66,72 @@ function ProfileModal({
         }
       );
 
-      const data =
-        await response.json();
+      const data = await response.json();
 
       if (!response.ok) {
-
         throw new Error(
-          data.message ||
-            "Failed to change password"
+          data.message || t("Failed to change password", { defaultValue: "Failed to change password" })
         );
       }
 
-      showSuccessMessage("Password", "changed");
-
+      showSuccessMessage(t("Password", { defaultValue: "Password" }), t("changed", { defaultValue: "changed" }));
       onClose();
-
     } catch (error) {
-
       console.error(error);
-
-      notify.error(error.message || "Failed to change password.");
+      notify.error(error.message || t("Failed to change password.", { defaultValue: "Failed to change password." }));
     } finally {
       setSaving(false);
     }
   };
 
   return createPortal(
-    <div
-      className="profile-overlay"
-    >
-
+    <div className="profile-overlay">
       <div
         className="profile-modal"
-        onClick={(e) =>
-          e.stopPropagation()
-        }
+        onClick={(e) => e.stopPropagation()}
       >
-
         <div className="profile-header">
-
           <div className="profile-user">
-
             <div className="profile-avatar">
               👤
             </div>
-
             <div>
-
               <h2>{user.name}</h2>
-
               <p>{user.email}</p>
-
             </div>
-
           </div>
-
         </div>
 
         <div className="profile-body">
-
           <div className="profile-field">
-
-            <label>
-              First Name
-            </label>
-
+            <label>{t("Name", { defaultValue: "Name" })}</label>
             <input
               type="text"
               value={user.name}
               readOnly
             />
-
           </div>
 
           <div className="profile-field">
-
-            <label>
-              Email
-            </label>
-
+            <label>{t("Email", { defaultValue: "Email" })}</label>
             <input
               type="email"
               value={user.email}
               readOnly
             />
-
           </div>
 
           <div className="profile-field">
-
-            <label>
-              Role
-            </label>
-
+            <label>{t("Role", { defaultValue: "Role" })}</label>
             <input
               type="text"
               value={user.role}
               readOnly
             />
-
           </div>
 
           <div className="profile-field">
-
-            <label>
-              New Password
-            </label>
-
+            <label>{t("New Password", { defaultValue: "New Password" })}</label>
             <input
               type="password"
               value={newPassword}
@@ -199,17 +139,12 @@ function ProfileModal({
                 setNewPassword(e.target.value);
                 setIsDirty(true);
               }}
-              placeholder="Enter new password"
+              placeholder={t("Enter new password", { defaultValue: "Enter new password" })}
             />
-
           </div>
 
           <div className="profile-field">
-
-            <label>
-              Confirm Password
-            </label>
-
+            <label>{t("Confirm Password", { defaultValue: "Confirm Password" })}</label>
             <input
               type="password"
               value={confirmPassword}
@@ -217,36 +152,30 @@ function ProfileModal({
                 setConfirmPassword(e.target.value);
                 setIsDirty(true);
               }}
-              placeholder="Confirm password"
+              placeholder={t("Confirm password", { defaultValue: "Confirm password" })}
             />
-
           </div>
-
         </div>
 
         <div className="profile-footer">
-
           <button
             className="change-btn"
             onClick={handlePasswordChange}
             disabled={saving}
           >
-            {saving ? "Changing..." : "Change Password"}
+            {saving ? t("Changing...", { defaultValue: "Changing..." }) : t("Change Password", { defaultValue: "Change Password" })}
           </button>
 
           <button
             className="close-btn"
             onClick={handleClose}
           >
-            Close
+            {t("Close", { defaultValue: "Close" })}
           </button>
-
         </div>
-
       </div>
 
       {ConfirmDialog}
-
     </div>,
     document.body
   );

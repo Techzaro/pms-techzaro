@@ -13,6 +13,7 @@
  * This page is strictly read-only — no edit, submit, or workflow actions.
  */
 import { useState, useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
@@ -73,6 +74,7 @@ const PRIORITY_TEXT_COLORS = {
 
 /** Main AllDeliveries page — read-only view of deliverables within the user's scope. */
 function AllDeliveries() {
+  const { t } = useTranslation();
   const currentUser = getUser();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -206,7 +208,8 @@ function AllDeliveries() {
       abandon_requested: "Abandon Requested",
       abandoned: "Abandoned",
     };
-    return map[status] || status;
+    const label = map[status] || status;
+    return t(label, { defaultValue: label });
   };
 
   const baseItems = orderedItems.length ? orderedItems : items;
@@ -323,8 +326,8 @@ function AllDeliveries() {
   const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * itemsPerPage, page * itemsPerPage);
 
   const breadcrumbs = [
-    { label: "Subtasks", path: rolePath("deliveries") },
-    { label: "All Sub-Tasks" },
+    { label: t("Subtasks", { defaultValue: "Subtasks" }), path: rolePath("deliveries") },
+    { label: t("All Sub-Tasks", { defaultValue: "All Sub-Tasks" }) },
   ];
 
   return (
@@ -333,15 +336,15 @@ function AllDeliveries() {
       <div className="projects-page">
         <div className="projects-header">
           <div>
-            <h1>All Sub-Tasks</h1>
-            <p>Monitor and track subtasks across your scope</p>
+            <h1>{t("All Sub-Tasks", { defaultValue: "All Sub-Tasks" })}</h1>
+            <p>{t("Monitor and track subtasks across your scope", { defaultValue: "Monitor and track subtasks across your scope" })}</p>
           </div>
           <div className="header-actions">
             <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)} className="reports-filter">
-              <option value="">All Time</option>
-              <option value="7">Last 7 Days</option>
-              <option value="30">Last 30 Days</option>
-              <option value="180">Last 6 Months</option>
+              <option value="">{t("All Time", { defaultValue: "All Time" })}</option>
+              <option value="7">{t("Last 7 Days", { defaultValue: "Last 7 Days" })}</option>
+              <option value="30">{t("Last 30 Days", { defaultValue: "Last 30 Days" })}</option>
+              <option value="180">{t("Last 6 Months", { defaultValue: "Last 6 Months" })}</option>
             </select>
           </div>
         </div>
@@ -349,17 +352,17 @@ function AllDeliveries() {
         {/* STATUS FILTERS */}
         <DraggableStatusBadges
           badges={[
-            { id: "due_today", label: "Due Today", count: dueTodayCount, className: "DueToday", dotColor: "#EF4444" },
-            { id: "pending", label: "Pending", count: pendingCount, className: "Pending" },
-            { id: "in_progress", label: "In Progress", count: inProgressCount, className: "InProgress" },
-            { id: "paused", label: "Paused", count: pausedCount, className: "Paused" },
-            { id: "submitted", label: "Submitted", count: submittedCount, className: "Submitted" },
-            { id: "reopened", label: "Reopened", count: reopenedCount, className: "Reopened" },
-            { id: "transferred", label: "Transferred", count: transferredCount, className: "Transferred" },
-            { id: "approved", label: "Approved", count: approvedCount, className: "Approved" },
-            { id: "rejected", label: "Declined", count: rejectedCount, className: "Rejected" },
-            { id: "abandoned", label: "Abandoned", count: abandonedCount, className: "Abandoned", dotColor: "#DC2626" },
-            { id: "", label: "All", count: allCount, className: "All" },
+            { id: "due_today", label: t("Due Today", { defaultValue: "Due Today" }), count: dueTodayCount, className: "DueToday", dotColor: "#EF4444" },
+            { id: "pending", label: t("Pending", { defaultValue: "Pending" }), count: pendingCount, className: "Pending" },
+            { id: "in_progress", label: t("In Progress", { defaultValue: "In Progress" }), count: inProgressCount, className: "InProgress" },
+            { id: "paused", label: t("Paused", { defaultValue: "Paused" }), count: pausedCount, className: "Paused" },
+            { id: "submitted", label: t("Submitted", { defaultValue: "Submitted" }), count: submittedCount, className: "Submitted" },
+            { id: "reopened", label: t("Reopened", { defaultValue: "Reopened" }), count: reopenedCount, className: "Reopened" },
+            { id: "transferred", label: t("Transferred", { defaultValue: "Transferred" }), count: transferredCount, className: "Transferred" },
+            { id: "approved", label: t("Approved", { defaultValue: "Approved" }), count: approvedCount, className: "Approved" },
+            { id: "rejected", label: t("Declined", { defaultValue: "Declined" }), count: rejectedCount, className: "Rejected" },
+            { id: "abandoned", label: t("Abandoned", { defaultValue: "Abandoned" }), count: abandonedCount, className: "Abandoned", dotColor: "#DC2626" },
+            { id: "", label: t("All", { defaultValue: "All" }), count: allCount, className: "All" },
           ]}
           activeStatus={statusFilter}
           onSelectStatus={selectStatusFilter}
@@ -382,22 +385,22 @@ function AllDeliveries() {
         {/* TABLE */}
         <div className="container">
           <div className="all-subtasks-header">
-            <div>ID</div>
-            <div>Assigned To</div>
-            <div>Assigned By</div>
-            <div>Sub-Task Name</div>
-            <div>Parent Task</div>
-            <div>Priority</div>
-            <div>Status</div>
-            <div>Due Date</div>
-            <div>Progress</div>
-            <div style={{ textAlign: "center" }}>Action</div>
+            <div>{t("ID", { defaultValue: "ID" })}</div>
+            <div>{t("Assigned To", { defaultValue: "Assigned To" })}</div>
+            <div>{t("Assigned By", { defaultValue: "Assigned By" })}</div>
+            <div>{t("Sub-Task Name", { defaultValue: "Sub-Task Name" })}</div>
+            <div>{t("Parent Task", { defaultValue: "Parent Task" })}</div>
+            <div>{t("Priority", { defaultValue: "Priority" })}</div>
+            <div>{t("Status", { defaultValue: "Status" })}</div>
+            <div>{t("Due Date", { defaultValue: "Due Date" })}</div>
+            <div>{t("Progress", { defaultValue: "Progress" })}</div>
+            <div style={{ textAlign: "center" }}>{t("Action", { defaultValue: "Action" })}</div>
           </div>
 
           {loading ? (
-            <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
+            <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>{t("Loading...", { defaultValue: "Loading..." })}</div>
           ) : filteredItems.length === 0 ? (
-            <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No items found</div>
+            <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>{t("No items found", { defaultValue: "No items found" })}</div>
           ) : (
             <SortableTableWrapper
               items={paginatedItems.map((i, index) => ({
@@ -425,7 +428,7 @@ function AllDeliveries() {
                           {getInitials(item.assignee?.name)}
                         </div>
                         <div style={{ minWidth: 0 }}>
-                          <div className="user-name">{item.assignee?.name || "Unassigned"}</div>
+                          <div className="user-name">{item.assignee?.name || t("Unassigned", { defaultValue: "Unassigned" })}</div>
                           <div className="user-role">{item.assignee?.role || ""}</div>
                         </div>
                       </div>
@@ -438,7 +441,7 @@ function AllDeliveries() {
                           {getInitials(item.creator?.name)}
                         </div>
                         <div style={{ minWidth: 0 }}>
-                          <div className="user-name">{item.creator?.name || "System"}</div>
+                          <div className="user-name">{item.creator?.name || t("System", { defaultValue: "System" })}</div>
                           <div className="user-role">{item.creator?.role || ""}</div>
                         </div>
                       </div>
@@ -461,7 +464,7 @@ function AllDeliveries() {
                     <div className="col-priority">
                       <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
                         <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
-                        {item.priority}
+                        {t(item.priority, { defaultValue: item.priority })}
                       </span>
                     </div>
 
@@ -493,7 +496,7 @@ function AllDeliveries() {
                     <div className="col-action" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%" }}>
                       <ActionPopover
                         trigger={
-                          <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
+                          <button className="action-icon-btn action-view action-trigger-lg" title={t("Actions", { defaultValue: "Actions" })}>
                             <IoEyeOutline size={20} />
                           </button>
                         }
@@ -501,7 +504,7 @@ function AllDeliveries() {
                       >
                         <button
                           className="action-icon-btn action-note"
-                          title="Add Note"
+                          title={t("Add Note", { defaultValue: "Add Note" })}
                           onClick={() => setNoteModal({ open: true, itemId: item.id })}
                         >
                           <StickyNote size={16} />
@@ -538,3 +541,4 @@ function AllDeliveries() {
 }
 
 export default AllDeliveries;
+

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { authToken, getUser } from "../utils/auth";
@@ -26,6 +27,7 @@ function CompanyHeader() {
 }
 
 function AuditLogs() {
+  const { t } = useTranslation();
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -89,7 +91,7 @@ function AuditLogs() {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         skipLoader: true,
       });
-      if (!res.ok) throw new Error("Failed to fetch audit logs");
+      if (!res.ok) throw new Error(t("Failed to fetch audit logs", { defaultValue: "Failed to fetch audit logs" }));
       const data = await res.json();
       setLogs(data.data || []);
       setPage(data.meta?.current_page || data.current_page || 1);
@@ -100,7 +102,7 @@ function AuditLogs() {
     } finally {
       setLoading(false);
     }
-  }, [search, dateFrom, dateTo, moduleFilter, actionFilter, statusFilter, userFilter, sortBy, sortDir, perPage]);
+  }, [search, dateFrom, dateTo, moduleFilter, actionFilter, statusFilter, userFilter, sortBy, sortDir, perPage, t]);
 
   useEffect(() => {
     fetchFilters();
@@ -152,7 +154,7 @@ function AuditLogs() {
 
   return (
     <DashboardLayout hideRightSidebar={true}>
-      <Breadcrumb items={[{ label: "Application Logs" }]} />
+      <Breadcrumb items={[{ label: t("Application Logs", { defaultValue: "Application Logs" }) }]} />
       <CompanyHeader />
       <br />
       <div className="audit-layout">
@@ -166,20 +168,18 @@ function AuditLogs() {
                 </svg>
               </div>
               <div>
-                <h1 className="audit-title">Application Logs</h1>
-                <p className="audit-subtitle">Monitor all system activities</p>
+                <h1 className="audit-title">{t("Application Logs", { defaultValue: "Application Logs" })}</h1>
+                <p className="audit-subtitle">{t("Monitor all system activities", { defaultValue: "Monitor all system activities" })}</p>
               </div>
             </div>
-               <button className="audit-export-btn" onClick={() => setExportOpen(true)} title="Export">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="7 10 12 15 17 10" />
-                  <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
-                Export
-              </button>
-
-
+            <button className="audit-export-btn" onClick={() => setExportOpen(true)} title={t("Export", { defaultValue: "Export" })}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              {t("Export", { defaultValue: "Export" })}
+            </button>
           </div>
 
           <div className="audit-filters">
@@ -191,7 +191,7 @@ function AuditLogs() {
                 </svg>
                 <input
                   type="text"
-                  placeholder="Search description, module, action, IP..."
+                  placeholder={t("Search description, module, action, IP...", { defaultValue: "Search description, module, action, IP..." })}
                   value={searchInput}
                   onChange={(e) => handleSearchChange(e.target.value)}
                 />
@@ -215,9 +215,9 @@ function AuditLogs() {
                     setDateFrom(val);
                     if (dateTo && val > dateTo) setDateTo(val);
                   }}
-                  title="From date"
+                  title={t("From date", { defaultValue: "From date" })}
                 />
-                <span className="audit-date-sep">to</span>
+                <span className="audit-date-sep">{t("to", { defaultValue: "to" })}</span>
                 <input
                   type="date"
                   value={dateTo}
@@ -227,41 +227,41 @@ function AuditLogs() {
                     setDateTo(val);
                     if (dateFrom && val < dateFrom) setDateFrom(val);
                   }}
-                  title="To date"
+                  title={t("To date", { defaultValue: "To date" })}
                 />
               </div>
 
               <select value={moduleFilter} onChange={(e) => setModuleFilter(e.target.value)}>
-                <option value="">All Modules</option>
+                <option value="">{t("All Modules", { defaultValue: "All Modules" })}</option>
                 {modules.map((m) => (
-                  <option key={m.value || m} value={m.value || m}>{m.label || m}</option>
+                  <option key={m.value || m} value={m.value || m}>{t(m.label || m, { defaultValue: m.label || m })}</option>
                 ))}
               </select>
 
               <select value={actionFilter} onChange={(e) => setActionFilter(e.target.value)}>
-                <option value="">All Actions</option>
+                <option value="">{t("All Actions", { defaultValue: "All Actions" })}</option>
                 {actions.map((a) => (
-                  <option key={a.value || a} value={a.value || a}>{a.label || a}</option>
+                  <option key={a.value || a} value={a.value || a}>{t(a.label || a, { defaultValue: a.label || a })}</option>
                 ))}
               </select>
 
               <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-                <option value="">All Status</option>
-                <option value="success">Success</option>
-                <option value="failed">Failed</option>
+                <option value="">{t("All Status", { defaultValue: "All Status" })}</option>
+                <option value="success">{t("Success", { defaultValue: "Success" })}</option>
+                <option value="failed">{t("Failed", { defaultValue: "Failed" })}</option>
               </select>
 
               <select value={userFilter} onChange={(e) => setUserFilter(e.target.value)}>
-                <option value="">All Users</option>
+                <option value="">{t("All Users", { defaultValue: "All Users" })}</option>
                 {users.map((u) => (
-                  <option key={u.id || u.value} value={u.id || u.value}>{u.name || u.label || u}</option>
+                  <option key={u.id || u.value} value={u.id || u.value}>{u.name || t(u.label || u, { defaultValue: u.label || u })}</option>
                 ))}
               </select>
             </div>
 
             <div className="audit-filter-actions">
-              <button className="audit-apply-btn" onClick={applyFilters}>Apply Filters</button>
-              <button className="audit-clear-btn" onClick={clearFilters}>Clear</button>
+              <button className="audit-apply-btn" onClick={applyFilters}>{t("Apply Filters", { defaultValue: "Apply Filters" })}</button>
+              <button className="audit-clear-btn" onClick={clearFilters}>{t("Clear", { defaultValue: "Clear" })}</button>
             </div>
           </div>
 
@@ -269,7 +269,7 @@ function AuditLogs() {
             {loading ? (
               <div className="audit-empty">
                 <div className="audit-spinner"></div>
-                <p>Loading audit logs...</p>
+                <p>{t("Loading audit logs...", { defaultValue: "Loading audit logs..." })}</p>
               </div>
             ) : error ? (
               <div className="audit-empty">
@@ -283,7 +283,7 @@ function AuditLogs() {
                   onClick={() => fetchLogs(page)}
                   style={{ marginTop: 8, padding: "6px 16px", border: "1px solid var(--border-color)", borderRadius: 8, background: "var(--bg-card)", cursor: "pointer", fontSize: 13 }}
                 >
-                  Try again
+                  {t("Try again", { defaultValue: "Try again" })}
                 </button>
               </div>
             ) : logs.length === 0 ? (
@@ -292,7 +292,7 @@ function AuditLogs() {
                   <circle cx="12" cy="12" r="10" />
                   <polyline points="12 6 12 12 16 14" />
                 </svg>
-                <p>No audit logs found.</p>
+                <p>{t("No audit logs found.", { defaultValue: "No audit logs found." })}</p>
               </div>
             ) : (
               <>
@@ -301,22 +301,22 @@ function AuditLogs() {
                     <thead>
                       <tr>
                         <th className="audit-th-sort" onClick={() => handleSort("created_at")}>
-                          Date & Time
+                          {t("Date & Time", { defaultValue: "Date & Time" })}
                         </th>
-                        <th>User</th>
+                        <th>{t("User", { defaultValue: "User" })}</th>
                         <th className="audit-th-sort" onClick={() => handleSort("module")}>
-                          Module
+                          {t("Module", { defaultValue: "Module" })}
                         </th>
                         <th className="audit-th-sort" onClick={() => handleSort("action")}>
-                          Action
+                          {t("Action", { defaultValue: "Action" })}
                         </th>
-                        <th>Description</th>
+                        <th>{t("Description", { defaultValue: "Description" })}</th>
                         <th className="audit-th-sort" onClick={() => handleSort("status")}>
-                          Status
+                          {t("Status", { defaultValue: "Status" })}
                         </th>
-                        <th>IP Address</th>
-                        <th>Browser</th>
-                        <th>Device</th>
+                        <th>{t("IP Address", { defaultValue: "IP Address" })}</th>
+                        <th>{t("Browser", { defaultValue: "Browser" })}</th>
+                        <th>{t("Device", { defaultValue: "Device" })}</th>
                         <th></th>
                       </tr>
                     </thead>
@@ -329,17 +329,17 @@ function AuditLogs() {
                               <span className="audit-user-name">{log.user?.name || "-"}</span>
                               {log.user?.role && (
                                 <span className={`audit-role-badge audit-role-${log.user.role}`}>
-                                  {log.user.role === "team_lead" || log.user.role === "teamlead" ? "Team Lead" : log.user.role.charAt(0).toUpperCase() + log.user.role.slice(1)}
+                                  {log.user.role === "team_lead" || log.user.role === "teamlead" ? t("Team Lead", { defaultValue: "Team Lead" }) : t(log.user.role.charAt(0).toUpperCase() + log.user.role.slice(1), { defaultValue: log.user.role.charAt(0).toUpperCase() + log.user.role.slice(1) })}
                                 </span>
                               )}
                             </div>
                           </td>
-                          <td>{log.module || "-"}</td>
-                          <td>{log.action || "-"}</td>
+                          <td>{log.module ? t(log.module, { defaultValue: log.module }) : "-"}</td>
+                          <td>{log.action ? t(log.action, { defaultValue: log.action }) : "-"}</td>
                           <td className="audit-cell-desc">{log.description || "-"}</td>
                           <td>
                             <span className={`audit-status-badge audit-status-${log.status || "success"}`}>
-                              {(log.status || "success").charAt(0).toUpperCase() + (log.status || "success").slice(1)}
+                              {t((log.status || "success").charAt(0).toUpperCase() + (log.status || "success").slice(1), { defaultValue: (log.status || "success").charAt(0).toUpperCase() + (log.status || "success").slice(1) })}
                             </span>
                           </td>
                           <td className="audit-cell-ip">{log.ip_address || "-"}</td>
@@ -349,7 +349,7 @@ function AuditLogs() {
                             <button
                               className="audit-action-btn"
                               onClick={() => setDetailLog(log)}
-                              title="View details"
+                              title={t("View details", { defaultValue: "View details" })}
                             >
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
@@ -363,34 +363,34 @@ function AuditLogs() {
                   </table>
                 </div>
 
-                  <div className="audit-pagination" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", marginTop: "16px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "var(--text-secondary)" }}>
-                      <span>Rows per page:</span>
-                      <select
-                        value={perPage}
-                        onChange={(e) => { setPerPage(Number(e.target.value)); setPage(1); }}
-                        style={{ padding: "4px 8px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", color: "var(--text-primary)", fontSize: "13px", cursor: "pointer" }}
-                      >
-                        <option value={10}>10</option>
-                        <option value={25}>25</option>
-                        <option value={50}>50</option>
-                        <option value={100}>100</option>
-                        <option value={500}>500</option>
-                        <option value={1000}>1000</option>
-                      </select>
-                    </div>
-                    {lastPage > 1 && (
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                        <button className="audit-page-btn" disabled={page <= 1} onClick={() => handlePageChange(page - 1)}>
-                          Previous
-                        </button>
-                        <span className="audit-page-info">Page {page} of {lastPage}</span>
-                        <button className="audit-page-btn" disabled={page >= lastPage} onClick={() => handlePageChange(page + 1)}>
-                          Next
-                        </button>
-                      </div>
-                    )}
+                <div className="audit-pagination" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", marginTop: "16px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "var(--text-secondary)" }}>
+                    <span>{t("Rows per page:", { defaultValue: "Rows per page:" })}</span>
+                    <select
+                      value={perPage}
+                      onChange={(e) => { setPerPage(Number(e.target.value)); setPage(1); }}
+                      style={{ padding: "4px 8px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", color: "var(--text-primary)", fontSize: "13px", cursor: "pointer" }}
+                    >
+                      <option value={10}>10</option>
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                      <option value={500}>500</option>
+                      <option value={1000}>1000</option>
+                    </select>
                   </div>
+                  {lastPage > 1 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <button className="audit-page-btn" disabled={page <= 1} onClick={() => handlePageChange(page - 1)}>
+                        {t("Previous", { defaultValue: "Previous" })}
+                      </button>
+                      <span className="audit-page-info">{t("Page {{page}} of {{lastPage}}", { page, lastPage, defaultValue: `Page ${page} of ${lastPage}` })}</span>
+                      <button className="audit-page-btn" disabled={page >= lastPage} onClick={() => handlePageChange(page + 1)}>
+                        {t("Next", { defaultValue: "Next" })}
+                      </button>
+                    </div>
+                  )}
+                </div>
               </>
             )}
           </div>

@@ -5,6 +5,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
 
@@ -199,6 +200,7 @@ function sanitizeHtml(html) {
 }
 
 function CredentialRow({ credential, onDelete, onEdit, isGuest }) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const [copiedUser, setCopiedUser] = useState(false);
 
@@ -253,17 +255,17 @@ function CredentialRow({ credential, onDelete, onEdit, isGuest }) {
               rel="noopener noreferrer"
               className="pd-cred-link"
             >
-              Visit
+              {t("Visit", { defaultValue: "Visit" })}
             </a>
           )}
         </div>
         <div className="pd-cred-actions">
           {!isGuest && (
             <>
-              <button className="pd-cred-edit" onClick={() => onEdit?.(credential)} title="Edit credential">
+              <button className="pd-cred-edit" onClick={() => onEdit?.(credential)} title={t("Edit credential", { defaultValue: "Edit credential" })}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
               </button>
-              <button className="pd-cred-delete" onClick={onDelete} title="Delete credential">
+              <button className="pd-cred-delete" onClick={onDelete} title={t("Delete credential", { defaultValue: "Delete credential" })}>
                 <Trash2 size={14} />
               </button>
             </>
@@ -273,28 +275,28 @@ function CredentialRow({ credential, onDelete, onEdit, isGuest }) {
 
       <div className="pd-cred-fields">
         <div className="pd-cred-field">
-          <label>Username / Email</label>
+          <label>{t("Username / Email", { defaultValue: "Username / Email" })}</label>
           <div className="pd-cred-value-row">
             <span className="pd-cred-value">{credential.username}</span>
-            <button className={`pd-cred-copy ${copiedUser ? "pd-cred-copied" : ""}`} onClick={copyUsername} title="Copy username">
+            <button className={`pd-cred-copy ${copiedUser ? "pd-cred-copied" : ""}`} onClick={copyUsername} title={t("Copy username", { defaultValue: "Copy username" })}>
               {copiedUser ? <Check size={14} /> : <Copy size={14} />}
             </button>
           </div>
         </div>
 
         <div className="pd-cred-field">
-          <label>Password</label>
+          <label>{t("Password", { defaultValue: "Password" })}</label>
           <div className="pd-cred-value-row">
             <span className="pd-cred-value pd-cred-password">{"\u2022".repeat(12)}</span>
-            <button className={`pd-cred-copy ${copied ? "pd-cred-copied" : ""}`} onClick={copyPassword} title="Copy password">
+            <button className={`pd-cred-copy ${copied ? "pd-cred-copied" : ""}`} onClick={copyPassword} title={t("Copy password", { defaultValue: "Copy password" })}>
               {copied ? <Check size={14} /> : <Copy size={14} />}
             </button>
           </div>
-          <span className="pd-cred-hint">{copied ? "Copied!" : "Click copy to use this password"}</span>
+          <span className="pd-cred-hint">{copied ? t("Copied!", { defaultValue: "Copied!" }) : t("Click copy to use this password", { defaultValue: "Click copy to use this password" })}</span>
         </div>
 
         <div className="pd-cred-field">
-          <label>Assigned To</label>
+          <label>{t("Assigned To", { defaultValue: "Assigned To" })}</label>
           <div className="pd-cred-assigned">
             {(credential.assigned_users || []).map((u) => (
               <span key={u.id} className="pd-cred-user-badge">
@@ -309,6 +311,7 @@ function CredentialRow({ credential, onDelete, onEdit, isGuest }) {
 }
 
 function ProjectDetails() {
+  const { t } = useTranslation();
   const { projectId } = useParams();
   const navigate = useNavigate();
   const notify = useNotification();
@@ -624,9 +627,9 @@ function ProjectDetails() {
           console.error(e);
           if (e.status === 403) {
             setLoadError(403);
-            notifyRef.current.error("You don't have access to this project.");
+            notifyRef.current.error(t("You don't have access to this project.", { defaultValue: "You don't have access to this project." }));
           } else {
-            notifyRef.current.error("Unable to load project details.");
+            notifyRef.current.error(t("Unable to load project details.", { defaultValue: "Unable to load project details." }));
           }
           setTimeout(() => {
             if (!cancelled) navigate(rolePath("projects"));
@@ -639,7 +642,7 @@ function ProjectDetails() {
     return () => {
       cancelled = true;
     };
-  }, [loadProject, navigate]);
+  }, [loadProject, navigate, t]);
 
   const handleRefresh = useCallback(async () => {
     if (loadErrorRef.current) return;
@@ -696,17 +699,17 @@ function ProjectDetails() {
       });
       if (res.ok) {
         setOrderedTasks((prev) => prev.filter((t) => String(t.id) !== String(taskId)));
-        toast.success("Task deleted successfully");
+        toast.success(t("Task deleted successfully", { defaultValue: "Task deleted successfully" }));
         loadProject().catch(() => {});
         publish("task:deleted", { id: taskId });
         publish("data:changed", { type: "task", action: "deleted" });
       } else {
         const data = await res.json().catch(() => ({}));
-        toast.error(data.message || "Failed to delete task.");
+        toast.error(data.message || t("Failed to delete task.", { defaultValue: "Failed to delete task." }));
       }
     } catch (err) {
       console.error(err);
-      toast.error("Failed to delete task.");
+      toast.error(t("Failed to delete task.", { defaultValue: "Failed to delete task." }));
     }
   };
 
@@ -729,10 +732,10 @@ function ProjectDetails() {
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage("Task", "acknowledged");
       } else {
-        notify.error(data.message || "Failed to acknowledge task.");
+        notify.error(data.message || t("Failed to acknowledge task.", { defaultValue: "Failed to acknowledge task." }));
       }
     } catch {
-      notify.error("Failed to acknowledge task.");
+      notify.error(t("Failed to acknowledge task.", { defaultValue: "Failed to acknowledge task." }));
     }
   };
 
@@ -755,10 +758,10 @@ function ProjectDetails() {
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage("Task", "resumed");
       } else {
-        notify.error(data.message || "Failed to continue task.");
+        notify.error(data.message || t("Failed to continue task.", { defaultValue: "Failed to continue task." }));
       }
     } catch {
-      notify.error("Failed to continue task.");
+      notify.error(t("Failed to continue task.", { defaultValue: "Failed to continue task." }));
     }
   };
 
@@ -782,10 +785,10 @@ function ProjectDetails() {
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage("Task", "paused");
       } else {
-        notify.error(data?.message || data?.error || "Failed to pause task.");
+        notify.error(data?.message || data?.error || t("Failed to pause task.", { defaultValue: "Failed to pause task." }));
       }
     } catch {
-      notify.error("Failed to pause task.");
+      notify.error(t("Failed to pause task.", { defaultValue: "Failed to pause task." }));
     }
   };
 
@@ -804,10 +807,10 @@ function ProjectDetails() {
         setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, assigner_paused: true, ...data.task } : t));
         showSuccessMessage("Task", "paused");
       } else {
-        notify.error(data.message || "Failed to pause task.");
+        notify.error(data.message || t("Failed to pause task.", { defaultValue: "Failed to pause task." }));
       }
     } catch {
-      notify.error("Failed to pause task.");
+      notify.error(t("Failed to pause task.", { defaultValue: "Failed to pause task." }));
     }
     setHoldingTaskId(null);
   };
@@ -826,10 +829,10 @@ function ProjectDetails() {
         setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, assigner_paused: false, ...data.task } : t));
         showSuccessMessage("Task", "resumed by assigner");
       } else {
-        notify.error(data.message || "Failed to resume task.");
+        notify.error(data.message || t("Failed to resume task.", { defaultValue: "Failed to resume task." }));
       }
     } catch {
-      notify.error("Failed to resume task.");
+      notify.error(t("Failed to resume task.", { defaultValue: "Failed to resume task." }));
     }
     setResumingTaskId(null);
   };
@@ -857,7 +860,7 @@ function ProjectDetails() {
       setTimeout(() => navigate(rolePath("projects")), 800);
     } catch (err) {
       console.error(err);
-      notify.error("Could not delete project.");
+      notify.error(t("Could not delete project.", { defaultValue: "Could not delete project." }));
     }
   };
 
@@ -882,7 +885,7 @@ function ProjectDetails() {
   if (loading) {
     return (
       <DashboardLayout hideRightSidebar={true}>
-        <div className="pd-loading">Loading project…</div>
+        <div className="pd-loading">{t("Loading project…", { defaultValue: "Loading project…" })}</div>
       </DashboardLayout>
     );
   }
@@ -890,7 +893,7 @@ function ProjectDetails() {
   if (!project) {
     return (
       <DashboardLayout hideRightSidebar={true}>
-        <div className="pd-loading pd-error">Project not found.</div>
+        <div className="pd-loading pd-error">{t("Project not found.", { defaultValue: "Project not found." })}</div>
       </DashboardLayout>
     );
   }
@@ -954,10 +957,10 @@ function ProjectDetails() {
           showSuccessMessage("Milestone", data.message);
           publish('data:changed', { type: 'project', action: 'updated' });
         } else {
-          notify.error(data.message || "Failed to update milestone");
+          notify.error(data.message || t("Failed to update milestone", { defaultValue: "Failed to update milestone" }));
         }
       } catch {
-        notify.error("Failed to update milestone");
+        notify.error(t("Failed to update milestone", { defaultValue: "Failed to update milestone" }));
       }
     });
   };
@@ -1000,14 +1003,14 @@ function ProjectDetails() {
       });
       const data = await res.json();
       if (!res.ok || data.success === false) {
-        throw new Error(data.message || "Failed to save visibility");
+        throw new Error(data.message || t("Failed to save visibility", { defaultValue: "Failed to save visibility" }));
       }
       showSuccessMessage("Project visibility", "updated");
       closeVisibility();
       loadProject();
     } catch (err) {
       console.error("Save visibility error:", err);
-      notify.error(err.message || "Failed to save visibility");
+      notify.error(err.message || t("Failed to save visibility", { defaultValue: "Failed to save visibility" }));
     } finally {
       setVisibilitySaving(false);
     }
@@ -1101,21 +1104,21 @@ function ProjectDetails() {
   };
 
   const tabs = [
-    { id: "overview", label: "Overview", icon: ListChecks },
-    { id: "tasks", label: "Tasks", icon: ClipboardList },
-    { id: "files", label: "Platform files & links", icon: FolderOpen },
-    { id: "access", label: "Accessess", icon: Shield },
-    { id: "members", label: "Members", icon: Users },
-    { id: "kb", label: "Knowledge Base", icon: BookOpen },
-    { id: "events", label: "Events & Announcements", icon: Calendar },
-    { id: "activity", label: "Activity", icon: Activity },
+    { id: "overview", label: t("Overview", { defaultValue: "Overview" }), icon: ListChecks },
+    { id: "tasks", label: t("Tasks", { defaultValue: "Tasks" }), icon: ClipboardList },
+    { id: "files", label: t("Platform files & links", { defaultValue: "Platform files & links" }), icon: FolderOpen },
+    { id: "access", label: t("Accessess", { defaultValue: "Accessess" }), icon: Shield },
+    { id: "members", label: t("Members", { defaultValue: "Members" }), icon: Users },
+    { id: "kb", label: t("Knowledge Base", { defaultValue: "Knowledge Base" }), icon: BookOpen },
+    { id: "events", label: t("Events & Announcements", { defaultValue: "Events & Announcements" }), icon: Calendar },
+    { id: "activity", label: t("Activity", { defaultValue: "Activity" }), icon: Activity },
   ];
 
   const overviewInner = (
     <>
       {project.description && (
         <div style={{ marginBottom: 20, maxWidth: "100%", wordBreak: "break-word", overflowWrap: "break-word" }}>
-          <h2 className="pd-block-title">Description</h2>
+          <h2 className="pd-block-title">{t("Description", { defaultValue: "Description" })}</h2>
           <div
             className="pd-desc-tx pd-rich"
             style={{
@@ -1134,7 +1137,7 @@ function ProjectDetails() {
       )}
       <div className="pd-shell-split">
         <div className="pd-shell-left">
-          <h2 className="pd-block-title">Project Milestones</h2>
+          <h2 className="pd-block-title">{t("Project Milestones", { defaultValue: "Project Milestones" })}</h2>
           {milestones.length > 0 ? (
             <ul className="pd-milestones" style={{ marginBottom: 20 }}>
               {milestones.map((m) => (
@@ -1149,7 +1152,7 @@ function ProjectDetails() {
                           background: m.status === "completed" ? "var(--color-success)" : "transparent", cursor: "pointer", display: "flex",
                           alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.2s",
                         }}
-                        title={m.status === "completed" ? "Click to unachieve" : "Click to achieve"}
+                        title={m.status === "completed" ? t("Click to unachieve", { defaultValue: "Click to unachieve" }) : t("Click to achieve", { defaultValue: "Click to achieve" })}
                       >
                         {m.status === "completed" && (
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -1178,11 +1181,11 @@ function ProjectDetails() {
                   </div>
                   <div style={{ textAlign: "right", flexShrink: 0, marginLeft: "12px" }}>
                     <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
-                      Due: {formatDateTimeShort(m.due_date)}
+                      {t("Due: {{date}}", { date: formatDateTimeShort(m.due_date), defaultValue: `Due: ${formatDateTimeShort(m.due_date)}` })}
                     </div>
                     {m.status === "completed" && m.completed_at && (
                       <div style={{ fontSize: "12px", color: "var(--color-success)", marginTop: "2px" }}>
-                        Achieved: {formatDateTimeShort(m.completed_at)}
+                        {t("Achieved: {{date}}", { date: formatDateTimeShort(m.completed_at), defaultValue: `Achieved: ${formatDateTimeShort(m.completed_at)}` })}
                       </div>
                     )}
                   </div>
@@ -1190,7 +1193,7 @@ function ProjectDetails() {
               ))}
             </ul>
           ) : (
-            <p className="pd-muted">No milestones.</p>
+            <p className="pd-muted">{t("No milestones.", { defaultValue: "No milestones." })}</p>
           )}
 
           {(() => {
@@ -1204,7 +1207,7 @@ function ProjectDetails() {
             if (cats.length === 0) return null;
             return (
               <div style={{ marginTop: 20 }}>
-                <h2 className="pd-block-title pd-block-title--gap">Category</h2>
+                <h2 className="pd-block-title pd-block-title--gap">{t("Category", { defaultValue: "Category" })}</h2>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                   {cats.map((cat, i) => (
                     <span key={i} style={{ display: "inline-block", padding: "4px 12px", borderRadius: 20, fontSize: 13, fontWeight: 500, background: "var(--color-primary-bg)", color: "var(--color-primary)" }}>{cat}</span>
@@ -1216,7 +1219,7 @@ function ProjectDetails() {
         </div>
 
         <aside className="pd-shell-right">
-          <h2 className="pd-block-title">Project details</h2>
+          <h2 className="pd-block-title">{t("Project details", { defaultValue: "Project details" })}</h2>
           <ul className="pd-meta-rows">
             <li className="pd-meta-rows--manager">
               <span className="pd-meta-rows__ic">
@@ -1224,10 +1227,10 @@ function ProjectDetails() {
               </span>
               <div className="pd-meta-rows__content">
                 <div className="pd-meta-rows__header">
-                  <span className="pd-meta-rows__label">Project manager</span>
+                  <span className="pd-meta-rows__label">{t("Project manager", { defaultValue: "Project manager" })}</span>
                   {(currentUser?.role === "admin" || currentUser?.role === "manager") && !isViewOnlyUser && (
-                    <button className="pd-manager-edit" onClick={openManagerEdit} title="Change project manager">
-                      Edit
+                    <button className="pd-manager-edit" onClick={openManagerEdit} title={t("Change project manager", { defaultValue: "Change project manager" })}>
+                      {t("Edit", { defaultValue: "Edit" })}
                     </button>
                   )}
                 </div>
@@ -1242,7 +1245,7 @@ function ProjectDetails() {
                 <CalendarDays size={18} />
               </span>
               <div>
-                <span className="pd-meta-rows__label">Start date</span>
+                <span className="pd-meta-rows__label">{t("Start date", { defaultValue: "Start date" })}</span>
                 <span className="pd-meta-rows__value">{formatDateTimeShort(project.start_date)}</span>
               </div>
             </li>
@@ -1251,10 +1254,10 @@ function ProjectDetails() {
                 <Tag size={18} />
               </span>
               <div>
-                <span className="pd-meta-rows__label">Priority</span>
+                <span className="pd-meta-rows__label">{t("Priority", { defaultValue: "Priority" })}</span>
                 <span className="pd-meta-rows__value">
                   <span className={`pd-pill pd-pill--priority-${(project.priority || "medium").toLowerCase()}`}>
-                    {project.priority || "—"}
+                    {t(project.priority || "Medium", { defaultValue: project.priority || "Medium" })}
                   </span>
                 </span>
               </div>
@@ -1264,7 +1267,7 @@ function ProjectDetails() {
                 <Building2 size={18} />
               </span>
               <div>
-                <span className="pd-meta-rows__label">Client</span>
+                <span className="pd-meta-rows__label">{t("Client", { defaultValue: "Client" })}</span>
                 <span className="pd-meta-rows__value">{project.client_name || project.website_name || "—"}</span>
               </div>
             </li>
@@ -1274,7 +1277,7 @@ function ProjectDetails() {
                   <Banknote size={18} />
                 </span>
                 <div>
-                  <span className="pd-meta-rows__label">Budget</span>
+                  <span className="pd-meta-rows__label">{t("Budget", { defaultValue: "Budget" })}</span>
                   <span className="pd-meta-rows__value">
                     {project.budget != null && project.budget !== "" ? `PKR ${Number(project.budget).toLocaleString()}` : "—"}
                   </span>
@@ -1294,7 +1297,7 @@ function ProjectDetails() {
         <div className="pd-main-layout">
           <div className="pd-page pd-page--tx">
             <Breadcrumb items={[
-              { label: "Projects", path: rolePath("projects") },
+              { label: t("Projects", { defaultValue: "Projects" }), path: rolePath("projects") },
               { label: project.title },
             ]} />
 
@@ -1311,32 +1314,32 @@ function ProjectDetails() {
                       <button
                         onClick={() => { navigator.clipboard.writeText(project.business_id); showSuccessMessage("Project ID copied!"); }}
                         style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
-                        title="Copy Project ID"
+                        title={t("Copy Project ID", { defaultValue: "Copy Project ID" })}
                       >
                         <Copy size={13} color="#ca8a04" />
                       </button>
                     </span>
                   )}
                   <div className="pd-hero-actions">
-                    <button className="td-nav-btn" onClick={() => goToProject(prevProjectId)} disabled={!prevProjectId} title="Previous project"><ChevronLeft size={18} /></button>
-                    <button className="td-nav-btn" onClick={() => goToProject(nextProjectId)} disabled={!nextProjectId} title="Next project"><ChevronRight size={18} /></button>
-                    <span className={`pd-pill-status pd-pill-status--${statusSlug(project.status)}`}>{project.status}</span>
+                    <button className="td-nav-btn" onClick={() => goToProject(prevProjectId)} disabled={!prevProjectId} title={t("Previous project", { defaultValue: "Previous project" })}><ChevronLeft size={18} /></button>
+                    <button className="td-nav-btn" onClick={() => goToProject(nextProjectId)} disabled={!nextProjectId} title={t("Next project", { defaultValue: "Next project" })}><ChevronRight size={18} /></button>
+                    <span className={`pd-pill-status pd-pill-status--${statusSlug(project.status)}`}>{t(project.status, { defaultValue: project.status })}</span>
                     {isAdminOrManager && !isViewOnlyUser && (
                       <button type="button" className="pd-btn-tx pd-btn-tx--outline" onClick={openVisibility}>
                         <IoEyeOutline size={16} />
-                        Show To
+                        {t("Show To", { defaultValue: "Show To" })}
                       </button>
                     )}
                     {canEdit && (
                       <button type="button" className="pd-btn-tx pd-btn-tx--outline" onClick={() => setShowEditModal(true)}>
                         <Pencil size={16} />
-                        Edit Project
+                        {t("Edit Project", { defaultValue: "Edit Project" })}
                       </button>
                     )}
                     {canEdit && (
                       <button type="button" className="pd-btn-tx pd-btn-tx--danger" onClick={handleDeleteProject}>
                         <Trash2 size={16} />
-                        Delete
+                        {t("Delete", { defaultValue: "Delete" })}
                       </button>
                     )}
                   </div>
@@ -1346,7 +1349,7 @@ function ProjectDetails() {
 
             <div className="td-stats">
               <div className="td-stat td-stat--progress">
-                <span className="td-stat-label">Overall Progress</span>
+                <span className="td-stat-label">{t("Overall Progress", { defaultValue: "Overall Progress" })}</span>
                 <div className="td-progress"><span style={{ width: `${progress}%` }} /></div>
                 <span className="td-stat-big">{progress}%</span>
               </div>
@@ -1355,21 +1358,21 @@ function ProjectDetails() {
                   <div className="td-stat-ic td-stat-ic--blue"><ClipboardList size={18} /></div>
                   <div>
                     <span className="td-stat-big">{tasks.length}</span>
-                    <span className="td-stat-label">Tasks</span>
+                    <span className="td-stat-label">{t("Tasks", { defaultValue: "Tasks" })}</span>
                   </div>
                 </div>
                 <div className="td-trio-item">
                   <div className="td-stat-ic td-stat-ic--orange"><Users size={18} /></div>
                   <div>
                     <span className="td-stat-big">{memberCount}</span>
-                    <span className="td-stat-label">Members</span>
+                    <span className="td-stat-label">{t("Members", { defaultValue: "Members" })}</span>
                   </div>
                 </div>
                 <div className="td-trio-item">
                   <div className="td-stat-ic td-stat-ic--green"><CalendarDays size={18} /></div>
                   <div>
-                    <span className="td-stat-big td-stat-big--sm">{project?.end_date ? formatDateTimeShort(project.end_date) : "No Deadline"}</span>
-                    <span className="td-stat-label">Deadline</span>
+                    <span className="td-stat-big td-stat-big--sm">{project?.end_date ? formatDateTimeShort(project.end_date) : t("No Deadline", { defaultValue: "No Deadline" })}</span>
+                    <span className="td-stat-label">{t("Deadline", { defaultValue: "Deadline" })}</span>
                   </div>
                 </div>
               </div>
@@ -1401,53 +1404,53 @@ function ProjectDetails() {
                       <div className="pd-tab-panel">
                         <section className="pd-card-flat pd-card-flat--table">
                           <div className="pd-card-flat__head">
-                            <h2 className="pd-block-title pd-block-title--inline">Tasks ({tasks.length})</h2>
+                            <h2 className="pd-block-title pd-block-title--inline">{t("Tasks ({{count}})", { count: tasks.length, defaultValue: `Tasks (${tasks.length})` })}</h2>
                             <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                              <input type="text" placeholder="Search by task name..." value={taskSearch} onChange={(e) => setTaskSearch(e.target.value)} />
+                              <input type="text" placeholder={t("Search by task name...", { defaultValue: "Search by task name..." })} value={taskSearch} onChange={(e) => setTaskSearch(e.target.value)} />
                             </div>
                             {canAddTask && (
                               <button type="button" className="pd-btn-tx pd-btn-tx--primary" onClick={() => setShowTaskModal(true)} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                                <Plus size={16} /> Add Task
+                                <Plus size={16} /> {t("Add Task", { defaultValue: "Add Task" })}
                               </button>
                             )}
                           </div>
                           <div className="pd-table-wrap">
                             <div className="project-task-table">
                                 <div className={`ptt-header ${currentUser?.role === "guest" ? "ptt-header--guest" : ""}`}>
-                                <div>ID</div>
-                                {currentUser?.role !== "guest" && <div>{isCreator || isAdminOrManager ? "Assigned To" : "Assigned By"}</div>}
-                                <div className="ptt-col-name">Task Name</div>
-                                <div>Status</div>
-                                <div>Progress</div>
-                                <div>Priority</div>
-                                <div>Start & Due Date</div>
-                                <div>Action</div>
+                                <div>{t("ID", { defaultValue: "ID" })}</div>
+                                {currentUser?.role !== "guest" && <div>{isCreator || isAdminOrManager ? t("Assigned To", { defaultValue: "Assigned To" }) : t("Assigned By", { defaultValue: "Assigned By" })}</div>}
+                                <div className="ptt-col-name">{t("Task Name", { defaultValue: "Task Name" })}</div>
+                                <div>{t("Status", { defaultValue: "Status" })}</div>
+                                <div>{t("Progress", { defaultValue: "Progress" })}</div>
+                                <div>{t("Priority", { defaultValue: "Priority" })}</div>
+                                <div>{t("Start & Due Date", { defaultValue: "Start & Due Date" })}</div>
+                                <div>{t("Action", { defaultValue: "Action" })}</div>
                               </div>
                               {filteredTasks.length === 0 ? (
-                                <div className="pd-muted pd-table-empty" style={{ padding: "20px", textAlign: "center" }}>{taskSearch ? "No tasks match your search." : "No tasks yet."}</div>
+                                <div className="pd-muted pd-table-empty" style={{ padding: "20px", textAlign: "center" }}>{taskSearch ? t("No tasks match your search.", { defaultValue: "No tasks match your search." }) : t("No tasks yet.", { defaultValue: "No tasks yet." })}</div>
                               ) : (
                                 <SortableTableWrapper items={filteredTasks} onReorder={handleTaskReorder} as="div" handleOnly>
-                                  {(t, idx, dndProps) => {
-                                    const statusKey = (t.status || "").toLowerCase();
+                                  {(tItem, idx, dndProps) => {
+                                    const statusKey = (tItem.status || "").toLowerCase();
                                       return (
-                                        <div className={`ptt-row ${currentUser?.role === "guest" ? "ptt-row--guest" : ""}`} key={t.id}>
-                                          <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={t.id} businessId={t.business_id} />
-                                          {currentUser?.role !== "guest" && <div>{isCreator || isAdminOrManager ? ((t.assignees || []).map((a) => a.name).join(", ") || "—") : (t.assigner?.name || "—")}</div>}
+                                        <div className={`ptt-row ${currentUser?.role === "guest" ? "ptt-row--guest" : ""}`} key={tItem.id}>
+                                          <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={tItem.id} businessId={tItem.business_id} />
+                                          {currentUser?.role !== "guest" && <div>{isCreator || isAdminOrManager ? ((tItem.assignees || []).map((a) => a.name).join(", ") || "—") : (tItem.assigner?.name || "—")}</div>}
                                         <div className="ptt-col-name">
-                                          <Link to={rolePath(`tasks/task-details/${t.id}`)} state={{ from: getTaskFrom(t) }} className="ptt-task-link">
-                                            {t.title}
+                                          <Link to={rolePath(`tasks/task-details/${tItem.id}`)} state={{ from: getTaskFrom(tItem) }} className="ptt-task-link">
+                                            {tItem.title}
                                           </Link>
                                         </div>
                                         <div>
                                           <span className="badge" style={{ background: STATUS_COLORS[statusKey] || "var(--bg-hover)", color: STATUS_TEXT_COLORS[statusKey] || "var(--text-dark)" }}>
                                             <span className="dot" style={{ background: STATUS_TEXT_COLORS[statusKey] || "var(--text-dark)" }}></span>
-                                            {formatStatus(t.status)}
+                                            {formatStatus(tItem.status)}
                                           </span>
                                         </div>
                                         {(() => {
-                                          const isTerminal = ["completed", "approved", "submitted", "submitted_late", "done"].includes((t.status || "").toLowerCase());
-                                          const prog = isTerminal ? 100 : (t.deliverables_progress || 0);
+                                          const isTerminal = ["completed", "approved", "submitted", "submitted_late", "done"].includes((tItem.status || "").toLowerCase());
+                                          const prog = isTerminal ? 100 : (tItem.deliverables_progress || 0);
                                           return (
                                             <div>
                                               <div style={{ display: "flex", justifyContent: "center", alignItems: "center", marginBottom: "4px" }}>
@@ -1459,61 +1462,61 @@ function ProjectDetails() {
                                                 <div className="progress-bar-fill" style={{ width: `${prog}%` }}></div>
                                               </div>
                                               <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "4px" }}>
-                                                {t.approved_deliverables || 0}/{t.total_deliverables || 0} Del. Approved
+                                                {t("{{approved}}/{{total}} Del. Approved", { approved: tItem.approved_deliverables || 0, total: tItem.total_deliverables || 0, defaultValue: `${tItem.approved_deliverables || 0}/${tItem.total_deliverables || 0} Del. Approved` })}
                                               </div>
                                             </div>
                                           );
                                         })()}
                                         <div>
-                                          <span className="badge" style={{ background: PRIORITY_COLORS[t.priority] || "var(--bg-hover)", color: PRIORITY_TEXT_COLORS[t.priority] || "var(--text-dark)" }}>
-                                            <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[t.priority] || "var(--text-dark)" }}></span>
-                                            {t.priority}
+                                          <span className="badge" style={{ background: PRIORITY_COLORS[tItem.priority] || "var(--bg-hover)", color: PRIORITY_TEXT_COLORS[tItem.priority] || "var(--text-dark)" }}>
+                                            <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[tItem.priority] || "var(--text-dark)" }}></span>
+                                            {t(tItem.priority || "Medium", { defaultValue: tItem.priority || "Medium" })}
                                           </span>
                                         </div>
                                         <div className="col-due-date">
                                           <div className="date-box">
-                                            {renderDynamicDates(t, currentUser)}
+                                            {renderDynamicDates(tItem, currentUser)}
                                           </div>
                                         </div>
                                         <div>
                                           <div className="action-btns">
                                             <ActionPopover
                                               trigger={
-                                                <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
+                                                <button className="action-icon-btn action-view action-trigger-lg" title={t("Actions", { defaultValue: "Actions" })}>
                                                   <IoEyeOutline size={20} />
                                                 </button>
                                               }
-                                              onTriggerClick={() => navigate(rolePath(`tasks/task-details/${t.id}`), { state: { from: getTaskFrom(t) } })}
+                                              onTriggerClick={() => navigate(rolePath(`tasks/task-details/${tItem.id}`), { state: { from: getTaskFrom(tItem) } })}
                                             >
-                                              <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: t.id })}>
+                                              <button className="action-icon-btn action-note" title={t("Add Note", { defaultValue: "Add Note" })} onClick={() => setNoteModal({ open: true, itemId: tItem.id })}>
                                                 <StickyNote size={14} />
                                               </button>
                                               {(() => {
-                                                const isAssigner = t.assigner?.id && t.assigner.id === currentUserId;
-                                                const isAssignee = (t.assignees || []).some((a) => a.id === currentUserId);
+                                                const isAssigner = tItem.assigner?.id && tItem.assigner.id === currentUserId;
+                                                const isAssignee = (tItem.assignees || []).some((a) => a.id === currentUserId);
 
                                                 if (isAssigner) {
                                                   const buttons = [];
-                                                  if (t.status?.toLowerCase() !== "approved") {
+                                                  if (tItem.status?.toLowerCase() !== "approved") {
                                                     buttons.push(
                                                       <button
                                                         key="edit"
                                                         className="action-icon-btn action-edit"
-                                                        title="Edit Task"
+                                                        title={t("Edit Task", { defaultValue: "Edit Task" })}
                                                         onClick={async () => {
                                                           try {
                                                             const token = authToken();
-                                                            const res = await fetch(`${API}/tasks/${t.id}`, {
+                                                            const res = await fetch(`${API}/tasks/${tItem.id}`, {
                                                               headers: { Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
                                                             });
                                                             if (res.ok) {
                                                               const data = await res.json();
-                                                              setEditingTask(data.task || t);
+                                                              setEditingTask(data.task || tItem);
                                                             } else {
-                                                              setEditingTask(t);
+                                                              setEditingTask(tItem);
                                                             }
                                                           } catch {
-                                                            setEditingTask(t);
+                                                            setEditingTask(tItem);
                                                           }
                                                         }}
                                                       >
@@ -1525,34 +1528,34 @@ function ProjectDetails() {
                                                     <button
                                                       key="delete"
                                                       className="action-icon-btn action-delete"
-                                                      title="Delete Task"
-                                                      onClick={(e) => handleDeleteTask(e, t.id)}
+                                                      title={t("Delete Task", { defaultValue: "Delete Task" })}
+                                                      onClick={(e) => handleDeleteTask(e, tItem.id)}
                                                     >
                                                       <Trash2 size={16} />
                                                     </button>
                                                   );
-                                                  if (t.assigner_paused) {
+                                                  if (tItem.assigner_paused) {
                                                     buttons.push(
                                                       <button
                                                         key="resume"
                                                         className="action-icon-btn"
-                                                        title="Resume"
-                                                        disabled={resumingTaskId === t.id}
-                                                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleTaskAssignerResume(t.id); }}
-                                                        style={{ color: "#059669", cursor: resumingTaskId === t.id ? "not-allowed" : "pointer" }}
+                                                        title={t("Resume", { defaultValue: "Resume" })}
+                                                        disabled={resumingTaskId === tItem.id}
+                                                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleTaskAssignerResume(tItem.id); }}
+                                                        style={{ color: "#059669", cursor: resumingTaskId === tItem.id ? "not-allowed" : "pointer" }}
                                                       >
                                                         <Lock size={16} />
                                                       </button>
                                                     );
-                                                  } else if (["pending", "in_progress", "reopened", "paused", "submitted"].includes(t.status?.toLowerCase())) {
+                                                  } else if (["pending", "in_progress", "reopened", "paused", "submitted"].includes(tItem.status?.toLowerCase())) {
                                                     buttons.push(
                                                       <button
                                                         key="hold"
                                                         className="action-icon-btn"
-                                                        title="Pause"
-                                                        disabled={holdingTaskId === t.id}
-                                                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); setPauseModalTaskId(t.id); setPauseModalOpen(true); }}
-                                                        style={{ color: "#7C3AED", cursor: holdingTaskId === t.id ? "not-allowed" : "pointer" }}
+                                                        title={t("Pause", { defaultValue: "Pause" })}
+                                                        disabled={holdingTaskId === tItem.id}
+                                                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); setPauseModalTaskId(tItem.id); setPauseModalOpen(true); }}
+                                                        style={{ color: "#7C3AED", cursor: holdingTaskId === tItem.id ? "not-allowed" : "pointer" }}
                                                       >
                                                         <Lock size={16} />
                                                       </button>
@@ -1562,43 +1565,43 @@ function ProjectDetails() {
                                                 }
 
                                                 if (isAssignee) {
-                                                  if (t.assigner_paused) {
+                                                  if (tItem.assigner_paused) {
                                                     return (
                                                       <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#92400E", fontSize: "11px", fontWeight: 600, border: "1px solid #F59E0B" }}>
                                                         <Lock size={12} />
-                                                        Paused by Assigner
+                                                        {t("Paused by Assigner", { defaultValue: "Paused by Assigner" })}
                                                       </span>
                                                     );
                                                   }
-                                                  if (t.status === "pending") {
+                                                  if (tItem.status === "pending") {
                                                     return (
-                                                      <button className="action-icon-btn action-submit" title="Acknowledge" onClick={(e) => handleTaskAcknowledge(e, t.id)}>
+                                                      <button className="action-icon-btn action-submit" title={t("Acknowledge", { defaultValue: "Acknowledge" })} onClick={(e) => handleTaskAcknowledge(e, tItem.id)}>
                                                         <CheckCircle2 size={16} />
                                                       </button>
                                                     );
                                                   }
-                                                  if (t.status === "paused") {
+                                                  if (tItem.status === "paused") {
                                                     return (
-                                                      <button className="action-icon-btn action-submit" title="Continue" onClick={(e) => handleTaskContinue(e, t.id)} style={{ color: "#059669" }}>
+                                                      <button className="action-icon-btn action-submit" title={t("Continue", { defaultValue: "Continue" })} onClick={(e) => handleTaskContinue(e, tItem.id)} style={{ color: "#059669" }}>
                                                         <Play size={16} />
                                                       </button>
                                                     );
                                                   }
-                                                  if (["in_progress", "submitted"].includes(t.status?.toLowerCase()) && !t.assigner_paused) {
+                                                  if (["in_progress", "submitted"].includes(tItem.status?.toLowerCase()) && !tItem.assigner_paused) {
                                                     return (
-                                                      <button className="action-icon-btn action-submit" title="Pause" onClick={(e) => handleTaskPause(e, t.id)} style={{ color: "#D97706" }}>
+                                                      <button className="action-icon-btn action-submit" title={t("Pause", { defaultValue: "Pause" })} onClick={(e) => handleTaskPause(e, tItem.id)} style={{ color: "#D97706" }}>
                                                         <Pause size={16} />
                                                       </button>
                                                     );
                                                   }
-                                                  if ((t.status === "in_progress" || t.status === "reopened") && t.assigner_paused === false) {
+                                                  if ((tItem.status === "in_progress" || tItem.status === "reopened") && tItem.assigner_paused === false) {
                                                     return (
                                                       <button
                                                         className="action-icon-btn action-submit"
-                                                        title={t.pending_deliverables_count > 0 ? "Submit all subtasks first" : "Submit Task"}
-                                                        disabled={t.pending_deliverables_count > 0}
-                                                        onClick={(e) => { e.stopPropagation(); !t.pending_deliverables_count && setSubmitTaskModal({ open: true, task: t }); }}
-                                                        style={t.pending_deliverables_count > 0 ? { opacity: 0.4, cursor: "not-allowed" } : {}}
+                                                        title={tItem.pending_deliverables_count > 0 ? t("Submit all subtasks first", { defaultValue: "Submit all subtasks first" }) : t("Submit Task", { defaultValue: "Submit Task" })}
+                                                        disabled={tItem.pending_deliverables_count > 0}
+                                                        onClick={(e) => { e.stopPropagation(); !tItem.pending_deliverables_count && setSubmitTaskModal({ open: true, task: tItem }); }}
+                                                        style={tItem.pending_deliverables_count > 0 ? { opacity: 0.4, cursor: "not-allowed" } : {}}
                                                       >
                                                         <LuSend size={16} />
                                                       </button>
@@ -1627,13 +1630,13 @@ function ProjectDetails() {
                       <div className="pd-tab-panel">
                         <section className="pd-card-flat">
                           <div className="pd-card-flat__head">
-                            <h2 className="pd-block-title pd-block-title--inline">Platform files & links ({files.length})</h2>
+                            <h2 className="pd-block-title pd-block-title--inline">{t("Platform files & links ({{count}})", { count: files.length, defaultValue: `Platform files & links (${files.length})` })}</h2>
                             {files.length > 0 && (
                               <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                                 <input
                                   type="text"
-                                  placeholder="Search by file name or URL..."
+                                  placeholder={t("Search by file name or URL...", { defaultValue: "Search by file name or URL..." })}
                                   value={fileSearch}
                                   onChange={(e) => setFileSearch(e.target.value)}
                                 />
@@ -1641,13 +1644,13 @@ function ProjectDetails() {
                             )}
                             {isAdminOrManager && !isViewOnlyUser && (
                               <button type="button" className="pd-btn-tx pd-btn-tx--primary" onClick={() => setShowAddFileModal(true)} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                                <Plus size={16} /> Add Files
+                                <Plus size={16} /> {t("Add Files", { defaultValue: "Add Files" })}
                               </button>
                             )}
                           </div>
 
                           {files.length === 0 ? (
-                            <p className="pd-muted">No files attached.</p>
+                            <p className="pd-muted">{t("No files attached.", { defaultValue: "No files attached." })}</p>
                           ) : (() => {
                             const filteredFiles = files.filter((f) => {
                               if (!fileSearch) return true;
@@ -1655,7 +1658,7 @@ function ProjectDetails() {
                               return (f.name || "").toLowerCase().includes(q) || (f.url || "").toLowerCase().includes(q);
                             });
                             return filteredFiles.length === 0 ? (
-                              <p className="pd-muted">No files match your search.</p>
+                              <p className="pd-muted">{t("No files match your search.", { defaultValue: "No files match your search." })}</p>
                             ) : (
                               <SortableTableWrapper
                                 items={filteredFiles}
@@ -1700,10 +1703,10 @@ function ProjectDetails() {
                       <div className="pd-tab-panel">
                         <section className="pd-card-flat">
                           <div className="pd-card-flat__head">
-                            <h2 className="pd-block-title pd-block-title--inline">Members</h2>
+                            <h2 className="pd-block-title pd-block-title--inline">{t("Members", { defaultValue: "Members" })}</h2>
                             <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                              <input type="text" placeholder="Search by member name or role..." value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)} />
+                              <input type="text" placeholder={t("Search by member name or role...", { defaultValue: "Search by member name or role..." })} value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)} />
                             </div>
                             {isAdminOrManager && !isViewOnlyUser && (
                               <button
@@ -1712,7 +1715,7 @@ function ProjectDetails() {
                                 className="pd-link-manage"
                                 style={{ background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}
                               >
-                                Manage Members
+                                {t("Manage Members", { defaultValue: "Manage Members" })}
                               </button>
                             )}
                           </div>
@@ -1723,10 +1726,10 @@ function ProjectDetails() {
                               </div>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div className="pd-member-name">{project.creator.name}</div>
-                                <div className="pd-member-role">Project Manager · {project.creator.role || "—"}</div>
+                                <div className="pd-member-role">{t("Project Manager", { defaultValue: "Project Manager" })} · {project.creator.role || "—"}</div>
                               </div>
                               <div className="pd-member-right">
-                                <span className="pd-badge-owner">Project Manager</span>
+                                <span className="pd-badge-owner">{t("Project Manager", { defaultValue: "Project Manager" })}</span>
                               </div>
                             </div>
                           )}
@@ -1742,11 +1745,11 @@ function ProjectDetails() {
                                 </div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                   <div className="pd-member-name">{m.name}</div>
-                                  <div className="pd-member-role">{m.role || "Member"}</div>
+                                  <div className="pd-member-role">{m.role || t("Member", { defaultValue: "Member" })}</div>
                                 </div>
                                 <div className="pd-member-right">
                                   {m.department && <span className="pd-member-dept">{m.department}</span>}
-                                  <span className="pd-badge-member">Member</span>
+                                  <span className="pd-badge-member">{t("Member", { defaultValue: "Member" })}</span>
                                 </div>
                               </div>
                             )}
@@ -1756,13 +1759,13 @@ function ProjectDetails() {
                         {(project.teams || []).length > 0 && (
                           <section className="pd-card-flat" style={{ marginTop: 16 }}>
                             <div className="pd-card-flat__head">
-                              <h2 className="pd-block-title pd-block-title--inline" style={{ fontSize: 20 }}>Teams</h2>
+                              <h2 className="pd-block-title pd-block-title--inline" style={{ fontSize: 20 }}>{t("Teams", { defaultValue: "Teams" })}</h2>
                             </div>
                             {(project.teams || []).map((team) => (
                               <div key={team.id} style={{ marginBottom: 16 }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, paddingBottom: 6, borderBottom: "1px solid var(--border-color)" }}>
                                   <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>{team.name}</h3>
-                                  <span className="pd-badge-member">Team</span>
+                                  <span className="pd-badge-member">{t("Team", { defaultValue: "Team" })}</span>
                                 </div>
                                 {team.leader && (
                                   <div className="pd-member">
@@ -1771,10 +1774,10 @@ function ProjectDetails() {
                                     </div>
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                       <div className="pd-member-name">{team.leader.name}</div>
-                                      <div className="pd-member-role">Team Lead · {team.leader.role || "—"}</div>
+                                      <div className="pd-member-role">{t("Team Lead", { defaultValue: "Team Lead" })} · {team.leader.role || "—"}</div>
                                     </div>
                                     <div className="pd-member-right">
-                                      <span className="pd-badge-owner">Lead</span>
+                                      <span className="pd-badge-owner">{t("Lead", { defaultValue: "Lead" })}</span>
                                     </div>
                                   </div>
                                 )}
@@ -1785,11 +1788,11 @@ function ProjectDetails() {
                                     </div>
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                       <div className="pd-member-name">{m.name}</div>
-                                      <div className="pd-member-role">{m.role || "Member"}</div>
+                                      <div className="pd-member-role">{m.role || t("Member", { defaultValue: "Member" })}</div>
                                     </div>
                                     <div className="pd-member-right">
                                       {m.department && <span className="pd-member-dept">{m.department}</span>}
-                                      <span className="pd-badge-member">Member</span>
+                                      <span className="pd-badge-member">{t("Member", { defaultValue: "Member" })}</span>
                                     </div>
                                   </div>
                                 ))}
@@ -1801,14 +1804,14 @@ function ProjectDetails() {
                         {(project.view_only_users || []).length > 0 && (
                           <section className="pd-card-flat" style={{ marginTop: 16 }}>
                             <div className="pd-card-flat__head">
-                              <h2 className="pd-block-title pd-block-title--inline">View Access</h2>
+                              <h2 className="pd-block-title pd-block-title--inline">{t("View Access", { defaultValue: "View Access" })}</h2>
                               <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                                <input type="text" placeholder="Search by user name..." value={viewAccessSearch} onChange={(e) => setViewAccessSearch(e.target.value)} />
+                                <input type="text" placeholder={t("Search by user name...", { defaultValue: "Search by user name..." })} value={viewAccessSearch} onChange={(e) => setViewAccessSearch(e.target.value)} />
                               </div>
                             </div>
                             <p className="pd-muted" style={{ margin: "0 0 12px", fontSize: 13 }}>
-                              These users have been granted view-only access via "Show To" and can see the project but are not team members.
+                              {t('These users have been granted view-only access via "Show To" and can see the project but are not team members.', { defaultValue: 'These users have been granted view-only access via "Show To" and can see the project but are not team members.' })}
                             </p>
                             {(() => {
                               const viewUsers = project.view_only_users || [];
@@ -1816,7 +1819,7 @@ function ProjectDetails() {
                                 ? viewUsers.filter((u) => (u.name || "").toLowerCase().includes(viewAccessSearch.toLowerCase()))
                                 : viewUsers;
                               return filtered.length === 0 ? (
-                                <p className="pd-muted" style={{ fontSize: 13 }}>{viewAccessSearch ? "No matching users found." : "No view-only users."}</p>
+                                <p className="pd-muted" style={{ fontSize: 13 }}>{viewAccessSearch ? t("No matching users found.", { defaultValue: "No matching users found." }) : t("No view-only users.", { defaultValue: "No view-only users." })}</p>
                               ) : (
                                 filtered.map((u) => (
                                   <div key={u.id} className="pd-member">
@@ -1840,32 +1843,32 @@ function ProjectDetails() {
                       <div className="pd-tab-panel">
                         <section className="pd-card-flat">
                           <div className="pd-card-flat__head">
-                            <h2 className="pd-block-title pd-block-title--inline">Project Access Credentials</h2>
+                            <h2 className="pd-block-title pd-block-title--inline">{t("Project Access Credentials", { defaultValue: "Project Access Credentials" })}</h2>
                             <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                              <input type="text" placeholder="Search by title, username, or URL..." value={accessSearch} onChange={(e) => setAccessSearch(e.target.value)} />
+                              <input type="text" placeholder={t("Search by title, username, or URL...", { defaultValue: "Search by title, username, or URL..." })} value={accessSearch} onChange={(e) => setAccessSearch(e.target.value)} />
                             </div>
                             {isAdminOrManager && !isViewOnlyUser && (
                               <button type="button" className="pd-btn-tx pd-btn-tx--primary" onClick={() => setShowAddAccessModal(true)} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                                <Plus size={16} /> Add Access
+                                <Plus size={16} /> {t("Add Access", { defaultValue: "Add Access" })}
                               </button>
                             )}
                           </div>
                           <p className="pd-muted" style={{ margin: "0 0 16px" }}>
-                            Store and manage login credentials for project-related websites. Passwords are encrypted and only visible to assigned users.
+                            {t("Store and manage login credentials for project-related websites. Passwords are encrypted and only visible to assigned users.", { defaultValue: "Store and manage login credentials for project-related websites. Passwords are encrypted and only visible to assigned users." })}
                           </p>
 
                           {loadingCredentials ? (
-                            <p className="pd-muted">Loading credentials...</p>
+                            <p className="pd-muted">{t("Loading credentials...", { defaultValue: "Loading credentials..." })}</p>
                           ) : accessCredentials.length === 0 ? (
-                            <p className="pd-muted">No access credentials added yet. Click "Add Access" to store login details.</p>
+                            <p className="pd-muted">{t("No access credentials added yet. Click \"Add Access\" to store login details.", { defaultValue: "No access credentials added yet. Click \"Add Access\" to store login details." })}</p>
                           ) : (() => {
                             const filteredAccess = accessSearch ? accessCredentials.filter((cred) => {
                               const q = accessSearch.toLowerCase();
                               return (cred.title || "").toLowerCase().includes(q) || (cred.username || "").toLowerCase().includes(q) || (cred.url || "").toLowerCase().includes(q);
                             }) : accessCredentials;
                             return filteredAccess.length === 0 ? (
-                              <p className="pd-muted">No access credentials match your search.</p>
+                              <p className="pd-muted">{t("No access credentials match your search.", { defaultValue: "No access credentials match your search." })}</p>
                             ) : (
                               <div className="pd-credentials-list">
                                 {filteredAccess.map((cred) => (
@@ -1892,17 +1895,17 @@ function ProjectDetails() {
                           <div className="pd-card-flat__head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
                             <div>
                               <h2 className="pd-block-title pd-block-title--inline" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                <BookOpen size={20} color="#2563eb" /> Project Knowledge Base & Documentation
+                                <BookOpen size={20} color="#2563eb" /> {t("Project Knowledge Base & Documentation", { defaultValue: "Project Knowledge Base & Documentation" })}
                               </h2>
                               <p className="pd-muted" style={{ margin: "4px 0 0" }}>
-                                Technical specifications, SOPs, and guidelines specific to {project?.title || "this project"}.
+                                {t("Technical specifications, SOPs, and guidelines specific to {{project}}.", { project: project?.title || "this project", defaultValue: `Technical specifications, SOPs, and guidelines specific to ${project?.title || "this project"}.` })}
                               </p>
                             </div>
                             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                               <div className="pd-files-search" style={{ margin: 0 }}>
                                 <input
                                   type="text"
-                                  placeholder="Search project articles..."
+                                  placeholder={t("Search project articles...", { defaultValue: "Search project articles..." })}
                                   value={kbSearch}
                                   onChange={(e) => setKbSearch(e.target.value)}
                                 />
@@ -1913,14 +1916,14 @@ function ProjectDetails() {
                                 onClick={() => navigate(rolePath("knowledge-base/create"), { state: { projectId: project?.id || projectId, projectTitle: project?.title } })}
                                 style={{ display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap" }}
                               >
-                                <Plus size={16} /> Add Document
+                                <Plus size={16} /> {t("Add Document", { defaultValue: "Add Document" })}
                               </button>
                             </div>
                           </div>
 
                           {loadingKb ? (
                             <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-secondary)" }}>
-                              Loading project knowledge base...
+                              {t("Loading project knowledge base...", { defaultValue: "Loading project knowledge base..." })}
                             </div>
                           ) : (() => {
                             const filteredKb = Array.isArray(projectKbArticles) ? projectKbArticles.filter((a) => {
@@ -1938,16 +1941,16 @@ function ProjectDetails() {
                               return (
                                 <div style={{ textAlign: "center", padding: "50px 20px", background: "var(--bg-card-subtle)", borderRadius: "10px", marginTop: "16px" }}>
                                   <BookOpen size={40} style={{ color: "#9ca3af", margin: "0 auto 10px" }} />
-                                  <h4 style={{ margin: "0 0 6px", fontSize: "15px", fontWeight: 600 }}>No project documentation yet</h4>
+                                  <h4 style={{ margin: "0 0 6px", fontSize: "15px", fontWeight: 600 }}>{t("No project documentation yet", { defaultValue: "No project documentation yet" })}</h4>
                                   <p style={{ margin: "0 0 16px", fontSize: "13px", color: "var(--text-secondary)" }}>
-                                    Create and share SOPs, architectural guidelines, or deliverable checklists for this project.
+                                    {t("Create and share SOPs, architectural guidelines, or deliverable checklists for this project.", { defaultValue: "Create and share SOPs, architectural guidelines, or deliverable checklists for this project." })}
                                   </p>
                                   <button
                                     type="button"
                                     onClick={() => navigate(rolePath("knowledge-base/create"), { state: { projectId: project?.id || projectId, projectTitle: project?.title } })}
                                     style={{ padding: "7px 16px", borderRadius: "6px", background: "#2563eb", color: "#ffffff", border: "none", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
                                   >
-                                    <Plus size={14} style={{ display: "inline", verticalAlign: "-2px", marginRight: "4px" }} /> Add Document
+                                    <Plus size={14} style={{ display: "inline", verticalAlign: "-2px", marginRight: "4px" }} /> {t("Add Document", { defaultValue: "Add Document" })}
                                   </button>
                                 </div>
                               );
@@ -1972,7 +1975,7 @@ function ProjectDetails() {
                                     <div>
                                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                                         <span style={{ fontSize: "11px", fontWeight: 600, color: "#2563eb", background: "#eff6ff", padding: "2px 8px", borderRadius: "4px" }}>
-                                          {item.categoryRelation?.name || item.category || "General"}
+                                          {item.categoryRelation?.name || item.category || t("General", { defaultValue: "General" })}
                                         </span>
                                         {item.views_count > 0 && (
                                           <span style={{ fontSize: "11px", color: "var(--text-muted)", display: "inline-flex", alignItems: "center", gap: "3px" }}>
@@ -1984,7 +1987,7 @@ function ProjectDetails() {
                                         {item.title}
                                       </h4>
                                       <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "12px" }}>
-                                        By {item.creator?.name || "Team Member"} on {new Date(item.updated_at || item.created_at).toLocaleDateString()}
+                                        {t("By {{author}} on {{date}}", { author: item.creator?.name || t("Team Member", { defaultValue: "Team Member" }), date: new Date(item.updated_at || item.created_at).toLocaleDateString(), defaultValue: `By ${item.creator?.name || "Team Member"} on ${new Date(item.updated_at || item.created_at).toLocaleDateString()}` })}
                                       </div>
                                     </div>
                                     <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", borderTop: "1px solid var(--border-color)", paddingTop: "10px" }}>
@@ -1993,7 +1996,7 @@ function ProjectDetails() {
                                         onClick={() => navigate(rolePath(`knowledge-base/edit/${item.id}`))}
                                         style={{ padding: "5px 12px", borderRadius: "6px", background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
                                       >
-                                        Edit / View
+                                        {t("Edit / View", { defaultValue: "Edit / View" })}
                                       </button>
                                     </div>
                                   </div>
@@ -2011,17 +2014,17 @@ function ProjectDetails() {
                           <div className="pd-card-flat__head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
                             <div>
                               <h2 className="pd-block-title pd-block-title--inline" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                <Calendar size={20} color="#2563eb" /> Project Events & Schedule
+                                <Calendar size={20} color="#2563eb" /> {t("Project Events & Schedule", { defaultValue: "Project Events & Schedule" })}
                               </h2>
                               <p className="pd-muted" style={{ margin: "4px 0 0" }}>
-                                Sprint demos, milestone reviews, and team meetings for {project?.title || "this project"}.
+                                {t("Sprint demos, milestone reviews, and team meetings for {{project}}.", { project: project?.title || "this project", defaultValue: `Sprint demos, milestone reviews, and team meetings for ${project?.title || "this project"}.` })}
                               </p>
                             </div>
                             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                               <div className="pd-files-search" style={{ margin: 0 }}>
                                 <input
                                   type="text"
-                                  placeholder="Search project events..."
+                                  placeholder={t("Search project events...", { defaultValue: "Search project events..." })}
                                   value={eventSearch}
                                   onChange={(e) => setEventSearch(e.target.value)}
                                 />
@@ -2032,14 +2035,14 @@ function ProjectDetails() {
                                 onClick={() => navigate(rolePath("events/create"), { state: { projectId: project?.id || projectId, projectTitle: project?.title } })}
                                 style={{ display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap" }}
                               >
-                                <Plus size={16} /> Add Event
+                                <Plus size={16} /> {t("Add Event", { defaultValue: "Add Event" })}
                               </button>
                             </div>
                           </div>
 
                           {loadingProjectEvents ? (
                             <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-secondary)" }}>
-                              Loading project events...
+                              {t("Loading project events...", { defaultValue: "Loading project events..." })}
                             </div>
                           ) : (() => {
                             const filteredEv = Array.isArray(projectEvents) ? projectEvents.filter((ev) => {
@@ -2056,16 +2059,16 @@ function ProjectDetails() {
                               return (
                                 <div style={{ textAlign: "center", padding: "50px 20px", background: "var(--bg-card-subtle)", borderRadius: "10px", marginTop: "16px" }}>
                                   <Calendar size={40} style={{ color: "#9ca3af", margin: "0 auto 10px" }} />
-                                  <h4 style={{ margin: "0 0 6px", fontSize: "15px", fontWeight: 600 }}>No project events scheduled</h4>
+                                  <h4 style={{ margin: "0 0 6px", fontSize: "15px", fontWeight: 600 }}>{t("No project events scheduled", { defaultValue: "No project events scheduled" })}</h4>
                                   <p style={{ margin: "0 0 16px", fontSize: "13px", color: "var(--text-secondary)" }}>
-                                    Schedule sprint meetings, demo sessions, and release deadlines for this project.
+                                    {t("Schedule sprint meetings, demo sessions, and release deadlines for this project.", { defaultValue: "Schedule sprint meetings, demo sessions, and release deadlines for this project." })}
                                   </p>
                                   <button
                                     type="button"
                                     onClick={() => navigate(rolePath("events/create"), { state: { projectId: project?.id || projectId, projectTitle: project?.title } })}
                                     style={{ padding: "7px 16px", borderRadius: "6px", background: "#2563eb", color: "#ffffff", border: "none", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
                                   >
-                                    <Plus size={14} style={{ display: "inline", verticalAlign: "-2px", marginRight: "4px" }} /> Add Event
+                                    <Plus size={14} style={{ display: "inline", verticalAlign: "-2px", marginRight: "4px" }} /> {t("Add Event", { defaultValue: "Add Event" })}
                                   </button>
                                 </div>
                               );
@@ -2074,8 +2077,8 @@ function ProjectDetails() {
                             return (
                               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "14px", marginTop: "18px" }}>
                                 {filteredEv.map((ev) => {
-                                  const dateStr = ev.start_date ? new Date(ev.start_date).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) : "Scheduled";
-                                  const timeStr = ev.start_date && !ev.all_day ? new Date(ev.start_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : (ev.all_day ? "All Day" : "");
+                                  const dateStr = ev.start_date ? new Date(ev.start_date).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) : t("Scheduled", { defaultValue: "Scheduled" });
+                                  const timeStr = ev.start_date && !ev.all_day ? new Date(ev.start_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : (ev.all_day ? t("All Day", { defaultValue: "All Day" }) : "");
 
                                   return (
                                     <div
@@ -2094,7 +2097,7 @@ function ProjectDetails() {
                                       <div>
                                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                                           <span style={{ fontSize: "11px", fontWeight: 600, color: ev.category?.color || "#2563eb", background: "#eff6ff", padding: "2px 8px", borderRadius: "4px" }}>
-                                            {ev.category?.name || ev.type || "Event"}
+                                            {ev.category?.name || ev.type || t("Event", { defaultValue: "Event" })}
                                           </span>
                                           <span style={{ fontSize: "11px", color: "var(--text-muted)", display: "inline-flex", alignItems: "center", gap: "4px" }}>
                                             <Clock size={12} /> {timeStr || dateStr}
@@ -2108,7 +2111,7 @@ function ProjectDetails() {
                                         </div>
                                         {ev.meeting_link && (
                                           <div style={{ fontSize: "12px", color: "#2563eb", marginBottom: "8px", display: "flex", alignItems: "center", gap: "4px" }}>
-                                            <Video size={13} color="#10b981" /> Virtual Meeting
+                                            <Video size={13} color="#10b981" /> {t("Virtual Meeting", { defaultValue: "Virtual Meeting" })}
                                           </div>
                                         )}
                                       </div>
@@ -2118,7 +2121,7 @@ function ProjectDetails() {
                                           onClick={() => navigate(rolePath(`events/edit/${ev.id}`))}
                                           style={{ padding: "5px 12px", borderRadius: "6px", background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
                                         >
-                                          Edit / View
+                                          {t("Edit / View", { defaultValue: "Edit / View" })}
                                         </button>
                                       </div>
                                     </div>
@@ -2195,10 +2198,10 @@ function ProjectDetails() {
         isOpen={deleteProjectConfirmOpen}
         onClose={() => setDeleteProjectConfirmOpen(false)}
         onConfirm={confirmDeleteProject}
-        title="Confirm Deletion"
-        message="Are you sure you want to delete this project? This action cannot be undone."
-        confirmText="Delete"
-        cancelText="Cancel"
+        title={t("Confirm Deletion", { defaultValue: "Confirm Deletion" })}
+        message={t("Are you sure you want to delete this project? This action cannot be undone.", { defaultValue: "Are you sure you want to delete this project? This action cannot be undone." })}
+        confirmText={t("Delete", { defaultValue: "Delete" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
         danger
       />
 
@@ -2215,10 +2218,10 @@ function ProjectDetails() {
         isOpen={deleteTaskConfirmOpen}
         onClose={() => { setDeleteTaskConfirmOpen(false); setDeleteTaskId(null); }}
         onConfirm={confirmDeleteTask}
-        title="Confirm Deletion"
-        message="Are you sure you want to delete this task? This action cannot be undone."
-        confirmText="Delete"
-        cancelText="Cancel"
+        title={t("Confirm Deletion", { defaultValue: "Confirm Deletion" })}
+        message={t("Are you sure you want to delete this task? This action cannot be undone.", { defaultValue: "Are you sure you want to delete this task? This action cannot be undone." })}
+        confirmText={t("Delete", { defaultValue: "Delete" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
         danger
       />
 
@@ -2247,7 +2250,7 @@ function ProjectDetails() {
         <div className="modal-overlay" onClick={handleVisClose}>
           <div className="sv-modal" onClick={(e) => e.stopPropagation()}>
             <div className="sv-modal-header">
-              <h3>Show To — {project.title}</h3>
+              <h3>{t("Show To — {{title}}", { title: project.title, defaultValue: `Show To — ${project.title}` })}</h3>
               <button className="sv-close-btn" onClick={handleVisClose}>✕</button>
             </div>
             <div className="sv-modal-body">
@@ -2257,7 +2260,7 @@ function ProjectDetails() {
                   <input
                     type="text"
                     className="sv-search-input"
-                    placeholder="Search by name, role, department..."
+                    placeholder={t("Search by name, role, department...", { defaultValue: "Search by name, role, department..." })}
                     value={visSearch}
                     onChange={(e) => setVisSearch(e.target.value)}
                   />
@@ -2267,7 +2270,7 @@ function ProjectDetails() {
                 </div>
               )}
               {visibilityUsers.length === 0 ? (
-                <p className="sv-muted">Loading users...</p>
+                <p className="sv-muted">{t("Loading users...", { defaultValue: "Loading users..." })}</p>
               ) : (
                 visibilityUsers
                   .filter((u) => {
@@ -2285,16 +2288,16 @@ function ProjectDetails() {
                     <span className="sv-user-name">{u.name}</span>
                     <span className="sv-user-role">({u.role.replace("_", " ")})</span>
                     {!u.is_member && (
-                      <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--color-warning)", background: "var(--color-warning-bg)", border: "1px solid var(--color-warning)", borderRadius: 6, padding: "1px 8px", fontWeight: 500 }}>View Only</span>
+                      <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--color-warning)", background: "var(--color-warning-bg)", border: "1px solid var(--color-warning)", borderRadius: 6, padding: "1px 8px", fontWeight: 500 }}>{t("View Only", { defaultValue: "View Only" })}</span>
                     )}
                   </label>
                 ))
               )}
             </div>
             <div className="sv-modal-footer">
-              <button className="sv-cancel-btn" onClick={handleVisClose}>Cancel</button>
+              <button className="sv-cancel-btn" onClick={handleVisClose}>{t("Cancel", { defaultValue: "Cancel" })}</button>
               <button className="sv-save-btn" onClick={saveVisibility} disabled={visibilitySaving}>
-                {visibilitySaving ? "Saving..." : "Save"}
+                {visibilitySaving ? t("Saving...", { defaultValue: "Saving..." }) : t("Save", { defaultValue: "Save" })}
               </button>
             </div>
           </div>
@@ -2307,11 +2310,11 @@ function ProjectDetails() {
       {editFileItem && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }} onClick={() => setEditFileItem(null)}>
           <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: "24px 28px", width: 460, maxWidth: "90vw", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--text-heading)" }}>Edit File / Link</h3>
-            <p style={{ margin: "6px 0 0", fontSize: 13, color: "var(--text-muted)" }}>Rename or update the URL below.</p>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--text-heading)" }}>{t("Edit File / Link", { defaultValue: "Edit File / Link" })}</h3>
+            <p style={{ margin: "6px 0 0", fontSize: 13, color: "var(--text-muted)" }}>{t("Rename or update the URL below.", { defaultValue: "Rename or update the URL below." })}</p>
             <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 12 }}>
               <div>
-                <label style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dark)", display: "block", marginBottom: 4 }}>Title</label>
+                <label style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dark)", display: "block", marginBottom: 4 }}>{t("Title", { defaultValue: "Title" })}</label>
                 <input
                   autoFocus
                   type="text"
@@ -2323,7 +2326,7 @@ function ProjectDetails() {
               </div>
               {editFileItem.url && (
                 <div>
-                  <label style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dark)", display: "block", marginBottom: 4 }}>URL</label>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dark)", display: "block", marginBottom: 4 }}>{t("URL", { defaultValue: "URL" })}</label>
                   <input
                     type="text"
                     value={editFileUrl}
@@ -2334,8 +2337,8 @@ function ProjectDetails() {
               )}
             </div>
             <div style={{ marginTop: 20, display: "flex", justifyContent: "flex-end", gap: 10 }}>
-              <button type="button" onClick={() => setEditFileItem(null)} style={{ padding: "8px 18px", borderRadius: 8, border: "1px solid var(--border-medium)", background: "var(--bg-card)", fontSize: 13, fontWeight: 600, cursor: "pointer", color: "var(--text-dark)" }}>Cancel</button>
-              <button type="button" onClick={handleRenameFile} disabled={!editFileName.trim()} style={{ padding: "8px 18px", borderRadius: 8, border: "none", background: editFileName.trim() ? "var(--color-primary)" : "var(--bg-hover)", color: editFileName.trim() ? "#fff" : "var(--text-muted)", fontSize: 13, fontWeight: 600, cursor: editFileName.trim() ? "pointer" : "not-allowed" }}>Save</button>
+              <button type="button" onClick={() => setEditFileItem(null)} style={{ padding: "8px 18px", borderRadius: 8, border: "1px solid var(--border-medium)", background: "var(--bg-card)", fontSize: 13, fontWeight: 600, cursor: "pointer", color: "var(--text-dark)" }}>{t("Cancel", { defaultValue: "Cancel" })}</button>
+              <button type="button" onClick={handleRenameFile} disabled={!editFileName.trim()} style={{ padding: "8px 18px", borderRadius: 8, border: "none", background: editFileName.trim() ? "var(--color-primary)" : "var(--bg-hover)", color: editFileName.trim() ? "#fff" : "var(--text-muted)", fontSize: 13, fontWeight: 600, cursor: editFileName.trim() ? "pointer" : "not-allowed" }}>{t("Save", { defaultValue: "Save" })}</button>
             </div>
           </div>
         </div>
@@ -2346,9 +2349,10 @@ function ProjectDetails() {
         isOpen={deleteFileConfirmOpen}
         onClose={() => { setDeleteFileConfirmOpen(false); setPendingDeleteFile(null); }}
         onConfirm={handleDeleteFile}
-        title="Delete File"
-        message={`Are you sure you want to delete "${pendingDeleteFile?.name}"? This action cannot be undone.`}
-        confirmText="Delete"
+        title={t("Delete File", { defaultValue: "Delete File" })}
+        message={t('Are you sure you want to delete "{{name}}"? This action cannot be undone.', { name: pendingDeleteFile?.name, defaultValue: `Are you sure you want to delete "${pendingDeleteFile?.name}"? This action cannot be undone.` })}
+        confirmText={t("Delete", { defaultValue: "Delete" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
         danger
       />
 
@@ -2377,9 +2381,10 @@ function ProjectDetails() {
           setDeleteCredentialConfirmOpen(false);
           setPendingDeleteCredential(null);
         }}
-        title="Delete Credential"
-        message="Are you sure you want to delete this access credential? This action cannot be undone."
-        confirmText="Delete"
+        title={t("Delete Credential", { defaultValue: "Delete Credential" })}
+        message={t("Are you sure you want to delete this access credential? This action cannot be undone.", { defaultValue: "Are you sure you want to delete this access credential? This action cannot be undone." })}
+        confirmText={t("Delete", { defaultValue: "Delete" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
         danger
       />
 
@@ -2387,7 +2392,7 @@ function ProjectDetails() {
         <div className="modal-overlay" onClick={handleMgrClose}>
           <div className="aam-modal" onClick={(e) => e.stopPropagation()}>
             <div className="aam-header">
-              <h3>Change Project Manager</h3>
+              <h3>{t("Change Project Manager", { defaultValue: "Change Project Manager" })}</h3>
               <button className="aam-close" onClick={handleMgrClose}>
                 <X size={18} />
               </button>
@@ -2395,9 +2400,9 @@ function ProjectDetails() {
             <div className="aam-body">
               <div className="aam-field">
                 <label>
-                  <Users size={14} /> Select Manager *
+                  <Users size={14} /> {t("Select Manager *", { defaultValue: "Select Manager *" })}
                 </label>
-                <p className="aam-hint">Choose a user to assign as project manager</p>
+                <p className="aam-hint">{t("Choose a user to assign as project manager", { defaultValue: "Choose a user to assign as project manager" })}</p>
                 <div className="aam-multiselect" ref={managerDropdownRef}>
                   <button
                     type="button"
@@ -2406,8 +2411,8 @@ function ProjectDetails() {
                   >
                     <span className="aam-multiselect-value">
                       {selectedManagerId
-                        ? managerUsers.find((u) => u.id === selectedManagerId)?.name || "1 user selected"
-                        : "Select users"}
+                        ? managerUsers.find((u) => u.id === selectedManagerId)?.name || t("1 user selected", { defaultValue: "1 user selected" })
+                        : t("Select users", { defaultValue: "Select users" })}
                     </span>
                     <ChevronDown size={16} className={`aam-multiselect-arrow ${managerDropdownOpen ? "aam-multiselect-arrow--open" : ""}`} />
                   </button>
@@ -2417,7 +2422,7 @@ function ProjectDetails() {
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                         <input
                           type="text"
-                          placeholder="Search by name, role, department..."
+                          placeholder={t("Search by name, role, department...", { defaultValue: "Search by name, role, department..." })}
                           value={mgrSearch}
                           onChange={(e) => setMgrSearch(e.target.value)}
                           onKeyDown={(e) => {
@@ -2481,7 +2486,7 @@ function ProjectDetails() {
               </div>
               <div className="aam-footer">
                 <button type="button" className="aam-btn aam-btn-cancel" onClick={handleMgrClose}>
-                  Cancel
+                  {t("Cancel", { defaultValue: "Cancel" })}
                 </button>
                 <button
                   type="button"
@@ -2489,7 +2494,7 @@ function ProjectDetails() {
                   onClick={saveManagerChange}
                   disabled={!selectedManagerId || selectedManagerId === project.creator?.id || savingManager}
                 >
-                  {savingManager ? "Saving..." : "Save Change"}
+                  {savingManager ? t("Saving...", { defaultValue: "Saving..." }) : t("Save Change", { defaultValue: "Save Change" })}
                 </button>
               </div>
             </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Clock,
   FileText,
@@ -11,6 +12,7 @@ import {
   AlertCircle,
   XCircle,
 } from "lucide-react";
+import DOMPurify from "dompurify";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { formatDateTime } from "../utils/formatDateTime";
@@ -26,6 +28,7 @@ import CustomSelect from "./CustomSelect";
  * @param {Array} initialUsers - Optional list of member users for the person filter
  */
 export default function UnifiedActivityFeed({ module = "task", entityId, initialUsers = [] }) {
+  const { t } = useTranslation();
   const [activities, setActivities] = useState([]);
   const [users, setUsers] = useState(initialUsers);
   const [loading, setLoading] = useState(true);
@@ -74,16 +77,16 @@ export default function UnifiedActivityFeed({ module = "task", entityId, initial
   }, [entityId, dateFilter, userFilter, typeFilter]);
 
   const userOptions = [
-    { value: "", label: "All Persons" },
+    { value: "", label: t("All Persons", { defaultValue: "All Persons" }) },
     ...users.map((u) => ({ value: String(u.id), label: u.name })),
   ];
 
   const typeOptions = [
-    { value: "all", label: "All Types" },
-    { value: "timelines", label: "Timelines" },
-    { value: "submissions", label: "Submissions" },
-    { value: "changes", label: "Field Changes" },
-    { value: "transfers", label: "Transfers" },
+    { value: "all", label: t("All Types", { defaultValue: "All Types" }) },
+    { value: "timelines", label: t("Timelines", { defaultValue: "Timelines" }) },
+    { value: "submissions", label: t("Submissions", { defaultValue: "Submissions" }) },
+    { value: "changes", label: t("Field Changes", { defaultValue: "Field Changes" }) },
+    { value: "transfers", label: t("Transfers", { defaultValue: "Transfers" }) },
   ];
 
   const resetFilters = () => {
@@ -112,14 +115,14 @@ export default function UnifiedActivityFeed({ module = "task", entityId, initial
   const getTypeBadgeStyle = (type) => {
     switch (type) {
       case "submissions":
-        return { bg: "#f0fdf4", color: "#16a34a", label: "Submission" };
+        return { bg: "#f0fdf4", color: "#16a34a", label: t("Submission", { defaultValue: "Submission" }) };
       case "transfers":
-        return { bg: "#fff7ed", color: "#ea580c", label: "Transfer" };
+        return { bg: "#fff7ed", color: "#ea580c", label: t("Transfer", { defaultValue: "Transfer" }) };
       case "changes":
-        return { bg: "#f0f9ff", color: "#0284c7", label: "Change" };
+        return { bg: "#f0f9ff", color: "#0284c7", label: t("Change", { defaultValue: "Change" }) };
       case "timelines":
       default:
-        return { bg: "#eff6ff", color: "#2563eb", label: "Timeline" };
+        return { bg: "#eff6ff", color: "#2563eb", label: t("Timeline", { defaultValue: "Timeline" }) };
     }
   };
 
@@ -161,7 +164,7 @@ export default function UnifiedActivityFeed({ module = "task", entityId, initial
           }}
         >
           <Clock size={18} color="#2563eb" />
-          Unified Activity
+          {t("Unified Activity", { defaultValue: "Unified Activity" })}
         </h3>
         <span
           style={{
@@ -173,7 +176,7 @@ export default function UnifiedActivityFeed({ module = "task", entityId, initial
             borderRadius: "10px",
           }}
         >
-          {activities.length} items
+          {t("{{count}} items", { defaultValue: `${activities.length} items`, count: activities.length })}
         </span>
       </div>
 
@@ -194,7 +197,7 @@ export default function UnifiedActivityFeed({ module = "task", entityId, initial
         {/* Date Filter */}
         <div style={{ flex: "1 1 120px", minWidth: 110 }}>
           <label style={{ fontSize: 10, fontWeight: 700, color: "#64748b", display: "block", marginBottom: 3, textTransform: "uppercase" }}>
-            Date
+            {t("Date", { defaultValue: "Date" })}
           </label>
           <input
             type="date"
@@ -218,7 +221,7 @@ export default function UnifiedActivityFeed({ module = "task", entityId, initial
         {/* Person Filter */}
         <div style={{ flex: "1 1 130px", minWidth: 120 }}>
           <label style={{ fontSize: 10, fontWeight: 700, color: "#64748b", display: "block", marginBottom: 3, textTransform: "uppercase" }}>
-            Person
+            {t("Person", { defaultValue: "Person" })}
           </label>
           <CustomSelect
             name="activity_user_id"
@@ -232,7 +235,7 @@ export default function UnifiedActivityFeed({ module = "task", entityId, initial
         {/* Type Filter */}
         <div style={{ flex: "1 1 120px", minWidth: 110 }}>
           <label style={{ fontSize: 10, fontWeight: 700, color: "#64748b", display: "block", marginBottom: 3, textTransform: "uppercase" }}>
-            Type
+            {t("Type", { defaultValue: "Type" })}
           </label>
           <CustomSelect
             name="activity_type"
@@ -262,7 +265,7 @@ export default function UnifiedActivityFeed({ module = "task", entityId, initial
                 whiteSpace: "nowrap",
               }}
             >
-              Clear
+              {t("Clear", { defaultValue: "Clear" })}
             </button>
           </div>
         )}
@@ -271,11 +274,11 @@ export default function UnifiedActivityFeed({ module = "task", entityId, initial
       {/* UNIFIED ACTIVITY FEED STREAM */}
       {loading ? (
         <div style={{ padding: "20px 0", textAlign: "center", color: "#64748b", fontSize: "13px" }}>
-          Loading activity stream...
+          {t("Loading activity stream...", { defaultValue: "Loading activity stream..." })}
         </div>
       ) : activities.length === 0 ? (
         <div style={{ padding: "24px 0", textAlign: "center", color: "#94a3b8", fontSize: "13px" }}>
-          No activities found matching filters.
+          {t("No activities found matching filters.", { defaultValue: "No activities found matching filters." })}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px", maxHeight: "540px", overflowY: "auto", paddingRight: 4 }}>
@@ -334,25 +337,29 @@ export default function UnifiedActivityFeed({ module = "task", entityId, initial
                     </span>
                   </div>
 
-                  {/* Description */}
+                  {/* Description — Task 3: render HTML safely */}
                   {item.description && (
-                    <p
+                    <div
+                      className="activity-feed-description"
                       style={{
                         margin: "0 0 6px",
                         fontSize: "12px",
                         color: "var(--text-secondary, #334155)",
-                        lineHeight: 1.5,
+                        lineHeight: 1.6,
                         wordBreak: "break-word",
-                        whiteSpace: "pre-wrap",
                       }}
-                    >
-                      {item.description}
-                    </p>
+                      dangerouslySetInnerHTML={{
+                        __html: DOMPurify.sanitize(item.description, {
+                          ALLOWED_TAGS: ["p", "br", "b", "strong", "i", "em", "u", "s", "ul", "ol", "li", "span", "a"],
+                          ALLOWED_ATTR: ["href", "target", "rel", "style"],
+                        }),
+                      }}
+                    />
                   )}
 
                   {/* Meta: User & Date */}
                   <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "11px", color: "#64748b" }}>
-                    <span style={{ fontWeight: 600, color: "#475569" }}>By: {item.user_name || "System"}</span>
+                    <span style={{ fontWeight: 600, color: "#475569" }}>{t("By: {{name}}", { defaultValue: `By: ${item.user_name || "System"}`, name: item.user_name || t("System", { defaultValue: "System" }) })}</span>
                     <span>•</span>
                     <span>{formatDateTime(item.created_at)}</span>
                   </div>

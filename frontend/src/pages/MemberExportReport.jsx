@@ -13,6 +13,7 @@
  */
 
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -20,7 +21,7 @@ import DonutChart from "../components/DonutChart";
 import "../components/Charts.css";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import useConfirmOnClose from "../hooks/useConfirmOnClose";
-import { getUserTimezone, convertToLocal } from "../utils/timezoneUtils";
+import { getUserTimezone, formatLocalDate, formatLocalTime } from "../utils/timezoneUtils";
 
 /** Mapping of status strings to RGB colour triples used when drawing PDF cells. */
 const STATUS_COLORS_PDF = {
@@ -88,6 +89,7 @@ function getPriStyle(p) {
  * @param {boolean}  isOwnPage  - True when the logged-in user is viewing their own report.
  */
 function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
+  const { t } = useTranslation();
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
   useEscapeKey(true, handleClose);
 
@@ -107,14 +109,17 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
   const delivSummary = userData?.deliverable_summary || {};
 
   // "MY" for member/team_lead viewing own page, "USER" for admin/manager viewing others
-  const reportLabel = isOwnPage ? "MY" : "USER";
-  const reportLabelTitle = isOwnPage ? "My" : "User";
+  const reportLabel = isOwnPage ? t("MY", { defaultValue: "MY" }) : t("USER", { defaultValue: "USER" });
+  const reportLabelTitle = isOwnPage ? t("My", { defaultValue: "My" }) : t("User", { defaultValue: "User" });
 
   const allItems = tasks;
 
   const dateRangeLabels = {
-    all: "All Time", today: "Today", week: "This Week", month: "This Month",
-    custom: customStart && customEnd ? `${formatDateShort(customStart)} - ${formatDateShort(customEnd)}` : "Custom Range",
+    all: t("All Time", { defaultValue: "All Time" }),
+    today: t("Today", { defaultValue: "Today" }),
+    week: t("This Week", { defaultValue: "This Week" }),
+    month: t("This Month", { defaultValue: "This Month" }),
+    custom: customStart && customEnd ? `${formatDateShort(customStart)} - ${formatDateShort(customEnd)}` : t("Custom Range", { defaultValue: "Custom Range" }),
   };
 
   const filterByDateRange = (items) => {
@@ -148,13 +153,13 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
   };
 
   const userTz = getUserTimezone();
-  const genDate = convertToLocal(new Date().toISOString(), userTz, "MMMM DD, YYYY");
-  const genTime = convertToLocal(new Date().toISOString(), userTz, "hh:mm A");
+  const genDate = formatLocalDate(new Date().toISOString(), userTz);
+  const genTime = formatLocalTime(new Date().toISOString(), userTz);
   const roleDisplay = user.role
     ? user.role === "team_lead" || user.role === "teamlead"
-      ? "Team Lead"
-      : user.role.charAt(0).toUpperCase() + user.role.slice(1)
-    : "Member";
+      ? t("Team Lead", { defaultValue: "Team Lead" })
+      : t(user.role.charAt(0).toUpperCase() + user.role.slice(1), { defaultValue: user.role.charAt(0).toUpperCase() + user.role.slice(1) })
+    : t("Member", { defaultValue: "Member" });
   const empId = user.employee_id || "EMP-" + String(user.id || 0).padStart(4, "0");
 
   // ═══════════════════════════ PDF GENERATION ═══════════════════════════
@@ -476,10 +481,10 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
 
   // ── REVIEW MODAL ──
   const cardMeta = [
-    { key: "total_assigned", label: "Total Assigned", value: totalAssigned, color: "var(--color-primary)", bg: "#EEF2FF" },
-    { key: "approved", label: "Approved", value: approvedCount, color: "#22C55E", bg: "#ECFDF5" },
-    { key: "pending", label: "Pending", value: pendingCount, color: "#F59E0B", bg: "#FEF3C7" },
-    { key: "overdue", label: "Overdue", value: overdueCount, color: "#EF4444", bg: "#FEF2F2" },
+    { key: "total_assigned", label: t("Total Assigned", { defaultValue: "Total Assigned" }), value: totalAssigned, color: "var(--color-primary)", bg: "#EEF2FF", sub: t("All tasks", { defaultValue: "All tasks" }) },
+    { key: "approved", label: t("Approved", { defaultValue: "Approved" }), value: approvedCount, color: "#22C55E", bg: "#ECFDF5", sub: t("Tasks completed", { defaultValue: "Tasks completed" }) },
+    { key: "pending", label: t("Pending", { defaultValue: "Pending" }), value: pendingCount, color: "#F59E0B", bg: "#FEF3C7", sub: t("Tasks in progress", { defaultValue: "Tasks in progress" }) },
+    { key: "overdue", label: t("Overdue", { defaultValue: "Overdue" }), value: overdueCount, color: "#EF4444", bg: "#FEF2F2", sub: t("Require attention", { defaultValue: "Require attention" }) },
   ];
 
   return createPortal(
@@ -490,8 +495,8 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
           <div className="er-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
             <div className="er-header">
               <div>
-                <h2>Export Report</h2>
-                <p>Select date range and review {isOwnPage ? "my" : "the user's"} performance report.</p>
+                <h2>{t("Export Report", { defaultValue: "Export Report" })}</h2>
+                <p>{isOwnPage ? t("Select date range and review my performance report.", { defaultValue: "Select date range and review my performance report." }) : t("Select date range and review the user's performance report.", { defaultValue: "Select date range and review the user's performance report." })}</p>
               </div>
               <button className="er-close-btn" onClick={handleClose}>
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -500,14 +505,14 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
               </button>
             </div>
             <div className="er-section">
-              <h3>Timeline</h3>
+              <h3>{t("Timeline", { defaultValue: "Timeline" })}</h3>
               <div className="er-date-buttons" style={{ marginBottom: 12 }}>
                 {[
-                  { value: "all", label: "All Time" },
-                  { value: "today", label: "Today" },
-                  { value: "week", label: "This Week" },
-                  { value: "month", label: "This Month" },
-                  { value: "custom", label: "Custom Range" },
+                  { value: "all", label: t("All Time", { defaultValue: "All Time" }) },
+                  { value: "today", label: t("Today", { defaultValue: "Today" }) },
+                  { value: "week", label: t("This Week", { defaultValue: "This Week" }) },
+                  { value: "month", label: t("This Month", { defaultValue: "This Month" }) },
+                  { value: "custom", label: t("Custom Range", { defaultValue: "Custom Range" }) },
                 ].map((opt) => (
                   <button key={opt.value} className={`er-date-btn ${dateRange === opt.value ? "active" : ""}`} onClick={() => { setDateRange(opt.value); setIsDirty(true); }}>
                     {opt.label}
@@ -534,12 +539,12 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
               )}
             </div>
             <div className="er-footer">
-              <button className="er-cancel-btn" onClick={handleClose}>Cancel</button>
+              <button className="er-cancel-btn" onClick={handleClose}>{t("Cancel", { defaultValue: "Cancel" })}</button>
               <button className="er-export-btn" onClick={() => setShowReview(true)}>
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M8 2v8M4 6l4 4 4-4M2 14h12" />
                 </svg>
-                Report Review
+                {t("Report Review", { defaultValue: "Report Review" })}
               </button>
             </div>
           </div>
@@ -570,7 +575,7 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                   </div>
                 </div>
                 <div className="erm-header-center">
-                  <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{reportLabel} PERFORMANCE REPORT</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{t("{{label}} PERFORMANCE REPORT", { label: reportLabel, defaultValue: `${reportLabel} PERFORMANCE REPORT` })}</span>
                 </div>
               </div>
 
@@ -581,17 +586,17 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                     <svg width="20" height="20" viewBox="0 0 48 48" fill="#9ca3af"><circle cx="24" cy="18" r="8" /><path d="M5 46c0-11 9-20 20-20s20 9 20 20" /></svg>
                   </div>
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-heading)" }}>{user.name || "Unknown User"}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-heading)" }}>{user.name || t("Unknown User", { defaultValue: "Unknown User" })}</div>
                     <div style={{ fontSize: 9, color: "var(--text-secondary)" }}>{roleDisplay}</div>
                     <div style={{ fontSize: 9, fontWeight: 600, color: "var(--color-primary)" }}>{user.team || ""}</div>
                   </div>
                 </div>
                 <div className="erm-profile-right">
                   {[
-                    { lbl: "Employee ID", val: empId, col: 1 }, { lbl: "Role", val: roleDisplay, col: 2 },
-                    { lbl: "Report Period", val: dateRangeLabels[dateRange], col: 1 }, { lbl: "Reporting To", val: user.reporting_to || "-", col: 2 },
-                    { lbl: "Total Work Items", val: String(totalItems), col: 1 }, { lbl: "Report Date", val: genDate, col: 2 },
-                    { lbl: "Team", val: user.team || "-", col: 1 }, { lbl: "Report Time", val: genTime, col: 2 },
+                    { lbl: t("Employee ID", { defaultValue: "Employee ID" }), val: empId, col: 1 }, { lbl: t("Role", { defaultValue: "Role" }), val: roleDisplay, col: 2 },
+                    { lbl: t("Report Period", { defaultValue: "Report Period" }), val: dateRangeLabels[dateRange], col: 1 }, { lbl: t("Reporting To", { defaultValue: "Reporting To" }), val: user.reporting_to || "-", col: 2 },
+                    { lbl: t("Total Work Items", { defaultValue: "Total Work Items" }), val: String(totalItems), col: 1 }, { lbl: t("Report Date", { defaultValue: "Report Date" }), val: genDate, col: 2 },
+                    { lbl: t("Team", { defaultValue: "Team" }), val: user.team || "-", col: 1 }, { lbl: t("Report Time", { defaultValue: "Report Time" }), val: genTime, col: 2 },
                   ].map((r, i) => (
                     <div key={i} style={{ display: "flex", gap: 4 }}>
                       <span style={{ color: "var(--text-secondary)", whiteSpace: "nowrap" }}>{r.lbl}:</span>
@@ -613,7 +618,7 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                     </div>
                     <div style={{ fontSize: 26, fontWeight: 700, color: c.color, marginTop: 4 }}>{c.value}</div>
                     <div style={{ fontSize: 8, color: "var(--text-muted)", marginTop: 2 }}>
-                      {c.key === "total_assigned" ? "All tasks" : c.key === "approved" ? "Tasks completed" : c.key === "pending" ? "Tasks in progress" : "Require attention"}
+                      {c.sub}
                     </div>
                   </div>
                 ))}
@@ -623,30 +628,30 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
               <div className="erm-two-col">
                 {/* Left: Status Breakdown */}
                 <div style={{ border: "1px solid var(--border-color)", borderRadius: 8, padding: "12px" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 8 }}>TASK STATUS BREAKDOWN</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 8 }}>{t("TASK STATUS BREAKDOWN", { defaultValue: "TASK STATUS BREAKDOWN" })}</div>
                   <DonutChart
                     segments={[
-                      { label: "Approved", count: sc.approved, color: "#10b981" },
-                      { label: "Pending", count: sc.pending, color: "#f59e0b" },
-                      { label: "In Review", count: sc.submitted + sc.reopened, color: "var(--color-primary)" },
-                      { label: "Overdue", count: sc.overdue, color: "#ef4444" },
+                      { label: t("Approved", { defaultValue: "Approved" }), count: sc.approved, color: "#10b981" },
+                      { label: t("Pending", { defaultValue: "Pending" }), count: sc.pending, color: "#f59e0b" },
+                      { label: t("In Review", { defaultValue: "In Review" }), count: sc.submitted + sc.reopened, color: "var(--color-primary)" },
+                      { label: t("Overdue", { defaultValue: "Overdue" }), count: sc.overdue, color: "#ef4444" },
                     ]}
                     size={140}
                     strokeWidth={24}
-                    totalLabel="Total Tasks"
+                    totalLabel={t("Total Tasks", { defaultValue: "Total Tasks" })}
                   />
                 </div>
 
                 {/* Right: Priority Distribution */}
                 <div style={{ border: "1px solid var(--border-color)", borderRadius: 8, padding: "12px" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 4 }}>PRIORITY DISTRIBUTION</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 4 }}>{t("PRIORITY DISTRIBUTION", { defaultValue: "PRIORITY DISTRIBUTION" })}</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
                     {(() => {
                       const totalP = (priorityDistribution.high ?? 0) + (priorityDistribution.medium ?? 0) + (priorityDistribution.low ?? 0);
                       return [
-                        { label: "High", count: priorityDistribution.high ?? 0, color: "#ef4444" },
-                        { label: "Medium", count: priorityDistribution.medium ?? 0, color: "#f59e0b" },
-                        { label: "Low", count: priorityDistribution.low ?? 0, color: "#10b981" },
+                        { label: t("High", { defaultValue: "High" }), count: priorityDistribution.high ?? 0, color: "#ef4444" },
+                        { label: t("Medium", { defaultValue: "Medium" }), count: priorityDistribution.medium ?? 0, color: "#f59e0b" },
+                        { label: t("Low", { defaultValue: "Low" }), count: priorityDistribution.low ?? 0, color: "#10b981" },
                       ].map((p) => {
                         const pct = totalP > 0 ? Math.round((p.count / totalP) * 1000) / 10 : 0;
                         return (
@@ -662,30 +667,30 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                     })()}
                   </div>
                   <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 8 }}>
-                    {(priorityDistribution.high ?? 0) + (priorityDistribution.medium ?? 0) + (priorityDistribution.low ?? 0)} Total Tasks
+                    {t("{{count}} Total Tasks", { count: (priorityDistribution.high ?? 0) + (priorityDistribution.medium ?? 0) + (priorityDistribution.low ?? 0), defaultValue: `${(priorityDistribution.high ?? 0) + (priorityDistribution.medium ?? 0) + (priorityDistribution.low ?? 0)} Total Tasks` })}
                   </div>
                 </div>
               </div>
 
               {/* ═══ TASKS TABLE ═══ */}
               <div className="erm-table-section">
-                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>TASKS DETAILS</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>{t("TASKS DETAILS", { defaultValue: "TASKS DETAILS" })}</div>
                 <div className="erm-table-wrapper">
                   <table className="erm-table">
                     <thead>
                       <tr>
                         <th style={{ width: "5%", textAlign: "center" }}>#</th>
-                        <th style={{ width: "12%", textAlign: "left" }}>Task ID</th>
-                        <th style={{ width: "25%", textAlign: "left" }}>Task Name</th>
-                        <th style={{ width: "12%", textAlign: "center" }}>Status</th>
-                        <th style={{ width: "14%", textAlign: "center" }}>Progress</th>
-                        <th style={{ width: "10%", textAlign: "center" }}>Priority</th>
-                        <th style={{ width: "12%", textAlign: "center" }}>Due Date</th>
+                        <th style={{ width: "12%", textAlign: "left" }}>{t("Task ID", { defaultValue: "Task ID" })}</th>
+                        <th style={{ width: "25%", textAlign: "left" }}>{t("Task Name", { defaultValue: "Task Name" })}</th>
+                        <th style={{ width: "12%", textAlign: "center" }}>{t("Status", { defaultValue: "Status" })}</th>
+                        <th style={{ width: "14%", textAlign: "center" }}>{t("Progress", { defaultValue: "Progress" })}</th>
+                        <th style={{ width: "10%", textAlign: "center" }}>{t("Priority", { defaultValue: "Priority" })}</th>
+                        <th style={{ width: "12%", textAlign: "center" }}>{t("Due Date", { defaultValue: "Due Date" })}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filteredItems.length === 0 ? (
-                        <tr><td colSpan={7} style={{ textAlign: "center", padding: 20, color: "#9ca3af" }}>No items found</td></tr>
+                        <tr><td colSpan={7} style={{ textAlign: "center", padding: 20, color: "#9ca3af" }}>{t("No items found", { defaultValue: "No items found" })}</td></tr>
                       ) : filteredItems.map((item, idx) => {
                         const progress = calculateProgress(item);
                         const st = formatStatus(item.status);
@@ -695,12 +700,12 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                         return (
                           <tr key={idx} style={{ borderBottom: "1px solid #f3f4f6", background: idx % 2 ? "#f9fafb" : "#fff" }}>
                             <td data-label="#" style={{ textAlign: "center", color: "#6b7280" }}>{idx + 1}</td>
-                            <td data-label="Task ID" style={{ fontWeight: 600, color: "#6366f1", fontSize: 9 }}>{item.business_id || "-"}</td>
-                            <td data-label="Name" style={{ fontWeight: 600, color: "#111827", wordBreak: "break-word" }}>{item.title || item.name || "-"}</td>
-                            <td data-label="Status" style={{ textAlign: "center" }}>
-                              <span style={{ fontWeight: 600, color: ss.text }}>&#9679; {st}</span>
+                            <td data-label={t("Task ID", { defaultValue: "Task ID" })} style={{ fontWeight: 600, color: "#6366f1", fontSize: 9 }}>{item.business_id || "-"}</td>
+                            <td data-label={t("Name", { defaultValue: "Name" })} style={{ fontWeight: 600, color: "#111827", wordBreak: "break-word" }}>{item.title || item.name || "-"}</td>
+                            <td data-label={t("Status", { defaultValue: "Status" })} style={{ textAlign: "center" }}>
+                              <span style={{ fontWeight: 600, color: ss.text }}>&#9679; {t(st, { defaultValue: st })}</span>
                             </td>
-                            <td data-label="Progress" style={{ textAlign: "center" }}>
+                            <td data-label={t("Progress", { defaultValue: "Progress" })} style={{ textAlign: "center" }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                                 <div style={{ flex: 1, height: 4, borderRadius: 2, background: "var(--border-color)", overflow: "hidden" }}>
                                   <div style={{ width: `${progress}%`, height: "100%", borderRadius: 2, background: progress >= 80 ? "#22c55e" : progress >= 50 ? "#f59e0b" : "#ef4444" }}></div>
@@ -708,10 +713,10 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                                 <span style={{ fontWeight: 600, fontSize: 9, color: "var(--text-dark)" }}>{progress}%</span>
                               </div>
                             </td>
-                            <td data-label="Priority" style={{ textAlign: "center" }}>
-                              <span style={{ fontWeight: 600, fontSize: 9, color: ps.text }}>&#9679; {item.priority || "Medium"}</span>
+                            <td data-label={t("Priority", { defaultValue: "Priority" })} style={{ textAlign: "center" }}>
+                              <span style={{ fontWeight: 600, fontSize: 9, color: ps.text }}>&#9679; {t(item.priority || "Medium", { defaultValue: item.priority || "Medium" })}</span>
                             </td>
-                            <td data-label="Due Date" style={{ textAlign: "center", color: "var(--text-secondary)", fontSize: 9 }}>{due}</td>
+                            <td data-label={t("Due Date", { defaultValue: "Due Date" })} style={{ textAlign: "center", color: "var(--text-secondary)", fontSize: 9 }}>{due}</td>
                           </tr>
                         );
                       })}
@@ -724,14 +729,14 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
               <div className="erm-subtasks-grid">
                 {/* Left */}
                 <div style={{ border: "1px solid var(--border-color)", borderRadius: 8, padding: "12px" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>SUBTASKS SUMMARY</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>{t("SUBTASKS SUMMARY", { defaultValue: "SUBTASKS SUMMARY" })}</div>
                   {[
-                    { label: "Total Subtasks", count: delivSummary.total ?? 0, color: "var(--color-primary)" },
-                    { label: "Submitted", count: delivSummary.submitted ?? 0, color: "#f59e0b" },
-                    { label: "Approved", count: delivSummary.approved ?? 0, color: "#22c55e" },
-                    { label: "Pending Review", count: delivSummary.pending_review ?? 0, color: "#f59e0b" },
-                    { label: "Declined", count: delivSummary.rejected ?? 0, color: "#ef4444" },
-                    { label: "Reopened", count: delivSummary.reopened ?? 0, color: "var(--color-primary)" },
+                    { label: t("Total Subtasks", { defaultValue: "Total Subtasks" }), count: delivSummary.total ?? 0, color: "var(--color-primary)" },
+                    { label: t("Submitted", { defaultValue: "Submitted" }), count: delivSummary.submitted ?? 0, color: "#f59e0b" },
+                    { label: t("Approved", { defaultValue: "Approved" }), count: delivSummary.approved ?? 0, color: "#22c55e" },
+                    { label: t("Pending Review", { defaultValue: "Pending Review" }), count: delivSummary.pending_review ?? 0, color: "#f59e0b" },
+                    { label: t("Declined", { defaultValue: "Declined" }), count: delivSummary.rejected ?? 0, color: "#ef4444" },
+                    { label: t("Reopened", { defaultValue: "Reopened" }), count: delivSummary.reopened ?? 0, color: "var(--color-primary)" },
                   ].map((d) => (
                     <div key={d.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "2px 0", fontSize: 10 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
@@ -745,19 +750,19 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
 
                 {/* Right */}
                 <div style={{ border: "1px solid var(--border-color)", borderRadius: 8, padding: "12px" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>SUBTASKS DETAILS</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>{t("SUBTASKS DETAILS", { defaultValue: "SUBTASKS DETAILS" })}</div>
                   {subtasks.length === 0 ? (
-                    <div style={{ textAlign: "center", padding: 20, color: "var(--text-muted)", fontSize: 10 }}>No subtasks found.</div>
+                    <div style={{ textAlign: "center", padding: 20, color: "var(--text-muted)", fontSize: 10 }}>{t("No subtasks found.", { defaultValue: "No subtasks found." })}</div>
                   ) : (
                     <div className="erm-table-wrapper">
                       <table className="erm-table" style={{ tableLayout: "auto", minWidth: 0 }}>
                         <thead>
                           <tr style={{ background: "var(--bg-hover)", color: "var(--text-secondary)", fontWeight: 600 }}>
                             <th style={{ width: "8%", padding: "4px 6px", textAlign: "center" }}>#</th>
-                            <th style={{ width: "40%", padding: "4px 6px", textAlign: "left" }}>Name</th>
-                            <th style={{ width: "17%", padding: "4px 6px", textAlign: "center" }}>Status</th>
-                            <th style={{ width: "17%", padding: "4px 6px", textAlign: "center" }}>Submitted</th>
-                            <th style={{ width: "18%", padding: "4px 6px", textAlign: "center" }}>Approved</th>
+                            <th style={{ width: "40%", padding: "4px 6px", textAlign: "left" }}>{t("Name", { defaultValue: "Name" })}</th>
+                            <th style={{ width: "17%", padding: "4px 6px", textAlign: "center" }}>{t("Status", { defaultValue: "Status" })}</th>
+                            <th style={{ width: "17%", padding: "4px 6px", textAlign: "center" }}>{t("Submitted", { defaultValue: "Submitted" })}</th>
+                            <th style={{ width: "18%", padding: "4px 6px", textAlign: "center" }}>{t("Approved", { defaultValue: "Approved" })}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -766,10 +771,10 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                             return (
                               <tr key={i} style={{ borderBottom: "1px solid var(--border-light)", background: i % 2 ? "var(--bg-hover)" : "var(--bg-card)" }}>
                                 <td data-label="#" style={{ padding: "4px 6px", textAlign: "center", color: "var(--text-secondary)" }}>{i + 1}</td>
-                                <td data-label="Name" style={{ padding: "4px 6px", fontWeight: 600, color: "var(--text-heading)" }}>{(d.title || "-").substring(0, 24)}</td>
-                                <td data-label="Status" style={{ padding: "4px 6px", textAlign: "center", fontWeight: 600, color: ss.text }}>&#9679; {formatStatus(d.status)}</td>
-                                <td data-label="Submitted" style={{ padding: "4px 6px", textAlign: "center", color: "var(--text-secondary)" }}>{d.submitted_at ? formatDateShort(d.submitted_at) : "-"}</td>
-                                <td data-label="Approved" style={{ padding: "4px 6px", textAlign: "center", color: "var(--text-secondary)" }}>{d.approved_at ? formatDateShort(d.approved_at) : "-"}</td>
+                                <td data-label={t("Name", { defaultValue: "Name" })} style={{ padding: "4px 6px", fontWeight: 600, color: "var(--text-heading)" }}>{(d.title || "-").substring(0, 24)}</td>
+                                <td data-label={t("Status", { defaultValue: "Status" })} style={{ padding: "4px 6px", textAlign: "center", fontWeight: 600, color: ss.text }}>&#9679; {t(formatStatus(d.status), { defaultValue: formatStatus(d.status) })}</td>
+                                <td data-label={t("Submitted", { defaultValue: "Submitted" })} style={{ padding: "4px 6px", textAlign: "center", color: "var(--text-secondary)" }}>{d.submitted_at ? formatDateShort(d.submitted_at) : "-"}</td>
+                                <td data-label={t("Approved", { defaultValue: "Approved" })} style={{ padding: "4px 6px", textAlign: "center", color: "var(--text-secondary)" }}>{d.approved_at ? formatDateShort(d.approved_at) : "-"}</td>
                               </tr>
                             );
                           })}
@@ -782,7 +787,7 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
 
               {/* ═══ MANAGER REMARKS ═══ */}
               <div className="erm-remarks">
-                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>MANAGER REMARKS</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>{t("MANAGER REMARKS", { defaultValue: "MANAGER REMARKS" })}</div>
                 <div style={{ display: "flex", gap: 16 }}>
                   <div style={{ flex: 1 }}>
                     {[1, 2, 3, 4].map(i => (
@@ -790,9 +795,9 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                     ))}
                   </div>
                   <div style={{ width: 120, textAlign: "center" }}>
-                    <div style={{ fontSize: 9, color: "var(--text-secondary)", marginBottom: 4 }}>Manager Signature</div>
+                    <div style={{ fontSize: 9, color: "var(--text-secondary)", marginBottom: 4 }}>{t("Manager Signature", { defaultValue: "Manager Signature" })}</div>
                     <div style={{ borderBottom: "1px solid var(--text-heading)", height: 20, marginBottom: 8 }}></div>
-                    <div style={{ fontSize: 9, color: "var(--text-secondary)", marginBottom: 4 }}>Date</div>
+                    <div style={{ fontSize: 9, color: "var(--text-secondary)", marginBottom: 4 }}>{t("Date", { defaultValue: "Date" })}</div>
                     <div style={{ borderBottom: "1px solid var(--text-heading)", height: 20 }}></div>
                   </div>
                 </div>
@@ -807,18 +812,18 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                   <span style={{ fontWeight: 600, color: "var(--text-secondary)" }}>Techxaro</span>
                   <span>PMS Portal</span>
                 </div>
-                <div>Generated Date: {genDate} | Generated Time: {genTime} ({userTz})</div>
-                <div>Timezone: {userTz} | Report Type: {reportLabelTitle} Performance Report | Page 1 of 1</div>
+                <div>{t("Generated Date: {{date}} | Generated Time: {{time}} ({{tz}})", { date: genDate, time: genTime, tz: userTz, defaultValue: `Generated Date: ${genDate} | Generated Time: ${genTime} (${userTz})` })}</div>
+                <div>{t("Timezone: {{tz}} | Report Type: {{label}} Performance Report | Page 1 of 1", { tz: userTz, label: reportLabelTitle, defaultValue: `Timezone: ${userTz} | Report Type: ${reportLabelTitle} Performance Report | Page 1 of 1` })}</div>
               </div>
 
               {/* ═══ ACTIONS ═══ */}
               <div className="erm-actions">
-                <button className="er-cancel-btn" onClick={() => setShowReview(false)}>Back</button>
+                <button className="er-cancel-btn" onClick={() => setShowReview(false)}>{t("Back", { defaultValue: "Back" })}</button>
                 <button className="er-export-btn" onClick={generatePDF} disabled={generating}>
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M8 2v8M4 6l4 4 4-4M2 14h12" />
                   </svg>
-                  {generating ? "Generating..." : "Export PDF"}
+                  {generating ? t("Generating...", { defaultValue: "Generating..." }) : t("Export PDF", { defaultValue: "Export PDF" })}
                 </button>
               </div>
             </div>

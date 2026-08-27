@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { IoSearchOutline, IoFilterOutline } from "react-icons/io5";
 import { Bookmark, Check, Trash2, Plus } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { notify } from "../utils/notify";
@@ -21,6 +22,7 @@ export default function TaskFilterBar({
   onSearchChange,
   module = "tasks",
 }) {
+  const { t } = useTranslation();
   const [users, setUsers] = useState([]);
   const [projects, setProjects] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
@@ -33,14 +35,14 @@ export default function TaskFilterBar({
 
   // Standard non-deletable default views (SRS Section 11)
   const defaultViews = [
-    { id: "all", name: "All", filters: {} },
-    { id: "pending", name: "Pending", filters: { statuses: ["Pending"] } },
-    { id: "in_progress", name: "In Progress", filters: { statuses: ["In Progress"] } },
-    { id: "submitted", name: "Submitted", filters: { statuses: ["Submitted"] } },
-    { id: "approved", name: "Approved", filters: { statuses: ["Approved"] } },
-    { id: "paused", name: "Paused", filters: { statuses: ["Paused"] } },
-    { id: "declined", name: "Declined", filters: { statuses: ["Declined"] } },
-    { id: "abandoned", name: "Abandoned", filters: { statuses: ["Abandoned"] } },
+    { id: "all", name: t("All", { defaultValue: "All" }), filters: {} },
+    { id: "pending", name: t("Pending"), filters: { statuses: ["Pending"] } },
+    { id: "in_progress", name: t("In Progress"), filters: { statuses: ["In Progress"] } },
+    { id: "submitted", name: t("Submitted", { defaultValue: "Submitted" }), filters: { statuses: ["Submitted"] } },
+    { id: "approved", name: t("Approved"), filters: { statuses: ["Approved"] } },
+    { id: "paused", name: t("Paused", { defaultValue: "Paused" }), filters: { statuses: ["Paused"] } },
+    { id: "declined", name: t("Declined", { defaultValue: "Declined" }), filters: { statuses: ["Declined"] } },
+    { id: "abandoned", name: t("Abandoned", { defaultValue: "Abandoned" }), filters: { statuses: ["Abandoned"] } },
   ];
 
   // Fetch users & projects for dropdowns
@@ -105,29 +107,29 @@ export default function TaskFilterBar({
 
   // SRS Section 8 & 9 Statuses Options
   const statusOptions = [
-    { value: "Pending", label: "Pending" },
-    { value: "In Progress", label: "In Progress" },
-    { value: "Submitted", label: "Submitted" },
-    { value: "Approved", label: "Approved" },
-    { value: "Paused", label: "Paused" },
-    { value: "Declined", label: "Declined" },
-    { value: "Abandoned", label: "Abandoned" },
+    { value: "Pending", label: t("Pending") },
+    { value: "In Progress", label: t("In Progress") },
+    { value: "Submitted", label: t("Submitted", { defaultValue: "Submitted" }) },
+    { value: "Approved", label: t("Approved") },
+    { value: "Paused", label: t("Paused", { defaultValue: "Paused" }) },
+    { value: "Declined", label: t("Declined", { defaultValue: "Declined" }) },
+    { value: "Abandoned", label: t("Abandoned", { defaultValue: "Abandoned" }) },
   ];
 
   // SRS Section 5 States Options
   const stateOptions = [
-    { value: "Reopened", label: "Reopened" },
-    { value: "Transferred", label: "Transferred" },
+    { value: "Reopened", label: t("Reopened", { defaultValue: "Reopened" }) },
+    { value: "Transferred", label: t("Transferred", { defaultValue: "Transferred" }) },
   ];
 
   // SRS Section 6 Due State Options
   const dueStateOptions = [
-    { value: "Due Today", label: "Due Today" },
-    { value: "Due This Week", label: "Due This Week" },
-    { value: "Due This Month", label: "Due This Month" },
-    { value: "Overdue", label: "Overdue" },
-    { value: "Upcoming", label: "Upcoming" },
-    { value: "No due date", label: "No due date" },
+    { value: "Due Today", label: t("Due Today", { defaultValue: "Due Today" }) },
+    { value: "Due This Week", label: t("Due This Week", { defaultValue: "Due This Week" }) },
+    { value: "Due This Month", label: t("Due This Month", { defaultValue: "Due This Month" }) },
+    { value: "Overdue", label: t("Overdue") },
+    { value: "Upcoming", label: t("Upcoming", { defaultValue: "Upcoming" }) },
+    { value: "No due date", label: t("No due date", { defaultValue: "No due date" }) },
   ];
 
   const toArray = (val) => {
@@ -170,7 +172,7 @@ export default function TaskFilterBar({
   const handleSaveCurrentView = async (e) => {
     e.preventDefault();
     if (!newViewName.trim()) {
-      notify?.error ? notify.error("Please enter a name for the view.") : alert("Please enter a name for the view.");
+      notify?.error ? notify.error(t("Please enter a name for the view.", { defaultValue: "Please enter a name for the view." })) : alert("Please enter a name for the view.");
       return;
     }
 
@@ -204,7 +206,7 @@ export default function TaskFilterBar({
 
       const data = await res.json();
       if (res.ok && data?.success) {
-        notify?.success ? notify.success("Saved view created successfully!") : null;
+        notify?.success ? notify.success(t("Saved view created successfully!", { defaultValue: "Saved view created successfully!" })) : null;
         setNewViewName("");
         setShowSaveModal(false);
         fetchSavedViews();
@@ -215,7 +217,7 @@ export default function TaskFilterBar({
         notify?.error ? notify.error(data?.message || "Failed to save view.") : alert(data?.message || "Failed to save view.");
       }
     } catch (err) {
-      notify?.error ? notify.error("Error saving view.") : console.error(err);
+      notify?.error ? notify.error(t("Error saving view.", { defaultValue: "Error saving view." })) : console.error(err);
     } finally {
       setSavingView(false);
     }
@@ -237,7 +239,7 @@ export default function TaskFilterBar({
       });
 
       if (res.ok) {
-        notify?.success ? notify.success("Saved view deleted.") : null;
+        notify?.success ? notify.success(t("Saved view deleted.", { defaultValue: "Saved view deleted." })) : null;
         fetchSavedViews();
         if (activeViewId === `custom-${viewId}`) {
           setActiveViewId("all");
@@ -252,7 +254,7 @@ export default function TaskFilterBar({
   const currentActiveViewName =
     defaultViews.find((v) => v.id === activeViewId)?.name ||
     savedViews.find((v) => `custom-${v.id}` === activeViewId)?.name ||
-    "Saved Views";
+    t("Saved Views", { defaultValue: "Saved Views" });
 
   return (
     <div
@@ -297,7 +299,7 @@ export default function TaskFilterBar({
             />
             <input
               type="text"
-              placeholder="Search tasks..."
+              placeholder={t("Search tasks...")}
               value={search || ""}
               onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
               style={{
@@ -335,10 +337,10 @@ export default function TaskFilterBar({
                 cursor: "pointer",
                 whiteSpace: "nowrap",
               }}
-              title="Select or manage saved views"
+              title={t("Select or manage saved views", { defaultValue: "Select or manage saved views" })}
             >
               <Bookmark size={15} style={{ color: "#4f46e5" }} />
-              <span>View: <strong>{currentActiveViewName}</strong></span>
+              <span>{t("View", { defaultValue: "View" })}: <strong>{currentActiveViewName}</strong></span>
             </button>
 
             {/* Views Dropdown Menu */}
@@ -359,7 +361,7 @@ export default function TaskFilterBar({
               >
                 {/* Standard Views */}
                 <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "#64748b", padding: "4px 8px" }}>
-                  Standard Views
+                  {t("Standard Views", { defaultValue: "Standard Views" })}
                 </div>
                 <div style={{ maxHeight: "150px", overflowY: "auto", marginBottom: "6px" }}>
                   {defaultViews.map((dv) => {
@@ -391,11 +393,11 @@ export default function TaskFilterBar({
                 {/* Custom Saved Views */}
                 <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: "6px" }}>
                   <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "#64748b", padding: "4px 8px" }}>
-                    My Custom Views
+                    {t("My Custom Views", { defaultValue: "My Custom Views" })}
                   </div>
                   {savedViews.length === 0 ? (
                     <div style={{ padding: "6px 8px", fontSize: "11px", color: "#94a3b8", fontStyle: "italic" }}>
-                      No custom views yet.
+                      {t("No custom views yet.", { defaultValue: "No custom views yet." })}
                     </div>
                   ) : (
                     <div style={{ maxHeight: "140px", overflowY: "auto" }}>
@@ -435,7 +437,7 @@ export default function TaskFilterBar({
                                   display: "inline-flex",
                                   alignItems: "center",
                                 }}
-                                title="Delete view"
+                                title={t("Delete view", { defaultValue: "Delete view" })}
                               >
                                 <Trash2 size={12} />
                               </button>
@@ -472,7 +474,7 @@ export default function TaskFilterBar({
                     }}
                   >
                     <Plus size={14} />
-                    <span>Save Current Filters as View</span>
+                    <span>{t("Save Current Filters as View", { defaultValue: "Save Current Filters as View" })}</span>
                   </button>
                 </div>
               </div>
@@ -502,7 +504,7 @@ export default function TaskFilterBar({
             }}
           >
             <IoFilterOutline size={16} />
-            <span>Filters</span>
+            <span>{t("Filters", { defaultValue: "Filters" })}</span>
             {isActive && (
               <span
                 style={{
@@ -535,7 +537,7 @@ export default function TaskFilterBar({
                 cursor: "pointer",
               }}
             >
-              Clear Filters
+              {t("Clear Filters")}
             </button>
           )}
         </div>
@@ -560,7 +562,7 @@ export default function TaskFilterBar({
           {/* 1. Status Multi-Select Filter (Pending, In Progress, Submitted, Approved, Paused, Declined, Abandoned) */}
           <div style={{ flex: "1 1 180px", minWidth: 160 }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
-              Status
+              {t("Status")}
             </label>
             <MultiSelectDropdown
               size="sm"
@@ -572,15 +574,15 @@ export default function TaskFilterBar({
                 }
               }}
               options={statusOptions}
-              placeholder="All Statuses"
-              searchPlaceholder="Search status..."
+              placeholder={t("All Statuses", { defaultValue: "All Statuses" })}
+              searchPlaceholder={t("Search status...", { defaultValue: "Search status..." })}
             />
           </div>
 
           {/* 2. State / Activity Multi-Select Filter (Reopened, Transferred) */}
           <div style={{ flex: "1 1 150px", minWidth: 140 }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
-              Activity / States
+              {t("Activity / States", { defaultValue: "Activity / States" })}
             </label>
             <MultiSelectDropdown
               size="sm"
@@ -592,15 +594,15 @@ export default function TaskFilterBar({
                 }
               }}
               options={stateOptions}
-              placeholder="All States"
-              searchPlaceholder="Search state..."
+              placeholder={t("All States", { defaultValue: "All States" })}
+              searchPlaceholder={t("Search state...", { defaultValue: "Search state..." })}
             />
           </div>
 
           {/* 3. Due State Multi-Select Filter (Due Today, Due This Week, Overdue, etc.) */}
           <div style={{ flex: "1 1 160px", minWidth: 150 }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
-              Due State
+              {t("Due State", { defaultValue: "Due State" })}
             </label>
             <MultiSelectDropdown
               size="sm"
@@ -612,45 +614,45 @@ export default function TaskFilterBar({
                 }
               }}
               options={dueStateOptions}
-              placeholder="All Due Dates"
-              searchPlaceholder="Search due state..."
+              placeholder={t("All Due Dates", { defaultValue: "All Due Dates" })}
+              searchPlaceholder={t("Search due state...", { defaultValue: "Search due state..." })}
             />
           </div>
 
           {/* 4. Person (Assignee) Multi-Select Filter */}
           <div style={{ flex: "1 1 160px", minWidth: 150 }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
-              Person (Assignee)
+              {t("Person (Assignee)", { defaultValue: "Person (Assignee)" })}
             </label>
             <MultiSelectDropdown
               size="sm"
               value={toArray(filters?.user_id || filters?.assigned_to)}
               onChange={(val) => onFilterChange && onFilterChange("user_id", val)}
               options={userOptions}
-              placeholder="All Assignees"
-              searchPlaceholder="Search assignees..."
+              placeholder={t("All Assignees", { defaultValue: "All Assignees" })}
+              searchPlaceholder={t("Search assignees...", { defaultValue: "Search assignees..." })}
             />
           </div>
 
           {/* 5. Project Multi-Select Filter */}
           <div style={{ flex: "1 1 160px", minWidth: 150 }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
-              Project
+              {t("Project", { defaultValue: "Project" })}
             </label>
             <MultiSelectDropdown
               size="sm"
               value={toArray(filters?.project_id)}
               onChange={(val) => onFilterChange && onFilterChange("project_id", val)}
               options={projectOptions}
-              placeholder="All Projects"
-              searchPlaceholder="Search projects..."
+              placeholder={t("All Projects")}
+              searchPlaceholder={t("Search projects...")}
             />
           </div>
 
           {/* 6. Start Date */}
           <div style={{ flex: "1 1 120px", minWidth: 110 }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
-              Start Date
+              {t("Start Date")}
             </label>
             <input
               type="date"
@@ -674,7 +676,7 @@ export default function TaskFilterBar({
           {/* 7. End Date */}
           <div style={{ flex: "1 1 120px", minWidth: 110 }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
-              End Date
+              {t("End Date")}
             </label>
             <input
               type="date"
@@ -728,16 +730,16 @@ export default function TaskFilterBar({
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
               <Bookmark size={20} color="#4f46e5" />
               <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#1e293b" }}>
-                Save Current View
+                {t("Save Current View", { defaultValue: "Save Current View" })}
               </h3>
             </div>
             <p style={{ margin: "0 0 16px", fontSize: "13px", color: "#64748b" }}>
-              Save your active filters for quick access anytime.
+              {t("Save your active filters for quick access anytime.", { defaultValue: "Save your active filters for quick access anytime." })}
             </p>
             <form onSubmit={handleSaveCurrentView}>
               <input
                 type="text"
-                placeholder="e.g. My Urgent Overdue Tasks"
+                placeholder={t("e.g. My Urgent Overdue Tasks", { defaultValue: "e.g. My Urgent Overdue Tasks" })}
                 value={newViewName}
                 onChange={(e) => setNewViewName(e.target.value)}
                 autoFocus
@@ -768,7 +770,7 @@ export default function TaskFilterBar({
                     cursor: "pointer",
                   }}
                 >
-                  Cancel
+                  {t("Cancel")}
                 </button>
                 <button
                   type="submit"
@@ -785,7 +787,7 @@ export default function TaskFilterBar({
                     opacity: savingView ? 0.7 : 1,
                   }}
                 >
-                  {savingView ? "Saving..." : "Save View"}
+                  {savingView ? t("Saving...") : t("Save View", { defaultValue: "Save View" })}
                 </button>
               </div>
             </form>

@@ -5,6 +5,7 @@
  * Automatically disabled during loading to prevent double submissions.
  * Accepts all standard button props (className, style, type, etc.).
  */
+import { useTranslation } from "react-i18next";
 import "./LoadingButton.css";
 
 function LoadingButton({
@@ -16,6 +17,7 @@ function LoadingButton({
   onClick,
   ...rest
 }) {
+  const { t } = useTranslation();
   const isDisabled = loading || disabled;
 
   return (
@@ -33,7 +35,7 @@ function LoadingButton({
           </svg>
         </span>
       )}
-      <span className="lb-text">{loading ? "Processing..." : children}</span>
+      <span className="lb-text">{loading ? t("Processing...", { defaultValue: "Processing..." }) : children}</span>
     </button>
   );
 }

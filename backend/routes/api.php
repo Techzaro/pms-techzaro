@@ -77,7 +77,14 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Get current authenticated user
     Route::get('/user', function (Request $request) {
-        return $request->user();
+        $user = $request->user();
+        if ($user) {
+            $user->language = $user->language ?? 'English';
+            $user->timezone = $user->timezone ?? 'UTC';
+            $user->date_format = $user->date_format ?? 'DD/MM/YYYY';
+            $user->time_format = $user->time_format ?? '12-hour';
+        }
+        return response()->json($user);
     });
 
     // View own profile

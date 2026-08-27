@@ -12,6 +12,7 @@
  */
 import { useState, useEffect } from "react";
 import { useSearchParams, Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { MdVisibility, MdVisibilityOff } from "react-icons/md";
 import API_URL from "../config/api";
 import { saveSession, clearAllSessions, authToken, setTenantSlug, getTenantSlug } from "../utils/auth";
@@ -28,6 +29,7 @@ import "./Login.css";
  * and role-based redirection.
  */
 function Login() {
+  const { t } = useTranslation();
   const notify = useNotification();
 
   const [searchParams, setSearchParams] = useSearchParams();
@@ -67,11 +69,11 @@ function Login() {
     const errors = { email: "", password: "", form: "" };
 
     if (!email.trim()) {
-      errors.email = "Please enter your email address.";
+      errors.email = t("Please enter your email address.", { defaultValue: "Please enter your email address." });
     }
 
     if (!password.trim()) {
-      errors.password = "Please enter your password.";
+      errors.password = t("Please enter your password.", { defaultValue: "Please enter your password." });
     }
 
     if (errors.email || errors.password) {
@@ -102,23 +104,23 @@ function Login() {
       try {
         data = JSON.parse(text);
       } catch {
-        throw new Error(text || "Unable to login");
+        throw new Error(text || t("Unable to login", { defaultValue: "Unable to login" }));
       }
 
       if (!res.ok) {
         let msg = "";
         if (res.status === 429) {
-          msg = data.message || "Too many failed login attempts. Please try again in 15 minutes.";
+          msg = data.message || t("Too many failed login attempts. Please try again in 15 minutes.", { defaultValue: "Too many failed login attempts. Please try again in 15 minutes." });
         } else if (res.status === 401) {
-          msg = data.message || "Incorrect email or password. Please try again.";
+          msg = data.message || t("Incorrect email or password. Please try again.", { defaultValue: "Incorrect email or password. Please try again." });
         } else if (res.status === 403) {
-          msg = data.message || "Login using personal email addresses is not allowed";
+          msg = data.message || t("Login using personal email addresses is not allowed", { defaultValue: "Login using personal email addresses is not allowed" });
         } else if (res.status === 422) {
-          msg = data.message || "Please enter valid email and password.";
+          msg = data.message || t("Please enter valid email and password.", { defaultValue: "Please enter valid email and password." });
         } else if (res.status === 404) {
-          msg = data.message || "Organization does not exist. Please contact administration.";
+          msg = data.message || t("Organization does not exist. Please contact administration.", { defaultValue: "Organization does not exist. Please contact administration." });
         } else {
-          msg = data.message || "Something went wrong. Please try again.";
+          msg = data.message || t("Something went wrong. Please try again.", { defaultValue: "Something went wrong. Please try again." });
         }
         setFieldErrors({ email: "", password: "", form: msg });
         return;
@@ -138,7 +140,7 @@ function Login() {
           redirectToDashboard(data.role);
         }
       } else {
-        setFieldErrors({ email: "", password: "", form: data.message || "Incorrect email or password. Please try again." });
+        setFieldErrors({ email: "", password: "", form: data.message || t("Incorrect email or password. Please try again.", { defaultValue: "Incorrect email or password. Please try again." }) });
       }
     });
   };
@@ -174,17 +176,17 @@ function Login() {
    */
   const handleFirstTimePasswordChange = async () => {
     if (!newPassword.trim()) {
-      notify.error("Please enter a new password.");
+      notify.error(t("Please enter a new password.", { defaultValue: "Please enter a new password." }));
       return;
     }
 
     if (!isPasswordValid(newPassword)) {
-      notify.error("Password does not meet all requirements.");
+      notify.error(t("Password does not meet all requirements.", { defaultValue: "Password does not meet all requirements." }));
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      notify.error("Password confirmation does not match");
+      notify.error(t("Password confirmation does not match", { defaultValue: "Password confirmation does not match" }));
       return;
     }
 
@@ -211,7 +213,7 @@ function Login() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.message || "Failed to change password. Please try again.");
+        throw new Error(data.message || t("Failed to change password. Please try again.", { defaultValue: "Failed to change password. Please try again." }));
       }
 
       // If backend issued a new token, keep the session by saving it; otherwise clear sessions and ask to re-login.
@@ -239,7 +241,7 @@ function Login() {
       }
 
     } catch (error) {
-      notify.error(error.message || "Failed to change password. Please try again.");
+      notify.error(error.message || t("Failed to change password. Please try again.", { defaultValue: "Failed to change password. Please try again." }));
     } finally {
       setChangingPassword(false);
     }
@@ -250,16 +252,16 @@ function Login() {
       <div className="login-page">
         <div className="login-left">
           <div className="overlay">
-            <h1>TECHXARO ONE</h1>
-            <p>Manage Projects, Teams & Tasks Professionally</p>
+            <h1>{t("TECHXARO ONE", { defaultValue: "TECHXARO ONE" })}</h1>
+            <p>{t("Manage Projects, Teams & Tasks Professionally", { defaultValue: "Manage Projects, Teams & Tasks Professionally" })}</p>
           </div>
         </div>
 
         <div className="login-right">
           <div className="login-box">
-            <h2>Change Password</h2>
+            <h2>{t("Change Password", { defaultValue: "Change Password" })}</h2>
             <p className="subtitle">
-              This is your first login. Please change your password to continue.
+              {t("This is your first login. Please change your password to continue.", { defaultValue: "This is your first login. Please change your password to continue." })}
             </p>
 
             <PasswordInput
@@ -268,8 +270,8 @@ function Login() {
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); document.getElementById("fp-confirm-password")?.focus(); } }}
-              placeholder="Enter New Password"
-              label="New Password"
+              placeholder={t("Enter New Password", { defaultValue: "Enter New Password" })}
+              label={t("New Password", { defaultValue: "New Password" })}
               showStrength={true}
               showRules={true}
             />
@@ -280,8 +282,8 @@ function Login() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleFirstTimePasswordChange(); } }}
-              placeholder="Confirm New Password"
-              label="Confirm New Password"
+              placeholder={t("Confirm New Password", { defaultValue: "Confirm New Password" })}
+              label={t("Confirm New Password", { defaultValue: "Confirm New Password" })}
               showStrength={false}
               showRules={false}
             />
@@ -291,7 +293,7 @@ function Login() {
                 onClick={handleFirstTimePasswordChange}
                 disabled={changingPassword || !newPassword || !confirmPassword}
               >
-                {changingPassword ? "Changing..." : "Change Password & Login"}
+                {changingPassword ? t("Changing...", { defaultValue: "Changing..." }) : t("Change Password & Login", { defaultValue: "Change Password & Login" })}
               </button>
             </div>
           </div>
@@ -304,21 +306,21 @@ function Login() {
     <div className="login-page">
       <div className="login-left">
         <div className="overlay">
-          <h1>TECHXARO ONE</h1>
-          <p>Manage Projects, Teams & Tasks Professionally</p>
+          <h1>{t("TECHXARO ONE", { defaultValue: "TECHXARO ONE" })}</h1>
+          <p>{t("Manage Projects, Teams & Tasks Professionally", { defaultValue: "Manage Projects, Teams & Tasks Professionally" })}</p>
         </div>
       </div>
 
       <div className="login-right">
         <div className="login-box">
-          <h2>Welcome</h2>
-          <p className="subtitle">Login to continue your work</p>
+          <h2>{t("Welcome", { defaultValue: "Welcome" })}</h2>
+          <p className="subtitle">{t("Login to continue your work", { defaultValue: "Login to continue your work" })}</p>
 
           {fieldErrors.form && <span className="field-error-text form-error">{fieldErrors.form}</span>}
 
           <input
             type="email"
-              placeholder="Enter Email"
+            placeholder={t("Enter Email", { defaultValue: "Enter Email" })}
             value={email}
             onChange={(e) => { setEmail(e.target.value); setFieldErrors(prev => ({ ...prev, email: "", form: "" })); }}
             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); document.getElementById("login-password")?.focus(); } }}
@@ -331,7 +333,7 @@ function Login() {
             <input
               id="login-password"
               type={showPassword ? "text" : "password"}
-              placeholder="Enter Password"
+              placeholder={t("Enter Password", { defaultValue: "Enter Password" })}
               value={password}
               onChange={(e) => { setPassword(e.target.value); setFieldErrors(prev => ({ ...prev, password: "", form: "" })); }}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleLogin(); } }}
@@ -347,7 +349,7 @@ function Login() {
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              title={showPassword ? "Hide password" : "Show password"}
+              title={showPassword ? t("Hide password", { defaultValue: "Hide password" }) : t("Show password", { defaultValue: "Show password" })}
               style={{
                 position: "absolute",
                 right: "4px", // Fixed to the right corner
@@ -379,14 +381,14 @@ function Login() {
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
                 />
-                Remember Me
+                {t("Remember Me", { defaultValue: "Remember Me" })}
               </label>
-              <Link to="/forgot-password" className="forgot-password">Forgot Password?</Link>
+              <Link to="/forgot-password" className="forgot-password">{t("Forgot Password?", { defaultValue: "Forgot Password?" })}</Link>
             </div>
 
             <div className="button-area">
               <LoadingButton onClick={handleLogin} loading={submitting}>
-                Login
+                {t("Login", { defaultValue: "Login" })}
               </LoadingButton>
             </div>
           </div>

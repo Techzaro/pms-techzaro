@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Puzzle, Search, Filter } from 'lucide-react';
 import { LoadingState, ErrorState } from './components/LoadingState';
 import { api } from './api/superAdminApi';
@@ -15,6 +16,7 @@ function moduleDisplayName(name, slug) {
 }
 
 export default function ModulesPage() {
+  const { t } = useTranslation();
   const [modules, setModules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -48,15 +50,15 @@ export default function ModulesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold" style={s.textHeading}>Modules</h1>
-        <p className="text-sm mt-1" style={s.textSecondary}>{modules.length} available modules</p>
+        <h1 className="text-2xl font-bold" style={s.textHeading}>{t('Modules', { defaultValue: 'Modules' })}</h1>
+        <p className="text-sm mt-1" style={s.textSecondary}>{t('{{count}} available modules', { count: modules.length, defaultValue: `${modules.length} available modules` })}</p>
       </div>
 
       <div className="rounded-xl" style={s.card}>
         <div className="p-4 flex flex-col sm:flex-row gap-3" style={s.divider}>
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={s.textMuted} />
-            <input type="text" placeholder="Search modules..." value={search} onChange={(e) => setSearch(e.target.value)}
+            <input type="text" placeholder={t("Search modules...", { defaultValue: "Search modules..." })} value={search} onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-9 pr-4 py-2 text-sm rounded-lg focus:ring-2 focus:ring-blue-500" style={s.input} />
           </div>
           <div className="flex items-center gap-2">
@@ -67,7 +69,7 @@ export default function ModulesPage() {
                 style={{
                   background: categoryFilter === cat ? 'var(--color-primary-bg)' : 'transparent',
                   color: categoryFilter === cat ? 'var(--color-primary)' : 'var(--text-muted)',
-                }}>{cat}</button>
+                }}>{t(cat, { defaultValue: cat })}</button>
             ))}
           </div>
         </div>
@@ -83,10 +85,10 @@ export default function ModulesPage() {
                     <Puzzle className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
                   </div>
                   <span className="px-2 py-0.5 text-xs font-medium rounded-full capitalize"
-                    style={{ background: catColor.bg, color: catColor.color }}>{mod.category}</span>
+                    style={{ background: catColor.bg, color: catColor.color }}>{t(mod.category, { defaultValue: mod.category })}</span>
                 </div>
-                <h3 className="text-sm font-semibold mb-1" style={s.textHeading}>{moduleDisplayName(mod.name, mod.slug)}</h3>
-                <p className="text-xs mb-3 line-clamp-2" style={s.textSecondary}>{mod.description || 'No description'}</p>
+                <h3 className="text-sm font-semibold mb-1" style={s.textHeading}>{t(moduleDisplayName(mod.name, mod.slug), { defaultValue: moduleDisplayName(mod.name, mod.slug) })}</h3>
+                <p className="text-xs mb-3 line-clamp-2" style={s.textSecondary}>{t(mod.description, { defaultValue: mod.description || 'No description' })}</p>
                 <div className="flex items-center justify-between">
                   <span className="text-xs" style={s.textMuted}>v{mod.version || '1.0'}</span>
                   <span className="w-2 h-2 rounded-full" style={{ background: mod.is_active ? '#10b981' : 'var(--text-muted)' }} />

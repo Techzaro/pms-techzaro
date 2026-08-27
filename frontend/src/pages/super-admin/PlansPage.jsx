@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { CreditCard, Check, X, Users, FolderKanban, HardDrive, Pencil, Loader2 } from 'lucide-react';
 import { LoadingState, ErrorState } from './components/LoadingState';
 import { api } from './api/superAdminApi';
@@ -10,6 +11,7 @@ function moduleDisplayName(name, slug) {
 }
 
 export default function PlansPage() {
+  const { t } = useTranslation();
   const [plans, setPlans] = useState([]);
   const [allModules, setAllModules] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -49,8 +51,8 @@ export default function PlansPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold" style={s.textHeading}>Plans & Pricing</h1>
-        <p className="text-sm mt-1" style={s.textSecondary}>{plans.length} subscription plans</p>
+        <h1 className="text-2xl font-bold" style={s.textHeading}>{t('Plans & Pricing', { defaultValue: 'Plans & Pricing' })}</h1>
+        <p className="text-sm mt-1" style={s.textSecondary}>{t('{{count}} subscription plans', { count: plans.length, defaultValue: `${plans.length} subscription plans` })}</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -59,35 +61,45 @@ export default function PlansPage() {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <h3 className="text-lg font-semibold" style={s.textHeading}>{plan.name}</h3>
-                {plan.slug === 'trial' && <span className="px-2 py-0.5 text-xs font-medium rounded-full" style={{ background: 'rgba(147,51,234,0.1)', color: '#9333ea' }}>{plan.trial_duration || 14} {plan.trial_duration_unit || 'days'}</span>}
-                {plan.is_default && <span className="px-2 py-0.5 text-xs font-medium rounded-full" style={s.infoBox}>Default</span>}
-                {!plan.is_active && <span className="px-2 py-0.5 text-xs font-medium rounded-full" style={{ background: 'rgba(220,38,38,0.1)', color: '#dc2626' }}>Inactive</span>}
+                {plan.slug === 'trial' && (
+                  <span className="px-2 py-0.5 text-xs font-medium rounded-full" style={{ background: 'rgba(147,51,234,0.1)', color: '#9333ea' }}>
+                    {plan.trial_duration || 14} {t(plan.trial_duration_unit || 'days', { defaultValue: plan.trial_duration_unit || 'days' })}
+                  </span>
+                )}
+                {plan.is_default && <span className="px-2 py-0.5 text-xs font-medium rounded-full" style={s.infoBox}>{t('Default', { defaultValue: 'Default' })}</span>}
+                {!plan.is_active && <span className="px-2 py-0.5 text-xs font-medium rounded-full" style={{ background: 'rgba(220,38,38,0.1)', color: '#dc2626' }}>{t('Inactive', { defaultValue: 'Inactive' })}</span>}
               </div>
               <button onClick={() => setEditingPlan(plan)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition-colors">
-                <Pencil className="w-3.5 h-3.5" /> Edit
+                <Pencil className="w-3.5 h-3.5" /> {t('Edit', { defaultValue: 'Edit' })}
               </button>
             </div>
             <div className="mb-6">
               {plan.price_monthly == 0 && plan.price_yearly == 0 ? (
                 <div className="flex items-baseline gap-1">
-                  <span className="text-3xl font-bold text-emerald-600">Free</span>
-                  <span className="text-sm" style={s.textSecondary}>{plan.trial_duration || 14} {plan.trial_duration_unit || 'days'} trial</span>
+                  <span className="text-3xl font-bold text-emerald-600">{t('Free', { defaultValue: 'Free' })}</span>
+                  <span className="text-sm" style={s.textSecondary}>
+                    {t('{{duration}} {{unit}} trial', {
+                      duration: plan.trial_duration || 14,
+                      unit: t(plan.trial_duration_unit || 'days', { defaultValue: plan.trial_duration_unit || 'days' }),
+                      defaultValue: `${plan.trial_duration || 14} ${plan.trial_duration_unit || 'days'} trial`
+                    })}
+                  </span>
                 </div>
               ) : (
                 <>
                   <div className="flex items-baseline gap-1">
                     <span className="text-3xl font-bold" style={s.textHeading}>${plan.price_monthly}</span>
-                    <span className="text-sm" style={s.textSecondary}>/month</span>
+                    <span className="text-sm" style={s.textSecondary}>/{t('month', { defaultValue: 'month' })}</span>
                   </div>
-                  <p className="text-sm mt-1" style={s.textSecondary}>${plan.price_yearly}/year</p>
+                  <p className="text-sm mt-1" style={s.textSecondary}>${plan.price_yearly}/{t('year', { defaultValue: 'year' })}</p>
                 </>
               )}
             </div>
             <div className="space-y-3 mb-6">
               {[
-                { icon: Users, text: `${plan.max_users === 9999 ? 'Unlimited' : plan.max_users} users` },
-                { icon: FolderKanban, text: `${plan.max_projects === 9999 ? 'Unlimited' : plan.max_projects} projects` },
-                { icon: HardDrive, text: `${plan.max_storage_gb} GB storage` },
+                { icon: Users, text: `${plan.max_users === 9999 ? t('Unlimited', { defaultValue: 'Unlimited' }) : plan.max_users} ${t('users', { defaultValue: 'users' })}` },
+                { icon: FolderKanban, text: `${plan.max_projects === 9999 ? t('Unlimited', { defaultValue: 'Unlimited' }) : plan.max_projects} ${t('projects', { defaultValue: 'projects' })}` },
+                { icon: HardDrive, text: `${plan.max_storage_gb} ${t('GB storage', { defaultValue: 'GB storage' })}` },
               ].map((item, i) => (
                 <div key={i} className="flex items-center gap-2 text-sm" style={s.textSecondary}>
                   <item.icon className="w-4 h-4" /> {item.text}
@@ -95,12 +107,12 @@ export default function PlansPage() {
               ))}
             </div>
             <div className="pt-4" style={s.divider}>
-              <p className="text-xs font-medium uppercase tracking-wider mb-3" style={s.textMuted}>Modules</p>
+              <p className="text-xs font-medium uppercase tracking-wider mb-3" style={s.textMuted}>{t('Modules', { defaultValue: 'Modules' })}</p>
               <div className="space-y-2">
                 {(plan.modules || []).map((mod) => (
                   <div key={mod.slug || mod.id} className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-emerald-500" />
-                    <span className="text-sm" style={s.text}>{moduleDisplayName(mod.name, mod.slug)}</span>
+                    <span className="text-sm" style={s.text}>{t(moduleDisplayName(mod.name, mod.slug), { defaultValue: moduleDisplayName(mod.name, mod.slug) })}</span>
                   </div>
                 ))}
               </div>
@@ -115,6 +127,7 @@ export default function PlansPage() {
 }
 
 function EditPlanModal({ plan, allModules, saving, onSave, onClose }) {
+  const { t } = useTranslation();
   const isTrial = plan.slug === 'trial';
 
   const [name, setName] = useState(plan.name);
@@ -154,7 +167,7 @@ function EditPlanModal({ plan, allModules, saving, onSave, onClose }) {
 
   const { isDirty, handleClose, markSaved, ConfirmDialog } = useUnsavedChanges(
     initialValues, currentValues, onClose,
-    { title: 'Close without saving?', message: 'You have unsaved changes. Are you sure you want to close? All changes will be lost.' }
+    { title: t('Close without saving?', { defaultValue: 'Close without saving?' }), message: t('You have unsaved changes. Are you sure you want to close? All changes will be lost.', { defaultValue: 'You have unsaved changes. Are you sure you want to close? All changes will be lost.' }) }
   );
 
   const toggleModule = (moduleId) => setSelectedModules(prev => prev.includes(moduleId) ? prev.filter(id => id !== moduleId) : [...prev, moduleId]);
@@ -190,11 +203,11 @@ function EditPlanModal({ plan, allModules, saving, onSave, onClose }) {
       <div className="relative rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" style={{ ...s.card, background: 'var(--bg-card)', zIndex: 10000 }}
         onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-5" style={s.divider}>
-          <h2 className="text-lg font-semibold" style={s.textHeading}>Edit Plan: {plan.name}</h2>
+          <h2 className="text-lg font-semibold" style={s.textHeading}>{t('Edit Plan: {{name}}', { name: plan.name, defaultValue: `Edit Plan: ${plan.name}` })}</h2>
           <div className="flex items-center gap-2">
             <button type="submit" form="editPlanForm" disabled={saving}
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50">
-              {saving && <Loader2 className="w-4 h-4 animate-spin" />} {saving ? 'Saving...' : 'Save Changes'}
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />} {saving ? t('Saving...', { defaultValue: 'Saving...' }) : t('Save Changes', { defaultValue: 'Save Changes' })}
             </button>
             <button onClick={handleClose} className="p-1.5 rounded-lg transition-colors"
               style={{ color: 'var(--text-muted)' }}
@@ -208,22 +221,22 @@ function EditPlanModal({ plan, allModules, saving, onSave, onClose }) {
         <form id="editPlanForm" onSubmit={handleSubmit} className="p-5 space-y-5">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={s.textMuted}>Plan Name</label>
+              <label className="block text-xs font-medium mb-1.5" style={s.textMuted}>{t('Plan Name', { defaultValue: 'Plan Name' })}</label>
               <input type="text" value={name} onChange={e => setName(e.target.value)} required style={inputStyle} />
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={s.textMuted}>Description</label>
+              <label className="block text-xs font-medium mb-1.5" style={s.textMuted}>{t('Description', { defaultValue: 'Description' })}</label>
               <input type="text" value={description} onChange={e => setDescription(e.target.value)} style={inputStyle} />
             </div>
           </div>
           {!isTrial && (
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium mb-1.5" style={s.textMuted}>Monthly Price ($)</label>
+                <label className="block text-xs font-medium mb-1.5" style={s.textMuted}>{t('Monthly Price ($)', { defaultValue: 'Monthly Price ($)' })}</label>
                 <input type="number" step="0.01" min="0" value={priceMonthly} onChange={e => setPriceMonthly(e.target.value)} required style={inputStyle} />
               </div>
               <div>
-                <label className="block text-xs font-medium mb-1.5" style={s.textMuted}>Yearly Price ($)</label>
+                <label className="block text-xs font-medium mb-1.5" style={s.textMuted}>{t('Yearly Price ($)', { defaultValue: 'Yearly Price ($)' })}</label>
                 <input type="number" step="0.01" min="0" value={priceYearly} onChange={e => setPriceYearly(e.target.value)} required style={inputStyle} />
               </div>
             </div>
@@ -231,45 +244,45 @@ function EditPlanModal({ plan, allModules, saving, onSave, onClose }) {
           {isTrial && (
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium mb-1.5" style={s.textMuted}>Trial Duration</label>
+                <label className="block text-xs font-medium mb-1.5" style={s.textMuted}>{t('Trial Duration', { defaultValue: 'Trial Duration' })}</label>
                 <input type="number" min="1" value={trialDuration} onChange={e => setTrialDuration(e.target.value)} required style={inputStyle} />
               </div>
               <div>
-                <label className="block text-xs font-medium mb-1.5" style={s.textMuted}>Duration Unit</label>
+                <label className="block text-xs font-medium mb-1.5" style={s.textMuted}>{t('Duration Unit', { defaultValue: 'Duration Unit' })}</label>
                 <select value={trialDurationUnit} onChange={e => setTrialDurationUnit(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
-                  <option value="minutes">Minutes</option>
-                  <option value="hours">Hours</option>
-                  <option value="days">Days</option>
+                  <option value="minutes">{t('Minutes', { defaultValue: 'Minutes' })}</option>
+                  <option value="hours">{t('Hours', { defaultValue: 'Hours' })}</option>
+                  <option value="days">{t('Days', { defaultValue: 'Days' })}</option>
                 </select>
               </div>
             </div>
           )}
           <div className="grid grid-cols-3 gap-4">
             {[
-              { label: 'Max Users', value: maxUsers, set: setMaxUsers, ph: 'Unlimited' },
-              { label: 'Max Projects', value: maxProjects, set: setMaxProjects, ph: 'Unlimited' },
-              { label: 'Storage (GB)', value: maxStorage, set: setMaxStorage, required: true },
+              { labelKey: 'Max Users', defaultLabel: 'Max Users', value: maxUsers, set: setMaxUsers, ph: t('Unlimited', { defaultValue: 'Unlimited' }) },
+              { labelKey: 'Max Projects', defaultLabel: 'Max Projects', value: maxProjects, set: setMaxProjects, ph: t('Unlimited', { defaultValue: 'Unlimited' }) },
+              { labelKey: 'Storage (GB)', defaultLabel: 'Storage (GB)', value: maxStorage, set: setMaxStorage, required: true },
             ].map((f) => (
-              <div key={f.label}>
-                <label className="block text-xs font-medium mb-1.5" style={s.textMuted}>{f.label}</label>
+              <div key={f.labelKey}>
+                <label className="block text-xs font-medium mb-1.5" style={s.textMuted}>{t(f.labelKey, { defaultValue: f.defaultLabel })}</label>
                 <input type="number" min="1" value={f.value} onChange={e => f.set(e.target.value)} placeholder={f.ph} required={f.required} style={inputStyle} />
-                <p className="text-[11px] mt-1" style={s.textMuted}>Leave empty = unlimited</p>
+                <p className="text-[11px] mt-1" style={s.textMuted}>{t('Leave empty = unlimited', { defaultValue: 'Leave empty = unlimited' })}</p>
               </div>
             ))}
           </div>
           <div className="flex gap-4">
             {[
-              { label: 'Active', checked: isActive, set: setIsActive },
-              { label: 'Default Plan', checked: isDefault, set: setIsDefault },
+              { labelKey: 'Active', defaultLabel: 'Active', checked: isActive, set: setIsActive },
+              { labelKey: 'Default Plan', defaultLabel: 'Default Plan', checked: isDefault, set: setIsDefault },
             ].map((c) => (
-              <label key={c.label} className="flex items-center gap-2 cursor-pointer">
+              <label key={c.labelKey} className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={c.checked} onChange={e => c.set(e.target.checked)} className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                <span className="text-sm" style={s.text}>{c.label}</span>
+                <span className="text-sm" style={s.text}>{t(c.labelKey, { defaultValue: c.defaultLabel })}</span>
               </label>
             ))}
           </div>
           <div>
-            <p className="text-xs font-medium uppercase tracking-wider mb-3" style={s.textMuted}>Modules</p>
+            <p className="text-xs font-medium uppercase tracking-wider mb-3" style={s.textMuted}>{t('Modules', { defaultValue: 'Modules' })}</p>
             <div className="grid grid-cols-2 gap-2">
               {allModules.map((mod) => (
                 <label key={mod.id} className="flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors"
@@ -279,7 +292,7 @@ function EditPlanModal({ plan, allModules, saving, onSave, onClose }) {
                   }}>
                   <input type="checkbox" checked={selectedModules.includes(mod.id)} onChange={() => toggleModule(mod.id)}
                     className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                  <span className="text-sm" style={s.text}>{mod.name}</span>
+                  <span className="text-sm" style={s.text}>{t(mod.name, { defaultValue: mod.name })}</span>
                 </label>
               ))}
             </div>

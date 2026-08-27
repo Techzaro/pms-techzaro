@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { authToken, getUser } from "../utils/auth";
 import API_URL from "../config/api";
 import { useEscapeKey } from "../hooks/useEscapeKey";
@@ -76,6 +77,7 @@ const COLOR_MAP = {
  * @param {Object|null} [editEvent=null] - Event object to edit (null for creation mode)
  */
 function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraftId = null }) {
+  const { t } = useTranslation();
   const draftSaveRef = useRef(null);
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useDraftGuard(onClose, {
     draftSaveHandler: () => draftSaveRef.current?.(),
@@ -163,7 +165,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
       };
       const payload = {
         module_type: "event",
-        title: formData.title || "Untitled Event Draft",
+        title: formData.title || t("Untitled Event Draft", { defaultValue: "Untitled Event Draft" }),
         draft_data: draftData,
       };
       if (draftId) {
@@ -174,7 +176,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
       }
       setIsDirty(false);
     } catch (err) {
-      notify.error(err.message || "Save draft failed");
+      notify.error(err.message || t("Save draft failed", { defaultValue: "Save draft failed" }));
     }
   };
 
@@ -365,14 +367,17 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
    */
   const handleCreate = async () => {
     if (!formData.title.trim()) {
-      notify.error("Event title is required");
+      notify.error(t("Event title is required", { defaultValue: "Event title is required" }));
       return;
     }
 
     // Check organization policy enforcement for working hours (SRS Sec 11, 15, 16)
     if (enforceOrgHours && participantWarnings.length > 0) {
       notify.error(
-        `Cannot schedule event: Organization strictly enforces working hours policy, and ${participantWarnings.length} participant(s) are outside their scheduled hours.`
+        t("Cannot schedule event: Organization strictly enforces working hours policy, and {{count}} participant(s) are outside their scheduled hours.", {
+          defaultValue: `Cannot schedule event: Organization strictly enforces working hours policy, and ${participantWarnings.length} participant(s) are outside their scheduled hours.`,
+          count: participantWarnings.length,
+        })
       );
       return;
     }
@@ -423,10 +428,10 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
         const data = await res.json();
 
         if (!res.ok) {
-          throw new Error(data.message || "Failed to save event");
+          throw new Error(data.message || t("Failed to save event", { defaultValue: "Failed to save event" }));
         }
 
-        showSuccessMessage("Event", isEditing ? "updated" : "created");
+        showSuccessMessage(t("Event", { defaultValue: "Event" }), isEditing ? t("updated", { defaultValue: "updated" }) : t("created", { defaultValue: "created" }));
         setStep(1);
         if (isEditing) {
           publish('event:updated', data.event || data);
@@ -439,7 +444,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
         onEventCreated?.(data.event);
         onClose();
       } catch (err) {
-        notify.error(err.message || "Something went wrong");
+        notify.error(err.message || t("Something went wrong", { defaultValue: "Something went wrong" }));
       }
     });
   };
@@ -452,12 +457,12 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
 
         <div className="event-header">
           <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
-            <h2 style={{ margin: 0 }}>{isEditing ? "Edit Event" : "Add New Event"}</h2>
+            <h2 style={{ margin: 0 }}>{isEditing ? t("Edit Event", { defaultValue: "Edit Event" }) : t("Add New Event", { defaultValue: "Add New Event" })}</h2>
             <AutoSaveIndicator isSaving={isSaving} lastSaved={lastSaved} />
           </div>
           <div className="event-header-actions" style={{ display: "flex", gap: 8 }}>
             <button className="event-save-draft-btn" onClick={handleSaveDraft} type="button">
-              Save Draft
+              {t("Save Draft", { defaultValue: "Save Draft" })}
             </button>
             <button className="event-close" onClick={handleClose}>×</button>
           </div>
@@ -465,20 +470,20 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
 
         {step === 1 && (
           <div className="event-step">
-            <label className="event-label required">Event Title</label>
+            <label className="event-label required">{t("Event Title", { defaultValue: "Event Title" })}</label>
             <input
               type="text"
               className="event-input"
-              placeholder="Enter name.."
+              placeholder={t("Enter name..", { defaultValue: "Enter name.." })}
               value={formData.title}
               onChange={(e) => handleChange("title", e.target.value)}
             />
 
-            <label className="event-label">Description</label>
+            <label className="event-label">{t("Description", { defaultValue: "Description" })}</label>
             <RichTextEditor
               value={formData.description}
               onChange={(val) => handleChange("description", val)}
-              placeholder="Add event description..."
+              placeholder={t("Add event description...", { defaultValue: "Add event description..." })}
             />
 
             <div className="event-dots">
@@ -487,15 +492,15 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
             </div>
 
             <div className="event-footer">
-              <button className="btn-cancel" onClick={handleClose}>Cancel</button>
-              <button className="btn-primary" onClick={handleNext}>Next</button>
+              <button className="btn-cancel" onClick={handleClose}>{t("Cancel")}</button>
+              <button className="btn-primary" onClick={handleNext}>{t("Next", { defaultValue: "Next" })}</button>
             </div>
           </div>
         )}
 
         {step === 2 && (
           <div className="event-step">
-            <label className="event-label required">Event Date</label>
+            <label className="event-label required">{t("Event Date", { defaultValue: "Event Date" })}</label>
 
             <div className="event-datetime-row">
               <input
@@ -524,7 +529,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
                 style={{ width: 16, height: 16, cursor: "pointer" }}
               />
               <label htmlFor="allDay" style={{ fontSize: 14, color: "#374151", cursor: "pointer" }}>
-                All Day Event
+                {t("All Day Event", { defaultValue: "All Day Event" })}
               </label>
             </div>
 
@@ -543,7 +548,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
                 style={{ width: 16, height: 16, cursor: "pointer" }}
               />
               <label htmlFor="hasEndDate" style={{ fontSize: 14, color: "#374151", cursor: "pointer" }}>
-                Add End Date &amp; Time
+                {t("Add End Date & Time", { defaultValue: "Add End Date & Time" })}
               </label>
             </div>
 
@@ -570,7 +575,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
             {/* Event Timezone Selector (SRS Sec 11) */}
             <div style={{ marginBottom: 12 }}>
               <label className="event-label" style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <Globe size={13} style={{ color: "var(--color-primary, #4f46e5)" }} /> Event Timezone (IANA)
+                <Globe size={13} style={{ color: "var(--color-primary, #4f46e5)" }} /> {t("Event Timezone (IANA)", { defaultValue: "Event Timezone (IANA)" })}
               </label>
               <select
                 className="event-input"
@@ -590,13 +595,13 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
               </select>
             </div>
 
-            <label className="event-label">Event Type</label>
+            <label className="event-label">{t("Event Type", { defaultValue: "Event Type" })}</label>
             {formData.eventType === "__custom__" ? (
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
                 <input
                   type="text"
                   className="event-input"
-                  placeholder="Enter custom event type"
+                  placeholder={t("Enter custom event type", { defaultValue: "Enter custom event type" })}
                   value={formData.eventTypeCustom}
                   onChange={(e) => handleChange("eventTypeCustom", e.target.value)}
                   autoFocus
@@ -606,7 +611,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
                   type="button"
                   className="custom-input-revert"
                   onClick={() => handleChange("eventType", "Meeting")}
-                  title="Back to list"
+                  title={t("Back to list", { defaultValue: "Back to list" })}
                   style={{ flexShrink: 0, width: 36, height: 36, border: "1px solid var(--border-color)", borderRadius: 10, background: "var(--bg-hover)", color: "var(--text-secondary)", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
                 >
                   &times;
@@ -621,7 +626,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
               >
                 {eventTypes.map((type) => (
                   <option key={type.label} value={type.value || type.label}>
-                    {type.label}
+                    {t(type.label)}
                   </option>
                 ))}
               </select>
@@ -640,18 +645,18 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
                 style={{ width: 16, height: 16, cursor: "pointer" }}
               />
               <label htmlFor="assignAll" style={{ fontSize: 14, color: "#374151", cursor: "pointer" }}>
-                Assign To All Users
+                {t("Assign To All Users", { defaultValue: "Assign To All Users" })}
               </label>
             </div>
 
             {!isGlobal && (
               <div style={{ marginTop: 14 }}>
-                <label className="event-label">Assign Users</label>
+                <label className="event-label">{t("Assign Users", { defaultValue: "Assign Users" })}</label>
                 <UserSelectDropdown
                   users={users}
                   selectedIds={assignedUserIds}
                   onChange={(ids) => { setIsDirty(true); setAssignedUserIds(ids); }}
-                  placeholder="Select users to assign"
+                  placeholder={t("Select users to assign", { defaultValue: "Select users to assign" })}
                 />
 
                 {/* Selected Attendees Working Hours & Local Event Time (SRS Sec 13 & 15) */}
@@ -680,10 +685,10 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
                           >
                             <span style={{ fontWeight: 600 }}>{u.name}</span>
                             <span style={{ color: "var(--text-secondary)" }}>
-                              Local: <strong>{comp.localTimeFormatted}</strong> ({uTz})
+                              {t("Local", { defaultValue: "Local" })}: <strong>{comp.localTimeFormatted}</strong> ({uTz})
                             </span>
                             <span style={{ color: comp.isCompliant ? "var(--color-success, #10b981)" : "var(--color-danger, #ef4444)", fontWeight: 600 }}>
-                              {comp.isCompliant ? `✓ ${comp.scheduleText}` : `⚠ Outside Hours (${comp.scheduleText})`}
+                              {comp.isCompliant ? `✓ ${comp.scheduleText}` : `⚠ ${t("Outside Hours", { defaultValue: "Outside Hours" })} (${comp.scheduleText})`}
                             </span>
                           </div>
                         );
@@ -709,19 +714,25 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
                 <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 700, marginBottom: 4 }}>
                   <AlertTriangle size={15} />
                   {enforceOrgHours
-                    ? "Strict Organization Policy: Outside Working Hours"
-                    : "Working Hours Warning (Non-Blocking)"}
+                    ? t("Strict Organization Policy: Outside Working Hours", { defaultValue: "Strict Organization Policy: Outside Working Hours" })
+                    : t("Working Hours Warning (Non-Blocking)", { defaultValue: "Working Hours Warning (Non-Blocking)" })}
                 </div>
                 <ul style={{ margin: 0, paddingLeft: 16, display: "flex", flexDirection: "column", gap: 2 }}>
                   {participantWarnings.map((w, idx) => (
                     <li key={idx}>
-                      <strong>{w.user.name}</strong>'s local time will be <strong>{w.localTime}</strong> ({w.localDay}), outside their working hours of <em>{w.scheduleText}</em>.
+                      {t("{{name}}'s local time will be {{time}} ({{day}}), outside their working hours of {{schedule}}.", {
+                        defaultValue: `${w.user.name}'s local time will be ${w.localTime} (${w.localDay}), outside their working hours of ${w.scheduleText}.`,
+                        name: w.user.name,
+                        time: w.localTime,
+                        day: w.localDay,
+                        schedule: w.scheduleText,
+                      })}
                     </li>
                   ))}
                 </ul>
                 {enforceOrgHours && (
                   <p style={{ margin: "6px 0 0 0", fontSize: 11, fontWeight: 600 }}>
-                    ⛔ Organization policy strictly enforces working hours. Submission blocked.
+                    ⛔ {t("Organization policy strictly enforces working hours. Submission blocked.", { defaultValue: "Organization policy strictly enforces working hours. Submission blocked." })}
                   </p>
                 )}
               </div>
@@ -733,13 +744,13 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
             </div>
 
             <div className="event-footer">
-              <button className="btn-cancel" onClick={handleBack}>Back</button>
+              <button className="btn-cancel" onClick={handleBack}>{t("Back", { defaultValue: "Back" })}</button>
               <LoadingButton
                 className="btn-primary"
                 onClick={handleCreate}
                 loading={submitting}
               >
-                {isEditing ? "Update Event" : "Create Event"}
+                {isEditing ? t("Update Event", { defaultValue: "Update Event" }) : t("Create Event", { defaultValue: "Create Event" })}
               </LoadingButton>
             </div>
           </div>

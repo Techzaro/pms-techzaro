@@ -7,9 +7,10 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { FileText, Download, ExternalLink } from "lucide-react";
 import API_URL from "../config/api";
-import { authToken } from "../utils/auth";
+import { authToken, getUser } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import { formatDateTime } from "../utils/formatDateTime";
@@ -48,6 +49,7 @@ function formatFileSize(bytes) {
  * @param {Function} onSubmitSuccess - Callback after successful resubmission.
  */
 function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
+  const { t } = useTranslation();
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
   useEscapeKey(isOpen, handleClose);
 
@@ -91,7 +93,7 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
   const handleResubmit = async () => {
     const validLinks = links.filter((l) => l.trim()).map(normalizeUrl);
     if (!comment.trim() && files.length === 0 && validLinks.length === 0) {
-      notify.error("Please add a comment, attach files, or add links.");
+      notify.error(t("Please add a comment, attach files, or add links.", { defaultValue: "Please add a comment, attach files, or add links." }));
       return;
     }
     setSubmitting(true);
@@ -115,10 +117,10 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
         if (onSubmitSuccess) onSubmitSuccess(data.deliverable);
         onClose();
       } else {
-        notify.error(data.message || "Failed to resubmit subtask.");
+        notify.error(data.message || t("Failed to resubmit subtask.", { defaultValue: "Failed to resubmit subtask." }));
       }
     } catch {
-      notify.error("An error occurred. Please try again.");
+      notify.error(t("An error occurred. Please try again.", { defaultValue: "An error occurred. Please try again." }));
     } finally {
       setSubmitting(false);
     }
@@ -137,7 +139,7 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
     return url;
   };
 
-  const statusLabel = (subtask.status || "pending").charAt(0).toUpperCase() + (subtask.status || "pending").slice(1);
+  const statusLabel = t((subtask.status || "pending").charAt(0).toUpperCase() + (subtask.status || "pending").slice(1));
   const isReopened = subtask.status === "reopened";
   const attachments = submission?.attachments || [];
   const viewFiles = attachments.filter((a) => a.attachment_type === "file");
@@ -153,7 +155,7 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
             <div className="vd-meta">
               <span className={`vd-status-badge vd-status-${subtask.status || "pending"}`}>{statusLabel}</span>
               {subtask.due_date && (
-                <span className="vd-due-date">Due Date & Time {formatDateTime(subtask.due_date)}</span>
+                <span className="vd-due-date">{t("Due Date & Time", { defaultValue: "Due Date & Time" })} {formatDateTime(subtask.due_date)}</span>
               )}
             </div>
           </div>
@@ -161,44 +163,44 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
 
         <div className="vd-body">
           {loading ? (
-            <div className="vd-loading">Loading details...</div>
+            <div className="vd-loading">{t("Loading details...", { defaultValue: "Loading details..." })}</div>
           ) : (
             <>
               {/* Reopen Details */}
               {isReopened && (
                 <div className="vd-section vd-reopen-section">
-                  <h3 className="vd-section-title">Reopen Details</h3>
+                  <h3 className="vd-section-title">{t("Reopen Details", { defaultValue: "Reopen Details" })}</h3>
                   <div className="vd-details-grid">
                     <div className="vd-detail-item">
-                      <span className="vd-detail-label">Reopened By</span>
+                      <span className="vd-detail-label">{t("Reopened By", { defaultValue: "Reopened By" })}</span>
                       <span className="vd-detail-value">{subtask.reopenedBy?.name || "\u2014"}</span>
                     </div>
                     <div className="vd-detail-item">
-                      <span className="vd-detail-label">Reopened On</span>
+                      <span className="vd-detail-label">{t("Reopened On", { defaultValue: "Reopened On" })}</span>
                       <span className="vd-detail-value">{formatDateTime(subtask.reopened_at)}</span>
                     </div>
                   </div>
                   {subtask.reopen_comment && (
                     <div className="vd-detail-item" style={{ marginTop: "12px" }}>
-                      <span className="vd-detail-label">Comment</span>
+                      <span className="vd-detail-label">{t("Comment", { defaultValue: "Comment" })}</span>
                       <p className="vd-text">{subtask.reopen_comment}</p>
                     </div>
                   )}
                   {subtask.reopen_instructions && (
                     <div className="vd-detail-item" style={{ marginTop: "12px" }}>
-                      <span className="vd-detail-label">Instructions</span>
+                      <span className="vd-detail-label">{t("Instructions", { defaultValue: "Instructions" })}</span>
                       <p className="vd-text">{subtask.reopen_instructions}</p>
                     </div>
                   )}
                   {subtask.reopen_new_deadline && (
                     <div className="vd-detail-item" style={{ marginTop: "12px" }}>
-                      <span className="vd-detail-label">New Deadline</span>
+                      <span className="vd-detail-label">{t("New Deadline", { defaultValue: "New Deadline" })}</span>
                       <span className="vd-detail-value">{formatDateTime(subtask.reopen_new_deadline)}</span>
                     </div>
                   )}
                   {subtask.reopen_link && (
                     <div className="vd-detail-item" style={{ marginTop: "12px" }}>
-                      <span className="vd-detail-label">Attached Link</span>
+                      <span className="vd-detail-label">{t("Attached Link", { defaultValue: "Attached Link" })}</span>
                       <a href={subtask.reopen_link} target="_blank" rel="noopener noreferrer" style={{ color: "#6366f1", textDecoration: "underline", wordBreak: "break-all" }}>
                         {subtask.reopen_link}
                       </a>
@@ -206,7 +208,7 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
                   )}
                   {subtask.reopen_file_name && (
                     <div className="vd-detail-item" style={{ marginTop: "12px" }}>
-                      <span className="vd-detail-label">Attached Files / Screenshots</span>
+                      <span className="vd-detail-label">{t("Attached Files / Screenshots", { defaultValue: "Attached Files / Screenshots" })}</span>
                       <div style={{ marginTop: "6px", display: "flex", flexDirection: "column", gap: "6px" }}>
                         {(subtask.reopen_file_name || "").split(",").map((name, idx) => {
                           const cleanName = name.trim();
@@ -231,7 +233,7 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
                 <>
                   <div className="vd-section">
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                      <h3 className="vd-section-title" style={{ margin: 0 }}>Submission Notes</h3>
+                      <h3 className="vd-section-title" style={{ margin: 0 }}>{t("Submission Notes", { defaultValue: "Submission Notes" })}</h3>
                       {!subtask.has_edited_submission &&
                         ((submission.submitted_by || submission.submittedBy)?.id === getUser()?.id || submission.submitted_by === getUser()?.id) && (
                           <button
@@ -240,7 +242,7 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
                             onClick={() => setEditModalOpen(true)}
                             style={{ padding: "4px 12px", fontSize: 12, cursor: "pointer", background: "#6366f1", color: "#fff", border: "none", borderRadius: 6 }}
                           >
-                            Edit Submission
+                            {t("Edit Submission", { defaultValue: "Edit Submission" })}
                           </button>
                         )}
                     </div>
@@ -250,7 +252,7 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
                   {/* Files */}
                   {viewFiles.length > 0 && (
                     <div className="vd-section">
-                      <h3 className="vd-section-title">Files ({viewFiles.length})</h3>
+                      <h3 className="vd-section-title">{t("Files", { defaultValue: "Files" })} ({viewFiles.length})</h3>
                       <div className="vd-file-list">
                         {viewFiles.map((att) => (
                           <a key={att.id} className="vd-file-link" href={fileUrl(att.full_url)} target="_blank" rel="noopener noreferrer">
@@ -267,7 +269,7 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
                   {/* Images */}
                   {viewImages.length > 0 && (
                     <div className="vd-section">
-                      <h3 className="vd-section-title">Images ({viewImages.length})</h3>
+                      <h3 className="vd-section-title">{t("Images", { defaultValue: "Images" })} ({viewImages.length})</h3>
                       <div className="vd-image-grid">
                         {viewImages.map((att) => (
                           <div key={att.id} className="vd-image-thumb" onClick={() => setImagePreview(fileUrl(att.full_url))}>
@@ -281,7 +283,7 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
                   {/* Links */}
                   {viewLinks.length > 0 && (
                     <div className="vd-section">
-                      <h3 className="vd-section-title">Links ({viewLinks.length})</h3>
+                      <h3 className="vd-section-title">{t("Links", { defaultValue: "Links" })} ({viewLinks.length})</h3>
                       <div className="vd-file-list">
                         {viewLinks.map((att) => (
                           <div key={att.id} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -295,10 +297,10 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
                               style={{ padding: "4px 8px", fontSize: "11px", height: "auto" }}
                               onClick={() => {
                                 navigator.clipboard.writeText(att.url);
-                                notify.success("Link copied to clipboard!");
+                                notify.success(t("Link copied to clipboard!", { defaultValue: "Link copied to clipboard!" }));
                               }}
                             >
-                              Copy Link
+                              {t("Copy Link", { defaultValue: "Copy Link" })}
                             </button>
                           </div>
                         ))}
@@ -309,7 +311,7 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
                   {/* Old single file fallback */}
                   {submission.file_name && attachments.length === 0 && (
                     <div className="vd-section">
-                      <h3 className="vd-section-title">Attached File</h3>
+                      <h3 className="vd-section-title">{t("Attached File", { defaultValue: "Attached File" })}</h3>
                       <a
                         className="vd-file-link"
                         href={`${API_URL}/deliverables/submission-file/${submission.id}`}
@@ -323,14 +325,14 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
                   )}
 
                   <div className="vd-section">
-                    <h3 className="vd-section-title">Submission Details</h3>
+                    <h3 className="vd-section-title">{t("Submission Details", { defaultValue: "Submission Details" })}</h3>
                     <div className="vd-details-grid">
                       <div className="vd-detail-item">
-                        <span className="vd-detail-label">Submitted By</span>
-                        <span className="vd-detail-value">{submission.submitted_by?.name || "Unknown"}</span>
+                        <span className="vd-detail-label">{t("Submitted By", { defaultValue: "Submitted By" })}</span>
+                        <span className="vd-detail-value">{submission.submitted_by?.name || t("Unknown", { defaultValue: "Unknown" })}</span>
                       </div>
                       <div className="vd-detail-item">
-                        <span className="vd-detail-label">Submitted At</span>
+                        <span className="vd-detail-label">{t("Submitted At", { defaultValue: "Submitted At" })}</span>
                         <span className="vd-detail-value">{formatDateTime(submission.created_at)}</span>
                       </div>
                     </div>
@@ -341,26 +343,26 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
               {/* Resubmit Form for Reopened Status */}
               {isReopened && (
                 <div className="vd-section vd-resubmit-section">
-                  <h3 className="vd-section-title">Resubmit Subtask</h3>
+                  <h3 className="vd-section-title">{t("Resubmit Subtask", { defaultValue: "Resubmit Subtask" })}</h3>
                   <div className="vd-field">
-                    <label className="vd-label">Comment</label>
+                    <label className="vd-label">{t("Comment", { defaultValue: "Comment" })}</label>
                     <textarea
                       className="vd-textarea"
-                      placeholder="Describe your revised submission..."
+                      placeholder={t("Describe your revised submission...", { defaultValue: "Describe your revised submission..." })}
                       value={comment}
                       onChange={(e) => { setIsDirty(true); setComment(e.target.value); }}
                       rows={3}
                     />
                   </div>
                   <div className="vd-field">
-                    <label className="vd-label">Attachments</label>
+                    <label className="vd-label">{t("Attachments", { defaultValue: "Attachments" })}</label>
                     <div
                       className="vd-dropzone"
                       onClick={() => document.getElementById(`vd-file-${subtask.id}`)?.click()}
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files.length) { setIsDirty(true); setFiles(Array.from(e.dataTransfer.files)); } }}
                     >
-                      <p className="vd-dropzone-text">Drag & drop files or <span className="vd-browse">browse</span></p>
+                      <p className="vd-dropzone-text">{t("Drag & drop files or", { defaultValue: "Drag & drop files or" })} <span className="vd-browse">{t("browse", { defaultValue: "browse" })}</span></p>
                     </div>
                     <input
                       type="file"
@@ -370,7 +372,7 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
                       onChange={(e) => { setIsDirty(true); setFiles(Array.from(e.target.files || [])); }}
                     />
                     <div className="vd-field">
-                      <label className="vd-label">Links</label>
+                      <label className="vd-label">{t("Links", { defaultValue: "Links" })}</label>
                       {links.map((link, i) => (
                         <div key={i} style={{ display: "flex", gap: "6px", marginBottom: "6px" }}>
                           <input
@@ -392,7 +394,7 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
 
               {!submission && !isReopened && (
                 <div className="vd-empty">
-                  <p>No submission found.</p>
+                  <p>{t("No submission found.", { defaultValue: "No submission found." })}</p>
                 </div>
               )}
             </>
@@ -407,10 +409,10 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
         )}
 
         <div className="vd-footer">
-          <button className="vd-close-btn" onClick={handleClose}>Close</button>
+          <button className="vd-close-btn" onClick={handleClose}>{t("Close", { defaultValue: "Close" })}</button>
           {isReopened && (
             <button className="vd-resubmit-btn" onClick={handleResubmit} disabled={submitting}>
-              {submitting ? "Submitting..." : "Resubmit"}
+              {submitting ? t("Submitting...", { defaultValue: "Submitting..." }) : t("Resubmit", { defaultValue: "Resubmit" })}
             </button>
           )}
         </div>

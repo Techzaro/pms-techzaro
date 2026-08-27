@@ -5,6 +5,7 @@
  */
 
 import { useRef, useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { MdExpandMore } from "react-icons/md";
 import "./UserSelectDropdown.css";
 
@@ -12,11 +13,13 @@ const UserSelectDropdown = ({
   users = [],
   selectedIds: rawSelectedIds = [],
   onChange,
-  placeholder = "Click to select members",
+  placeholder,
   disabled = false,
   viewOnly = false,
   error = false,
 }) => {
+  const { t } = useTranslation();
+  const defaultPlaceholder = placeholder || t("Click to select members", { defaultValue: "Click to select members" });
   const selectedIds = Array.isArray(rawSelectedIds) ? rawSelectedIds : [];
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -75,7 +78,7 @@ const UserSelectDropdown = ({
 
   const formatRole = (role) => {
     if (!role) return "";
-    const map = { admin: "Admin", manager: "Manager", team_lead: "Team Lead", member: "Member", guest: "Guest" };
+    const map = { admin: t("Admin", { defaultValue: "Admin" }), manager: t("Manager", { defaultValue: "Manager" }), team_lead: t("Team Lead", { defaultValue: "Team Lead" }), member: t("Member", { defaultValue: "Member" }), guest: t("Guest", { defaultValue: "Guest" }) };
     return map[role] || role.charAt(0).toUpperCase() + role.slice(1);
   };
 
@@ -153,8 +156,8 @@ const UserSelectDropdown = ({
   const selectedNamesText = selectedNamesList.join(", ");
 
   const triggerText = viewOnly
-    ? (users.length === 0 ? "No team members" : `${users.length} team member(s)`)
-    : (selectedNamesText || placeholder);
+    ? (users.length === 0 ? t("No team members", { defaultValue: "No team members" }) : t("{{count}} team member(s)", { defaultValue: `${users.length} team member(s)`, count: users.length }))
+    : (selectedNamesText || defaultPlaceholder);
 
   return (
     <div className="usd-wrap" ref={ref}>
@@ -184,7 +187,7 @@ const UserSelectDropdown = ({
             ref={inputRef}
             type="text"
             className="usd-combo-input"
-            placeholder="Search members..."
+            placeholder={t("Search members...", { defaultValue: "Search members..." })}
             value={search}
             onChange={handleInputChange}
             onFocus={handleInputFocus}
@@ -240,7 +243,7 @@ const UserSelectDropdown = ({
                       fontSize: "14px",
                       lineHeight: 1,
                     }}
-                    title={`Remove ${name}`}
+                    title={t("Remove {{name}}", { name, defaultValue: `Remove ${name}` })}
                   >
                     &times;
                   </button>
@@ -260,7 +263,7 @@ const UserSelectDropdown = ({
           )}
           <div className="usd-dropdown-items" ref={listRef}>
             {filteredUsers.length === 0 ? (
-              <p className="usd-empty">{search ? "No users match your search." : "No users available."}</p>
+              <p className="usd-empty">{search ? t("No users match your search.", { defaultValue: "No users match your search." }) : t("No users available.", { defaultValue: "No users available." })}</p>
             ) : (
               <>
                 {!viewOnly && (
@@ -271,7 +274,7 @@ const UserSelectDropdown = ({
                         checked={filteredUsers.length > 0 && filteredUsers.every((u) => isUserSelected(u.id))}
                         onChange={toggleAll}
                       />
-                      <span className="usd-name" style={{ fontWeight: 600 }}>Select All</span>
+                      <span className="usd-name" style={{ fontWeight: 600 }}>{t("Select All", { defaultValue: "Select All" })}</span>
                     </label>
                   </div>
                 )}

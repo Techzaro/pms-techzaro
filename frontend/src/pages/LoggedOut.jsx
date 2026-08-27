@@ -1,15 +1,17 @@
 import { Link, useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import "./Login.css";
 import "./LoggedOut.css";
 
 function LoggedOut() {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const reason = searchParams.get("reason");
 
-  const title = reason === "inactivity" ? "Session Expired" : "Logged Out";
+  const title = reason === "inactivity" ? t("Session Expired", { defaultValue: "Session Expired" }) : t("Logged Out", { defaultValue: "Logged Out" });
   const message = reason === "inactivity"
-    ? "Your session has expired due to 3 hours of inactivity. Please log in again to continue."
-    : "You have been successfully logged out of your account.";
+    ? t("Your session has expired due to 3 hours of inactivity. Please log in again to continue.", { defaultValue: "Your session has expired due to 3 hours of inactivity. Please log in again to continue." })
+    : t("You have been successfully logged out of your account.", { defaultValue: "You have been successfully logged out of your account." });
 
   return (
     <div className="login-page">
@@ -20,8 +22,8 @@ function LoggedOut() {
             alt="TechXaro Logo"
             className="logo"
           />
-          <h1>TECHXARO PMS</h1>
-          <p>Manage Projects, Teams & Tasks Professionally</p>
+          <h1>{t("TECHXARO PMS", { defaultValue: "TECHXARO PMS" })}</h1>
+          <p>{t("Manage Projects, Teams & Tasks Professionally", { defaultValue: "Manage Projects, Teams & Tasks Professionally" })}</p>
         </div>
       </div>
 
@@ -34,11 +36,11 @@ function LoggedOut() {
 
           <div className="button-area">
             <Link to="/login" className="loggedout-btn-link">
-              Login Again
+              {t("Login Again", { defaultValue: "Login Again" })}
             </Link>
           </div>
 
-          <p className="loggedout-note">If you need help, contact your administrator.</p>
+          <p className="loggedout-note">{t("If you need help, contact your administrator.", { defaultValue: "If you need help, contact your administrator." })}</p>
         </div>
       </div>
     </div>

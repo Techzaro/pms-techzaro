@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { authToken } from "../utils/auth";
 import API_URL from "../config/api";
@@ -21,6 +22,7 @@ const MODULE_LABELS = {
 };
 
 function ResignationConfirmModal({ isOpen, onClose, onConfirm, user, impact, loading: impactLoading }) {
+  const { t } = useTranslation();
   useEscapeKey(isOpen, onClose);
   const [processing, setProcessing] = useState(false);
   const [notes, setNotes] = useState("");
@@ -60,11 +62,11 @@ function ResignationConfirmModal({ isOpen, onClose, onConfirm, user, impact, loa
         _notifHandled: true,
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to resign user");
+      if (!res.ok) throw new Error(data.message || t("Failed to resign user", { defaultValue: "Failed to resign user" }));
       if (onConfirm) onConfirm(data);
       onClose();
     } catch (err) {
-      notify.error(err.message || "Failed to resign user.");
+      notify.error(err.message || t("Failed to resign user.", { defaultValue: "Failed to resign user." }));
     } finally {
       setProcessing(false);
     }
@@ -83,8 +85,8 @@ function ResignationConfirmModal({ isOpen, onClose, onConfirm, user, impact, loa
               </svg>
             </div>
             <div>
-              <h2>Resign User</h2>
-              <p>This action will revoke access and return work items to assigners</p>
+              <h2>{t("Resign User", { defaultValue: "Resign User" })}</h2>
+              <p>{t("This action will revoke access and return work items to assigners", { defaultValue: "This action will revoke access and return work items to assigners" })}</p>
             </div>
           </div>
           <button className="rcm-close-btn" onClick={onClose} disabled={processing}>
@@ -98,7 +100,7 @@ function ResignationConfirmModal({ isOpen, onClose, onConfirm, user, impact, loa
           {impactLoading ? (
             <div className="rcm-loading">
               <div className="rcm-spinner"></div>
-              <p>Analyzing impact...</p>
+              <p>{t("Analyzing impact...", { defaultValue: "Analyzing impact..." })}</p>
             </div>
           ) : (
             <>
@@ -114,50 +116,50 @@ function ResignationConfirmModal({ isOpen, onClose, onConfirm, user, impact, loa
                   <h3>{user?.name}</h3>
                   <p>{user?.email}</p>
                   <div className="rcm-user-tags">
-                    <span className="rcm-tag">{user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1).replace("_", " ") : "-"}</span>
-                    {user?.department && <span className="rcm-tag">{user.department}</span>}
+                    <span className="rcm-tag">{user?.role ? t(user.role.charAt(0).toUpperCase() + user.role.slice(1).replace("_", " ")) : "-"}</span>
+                    {user?.department && <span className="rcm-tag">{t(user.department)}</span>}
                   </div>
                 </div>
               </div>
 
               <div className="rcm-impact-summary">
-                <h4>Impact Summary</h4>
+                <h4>{t("Impact Summary", { defaultValue: "Impact Summary" })}</h4>
                 <div className="rcm-impact-grid">
                   <div className="rcm-impact-item">
                     <span className="rcm-impact-count" style={{ color: "#4f46e5" }}>{summary.total_projects || 0}</span>
-                    <span className="rcm-impact-label">Projects</span>
+                    <span className="rcm-impact-label">{t("Projects")}</span>
                   </div>
                   <div className="rcm-impact-item">
                     <span className="rcm-impact-count" style={{ color: "#0891b2" }}>{summary.total_tasks || 0}</span>
-                    <span className="rcm-impact-label">Tasks</span>
+                    <span className="rcm-impact-label">{t("Tasks")}</span>
                   </div>
                   <div className="rcm-impact-item">
                     <span className="rcm-impact-count" style={{ color: "#7c3aed" }}>{summary.total_deliverables || 0}</span>
-                    <span className="rcm-impact-label">Subtasks</span>
+                    <span className="rcm-impact-label">{t("Subtasks")}</span>
                   </div>
                   <div className="rcm-impact-item">
                     <span className="rcm-impact-count" style={{ color: "#059669" }}>{summary.total_events || 0}</span>
-                    <span className="rcm-impact-label">Events</span>
+                    <span className="rcm-impact-label">{t("Events", { defaultValue: "Events" })}</span>
                   </div>
                 </div>
                 {totalItems > 0 && (
                   <div className="rcm-total-badge">
-                    <strong>{totalItems}</strong> item{totalItems !== 1 ? "s" : ""} will return to original assigners as drafts
+                    <strong>{totalItems}</strong> {t("{{count}} item(s) will return to original assigners as drafts", { defaultValue: `${totalItems} item${totalItems !== 1 ? "s" : ""} will return to original assigners as drafts`, count: totalItems })}
                   </div>
                 )}
               </div>
 
               {affectedItems.length > 0 && (
                 <div className="rcm-affected-items">
-                  <h4>Affected Items</h4>
+                  <h4>{t("Affected Items", { defaultValue: "Affected Items" })}</h4>
                   <div className="rcm-items-table-wrap">
                     <table className="rcm-items-table">
                       <thead>
                         <tr>
-                          <th>Type</th>
-                          <th>Code</th>
-                          <th>Title</th>
-                          <th>Return To</th>
+                          <th>{t("Type", { defaultValue: "Type" })}</th>
+                          <th>{t("Code", { defaultValue: "Code" })}</th>
+                          <th>{t("Title", { defaultValue: "Title" })}</th>
+                          <th>{t("Return To", { defaultValue: "Return To" })}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -168,7 +170,7 @@ function ResignationConfirmModal({ isOpen, onClose, onConfirm, user, impact, loa
                                 background: (MODULE_COLORS[item.type] || "#6b7280") + "15",
                                 color: MODULE_COLORS[item.type] || "#6b7280",
                               }}>
-                                {MODULE_LABELS[item.type] || item.type}
+                                {MODULE_LABELS[item.type] ? t(MODULE_LABELS[item.type]) : item.type}
                               </span>
                             </td>
                             <td className="rcm-item-code">{item.code || "-"}</td>
@@ -188,7 +190,7 @@ function ResignationConfirmModal({ isOpen, onClose, onConfirm, user, impact, loa
                     <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
                     <polyline points="22 4 12 14.01 9 11.01" />
                   </svg>
-                  <span>No active work items found. User can be safely resigned.</span>
+                  <span>{t("No active work items found. User can be safely resigned.", { defaultValue: "No active work items found. User can be safely resigned." })}</span>
                 </div>
               )}
 
@@ -197,13 +199,13 @@ function ResignationConfirmModal({ isOpen, onClose, onConfirm, user, impact, loa
                   <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
                   <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
                 </svg>
-                <span>This user will <strong>immediately lose access</strong> to the system. All unfinished work will automatically return to the original assigners as Draft items for review and reassignment.</span>
+                <span>{t("This user will immediately lose access to the system. All unfinished work will automatically return to the original assigners as Draft items for review and reassignment.", { defaultValue: "This user will immediately lose access to the system. All unfinished work will automatically return to the original assigners as Draft items for review and reassignment." })}</span>
               </div>
 
               <div className="rcm-notes">
-                <label>Notes (optional)</label>
+                <label>{t("Notes (optional)", { defaultValue: "Notes (optional)" })}</label>
                 <textarea
-                  placeholder="Add a reason or note about this resignation..."
+                  placeholder={t("Add a reason or note about this resignation...", { defaultValue: "Add a reason or note about this resignation..." })}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   rows={3}
@@ -215,7 +217,7 @@ function ResignationConfirmModal({ isOpen, onClose, onConfirm, user, impact, loa
 
         <div className="rcm-footer">
           <button className="rcm-cancel-btn" onClick={onClose} disabled={processing}>
-            Cancel
+            {t("Cancel")}
           </button>
           <button
             className="rcm-confirm-btn"
@@ -225,7 +227,7 @@ function ResignationConfirmModal({ isOpen, onClose, onConfirm, user, impact, loa
             {processing ? (
               <>
                 <div className="rcm-btn-spinner"></div>
-                Processing...
+                {t("Processing...", { defaultValue: "Processing..." })}
               </>
             ) : (
               <>
@@ -234,7 +236,7 @@ function ResignationConfirmModal({ isOpen, onClose, onConfirm, user, impact, loa
                   <circle cx="9" cy="7" r="4" />
                   <line x1="17" y1="11" x2="23" y2="11" />
                 </svg>
-                Confirm Resignation
+                {t("Confirm Resignation", { defaultValue: "Confirm Resignation" })}
               </>
             )}
           </button>

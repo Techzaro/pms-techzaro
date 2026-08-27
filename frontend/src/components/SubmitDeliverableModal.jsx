@@ -7,6 +7,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { FileText, Upload, X, Image } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
@@ -29,6 +30,7 @@ import "./layout/CreateTaskModal.css";
  * @param {Function} onSubmitSuccess - Callback after successful submission, receives updated subtask.
  */
 function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess, submissionToEdit = null }) {
+  const { t } = useTranslation();
   const [comment, setComment] = useState("");
   const [files, setFiles] = useState([]);
   const [links, setLinks] = useState([]);
@@ -63,7 +65,7 @@ function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess, sub
       if (clipboardFiles && clipboardFiles.length > 0) {
         const newFiles = Array.from(clipboardFiles);
         setFiles((prev) => [...prev, ...newFiles]);
-        notify.success(`Pasted ${newFiles.length} file(s) from clipboard`);
+        notify.success(t("Pasted {{count}} file(s) from clipboard", { defaultValue: `Pasted ${newFiles.length} file(s) from clipboard`, count: newFiles.length }));
       }
     };
 
@@ -71,7 +73,7 @@ function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess, sub
     return () => {
       window.removeEventListener("paste", handlePaste);
     };
-  }, [isOpen]);
+  }, [isOpen, t]);
 
   /** Appends newly selected files to the existing file list */
   const handleFileSelect = (e) => {
@@ -93,7 +95,7 @@ function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess, sub
   const handleSubmit = async () => {
     const validLinks = links.map((l) => l.url);
     if (!comment.trim() && files.length === 0 && validLinks.length === 0 && !submissionToEdit) {
-      notify.error("Please add a comment, attach files, or add links.");
+      notify.error(t("Please add a comment, attach files, or add links.", { defaultValue: "Please add a comment, attach files, or add links." }));
       return;
     }
     await run(async () => {
@@ -122,17 +124,17 @@ function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess, sub
           onSubmitSuccess(data.deliverable || subtask);
           onClose();
         } else {
-          notify.error(data.message || "Failed to submit.");
+          notify.error(data.message || t("Failed to submit.", { defaultValue: "Failed to submit." }));
         }
       } catch {
-        notify.error("An error occurred. Please try again.");
+        notify.error(t("An error occurred. Please try again.", { defaultValue: "An error occurred. Please try again." }));
       }
     });
   };
 
   if (!isOpen || !subtask) return null;
 
-  const statusLabel = (subtask.status || "pending").charAt(0).toUpperCase() + (subtask.status || "pending").slice(1);
+  const statusLabel = t((subtask.status || "pending").charAt(0).toUpperCase() + (subtask.status || "pending").slice(1));
   const isImageFile = (f) => f.type?.startsWith("image/");
 
   return createPortal(
@@ -145,20 +147,20 @@ function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess, sub
             <div className="sd-meta">
               <span className={`sd-status-badge sd-status-${subtask.status || "pending"}`}>{statusLabel}</span>
               {subtask.due_date && (
-                <span className="sd-due-date">Due Date {formatDateTimeShort(subtask.due_date)}</span>
+                <span className="sd-due-date">{t("Due Date", { defaultValue: "Due Date" })} {formatDateTimeShort(subtask.due_date)}</span>
               )}
             </div>
           </div>
         </div>
 
         <div className="sd-body">
-          <h3 className="sd-section-title">Submit Subtask</h3>
+          <h3 className="sd-section-title">{t("Submit Subtask", { defaultValue: "Submit Subtask" })}</h3>
 
           <div className="sd-field">
-            <label className="sd-label">Submission Notes</label>
+            <label className="sd-label">{t("Submission Notes", { defaultValue: "Submission Notes" })}</label>
             <textarea
               className="sd-textarea"
-              placeholder="Describe your submission..."
+              placeholder={t("Describe your submission...", { defaultValue: "Describe your submission..." })}
               value={comment}
               onChange={(e) => { setComment(e.target.value); }}
               rows={3}
@@ -166,7 +168,7 @@ function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess, sub
           </div>
 
           <div className="sd-field">
-            <label className="sd-label">Attachments ({files.length})</label>
+            <label className="sd-label">{t("Attachments", { defaultValue: "Attachments" })} ({files.length})</label>
             <div
               className="sd-dropzone"
               onDragOver={(e) => e.preventDefault()}
@@ -176,8 +178,8 @@ function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess, sub
               <div className="sd-dropzone-icon">
                 <Upload size={24} strokeWidth={1.5} />
               </div>
-              <p className="sd-dropzone-text">Drag & drop files or <span className="sd-browse">browse</span></p>
-              <p className="sd-dropzone-hint">Supports: PDF, DOC, XLS, PPT, images, ZIP, RAR</p>
+              <p className="sd-dropzone-text">{t("Drag & drop files or", { defaultValue: "Drag & drop files or" })} <span className="sd-browse">{t("browse", { defaultValue: "browse" })}</span></p>
+              <p className="sd-dropzone-hint">{t("Supports: PDF, DOC, XLS, PPT, images, ZIP, RAR", { defaultValue: "Supports: PDF, DOC, XLS, PPT, images, ZIP, RAR" })}</p>
             </div>
             <input
               id={`sdm-file-${subtask.id}`}
@@ -212,9 +214,9 @@ function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess, sub
         </div>
 
         <div className="sd-footer">
-          <button className="sd-cancel-btn" onClick={handleClose} disabled={submitting}>Cancel</button>
+          <button className="sd-cancel-btn" onClick={handleClose} disabled={submitting}>{t("Cancel")}</button>
           <LoadingButton className="sd-submit-btn" onClick={handleSubmit} loading={submitting}>
-            {subtask.status === "rework_required" ? "Resubmit Subtask" : "Submit Subtask"}
+            {subtask.status === "rework_required" ? t("Resubmit Subtask", { defaultValue: "Resubmit Subtask" }) : t("Submit Subtask", { defaultValue: "Submit Subtask" })}
           </LoadingButton>
         </div>
       </div>
@@ -223,10 +225,10 @@ function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess, sub
       isOpen={fileRemoveConfirmOpen}
       onClose={() => { setFileRemoveConfirmOpen(false); setPendingFileIndex(-1); }}
       onConfirm={() => { removeFile(pendingFileIndex); setFileRemoveConfirmOpen(false); setPendingFileIndex(-1); }}
-      title="Remove File"
-      message="Are you sure you want to remove this file?"
-      confirmText="Remove"
-      cancelText="Cancel"
+      title={t("Remove File", { defaultValue: "Remove File" })}
+      message={t("Are you sure you want to remove this file?", { defaultValue: "Are you sure you want to remove this file?" })}
+      confirmText={t("Remove", { defaultValue: "Remove" })}
+      cancelText={t("Cancel")}
       danger
     />
     {ConfirmDialog}
