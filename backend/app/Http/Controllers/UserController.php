@@ -152,11 +152,16 @@ class UserController extends Controller
         $isDraft = strtolower($request->input('status', '')) === 'draft' || $request->boolean('is_draft');
 
         try {
+            // Check org email policy — standard policy makes professional_email optional
+            $org = $request->attributes->get('currentOrganization');
+            $emailPolicy = $org->email_policy ?? 'standard';
+            $isCompanyRequired = $emailPolicy === 'company_required';
+
             $request->validate([
                 'name' => 'required|string|max:255',
                 'email' => $isDraft ? 'nullable|string|email|max:255|unique:users,email' : 'required|string|email|max:255|unique:users,email',
                 'personal_email' => 'nullable|email|max:255',
-                'professional_email' => $isDraft ? 'nullable|string|email|max:255|unique:users,professional_email' : 'required|string|email|max:255|unique:users,professional_email',
+                'professional_email' => ($isDraft || !$isCompanyRequired) ? 'nullable|string|email|max:255' : 'required|string|email|max:255',
                 'professional_email_password' => 'nullable|string|max:255',
                 'role' => [$isDraft ? 'nullable' : 'required', Rule::in(['admin', 'manager', 'team_lead', 'teamlead', 'member', 'guest'])],
                 'father_name' => 'nullable|string|max:255',
@@ -191,6 +196,8 @@ class UserController extends Controller
                 'avatar' => 'nullable|image|mimes:jpeg,jpg,png,webp|max:5120',
                 'password_type' => 'nullable|string|in:auto,manual',
                 'password' => $request->input('password_type') === 'manual' ? 'required|string|min:6|max:255' : 'nullable|string|max:255',
+                'project_ids' => 'nullable|array',
+                'project_ids.*' => 'integer|exists:projects,id',
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             Log::error('User create validation failed', ['errors' => $e->errors()]);
@@ -219,8 +226,8 @@ class UserController extends Controller
             'email' => $request->input('email') ?: ($isDraft ? 'draft_' . Str::random(8) . '@draft.local' : null),
             'password' => Hash::make($plainPassword),
             'role' => $role,
-            'status' => $isDraft ? 'Draft' : ($request->input('status') ?: 'Active'),
-            'active' => $isDraft ? false : ($request->input('status') === 'Inactive' ? false : true),
+            'status' => $isDraft ? 'Draft' : 'Inactive',
+            'active' => $isDraft ? false : false,
             'must_change_password' => true,
 
             // Contact
@@ -241,7 +248,7 @@ class UserController extends Controller
 
             // Emails
             'personal_email' => $request->input('personal_email'),
-            'professional_email' => $request->input('professional_email'),
+            'professional_email' => $request->input('professional_email') ?: $request->input('personal_email'),
             'professional_email_password' => $request->input('professional_email_password') ?: null,
             'recovery_email' => $request->input('recovery_email'),
 
@@ -260,6 +267,31 @@ class UserController extends Controller
             'bank_account_number' => $request->input('bank_account_number'),
             'bank_account_title' => $request->input('bank_account_title'),
         ]);
+
+        // Attach user to selected projects immediately upon creation
+        $projectIds = $request->input('project_ids', $request->input('projects', []));
+        if (is_string($projectIds)) {
+            $projectIds = json_decode($projectIds, true) ?: explode(',', $projectIds);
+        }
+        if (! empty($projectIds) && is_array($projectIds)) {
+            $projectIds = array_values(array_filter(array_map('intval', $projectIds)));
+            $projects = Project::whereIn('id', $projectIds)->get();
+            foreach ($projects as $proj) {
+                $assignedUsers = (array) ($proj->assigned_users ?? []);
+                if (! in_array((int) $user->id, array_map('intval', $assignedUsers))) {
+                    $assignedUsers[] = (int) $user->id;
+                    $proj->assigned_users = array_values(array_unique(array_map('intval', $assignedUsers)));
+                }
+                if ($user->role === 'guest') {
+                    $guestIds = (array) ($proj->guest_ids ?? []);
+                    if (! in_array((int) $user->id, array_map('intval', $guestIds))) {
+                        $guestIds[] = (int) $user->id;
+                        $proj->guest_ids = array_values(array_unique(array_map('intval', $guestIds)));
+                    }
+                }
+                $proj->save();
+            }
+        }
 
         // Handle file uploads
         $this->handleFileUploads($request, $user);
@@ -896,7 +928,7 @@ class UserController extends Controller
                 ], 403);
             }
 
-            if ($user->active === false) {
+            if ($user->status === 'Resigned') {
                 return response()->json([
                     'success' => false,
                     'message' => 'This user is already resigned.',
@@ -2079,6 +2111,8 @@ class UserController extends Controller
             'phone_number' => 'nullable|string|max:32',
             'company_name' => 'nullable|string|max:255',
             'avatar' => 'nullable|image|mimes:jpeg,jpg,png,webp|max:5120',
+            'project_ids' => 'nullable|array',
+            'project_ids.*' => 'integer|exists:projects,id',
         ]);
 
         $authUser = $request->user();
@@ -2097,6 +2131,29 @@ class UserController extends Controller
             'contact_no' => $request->input('phone_number'),
             'company_name' => $request->input('company_name'),
         ]);
+
+        // Attach guest to selected projects immediately upon creation
+        $projectIds = $request->input('project_ids', $request->input('projects', []));
+        if (is_string($projectIds)) {
+            $projectIds = json_decode($projectIds, true) ?: explode(',', $projectIds);
+        }
+        if (! empty($projectIds) && is_array($projectIds)) {
+            $projectIds = array_values(array_filter(array_map('intval', $projectIds)));
+            $projects = Project::whereIn('id', $projectIds)->get();
+            foreach ($projects as $proj) {
+                $assignedUsers = (array) ($proj->assigned_users ?? []);
+                if (! in_array((int) $user->id, array_map('intval', $assignedUsers))) {
+                    $assignedUsers[] = (int) $user->id;
+                    $proj->assigned_users = array_values(array_unique(array_map('intval', $assignedUsers)));
+                }
+                $guestIds = (array) ($proj->guest_ids ?? []);
+                if (! in_array((int) $user->id, array_map('intval', $guestIds))) {
+                    $guestIds[] = (int) $user->id;
+                    $proj->guest_ids = array_values(array_unique(array_map('intval', $guestIds)));
+                }
+                $proj->save();
+            }
+        }
 
         if ($request->hasFile('avatar')) {
             $user->avatar = $this->handleAvatarUpload($request, $user);

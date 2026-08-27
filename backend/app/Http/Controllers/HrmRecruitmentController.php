@@ -652,23 +652,134 @@ class HrmRecruitmentController extends Controller
 
     public function getDashboardStats()
     {
-        return response()->json([
-            'open_positions' => HrmJobOpening::where('status', 'Open')->count(),
-            'applicants_in_pipeline' => HrmCandidate::whereNotIn('stage', ['Hired', 'Refused'])->count(),
-            'offer_letters_pending' => HrmOfferLetter::whereIn('status', ['Draft', 'Sent', 'Viewed'])->count(),
-            'total_employees' => HrmCandidate::where('stage', 'Hired')->count() + 15,
-            'present_today' => 14,
-            'on_leave_today' => 1,
-            'reviews_due' => 3,
-            'assets_issued' => 12,
-            'documents_pending' => 2,
-            'payroll_processed' => 1,
-            'payroll_total' => 2450000,
-            'payslips_pending' => 0,
-            'active_notices' => 2,
-            'ongoing_trainings' => 1,
-            'training_enrollments' => 8,
-        ]);
+        $today = date('Y-m-d');
+
+        // 1. Active Workforce (Count of registered users in tenant DB, or hired candidates)
+        $totalEmployees = \App\Models\User::count();
+        if ($totalEmployees === 0 && \Illuminate\Support\Facades\Schema::hasTable('hrm_candidates')) {
+            $totalEmployees = \App\Models\HrmCandidate::where('stage', 'Hired')->count();
+        }
+
+        // 2. Present Today & On Leave Today
+        $presentToday = \Illuminate\Support\Facades\Schema::hasTable('hrm_attendances')
+            ? \Illuminate\Support\Facades\DB::table('hrm_attendances')
+                ->where('date', $today)
+                ->whereIn('status', ['Present', 'Late'])
+                ->count()
+            : 0;
+
+        if ($presentToday === 0 && \Illuminate\Support\Facades\Schema::hasTable('hrm_attendances')) {
+            $latestDate = \Illuminate\Support\Facades\DB::table('hrm_attendances')->max('date');
+            if ($latestDate) {
+                $presentToday = \Illuminate\Support\Facades\DB::table('hrm_attendances')
+                    ->where('date', $latestDate)
+                    ->whereIn('status', ['Present', 'Late'])
+                    ->count();
+            }
+        }
+
+        $onLeaveToday = \Illuminate\Support\Facades\Schema::hasTable('hrm_attendances')
+            ? \Illuminate\Support\Facades\DB::table('hrm_attendances')
+                ->where('date', $today)
+                ->where('status', 'Leave')
+                ->count()
+            : 0;
+
+        if ($onLeaveToday === 0 && \Illuminate\Support\Facades\Schema::hasTable('hrm_member_requests')) {
+            $onLeaveToday = \App\Models\HrmMemberRequest::where('status', 'Approved')
+                ->where(function ($q) {
+                    if (\Illuminate\Support\Facades\Schema::hasColumn('hrm_member_requests', 'application_type')) {
+                        $q->where('application_type', 'like', '%Leave%')
+                          ->orWhere('title', 'like', '%Leave%');
+                    } else {
+                        $q->where('title', 'like', '%Leave%');
+                    }
+                })
+                ->whereDate('created_at', '<=', $today)
+                ->count();
+        }
+
+        // 3. Member Requests Queue / Action Needed
+        $pendingMemberRequests = \Illuminate\Support\Facades\Schema::hasTable('hrm_member_requests')
+            ? \App\Models\HrmMemberRequest::where('status', 'Pending')->count()
+            : 0;
+
+        $pendingCorrections = \Illuminate\Support\Facades\Schema::hasTable('hrm_attendance_corrections')
+            ? \Illuminate\Support\Facades\DB::table('hrm_attendance_corrections')->where('status', 'Pending')->count()
+            : 0;
+
+        $totalActionNeeded = $pendingMemberRequests + $pendingCorrections;
+
+        // 4. Payroll Total & Payslips Pending
+        $payrollTotal = 0;
+        if (\Illuminate\Support\Facades\Schema::hasTable('hrm_payrolls')) {
+            $payrollTotal = \Illuminate\Support\Facades\DB::table('hrm_payrolls')->whereMonth('created_at', date('m'))->sum('net_salary') ?: 0;
+        }
+        if ($payrollTotal == 0) {
+            if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'gross_salary')) {
+                $payrollTotal = \Illuminate\Support\Facades\DB::table('users')->sum('gross_salary') ?: 0;
+            } elseif (\Illuminate\Support\Facades\Schema::hasColumn('users', 'salary')) {
+                $payrollTotal = \Illuminate\Support\Facades\DB::table('users')->sum('salary') ?: 0;
+            }
+        }
+
+        $payslipsPending = \Illuminate\Support\Facades\Schema::hasTable('hrm_payslips')
+            ? \Illuminate\Support\Facades\DB::table('hrm_payslips')->where('status', 'Pending')->count()
+            : 0;
+
+        // Recruitment & Other Metrics
+        $openPositions = HrmJobOpening::where('status', 'Open')->count();
+        $applicantsPipeline = HrmCandidate::whereNotIn('stage', ['Hired', 'Refused'])->count();
+        $pendingOfferLetters = HrmOfferLetter::whereIn('status', ['Draft', 'Sent', 'Viewed'])->count();
+
+        $documentsPending = \Illuminate\Support\Facades\Schema::hasTable('hrm_employee_documents')
+            ? \Illuminate\Support\Facades\DB::table('hrm_employee_documents')->where('status', 'Pending')->count()
+            : 0;
+
+        $activeNotices = \Illuminate\Support\Facades\Schema::hasTable('hrm_notices')
+            ? \Illuminate\Support\Facades\DB::table('hrm_notices')->where('status', 'Active')->count()
+            : 0;
+
+        $reviewsDue = \Illuminate\Support\Facades\Schema::hasTable('hrm_performance_reviews')
+            ? \Illuminate\Support\Facades\DB::table('hrm_performance_reviews')->where('status', 'Pending')->count()
+            : 0;
+
+        $assetsIssued = \Illuminate\Support\Facades\Schema::hasTable('hrm_assets')
+            ? \Illuminate\Support\Facades\DB::table('hrm_assets')->where('status', 'Issued')->count()
+            : 0;
+
+        $payrollProcessed = \Illuminate\Support\Facades\Schema::hasTable('hrm_payrolls')
+            ? \Illuminate\Support\Facades\DB::table('hrm_payrolls')->count()
+            : 0;
+
+        $ongoingTrainings = \Illuminate\Support\Facades\Schema::hasTable('hrm_trainings')
+            ? \Illuminate\Support\Facades\DB::table('hrm_trainings')->where('status', 'Ongoing')->count()
+            : 0;
+
+        $trainingEnrollments = \Illuminate\Support\Facades\Schema::hasTable('hrm_training_enrollments')
+            ? \Illuminate\Support\Facades\DB::table('hrm_training_enrollments')->count()
+            : 0;
+
+        $statsData = [
+            'open_positions' => $openPositions,
+            'applicants_in_pipeline' => $applicantsPipeline,
+            'offer_letters_pending' => $pendingOfferLetters,
+            'total_employees' => $totalEmployees,
+            'present_today' => $presentToday,
+            'on_leave_today' => $onLeaveToday,
+            'pending_applications' => $totalActionNeeded,
+            'documents_pending' => $documentsPending,
+            'reviews_due' => $reviewsDue,
+            'assets_issued' => $assetsIssued,
+            'payroll_processed' => $payrollProcessed,
+            'payroll_total' => $payrollTotal,
+            'payslips_pending' => $payslipsPending,
+            'active_notices' => $activeNotices,
+            'ongoing_trainings' => $ongoingTrainings,
+            'training_enrollments' => $trainingEnrollments,
+        ];
+
+        return response()->json(array_merge(['data' => $statsData], $statsData));
     }
 
     public function getHrmNotifications()

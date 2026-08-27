@@ -80,6 +80,7 @@ class AuthController extends Controller
 
             // Look up user by email — guests use personal_email, employees use professional_email
             $dbNotFound = false;
+            $crossTenantResult = null;
             try {
                 $user = User::where('professional_email', $request->email)
                     ->orWhere('email', $request->email)
@@ -117,6 +118,7 @@ class AuthController extends Controller
                 }
                 $defaultDb = config('database.connections.mysql.database');
                 $result = $this->findUserAcrossTenants($request->email, $defaultDb, $request->password);
+                $crossTenantResult = $result;
                 if (! $result) {
                     // Also check soft-deleted orgs — their DB may have been dropped
                     $deletedOrgWithUser = $this->findUserInDeletedOrgs($request->email);
@@ -138,6 +140,12 @@ class AuthController extends Controller
             $organization = $request->attributes->get('currentOrganization');
             $tenantSlug = $organization?->slug;
 
+            // If we already found the user via cross-tenant search, use that slug
+            if (!$tenantSlug && $crossTenantResult) {
+                $tenantSlug = $crossTenantResult['slug'] ?? null;
+                $organization = $crossTenantResult['organization'] ?? null;
+            }
+
             // Step 1: Look up in current tenant DB (default or resolved tenant)
             try {
                 $tenantUser = User::where('professional_email', $email)
@@ -154,15 +162,13 @@ class AuthController extends Controller
 
             if ($tenantUser) {
                 $user = $tenantUser;
-
-                // A user found directly on the configured mysql connection still
-                // needs its master organization resolved. Without this, repeated
-                // logins can fall back to the platform slug and lose /org/{slug}.
-                if (!$organization) {
-                    $currentDatabase = config('database.connections.mysql.database');
-                    if ($currentDatabase) {
-                        $organization = MasterOrganization::where('database_name', $currentDatabase)->first();
-                        $tenantSlug = $organization?->slug;
+                // If still no slug from cross-tenant, do a targeted search
+                if (!$tenantSlug) {
+                    $defaultDb = config('database.connections.mysql.database');
+                    $result = $this->findUserAcrossTenants($email, $defaultDb, $request->password);
+                    if ($result) {
+                        $tenantSlug = $result['slug'];
+                        $organization = $result['organization'];
                     }
                 }
             } else {
@@ -338,6 +344,7 @@ class AuthController extends Controller
         }
 
         try {
+            $this->activityService->log($user->id, 'auth', 'Logged out of system', 'auth', $user->id, 'logout');
             $this->auditService->log(
                 module: 'auth',
                 action: 'logout',
@@ -346,7 +353,7 @@ class AuthController extends Controller
                 status: 'success'
             );
         } catch (\Throwable $e) {
-            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+            \Log::error('Failed to log audit on logout', ['error' => $e->getMessage()]);
         }
 
         return response()->json([
@@ -384,8 +391,7 @@ class AuthController extends Controller
                 return response()->json(['success' => false, 'message' => 'Unauthorized.'], 401);
             }
 
-            $tokenValue = str_contains($token, '|') ? substr($token, strpos($token, '|') + 1) : $token;
-            $hashedToken = hash('sha256', $tokenValue);
+            $hashedToken = hash('sha256', $token);
 
             $organization = $request->attributes->get('currentOrganization');
             $user = null;
@@ -408,9 +414,18 @@ class AuthController extends Controller
                     \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_OBJ,
                 ]);
 
-                $stmt = $pdo->prepare('SELECT tokenable_id FROM `personal_access_tokens` WHERE token = ? LIMIT 1');
-                $stmt->execute([$hashedToken]);
-                $tokenRow = $stmt->fetch();
+                // Try full token hash first (current format), then stripped prefix (old format)
+                $candidateHashes = [$hashedToken];
+                if (str_contains($token, '|')) {
+                    $candidateHashes[] = hash('sha256', substr($token, strpos($token, '|') + 1));
+                }
+                $tokenRow = null;
+                foreach ($candidateHashes as $ch) {
+                    $stmt = $pdo->prepare('SELECT tokenable_id FROM `personal_access_tokens` WHERE token = ? LIMIT 1');
+                    $stmt->execute([$ch]);
+                    $tokenRow = $stmt->fetch();
+                    if ($tokenRow) break;
+                }
 
                 if ($tokenRow) {
                     \Log::info('firstTimeChangePassword: token row found in tenant DB', ['tokenable_id' => $tokenRow->tokenable_id]);
@@ -445,9 +460,17 @@ class AuthController extends Controller
                     ]
                 );
 
-                $stmt = $pdo->prepare('SELECT tokenable_id FROM `personal_access_tokens` WHERE token = ? LIMIT 1');
-                $stmt->execute([$hashedToken]);
-                $tokenRow = $stmt->fetch();
+                $candidateHashes = [$hashedToken];
+                if (str_contains($token, '|')) {
+                    $candidateHashes[] = hash('sha256', substr($token, strpos($token, '|') + 1));
+                }
+                $tokenRow = null;
+                foreach ($candidateHashes as $ch) {
+                    $stmt = $pdo->prepare('SELECT tokenable_id FROM `personal_access_tokens` WHERE token = ? LIMIT 1');
+                    $stmt->execute([$ch]);
+                    $tokenRow = $stmt->fetch();
+                    if ($tokenRow) break;
+                }
 
                 if ($tokenRow) {
                     \Log::info('firstTimeChangePassword: token row found in default DB', ['tokenable_id' => $tokenRow->tokenable_id]);
@@ -471,36 +494,14 @@ class AuthController extends Controller
             $user->password = $request->new_password;
             $user->must_change_password = false;
             $user->active = true;
+            $user->status = 'Active';
             $user->password_changed_by = $user->id;
             $user->password_changed_at = now();
             $user->save();
 
-            // Issue a fresh token for the user so frontend can continue the session.
-            // Do not remove all tokens for the user; only revoke the temporary token used for first-time change.
-            $expiresAt = now()->addHours(3);
+            // Revoke the temporary token used for this request so user must re-login.
+            // Do NOT issue a new token — force the user to log in again with their new password.
             try {
-                $newTokenResult = $user->createToken('auth_token', ['*'], $expiresAt);
-                $newToken = $newTokenResult->plainTextToken;
-
-                // Store mapping in master DB (if available)
-                try {
-                    $newTokenHash = hash('sha256', $newToken);
-                    DB::connection('mysql_master')->table('personal_access_tokens')->insert([
-                        'tokenable_type' => 'App\\Models\\User',
-                        'tokenable_id'   => $user->id,
-                        'name'           => 'pms_token|' . ($organization->slug ?? ''),
-                        'token'          => $newTokenHash,
-                        'abilities'      => json_encode(['*']),
-                        'expires_at'     => $expiresAt,
-                        'created_at'     => now(),
-                        'updated_at'     => now(),
-                    ]);
-                } catch (\Throwable $e) {
-                    \Log::warning('Failed to store new token mapping in master DB', ['error' => $e->getMessage()]);
-                }
-
-                // Revoke only the temporary token used in this request (if present).
-                // Try both hashing strategies to cover possible stored formats.
                 $oldTokenRaw = $request->bearerToken() ?: '';
                 $candidateHashes = [];
                 if ($oldTokenRaw !== '') {
@@ -533,9 +534,7 @@ class AuthController extends Controller
                     }
                 }
             } catch (\Throwable $e) {
-                // Token creation failure should not block password update — log and continue.
-                \Log::warning('Failed to create new token after first-time password change', ['error' => $e->getMessage()]);
-                $newToken = null;
+                \Log::warning('Failed to revoke token after first-time password change', ['error' => $e->getMessage()]);
             }
 
             try {
@@ -566,14 +565,6 @@ class AuthController extends Controller
             ];
             if ($organization) {
                 $responseData['tenant_slug'] = $organization->slug;
-            }
-
-            // If we created a new token, return it so the frontend can update stored token
-            if (isset($newToken) && $newToken) {
-                $responseData['token'] = $newToken;
-                if (isset($expiresAt)) {
-                    $responseData['expires_at'] = $expiresAt->toISOString();
-                }
             }
 
             return response()->json($responseData);

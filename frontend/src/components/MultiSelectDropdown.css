@@ -3,6 +3,10 @@
   width: 100%;
 }
 
+.msd-wrap.msd-open {
+  z-index: 9999;
+}
+
 .msd-trigger {
   display: flex;
   align-items: center;
@@ -109,7 +113,7 @@
   border: 1px solid var(--border-color);
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  z-index: 100;
+  z-index: 9999;
   max-height: 260px;
   display: flex;
   flex-direction: column;
@@ -232,4 +236,39 @@
 .msd-select-all .msd-checkbox {
   width: 16px;
   height: 16px;
+}
+
+/* Compact size for filter bars */
+.msd-sm .msd-trigger {
+  height: 36px;
+  min-height: 36px;
+  border-radius: 8px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.msd-sm .msd-selected-text {
+  font-size: 12px;
+}
+
+.msd-sm .msd-placeholder-text {
+  font-size: 12px;
+}
+
+.msd-sm .msd-combo-input {
+  font-size: 12px;
+}
+
+.msd-sm .msd-dropdown {
+  border-radius: 8px;
+}
+
+.msd-sm .msd-option {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.msd-sm .msd-select-all {
+  padding: 6px 10px;
+  font-size: 12px;
 }

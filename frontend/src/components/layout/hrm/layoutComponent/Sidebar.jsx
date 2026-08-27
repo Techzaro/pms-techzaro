@@ -115,6 +115,33 @@ function Sidebar() {
         sessionStorage.setItem("hrm_settingsOpen", "false");
         setApplicationsOpen(false);
         sessionStorage.setItem("hrm_applicationsOpen", "false");
+        setEsignOpen(false);
+        sessionStorage.setItem("hrm_esignOpen", "false");
+      }
+      return next;
+    });
+  };
+
+  const [esignOpen, setEsignOpen] = useState(
+    () => sessionStorage.getItem("hrm_esignOpen") === "true"
+  );
+  const toggleEsign = () => {
+    setEsignOpen((prev) => {
+      const next = !prev;
+      sessionStorage.setItem("hrm_esignOpen", next);
+      if (next) {
+        setAttendanceOpen(false);
+        sessionStorage.setItem("hrm_attendanceOpen", "false");
+        setPerformanceOpen(false);
+        sessionStorage.setItem("hrm_performanceOpen", "false");
+        setRecruitmentOpen(false);
+        sessionStorage.setItem("hrm_recruitmentOpen", "false");
+        setWorkforceOpen(false);
+        sessionStorage.setItem("hrm_workforceOpen", "false");
+        setSettingsOpen(false);
+        sessionStorage.setItem("hrm_settingsOpen", "false");
+        setApplicationsOpen(false);
+        sessionStorage.setItem("hrm_applicationsOpen", "false");
       }
       return next;
     });
@@ -233,8 +260,24 @@ function Sidebar() {
     const isRecruitmentRoute = isActiveOrStart("hrm/recruitment") || isActiveOrStart("hrm/offer-letters");
     const isWorkforceRoute = isActiveOrStart("hrm/workforce") || isActiveOrStart("hrm/documents");
     const isSettingsRoute = isActiveOrStart("hrm/workflow-settings") || isActiveOrStart("hrm/settings");
+    const isEsignRoute = isActiveOrStart("hrm/esign");
 
-    if (isAttendanceRoute) {
+    if (isEsignRoute) {
+      setEsignOpen(true);
+      sessionStorage.setItem("hrm_esignOpen", "true");
+      setAttendanceOpen(false);
+      sessionStorage.setItem("hrm_attendanceOpen", "false");
+      setPerformanceOpen(false);
+      sessionStorage.setItem("hrm_performanceOpen", "false");
+      setRecruitmentOpen(false);
+      sessionStorage.setItem("hrm_recruitmentOpen", "false");
+      setWorkforceOpen(false);
+      sessionStorage.setItem("hrm_workforceOpen", "false");
+      setSettingsOpen(false);
+      sessionStorage.setItem("hrm_settingsOpen", "false");
+      setApplicationsOpen(false);
+      sessionStorage.setItem("hrm_applicationsOpen", "false");
+    } else if (isAttendanceRoute) {
       setAttendanceOpen(true);
       sessionStorage.setItem("hrm_attendanceOpen", "true");
       setPerformanceOpen(false);
@@ -247,6 +290,8 @@ function Sidebar() {
       sessionStorage.setItem("hrm_settingsOpen", "false");
       setApplicationsOpen(false);
       sessionStorage.setItem("hrm_applicationsOpen", "false");
+      setEsignOpen(false);
+      sessionStorage.setItem("hrm_esignOpen", "false");
     } else if (isPerformanceRoute) {
       setPerformanceOpen(true);
       sessionStorage.setItem("hrm_performanceOpen", "true");
@@ -260,6 +305,8 @@ function Sidebar() {
       sessionStorage.setItem("hrm_settingsOpen", "false");
       setApplicationsOpen(false);
       sessionStorage.setItem("hrm_applicationsOpen", "false");
+      setEsignOpen(false);
+      sessionStorage.setItem("hrm_esignOpen", "false");
     } else if (isRecruitmentRoute) {
       setRecruitmentOpen(true);
       sessionStorage.setItem("hrm_recruitmentOpen", "true");
@@ -273,6 +320,8 @@ function Sidebar() {
       sessionStorage.setItem("hrm_settingsOpen", "false");
       setApplicationsOpen(false);
       sessionStorage.setItem("hrm_applicationsOpen", "false");
+      setEsignOpen(false);
+      sessionStorage.setItem("hrm_esignOpen", "false");
     } else if (isWorkforceRoute) {
       setWorkforceOpen(true);
       sessionStorage.setItem("hrm_workforceOpen", "true");
@@ -286,6 +335,8 @@ function Sidebar() {
       sessionStorage.setItem("hrm_settingsOpen", "false");
       setApplicationsOpen(false);
       sessionStorage.setItem("hrm_applicationsOpen", "false");
+      setEsignOpen(false);
+      sessionStorage.setItem("hrm_esignOpen", "false");
     } else if (isSettingsRoute) {
       setSettingsOpen(true);
       sessionStorage.setItem("hrm_settingsOpen", "true");
@@ -299,6 +350,8 @@ function Sidebar() {
       sessionStorage.setItem("hrm_workforceOpen", "false");
       setApplicationsOpen(false);
       sessionStorage.setItem("hrm_applicationsOpen", "false");
+      setEsignOpen(false);
+      sessionStorage.setItem("hrm_esignOpen", "false");
     } else if (isApplicationsRoute) {
       setApplicationsOpen(true);
       sessionStorage.setItem("hrm_applicationsOpen", "true");
@@ -312,6 +365,8 @@ function Sidebar() {
       sessionStorage.setItem("hrm_workforceOpen", "false");
       setSettingsOpen(false);
       sessionStorage.setItem("hrm_settingsOpen", "false");
+      setEsignOpen(false);
+      sessionStorage.setItem("hrm_esignOpen", "false");
     } else {
       setAttendanceOpen(false);
       sessionStorage.setItem("hrm_attendanceOpen", "false");
@@ -325,6 +380,8 @@ function Sidebar() {
       sessionStorage.setItem("hrm_settingsOpen", "false");
       setApplicationsOpen(false);
       sessionStorage.setItem("hrm_applicationsOpen", "false");
+      setEsignOpen(false);
+      sessionStorage.setItem("hrm_esignOpen", "false");
     }
   }, [location.pathname, location.search]);
 
@@ -411,12 +468,57 @@ function Sidebar() {
                     >
                       Job Openings &amp; Candidates
                     </Link>
-                    <Link
+                    {/* <Link
                       to={rolePath("hrm/offer-letters")}
                       className={`sidebar-sub-link ${isActiveOrStart("hrm/offer-letters") ? "active" : ""}`}
                       onClick={(e) => e.stopPropagation()}
                     >
                       Offer Letters
+                    </Link> */}
+                  </div>
+                )}
+              </div>
+
+              {/* E-Sign System Dropdown Group */}
+              <div
+                className={`sidebar-dropdown-group ${esignOpen ? "open" : ""} ${isActiveOrStart("hrm/esign") ? "active" : ""}`}
+              >
+                <div
+                  className="sidebar-dropdown-header"
+                  onClick={toggleEsign}
+                >
+                  <MdFactCheck />
+                  <span style={{ flex: 1 }}>E-Sign </span>
+                  <MdKeyboardArrowDown
+                    size={18}
+                    style={{
+                      transition: "transform 0.2s",
+                      transform: esignOpen ? "rotate(180deg)" : "rotate(0deg)",
+                    }}
+                  />
+                </div>
+                {esignOpen && (
+                  <div className="sidebar-sub-links">
+                    <Link
+                      to={rolePath("hrm/esign?mode=packages")}
+                      className={`sidebar-sub-link ${isActiveOrStart("hrm/esign") && (!location.search || location.search.includes("mode=packages")) ? "active" : ""}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Send Documents
+                    </Link>
+                    <Link
+                      to={rolePath("hrm/esign?mode=signed")}
+                      className={`sidebar-sub-link ${isActiveOrStart("hrm/esign") && location.search.includes("mode=signed") ? "active" : ""}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Signed Documents Repository
+                    </Link>
+                    <Link
+                      to={rolePath("hrm/esign?mode=templates")}
+                      className={`sidebar-sub-link ${isActiveOrStart("hrm/esign") && location.search.includes("mode=templates") ? "active" : ""}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Template Library
                     </Link>
                   </div>
                 )}

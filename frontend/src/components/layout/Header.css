@@ -3,7 +3,7 @@
   max-width: 100%;
   min-height: 64px;
   height: auto;
-  margin: 0;
+  margin: 0 0 14px 0;
 
   display: flex;
   justify-content: space-between;
@@ -49,9 +49,31 @@
   background: var(--bg-hover, #f1f5f9);
 }
 
+.header-logo-switcher {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px;
+  margin: -4px -8px;
+  border-radius: 12px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: background 0.15s ease;
+}
+
+.header-logo-switcher:hover,
+.header-logo-switcher:focus-visible {
+  background: var(--bg-hover, #f1f5f9);
+  outline: none;
+}
+
 .logo-box {
   width: 42px;
   height: 42px;
+  flex-shrink: 0;
 
   border-radius: 12px;
 

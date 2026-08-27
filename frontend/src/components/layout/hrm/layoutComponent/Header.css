@@ -1,6 +1,7 @@
 .header-container {
   width: 100%;
   height: 80px;
+  margin: 0 0 14px 0;
 
   background: var(--bg-card);
 
@@ -1248,7 +1249,9 @@
 /* header-right + all children locked so they never shrink to
    invisible width — this is the actual fix for the missing avatar */
 .hrm-layout .header-right {
-  gap: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   flex-shrink: 0;
   min-width: max-content;
 }

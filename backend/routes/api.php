@@ -192,8 +192,8 @@ Route::middleware('auth:sanctum')->group(function () {
     | Admin and manager only: CRUD operations for managing users.
     */
     Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager')->group(function () {
-        // Create new user
-        Route::post('/users', [UserController::class, 'store']);
+        // Create new user (enforces plan user limit)
+        Route::post('/users', [UserController::class, 'store'])->middleware(\App\Http\Middleware\CheckPlanLimits::class . ':users');
         // View user details
         Route::get('/users/{user}', [UserController::class, 'show']);
         // Update user information
@@ -223,7 +223,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/users/{user}/request-deletion', [UserController::class, 'requestDeletion']);
 
         // Guest (Client Portal) management
-        Route::post('/guests', [UserController::class, 'storeGuest']);
+        Route::post('/guests', [UserController::class, 'storeGuest'])->middleware(\App\Http\Middleware\CheckPlanLimits::class . ':users');
         Route::put('/guests/{user}', [UserController::class, 'updateGuest']);
         Route::delete('/guests/{user}', [UserController::class, 'destroyGuest']);
         Route::post('/guests/{user}/resend-invitation', [UserController::class, 'resendInvitation']);
@@ -311,8 +311,8 @@ Route::middleware('auth:sanctum')->group(function () {
     | Admin and manager only: create, update, delete projects and manage files.
     */
     Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager')->group(function () {
-        // Create new project
-        Route::post('/projects', [ProjectController::class, 'store']);
+        // Create new project (enforces plan project limit)
+        Route::post('/projects', [ProjectController::class, 'store'])->middleware(\App\Http\Middleware\CheckPlanLimits::class . ':projects');
         // Update project
         Route::put('/projects/{project}', [ProjectController::class, 'update']);
         // Partial update project
@@ -739,6 +739,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/hrm/notifications', [HrmRecruitmentController::class, 'getHrmNotifications']);
     Route::post('/hrm/notifications/mark-read', [HrmRecruitmentController::class, 'markHrmNotificationsRead']);
 
+    // HRM Activity Logs
+    Route::get('/hrm/activities', [\App\Http\Controllers\HrmActivityController::class, 'index']);
+    Route::get('/hrm/my-activity', [\App\Http\Controllers\HrmActivityController::class, 'myActivity']);
+
     // Convert candidate to user employee account
     Route::post('/hrm/candidates/{id}/convert-to-user', [HrmRecruitmentController::class, 'convertCandidateToUser']);
 
@@ -829,6 +833,38 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/hrm/performance/goals', [HrmPerformanceController::class, 'storeGoal']);
     Route::patch('/hrm/performance/goals/{id}', [HrmPerformanceController::class, 'updateGoal']);
     Route::post('/hrm/performance/appraisals', [HrmPerformanceController::class, 'storeAppraisal']);
+
+    // Isolated HRM e-sign employment packages. Backend role enforcement is mandatory.
+    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager,owner,hr_manager')->prefix('hrm/esign')->group(function () {
+        Route::get('/envelopes', [\App\Http\Controllers\HrmEsignController::class, 'index']);
+        Route::post('/envelopes', [\App\Http\Controllers\HrmEsignController::class, 'store']);
+        Route::get('/envelopes/{envelope}', [\App\Http\Controllers\HrmEsignController::class, 'show']);
+        Route::put('/envelopes/{envelope}', [\App\Http\Controllers\HrmEsignController::class, 'update']);
+        Route::post('/envelopes/{envelope}/send', [\App\Http\Controllers\HrmEsignController::class, 'send']);
+        Route::post('/envelopes/{envelope}/void', [\App\Http\Controllers\HrmEsignController::class, 'void']);
+
+        // Template Management Routes for HR
+        Route::get('/templates', [\App\Http\Controllers\HrmEsignController::class, 'getTemplates']);
+        Route::post('/templates', [\App\Http\Controllers\HrmEsignController::class, 'storeTemplate']);
+        Route::put('/templates/{template}', [\App\Http\Controllers\HrmEsignController::class, 'updateTemplate']);
+        Route::delete('/templates/{template}', [\App\Http\Controllers\HrmEsignController::class, 'destroyTemplate']);
+    });
+});
+
+// Public signing still requires tenant identification via X-Tenant-ID and a hashed, expiring token.
+Route::middleware('throttle:30,1')->group(function () {
+    Route::get('/public/esign/{slug}/{token}', [\App\Http\Controllers\HrmEsignController::class, 'publicShow']);
+    Route::get('/public/esign/{token}', [\App\Http\Controllers\HrmEsignController::class, 'publicShow']);
+    Route::get('/esign/{slug}/{token}', [\App\Http\Controllers\HrmEsignController::class, 'publicShow']);
+    Route::get('/esign/{token}', [\App\Http\Controllers\HrmEsignController::class, 'publicShow']);
+    Route::post('/public/esign/{slug}/{token}/request-otp', [\App\Http\Controllers\HrmEsignController::class, 'requestOtp'])->middleware('throttle:10,1');
+    Route::post('/public/esign/{token}/request-otp', [\App\Http\Controllers\HrmEsignController::class, 'requestOtp'])->middleware('throttle:10,1');
+    Route::post('/esign/{slug}/{token}/request-otp', [\App\Http\Controllers\HrmEsignController::class, 'requestOtp'])->middleware('throttle:10,1');
+    Route::post('/esign/{token}/request-otp', [\App\Http\Controllers\HrmEsignController::class, 'requestOtp'])->middleware('throttle:10,1');
+    Route::post('/public/esign/{slug}/{token}/sign', [\App\Http\Controllers\HrmEsignController::class, 'sign'])->middleware('throttle:10,1');
+    Route::post('/public/esign/{token}/sign', [\App\Http\Controllers\HrmEsignController::class, 'sign'])->middleware('throttle:10,1');
+    Route::post('/esign/{slug}/{token}/sign', [\App\Http\Controllers\HrmEsignController::class, 'sign'])->middleware('throttle:10,1');
+    Route::post('/esign/{token}/sign', [\App\Http\Controllers\HrmEsignController::class, 'sign'])->middleware('throttle:10,1');
 });
 
 /*

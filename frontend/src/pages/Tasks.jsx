@@ -6,7 +6,7 @@
  * filtering, drag-and-drop reordering and pagination.
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
@@ -139,9 +139,9 @@ function Tasks() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
   const [advancedFilters, setAdvancedFilters] = useState({
-    user_id: "",
-    project_id: "",
-    status: "",
+    user_id: [],
+    project_id: [],
+    status: [],
     start_date: "",
     end_date: "",
   });
@@ -165,9 +165,15 @@ function Tasks() {
     const params = new URLSearchParams();
     params.append("per_page", itemsPerPage);
     if (debouncedSearch) params.append("search", debouncedSearch);
-    if (advancedFilters.user_id) params.append("user_id", advancedFilters.user_id);
-    if (advancedFilters.project_id) params.append("project_id", advancedFilters.project_id);
-    if (advancedFilters.status) params.append("status", advancedFilters.status);
+    if (advancedFilters.user_id && advancedFilters.user_id.length > 0) {
+      params.append("user_id", Array.isArray(advancedFilters.user_id) ? advancedFilters.user_id.join(",") : advancedFilters.user_id);
+    }
+    if (advancedFilters.project_id && advancedFilters.project_id.length > 0) {
+      params.append("project_id", Array.isArray(advancedFilters.project_id) ? advancedFilters.project_id.join(",") : advancedFilters.project_id);
+    }
+    if (advancedFilters.status && advancedFilters.status.length > 0) {
+      params.append("status", Array.isArray(advancedFilters.status) ? advancedFilters.status.join(",") : advancedFilters.status);
+    }
     if (advancedFilters.start_date) params.append("start_date", advancedFilters.start_date);
     if (advancedFilters.end_date) params.append("end_date", advancedFilters.end_date);
     if (sortBy) params.append("sort_by", sortBy);
@@ -428,15 +434,69 @@ function Tasks() {
   const approvedCount = baseItems.filter((i) => i.status === "approved").length;
   const rejectedCount = baseItems.filter((i) => i.status === "rejected").length;
   const abandonedCount = baseItems.filter((i) => i.status === "abandoned" || i.status === "abandon_requested").length;
-  const searchFilteredItems = debouncedSearch
-    ? baseItems.filter((item) => {
-        const q = debouncedSearch.toLowerCase();
+  const searchFilteredItems = useMemo(() => {
+    let list = baseItems;
+    if (debouncedSearch) {
+      const q = debouncedSearch.toLowerCase();
+      list = list.filter((item) => {
         const titleMatch = (item.title || "").toLowerCase().includes(q);
-        const assigneeMatch = (item.assignees || []).some(a => (a.name || "").toLowerCase().includes(q));
+        const assigneeMatch = (item.assignees || []).some((a) => (a.name || "").toLowerCase().includes(q));
         const assignerMatch = (item.assigner?.name || "").toLowerCase().includes(q);
-        return titleMatch || assigneeMatch || assignerMatch;
-      })
-    : baseItems;
+        const projectMatch = (item.project?.title || "").toLowerCase().includes(q);
+        return titleMatch || assigneeMatch || assignerMatch || projectMatch;
+      });
+    }
+    if (advancedFilters.user_id && advancedFilters.user_id.length > 0) {
+      const uids = (Array.isArray(advancedFilters.user_id) ? advancedFilters.user_id : [advancedFilters.user_id]).map(Number);
+      list = list.filter((item) => {
+        return (item.assignees || []).some((a) => uids.includes(Number(a.id))) ||
+          uids.includes(Number(item.assigned_to)) ||
+          uids.includes(Number(item.assigned_by));
+      });
+    }
+    if (advancedFilters.project_id && advancedFilters.project_id.length > 0) {
+      const pids = (Array.isArray(advancedFilters.project_id) ? advancedFilters.project_id : [advancedFilters.project_id]).map(Number);
+      list = list.filter((item) => {
+        const projId = Number(item.project_id || item.project?.id);
+        return pids.includes(projId);
+      });
+    }
+    if (advancedFilters.status && advancedFilters.status.length > 0) {
+      const sts = Array.isArray(advancedFilters.status) ? advancedFilters.status : [advancedFilters.status];
+      list = list.filter((item) => {
+        return sts.some((st) => {
+          if (st === "due_today") {
+            const d = item.end_date || item.due_date || item.start_date ? new Date(item.end_date || item.due_date || item.start_date) : null;
+            const isToday = d && d.toDateString() === new Date().toDateString();
+            const isDone = ["approved", "completed", "done"].includes((item.status || "").toLowerCase());
+            return isToday && !isDone;
+          }
+          if (st === "pending") return ["pending", "planned", "Planning", "Planned"].includes(item.status);
+          if (st === "in_progress") return ["in_progress", "In Progress", "in-progress"].includes(item.status);
+          if (st === "paused") return ["paused", "pause", "Pause"].includes(item.status);
+          if (st === "transferred") return Array.isArray(item.delegation_chain) && item.delegation_chain.length > 0;
+          if (st === "rejected" || st === "declined") return item.status === "rejected" || item.status === "declined";
+          if (st === "abandoned") return item.status === "abandoned" || item.status === "abandon_requested";
+          if (st === "approved") return item.status === "approved" || item.status === "completed";
+          return item.status === st;
+        });
+      });
+    }
+    if (advancedFilters.start_date) {
+      list = list.filter((item) => {
+        const itemDate = item.start_date ? new Date(item.start_date) : null;
+        return itemDate && itemDate >= new Date(advancedFilters.start_date);
+      });
+    }
+    if (advancedFilters.end_date) {
+      list = list.filter((item) => {
+        const itemDate = item.end_date || item.due_date ? new Date(item.end_date || item.due_date) : null;
+        return itemDate && itemDate <= new Date(advancedFilters.end_date);
+      });
+    }
+    return list;
+  }, [baseItems, debouncedSearch, advancedFilters]);
+
   const filteredItems = statusFilter
     ? searchFilteredItems.filter((item) => {
         if (statusFilter === "due_today") {
@@ -534,7 +594,7 @@ function Tasks() {
           onFilterChange={(key, val) => setAdvancedFilters((prev) => ({ ...prev, [key]: val }))}
           onReset={() => {
             setSearch("");
-            setAdvancedFilters({ user_id: "", project_id: "", status: "", start_date: "", end_date: "" });
+            setAdvancedFilters({ user_id: [], project_id: [], status: [], start_date: "", end_date: "" });
           }}
         />
       )}

@@ -143,6 +143,10 @@ class DatabaseProvisionService
             'hrm_member_requests',
             'hrm_workflows',
             'hrm_workflow_steps',
+            'hrm_esign_envelopes',
+            'hrm_esign_documents',
+            'hrm_esign_tokens',
+            'hrm_esign_events',
         ];
 
         $missing = array_values(array_filter(

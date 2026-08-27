@@ -4,11 +4,12 @@
   display: inline-flex;
   gap: 6px;
   align-items: center;
-  opacity: 0;
-  pointer-events: none;
+  opacity: 0.85;
+  pointer-events: auto;
+  transition: opacity 0.15s ease;
 }
 
-/* Show actions on row hover — both grid rows and table rows */
+/* Show full opacity on row hover — both grid rows and table rows */
 .project-list-row:hover .row-actions,
 .all-tasks-row:hover .row-actions,
 .self-tasks-row:hover .row-actions,
@@ -20,6 +21,7 @@
 .deliveries-by-you-row:hover .row-actions,
 .all-subtasks-row:hover .row-actions,
 .table-row:hover .row-actions,
+.row-actions:hover,
 tr:hover .row-actions {
   opacity: 1;
   pointer-events: auto;

@@ -10,8 +10,10 @@ import { isAdminDomain } from "../utils/domain";
 import { notify } from "../utils/notify";
 
 /** @type {string} API base URL without trailing slashes */
-const rawApiUrl = import.meta.env.VITE_API_URL || "";
-const API_URL = rawApiUrl.replace(/\/+$/g, "");
+const rawApiUrl = import.meta.env.VITE_API_URL || "/api";
+const API_URL = (rawApiUrl || "/api").replace(/\/+$/g, "");
+
+export default API_URL;
 
 // Global fetch interceptor for session management and notifications
 const originalFetch = window.fetch;
@@ -34,7 +36,9 @@ window.fetch = async function (...args) {
     // Handle session expiration (401 Unauthorized)
     if (res.status === 401) {
       const url = typeof resource === "string" ? resource : resource?.url || "";
-      if (url.includes("/super-admin")) return res;
+      // Public purpose-token endpoints (candidate e-sign, offer portals, etc.)
+      // do not use a PMS login and must not trigger employee-session redirects.
+      if (url.includes("/super-admin") || url.includes("/public/")) return res;
       const tokenNow = getToken(role);
       const isTokenExpired = tokenNow && tokenNow === tokenAtRequest;
       const isZombieTab = !tokenAtRequest && !tokenNow && role;
@@ -57,76 +61,14 @@ window.fetch = async function (...args) {
         try {
           window.history.replaceState(null, "", loginPath);
         } catch {}
-        window.location.replace(`${loginPath}?message=${encodeURIComponent(targetMsg)}`);
-      }
-    }
-
-    // Auto-show notifications for API responses (unless disabled via _notifHandled)
-    if (!config._notifHandled && res.status !== 204) {
-      const url = typeof resource === "string" ? resource : resource?.url || "";
-      const isApiCall = url.includes("/api") || (API_URL && url.includes(API_URL));
-      if (isApiCall) {
-        try {
-          const clone = res.clone();
-          const data = await clone.json();
-          if (data?.success === true && data?.message && typeof data.message === "string") {
-            notify.success(data.message);
-          } else if (data?.success === false && data?.message && typeof data.message === "string") {
-            notify.error(data.message);
-          }
-        } catch {}
+        window.location.replace(
+          loginPath + "?message=" + encodeURIComponent(targetMsg),
+        );
       }
     }
 
     return res;
-  } catch (e) {
-    throw e;
+  } catch (error) {
+    throw error;
   }
 };
-
-/**
- * Invalidates React Query cache (placeholder for future implementation).
- */
-export function invalidateCache() {}
-
-/**
- * Called after mutations (placeholder for future implementation).
- */
-export function onMutation() {}
-
-// Cross-tab session synchronization
-// Detects when our session is removed by another tab (e.g. logout)
-let _sessionConflictHandled = false;
-window.addEventListener("storage", (e) => {
-  if (!e.key || _sessionConflictHandled) return;
-  const role = getCurrentRole();
-  if (!role) return;
-  const sid = getSessionId();
-  if (!sid) return;
-
-  // Only react to sessions_{role} changes
-  if (e.key !== `sessions_${role}`) return;
-
-  // No change — ignore
-  if (e.newValue === e.oldValue) return;
-
-  try {
-    const oldSessions = e.oldValue ? JSON.parse(e.oldValue) : {};
-    const newSessions = e.newValue ? JSON.parse(e.newValue) : {};
-
-    // Our session was explicitly removed (existed before, gone now)
-    if (oldSessions[sid] && !newSessions[sid]) {
-      _sessionConflictHandled = true;
-      clearSession(role);
-      const loginPath = isAdminDomain() ? "/super-admin/login" : "/login";
-      try {
-        window.history.replaceState(null, "", loginPath);
-      } catch {}
-      window.location.replace(`${loginPath}?message=${encodeURIComponent("You have been logged in from another tab.")}`);
-    }
-  } catch {
-    // Parse error — ignore (don't force logout on corrupted data)
-  }
-});
-
-export default API_URL;

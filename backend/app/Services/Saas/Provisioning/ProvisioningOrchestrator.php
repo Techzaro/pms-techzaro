@@ -58,6 +58,13 @@ class ProvisioningOrchestrator
         ]);
 
         try {
+            // Step 0: Fix master DB columns (organizations table safety net)
+            try {
+                \App\Console\Commands\FixMasterColumns::fixMasterDatabaseQuiet();
+            } catch (\Throwable $e) {
+                Log::warning("Master column fix failed (non-fatal)", ['error' => $e->getMessage()]);
+            }
+
             // Step 1: Create Organization Record (master DB)
             $status->startStep(ProvisioningStatus::STEP_CREATE_ORG_RECORD);
             $organization = $this->createOrganizationRecord($data);
@@ -72,6 +79,14 @@ class ProvisioningOrchestrator
             $status->startStep(ProvisioningStatus::STEP_RUN_MIGRATIONS);
             $this->migrationRunner->run($dbName);
             $status->completeStep(ProvisioningStatus::STEP_RUN_MIGRATIONS);
+
+            // Step 3b: Fix missing columns (migration safety net)
+            try {
+                \App\Console\Commands\FixTenantColumns::fixDatabaseProgrammatic($dbName);
+                Log::info("Tenant column fixes applied", ['database' => $dbName]);
+            } catch (\Throwable $e) {
+                Log::warning("Column fix step failed (non-fatal)", ['error' => $e->getMessage()]);
+            }
 
             // Step 4: Run Tenant Seeders
             $status->startStep(ProvisioningStatus::STEP_RUN_SEEDERS);

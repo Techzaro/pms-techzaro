@@ -12,7 +12,7 @@ return new class extends Migration
             Schema::create('hrm_application_fields', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('organization_id')->nullable()->index();
-                $table->foreignId('application_type_id')->constrained('hrm_application_types')->cascadeOnDelete();
+                $table->unsignedBigInteger('application_type_id')->index();
                 $table->string('field_label');
                 $table->string('field_name');
                 $table->string('field_type');

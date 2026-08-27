@@ -210,6 +210,26 @@ class DraftService
 
     public function publish(Draft $draft, User $user): ?object
     {
+        // Enforce plan limits for new entity creation (not updates)
+        if (!$draft->original_record_id && in_array($draft->module_type, ['project', 'user'])) {
+            $organization = request()->attributes->get('currentOrganization');
+            if ($organization && !$organization->isOwner()) {
+                $entitlementService = app(\App\Services\Saas\EntitlementService::class);
+                $check = $draft->module_type === 'project'
+                    ? $entitlementService->canCreateProject($organization)
+                    : $entitlementService->canCreateUser($organization);
+
+                if (!$check['allowed']) {
+                    throw new \App\Exceptions\PlanLimitReachedException(
+                        $check['message'],
+                        $check['resource'],
+                        $check['limit'],
+                        $check['current']
+                    );
+                }
+            }
+        }
+
         $draftData = $draft->draft_data;
 
         $entity = match ($draft->module_type) {

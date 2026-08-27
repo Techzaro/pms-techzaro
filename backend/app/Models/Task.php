@@ -165,16 +165,91 @@ class Task extends Model
     public function scopeFilter(Builder $query, array $filters): Builder
     {
         if (! empty($filters['status'])) {
-            $query->where('status', $filters['status']);
+            $statuses = is_array($filters['status']) ? $filters['status'] : explode(',', (string) $filters['status']);
+            $statuses = array_values(array_filter(array_map('trim', $statuses)));
+            if (! empty($statuses)) {
+                $expandedStatuses = [];
+                $hasDueToday = false;
+                $hasTransferred = false;
+                foreach ($statuses as $st) {
+                    if ($st === 'due_today') {
+                        $hasDueToday = true;
+                    } elseif ($st === 'transferred') {
+                        $hasTransferred = true;
+                    } elseif ($st === 'pending') {
+                        $expandedStatuses = array_merge($expandedStatuses, ['pending', 'planned', 'Planning', 'Planned']);
+                    } elseif ($st === 'in_progress') {
+                        $expandedStatuses = array_merge($expandedStatuses, ['in_progress', 'In Progress', 'in-progress']);
+                    } elseif ($st === 'paused') {
+                        $expandedStatuses = array_merge($expandedStatuses, ['paused', 'pause', 'Pause']);
+                    } elseif ($st === 'rejected' || $st === 'declined') {
+                        $expandedStatuses[] = 'rejected';
+                        $expandedStatuses[] = 'declined';
+                    } elseif ($st === 'abandoned') {
+                        $expandedStatuses[] = 'abandoned';
+                        $expandedStatuses[] = 'abandon_requested';
+                    } elseif ($st === 'approved') {
+                        $expandedStatuses[] = 'approved';
+                        $expandedStatuses[] = 'completed';
+                    } elseif (! empty($st)) {
+                        $expandedStatuses[] = $st;
+                    }
+                }
+                $expandedStatuses = array_values(array_unique($expandedStatuses));
+                $query->where(function ($sq) use ($expandedStatuses, $hasDueToday, $hasTransferred) {
+                    $hasCondition = false;
+                    if (! empty($expandedStatuses)) {
+                        $sq->whereIn('status', $expandedStatuses);
+                        $hasCondition = true;
+                    }
+                    if ($hasDueToday) {
+                        $today = now()->toDateString();
+                        if ($hasCondition) {
+                            $sq->orWhere(function ($dq) use ($today) {
+                                $dq->where(function ($ddq) use ($today) {
+                                    $ddq->whereDate('end_date', $today)->orWhereDate('due_date', $today)->orWhereDate('start_date', $today);
+                                })->whereNotIn('status', ['approved', 'completed', 'done', 'abandoned']);
+                            });
+                        } else {
+                            $sq->where(function ($ddq) use ($today) {
+                                $ddq->whereDate('end_date', $today)->orWhereDate('due_date', $today)->orWhereDate('start_date', $today);
+                            })->whereNotIn('status', ['approved', 'completed', 'done', 'abandoned']);
+                            $hasCondition = true;
+                        }
+                    }
+                    if ($hasTransferred) {
+                        if ($hasCondition) {
+                            $sq->orWhere(function ($tq) {
+                                $tq->whereNotNull('delegation_chain')->where('delegation_chain', '!=', '[]');
+                            });
+                        } else {
+                            $sq->whereNotNull('delegation_chain')->where('delegation_chain', '!=', '[]');
+                        }
+                    }
+                });
+            }
         }
         if (! empty($filters['priority'])) {
             $query->where('priority', $filters['priority']);
         }
-        if (! empty($filters['assigned_to'])) {
-            $query->where('assigned_to', $filters['assigned_to']);
+        $userIds = $filters['user_id'] ?? $filters['assigned_to'] ?? null;
+        if (! empty($userIds)) {
+            $ids = is_array($userIds) ? $userIds : explode(',', (string) $userIds);
+            $ids = array_values(array_filter(array_map('intval', $ids)));
+            if (! empty($ids)) {
+                $query->where(function ($q) use ($ids) {
+                    $q->whereIn('assigned_to', $ids)
+                      ->orWhereIn('assigned_by', $ids)
+                      ->orWhereHas('assignees', fn ($aq) => $aq->whereIn('users.id', $ids));
+                });
+            }
         }
         if (! empty($filters['project_id'])) {
-            $query->where('project_id', $filters['project_id']);
+            $projectIds = is_array($filters['project_id']) ? $filters['project_id'] : explode(',', (string) $filters['project_id']);
+            $projectIds = array_values(array_filter(array_map('intval', $projectIds)));
+            if (! empty($projectIds)) {
+                $query->whereIn('project_id', $projectIds);
+            }
         }
         if (! empty($filters['search'])) {
             $query->where(function ($q) use ($filters) {
@@ -187,6 +262,12 @@ class Task extends Model
         }
         if (! empty($filters['start_date_to'])) {
             $query->where('start_date', '<=', $filters['start_date_to']);
+        }
+        if (! empty($filters['start_date'])) {
+            $query->whereDate('start_date', '>=', $filters['start_date']);
+        }
+        if (! empty($filters['end_date'])) {
+            $query->whereDate('end_date', '<=', $filters['end_date']);
         }
 
         return $query;
