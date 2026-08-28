@@ -63,7 +63,7 @@ export const STATUS_LABELS = {
   "in-progress": "In Progress",
   paused: "Paused",
   submitted: "Submitted",
-  reopened: "Pending",
+  reopened: "Reopened",
   approved: "Approved",
   rejected: "Declined",
   declined: "Declined",
@@ -89,13 +89,17 @@ export default function TaskMultiStatusBadges({ item }) {
   const { t } = useTranslation();
   if (!item) return null;
 
-  const rawStatus = item?.status || "Pending";
+  const viewerStatus = item?.display_status || item?.status || "Pending";
+  // Lists use the normal workflow status as the primary badge. Reopened is
+  // represented by the dedicated modifier icon; Task Details still shows the
+  // explicit Reopened status from its own header.
+  const rawStatus = String(viewerStatus).toLowerCase() === "reopened" ? "in_progress" : viewerStatus;
   const normalizedKey = String(rawStatus).toLowerCase();
   const primaryBg = STATUS_COLORS[rawStatus] || STATUS_COLORS[normalizedKey] || "#F3F4F6";
   const primaryColor = STATUS_TEXT_COLORS[rawStatus] || STATUS_TEXT_COLORS[normalizedKey] || "#374151";
   const primaryLabel = formatStatus(rawStatus);
 
-  // 1. Subtle Reopened Indicator (SRS Section 5 & 10)
+  // Subtle Reopened Indicator
   const isReopened = Boolean(
     (Array.isArray(item?.states) && item.states.some((s) => String(s).toLowerCase() === "reopened")) ||
     item?.is_reopened ||
@@ -103,14 +107,14 @@ export default function TaskMultiStatusBadges({ item }) {
     (item?.reopen_count && item.reopen_count > 0)
   );
 
-  // 2. Subtle Transferred Indicator (SRS Section 5 & 10)
+  // Subtle Transferred Indicator (SRS Section 5 & 10)
   const isTransferred = Boolean(
     (Array.isArray(item?.states) && item.states.some((s) => String(s).toLowerCase() === "transferred")) ||
     item?.is_transferred ||
     (Array.isArray(item?.delegation_chain) && item.delegation_chain.length > 0)
   );
 
-  // 3. Assigner Paused Lock Indicator
+  // Assigner Paused Lock Indicator
   const isAssignerPaused = Boolean(item?.assigner_paused);
 
   return (

@@ -12,8 +12,8 @@ import { authToken, getUser } from "../utils/auth";
 import { notify } from "../utils/notify";
 import { formatDateTime } from "../utils/formatDateTime";
 
-function DelegationChain({ task, delegationChain = [], approvalChain = [], onTaskUpdate }) {
-  const { t } = useTranslation();
+function DelegationChain({ task, delegationChain = [], safeApprovalChain = [], onTaskUpdate }) {
+  const { t } = useTranslation(); // Added this because t() was being used but not defined
   const currentUser = getUser();
   const [accepting, setAccepting] = useState(false);
   const [rejecting, setRejecting] = useState(false);
@@ -30,11 +30,18 @@ function DelegationChain({ task, delegationChain = [], approvalChain = [], onTas
       const res = await fetch(`${API_URL}/tasks/${task.id}/accept-delegation`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      
       if (res.ok && data.success) {
-        notify.success(t("Transfer accepted", { defaultValue: "Transfer accepted" }));
-        onTaskUpdate?.();
+        // Combined logic from both branches
+        notify.success(data.message || t("Transfer accepted", { defaultValue: "Transfer accepted" }));
+        try {
+          await onTaskUpdate?.();
+        } catch (refreshError) {
+          console.error("Post-acknowledgement refresh failed", refreshError);
+        }
       } else {
         notify.error(data.message || t("Failed to accept", { defaultValue: "Failed to accept" }));
       }
@@ -113,8 +120,6 @@ function DelegationChain({ task, delegationChain = [], approvalChain = [], onTas
   };
 
   const safeDelegationChain = Array.isArray(delegationChain) ? delegationChain : [];
-  const safeApprovalChain = Array.isArray(approvalChain) ? approvalChain : [];
-
   if (!safeDelegationChain.length && !isDelegatedToMe) return null;
 
   return (
@@ -236,8 +241,8 @@ function DelegationChain({ task, delegationChain = [], approvalChain = [], onTas
         })}
       </div>
 
-      {/* Approval chain */}
-      {safeApprovalChain.length > 0 && (
+      {/* Approval chain from feature/time-zone */}
+      {safeApprovalChain?.length > 0 && (
         <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid var(--border)" }}>
           <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "8px" }}>
             {t("Approval Route (reversed chain):", { defaultValue: "Approval Route (reversed chain):" })}
@@ -258,8 +263,8 @@ function DelegationChain({ task, delegationChain = [], approvalChain = [], onTas
         </div>
       )}
 
-      {/* Current owner indicator */}
-      {task.current_owner && task.current_owner_name && (
+      {/* Current owner indicator from feature/time-zone */}
+      {task?.current_owner && task?.current_owner_name && (
         <div style={{
           marginTop: "12px", padding: "8px 12px", borderRadius: "6px",
           background: "var(--color-info-bg, #f0f9ff)",

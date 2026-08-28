@@ -28,35 +28,41 @@ initI18n();
 const originalFetch = window.fetch;
 window.fetch = async function (...args) {
   const response = await originalFetch.apply(window, args);
-  if (response.ok) {
-    const url = typeof args[0] === 'string' ? args[0] : args[0]?.url;
-    const options = args[1] || {};
-    const method = (options.method || 'GET').toUpperCase();
-    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
-      if (url && (
-        url.includes('/tasks') ||
-        url.includes('/projects') ||
-        url.includes('/deliverables') ||
-        url.includes('/events') ||
-        url.includes('/deliveries')
-      )) {
-        queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-        queryClient.invalidateQueries({ queryKey: ['activities'] });
-        window.dispatchEvent(new CustomEvent('calendar-sync'));
-        publish('data:changed', { url, method });
-      } else if (url && url.includes('/teams')) {
-        queryClient.invalidateQueries({ queryKey: ['teams'] });
-        queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-        publish('data:changed', { url, method });
-      } else if (url && url.includes('/notifications')) {
-        queryClient.invalidateQueries({ queryKey: ['notifications'] });
-        publish('data:changed', { url, method });
-      } else if (url && url.includes('/users')) {
-        queryClient.invalidateQueries({ queryKey: ['users'] });
-        queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-        publish('data:changed', { url, method });
+  // Cache/event side effects must never turn a completed HTTP mutation into a
+  // rejected fetch. Callers use this promise to decide whether the API failed.
+  try {
+    if (response.ok) {
+      const url = typeof args[0] === 'string' ? args[0] : args[0]?.url;
+      const options = args[1] || {};
+      const method = (options.method || 'GET').toUpperCase();
+      if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+        if (url && (
+          url.includes('/tasks') ||
+          url.includes('/projects') ||
+          url.includes('/deliverables') ||
+          url.includes('/events') ||
+          url.includes('/deliveries')
+        )) {
+          queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+          queryClient.invalidateQueries({ queryKey: ['activities'] });
+          window.dispatchEvent(new CustomEvent('calendar-sync'));
+          publish('data:changed', { url, method });
+        } else if (url && url.includes('/teams')) {
+          queryClient.invalidateQueries({ queryKey: ['teams'] });
+          queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+          publish('data:changed', { url, method });
+        } else if (url && url.includes('/notifications')) {
+          queryClient.invalidateQueries({ queryKey: ['notifications'] });
+          publish('data:changed', { url, method });
+        } else if (url && url.includes('/users')) {
+          queryClient.invalidateQueries({ queryKey: ['users'] });
+          queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+          publish('data:changed', { url, method });
+        }
       }
     }
+  } catch (sideEffectError) {
+    console.error('Post-request cache invalidation failed', sideEffectError);
   }
   return response;
 };

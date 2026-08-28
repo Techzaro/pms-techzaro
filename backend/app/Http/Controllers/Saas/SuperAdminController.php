@@ -1245,8 +1245,11 @@ class SuperAdminController extends Controller
         // Strip ALL MySQL dump conditional comment lines (/*!...*/) that cause issues
         $sql = preg_replace('/\/\*!\d+\s+.*?\*\//', '', $sql);
 
+        // Strip -- comment lines (MariaDB dump header comments)
+        $sql = preg_replace('/^--.*$/m', '', $sql);
+
         // Execute in large batches (much faster than line-by-line)
-        $statements = array_filter(array_map('trim', explode(';', $sql)), fn($s) => $s !== '' && !str_starts_with($s, '--'));
+        $statements = array_filter(array_map('trim', explode(';', $sql)), fn($s) => $s !== '' && $s !== '--');
         $batch = '';
         $batchSize = 0;
         foreach ($statements as $statement) {

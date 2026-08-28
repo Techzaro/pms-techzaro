@@ -225,8 +225,8 @@ function TransferTaskDialog({ isOpen, onClose, task, entityType, onTransferSucce
                     onChange={() => { setReturnToTransferor(false); setIsDirty(true); }}
                   />
                   <span className="tt-radio-label">
-                    <strong>{t("Submit directly to original assigner", { defaultValue: "Submit directly to original assigner" })}</strong>
-                    <small>{t("New owner submits directly to the person who originally assigned the task", { defaultValue: "New owner submits directly to the person who originally assigned the task" })}</small>
+                    <strong>{t("Submit directly to my assigner", { defaultValue: "Submit directly to my assigner" })}</strong>
+                    <small>{t("You will be bypassed. The submission goes to the nearest earlier return checkpoint or task creator.", { defaultValue: "You will be bypassed. The submission goes to the nearest earlier return checkpoint or task creator." })}</small>
                   </span>
                 </label>
               </div>

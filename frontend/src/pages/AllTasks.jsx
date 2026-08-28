@@ -187,9 +187,6 @@ function AllTasks() {
       const params = new URLSearchParams();
       if (timeFilter) params.append("time_filter", timeFilter);
       if (debouncedSearch) params.append("search", debouncedSearch);
-      if (statusFilter && (!advancedFilters.statuses || advancedFilters.statuses.length === 0)) {
-        params.append("status", statusFilter);
-      }
 
       const stList = Array.isArray(advancedFilters.statuses)
         ? advancedFilters.statuses
@@ -274,7 +271,7 @@ function AllTasks() {
 
   const baseItems = orderedItems.length ? orderedItems : items;
   const pendingStatuses = ["pending", "planned", "Planning", "Planned"];
-  const inProgressStatuses = ["in_progress", "In Progress", "In-progress"];
+  const inProgressStatuses = ["in_progress", "In Progress", "In-progress", "reopened", "Reopened"];
 
   const allCount = useMemo(() => baseItems.length, [baseItems]);
   const dueTodayCount = useMemo(() => baseItems.filter((i) => { const d = i.end_date ? new Date(i.end_date) : null; return d && d.toDateString() === new Date().toDateString(); }).length, [baseItems]);
