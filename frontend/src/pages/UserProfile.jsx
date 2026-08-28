@@ -844,7 +844,7 @@ function UserProfile() {
     } else if (editUser.designation === "__custom__" && !editUser.designationCustom.trim()) {
       errors.designationCustom = t("Custom Designation is required.", { defaultValue: "Custom Designation is required." });
     }
-    if (!editUser.employee_code.trim()) errors.employee_code = t("Employee Code is required.", { defaultValue: "Employee Code is required." });
+if (!editUser.employee_code.trim()) errors.employee_code = t("Employee Code is required.", { defaultValue: "Employee Code is required." });
     if (!editUser.job_started_date) errors.job_started_date = t("Job Start Date is required.", { defaultValue: "Job Start Date is required." });
     if (editUser.gross_salary && editUser.gross_salary.length > 100) {
       errors.gross_salary = t("Gross Salary must be 300 characters or less.", { defaultValue: "Gross Salary must be 300 characters or less." });

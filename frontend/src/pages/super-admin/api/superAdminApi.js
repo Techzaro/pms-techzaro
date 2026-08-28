@@ -178,11 +178,40 @@ export const api = {
   }),
   closeOrgSupportTicket: (orgId, ticketId) => request(`/organizations/${orgId}/support/tickets/${ticketId}/close`, { method: 'POST' }),
 
+  // ─── Feedback Tickets ──────────────────────────────────────
+  getFeedbackTickets: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/feedback-tickets${qs ? '?' + qs : ''}`);
+  },
+  getFeedbackTicketDetail: (ticketId) => request(`/feedback-tickets/${ticketId}`),
+  replyFeedbackTicket: (ticketId, message) => request(`/feedback-tickets/${ticketId}/reply`, {
+    method: 'POST', body: JSON.stringify({ message }),
+  }),
+  closeFeedbackTicket: (ticketId) => request(`/feedback-tickets/${ticketId}/close`, { method: 'POST' }),
+  updateFeedbackTicketStatus: (ticketId, status) => request(`/feedback-tickets/${ticketId}/status`, {
+    method: 'POST', body: JSON.stringify({ status }),
+  }),
+
+  // ─── Organization Audit Logs (Super Admin) ──────────────────
+  getOrgAuditLogs: (orgId, params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/organizations/${orgId}/audit-logs${qs ? '?' + qs : ''}`);
+  },
+  getOrgAuditLogModules: (orgId) => request(`/organizations/${orgId}/audit-logs/modules`),
+  getOrgAuditLogActions: (orgId) => request(`/organizations/${orgId}/audit-logs/actions`),
+  getOrgAuditLogUsers: (orgId) => request(`/organizations/${orgId}/audit-logs/users`),
+
   // ─── Activity Logs ───────────────────────────────────────────
   getActivityLogs: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return request(`/activity-logs${qs ? '?' + qs : ''}`);
   },
+  getActivityLogActions: () => request('/activity-logs/actions'),
+  getAllOrgAuditLogs: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/all-org-audit-logs${qs ? '?' + qs : ''}`);
+  },
+  getAllOrgAuditLogModules: () => request('/all-org-audit-logs/modules'),
 
   // ─── Notifications ───────────────────────────────────────────
   getNotifications: (params = {}) => {

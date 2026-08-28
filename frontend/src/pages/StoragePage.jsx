@@ -15,9 +15,15 @@ const CATEGORY_CONFIG = {
   attachments: { label: 'Attachments', icon: FolderOpen, color: 'var(--color-primary)' },
   documents: { label: 'Documents', icon: FileText, color: 'var(--color-blue)' },
   images: { label: 'Images', icon: Image, color: 'var(--color-success)' },
-  avatars: { label: 'Avatars', icon: Image, color: '#8b5cf6' },
-  reports: { label: 'Reports', icon: FileText, color: 'var(--color-warning)' },
-  other: { label: 'Other', icon: Archive, color: 'var(--text-muted)' },
+  archives: { label: 'Archives', icon: Archive, color: 'var(--color-warning)' },
+  other: { label: 'Other', icon: HardDrive, color: 'var(--text-muted)' },
+};
+
+const fmtBytesToUnit = (bytes, unit = 'GB') => {
+  if (!bytes) return `0 ${unit}`;
+  const divisors = { KB: 1024, MB: 1024**2, GB: 1024**3 };
+  const divisor = divisors[unit] || divisors.GB;
+  return `${(bytes / divisor).toFixed(2)} ${unit}`;
 };
 
 function formatBytes(bytes) {
@@ -93,13 +99,17 @@ export default function StoragePage() {
       if (summaryRes.success) setSummary(summaryRes.summary);
       if (largeRes.success) setLargeFiles(largeRes.large_files || []);
 
-      // Also fetch notifications on initial load
+      // Also fetch notifications and preferences on initial load
       try {
-        const notifRes = await api.get('/organization/storage/notifications');
+        const [notifRes, prefRes] = await Promise.all([
+          api.get('/organization/storage/notifications'),
+          api.get('/organization/storage/preferences'),
+        ]);
         if (notifRes.success) {
           setNotifications(notifRes.notifications || []);
           setPinnedNotifications(notifRes.pinned || []);
         }
+        if (prefRes.success) setPreferences(prefRes.preferences);
       } catch (_) { /* ignore */ }
     } catch (err) {
       setError(t('Failed to load storage data.', { defaultValue: 'Failed to load storage data.' }));
@@ -181,8 +191,10 @@ export default function StoragePage() {
   }
 
   const usagePercent = summary?.usage_percent || storage?.usage_percent || 0;
-  const isWarning = usagePercent > 80;
-  const isCritical = usagePercent > 95;
+  const warnThreshold = preferences?.warn_threshold || 80;
+  const criticalThreshold = preferences?.critical_threshold || 90;
+  const isWarning = usagePercent >= warnThreshold;
+  const isCritical = usagePercent >= criticalThreshold;
   const isNearLimit = usagePercent > 70;
 
   return (
@@ -329,10 +341,15 @@ export default function StoragePage() {
             <div style={{ marginBottom: '24px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                 <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-heading)' }}>
-                  {summary?.total_gb || storage?.total_gb || 0} GB
+<span style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-dark)' }}>
+                  {fmtBytesToUnit(summary?.total_bytes || storage?.total_bytes || 0, summary?.storage_unit || storage?.storage_unit || 'GB')}
                 </span>
                 <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
-                  {t('of {{max}} GB', { max: summary?.max_storage_gb || storage?.max_storage_gb || 0, defaultValue: `of ${summary?.max_storage_gb || storage?.max_storage_gb || 0} GB` })}
+                  {t('of {{max}} {{unit}}', {
+                    max: summary?.max_storage_gb || storage?.max_storage_gb || 0,
+                    unit: summary?.storage_unit || storage?.storage_unit || 'GB',
+                    defaultValue: `of ${summary?.max_storage_gb || storage?.max_storage_gb || 0} ${summary?.storage_unit || storage?.storage_unit || 'GB'}`
+                  })}
                 </span>
               </div>
               <div style={{ width: '100%', height: '14px', borderRadius: '7px', background: 'var(--bg-hover)', overflow: 'hidden' }}>
@@ -350,18 +367,25 @@ export default function StoragePage() {
                 }} />
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px' }}>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t('{{percent}}% used', { percent: usagePercent, defaultValue: `${usagePercent}% used` })}</span>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t('{{remaining}} GB remaining', { remaining: summary?.remaining_gb || storage?.remaining_gb || 0, defaultValue: `${summary?.remaining_gb || storage?.remaining_gb || 0} GB remaining` })}</span>
+<span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                  {t('{{percent}}% used', { percent: usagePercent, defaultValue: `${usagePercent}% used` })}
+                </span>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                  {t('{{remaining}} remaining', { 
+                    remaining: fmtBytesToUnit(summary?.remaining_bytes, summary?.storage_unit || 'GB'), 
+                    defaultValue: `${fmtBytesToUnit(summary?.remaining_bytes, summary?.storage_unit || 'GB')} remaining` 
+                  })}
+                </span>
               </div>
             </div>
 
             {/* Stats Grid */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
               {[
-                { label: t('Total Files', { defaultValue: 'Total Files' }), value: summary?.total_files || 0, color: 'var(--color-primary)', icon: FileText },
-                { label: t('Used Space', { defaultValue: 'Used Space' }), value: `${summary?.total_gb || 0} GB`, color: 'var(--color-blue)', icon: HardDrive },
-                { label: t('Storage Limit', { defaultValue: 'Storage Limit' }), value: `${summary?.max_storage_gb || 0} GB`, color: 'var(--color-success)', icon: Shield },
-                { label: t('Remaining', { defaultValue: 'Remaining' }), value: `${summary?.remaining_gb || 0} GB`, color: isCritical ? 'var(--color-danger)' : 'var(--color-warning)', icon: ArrowDown },
+{ label: t('Total Files', { defaultValue: 'Total Files' }), value: summary?.total_files || 0, color: 'var(--color-primary)', icon: FileText },
+                { label: t('Used Space', { defaultValue: 'Used Space' }), value: fmtBytesToUnit(summary?.total_bytes || 0, summary?.storage_unit || 'GB'), color: 'var(--color-blue)', icon: HardDrive },
+                { label: t('Storage Limit', { defaultValue: 'Storage Limit' }), value: `${summary?.max_storage_gb || 0} ${summary?.storage_unit || 'GB'}`, color: 'var(--color-success)', icon: Shield },
+                { label: t('Remaining', { defaultValue: 'Remaining' }), value: fmtBytesToUnit(summary?.remaining_bytes, summary?.storage_unit || 'GB'), color: isCritical ? 'var(--color-danger)' : 'var(--color-warning)', icon: ArrowDown },
               ].map((stat) => (
                 <div key={stat.label} style={{
                   padding: '16px', borderRadius: '14px',
@@ -741,8 +765,12 @@ export default function StoragePage() {
                   <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-dark)', margin: '4px 0 0' }}>{summary?.plan_name}</p>
                 </div>
                 <div>
-                  <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('Storage Used', { defaultValue: 'Storage Used' })}</p>
-                  <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-dark)', margin: '4px 0 0' }}>{summary?.total_gb} GB / {summary?.max_storage_gb} GB</p>
+<p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {t('Storage Used', { defaultValue: 'Storage Used' })}
+                  </p>
+                  <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-dark)', margin: '4px 0 0' }}>
+                    {fmtBytesToUnit(summary?.total_bytes || 0, summary?.storage_unit || 'GB')} / {summary?.max_storage_gb || 0} {summary?.storage_unit || 'GB'}
+                  </p>
                 </div>
                 <div>
                   <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('Total Files', { defaultValue: 'Total Files' })}</p>
@@ -961,6 +989,50 @@ export default function StoragePage() {
                 </div>
               </div>
 
+              {/* Storage Limit Override */}
+              <div style={{
+                padding: '18px 20px', borderRadius: '14px',
+                background: 'var(--bg-hover)', border: '1px solid var(--border-light)',
+              }}>
+                <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-info)', margin: '0 0 12px' }}>Storage Limit Override</p>
+                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 14px' }}>
+                  Set a custom storage limit for this organization. Leave empty to use the plan default.
+                </p>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <input
+                    type="number"
+                    min="0.001"
+                    step="any"
+                    max="9999"
+                    value={preferences.custom_max_storage_gb || ''}
+                    onChange={(e) => setPreferences(p => ({ ...p, custom_max_storage_gb: e.target.value ? parseFloat(e.target.value) : null }))}
+                    placeholder="Leave empty to use plan limit"
+                    style={{
+                      flex: 1, padding: '10px 14px', borderRadius: '10px',
+                      border: '2px solid #64748b', fontSize: '13px',
+                      background: 'var(--bg-card)', color: 'var(--text-heading)',
+                    }}
+                  />
+                  <select
+                    value={preferences.storage_unit || 'GB'}
+                    onChange={(e) => setPreferences(p => ({ ...p, storage_unit: e.target.value }))}
+                    style={{
+                      padding: '10px 14px', borderRadius: '10px',
+                      border: '2px solid #64748b', fontSize: '13px',
+                      background: 'var(--bg-card)', color: 'var(--text-heading)',
+                      minWidth: '80px',
+                    }}
+                  >
+                    <option value="KB">KB</option>
+                    <option value="MB">MB</option>
+                    <option value="GB">GB</option>
+                  </select>
+                </div>
+                <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '8px 0 0' }}>
+                  Plan default: {summary?.max_storage_gb || 0} {summary?.storage_unit || 'GB'}
+                </p>
+              </div>
+
               {/* Driver Selection */}
               <div style={{
                 padding: '18px 20px', borderRadius: '14px',
@@ -1066,7 +1138,14 @@ export default function StoragePage() {
                   onClick={async () => {
                     setPrefSaving(true);
                     try {
-                      const res = await api.put('/organization/storage/preferences', preferences);
+                      const payload = { ...preferences };
+                      if (payload.custom_max_storage_gb != null) {
+                        payload.custom_storage_unit = payload.storage_unit || 'GB';
+                      } else {
+                        payload.custom_max_storage_gb = null;
+                        payload.custom_storage_unit = null;
+                      }
+                      const res = await api.put('/organization/storage/preferences', payload);
                       if (res.success) {
                         setToast({ type: 'success', message: t('Storage preferences saved.', { defaultValue: 'Storage preferences saved.' }) });
                       }
@@ -1161,8 +1240,8 @@ export default function StoragePage() {
           handleDeleteSingleFile(singleDeleteConfirm.id);
           setSingleDeleteConfirm({ open: false, id: null });
         }}
-        title={t('Delete File', { defaultValue: 'Delete File' })}
-        message={t('Are you sure you want to delete this file? This action cannot be undone.', { defaultValue: 'Are you sure you want to delete this file? This action cannot be undone.' })}
+title={t('Delete File', { defaultValue: 'Delete File' })}
+        message={t('Are you sure you want to delete this file? This file will be removed from storage and all linked projects, tasks, deliverables, and submissions. This action cannot be undone.', { defaultValue: 'Are you sure you want to delete this file? This file will be removed from storage and all linked projects, tasks, deliverables, and submissions. This action cannot be undone.' })}
         confirmText={t('Delete', { defaultValue: 'Delete' })}
         danger
       />

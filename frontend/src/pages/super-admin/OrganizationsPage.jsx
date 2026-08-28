@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, Fragment } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Building2, Plus, Search, Filter, X, Hash, Eye, SlidersHorizontal, ExternalLink, Mail, User, Pencil, Trash2, Ban, CheckCircle, Loader2, Check, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Building2, Plus, Search, Filter, X, Hash, Eye, SlidersHorizontal, ExternalLink, Mail, User, Pencil, Trash2, Ban, CheckCircle, Loader2, Check, ArrowRight, ArrowLeft, Sliders } from 'lucide-react';
 import ActionPopover from '../../components/ActionPopover';
 import '../../components/ActionPopover.css';
 import ConfirmModal from '../../components/ConfirmModal';
@@ -11,6 +11,7 @@ import EmptyState from './components/EmptyState';
 import { LoadingState, ErrorState } from './components/LoadingState';
 import { api } from './api/superAdminApi';
 import CreateOrganizationModal from './CreateOrganizationPage';
+import PlanCustomizeModal from './components/PlanCustomizeModal';
 
 const ITEMS_PER_PAGE = 10;
 const ORG_APP_URL = import.meta.env.VITE_ORG_APP_URL || '';
@@ -327,7 +328,6 @@ export default function OrganizationsPage() {
                                     <SlidersHorizontal size={18} />
                                   </button>
                                 }
-                                onTriggerClick={() => navigate(`/super-admin/organizations/${org.id}`)}
                               >
                                 <button
                                   className="action-icon-btn action-edit"
@@ -426,6 +426,16 @@ function EditOrganizationModal({ org, plans, saving, onSave, onClose }) {
     name: org?.name || '', admin_name: org?.admin_name || '',
     admin_email: org?.admin_email || '', admin_phone: org?.admin_phone || '',
   });
+  const [showPlanCustomModal, setShowPlanCustomModal] = useState(false);
+  const [planCustomization, setPlanCustomization] = useState(
+    org?.effective_plan?.is_custom ? {
+      custom_price_monthly: org.effective_plan.price_monthly,
+      custom_price_yearly: org.effective_plan.price_yearly,
+      custom_max_users: org.effective_plan.max_users,
+      custom_max_projects: org.effective_plan.max_projects,
+      custom_max_storage_gb: org.effective_plan.max_storage_gb,
+    } : null
+  );
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
@@ -439,11 +449,22 @@ function EditOrganizationModal({ org, plans, saving, onSave, onClose }) {
 
   const handleSubmit = () => {
     if (!selectedPlanId) return;
-    onSave({
+    const payload = {
       name: form.name, admin_name: form.admin_name,
       admin_phone: form.admin_phone || null,
       plan_id: selectedPlanId, billing_period: billingPeriod,
-    });
+    };
+    if (planCustomization) {
+      payload.is_custom = true;
+      payload.custom_price_monthly = planCustomization.custom_price_monthly;
+      payload.custom_price_yearly = planCustomization.custom_price_yearly;
+      payload.custom_max_users = planCustomization.custom_max_users;
+      payload.custom_max_projects = planCustomization.custom_max_projects;
+      payload.custom_max_storage_gb = planCustomization.custom_max_storage_gb;
+    } else {
+      payload.is_custom = false;
+    }
+    onSave(payload);
   };
 
   const selectedPlan = plans.find(p => p.id === selectedPlanId);
@@ -546,12 +567,15 @@ function EditOrganizationModal({ org, plans, saving, onSave, onClose }) {
               <div className="space-y-3">
                 {plans.filter(p => p.is_active).map((plan) => {
                   const isSelected = selectedPlanId === plan.id;
-                  const price = billingPeriod === 'monthly' ? plan.price_monthly : plan.price_yearly;
-                  const users = plan.max_users;
-                  const projects = plan.max_projects;
-                  const storage = plan.max_storage_gb;
+                  const hasCustom = planCustomization && isSelected;
+                  const price = hasCustom
+                    ? (billingPeriod === 'monthly' ? planCustomization.custom_price_monthly : planCustomization.custom_price_yearly)
+                    : (billingPeriod === 'monthly' ? plan.price_monthly : plan.price_yearly);
+                  const users = hasCustom ? planCustomization.custom_max_users : plan.max_users;
+                  const projects = hasCustom ? planCustomization.custom_max_projects : plan.max_projects;
+                  const storage = hasCustom ? planCustomization.custom_max_storage_gb : plan.max_storage_gb;
                   return (
-                    <div key={plan.id} onClick={() => setSelectedPlanId(plan.id)}
+                    <div key={plan.id} onClick={() => { setSelectedPlanId(plan.id); if (!isSelected) setPlanCustomization(null); }}
                       className="relative cursor-pointer rounded-xl border-2 p-4 transition-all hover:shadow-md flex items-center gap-4"
                       style={{
                         borderColor: isSelected ? 'var(--color-primary)' : 'var(--border-light)',
@@ -569,6 +593,10 @@ function EditOrganizationModal({ org, plans, saving, onSave, onClose }) {
                           {plan.is_default && (
                             <span className="px-2 py-0.5 text-xs font-medium rounded-full" style={s.infoBox}>{t('Default', { defaultValue: 'Default' })}</span>
                           )}
+                          {hasCustom && (
+                            <span className="px-2 py-0.5 text-xs font-medium rounded-full"
+                              style={{ background: 'rgba(245,158,11,0.12)', color: '#d97706' }}>Custom</span>
+                          )}
                         </div>
                         <p className="text-sm mt-0.5" style={s.textSecondary}>
                           ${price}/{billingPeriod === 'monthly' ? t('mo', { defaultValue: 'mo' }) : t('yr', { defaultValue: 'yr' })}
@@ -578,7 +606,23 @@ function EditOrganizationModal({ org, plans, saving, onSave, onClose }) {
                           {projects === 9999 ? t('Unlimited', { defaultValue: 'Unlimited' }) : projects} {t('projects', { defaultValue: 'projects' })}
                         </p>
                       </div>
-                      <div className="text-right text-xs" style={s.textMuted}>{storage === 9999 ? t('Unlimited', { defaultValue: 'Unlimited' }) : storage} {t('GB storage', { defaultValue: 'GB storage' })}</div>
+<div className="flex items-center gap-3">
+    <div className="text-right text-xs" style={s.textMuted}>
+        {storage === 9999 ? t('Unlimited', { defaultValue: 'Unlimited' }) : `${storage} ${plan.storage_unit || 'GB'}`} {t('storage', { defaultValue: 'storage' })}
+    </div>
+    {isSelected && (
+        <button type="button" onClick={(e) => { e.stopPropagation(); setShowPlanCustomModal(true); }}
+            className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg transition-colors"
+            style={{
+                background: hasCustom ? 'rgba(245,158,11,0.15)' : '#fff',
+                color: hasCustom ? '#D97706' : '#6B7280',
+                border: hasCustom ? '2px solid #F59E0B' : '2px solid #D1D5DB',
+            }}>
+            <Sliders className="w-3.5 h-3.5" />
+            {hasCustom ? t('Edit Custom', { defaultValue: 'Edit Custom' }) : t('Custom', { defaultValue: 'Custom' })}
+        </button>
+    )}
+</div>
                     </div>
                   );
                 })}
@@ -611,6 +655,18 @@ function EditOrganizationModal({ org, plans, saving, onSave, onClose }) {
           )}
         </div>
       </div>
+
+      {showPlanCustomModal && selectedPlan && (
+        <PlanCustomizeModal
+          plan={selectedPlan}
+          billingPeriod={billingPeriod}
+          initialData={planCustomization}
+          isCustom={!!planCustomization}
+          onSaved={(data) => { setPlanCustomization(data); setShowPlanCustomModal(false); }}
+          onReset={() => { setPlanCustomization(null); setShowPlanCustomModal(false); }}
+          onClose={() => setShowPlanCustomModal(false)}
+        />
+      )}
     </div>
   );
 }

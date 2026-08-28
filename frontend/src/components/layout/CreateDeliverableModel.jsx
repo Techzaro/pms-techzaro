@@ -267,7 +267,10 @@ const CreateSubtaskModal = ({
         if (fileObj.customName) fd.append("name", fileObj.customName);
         return fetch(`${API_URL}/deliverables/${deliverableId}/files`, {
           method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd,
-        });
+        }).then(res => res.json().catch(() => ({})).then(d => {
+          if (d.file_skipped) notify.warning(d.message || "File could not be uploaded due to storage limit.");
+          return d;
+        }));
       }),
       ...links.map((link) => {
         return fetch(`${API_URL}/deliverables/${deliverableId}/links`, {

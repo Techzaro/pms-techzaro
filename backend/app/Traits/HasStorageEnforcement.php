@@ -38,27 +38,40 @@ trait HasStorageEnforcement
             ->latest()
             ->first();
 
-        $maxStorageGb = $subscription?->getEffectiveMaxStorageGb() ?? 10;
-        $maxBytes = (int) ($maxStorageGb * 1024 * 1024 * 1024);
+        $maxStorageGb = $subscription?->getEffectiveMaxStorageValue() ?? 10;
+        $storageUnit = $subscription?->getEffectiveStorageUnit() ?? 'GB';
+
+        // Org-level storage override (highest priority)
+        if ($org->custom_max_storage_gb !== null) {
+            $maxStorageGb = $org->custom_max_storage_gb;
+            $storageUnit = $org->storage_unit ?? $storageUnit;
+        }
+
+        $maxBytes = OrganizationSubscription::convertToBytes($maxStorageGb, $storageUnit);
 
         $currentUsedBytes = OrganizationStorageUsage::on('mysql_master')
             ->where('organization_id', $org->id)
             ->sum('file_size_bytes');
 
         $fileSize = $file->getSize();
-        $remainingBytes = $maxBytes - $currentUsedBytes;
+        $remainingBytes = max(0, $maxBytes - $currentUsedBytes);
 
         if ($fileSize > $remainingBytes) {
-            $fileMb = round($fileSize / (1024 * 1024), 2);
-            $remainingMb = round(max(0, $remainingBytes) / (1024 * 1024), 2);
-            $usedMb = round($currentUsedBytes / (1024 * 1024), 2);
-            $maxMb = round($maxBytes / (1024 * 1024), 2);
+            $divisors = ['KB' => 1024, 'MB' => 1024 * 1024, 'GB' => 1024 * 1024 * 1024];
+            $divisor = $divisors[$storageUnit] ?? $divisors['GB'];
+
+            $fileVal    = round($fileSize / $divisor, 2);
+            $remainVal  = round($remainingBytes / $divisor, 2);
+            $usedVal    = round($currentUsedBytes / $divisor, 2);
+            $maxVal     = round($maxBytes / $divisor, 2);
+            $usagePercent = $maxBytes > 0 ? round(($currentUsedBytes / $maxBytes) * 100, 1) : 0;
 
             return [
                 'allowed' => false,
-                'message' => "Storage limit exceeded. You need {$fileMb} MB but only {$remainingMb} MB remaining. " .
-                             "Current usage: {$usedMb} MB / {$maxMb} MB. " .
+                'message' => "Upload blocked — storage limit reached. You need {$fileVal} {$storageUnit} but only {$remainVal} {$storageUnit} is remaining. " .
                              "Please delete some files or contact admin to increase your storage limit.",
+                'remaining_bytes' => $remainingBytes,
+                'storage_unit'    => $storageUnit,
             ];
         }
 
@@ -96,5 +109,10 @@ trait HasStorageEnforcement
             'usage'         => $usage,
             'notifications' => $notifications,
         ];
+    }
+
+    private function buildFileSkippedMessage(string $entityType): string
+    {
+        return "Your {$entityType} was created successfully, but the attached file could not be uploaded because your storage limit has been reached. Please delete some files or contact admin to increase your storage limit.";
     }
 }

@@ -19,12 +19,17 @@ class OrganizationSupportTicket extends Model
         'status',
         'priority',
         'category',
+        'source',
+        'tenant_feedback_id',
+        'feedback_reference_number',
+        'feedback_metadata',
         'assigned_to_name',
         'resolved_at',
         'closed_at',
     ];
 
     protected $casts = [
+        'feedback_metadata' => 'array',
         'resolved_at' => 'datetime',
         'closed_at'   => 'datetime',
     ];

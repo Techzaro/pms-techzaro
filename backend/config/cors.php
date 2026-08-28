@@ -28,10 +28,13 @@ return [
         'http://localhost:5173',
         'https://app.one.techxaro.com',
         'https://admin.one.techxaro.com',
+        'https://pried-audition-audacity.ngrok-free.dev',
     ],
 
     'allowed_origins_patterns' => [
         '/^https?:\/\/[a-zA-Z0-9.-]+\.techxaro\.com$/',
+        '/^https?:\/\/[a-zA-Z0-9.-]+\.ngrok-free\.dev$/',
+        '/^https?:\/\/[a-zA-Z0-9.-]+\.ngrok\.io$/',
     ],
 
     'allowed_headers' => ['*'],

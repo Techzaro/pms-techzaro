@@ -110,7 +110,7 @@ const ActionPopover = ({ trigger, children, onTriggerClick }) => {
       tabIndex={0}
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="ap-trigger" onClick={(e) => { e.stopPropagation(); onTriggerClick && onTriggerClick(e); }}>{trigger}</div>
+      <div className="ap-trigger" onClick={(e) => { e.stopPropagation(); e.preventDefault(); onTriggerClick && onTriggerClick(e); }}>{trigger}</div>
       {open &&
         createPortal(
           <div

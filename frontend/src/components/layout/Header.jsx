@@ -20,13 +20,15 @@ import { getNotificationDestination } from "../../utils/navigation";
 import { useTheme } from "../../context/ThemeContext.jsx";
 import { useOrgBranding } from "../../hooks/useOrgBranding";
 import { useTranslation } from "react-i18next";
-import { i18n } from "../../utils/i18n";
+import i18n from "../../utils/i18n";
+import { useOrgSubscription } from "../../hooks/useOrgSubscription";
 import "./Header.css";
+
 
 import CreateTaskModal from "../CreateTaskModal";
 import CreateProjectModal from "../CreateProjectModal";
 import CreateDeliverableModel from "./CreateDeliverableModel";
-import FeedbackModal from "../FeedbackModal";
+
 
 /**
  * Header component – renders the top navigation bar.
@@ -43,13 +45,22 @@ function Header() {
   const profileMenuRef = useRef(null);
   const { theme, toggleTheme } = useTheme();
   const { data: branding } = useOrgBranding();
+  const { data: subData } = useOrgSubscription();
+
+  const enabledModules = useMemo(() => {
+    const mods = subData?.modules?.enabled;
+    if (!Array.isArray(mods) || mods.length === 0) return null;
+    return new Set(mods.filter(m => m.is_enabled !== false).map(m => m.slug));
+  }, [subData]);
+
+  const hasModule = (slug) => enabledModules === null || enabledModules.has(slug);
 
   // ── State ──
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [showSubtaskModal, setShowSubtaskModal] = useState(false);
-  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isSmallScreen, setIsSmallScreen] = useState(window.innerWidth <= 1200);
   const [notifications, setNotifications] = useState([]);
@@ -662,7 +673,7 @@ function Header() {
 
           {/* Quick-create task button – not for guests */}
 
-          {getCurrentRole() !== "guest" && (
+          {getCurrentRole() !== "guest" && hasModule("tasks") && (
           <button
             className="task-btn1"
             title={t("Create Task")}
@@ -675,7 +686,7 @@ function Header() {
           </button>
           )}
 
-          {getCurrentRole() !== "guest" && (
+          {getCurrentRole() !== "guest" && hasModule("deliverables") && (
           <button
             className="task-btn1"
             style={{ background: "#7c3aed" }}
@@ -691,7 +702,7 @@ function Header() {
 
           {/* Quick-create project button – visible to admin/manager only */}
 
-          {["admin", "manager"].includes(getCurrentRole()) && (
+          {["admin", "manager"].includes(getCurrentRole()) && hasModule("projects") && (
           <button
             className="project-btn"
             title={t("Create Project")}
@@ -820,7 +831,7 @@ function Header() {
                   <MdHistory size={20} />
                   <span>{t("My Activity")}</span>
                 </button>
-                <button className={`hmc-menu-item${profileHighlightIndex === 3 ? ' hmc-menu-item--highlighted' : ''}`} onClick={() => { setIsProfileOpen(false); setIsFeedbackOpen(true); }} onMouseEnter={() => setProfileHighlightIndex(3)}>
+                <button className={`hmc-menu-item${profileHighlightIndex === 3 ? ' hmc-menu-item--highlighted' : ''}`} onClick={() => { setIsProfileOpen(false); navigate(rolePath("feedback")); }} onMouseEnter={() => setProfileHighlightIndex(3)}>
                   <MdFeedback size={20} />
                   <span>{t("Feedback")}</span>
                 </button>
@@ -906,11 +917,6 @@ function Header() {
           onClose={() => setShowSubtaskModal(false)}
         />
       )}
-
-      <FeedbackModal
-        isOpen={isFeedbackOpen}
-        onClose={() => setIsFeedbackOpen(false)}
-      />
 
     </>
   );

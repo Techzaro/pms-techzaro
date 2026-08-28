@@ -6,6 +6,8 @@ use App\Models\Feedback;
 use App\Models\FeedbackActivityLog;
 use App\Models\FeedbackNote;
 use App\Models\User;
+use App\Models\Master\OrganizationSupportTicket;
+use App\Models\Master\OrganizationSupportMessage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -20,7 +22,6 @@ class FeedbackService
     {
         $refNumber = $this->generateReferenceNumber();
 
-        // Handle file uploads
         $screenshotPath = null;
         $recordingPath = null;
         $attachmentPath = null;
@@ -35,6 +36,11 @@ class FeedbackService
             $attachmentPath = $request->file('attachment')->store('feedback/attachments', 'public');
         }
 
+        // Resolve organization from middleware context (not from $data which may be empty)
+        $organization = $request->attributes->get('currentOrganization');
+        $organizationId = $organization?->id ?? $data['organization_id'] ?? null;
+        $organizationName = $organization?->name ?? $data['organization_name'] ?? $user->company_name ?? 'TechXaro';
+
         $feedback = Feedback::create([
             'reference_number'  => $refNumber,
             'feedback_type'     => $data['feedback_type'] ?? 'General Feedback',
@@ -46,10 +52,8 @@ class FeedbackService
             'screenshot_path'   => $screenshotPath,
             'recording_path'    => $recordingPath,
             'attachment_path'   => $attachmentPath,
-
-            // Auto-captured data
-            'organization_id'   => $data['organization_id'] ?? $user->company_id ?? null,
-            'organization_name' => $data['organization_name'] ?? $user->company_name ?? 'TechXaro',
+            'organization_id'   => $organizationId,
+            'organization_name' => $organizationName,
             'user_id'           => $user->id,
             'user_name'         => $user->name,
             'user_role'         => $user->role,
@@ -63,13 +67,15 @@ class FeedbackService
             'app_version'       => $data['app_version'] ?? '1.0.0',
         ]);
 
-        // Log initial submission activity
         $this->logActivity(
             $feedback,
             $user,
             'submitted',
             "Feedback submitted with reference number {$refNumber} from " . ($data['current_page'] ?? '/')
         );
+
+        // Auto-create support ticket in master DB for super admin review
+        $this->createSupportTicketFromFeedback($feedback, $data, $user, $organization);
 
         return $feedback;
     }
@@ -290,5 +296,169 @@ class FeedbackService
         if (str_contains($ua, 'Android')) return 'Android';
         if (str_contains($ua, 'iPhone') || str_contains($ua, 'iPad')) return 'iOS';
         return 'Other OS';
+    }
+
+    /**
+     * Auto-create a support ticket in the master DB when feedback is submitted.
+     * This allows super admin to see and respond to feedback in the support system.
+     */
+    private function createSupportTicketFromFeedback(Feedback $feedback, array $data, User $user, $organization): void
+    {
+        try {
+            $organizationId = $organization?->id ?? $data['organization_id'] ?? null;
+            if (!$organizationId) {
+                \Log::warning("Feedback support ticket skipped: no organization_id resolved", [
+                    'feedback_id' => $feedback->id,
+                    'user_id' => $user->id,
+                ]);
+                return;
+            }
+
+            $categoryMap = [
+                'Bug Report' => 'bug_report',
+                'Feature Request' => 'feature_request',
+                'General Suggestion' => 'general',
+                'Feature Rating' => 'general',
+                'General Feedback' => 'general',
+            ];
+
+            $priorityMap = [
+                'Low' => 'low',
+                'Medium' => 'medium',
+                'High' => 'high',
+                'Urgent' => 'urgent',
+            ];
+
+            $ticketNumber = 'FBT-' . strtoupper(Str::random(4)) . '-' . date('YmdHis');
+
+            $feedbackMetadata = [
+                'feedback_id' => $feedback->id,
+                'reference_number' => $feedback->reference_number,
+                'feedback_type' => $feedback->feedback_type,
+                'description' => $feedback->description,
+                'module' => $feedback->module,
+                'current_page' => $feedback->current_page,
+                'browser' => $feedback->browser,
+                'operating_system' => $feedback->operating_system,
+                'device_type' => $feedback->device_type,
+                'ip_address' => $feedback->ip_address,
+                'user_name' => $feedback->user_name,
+                'user_role' => $feedback->user_role,
+                'rating' => $feedback->rating,
+                'screenshot_path' => $feedback->screenshot_path,
+                'recording_path' => $feedback->recording_path,
+                'attachment_path' => $feedback->attachment_path,
+            ];
+
+            // user_id has FK on master DB users table — tenant user won't exist there
+            // Store user info in feedback_metadata instead; set user_id = null
+            $ticket = OrganizationSupportTicket::on('mysql_master')->create([
+                'organization_id' => $organizationId,
+                'user_id' => null,
+                'ticket_number' => $ticketNumber,
+                'subject' => $feedback->subject,
+                'message' => $this->buildFeedbackTicketMessage($feedback),
+                'status' => 'open',
+                'priority' => $priorityMap[$feedback->priority] ?? 'medium',
+                'category' => $categoryMap[$feedback->feedback_type] ?? 'general',
+                'source' => 'feedback',
+                'tenant_feedback_id' => $feedback->id,
+                'feedback_reference_number' => $feedback->reference_number,
+                'feedback_metadata' => $feedbackMetadata,
+            ]);
+
+            // Log to ActivityLog (master DB)
+            \App\Models\Master\ActivityLog::create([
+                'user' => $user->name,
+                'action' => "Feedback submitted - Support ticket {$ticketNumber} auto-created",
+                'target' => $feedback->subject,
+                'ip' => $feedback->ip_address,
+                'status' => 'success',
+            ]);
+
+            // Log to tenant AuditLog using actual database_name from Organization model
+            if ($organization) {
+                try {
+                    $dbHost = $organization->database_host ?: config('database.connections.mysql_master.host', '127.0.0.1');
+                    $dbPort = (int) ($organization->database_port ?: config('database.connections.mysql_master.port', 3306));
+                    $dbName = $organization->database_name;
+                    $dbUser = $organization->database_username ?: config('database.connections.mysql_master.username', 'root');
+                    $dbPass = $organization->database_password ?? config('database.connections.mysql_master.password', '');
+
+                    $pdo = new \PDO(
+                        "mysql:host={$dbHost};port={$dbPort};dbname={$dbName};charset=utf8mb4",
+                        $dbUser,
+                        $dbPass,
+                        [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION, \PDO::ATTR_TIMEOUT => 5]
+                    );
+                    $stmt = $pdo->prepare("
+                        INSERT INTO audit_logs (user_id, module, action, entity_type, entity_id, description, new_values, status, ip_address, user_agent, browser, os, device, request_method, request_url, created_at, updated_at)
+                        VALUES (?, 'Feedback', 'Submitted', 'Feedback', ?, ?, ?, 'success', ?, ?, ?, ?, ?, 'POST', ?, NOW(), NOW())
+                    ");
+                    $stmt->execute([
+                        $user->id,
+                        $feedback->id,
+                        "Feedback {$feedback->reference_number} submitted: {$feedback->subject}",
+                        json_encode(['reference_number' => $feedback->reference_number, 'ticket_number' => $ticketNumber]),
+                        $feedback->ip_address,
+                        $feedback->browser ?? 'Unknown',
+                        $feedback->operating_system ?? 'Unknown',
+                        $feedback->device_type ?? 'Desktop',
+                        $data['current_page'] ?? '/',
+                    ]);
+                    $pdo = null;
+                } catch (\Throwable $e) {
+                    \Log::warning("Failed to write tenant audit log for feedback submission: " . $e->getMessage());
+                }
+            }
+
+            \Log::info("Feedback submitted and support ticket auto-created", [
+                'user' => $user->name,
+                'user_id' => $user->id,
+                'feedback_id' => $feedback->id,
+                'reference_number' => $feedback->reference_number,
+                'ticket_number' => $ticketNumber,
+                'organization_id' => $organizationId,
+            ]);
+
+        } catch (\Throwable $e) {
+            \Log::error("Failed to create support ticket from feedback: " . $e->getMessage(), [
+                'feedback_id' => $feedback->id ?? null,
+                'organization_id' => $organization?->id ?? $data['organization_id'] ?? null,
+                'trace' => $e->getTraceAsString(),
+            ]);
+        }
+    }
+
+    /**
+     * Build the support ticket message from feedback data.
+     */
+    private function buildFeedbackTicketMessage(Feedback $feedback): string
+    {
+        $parts = [
+            "📝 **Feedback Submission** (Ref: {$feedback->reference_number})",
+            "",
+            "**Type:** {$feedback->feedback_type}",
+            "**Module:** {$feedback->module}",
+            "**Priority:** {$feedback->priority}",
+        ];
+
+        if ($feedback->rating) {
+            $parts[] = "**Rating:** {$feedback->rating}/5 stars";
+        }
+
+        $parts[] = "";
+        $parts[] = "**Description:**";
+        $parts[] = strip_tags($feedback->description);
+        $parts[] = "";
+        $parts[] = "---";
+        $parts[] = "**Submitted by:** {$feedback->user_name} ({$feedback->user_role})";
+        $parts[] = "**Organization:** {$feedback->organization_name}";
+        $parts[] = "**Page:** {$feedback->current_page}";
+        $parts[] = "**Browser:** {$feedback->browser}";
+        $parts[] = "**OS:** {$feedback->operating_system}";
+        $parts[] = "**Date:** {$feedback->submitted_at->format('M d, Y h:i A')}";
+
+        return implode("\n", $parts);
     }
 }

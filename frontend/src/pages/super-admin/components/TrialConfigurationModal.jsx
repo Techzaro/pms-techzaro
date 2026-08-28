@@ -13,6 +13,7 @@ export default function TrialConfigurationModal({ mode = 'global', orgId, localO
   const [maxUsers, setMaxUsers] = useState(initialData?.max_users || 5);
   const [maxProjects, setMaxProjects] = useState(initialData?.max_projects || 5);
   const [maxStorage, setMaxStorage] = useState(initialData?.max_storage_gb || 5);
+  const [storageUnit, setStorageUnit] = useState(initialData?.storage_unit || 'GB');
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -31,7 +32,8 @@ export default function TrialConfigurationModal({ mode = 'global', orgId, localO
         trial_duration_unit: trialUnit,
         max_users: parseInt(maxUsers),
         max_projects: parseInt(maxProjects),
-        max_storage_gb: parseInt(maxStorage),
+        max_storage_gb: parseFloat(maxStorage),
+        storage_unit: storageUnit,
       };
       if (localOnly) {
         onSaved?.(data);
@@ -170,6 +172,23 @@ export default function TrialConfigurationModal({ mode = 'global', orgId, localO
                   required style={inputStyle} />
               </div>
             ))}
+          </div>
+          {/* Storage with unit selector */}
+          <div>
+            <label className="block text-xs font-medium mb-1.5" style={s.textMuted}>
+              <HardDrive className="w-3.5 h-3.5 inline mr-1" /> Storage Limit ({storageUnit})
+            </label>
+            <div className="flex gap-2">
+              <input type="number" min="0.001" step="any" value={maxStorage}
+                onChange={(e) => setMaxStorage(e.target.value)}
+                required style={{ ...inputStyle, flex: 1 }} />
+              <select value={storageUnit} onChange={(e) => setStorageUnit(e.target.value)}
+                style={{ ...inputStyle, width: 'auto', cursor: 'pointer', minWidth: '70px' }}>
+                <option value="KB">KB</option>
+                <option value="MB">MB</option>
+                <option value="GB">GB</option>
+              </select>
+            </div>
           </div>
 
           {/* Info text */}

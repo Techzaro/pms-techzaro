@@ -133,7 +133,11 @@ function SubmitTaskModal({ isOpen, onClose, task, existingSubmission = null, isE
 
         const data = await res.json();
         if (res.ok) {
-          notify.success(isEdit ? t("Submission updated successfully!", { defaultValue: "Submission updated successfully!" }) : t("Task submitted successfully!", { defaultValue: "Task submitted successfully!" }));
+if (data.file_skipped) {
+  notify.warning(data.message || t("Task submitted, but file could not be uploaded due to storage limit.", { defaultValue: "Task submitted, but file could not be uploaded due to storage limit." }));
+} else {
+  notify.success(isEdit ? t("Submission updated successfully!", { defaultValue: "Submission updated successfully!" }) : t("Task submitted successfully!", { defaultValue: "Task submitted successfully!" }));
+}
           setIsDirty(false);
           if (onSubmitSuccess) onSubmitSuccess(data.task);
           onClose();

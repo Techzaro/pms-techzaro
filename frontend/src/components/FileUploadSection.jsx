@@ -131,12 +131,16 @@ export default function FileUploadSection({ entityType, entityId, files, onReord
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         body: formData,
       });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        showSuccessMessage(t("File uploaded successfully", { defaultValue: "File uploaded successfully" }));
+        if (data.file_skipped) {
+          notify.warning(data.message || "File could not be uploaded due to storage limit. Please free up space or contact admin.");
+        } else {
+          showSuccessMessage("File uploaded successfully");
+        }
         if (onFilesChange) onFilesChange();
       } else {
-        const data = await res.json().catch(() => ({}));
-        notify.error(data.message || t("Failed to upload file", { defaultValue: "Failed to upload file" }));
+        notify.error(data.message || "Failed to upload file");
       }
     } catch {
       notify.error(t("Failed to upload file", { defaultValue: "Failed to upload file" }));

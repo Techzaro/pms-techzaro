@@ -1,23 +1,23 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import DOMPurify from "dompurify";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
-import { authToken } from "../utils/auth";
+import FeedbackModal from "../components/FeedbackModal";
+import { authToken, rolePath } from "../utils/auth";
 import API_URL from "../config/api";
+import { formatDateOnly as formatDate } from "../utils/formatDateTime";
 import {
   MdOutlineFeedback,
-  MdFilterList,
-  MdSearch,
-  MdClose,
+  MdRefresh,
   MdPerson,
-  MdTimeline,
-  MdHistory,
   MdDownload,
   MdSend,
-  MdRefresh,
+  MdTimeline,
+  MdHistory,
+  MdClose,
 } from "react-icons/md";
-import DOMPurify from "dompurify";
-import { formatDateOnly as formatDate } from "../utils/formatDateTime";
 import "./FeedbackCenter.css";
 
 const STATUS_OPTIONS = [
@@ -44,11 +44,13 @@ const PRIORITY_OPTIONS = ["Low", "Medium", "High", "Urgent"];
 
 export default function FeedbackCenter() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+
   const [feedbacks, setFeedbacks] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
 
-  // Filter state
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -58,31 +60,15 @@ export default function FeedbackCenter() {
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
 
-  // Users for assignee dropdown
-  const [usersList, setUsersList] = useState([]);
-
-  // Detail drawer state
+  // Drawer / Detail View states
   const [selectedId, setSelectedId] = useState(null);
   const [detailData, setDetailData] = useState(null);
   const [historyData, setHistoryData] = useState([]);
+  const [usersList, setUsersList] = useState([]);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
-
-  // Form states in detail drawer
-  const [noteText, setNoteText] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
+  const [noteText, setNoteText] = useState("");
 
-  // Fetch admin team users for assignment
-  useEffect(() => {
-    const token = authToken();
-    fetch(`${API_URL}/team-users`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((res) => (res.ok ? res.json() : { users: [] }))
-      .then((data) => setUsersList(data.users || data.data || []))
-      .catch(() => setUsersList([]));
-  }, []);
-
-  // Fetch feedback list
   const fetchFeedbacks = useCallback(() => {
     setIsLoading(true);
     const token = authToken();
@@ -125,7 +111,6 @@ export default function FeedbackCenter() {
     fetchFeedbacks();
   }, [fetchFeedbacks]);
 
-  // Load single detail view
   const openDetail = (id) => {
     setSelectedId(id);
     setIsDetailLoading(true);
@@ -138,73 +123,62 @@ export default function FeedbackCenter() {
       },
     })
       .then((res) => (res.ok ? res.json() : null))
-      .then((json) => {
-        if (json && json.success) {
-          setDetailData(json.data);
-          setHistoryData(json.history || []);
-        }
+      .then((data) => {
+        setDetailData(data?.feedback || null);
+        setHistoryData(data?.history || []);
+        setUsersList(data?.users || []);
       })
+      .catch(() => setDetailData(null))
       .finally(() => setIsDetailLoading(false));
   };
 
-  // Update status, priority, or assignee
-  const handleUpdate = async (field, value) => {
-    if (!selectedId || !detailData) return;
+  const handleUpdate = (field, value) => {
+    if (!selectedId) return;
     setIsUpdating(true);
+    const token = authToken();
 
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/feedback/${selectedId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ [field]: value }),
-      });
-
-      const json = await res.json();
-      if (json.success) {
-        setDetailData(json.data);
-        fetchFeedbacks();
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsUpdating(false);
-    }
+    fetch(`${API_URL}/feedback/${selectedId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ [field]: value }),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.feedback) {
+          setDetailData(data.feedback);
+          fetchFeedbacks();
+        }
+      })
+      .finally(() => setIsUpdating(false));
   };
 
-  // Add internal note
-  const handleAddNote = async (e) => {
+  const handleAddNote = (e) => {
     e.preventDefault();
-    if (!noteText.trim() || !selectedId) return;
-
+    if (!selectedId || !noteText.trim()) return;
     setIsUpdating(true);
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/feedback/${selectedId}/notes`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ note: noteText }),
-      });
+    const token = authToken();
 
-      const json = await res.json();
-      if (json.success) {
-        setNoteText("");
-        // Reload detail
-        openDetail(selectedId);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsUpdating(false);
-    }
+    fetch(`${API_URL}/feedback/${selectedId}/notes`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ note: noteText }),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.feedback) {
+          setDetailData(data.feedback);
+          setNoteText("");
+        }
+      })
+      .finally(() => setIsUpdating(false));
   };
 
   const getStatusClass = (st) => {
@@ -219,11 +193,11 @@ export default function FeedbackCenter() {
         <Breadcrumb
           items={[
             { label: t("Admin", { defaultValue: "Admin" }), path: "/admin" },
+            { label: t("Dashboard", { defaultValue: "Dashboard" }), path: rolePath("dashboard") },
             { label: t("User Feedback Center", { defaultValue: "User Feedback Center" }) },
           ]}
         />
 
-        {/* Page Title */}
         <div className="fbc-header">
           <div className="fbc-title-group">
             <h1>
@@ -238,13 +212,18 @@ export default function FeedbackCenter() {
               {t("Manage, review, and track user bug reports, feature requests, and suggestions.", { defaultValue: "Manage, review, and track user bug reports, feature requests, and suggestions." })}
             </p>
           </div>
-          <button className="fb-btn-cancel" onClick={fetchFeedbacks}>
-            <MdRefresh size={18} style={{ verticalAlign: "middle", marginRight: 4 }} />
-            {t("Refresh", { defaultValue: "Refresh" })}
-          </button>
+
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button className="fb-btn-submit" onClick={() => setIsFeedbackModalOpen(true)}>
+              + {t("Create Feedback", { defaultValue: "Create Feedback" })}
+            </button>
+            <button className="fb-btn-cancel" onClick={fetchFeedbacks} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <MdRefresh size={18} />
+              {t("Refresh", { defaultValue: "Refresh" })}
+            </button>
+          </div>
         </div>
 
-        {/* Advanced Filters */}
         <div className="fbc-filters-card">
           <div className="fbc-filter-grid">
             <div className="fbc-filter-item">
@@ -341,7 +320,6 @@ export default function FeedbackCenter() {
           </div>
         </div>
 
-        {/* Data Table */}
         <div className="fbc-table-card">
           <table className="fbc-table">
             <thead>
@@ -414,7 +392,10 @@ export default function FeedbackCenter() {
                       </span>
                     </td>
                     <td style={{ fontSize: "0.8rem", color: "#64748b" }}>
-                      {formatDate(item.submitted_at || item.created_at)}
+                      <div>{formatDate(item.submitted_at || item.created_at)}</div>
+                      <div style={{ fontSize: "0.72rem", color: "#94a3b8" }}>
+                        {new Date(item.submitted_at || item.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                      </div>
                     </td>
                     <td>
                       <button
@@ -703,6 +684,14 @@ export default function FeedbackCenter() {
           </div>
         )}
       </div>
+
+      <FeedbackModal
+        isOpen={isFeedbackModalOpen}
+        onClose={() => {
+          setIsFeedbackModalOpen(false);
+          fetchFeedbacks();
+        }}
+      />
     </DashboardLayout>
   );
 }

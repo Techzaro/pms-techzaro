@@ -361,7 +361,7 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
                           </p>
                         </div>
                         <div className="flex items-center gap-3">
-                          <div className="text-right text-xs" style={s.textMuted}>{storage === 9999 ? t('Unlimited', { defaultValue: 'Unlimited' }) : storage} {t('GB storage', { defaultValue: 'GB storage' })}</div>
+<div className="text-right text-xs" style={s.textMuted}>{storage === 9999 ? 'Unlimited' : `${storage} ${plan.storage_unit || 'GB'}`}</div>
                           {isSelected && (
                             <button type="button" onClick={(e) => { e.stopPropagation(); isTrial ? setShowTrialModal(true) : setShowPlanCustomModal(true); }}
                               className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors"

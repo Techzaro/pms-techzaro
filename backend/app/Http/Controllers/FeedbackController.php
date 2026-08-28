@@ -149,4 +149,105 @@ class FeedbackController extends Controller
             'data'    => $note,
         ], 201);
     }
+
+    /**
+     * Get chat messages for a feedback ticket.
+     * GET /api/feedback/{id}/messages
+     */
+    public function getMessages(Request $request, int $id): JsonResponse
+    {
+        $feedback = Feedback::findOrFail($id);
+
+        $ticket = \App\Models\Master\OrganizationSupportTicket::on('mysql_master')
+            ->where('source', 'feedback')
+            ->where('tenant_feedback_id', $id)
+            ->first();
+
+        if (!$ticket) {
+            return response()->json([
+                'success' => true,
+                'messages' => [],
+            ]);
+        }
+
+        $messages = \App\Models\Master\OrganizationSupportMessage::on('mysql_master')
+            ->where('ticket_id', $ticket->id)
+            ->with('user:id,name,email')
+            ->orderBy('created_at', 'asc')
+            ->get()
+            ->filter(function ($msg) use ($ticket) {
+                return $msg->message !== $ticket->message;
+            })->values()
+            ->map(function ($msg) {
+                return [
+                    'id' => $msg->id,
+                    'message' => $msg->message,
+                    'sender_type' => $msg->sender_type,
+                    'is_read' => $msg->is_read,
+                    'user' => $msg->user ? [
+                        'id' => $msg->user->id,
+                        'name' => $msg->user->name,
+                    ] : null,
+                    'created_at' => $msg->created_at?->toISOString(),
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'messages' => $messages,
+            'ticket_status' => $ticket->status,
+        ]);
+    }
+
+    /**
+     * Send a chat message on a feedback ticket.
+     * POST /api/feedback/{id}/messages
+     */
+    public function sendMessage(Request $request, int $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'message' => ['required', 'string', 'max:2000'],
+        ]);
+
+        $user = $request->user();
+        $feedback = Feedback::findOrFail($id);
+
+        $ticket = \App\Models\Master\OrganizationSupportTicket::on('mysql_master')
+            ->where('source', 'feedback')
+            ->where('tenant_feedback_id', $id)
+            ->first();
+
+        if (!$ticket) {
+            return response()->json(['success' => false, 'message' => 'Support ticket not found.'], 404);
+        }
+
+        if ($ticket->status === 'closed') {
+            return response()->json(['success' => false, 'message' => 'Cannot reply to a closed ticket.'], 400);
+        }
+
+        $senderType = 'organization';
+
+        $msg = \App\Models\Master\OrganizationSupportMessage::on('mysql_master')->create([
+            'ticket_id' => $ticket->id,
+            'user_id' => null,
+            'message' => $validated['message'],
+            'sender_type' => $senderType,
+        ]);
+
+        if ($ticket->status === 'open') {
+            $ticket->update(['status' => 'pending']);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id' => $msg->id,
+                'message' => $msg->message,
+                'sender_type' => $msg->sender_type,
+                'is_read' => $msg->is_read,
+                'user' => ['id' => $user->id, 'name' => $user->name],
+                'created_at' => $msg->created_at?->toISOString(),
+            ],
+        ], 201);
+    }
 }

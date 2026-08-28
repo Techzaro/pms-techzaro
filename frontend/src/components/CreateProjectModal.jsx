@@ -500,7 +500,10 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
           headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
           body: fd,
           _notifHandled: true,
-        }).catch((e) => console.error("File upload error:", e));
+        }).then(res => res.json().catch(() => ({})).then(d => {
+          if (d.file_skipped) notify.warning(d.message || "File could not be uploaded due to storage limit.");
+          return d;
+        })).catch((e) => console.error("File upload error:", e));
       });
 
       const linkPromises = (links || []).map((link) => {

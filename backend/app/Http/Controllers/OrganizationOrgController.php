@@ -60,7 +60,14 @@ class OrganizationOrgController extends Controller
             ->latest()
             ->first();
 
-        $maxStorageGb = $subscription?->getEffectiveMaxStorageGb() ?? 10;
+        $maxStorageGb = $subscription?->getEffectiveMaxStorageValue() ?? 10;
+        $storageUnit = $subscription?->getEffectiveStorageUnit() ?? 'GB';
+
+        // Org-level storage override (highest priority)
+        if ($org->custom_max_storage_gb !== null) {
+            $maxStorageGb = $org->custom_max_storage_gb;
+            $storageUnit = $org->storage_unit ?? $storageUnit;
+        }
 
         $storageFiles = OrganizationStorageUsage::on('mysql_master')
             ->where('organization_id', $org->id)
@@ -99,6 +106,10 @@ class OrganizationOrgController extends Controller
                 ];
             });
 
+        $maxBytes = OrganizationSubscription::convertToBytes($maxStorageGb, $storageUnit);
+        $remainingBytes = max(0, $maxBytes - $totalBytes);
+        $remainingGb = round($remainingBytes / (1024 * 1024 * 1024), 4);
+
         return response()->json([
             'success' => true,
             'storage' => [
@@ -106,8 +117,10 @@ class OrganizationOrgController extends Controller
                 'total_mb'         => $totalMb,
                 'total_gb'         => $totalGb,
                 'max_storage_gb'   => $maxStorageGb,
-                'usage_percent'    => $maxStorageGb > 0 ? round(($totalGb / $maxStorageGb) * 100, 1) : 0,
-                'remaining_gb'     => max(0, round($maxStorageGb - $totalGb, 4)),
+                'storage_unit'     => $storageUnit,
+                'usage_percent'    => $maxBytes > 0 ? round(($totalBytes / $maxBytes) * 100, 1) : 0,
+                'remaining_bytes'  => $remainingBytes,
+                'remaining_gb'     => $remainingGb,
                 'by_category'      => $byCategory,
                 'recent_files'     => $recentFiles,
                 'total_files'      => $storageFiles->count(),
@@ -151,11 +164,29 @@ class OrganizationOrgController extends Controller
             return response()->json(['success' => false, 'message' => 'Organization not found.'], 404);
         }
 
+        // Fetch file details before deletion
+        $fileRecord = OrganizationStorageUsage::on('mysql_master')
+            ->where('organization_id', $org->id)
+            ->where('id', $id)
+            ->first();
+
+        $fileName = $fileRecord?->file_name ?? 'Unknown';
+        $fileSizeMb = $fileRecord?->file_size_bytes ? round($fileRecord->file_size_bytes / (1024 * 1024), 2) : 0;
+        $fileCategory = $fileRecord?->category ?? 'Unknown';
+
         $result = \App\Services\StorageFileService::deleteFile($org, $id);
 
         if (!$result) {
             return response()->json(['success' => false, 'message' => 'Record not found.'], 404);
         }
+
+        $this->auditService->log(
+            'storage', 'delete',
+            "Deleted file \"{$fileName}\" ({$fileSizeMb} MB) from {$fileCategory}",
+            null, 'storage_file', $id,
+            ['file_name' => $fileName, 'file_size_mb' => $fileSizeMb, 'category' => $fileCategory],
+            null, 'success'
+        );
 
         return response()->json(['success' => true, 'message' => 'File deleted from storage and database.']);
     }
@@ -172,6 +203,16 @@ class OrganizationOrgController extends Controller
         }
 
         $result = \App\Services\StorageFileService::deleteOldFiles($org, $request->months);
+
+        if ($result['deleted_count'] > 0) {
+            $this->auditService->log(
+                'storage', 'bulk_delete',
+                "Bulk deleted {$result['deleted_count']} files older than {$request->months} months (freed {$result['freed_mb']} MB)",
+                null, 'storage_bulk', null,
+                ['type' => 'old', 'months' => $request->months, 'deleted_count' => $result['deleted_count'], 'freed_mb' => $result['freed_mb']],
+                null, 'success'
+            );
+        }
 
         return response()->json([
             'success' => true,
@@ -194,6 +235,16 @@ class OrganizationOrgController extends Controller
         }
 
         $result = \App\Services\StorageFileService::deleteLargeFiles($org, $request->min_size_gb);
+
+        if ($result['deleted_count'] > 0) {
+            $this->auditService->log(
+                'storage', 'bulk_delete',
+                "Bulk deleted {$result['deleted_count']} files larger than {$request->min_size_gb} GB (freed {$result['freed_mb']} MB)",
+                null, 'storage_bulk', null,
+                ['type' => 'large', 'min_size_gb' => $request->min_size_gb, 'deleted_count' => $result['deleted_count'], 'freed_mb' => $result['freed_mb']],
+                null, 'success'
+            );
+        }
 
         return response()->json([
             'success' => true,
@@ -256,8 +307,15 @@ class OrganizationOrgController extends Controller
             ->latest()
             ->first();
 
-        $maxStorageGb = $subscription?->getEffectiveMaxStorageGb() ?? 10;
+        $maxStorageGb = $subscription?->getEffectiveMaxStorageValue() ?? 10;
+        $storageUnit = $subscription?->getEffectiveStorageUnit() ?? 'GB';
         $planName = $subscription?->plan?->name ?? 'Unknown';
+
+        // Org-level storage override (highest priority)
+        if ($org->custom_max_storage_gb !== null) {
+            $maxStorageGb = $org->custom_max_storage_gb;
+            $storageUnit = $org->storage_unit ?? $storageUnit;
+        }
 
         $storageFiles = OrganizationStorageUsage::on('mysql_master')
             ->where('organization_id', $org->id)
@@ -265,7 +323,11 @@ class OrganizationOrgController extends Controller
 
         $totalBytes = $storageFiles->sum('file_size_bytes');
         $totalGb = round($totalBytes / (1024 * 1024 * 1024), 4);
-        $usagePercent = $maxStorageGb > 0 ? round(($totalGb / $maxStorageGb) * 100, 1) : 0;
+
+        $maxBytes = OrganizationSubscription::convertToBytes($maxStorageGb, $storageUnit);
+        $remainingBytes = max(0, $maxBytes - $totalBytes);
+        $remainingGb = round($remainingBytes / (1024 * 1024 * 1024), 4);
+        $usagePercent = $maxBytes > 0 ? round(($totalBytes / $maxBytes) * 100, 1) : 0;
 
         $oldFiles3m = OrganizationStorageUsage::on('mysql_master')
             ->where('organization_id', $org->id)
@@ -320,8 +382,10 @@ class OrganizationOrgController extends Controller
                 'total_bytes'    => $totalBytes,
                 'total_gb'       => $totalGb,
                 'max_storage_gb' => $maxStorageGb,
+                'storage_unit'   => $storageUnit,
                 'usage_percent'  => $usagePercent,
-                'remaining_gb'   => max(0, round($maxStorageGb - $totalGb, 4)),
+                'remaining_bytes'=> $remainingBytes,
+                'remaining_gb'   => $remainingGb,
                 'total_files'    => $storageFiles->count(),
                 'old_files' => [
                     '3_months'  => ['count' => $oldFiles3m, 'size_mb' => round($oldSize3m / (1024 * 1024), 2)],
@@ -346,6 +410,9 @@ class OrganizationOrgController extends Controller
         if (!$org) {
             return response()->json(['success' => false, 'message' => 'Organization not found.'], 404);
         }
+
+        // Trigger fresh notification check to dismiss stale notifications
+        \App\Services\StorageNotificationService::checkAndNotify($org);
 
         $notifications = \App\Services\StorageNotificationService::getActiveNotifications($org->id);
         $pinned = \App\Services\StorageNotificationService::getPinnedNotifications($org->id);
@@ -422,13 +489,15 @@ class OrganizationOrgController extends Controller
         return response()->json([
             'success' => true,
             'preferences' => [
-                'auto_delete'        => $org->storage_auto_delete ?? false,
-                'overwrite'          => $org->storage_overwrite ?? true,
-                'warn_threshold'     => $org->storage_warn_threshold ?? 80,
-                'critical_threshold' => $org->storage_critical_threshold ?? 90,
-                'pin_threshold'      => $org->storage_pin_threshold ?? 95,
-                'driver'             => $org->storage_driver ?? 'local',
-                's3_prefix'          => $org->storage_s3_prefix ?? "org-{$org->id}",
+                'auto_delete'          => $org->storage_auto_delete ?? false,
+                'overwrite'            => $org->storage_overwrite ?? true,
+                'warn_threshold'       => $org->storage_warn_threshold ?? 80,
+                'critical_threshold'   => $org->storage_critical_threshold ?? 90,
+                'pin_threshold'        => $org->storage_pin_threshold ?? 95,
+                'driver'               => $org->storage_driver ?? 'local',
+                's3_prefix'            => $org->storage_s3_prefix ?? "org-{$org->id}",
+                'custom_max_storage_gb'=> $org->custom_max_storage_gb,
+                'storage_unit'         => $org->storage_unit ?? 'GB',
             ],
         ]);
     }
@@ -436,13 +505,15 @@ class OrganizationOrgController extends Controller
     public function updateStoragePreferences(Request $request): JsonResponse
     {
         $request->validate([
-            'auto_delete'        => 'nullable|boolean',
-            'overwrite'          => 'nullable|boolean',
-            'warn_threshold'     => 'nullable|integer|min:50|max:95',
-            'critical_threshold' => 'nullable|integer|min:60|max:98',
-            'pin_threshold'      => 'nullable|integer|min:70|max:100',
-            'driver'             => 'nullable|string|in:local,s3',
-            's3_prefix'          => 'nullable|string|max:100',
+            'auto_delete'          => 'nullable|boolean',
+            'overwrite'            => 'nullable|boolean',
+            'warn_threshold'       => 'nullable|integer|min:50|max:95',
+            'critical_threshold'   => 'nullable|integer|min:60|max:98',
+            'pin_threshold'        => 'nullable|integer|min:70|max:100',
+            'driver'               => 'nullable|string|in:local,s3',
+            's3_prefix'            => 'nullable|string|max:100',
+            'custom_max_storage_gb'=> 'nullable|numeric|min:0.001|max:9999',
+            'custom_storage_unit'  => 'nullable|string|in:KB,MB,GB',
         ]);
 
         $org = $this->resolveOrganization($request);
@@ -458,19 +529,31 @@ class OrganizationOrgController extends Controller
             'storage_pin_threshold'      => $request->input('pin_threshold'),
             'storage_driver'             => $request->input('driver'),
             'storage_s3_prefix'          => $request->input('s3_prefix'),
+            'custom_max_storage_gb'      => $request->input('custom_max_storage_gb'),
+            'storage_unit'               => $request->has('custom_storage_unit') ? ($request->input('custom_storage_unit') ?: 'GB') : null,
         ], fn($v) => $v !== null));
+
+        // Dismiss old storage notifications so new ones with correct unit get created
+        \App\Models\Master\OrganizationStorageNotification::on('mysql_master')
+            ->where('organization_id', $org->id)
+            ->update(['is_dismissed' => true]);
+
+        // Trigger fresh notification check with new limits
+        \App\Services\StorageNotificationService::checkAndNotify($org);
 
         return response()->json([
             'success' => true,
             'message' => 'Storage preferences updated.',
             'preferences' => [
-                'auto_delete'        => $org->storage_auto_delete,
-                'overwrite'          => $org->storage_overwrite,
-                'warn_threshold'     => $org->storage_warn_threshold,
-                'critical_threshold' => $org->storage_critical_threshold,
-                'pin_threshold'      => $org->storage_pin_threshold,
-                'driver'             => $org->storage_driver,
-                's3_prefix'          => $org->storage_s3_prefix,
+                'auto_delete'          => $org->storage_auto_delete,
+                'overwrite'            => $org->storage_overwrite,
+                'warn_threshold'       => $org->storage_warn_threshold,
+                'critical_threshold'   => $org->storage_critical_threshold,
+                'pin_threshold'        => $org->storage_pin_threshold,
+                'driver'               => $org->storage_driver,
+                's3_prefix'            => $org->storage_s3_prefix,
+                'custom_max_storage_gb'=> $org->custom_max_storage_gb,
+                'storage_unit'         => $org->storage_unit,
             ],
         ]);
     }
@@ -607,6 +690,7 @@ class OrganizationOrgController extends Controller
 
         $query = OrganizationSupportTicket::on('mysql_master')
             ->where('organization_id', $org->id)
+            ->where('source', '!=', 'feedback')
             ->with('user:id,name,email');
 
         if ($status) {
@@ -645,10 +729,10 @@ class OrganizationOrgController extends Controller
         });
 
         $counts = [
-            'open'    => OrganizationSupportTicket::on('mysql_master')->where('organization_id', $org->id)->where('status', 'open')->count(),
-            'pending' => OrganizationSupportTicket::on('mysql_master')->where('organization_id', $org->id)->where('status', 'pending')->count(),
-            'resolved'=> OrganizationSupportTicket::on('mysql_master')->where('organization_id', $org->id)->where('status', 'resolved')->count(),
-            'closed'  => OrganizationSupportTicket::on('mysql_master')->where('organization_id', $org->id)->where('status', 'closed')->count(),
+            'open'    => OrganizationSupportTicket::on('mysql_master')->where('organization_id', $org->id)->where('source', '!=', 'feedback')->where('status', 'open')->count(),
+            'pending' => OrganizationSupportTicket::on('mysql_master')->where('organization_id', $org->id)->where('source', '!=', 'feedback')->where('status', 'pending')->count(),
+            'resolved'=> OrganizationSupportTicket::on('mysql_master')->where('organization_id', $org->id)->where('source', '!=', 'feedback')->where('status', 'resolved')->count(),
+            'closed'  => OrganizationSupportTicket::on('mysql_master')->where('organization_id', $org->id)->where('source', '!=', 'feedback')->where('status', 'closed')->count(),
         ];
 
         return response()->json([
@@ -667,6 +751,7 @@ class OrganizationOrgController extends Controller
 
         $ticket = OrganizationSupportTicket::on('mysql_master')
             ->where('organization_id', $org->id)
+            ->where('source', '!=', 'feedback')
             ->with('user:id,name,email')
             ->with('messages.user:id,name,email')
             ->find($ticketId);
@@ -707,7 +792,9 @@ class OrganizationOrgController extends Controller
                 'status'        => $ticket->status,
                 'priority'      => $ticket->priority,
                 'category'      => $ticket->category,
+                'source'        => $ticket->source ?? 'manual',
                 'assigned_to'   => $ticket->assigned_to_name,
+                'feedback_metadata' => $ticket->feedback_metadata,
                 'user'          => $ticket->user ? [
                     'id'    => $ticket->user->id,
                     'name'  => $ticket->user->name,
@@ -776,6 +863,7 @@ class OrganizationOrgController extends Controller
 
         $ticket = OrganizationSupportTicket::on('mysql_master')
             ->where('organization_id', $org->id)
+            ->where('source', '!=', 'feedback')
             ->find($ticketId);
 
         if (!$ticket) {
@@ -813,6 +901,7 @@ class OrganizationOrgController extends Controller
 
         $ticket = OrganizationSupportTicket::on('mysql_master')
             ->where('organization_id', $org->id)
+            ->where('source', '!=', 'feedback')
             ->find($ticketId);
 
         if (!$ticket) {
@@ -836,6 +925,7 @@ class OrganizationOrgController extends Controller
 
         $ticketIds = OrganizationSupportTicket::on('mysql_master')
             ->where('organization_id', $org->id)
+            ->where('source', '!=', 'feedback')
             ->where('status', '!=', 'closed')
             ->pluck('id');
 

@@ -24,7 +24,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property float|null $custom_price_yearly
  * @property int|null   $custom_max_users
  * @property int|null   $custom_max_projects
- * @property int|null   $custom_max_storage_gb
+ * @property float|null $custom_max_storage_gb
+ * @property string|null $storage_unit
  * @property \Carbon\Carbon $starts_at
  * @property \Carbon\Carbon|null $ends_at
  * @property \Carbon\Carbon|null $cancelled_at
@@ -48,6 +49,7 @@ class OrganizationSubscription extends Model
         'custom_max_users',
         'custom_max_projects',
         'custom_max_storage_gb',
+        'storage_unit',
         'starts_at',
         'ends_at',
         'cancelled_at',
@@ -62,7 +64,8 @@ class OrganizationSubscription extends Model
         'custom_price_yearly'   => 'float',
         'custom_max_users'      => 'integer',
         'custom_max_projects'   => 'integer',
-        'custom_max_storage_gb' => 'integer',
+        'custom_max_storage_gb' => 'float',
+        'storage_unit'          => 'string',
         'starts_at'             => 'datetime',
         'ends_at'               => 'datetime',
         'cancelled_at'          => 'datetime',
@@ -164,13 +167,47 @@ class OrganizationSubscription extends Model
         return $this->plan?->max_projects ?? -1;
     }
 
-    /** Get the effective max storage (custom if set, else plan default). */
-    public function getEffectiveMaxStorageGb(): int
+    /** Get the effective max storage in GB (custom if set, else plan default). */
+    public function getEffectiveMaxStorageGb(): float
     {
         if ($this->is_custom && $this->custom_max_storage_gb !== null) {
-            return $this->custom_max_storage_gb;
+            return (float) $this->custom_max_storage_gb;
         }
-        return $this->plan?->max_storage_gb ?? 10;
+        return (float) ($this->plan?->max_storage_gb ?? 10);
+    }
+
+    /** Get the effective max storage value (custom if set, else plan default). */
+    public function getEffectiveMaxStorageValue(): float
+    {
+        return $this->getEffectiveMaxStorageGb();
+    }
+
+    /** Get the effective storage unit (custom if set, else plan default). */
+    public function getEffectiveStorageUnit(): string
+    {
+        if ($this->is_custom && $this->storage_unit !== null) {
+            return $this->storage_unit;
+        }
+        return $this->plan?->storage_unit ?? 'GB';
+    }
+
+    /** Convert the effective storage limit to bytes. */
+    public function getEffectiveMaxStorageBytes(): int
+    {
+        $value = $this->getEffectiveMaxStorageValue();
+        $unit = $this->getEffectiveStorageUnit();
+        return self::convertToBytes($value, $unit);
+    }
+
+    /** Convert a value + unit to bytes. */
+    public static function convertToBytes(float $value, string $unit): int
+    {
+        return match (strtoupper($unit)) {
+            'KB' => (int) ($value * 1024),
+            'MB' => (int) ($value * 1024 * 1024),
+            'GB' => (int) ($value * 1024 * 1024 * 1024),
+            default => (int) ($value * 1024 * 1024 * 1024),
+        };
     }
 
     /** Get all effective plan details as an array (for API responses). */
@@ -181,7 +218,8 @@ class OrganizationSubscription extends Model
             'price_yearly'  => $this->getEffectivePriceYearly(),
             'max_users'     => $this->getEffectiveMaxUsers(),
             'max_projects'  => $this->getEffectiveMaxProjects(),
-            'max_storage_gb'=> $this->getEffectiveMaxStorageGb(),
+            'max_storage_gb'=> (float) $this->getEffectiveMaxStorageValue(),
+            'storage_unit'  => $this->getEffectiveStorageUnit(),
             'is_custom'     => $this->is_custom,
         ];
     }

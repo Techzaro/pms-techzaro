@@ -94,6 +94,9 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
 
         const data = await res.json();
         if (res.ok) {
+          if (data.file_skipped) {
+            notify.warning(data.message || "Task reopened, but file could not be uploaded due to storage limit.");
+          }
           markSaved();
           onReopenSuccess(data.task);
           onClose();

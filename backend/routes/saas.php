@@ -78,6 +78,19 @@ Route::middleware('super.admin')->group(function () use ($ctrl, $authCtrl) {
     Route::post('/organizations/{id}/support/tickets/{ticketId}/reply', [$ctrl, 'orgSupportReply']);
     Route::post('/organizations/{id}/support/tickets/{ticketId}/close', [$ctrl, 'orgSupportClose']);
 
+    // ─── Organization Audit Logs (Super Admin) ─────────────────
+    Route::get('/organizations/{id}/audit-logs', [$ctrl, 'orgAuditLogs']);
+    Route::get('/organizations/{id}/audit-logs/modules', [$ctrl, 'orgAuditLogModules']);
+    Route::get('/organizations/{id}/audit-logs/actions', [$ctrl, 'orgAuditLogActions']);
+    Route::get('/organizations/{id}/audit-logs/users', [$ctrl, 'orgAuditLogUsers']);
+
+    // ─── Feedback Tickets (Super Admin) ────────────────────────
+    Route::get('/feedback-tickets', [$ctrl, 'allFeedbackTickets']);
+    Route::get('/feedback-tickets/{ticketId}', [$ctrl, 'feedbackTicketDetail']);
+    Route::post('/feedback-tickets/{ticketId}/reply', [$ctrl, 'feedbackTicketReply']);
+    Route::post('/feedback-tickets/{ticketId}/close', [$ctrl, 'feedbackTicketClose']);
+    Route::post('/feedback-tickets/{ticketId}/status', [$ctrl, 'feedbackTicketUpdateStatus']);
+
     // ─── Organization Trial Settings ────────────────────────────
     Route::get('/organizations/{id}/trial-settings', [$ctrl, 'getTrialSettings']);
     Route::put('/organizations/{id}/trial-settings', [$ctrl, 'updateTrialSettings']);
@@ -106,6 +119,9 @@ Route::middleware('super.admin')->group(function () use ($ctrl, $authCtrl) {
 
     // ─── Activity Logs ─────────────────────────────────────────
     Route::get('/activity-logs', [$ctrl, 'activityLogs']);
+    Route::get('/activity-logs/actions', [$ctrl, 'activityLogActions']);
+    Route::get('/all-org-audit-logs', [$ctrl, 'allOrgAuditLogs']);
+    Route::get('/all-org-audit-logs/modules', [$ctrl, 'allOrgAuditLogModules']);
 
     // ─── Health ────────────────────────────────────────────────
     Route::get('/health', [$ctrl, 'health']);

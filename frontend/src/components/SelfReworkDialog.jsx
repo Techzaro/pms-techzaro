@@ -82,6 +82,9 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
 
         const data = await res.json();
         if (res.ok) {
+          if (data.file_skipped) {
+            notify.warning(data.message || "Subtask marked for rework, but file could not be uploaded due to storage limit.");
+          }
           markSaved();
           onReworkSuccess(data.deliverable);
           onClose();

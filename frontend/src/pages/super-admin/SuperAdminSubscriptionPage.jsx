@@ -205,9 +205,9 @@ export default function SuperAdminSubscriptionPage() {
       <div style={{ background: 'var(--bg-card)', borderRadius: 20, padding: 24, boxShadow: 'var(--shadow-sm)' }}>
         <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-heading)', margin: '0 0 16px' }}>{t('Plan Limits', { defaultValue: 'Plan Limits' })}</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
-          <LimitCard icon={<Users style={{ width: 20, height: 20 }} />} label={t("Users", { defaultValue: "Users" })} value={plan.max_users} color="#4f46e5" />
-          <LimitCard icon={<FolderKanban style={{ width: 20, height: 20 }} />} label={t("Projects", { defaultValue: "Projects" })} value={plan.max_projects} color="#2563eb" />
-          <LimitCard icon={<HardDrive style={{ width: 20, height: 20 }} />} label={t("Storage", { defaultValue: "Storage" })} value={plan.max_storage_gb} suffix="GB" color="#16a34a" />
+<LimitCard icon={<Users style={{ width: 20, height: 20 }} />} label={t("Users", { defaultValue: "Users" })} value={plan.max_users} color="#4f46e5" />
+            <LimitCard icon={<FolderKanban style={{ width: 20, height: 20 }} />} label={t("Projects", { defaultValue: "Projects" })} value={plan.max_projects} color="#2563eb" />
+            <LimitCard icon={<HardDrive style={{ width: 20, height: 20 }} />} label={t("Storage", { defaultValue: "Storage" })} value={plan.max_storage_gb} suffix={plan.storage_unit || 'GB'} color="#16a34a" />
         </div>
       </div>
 
@@ -372,9 +372,9 @@ function PlanChangeModal({ plans, selectedPlanId, setSelectedPlanId, selectedBil
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
-                    <span>{p.max_users >= 9999 ? t('Unlimited', { defaultValue: 'Unlimited' }) : p.max_users} {t('users', { defaultValue: 'users' })}</span>
-                    <span>{p.max_projects >= 9999 ? t('Unlimited', { defaultValue: 'Unlimited' }) : p.max_projects} {t('projects', { defaultValue: 'projects' })}</span>
-                    <span>{p.max_storage_gb} {t('GB storage', { defaultValue: 'GB storage' })}</span>
+<span>{p.max_users >= 9999 ? t('Unlimited', { defaultValue: 'Unlimited' }) : p.max_users} {t('users', { defaultValue: 'users' })}</span>
+          <span>{p.max_projects >= 9999 ? t('Unlimited', { defaultValue: 'Unlimited' }) : p.max_projects} {t('projects', { defaultValue: 'projects' })}</span>
+          <span>{p.max_storage_gb} {p.storage_unit || 'GB'} storage</span>
                   </div>
                 </div>
               );

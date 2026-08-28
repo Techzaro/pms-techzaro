@@ -310,10 +310,20 @@ function SubtaskDetails() {
         method: "POST", headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, body: formData, _notifHandled: true,
       });
       const data = await res.json();
-      if (res.ok) { publish('deliverable:updated', data.deliverable || data); publish('data:changed', { type: 'deliverable', action: 'updated' }); showSuccessMessage("Subtask", "submitted"); setShowSubmitForm(false); setSubmitComment(""); setSubmitFile(null); setSubmitFiles([]); setLinks([]); setLinkInput(""); fetchSubtask(); }
-      else { notify.error(data.message || t("Failed to submit", { defaultValue: "Failed to submit" })); }
-    } catch { notify.error(t("An error occurred", { defaultValue: "An error occurred" })); } finally { setSubmitting(false); }
-  };
+if (res.ok) {
+  if (data.file_skipped) {
+    notify.warning(data.message || t("Submission saved but file could not be attached due to storage limit.", { defaultValue: "Submission saved but file could not be attached due to storage limit." }));
+  } else {
+    showSuccessMessage(t("Subtask submitted successfully!", { defaultValue: "Subtask submitted successfully!" }));
+  }
+  publish('deliverable:updated', data.deliverable || data);
+  publish('data:changed', { type: 'deliverable', action: 'updated' });
+  setShowSubmitForm(false);
+  setSubmitComment("");
+  setSubmitFile(null);
+} else {
+  notify.error(data.message || t("Failed to submit", { defaultValue: "Failed to submit" }));
+}
 
   const handleApprove = async () => {
     await runApprove(async () => {

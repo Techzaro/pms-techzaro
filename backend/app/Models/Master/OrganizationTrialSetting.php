@@ -18,7 +18,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $trial_duration_unit
  * @property int    $max_users
  * @property int    $max_projects
- * @property int    $max_storage_gb
+ * @property float  $max_storage_gb
+ * @property string $storage_unit
  */
 class OrganizationTrialSetting extends Model
 {
@@ -31,13 +32,15 @@ class OrganizationTrialSetting extends Model
         'max_users',
         'max_projects',
         'max_storage_gb',
+        'storage_unit',
     ];
 
     protected $casts = [
         'trial_duration' => 'integer',
         'max_users'      => 'integer',
         'max_projects'   => 'integer',
-        'max_storage_gb' => 'integer',
+        'max_storage_gb' => 'float',
+        'storage_unit' => 'string',
     ];
 
     /*

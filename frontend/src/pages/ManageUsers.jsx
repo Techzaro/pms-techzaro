@@ -74,8 +74,8 @@ const stripDashes = (value) => value.replace(/-/g, "");
  * Handles CRUD operations for users, role assignment, resignation, and profile viewing.
  */
 function ManageUsers() {
-  const { t } = useTranslation();
-  const { canCreateUser, maxUsers, currentUsers, usersRemaining, getLimitMessage } = usePlanLimits();
+const { t } = useTranslation();
+const { canCreateUser, maxUsers, currentUsers, usersRemaining, getLimitMessage, foundingAdminId } = usePlanLimits();
   const notify = useNotification();
   const [users, setUsers] = useState([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -879,7 +879,7 @@ function ManageUsers() {
     } else if (newUser.designation === "__custom__" && !newUser.designationCustom.trim()) {
       errors.designationCustom = t("Custom Designation is required.", { defaultValue: "Custom Designation is required." });
     }
-    if (!newUser.employeeCode.trim()) errors.employeeCode = t("Employee Code is required.", { defaultValue: "Employee Code is required." });
+if (!newUser.employeeCode.trim()) errors.employeeCode = t("Employee Code is required.", { defaultValue: "Employee Code is required." });
     if (!newUser.jobStartedDate) errors.jobStartedDate = t("Job Start Date is required.", { defaultValue: "Job Start Date is required." });
     if (newUser.grossSalary && newUser.grossSalary.length > 300) {
       errors.grossSalary = t("Gross Salary must be 300 characters or less.", { defaultValue: "Gross Salary must be 300 characters or less." });
@@ -1194,9 +1194,13 @@ function ManageUsers() {
             {currentUserRole === "admin" && !isSelf && (
               <button
                 className="btn-view"
-                style={{ color: "#ef4444" }}
-                onClick={() => handleAdminDeleteUser(user)}
-                title={user.deletion_requested ? t("Approve & Delete User", { defaultValue: "Approve & Delete User" }) : t("Delete User", { defaultValue: "Delete User" })}
+style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#ef4444" }}
+                    onClick={() => {
+                      if (foundingAdminId && user.id === foundingAdminId) return;
+                      handleAdminDeleteUser(user);
+                    }}
+                    disabled={foundingAdminId && user.id === foundingAdminId}
+                    title={foundingAdminId && user.id === foundingAdminId ? "Founding admin cannot be deleted" : (user.deletion_requested ? t("Approve & Delete User", { defaultValue: "Approve & Delete User" }) : t("Delete User", { defaultValue: "Delete User" }))}
               >
                 <Trash2 size={18} />
               </button>
@@ -1308,9 +1312,13 @@ function ManageUsers() {
             {currentUserRole === "admin" && !isSelf && (
               <button
                 className="btn-view"
-                style={{ color: "#ef4444" }}
-                onClick={() => handleAdminDeleteUser(user)}
-                title={user.deletion_requested ? t("Approve & Delete User", { defaultValue: "Approve & Delete User" }) : t("Delete User", { defaultValue: "Delete User" })}
+style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#ef4444" }}
+                    onClick={() => {
+                      if (foundingAdminId && user.id === foundingAdminId) return;
+                      handleAdminDeleteUser(user);
+                    }}
+                    disabled={foundingAdminId && user.id === foundingAdminId}
+                    title={foundingAdminId && user.id === foundingAdminId ? "Founding admin cannot be deleted" : (user.deletion_requested ? t("Approve & Delete User", { defaultValue: "Approve & Delete User" }) : t("Delete User", { defaultValue: "Delete User" }))}
               >
                 <Trash2 size={18} />
               </button>

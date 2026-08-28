@@ -1,7 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import Breadcrumb from '../components/Breadcrumb';
+import ConfirmModal from '../components/ConfirmModal';
 import api from '../lib/api';
 import {
   Building2, CreditCard, HardDrive, Users, FolderKanban, Calendar, Clock,
@@ -34,6 +37,12 @@ const fmt$ = (a,c='USD') => new Intl.NumberFormat('en-US',{style:'currency',curr
 const fmtD = (d) => d ? new Date(d).toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'}) : 'N/A';
 const fmtDT = (d) => { if(!d) return null; const x=new Date(d); return { date:x.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}), time:x.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) }; };
 const fmtB = (b) => { if(!b) return '0 B'; const g=b/(1024**3); return g>=1?`${g.toFixed(2)} GB`:`${(b/(1024**2)).toFixed(2)} MB`; };
+const fmtBytesToUnit = (bytes, unit = 'GB') => {
+  if (!bytes) return `0 ${unit}`;
+  const divisors = { KB: 1024, MB: 1024**2, GB: 1024**3 };
+  const divisor = divisors[unit] || divisors.GB;
+  return `${(bytes / divisor).toFixed(2)} ${unit}`;
+};
 
 function Badge({status}){
   const { t } = useTranslation();
@@ -52,13 +61,17 @@ const sc = {
 };
 
 export default function OrganizationDetailsPage() {
-  const { t } = useTranslation();
+const { t } = useTranslation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [data,setData]=useState(null);
   const [stSum,setStSum]=useState(null);
   const [bill,setBill]=useState(null);
   const [hist,setHist]=useState(null);
   const [ld,setLd]=useState(true);
-  const [tab,setTab]=useState('details');
+  const [tab,setTab]=useState(() => {
+    const t = searchParams.get('tab');
+    return (t && ['details','storage','bill','hist'].includes(t)) ? t : 'details';
+  });
   const [stTab,setStTab]=useState('overview');
   const [stData,setStData]=useState(null);
   const [stNotif,setStNotif]=useState([]);
@@ -69,6 +82,7 @@ export default function OrganizationDetailsPage() {
   const [stPrefSav,setStPrefSav]=useState(false);
   const [delModal,setDelModal]=useState(null);
   const [delLd,setDelLd]=useState(false);
+  const [fileDelConfirm,setFileDelConfirm]=useState({open:false,file:null});
   const [viewInv,setViewInv]=useState(null);
   const [now,setNow]=useState(new Date());
   const [tz,setTz]=useState('');
@@ -197,8 +211,8 @@ export default function OrganizationDetailsPage() {
           <p className="text-sm mt-0.5" style={sc.ts}>{o?.domain}</p>
         </div>
         <div className="flex items-center gap-1 p-1 rounded-xl" style={{background:'var(--bg-hover)',border:'1px solid var(--border-light)'}}>
-          {[{k:'details',l:t('Details', { defaultValue: 'Details' })},{k:'regional',l:t('Regional & Hours', { defaultValue: 'Regional & Hours' }),i:Globe},{k:'storage',l:t('Storage', { defaultValue: 'Storage' }),i:HardDrive},{k:'bill',l:t('Billing', { defaultValue: 'Billing' }),i:CreditCard},{k:'hist',l:t('History', { defaultValue: 'History' }),i:Clock}].map(tTab=>
-            <button key={tTab.k} onClick={()=>setTab(tTab.k)} className={`px-4 py-2 rounded-lg text-[13px] font-semibold transition-all${tTab.i?' flex items-center gap-1.5':''}`} style={tab===tTab.k?{background:'#4f46e5',color:'#fff',boxShadow:'0 2px 6px rgba(79,70,229,0.25)'}:{background:'#f1f5f9',color:'#334155',border:'1px solid #cbd5e1'}}>{tTab.i&&<tTab.i className="w-4 h-4"/>}{tTab.l}</button>
+{[{k:'details',l:t('Details', { defaultValue: 'Details' })},{k:'regional',l:t('Regional & Hours', { defaultValue: 'Regional & Hours' }),i:Globe},{k:'storage',l:t('Storage', { defaultValue: 'Storage' }),i:HardDrive},{k:'bill',l:t('Billing', { defaultValue: 'Billing' }),i:CreditCard},{k:'hist',l:t('History', { defaultValue: 'History' }),i:Clock}].map(t=>
+                <button key={t.k} onClick={()=>{setTab(t.k); setSearchParams({tab: t.k}, {replace: true});}} className={`px-4 py-2 rounded-lg text-[13px] font-semibold transition-all${tab===t.k?' flex items-center gap-1.5':''}`}>
           )}
         </div>
       </div>
@@ -272,7 +286,7 @@ export default function OrganizationDetailsPage() {
             </div>
 
             <div className="grid grid-cols-3 gap-4 pt-3" style={{borderTop:'1px solid var(--border-light)'}}>
-              {[{icon:Users,l:t('Users', { defaultValue: 'Users' }),v:plan.max_users>=9999?t('Unlimited', { defaultValue: 'Unlimited' }):plan.max_users},{icon:FolderKanban,l:t('Projects', { defaultValue: 'Projects' }),v:plan.max_projects>=9999?t('Unlimited', { defaultValue: 'Unlimited' }):plan.max_projects},{icon:HardDrive,l:t('Storage', { defaultValue: 'Storage' }),v:`${plan.max_storage_gb} GB`}].map(x=>
+{[{icon:Users,l:t('Users', { defaultValue: 'Users' }),v:plan.max_users===9999?t('Unlimited', { defaultValue: 'Unlimited' }):plan.max_users},{icon:FolderKanban,l:t('Projects', { defaultValue: 'Projects' }),v:plan.max_projects===9999?t('Unlimited', { defaultValue: 'Unlimited' }):plan.max_projects},{icon:HardDrive,l:t('Storage', { defaultValue: 'Storage' }),v:plan.max_storage===9999?t('Unlimited', { defaultValue: 'Unlimited' }):`${plan.max_storage} ${plan.storage_unit || 'GB'}`}]
                 <div key={x.l} className="p-3 rounded-lg" style={sc.infoBox}>
                   <div className="flex items-center gap-2 mb-1">
                     <x.icon className="w-4 h-4" style={{color:'var(--color-primary)'}}/>
@@ -407,23 +421,22 @@ export default function OrganizationDetailsPage() {
               </div>
               <div className="mb-3">
                 <div className="flex justify-between mb-1">
-                  <span className="text-sm font-semibold" style={sc.text}>{t('{{count}} GB used', { count: stSum.summary.total_gb, defaultValue: `${stSum.summary.total_gb} GB used` })}</span>
-                  <span className="text-sm" style={sc.ts}>{t('of {{max}} GB', { max: stSum.summary.max_storage_gb, defaultValue: `of ${stSum.summary.max_storage_gb} GB` })}</span>
+
                 </div>
                 <div className="w-full h-3 rounded-full" style={{background:'var(--bg-hover)'}}>
                   <div className="h-3 rounded-full transition-all" style={{width:`${Math.min(stSum.summary.usage_percent,100)}%`,background:stSum.summary.usage_percent>95?'var(--color-danger)':stSum.summary.usage_percent>80?'var(--color-warning)':'var(--color-primary)'}}/>
                 </div>
                 <div className="flex justify-between mt-1">
-                  <span className="text-xs" style={sc.tm}>{t('{{percent}}% used', { percent: stSum.summary.usage_percent, defaultValue: `${stSum.summary.usage_percent}% used` })}</span>
-                  <span className="text-xs" style={sc.tm}>{t('{{remaining}} GB remaining', { remaining: stSum.summary.remaining_gb, defaultValue: `${stSum.summary.remaining_gb} GB remaining` })}</span>
+<span className="text-xs" style={sc.tm}>{t('{{percent}}% used', { percent: stSum.summary.usage_percent, defaultValue: `${stSum.summary.usage_percent}% used` })}</span>
+                  <span className="text-xs" style={sc.tm}>{t('{{remaining}} GB remaining', { remaining: `${fmtBytesToUnit(stSum.summary.remaining_bytes, stSum.summary.storage_unit || 'GB')} ${stSum.summary.storage_unit || 'GB'}`, defaultValue: `${fmtBytesToUnit(stSum.summary.remaining_bytes, stSum.summary.storage_unit || 'GB')} ${stSum.summary.storage_unit || 'GB'} remaining` })}</span>
                 </div>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[
-                  {l:t('Total Files', { defaultValue: 'Total Files' }),v:stSum.summary.total_files,color:'var(--color-primary)'},
-                  {l:t('Used Space', { defaultValue: 'Used Space' }),v:`${stSum.summary.total_gb} GB`,color:'var(--color-primary)'},
-                  {l:t('Storage Limit', { defaultValue: 'Storage Limit' }),v:`${stSum.summary.max_storage_gb} GB`,color:'var(--color-success)'},
-                  {l:t('Remaining', { defaultValue: 'Remaining' }),v:`${stSum.summary.remaining_gb} GB`,color:stSum.summary.usage_percent>95?'var(--color-danger)':'var(--color-warning)'},
+{l:t('Total Files', { defaultValue: 'Total Files' }),v:stSum.summary.total_files,color:'var(--color-primary)'},
+                  {l:t('Used Space', { defaultValue: 'Used Space' }),v:`${fmtBytesToUnit(stSum.summary.total_bytes, stSum.summary.storage_unit || 'GB')} ${stSum.summary.storage_unit || 'GB'}`,color:'var(--color-primary)'},
+                  {l:t('Storage Limit', { defaultValue: 'Storage Limit' }),v:`${stSum.summary.max_storage_gb} ${stSum.summary.storage_unit || 'GB'}`,color:'var(--color-success)'},
+                  {l:t('Remaining', { defaultValue: 'Remaining' }),v:`${fmtBytesToUnit(stSum.summary.remaining_bytes, stSum.summary.storage_unit || 'GB')} ${stSum.summary.storage_unit || 'GB'}`,color:stSum.summary.usage_percent>95?'var(--color-danger)':'var(--color-warning)'},
                 ].map(x=>
                   <div key={x.l} className="p-3 rounded-lg" style={{background:'var(--bg-hover)',border:'1px solid var(--border-light)'}}>
                     <p className="text-xs" style={{color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'0.05em'}}>{x.l}</p>
@@ -493,7 +506,7 @@ export default function OrganizationDetailsPage() {
                       <div className="flex items-center gap-3 flex-shrink-0">
                         <span className="text-xs" style={sc.ts}>{f.file_size_mb} MB</span>
                         <span className="text-xs" style={sc.tm}>{new Date(f.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>
-                        <button onClick={async()=>{try{await api.delete(`/organization/storage/${f.id}`);loadStData();}catch{}}} className="p-1 rounded-md hover:opacity-80 transition-colors" title={t('Delete', { defaultValue: 'Delete' })}>
+<button onClick={() => setFileDelConfirm({open:true, file:f})} className="p-1 rounded-md hover:opacity-80 transition-colors" title="Delete">
                           <Trash2 className="w-3.5 h-3.5" style={{color:'var(--color-danger)'}}/>
                         </button>
                       </div>
@@ -869,6 +882,26 @@ export default function OrganizationDetailsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={fileDelConfirm.open}
+        onClose={()=>setFileDelConfirm({open:false,file:null})}
+        onConfirm={async()=>{
+          try{
+            await api.delete(`/organization/storage/${fileDelConfirm.file.id}`);
+            setToast({t:'s',m:'File deleted successfully from all references.'});
+            setFileDelConfirm({open:false,file:null});
+            loadStData();
+          }catch{
+            setToast({t:'e',m:'Failed to delete file.'});
+            setFileDelConfirm({open:false,file:null});
+          }
+        }}
+        title="Delete File"
+        message={`Are you sure you want to delete "${fileDelConfirm.file?.file_name}"? This file will be removed from storage and all linked projects, tasks, deliverables, and submissions. This action cannot be undone.`}
+        confirmText="Delete"
+        danger
+      />
     </DashboardLayout>
   );
 }

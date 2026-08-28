@@ -79,6 +79,7 @@ class SubscriptionService
             'custom_max_users'      => $customOverrides['custom_max_users'] ?? null,
             'custom_max_projects'   => $customOverrides['custom_max_projects'] ?? null,
             'custom_max_storage_gb' => $customOverrides['custom_max_storage_gb'] ?? null,
+            'storage_unit'          => $customOverrides['storage_unit'] ?? null,
             'starts_at'             => now(),
             'ends_at'               => $this->calculateEndDate($plan, $billingPeriod),
             'trial_ends_at'         => null,

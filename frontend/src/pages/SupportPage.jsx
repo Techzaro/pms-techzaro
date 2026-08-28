@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import Breadcrumb from '../components/Breadcrumb';
 import api from '../lib/api';
-import { MessageSquare, Send, Plus, X, CheckCircle, Clock, AlertCircle, Circle, ChevronLeft, Filter } from 'lucide-react';
+import { MessageSquare, Send, Plus, X, CheckCircle, Clock, AlertCircle, Circle, ChevronLeft, Filter, FileText, Star } from 'lucide-react';
 
 const PRIORITY_CONFIG = {
   low: { label: 'Low', color: 'var(--text-muted)', bg: 'var(--bg-hover)' },
@@ -248,6 +248,15 @@ function TicketList({ tickets, counts, loading, filterStatus, setFilterStatus, o
                       }}>
                         {t(priorityCfg.label, { defaultValue: priorityCfg.label })}
                       </span>
+                      {ticket.source === 'feedback' && (
+                        <span style={{
+                          padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600,
+                          background: 'rgba(139,92,246,0.1)', color: '#8b5cf6',
+                        }}>
+                          <FileText style={{ width: '10px', height: '10px', display: 'inline', marginRight: '2px' }} />
+                          Feedback
+                        </span>
+                      )}
                     </div>
                     <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {ticket.ticket_number} · {t(ticket.category, { defaultValue: ticket.category })}
@@ -273,6 +282,8 @@ function TicketDetail({ ticket, messages, loading, onBack, onReply, onClose, rep
   const { t } = useTranslation();
   const statusCfg = STATUS_CONFIG[ticket.status] || STATUS_CONFIG.open;
   const priorityCfg = PRIORITY_CONFIG[ticket.priority] || PRIORITY_CONFIG.medium;
+  const isFeedback = ticket.source === 'feedback';
+  const metadata = ticket.feedback_metadata || {};
 
   return (
     <div style={{ background: 'var(--bg-card)', borderRadius: '20px', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
@@ -305,9 +316,19 @@ function TicketDetail({ ticket, messages, loading, onBack, onReply, onClose, rep
               }}>
                 {t(priorityCfg.label, { defaultValue: priorityCfg.label })}
               </span>
+              {isFeedback && (
+                <span style={{
+                  padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600,
+                  background: 'rgba(139,92,246,0.1)', color: '#8b5cf6',
+                }}>
+                  <FileText style={{ width: '10px', height: '10px', display: 'inline', marginRight: '2px' }} />
+                  Feedback
+                </span>
+              )}
             </div>
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0' }}>
-              {ticket.ticket_number} · {t(ticket.category, { defaultValue: ticket.category })}
+{ticket.ticket_number} · {t(ticket.category, { defaultValue: ticket.category })}
+              {isFeedback && ticket.feedback_reference_number && ` · Ref: ${ticket.feedback_reference_number}`}
             </p>
           </div>
         </div>
@@ -321,6 +342,43 @@ function TicketDetail({ ticket, messages, loading, onBack, onReply, onClose, rep
           </button>
         )}
       </div>
+
+      {/* Feedback Metadata Panel */}
+      {isFeedback && metadata.feedback_type && (
+        <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-light)', background: 'var(--bg-hover)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '12px' }}>
+            <div>
+              <p style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', margin: 0 }}>Type</p>
+              <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-dark)', margin: '2px 0 0' }}>{metadata.feedback_type}</p>
+            </div>
+            <div>
+              <p style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', margin: 0 }}>Module</p>
+              <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-dark)', margin: '2px 0 0' }}>{metadata.module}</p>
+            </div>
+            <div>
+              <p style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', margin: 0 }}>Browser</p>
+              <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-dark)', margin: '2px 0 0' }}>{metadata.browser}</p>
+            </div>
+            <div>
+              <p style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', margin: 0 }}>OS</p>
+              <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-dark)', margin: '2px 0 0' }}>{metadata.operating_system}</p>
+            </div>
+            {metadata.rating && (
+              <div>
+                <p style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', margin: 0 }}>Rating</p>
+                <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-dark)', margin: '2px 0 0', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <Star style={{ width: '12px', height: '12px', color: '#f59e0b' }} fill="currentColor" />
+                  {metadata.rating}/5
+                </p>
+              </div>
+            )}
+            <div>
+              <p style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', margin: 0 }}>Submitted By</p>
+              <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-dark)', margin: '2px 0 0' }}>{metadata.user_name} ({metadata.user_role})</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Messages */}
       <div style={{ padding: '20px 24px', minHeight: '300px', maxHeight: '500px', overflowY: 'auto' }}>

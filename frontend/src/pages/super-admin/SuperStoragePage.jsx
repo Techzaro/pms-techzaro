@@ -87,9 +87,9 @@ export default function SuperStoragePage() {
                 <>
                   <div className="mb-3">
                     <div className="flex justify-between mb-1">
-                      <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>{s.total_gb} {t('GB', { defaultValue: 'GB' })} / {s.max_storage_gb} {t('GB', { defaultValue: 'GB' })}</span>
-                      <span className="text-xs" style={{ color: isCritical ? 'var(--color-danger)' : isWarning ? 'var(--color-warning)' : 'var(--text-muted)' }}>{usagePercent}%</span>
-                    </div>
+                   <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+  {formatBytes(s.total_bytes || 0)} / {s.max_storage_gb} {t(s.storage_unit || 'GB', { defaultValue: s.storage_unit || 'GB' })}
+</span>                    </div>
                     <div className="w-full h-2 rounded-full" style={{ background: 'var(--bg-hover)' }}>
                       <div className="h-2 rounded-full" style={{
                         width: `${Math.min(usagePercent, 100)}%`,
@@ -98,8 +98,8 @@ export default function SuperStoragePage() {
                     </div>
                   </div>
                   <div className="flex justify-between text-xs" style={{ color: 'var(--text-muted)' }}>
-                    <span>{t('{{count}} files', { count: s.total_files, defaultValue: `${s.total_files} files` })}</span>
-                    <span>{t('{{remaining}} GB left', { remaining: s.remaining_gb, defaultValue: `${s.remaining_gb} GB left` })}</span>
+<span>{t('{{count}} files', { count: s.total_files, defaultValue: `${s.total_files} files` })}</span>
+<span>{formatBytes(s.remaining_bytes || 0)} {t('left', { defaultValue: 'left' })}</span>
                   </div>
                 </>
               ) : (

@@ -21,4 +21,11 @@ class ActivityLog extends Model
               ->orWhere('target', 'like', "%{$search}%");
         });
     }
+
+    public function scopeDateRange(Builder $query, ?string $from, ?string $to): Builder
+    {
+        if ($from) $query->where('created_at', '>=', $from . ' 00:00:00');
+        if ($to) $query->where('created_at', '<=', $to . ' 23:59:59');
+        return $query;
+    }
 }
