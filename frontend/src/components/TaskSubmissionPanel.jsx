@@ -140,6 +140,7 @@ function TaskSubmissionPanel({
   const userRole = currentUser?.role;
   const isSuperAdmin = propIsSuperAdmin ?? (userRole === "admin" || userRole === "super_admin");
   const canApprove = propCanApprove ?? (!isAssignee && (isCreator || isSuperAdmin));
+  const canDecline = task.can_decline_submission ?? canApprove;
 
   const [abandonModalOpen, setAbandonModalOpen] = useState(false);
   const [abandonAction, setAbandonAction] = useState(null);
@@ -184,7 +185,7 @@ function TaskSubmissionPanel({
 
   const confirmMessages = {
     approve: "Are you sure you want to approve this task?",
-    reject: "Are you sure you want to decline this task? The assignee will not be able to resubmit.",
+    reject: "Are you sure you want to decline this submission? It will return to the submitter for resubmission.",
   };
 
   const historyItems = workflowEvents
@@ -502,28 +503,43 @@ function TaskSubmissionPanel({
 
           {/* Combined Review & Abandon action buttons */}
           <div className="td-review-actions" style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center", marginTop: "16px" }}>
-            {canApprove && status === "submitted" && (
+            {task?.can_submit_to_next && (
+              <button
+                className="td-review-btn td-review-btn--approve"
+                style={{ background: "#2563eb", borderColor: "#2563eb", color: "#ffffff" }}
+                disabled={acting}
+                onClick={() => handleAction("submit-to-next")}
+              >
+                Submit
+              </button>
+            )}
+
+            {(canApprove || canDecline) && (status === "submitted" || status === "submitted_late") && (
               <>
-                <button
-                  className="td-review-btn td-review-btn--approve"
-                  disabled={acting}
-                  onClick={() => setConfirmDialog({ open: true, type: "approve" })}
-                >
-                  Approve
-                </button>
-                <button
-                  className="td-review-btn td-review-btn--reject"
-                  disabled={acting}
-                  onClick={() => setConfirmDialog({ open: true, type: "reject" })}
-                >
-                  Decline
-                </button>
+                {canApprove && (
+                  <button
+                    className="td-review-btn td-review-btn--approve"
+                    disabled={acting}
+                    onClick={() => setConfirmDialog({ open: true, type: "approve" })}
+                  >
+                    Approve
+                  </button>
+                )}
+                {canDecline && (
+                  <button
+                    className="td-review-btn td-review-btn--reject"
+                    disabled={acting}
+                    onClick={() => setConfirmDialog({ open: true, type: "reject" })}
+                  >
+                    Decline
+                  </button>
+                )}
                 <button
                   className="td-review-btn td-review-btn--reopen"
                   disabled={acting}
                   onClick={() => setReopenDialog(true)}
                 >
-                  Decline & Reopen
+                  Reopen Task
                 </button>
               </>
             )}

@@ -398,6 +398,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/tasks/{task}/assigner-pause', [TaskController::class, 'assignerPause']); // Assigner pauses task (locks assignee)
     Route::post('/tasks/{task}/assigner-resume', [TaskController::class, 'assignerResume']); // Assigner resumes task (unlocks assignee)
     Route::post('/tasks/{task}/submit', [TaskController::class, 'submit']); // Submit task for review
+    Route::post('/tasks/{task}/submit-to-next', [TaskController::class, 'submitToNext'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
     Route::get('/tasks/{task}/timer', [TaskController::class, 'timer']); // Get live timer state
     Route::get('/tasks/{task}/timer-sessions', [TaskController::class, 'timerSessions']); // Get pause session history
     Route::get('/tasks/{task}/latest-submission', [TaskController::class, 'latestSubmission']); // Get latest submission

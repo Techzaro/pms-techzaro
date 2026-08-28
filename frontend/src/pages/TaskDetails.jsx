@@ -532,8 +532,8 @@ function TaskDetails() {
   const isTerminalOrSubmitted = ["submitted", "submitted_late", "approved", "abandoned"].includes(taskStatus);
   const canEdit = (readOnly || isOnlyFollower) ? false : (task?.can_edit ?? (task && currentUser && isCreator && !["approved", "submitted", "submitted_late", "abandoned"].includes(taskStatus)));
   const canDelete = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isCreator || isAdminOrManager));
-  const canSubmitTask = (readOnly || isTerminalOrSubmitted || isOnlyFollower) ? false : (task?.my_status === "submitted" || (isAssignee && task?.my_status === "submitted") ? false : (task?.can_submit && !isTerminalOrSubmitted ? true : (task && currentUser && isAssignee && ["in_progress", "reopened", "paused"].includes(taskStatus))));
-  const canAcknowledge = (readOnly || isOnlyFollower) ? false : (task && currentUser && isAssignee && ["pending", "reopened"].includes(task?.status));
+  const canSubmitTask = !readOnly && !isTerminalOrSubmitted && !isOnlyFollower && task?.can_submit === true;
+  const canAcknowledge = (readOnly || isOnlyFollower || task?.submission_stage === "declined") ? false : (task && currentUser && isAssignee && ["pending", "reopened"].includes(task?.status));
   const canPause = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isAdminOrManager) && ["in_progress", "submitted"].includes(task?.status) && !task?.assigner_paused);
   const canContinue = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isAdminOrManager) && task?.status === "paused" && !task?.assigner_paused);
   const isAssignerLocked = !!task?.assigner_paused;
@@ -545,6 +545,7 @@ function TaskDetails() {
   const transferorHasApproved = task?.transferor_has_approved ?? false;
   const hasPendingDelegation = task?.pending_delegation && task.pending_delegation.delegated_to === currentUser?.id;
   const isDelegatee = task?.is_delegatee ?? (task?.current_owner && currentUser && parseInt(task.current_owner, 10) === parseInt(currentUser.id, 10)) ?? false;
+  const isCurrentOwner = task?.is_current_owner ?? (task?.current_owner && currentUser && parseInt(task.current_owner, 10) === parseInt(currentUser.id, 10)) ?? isAssignee;
   const canApprove = (readOnly || isOnlyFollower) ? false : (!isAssignee && (isCreator || isSuperAdmin));
 
   const { submitting: acknowledging, run: runAcknowledge } = useSubmit();
@@ -558,6 +559,7 @@ function TaskDetails() {
   const { submitting: revoking, run: runRevoke } = useSubmit();
   const { submitting: approvingTask, run: runApproveTask } = useSubmit();
   const { submitting: rejectingTask, run: runRejectTask } = useSubmit();
+  const { submitting: forwardingTask, run: runForwardTask } = useSubmit();
   const [abandonModalOpen, setAbandonModalOpen] = useState(false);
   const { submitting: abandoningTask, run: runAbandonTask } = useSubmit();
   const [pinnedTasks] = usePinnedTasks();
@@ -951,26 +953,34 @@ function TaskDetails() {
     setDeleteTaskConfirmOpen(false);
     isDeletingRef.current = true;
     await runDelete(async () => {
+      let res;
       try {
         const token = authToken();
-        const res = await fetch(`${API_URL}/tasks/${taskId}`, {
+        res = await fetch(`${API_URL}/tasks/${taskId}`, {
           method: "DELETE",
           headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
           _notifHandled: true,
         });
-        if (res.ok) {
-          toast.success("Task deleted successfully");
+      } catch {
+        isDeletingRef.current = false;
+        notify.error("Failed to delete task.");
+        return;
+      }
+
+      if (res.ok) {
+        notify.success("Task deleted successfully");
+        try {
           publish('task:deleted', { id: taskId });
           publish('data:changed', { type: 'task', action: 'deleted' });
           navigate(rolePath("tasks"), { replace: true });
-        } else {
-          isDeletingRef.current = false;
-          const data = await res.json().catch(() => ({}));
-          toast.error(data.message || "Failed to delete task.");
+        } catch (uiError) {
+          // The server deletion succeeded; a navigation/event error is not a delete failure.
+          console.error("Post-delete navigation failed", uiError);
         }
-      } catch {
+      } else {
         isDeletingRef.current = false;
-        toast.error("Failed to delete task.");
+        const data = await res.json().catch(() => ({}));
+        notify.error(data.message || "Failed to delete task.");
       }
     });
   };
@@ -1007,16 +1017,24 @@ function TaskDetails() {
       const res = await fetch(`${API_URL}/tasks/${task.id}/accept-delegation`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        notify.success("Transfer acknowledged and accepted");
-        loadTaskDetails();
+        notify.success(data.message || "Transfer acknowledged and accepted");
+        if (data.task) {
+          setTask(data.task);
+        } else {
+          fetchTask(true);
+        }
+        publish('task:updated', { id: task.id });
+        publish('data:changed', { type: 'task', action: 'updated' });
       } else {
         notify.error(data.message || "Failed to acknowledge transfer");
       }
-    } catch {
-      notify.error("Error acknowledging transfer");
+    } catch (err) {
+      console.error("Error acknowledging transfer:", err);
+      notify.error("Failed to acknowledge transfer");
     } finally {
       setTaskActing(false);
     }
@@ -1219,6 +1237,30 @@ function TaskDetails() {
     });
   };
 
+  const handleSubmitToNext = async () => {
+    await runForwardTask(async () => {
+      try {
+        const token = authToken();
+        const res = await fetch(`${API_URL}/tasks/${taskId}/submit-to-next`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+          _notifHandled: true,
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setTask(data.task || data);
+          publish('task:updated', { id: taskId });
+          publish('data:changed', { type: 'task', action: 'updated' });
+          showSuccessMessage("Task", "submitted to next reviewer");
+        } else {
+          notify.error(data.message || "Failed to submit to next reviewer.");
+        }
+      } catch {
+        notify.error("Failed to submit to next reviewer.");
+      }
+    });
+  };
+
   const handleTaskReopen = async () => {
     setTaskReopenDialog(true);
   };
@@ -1318,7 +1360,7 @@ function TaskDetails() {
                       {deleting ? "Deleting..." : "Delete"}
                     </button>
                   )}
-                  {!readOnly && isAssignee && task?.allow_transfer === true && !["approved", "rejected", "pending", "submitted"].includes(task?.status) && task?.my_status !== "submitted" && !isTransferor && !task?.active_outgoing_delegation && !hasPendingDelegation && !isDelegatee && (
+                  {!readOnly && (task?.can_delegate === true || (task?.allow_transfer !== false && (isAssignee || isCurrentOwner) && !isTransferor)) && !["approved", "rejected", "pending", "submitted"].includes(task?.status) && task?.my_status !== "submitted" && !task?.active_outgoing_delegation && !hasPendingDelegation && (
                     <button className="td-btn-outline" onClick={() => setTransferDialog(true)}>
                       <Users size={15} />
                       Transfer
@@ -1383,7 +1425,18 @@ function TaskDetails() {
                       {task.status === "reopened" ? "Resubmit Task" : "Submit Task"}
                     </button>
                   )}
-                  {canApprove && (task?.status === "submitted" || task?.status === "reopened") && (
+                  {task?.can_submit_to_next && (
+                    <button
+                      className="td-btn-primary"
+                      style={{ background: "#2563eb", color: "#ffffff", border: "none", fontWeight: 600, padding: "8px 16px", borderRadius: "8px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                      disabled={forwardingTask}
+                      onClick={handleSubmitToNext}
+                    >
+                      <LuSend size={15} />
+                      {forwardingTask ? "Submitting..." : "Submit"}
+                    </button>
+                  )}
+                  {canApprove && (task?.status === "submitted" || task?.status === "submitted_late" || task?.status === "reopened") && (
                     <button
                       className="td-btn-success"
                       style={{ background: "#16a34a", color: "#ffffff", border: "none", fontWeight: 600, padding: "8px 16px", borderRadius: "8px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}
@@ -1394,7 +1447,18 @@ function TaskDetails() {
                       {approvingTask ? "Approving..." : "Approve Task"}
                     </button>
                   )}
-                  {canApprove && (task?.status === "approved" || task?.status === "abandoned") && (
+                  {(canApprove || task?.can_decline_submission) && (task?.status === "submitted" || task?.status === "submitted_late") && (
+                    <button
+                      className="td-btn-danger"
+                      style={{ background: "#dc2626", color: "#ffffff", border: "none", fontWeight: 600, padding: "8px 16px", borderRadius: "8px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                      disabled={rejectingTask}
+                      onClick={handleTaskReject}
+                    >
+                      <XCircle size={15} />
+                      {rejectingTask ? "Declining..." : "Decline Task"}
+                    </button>
+                  )}
+                  {(canApprove || task?.can_decline_submission) && (task?.status === "submitted" || task?.status === "submitted_late" || task?.status === "approved" || task?.status === "abandoned") && (
                     <button
                       className="td-btn-secondary"
                       style={{ border: "1px solid var(--border-color, #e5e7eb)", fontWeight: 600, padding: "8px 16px", borderRadius: "8px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px", background: "var(--bg-card, #ffffff)", color: "var(--color-primary, #2563EB)" }}
@@ -1459,9 +1523,9 @@ function TaskDetails() {
               </div>
 
               <div className="td-badges">
-                <span className="td-badge" style={{ background: statusBgColor(task?.status), color: statusColor(task?.status) }}>
-                  <span className="td-badge-dot" style={{ background: statusColor(task?.status) }} />
-                  {statusLabel(task?.status || "Pending")}
+                <span className="td-badge" style={{ background: statusBgColor(task?.display_status || task?.my_status || task?.status), color: statusColor(task?.display_status || task?.my_status || task?.status) }}>
+                  <span className="td-badge-dot" style={{ background: statusColor(task?.display_status || task?.my_status || task?.status) }} />
+                  {statusLabel(task?.display_status || task?.my_status || task?.status || "Pending")}
                 </span>
                 {Array.isArray(task?.states) && task.states.map((st, idx) => (
                   <span key={idx} className="td-badge" style={{ background: "#EDE9FE", color: "#6D28D9", border: "1px solid #DDD6FE" }}>

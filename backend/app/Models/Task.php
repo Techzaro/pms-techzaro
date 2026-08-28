@@ -32,6 +32,7 @@ class Task extends Model
         'end_date',
         'assigned_to',
         'assigned_by',
+        'creator_id',
         'updated_by',
         'submitted_at',
         'approved_at',
@@ -73,6 +74,10 @@ class Task extends Model
         'recurrence_status',
         'deliverables_generated',
         'current_owner',
+        'current_reviewer_id',
+        'current_submitter_id',
+        'submission_stage',
+        'submission_forwarded_by',
         'original_assigner',
         'delegation_chain',
         'approval_chain',
@@ -137,7 +142,19 @@ class Task extends Model
     
     protected $appends = [
         'due_state',
+        'display_status',
     ];
+
+    public function getDisplayStatusAttribute(): string
+    {
+        $viewer = auth()->user();
+        if (! $viewer) {
+            return strtolower((string) $this->status);
+        }
+
+        return app(\App\Services\DelegationService::class)
+            ->routingPayload($this, $viewer)['display_status'];
+    }
 
     /**
      * Calculate dynamic due state (SRS Sections 2, 3, & 6).
@@ -210,6 +227,7 @@ class Task extends Model
         'delegation_chain' => 'array',
         'approval_chain' => 'array',
         'delegation_count' => 'integer',
+        'submission_forwarded_by' => 'array',
     ];
 
     /** Apply filters for querying tasks (SRS Sections 4, 5, 8, 9). */
@@ -613,6 +631,21 @@ class Task extends Model
     public function currentOwner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'current_owner');
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'creator_id');
+    }
+
+    public function currentReviewer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'current_reviewer_id');
+    }
+
+    public function currentSubmitter(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'current_submitter_id');
     }
 
     /** The user who originally assigned this task. */

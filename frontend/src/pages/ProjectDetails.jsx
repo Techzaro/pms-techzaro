@@ -684,9 +684,10 @@ function ProjectDetails() {
     setDeleteTaskConfirmOpen(false);
     setDeleteTaskId(null);
     if (!taskId) return;
+    let res;
     try {
       const token = authToken();
-      const res = await fetch(`${API}/tasks/${taskId}`, {
+      res = await fetch(`${API}/tasks/${taskId}`, {
         method: "DELETE",
         headers: {
           Accept: "application/json",
@@ -694,19 +695,24 @@ function ProjectDetails() {
         },
         _notifHandled: true,
       });
-      if (res.ok) {
-        setOrderedTasks((prev) => prev.filter((t) => String(t.id) !== String(taskId)));
-        toast.success("Task deleted successfully");
-        loadProject().catch(() => {});
-        publish("task:deleted", { id: taskId });
-        publish("data:changed", { type: "task", action: "deleted" });
-      } else {
-        const data = await res.json().catch(() => ({}));
-        toast.error(data.message || "Failed to delete task.");
-      }
     } catch (err) {
       console.error(err);
       toast.error("Failed to delete task.");
+      return;
+    }
+    if (res.ok) {
+      toast.success("Task deleted successfully");
+      try {
+        setOrderedTasks((prev) => prev.filter((t) => String(t.id) !== String(taskId)));
+        loadProject().catch(() => {});
+        publish("task:deleted", { id: taskId });
+        publish("data:changed", { type: "task", action: "deleted" });
+      } catch (uiError) {
+        console.error("Post-delete project refresh failed", uiError);
+      }
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast.error(data.message || "Failed to delete task.");
     }
   };
 
