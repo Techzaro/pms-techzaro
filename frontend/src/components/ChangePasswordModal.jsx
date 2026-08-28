@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import useUnsavedChanges from "../hooks/useUnsavedChanges";
 import API_URL from "../config/api";
@@ -7,14 +8,15 @@ import { authToken } from "../utils/auth";
 import { notify, showSuccessMessage } from "../utils/notify";
 
 const REQUIREMENTS = [
-  { label: "At least 8 characters", test: (v) => v.length >= 8 },
-  { label: "One uppercase letter", test: (v) => /[A-Z]/.test(v) },
-  { label: "One lowercase letter", test: (v) => /[a-z]/.test(v) },
-  { label: "One number", test: (v) => /[0-9]/.test(v) },
-  { label: "One special character (@$!%*?&#)", test: (v) => /[@$!%*?&#]/.test(v) },
+  { key: "At least 8 characters", test: (v) => v.length >= 8 },
+  { key: "One uppercase letter", test: (v) => /[A-Z]/.test(v) },
+  { key: "One lowercase letter", test: (v) => /[a-z]/.test(v) },
+  { key: "One number", test: (v) => /[0-9]/.test(v) },
+  { key: "One special character (@$!%*?&#)", test: (v) => /[@$!%*?&#]/.test(v) },
 ];
 
 export default function ChangePasswordModal({ onClose }) {
+  const { t } = useTranslation();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -34,10 +36,10 @@ export default function ChangePasswordModal({ onClose }) {
   const handleSubmit = async () => {
     const errs = { currentPassword: "", confirmPassword: "" };
     if (!currentPassword) {
-      errs.currentPassword = "Please enter current password.";
+      errs.currentPassword = t("Please enter current password.", { defaultValue: "Please enter current password." });
     }
     if (!confirmPassword) {
-      errs.confirmPassword = "Please confirm your password.";
+      errs.confirmPassword = t("Please confirm your password.", { defaultValue: "Please confirm your password." });
     }
 
     if (errs.currentPassword || errs.confirmPassword) {
@@ -65,10 +67,10 @@ export default function ChangePasswordModal({ onClose }) {
 
         let msg = data.message || "Failed to change password";
         if (msg.toLowerCase().includes("current password") || msg.toLowerCase().includes("old_password") || msg.toLowerCase().includes("incorrect")) {
-          if (!resErrs.currentPassword) resErrs.currentPassword = "Current password is incorrect.";
+          if (!resErrs.currentPassword) resErrs.currentPassword = t("Current password is incorrect.", { defaultValue: "Current password is incorrect." });
         }
         if (msg.toLowerCase().includes("confirm") || msg.toLowerCase().includes("match")) {
-          if (!resErrs.confirmPassword) resErrs.confirmPassword = "Password confirmation does not match";
+          if (!resErrs.confirmPassword) resErrs.confirmPassword = t("Password confirmation does not match", { defaultValue: "Password confirmation does not match" });
         }
         if (Object.keys(resErrs).length > 0) {
           setErrors(resErrs);
@@ -92,8 +94,8 @@ export default function ChangePasswordModal({ onClose }) {
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>Change Password</h2>
-            <p style={{ margin: "4px 0 0", fontSize: 13, color: "#6b7280" }}>Update your account password.</p>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>{t("Change Password")}</h2>
+            <p style={{ margin: "4px 0 0", fontSize: 13, color: "#6b7280" }}>{t("Update your account password.", { defaultValue: "Update your account password." })}</p>
           </div>
           <button onClick={handleClose} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "var(--text-muted)", fontSize: 20, lineHeight: 1, flexShrink: 0 }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
@@ -104,12 +106,12 @@ export default function ChangePasswordModal({ onClose }) {
 
         {/* Current Password */}
         <div style={{ marginBottom: 18 }}>
-          <label style={{ display: "block", fontSize: 14, fontWeight: 600, color: "var(--text-heading)", marginBottom: 6 }}>Current Password</label>
+          <label style={{ display: "block", fontSize: 14, fontWeight: 600, color: "var(--text-heading)", marginBottom: 6 }}>{t("Current Password", { defaultValue: "Current Password" })}</label>
           <div style={{ position: "relative" }}>
             <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", fontSize: 14 }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
             </span>
-            <input type={showCurrent ? "text" : "password"} value={currentPassword} onChange={(e) => { setCurrentPassword(e.target.value); setErrors((prev) => ({ ...prev, currentPassword: "" })); }} placeholder="Enter current password" style={{ width: "100%", padding: "10px 40px 10px 36px", border: errors.currentPassword ? "1px solid #ef4444" : "var(--border-color)", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box", color: "var(--text-heading)" }} />
+            <input type={showCurrent ? "text" : "password"} value={currentPassword} onChange={(e) => { setCurrentPassword(e.target.value); setErrors((prev) => ({ ...prev, currentPassword: "" })); }} placeholder={t("Enter current password", { defaultValue: "Enter current password" })} style={{ width: "100%", padding: "10px 40px 10px 36px", border: errors.currentPassword ? "1px solid #ef4444" : "var(--border-color)", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box", color: "var(--text-heading)" }} />
             <button type="button" onClick={() => setShowCurrent(!showCurrent)} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 2 }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{showCurrent ? (<><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></>) : (<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>)}</svg>
             </button>
@@ -119,9 +121,9 @@ export default function ChangePasswordModal({ onClose }) {
 
         {/* New Password */}
         <div style={{ marginBottom: 10 }}>
-          <label style={{ display: "block", fontSize: 14, fontWeight: 600, color: "var(--text-heading)", marginBottom: 6 }}>New Password</label>
+          <label style={{ display: "block", fontSize: 14, fontWeight: 600, color: "var(--text-heading)", marginBottom: 6 }}>{t("New Password", { defaultValue: "New Password" })}</label>
           <div style={{ position: "relative" }}>
-            <input type={showNew ? "text" : "password"} value={newPassword} onChange={(e) => { setNewPassword(e.target.value); }} placeholder="Enter new password" style={{ width: "100%", padding: "10px 40px 10px 12px", border: "var(--border-color)", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box", color: "var(--text-heading)" }} />
+            <input type={showNew ? "text" : "password"} value={newPassword} onChange={(e) => { setNewPassword(e.target.value); }} placeholder={t("Enter new password", { defaultValue: "Enter new password" })} style={{ width: "100%", padding: "10px 40px 10px 12px", border: "var(--border-color)", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box", color: "var(--text-heading)" }} />
             <button type="button" onClick={() => setShowNew(!showNew)} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 2 }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{showNew ? (<><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></>) : (<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>)}</svg>
             </button>
@@ -131,18 +133,18 @@ export default function ChangePasswordModal({ onClose }) {
         {/* Requirements */}
         <div style={{ marginBottom: 18, padding: "0 0 0 2px" }}>
           {REQUIREMENTS.map((r) => (
-            <div key={r.label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: r.test(newPassword) ? "#16a34a" : "#6b7280", marginBottom: 3 }}>
+            <div key={r.key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: r.test(newPassword) ? "#16a34a" : "#6b7280", marginBottom: 3 }}>
               <span style={{ fontSize: 10 }}>●</span>
-              <span>{r.label}</span>
+              <span>{t(r.key, { defaultValue: r.key })}</span>
             </div>
           ))}
         </div>
 
         {/* Confirm Password */}
         <div style={{ marginBottom: 24 }}>
-          <label style={{ display: "block", fontSize: 14, fontWeight: 600, color: "var(--text-heading)", marginBottom: 6 }}>Confirm New Password</label>
+          <label style={{ display: "block", fontSize: 14, fontWeight: 600, color: "var(--text-heading)", marginBottom: 6 }}>{t("Confirm New Password", { defaultValue: "Confirm New Password" })}</label>
           <div style={{ position: "relative" }}>
-            <input type={showConfirm ? "text" : "password"} value={confirmPassword} onChange={(e) => { setConfirmPassword(e.target.value); setErrors((prev) => ({ ...prev, confirmPassword: "" })); }} placeholder="Confirm new password" style={{ width: "100%", padding: "10px 40px 10px 12px", border: errors.confirmPassword ? "1px solid #ef4444" : "var(--border-color)", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box", color: "var(--text-heading)" }} />
+            <input type={showConfirm ? "text" : "password"} value={confirmPassword} onChange={(e) => { setConfirmPassword(e.target.value); setErrors((prev) => ({ ...prev, confirmPassword: "" })); }} placeholder={t("Confirm new password", { defaultValue: "Confirm new password" })} style={{ width: "100%", padding: "10px 40px 10px 12px", border: errors.confirmPassword ? "1px solid #ef4444" : "var(--border-color)", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box", color: "var(--text-heading)" }} />
             <button type="button" onClick={() => setShowConfirm(!showConfirm)} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 2 }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{showConfirm ? (<><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></>) : (<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>)}</svg>
             </button>
@@ -152,8 +154,8 @@ export default function ChangePasswordModal({ onClose }) {
 
         {/* Buttons */}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-          <button onClick={handleClose} style={{ padding: "10px 22px", borderRadius: 10, border: "var(--border-color)", background: "var(--bg-card)", color: "var(--text-dark)", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "var(--bg-hover)"} onMouseLeave={(e) => e.target.style.background = "var(--bg-card)"}>Cancel</button>
-          <button onClick={handleSubmit} disabled={loading} style={{ padding: "10px 22px", borderRadius: 10, border: "none", background: "var(--color-primary)", color: "#fff", fontWeight: 600, fontSize: 14, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, transition: "all 0.15s" }} onMouseEnter={(e) => { if (!loading) e.target.style.background = "var(--color-primary-dark)"; }} onMouseLeave={(e) => e.target.style.background = "var(--color-primary)"}>Change Password</button>
+          <button onClick={handleClose} style={{ padding: "10px 22px", borderRadius: 10, border: "var(--border-color)", background: "var(--bg-card)", color: "var(--text-dark)", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "var(--bg-hover)"} onMouseLeave={(e) => e.target.style.background = "var(--bg-card)"}>{t("Cancel")}</button>
+          <button onClick={handleSubmit} disabled={loading} style={{ padding: "10px 22px", borderRadius: 10, border: "none", background: "var(--color-primary)", color: "#fff", fontWeight: 600, fontSize: 14, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, transition: "all 0.15s" }} onMouseEnter={(e) => { if (!loading) e.target.style.background = "var(--color-primary-dark)"; }} onMouseLeave={(e) => e.target.style.background = "var(--color-primary)"}>{t("Change Password")}</button>
         </div>
       </div>
       {ConfirmDialog}

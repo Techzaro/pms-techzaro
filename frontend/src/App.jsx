@@ -1,3 +1,4 @@
+import i18n from "./i18n";
 /**
  * @file App.jsx
  * @description Main application component with routing configuration.
@@ -84,7 +85,9 @@ const BrandingPage = lazy(() => import("./pages/BrandingPage"));
 const SubscriptionPage = lazy(() => import("./pages/SubscriptionPage"));
 const StoragePage = lazy(() => import("./pages/StoragePage"));
 const OrganizationDetailsPage = lazy(() => import("./pages/OrganizationDetailsPage"));
+const RegionalSettings = lazy(() => import("./pages/RegionalSettings"));
 
+import TimezoneDetector from "./components/TimezoneDetector";
 import { authToken, superAdminAuthToken } from "./utils/auth";
 import { isAdminDomain, isOrgDomain } from "./utils/domain";
 
@@ -101,9 +104,9 @@ class ErrorBoundary extends Component {
     if (this.state.hasError) {
       return (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontFamily: 'sans-serif' }}>
-          <h2 style={{ marginBottom: 12 }}>Something went wrong</h2>
-          <p style={{ color: '#666', marginBottom: 16 }}>Please try refreshing the page.</p>
-          <button onClick={() => { this.setState({ hasError: false }); window.location.reload(); }} style={{ padding: '8px 24px', cursor: 'pointer' }}>Reload</button>
+          <h2 style={{ marginBottom: 12 }}>{i18n.t("Something went wrong", { defaultValue: "Something went wrong" })}</h2>
+          <p style={{ color: '#666', marginBottom: 16 }}>{i18n.t("Please try refreshing the page.", { defaultValue: "Please try refreshing the page." })}</p>
+          <button onClick={() => { this.setState({ hasError: false }); window.location.reload(); }} style={{ padding: '8px 24px', cursor: 'pointer' }}>{i18n.t("Reload", { defaultValue: "Reload" })}</button>
         </div>
       );
     }
@@ -228,6 +231,7 @@ function App() {
     <BrowserRouter>
       <AuthSecurityGuard>
         <ScrollToTop />
+        <TimezoneDetector />
         <ErrorBoundary>
           <Suspense fallback={<LoadingSpinner />}>
             <Routes>
@@ -318,15 +322,19 @@ function App() {
                     <Route path="events" element={<EventsList />} />
                     <Route path="events/create" element={<EventEditor />} />
                     <Route path="events/edit/:id" element={<EventEditor />} />
+                    <Route path="events/:id/edit" element={<EventEditor />} />
                     <Route path="events/:id" element={<EventEditor />} />
                     <Route path="drafts" element={<DraftCenter />} />
                     <Route path="templates" element={<Templates />} />
                     <Route path="knowledge-base" element={<KnowledgeBaseList />} />
                     <Route path="knowledge-base/create" element={<KnowledgeBaseEditor />} />
                     <Route path="knowledge-base/edit/:id" element={<KnowledgeBaseEditor />} />
+                    <Route path="knowledge-base/:id/edit" element={<KnowledgeBaseEditor />} />
                     <Route path="knowledge-base/:id" element={<KnowledgeBaseEditor />} />
                     <Route path="notifications" element={<Notifications />} />
                     <Route path="settings/notifications" element={<NotificationSettings />} />
+                    <Route path="settings/regional" element={<RegionalSettings />} />
+                    <Route path="regional-settings" element={<RegionalSettings />} />
                     <Route path="audit-logs" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><AuditLogs /></RoleProtectedRoute>} />
                     <Route path="feedback" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><FeedbackCenter /></RoleProtectedRoute>} />
                     <Route path="feedback/:id" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><FeedbackDetail /></RoleProtectedRoute>} />
@@ -390,15 +398,19 @@ function App() {
                     <Route path="events" element={<EventsList />} />
                     <Route path="events/create" element={<EventEditor />} />
                     <Route path="events/edit/:id" element={<EventEditor />} />
+                    <Route path="events/:id/edit" element={<EventEditor />} />
                     <Route path="events/:id" element={<EventEditor />} />
                     <Route path="drafts" element={<DraftCenter />} />
                     <Route path="templates" element={<Templates />} />
                     <Route path="knowledge-base" element={<KnowledgeBaseList />} />
                     <Route path="knowledge-base/create" element={<KnowledgeBaseEditor />} />
                     <Route path="knowledge-base/edit/:id" element={<KnowledgeBaseEditor />} />
+                    <Route path="knowledge-base/:id/edit" element={<KnowledgeBaseEditor />} />
                     <Route path="knowledge-base/:id" element={<KnowledgeBaseEditor />} />
                     <Route path="notifications" element={<Notifications />} />
                     <Route path="settings/notifications" element={<NotificationSettings />} />
+                    <Route path="settings/regional" element={<RegionalSettings />} />
+                    <Route path="regional-settings" element={<RegionalSettings />} />
                     <Route path="audit-logs" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><AuditLogs /></RoleProtectedRoute>} />
                     <Route path="branding" element={<RoleProtectedRoute allowedRoles={["admin"]}><BrandingPage /></RoleProtectedRoute>} />
                     <Route path="subscription" element={<RoleProtectedRoute allowedRoles={["admin"]}><SubscriptionPage /></RoleProtectedRoute>} />

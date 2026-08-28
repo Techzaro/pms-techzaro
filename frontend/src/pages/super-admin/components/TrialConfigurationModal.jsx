@@ -1,20 +1,13 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X, Loader2, Clock, Users, FolderKanban, HardDrive, RotateCcw } from 'lucide-react';
 import { api } from '../api/superAdminApi';
 
 /**
  * TrialConfigurationModal — Reusable modal for editing trial configuration.
- *
- * Props:
- *   mode        — 'global' (Plans page) or 'organization' (Org create/edit)
- *   orgId       — required when mode='organization' and localOnly=false
- *   localOnly   — if true, does not call API; just passes data to onSaved
- *   initialData — pre-populated values { trial_duration, trial_duration_unit, max_users, max_projects, max_storage_gb }
- *   isCustom    — whether org currently has a custom override (org mode only)
- *   onSaved     — callback after successful save (receives data in localOnly mode)
- *   onClose     — close callback
  */
 export default function TrialConfigurationModal({ mode = 'global', orgId, localOnly = false, initialData, isCustom = false, onSaved, onClose }) {
+  const { t } = useTranslation();
   const [trialDuration, setTrialDuration] = useState(initialData?.trial_duration || 14);
   const [trialUnit, setTrialUnit] = useState(initialData?.trial_duration_unit || 'days');
   const [maxUsers, setMaxUsers] = useState(initialData?.max_users || 5);
@@ -101,18 +94,18 @@ export default function TrialConfigurationModal({ mode = 'global', orgId, localO
         <div className="flex items-center justify-between p-5" style={s.divider}>
           <div>
             <h2 className="text-lg font-semibold" style={s.textHeading}>
-              {isOrgMode ? 'Trial Configuration' : 'Default Trial Configuration'}
+              {isOrgMode ? t('Trial Configuration', { defaultValue: 'Trial Configuration' }) : t('Default Trial Configuration', { defaultValue: 'Default Trial Configuration' })}
             </h2>
             <p className="text-xs mt-0.5" style={s.textMuted}>
               {isOrgMode
-                ? (isCustom ? 'Custom settings for this organization' : 'Using global default from Plans')
-                : 'Global default for all new Trial organizations'}
+                ? (isCustom ? t('Custom settings for this organization', { defaultValue: 'Custom settings for this organization' }) : t('Using global default from Plans', { defaultValue: 'Using global default from Plans' }))
+                : t('Global default for all new Trial organizations', { defaultValue: 'Global default for all new Trial organizations' })}
             </p>
           </div>
           <div className="flex items-center gap-2">
             <button type="submit" form="trialConfigForm" disabled={saving}
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50">
-              {saving && <Loader2 className="w-4 h-4 animate-spin" />} {saving ? 'Saving...' : 'Save'}
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />} {saving ? t('Saving...', { defaultValue: 'Saving...' }) : t('Save', { defaultValue: 'Save' })}
             </button>
             <button onClick={() => setShowCloseConfirm(true)} className="p-1.5 rounded-lg transition-colors"
               style={{ color: 'var(--text-muted)' }}
@@ -131,7 +124,7 @@ export default function TrialConfigurationModal({ mode = 'global', orgId, localO
                 ? 'bg-amber-50 text-amber-700 border border-amber-200'
                 : 'bg-gray-50 text-gray-600 border border-gray-200'
             }`}>
-              {isCustom ? 'Custom Trial' : 'Default Trial'}
+              {isCustom ? t('Custom Trial', { defaultValue: 'Custom Trial' }) : t('Default Trial', { defaultValue: 'Default Trial' })}
             </span>
           </div>
         )}
@@ -148,7 +141,7 @@ export default function TrialConfigurationModal({ mode = 'global', orgId, localO
           {/* Trial Duration */}
           <div>
             <label className="block text-xs font-medium mb-1.5" style={s.textMuted}>
-              <Clock className="w-3.5 h-3.5 inline mr-1" /> Trial Duration
+              <Clock className="w-3.5 h-3.5 inline mr-1" /> {t('Trial Duration', { defaultValue: 'Trial Duration' })}
             </label>
             <div className="grid grid-cols-2 gap-3">
               <input type="number" min="1" value={trialDuration}
@@ -156,9 +149,9 @@ export default function TrialConfigurationModal({ mode = 'global', orgId, localO
                 required style={inputStyle} />
               <select value={trialUnit} onChange={(e) => setTrialUnit(e.target.value)}
                 style={{ ...inputStyle, cursor: 'pointer' }}>
-                <option value="minutes">Minutes</option>
-                <option value="hours">Hours</option>
-                <option value="days">Days</option>
+                <option value="minutes">{t('Minutes', { defaultValue: 'Minutes' })}</option>
+                <option value="hours">{t('Hours', { defaultValue: 'Hours' })}</option>
+                <option value="days">{t('Days', { defaultValue: 'Days' })}</option>
               </select>
             </div>
           </div>
@@ -166,12 +159,13 @@ export default function TrialConfigurationModal({ mode = 'global', orgId, localO
           {/* Limits */}
           <div className="grid grid-cols-3 gap-3">
             {[
-              { icon: Users, label: 'User Limit', value: maxUsers, set: setMaxUsers },
-              { icon: FolderKanban, label: 'Project Limit', value: maxProjects, set: setMaxProjects },
+              { icon: Users, labelKey: 'User Limit', defaultLabel: 'User Limit', value: maxUsers, set: setMaxUsers },
+              { icon: FolderKanban, labelKey: 'Project Limit', defaultLabel: 'Project Limit', value: maxProjects, set: setMaxProjects },
+              { icon: HardDrive, labelKey: 'Storage (GB)', defaultLabel: 'Storage (GB)', value: maxStorage, set: setMaxStorage },
             ].map((f) => (
-              <div key={f.label}>
+              <div key={f.labelKey}>
                 <label className="block text-xs font-medium mb-1.5" style={s.textMuted}>
-                  <f.icon className="w-3.5 h-3.5 inline mr-1" /> {f.label}
+                  <f.icon className="w-3.5 h-3.5 inline mr-1" /> {t(f.labelKey, { defaultValue: f.defaultLabel })}
                 </label>
                 <input type="number" min="1" value={f.value}
                   onChange={(e) => f.set(e.target.value)}
@@ -200,8 +194,8 @@ export default function TrialConfigurationModal({ mode = 'global', orgId, localO
           {/* Info text */}
           <p className="text-xs" style={s.textMuted}>
             {isOrgMode
-              ? 'These settings apply only to this organization and do not affect the global Trial configuration.'
-              : 'These are the default settings applied to all new organizations using the Trial plan.'}
+              ? t('These settings apply only to this organization and do not affect the global Trial configuration.', { defaultValue: 'These settings apply only to this organization and do not affect the global Trial configuration.' })
+              : t('These are the default settings applied to all new organizations using the Trial plan.', { defaultValue: 'These are the default settings applied to all new organizations using the Trial plan.' })}
           </p>
         </form>
 
@@ -213,7 +207,7 @@ export default function TrialConfigurationModal({ mode = 'global', orgId, localO
               style={{ color: '#dc2626', background: 'rgba(220,38,38,0.08)' }}
               onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(220,38,38,0.15)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(220,38,38,0.08)'; }}>
-              <RotateCcw className="w-4 h-4" /> Reset to Default Trial
+              <RotateCcw className="w-4 h-4" /> {t('Reset to Default Trial', { defaultValue: 'Reset to Default Trial' })}
             </button>
           </div>
         )}
@@ -226,12 +220,12 @@ export default function TrialConfigurationModal({ mode = 'global', orgId, localO
               <div className="mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4" style={{ background: 'rgba(220,38,38,0.1)' }}>
                 <X className="w-6 h-6 text-red-600" />
               </div>
-              <h3 className="text-lg font-semibold mb-2" style={s.textHeading}>Close without saving?</h3>
-              <p className="text-sm mb-6" style={s.textSecondary}>You have unsaved changes. Are you sure you want to close?</p>
+              <h3 className="text-lg font-semibold mb-2" style={s.textHeading}>{t('Close without saving?', { defaultValue: 'Close without saving?' })}</h3>
+              <p className="text-sm mb-6" style={s.textSecondary}>{t('You have unsaved changes. Are you sure you want to close?', { defaultValue: 'You have unsaved changes. Are you sure you want to close?' })}</p>
               <div className="flex gap-3">
                 <button onClick={() => setShowCloseConfirm(false)} className="flex-1 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors"
-                  style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)' }}>Keep Editing</button>
-                <button onClick={onClose} className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors">Close</button>
+                  style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)' }}>{t('Keep Editing', { defaultValue: 'Keep Editing' })}</button>
+                <button onClick={onClose} className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors">{t('Close', { defaultValue: 'Close' })}</button>
               </div>
             </div>
           </div>
@@ -245,17 +239,16 @@ export default function TrialConfigurationModal({ mode = 'global', orgId, localO
               <div className="mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4" style={{ background: 'rgba(147,51,234,0.1)' }}>
                 <RotateCcw className="w-6 h-6" style={{ color: '#9333ea' }} />
               </div>
-              <h3 className="text-lg font-semibold mb-2" style={s.textHeading}>Reset to Default Trial?</h3>
+              <h3 className="text-lg font-semibold mb-2" style={s.textHeading}>{t('Reset to Default Trial?', { defaultValue: 'Reset to Default Trial?' })}</h3>
               <p className="text-sm mb-6" style={s.textSecondary}>
-                This organization will use the global Trial configuration from Plans.
-                Custom settings will be removed.
+                {t('This organization will use the global Trial configuration from Plans. Custom settings will be removed.', { defaultValue: 'This organization will use the global Trial configuration from Plans. Custom settings will be removed.' })}
               </p>
               <div className="flex gap-3">
                 <button onClick={() => setShowResetConfirm(false)} className="flex-1 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors"
-                  style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)' }}>Cancel</button>
+                  style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)' }}>{t('Cancel', { defaultValue: 'Cancel' })}</button>
                 <button onClick={handleReset} disabled={resetting}
                   className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
-                  {resetting && <Loader2 className="w-4 h-4 animate-spin" />} {resetting ? 'Resetting...' : 'Reset'}
+                  {resetting && <Loader2 className="w-4 h-4 animate-spin" />} {resetting ? t('Resetting...', { defaultValue: 'Resetting...' }) : t('Reset', { defaultValue: 'Reset' })}
                 </button>
               </div>
             </div>

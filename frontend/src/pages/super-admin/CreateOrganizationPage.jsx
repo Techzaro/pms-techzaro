@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Building2, Loader2, X, Check, ArrowRight, ArrowLeft, Sliders, Globe } from 'lucide-react';
 import { api } from './api/superAdminApi';
 import TrialConfigurationModal from './components/TrialConfigurationModal';
@@ -14,6 +15,7 @@ const flagEmoji = (code) => {
 };
 
 export default function CreateOrganizationModal({ onClose, onSuccess }) {
+  const { t } = useTranslation();
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -44,7 +46,10 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
 
   const { isDirty, handleClose, ConfirmDialog } = useUnsavedChanges(
     initialValues, currentValues, onClose,
-    { title: 'Close without saving?', message: 'You have unsaved changes. Are you sure you want to close? All changes will be lost.' }
+    {
+      title: t('Close without saving?', { defaultValue: 'Close without saving?' }),
+      message: t('You have unsaved changes. Are you sure you want to close? All changes will be lost.', { defaultValue: 'You have unsaved changes. Are you sure you want to close? All changes will be lost.' })
+    }
   );
 
   useEffect(() => {
@@ -95,7 +100,7 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
   };
 
   const handleSubmit = async () => {
-    if (!selectedPlanId) { setError('Please select a plan'); return; }
+    if (!selectedPlanId) { setError(t('Please select a plan', { defaultValue: 'Please select a plan' })); return; }
     const isTrial = plans.find(p => p.id === selectedPlanId)?.slug === 'trial';
     setSubmitting(true); setError(null);
     try {
@@ -126,7 +131,7 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
         payload.custom_max_storage_gb = planCustomization.custom_max_storage_gb;
       }
       await api.createOrganization(payload);
-      onSuccess(`Organization "${form.name}" created successfully. Credentials emailed to ${form.admin_email}.`);
+      onSuccess(t('Organization "{{name}}" created successfully. Credentials emailed to {{email}}.', { name: form.name, email: form.admin_email, defaultValue: `Organization "${form.name}" created successfully. Credentials emailed to ${form.admin_email}.` }));
     } catch (e) { setError(e.message); } finally { setSubmitting(false); }
   };
 
@@ -150,9 +155,11 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
         <div className="flex items-center justify-between p-6 pb-4" style={s.divider}>
           <div>
             <h2 className="text-lg font-semibold flex items-center gap-2" style={s.textHeading}>
-              <Building2 className="w-5 h-5 text-blue-600" /> New Organization
+              <Building2 className="w-5 h-5 text-blue-600" /> {t('New Organization', { defaultValue: 'New Organization' })}
             </h2>
-            <p className="text-sm mt-1" style={s.textSecondary}>Step {step} of 2 — {step === 1 ? 'Organization Details' : 'Select Plan'}</p>
+            <p className="text-sm mt-1" style={s.textSecondary}>
+              {t('Step {{step}} of 2 — {{label}}', { step, label: step === 1 ? t('Organization Details', { defaultValue: 'Organization Details' }) : t('Select Plan', { defaultValue: 'Select Plan' }), defaultValue: `Step ${step} of 2 — ${step === 1 ? 'Organization Details' : 'Select Plan'}` })}
+            </p>
           </div>
           <button onClick={handleClose} className="p-1 rounded-lg transition-colors cursor-pointer"
             style={{ color: 'var(--text-muted)' }}
@@ -168,7 +175,7 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
               style={{ background: step === 1 ? 'var(--color-primary)' : 'var(--color-success)' }}>
               {step > 1 ? <Check className="w-4 h-4" /> : '1'}
             </div>
-            Details
+            {t('Details', { defaultValue: 'Details' })}
           </div>
           <div className="flex-1 h-0.5 rounded"
             style={{ background: step === 2 ? 'var(--color-success)' : 'var(--bg-hover)' }}></div>
@@ -176,7 +183,7 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
             style={{ color: step === 2 ? 'var(--color-primary)' : 'var(--text-muted)' }}>
             <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
               style={{ background: step === 2 ? 'var(--color-primary)' : 'var(--bg-hover)', color: step === 2 ? '#fff' : 'var(--text-muted)' }}>2</div>
-            Plan
+            {t('Plan', { defaultValue: 'Plan' })}
           </div>
         </div>
 
@@ -190,15 +197,15 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
           {step === 1 && (
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1" style={s.textSecondary}>Organization Name *</label>
+                <label className="block text-sm font-medium mb-1" style={s.textSecondary}>{t('Organization Name', { defaultValue: 'Organization Name' })} *</label>
                 <input type="text" value={form.name}
                   onChange={handleNameChange}
                   className="w-full px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-                  style={s.input} placeholder="Acme Corporation" />
+                  style={s.input} placeholder={t("Acme Corporation", { defaultValue: "Acme Corporation" })} />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1" style={s.textSecondary}>
-                  <span className="flex items-center gap-1.5"><Globe className="w-3.5 h-3.5" /> Slug</span>
+                  <span className="flex items-center gap-1.5"><Globe className="w-3.5 h-3.5" /> {t('Slug', { defaultValue: 'Slug' })}</span>
                 </label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
                   <input type="text" value={form.slug}
@@ -209,57 +216,57 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
                     /org/{form.slug || 'slug'}
                   </span>
                 </div>
-                <p className="text-xs mt-1" style={s.textMuted}>Auto-generated from name. You can customize it.</p>
+                <p className="text-xs mt-1" style={s.textMuted}>{t('Auto-generated from name. You can customize it.', { defaultValue: 'Auto-generated from name. You can customize it.' })}</p>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1" style={s.textSecondary}>Admin Name *</label>
+                <label className="block text-sm font-medium mb-1" style={s.textSecondary}>{t('Admin Name', { defaultValue: 'Admin Name' })} *</label>
                 <input type="text" value={form.admin_name}
                   onChange={(e) => setForm(prev => ({ ...prev, admin_name: e.target.value }))}
                   className="w-full px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-                  style={s.input} placeholder="John Smith" />
+                  style={s.input} placeholder={t("John Smith", { defaultValue: "John Smith" })} />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1" style={s.textSecondary}>Email *</label>
+                <label className="block text-sm font-medium mb-1" style={s.textSecondary}>{t('Email', { defaultValue: 'Email' })} *</label>
                 <input type="email" value={form.admin_email}
                   onChange={(e) => setForm(prev => ({ ...prev, admin_email: e.target.value }))}
                   className="w-full px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-                  style={s.input} placeholder="admin@acme.com" />
+                  style={s.input} placeholder={t("admin@acme.com", { defaultValue: "admin@acme.com" })} />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1" style={{ ...s.textSecondary, color: 'var(--color-primary)', fontWeight: 600 }}>Password Generation</label>
+                <label className="block text-sm font-medium mb-1" style={{ ...s.textSecondary, color: 'var(--color-primary)', fontWeight: 600 }}>{t('Password Generation', { defaultValue: 'Password Generation' })}</label>
                 <div className="mt-1 mb-3">
-                  <label className="block text-xs font-medium mb-1.5" style={s.textMuted}>Account Password Mode</label>
+                  <label className="block text-xs font-medium mb-1.5" style={s.textMuted}>{t('Account Password Mode', { defaultValue: 'Account Password Mode' })}</label>
                   <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
                     <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 'normal', fontSize: '14px', color: 'var(--text-dark)' }}>
                       <input type="radio" name="adminPasswordType" value="auto"
                         checked={passwordType !== 'manual'}
                         onChange={() => { setPasswordType('auto'); setAdminPassword(''); }} />
-                      Auto-generated password
+                      {t('Auto-generated password', { defaultValue: 'Auto-generated password' })}
                     </label>
                     <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 'normal', fontSize: '14px', color: 'var(--text-dark)' }}>
                       <input type="radio" name="adminPasswordType" value="manual"
                         checked={passwordType === 'manual'}
                         onChange={() => setPasswordType('manual')} />
-                      Manually generated password
+                      {t('Manually generated password', { defaultValue: 'Manually generated password' })}
                     </label>
                   </div>
                 </div>
                 {passwordType === 'manual' && (
                   <div>
-                    <label className="block text-sm font-medium mb-1" style={s.textSecondary}>Admin Password *</label>
+                    <label className="block text-sm font-medium mb-1" style={s.textSecondary}>{t('Admin Password', { defaultValue: 'Admin Password' })} *</label>
                     <input type="text" value={adminPassword}
                       onChange={(e) => setAdminPassword(e.target.value)}
                       className="w-full px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-                      style={s.input} placeholder="Enter initial password (min 6 characters)" />
+                      style={s.input} placeholder={t("Enter initial password (min 6 characters)", { defaultValue: "Enter initial password (min 6 characters)" })} />
                   </div>
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1" style={s.textSecondary}>Country</label>
+                <label className="block text-sm font-medium mb-1" style={s.textSecondary}>{t('Country', { defaultValue: 'Country' })}</label>
                 <CountrySelect value={selectedCountry} onChange={setSelectedCountry} />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1" style={s.textSecondary}>Phone Number</label>
+                <label className="block text-sm font-medium mb-1" style={s.textSecondary}>{t('Phone Number', { defaultValue: 'Phone Number' })}</label>
                 <div style={{ display: 'flex', gap: 0 }}>
                   <div style={{ padding: '8px 12px', background: 'var(--bg-hover)', borderRight: '1px solid var(--border-light)', borderRadius: '8px 0 0 8px', fontSize: 13, color: 'var(--text-dark)', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', userSelect: 'none' }}>
                     <span style={{ fontSize: 14 }}>{flagEmoji(selectedCountry)}</span>
@@ -286,8 +293,8 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
                         background: billingPeriod === p ? 'var(--color-primary)' : 'var(--bg-hover)',
                         color: billingPeriod === p ? '#fff' : 'var(--text-muted)',
                       }}>
-                      {p.charAt(0).toUpperCase() + p.slice(1)}
-                      {p === 'yearly' && <span className="ml-1 text-xs text-emerald-400">Save 20%</span>}
+                      {p === 'monthly' ? t('Monthly', { defaultValue: 'Monthly' }) : t('Yearly', { defaultValue: 'Yearly' })}
+                      {p === 'yearly' && <span className="ml-1 text-xs text-emerald-400">{t('Save 20%', { defaultValue: 'Save 20%' })}</span>}
                     </button>
                   ))}
                 </div>
@@ -296,7 +303,7 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
               {plansLoading ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-                  <span className="ml-2 text-sm" style={s.textSecondary}>Loading plans...</span>
+                  <span className="ml-2 text-sm" style={s.textSecondary}>{t('Loading plans...', { defaultValue: 'Loading plans...' })}</span>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -328,33 +335,33 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
                             )}
                             {isTrial && (
                               <span className="px-2 py-0.5 text-xs font-medium rounded-full"
-                                style={{ background: 'rgba(147,51,234,0.12)', color: 'var(--color-primary)' }}>{plan.trial_duration || 14} {(plan.trial_duration_unit || 'days').replace(/s$/, '')} Free</span>
+                                style={{ background: 'rgba(147,51,234,0.12)', color: 'var(--color-primary)' }}>{plan.trial_duration || 14} {t(plan.trial_duration_unit || 'days', { defaultValue: plan.trial_duration_unit || 'days' }).replace(/s$/, '')} {t('Free', { defaultValue: 'Free' })}</span>
                             )}
                             {plan.is_default && (
                               <span className="px-2 py-0.5 text-xs font-medium rounded-full"
-                                style={{ background: 'var(--color-primary-bg)', color: 'var(--color-primary)' }}>Default</span>
+                                style={{ background: 'var(--color-primary-bg)', color: 'var(--color-primary)' }}>{t('Default', { defaultValue: 'Default' })}</span>
                             )}
                             {hasCustom && (
                               <span className="px-2 py-0.5 text-xs font-medium rounded-full"
-                                style={{ background: isTrial ? 'rgba(147,51,234,0.12)' : 'rgba(245,158,11,0.12)', color: isTrial ? '#9333ea' : '#d97706' }}>Custom</span>
+                                style={{ background: isTrial ? 'rgba(147,51,234,0.12)' : 'rgba(245,158,11,0.12)', color: isTrial ? '#9333ea' : '#d97706' }}>{t('Custom', { defaultValue: 'Custom' })}</span>
                             )}
                           </div>
                           <p className="text-sm mt-0.5" style={s.textSecondary}>
                             {isTrial ? (
-                              <>Free · {users === 9999 ? 'Unlimited' : users} users · {projects === 9999 ? 'Unlimited' : projects} projects</>
+                              <>{t('Free', { defaultValue: 'Free' })} · {users === 9999 ? t('Unlimited', { defaultValue: 'Unlimited' }) : users} {t('users', { defaultValue: 'users' })} · {projects === 9999 ? t('Unlimited', { defaultValue: 'Unlimited' }) : projects} {t('projects', { defaultValue: 'projects' })}</>
                             ) : (
                               <>
-                                ${price}/{billingPeriod === 'monthly' ? 'mo' : 'yr'}
+                                ${price}/{billingPeriod === 'monthly' ? t('mo', { defaultValue: 'mo' }) : t('yr', { defaultValue: 'yr' })}
                                 <span className="mx-1.5" style={{ color: 'var(--border-light)' }}>·</span>
-                                {users === 9999 ? 'Unlimited' : users} users
+                                {users === 9999 ? t('Unlimited', { defaultValue: 'Unlimited' }) : users} {t('users', { defaultValue: 'users' })}
                                 <span className="mx-1.5" style={{ color: 'var(--border-light)' }}>·</span>
-                                {projects === 9999 ? 'Unlimited' : projects} projects
+                                {projects === 9999 ? t('Unlimited', { defaultValue: 'Unlimited' }) : projects} {t('projects', { defaultValue: 'projects' })}
                               </>
                             )}
                           </p>
                         </div>
                         <div className="flex items-center gap-3">
-                          <div className="text-right text-xs" style={s.textMuted}>{storage === 9999 ? 'Unlimited' : `${storage} ${plan.storage_unit || 'GB'}`}</div>
+<div className="text-right text-xs" style={s.textMuted}>{storage === 9999 ? 'Unlimited' : `${storage} ${plan.storage_unit || 'GB'}`}</div>
                           {isSelected && (
                             <button type="button" onClick={(e) => { e.stopPropagation(); isTrial ? setShowTrialModal(true) : setShowPlanCustomModal(true); }}
                               className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors"
@@ -364,7 +371,7 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
                                 border: hasCustom ? (isTrial ? '1px solid rgba(147,51,234,0.3)' : '1px solid rgba(245,158,11,0.3)') : '1px solid var(--border-light)',
                               }}>
                               <Sliders className="w-3.5 h-3.5" />
-                              {hasCustom ? 'Edit Custom' : 'Custom'}
+                              {hasCustom ? t('Edit Custom', { defaultValue: 'Edit Custom' }) : t('Custom', { defaultValue: 'Custom' })}
                             </button>
                           )}
                         </div>
@@ -381,23 +388,23 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
           <button onClick={handleClose}
             className="flex-1 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer"
             style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)' }}>
-            Cancel
+            {t('Cancel', { defaultValue: 'Cancel' })}
           </button>
           {step === 1 ? (
             <button onClick={handleNext} disabled={!form.name || !form.admin_name || !form.admin_email}
               className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed">
-              Next <ArrowRight className="w-4 h-4" />
+              {t('Next', { defaultValue: 'Next' })} <ArrowRight className="w-4 h-4" />
             </button>
           ) : (
             <div className="flex-1 flex gap-3">
               <button onClick={handleBack}
                 className="py-2.5 px-4 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 cursor-pointer"
                 style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)' }}>
-                <ArrowLeft className="w-4 h-4" /> Back
+                <ArrowLeft className="w-4 h-4" /> {t('Back', { defaultValue: 'Back' })}
               </button>
               <button onClick={handleSubmit} disabled={submitting || !selectedPlanId}
                 className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed">
-                {submitting ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating...</> : 'Create Organization'}
+                {submitting ? <><Loader2 className="w-4 h-4 animate-spin" /> {t('Creating...', { defaultValue: 'Creating...' })}</> : t('Create Organization', { defaultValue: 'Create Organization' })}
               </button>
             </div>
           )}

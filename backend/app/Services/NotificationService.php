@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Notification;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -16,6 +17,39 @@ use Illuminate\Support\Facades\Mail;
  */
 class NotificationService
 {
+    /**
+     * Resolves the recipient user's configured timezone.
+     * Priority: User timezone -> Organization default_timezone -> UTC (SRS Sec 21)
+     *
+     * @param User|int|null $user
+     * @return string
+     */
+    public static function resolveUserTimezone(User|int|null $user): string
+    {
+        if (is_numeric($user)) {
+            $user = User::find($user);
+        }
+        if (!$user) {
+            return config('app.timezone', 'UTC');
+        }
+        if (!empty($user->timezone)) {
+            return $user->timezone;
+        }
+
+        // Check organization default timezone
+        try {
+            if (!empty($user->organization_id)) {
+                $orgTz = \App\Models\Master\Organization::where('id', $user->organization_id)->value('default_timezone');
+                if (!empty($orgTz)) {
+                    return $orgTz;
+                }
+            }
+        } catch (\Throwable $e) {
+            // Fallback
+        }
+
+        return config('app.timezone', 'UTC');
+    }
     /**
      * Check if a user has enabled notifications for a specific event type and channel.
      *

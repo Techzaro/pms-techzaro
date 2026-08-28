@@ -15,6 +15,9 @@ class FixMasterColumns extends Command
         'organizations' => [
             ['name' => 'admin_name',  'definition' => "VARCHAR(255) NULL AFTER `slug`"],
             ['name' => 'admin_email', 'definition' => "VARCHAR(255) NULL AFTER `admin_name`"],
+            ['name' => 'default_timezone',             'definition' => "VARCHAR(64) DEFAULT 'UTC' AFTER `status`"],
+            ['name' => 'enforce_working_hours',        'definition' => "TINYINT(1) DEFAULT 0 AFTER `default_timezone`"],
+            ['name' => 'working_hours',                'definition' => "JSON NULL AFTER `enforce_working_hours`"],
             ['name' => 'storage_auto_delete',          'definition' => "TINYINT(1) DEFAULT 0 AFTER `settings`"],
             ['name' => 'storage_overwrite',            'definition' => "TINYINT(1) DEFAULT 1"],
             ['name' => 'storage_warn_threshold',       'definition' => "INT DEFAULT 80"],

@@ -1,10 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { ClipboardList, Search, Filter, Download, CheckCircle2, AlertTriangle, Info, ChevronLeft, ChevronRight, Clock, Eye, X, Loader2, Building2 } from 'lucide-react';
 import StatusBadge from './components/StatusBadge';
 import { LoadingState, ErrorState } from './components/LoadingState';
 import '../../components/AuditLogDetailModal.css';
 import { api } from './api/superAdminApi';
+
+export default function ActivityLogsPage() {
+  const { t } = useTranslation();
+}
 
 function SuperAdminLogsView() {
   const [logs, setLogs] = useState([]);
@@ -57,7 +62,7 @@ function SuperAdminLogsView() {
   const formatTime = (dateStr) => {
     if (!dateStr) return '';
     const d = new Date(dateStr);
-    return d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
   };
 
   const s = {
@@ -70,38 +75,45 @@ function SuperAdminLogsView() {
     divider: { borderTop: '1px solid var(--border-light)' },
   };
 
-  return (
-    <div className="space-y-4">
+return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold" style={s.textHeading}>{t('Activity Logs', { defaultValue: 'Activity Logs' })}</h1>
+          <p className="text-sm mt-1" style={s.textSecondary}>{t('Platform activity history', { defaultValue: 'Platform activity history' })}</p>
+        </div>
+      </div>
+
       <div className="rounded-xl p-4" style={s.card}>
         <div className="flex flex-wrap gap-3 mb-3">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={s.textMuted} />
-            <input type="text" placeholder="Search user, action, target..." value={searchInput}
+            <input type="text" placeholder={t("Search user, action, target...", { defaultValue: "Search user, action, target..." })} value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               className="w-full pl-9 pr-4 py-2 text-sm rounded-lg focus:ring-2 focus:ring-blue-500" style={s.input} />
           </div>
           <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
-            className="px-3 py-2 rounded-lg text-sm" style={s.input} title="From date" />
+            className="px-3 py-2 rounded-lg text-sm" style={s.input} title={t("From date", { defaultValue: "From date" })} />
           <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
-            className="px-3 py-2 rounded-lg text-sm" style={s.input} title="To date" />
+            className="px-3 py-2 rounded-lg text-sm" style={s.input} title={t("To date", { defaultValue: "To date" })} />
           <select value={actionFilter} onChange={(e) => setActionFilter(e.target.value)}
             className="px-3 py-2 rounded-lg text-sm" style={s.input}>
-            <option value="">All Actions</option>
+            <option value="">{t('All Actions', { defaultValue: 'All Actions' })}</option>
             {actions.map((a) => <option key={a} value={a}>{a}</option>)}
           </select>
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
             className="px-3 py-2 rounded-lg text-sm" style={s.input}>
-            <option value="">All Status</option>
-            <option value="success">Success</option>
-            <option value="warning">Warning</option>
-            <option value="info">Info</option>
+            <option value="">{t('All Status', { defaultValue: 'All Status' })}</option>
+            <option value="success">{t('Success', { defaultValue: 'Success' })}</option>
+            <option value="warning">{t('Warning', { defaultValue: 'Warning' })}</option>
+            <option value="info">{t('Info', { defaultValue: 'Info' })}</option>
           </select>
         </div>
         <div className="flex gap-2">
           <button onClick={() => { setSearch(searchInput); setCurrentPage(1); fetchLogs(1); }}
             className="px-4 py-2 rounded-lg text-xs font-semibold transition-colors"
             style={{ background: 'var(--color-primary)', color: '#fff' }}>
-            Apply Filters
+            {t('Apply Filters', { defaultValue: 'Apply Filters' })}
           </button>
           <button onClick={() => {
             setSearchInput(''); setSearch(''); setDateFrom(''); setDateTo('');
@@ -109,21 +121,28 @@ function SuperAdminLogsView() {
           }}
             className="px-4 py-2 rounded-lg text-xs font-semibold transition-colors"
             style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border-light)' }}>
-            Clear
+            {t('Clear', { defaultValue: 'Clear' })}
           </button>
         </div>
       </div>
 
-      <div className="rounded-xl" style={s.card}>
-        {loading ? <LoadingState message="Loading logs..." /> : (
+<div className="rounded-xl" style={s.card}>
+        {loading ? <LoadingState message={t("Loading logs...", { defaultValue: "Loading logs..." })} /> : (
           <>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr style={s.divider}>
-                    {['User', 'Action', 'Target', 'IP', 'Status', 'Time'].map((h) => (
-                      <th key={h} className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider"
-                        style={s.textMuted}>{h}</th>
+                    {[
+                      { key: 'User', defaultLabel: 'User' },
+                      { key: 'Action', defaultLabel: 'Action' },
+                      { key: 'Target', defaultLabel: 'Target' },
+                      { key: 'IP', defaultLabel: 'IP' },
+                      { key: 'Status', defaultLabel: 'Status' },
+                      { key: 'Time', defaultLabel: 'Time' },
+                    ].map((h) => (
+                      <th key={h.key} className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider"
+                        style={s.textMuted}>{t(h.key, { defaultValue: h.defaultLabel })}</th>
                     ))}
                   </tr>
                 </thead>
@@ -133,20 +152,20 @@ function SuperAdminLogsView() {
                       onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
                       <td className="px-4 py-3"><span className="text-sm font-medium" style={s.text}>{log.user}</span></td>
-                      <td className="px-4 py-3"><span className="text-sm" style={s.textSecondary}>{log.action}</span></td>
+                      <td className="px-4 py-3"><span className="text-sm" style={s.textSecondary}>{t(log.action, { defaultValue: log.action })}</span></td>
                       <td className="px-4 py-3"><span className="text-sm" style={s.textSecondary}>{log.target || '—'}</span></td>
                       <td className="px-4 py-3"><code className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-hover)', color: 'var(--text)' }}>{log.ip || '—'}</code></td>
                       <td className="px-4 py-3"><div className="flex items-center gap-1.5">{getStatusIcon(log.status)}<StatusBadge status={log.status} size="sm" /></div></td>
                       <td className="px-4 py-3"><span className="text-sm" style={s.textSecondary}>{formatTime(log.created_at)}</span></td>
                     </tr>
                   ))}
-                  {logs.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-sm" style={s.textMuted}>No logs found</td></tr>}
+                  {logs.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-sm" style={s.textMuted}>{t('No logs found', { defaultValue: 'No logs found' })}</td></tr>}
                 </tbody>
               </table>
             </div>
             <div className="flex items-center justify-between px-4 py-3" style={s.divider}>
-              <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                <span>Rows per page:</span>
+<div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
+                <span>{t('Rows per page:', { defaultValue: 'Rows per page:' })}</span>
                 <select value={perPage} onChange={(e) => { setPerPage(Number(e.target.value)); setCurrentPage(1); }}
                   className="px-2 py-1 rounded-lg text-sm"
                   style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-light)', color: 'var(--text-dark)' }}>
@@ -155,7 +174,9 @@ function SuperAdminLogsView() {
               </div>
               {lastPage > 1 && (
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Page {currentPage} of {lastPage}</span>
+                  <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+                    {t('Page {{currentPage}} of {{lastPage}}', { currentPage, lastPage, defaultValue: `Page ${currentPage} of ${lastPage}` })}
+                  </span>
                   <button onClick={() => { const p = currentPage - 1; if (p >= 1) setCurrentPage(p); }} disabled={currentPage <= 1}
                     className="p-1.5 rounded-lg disabled:opacity-30 transition-colors"
                     style={{ color: 'var(--text-muted)' }}
@@ -402,8 +423,7 @@ function ApplicationLogsView() {
                 </select>
                 <span className="ml-2 text-xs" style={{ color: 'var(--text-muted)' }}>
                   {total} total logs
-                </span>
-              </div>
+                </span>              </div>
               {lastPage > 1 && (
                 <div className="flex items-center gap-2">
                   <button onClick={() => fetchLogs(currentPage - 1)} disabled={currentPage <= 1}

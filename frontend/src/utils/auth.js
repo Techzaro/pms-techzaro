@@ -210,7 +210,24 @@ export function setUser(role, user) {
   if (sid) {
     const sessions = _getSessions(r);
     if (sessions[sid]) {
-      sessions[sid].user = user;
+      if (user && typeof user === "object") {
+        const prevUser = sessions[sid].user || {};
+        const cleanedUser = { ...user };
+        // Don't overwrite existing valid regional preferences with null or undefined
+        ["language", "timezone", "date_format", "time_format", "working_hours"].forEach((k) => {
+          if ((cleanedUser[k] === undefined || cleanedUser[k] === null || cleanedUser[k] === "") && prevUser[k]) {
+            cleanedUser[k] = prevUser[k];
+          }
+        });
+        if (cleanedUser.language) {
+          try {
+            localStorage.setItem("pms_active_language", cleanedUser.language);
+          } catch {}
+        }
+        sessions[sid].user = { ...prevUser, ...cleanedUser };
+      } else {
+        sessions[sid].user = user;
+      }
       _setSessions(r, sessions);
     }
   }

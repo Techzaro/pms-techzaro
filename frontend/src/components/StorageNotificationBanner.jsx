@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlertTriangle, AlertCircle, X, HardDrive, ChevronDown, ChevronUp } from 'lucide-react';
 import { orgPath } from '../utils/urls';
 import api from '../lib/api';
@@ -25,6 +26,7 @@ const SEVERITY_CONFIG = {
 };
 
 export default function StorageNotificationBanner() {
+  const { t } = useTranslation();
   const [pinned, setPinned] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [expanded, setExpanded] = useState(false);
@@ -106,7 +108,7 @@ export default function StorageNotificationBanner() {
               borderRadius: '10px',
               border: `1px solid ${config.border}33`,
             }}>
-              {pinnedNotif.severity}
+              {t(pinnedNotif.severity)}
             </span>
             <span style={{ fontWeight: 700, fontSize: '13px', color: config.textColor }}>
               {pinnedNotif.title}
@@ -124,7 +126,7 @@ export default function StorageNotificationBanner() {
             textDecoration: 'underline',
             whiteSpace: 'nowrap',
           }}>
-            Manage
+            {t("Manage Storage", { defaultValue: "Manage Storage" })}
           </a>
           <button onClick={() => handleDismiss(pinnedNotif.id)} style={{
             background: 'none',
@@ -134,7 +136,7 @@ export default function StorageNotificationBanner() {
             display: 'flex',
             color: config.textColor,
             opacity: 0.7,
-          }} title="Dismiss">
+          }} title={t("Dismiss", { defaultValue: "Dismiss" })}>
             <X size={16} />
           </button>
         </div>
@@ -160,7 +162,7 @@ export default function StorageNotificationBanner() {
               }}
             >
               {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-              {notifications.length} more notification{notifications.length !== 1 ? 's' : ''}
+              {t("{{count}} more notification(s)", { defaultValue: `${notifications.length} more notifications`, count: notifications.length })}
             </button>
             {expanded && (
               <div style={{
@@ -198,7 +200,7 @@ export default function StorageNotificationBanner() {
                   width: '100%', padding: '8px', background: '#f9fafb', border: 'none', cursor: 'pointer',
                   fontSize: '12px', color: '#6b7280', fontWeight: 600,
                 }}>
-                  Dismiss All
+                  {t("Dismiss All", { defaultValue: "Dismiss All" })}
                 </button>
               </div>
             )}
@@ -230,7 +232,7 @@ export default function StorageNotificationBanner() {
         <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
           <a href={orgPath('organization-details') + '?tab=storage'} style={{
             fontSize: '12px', fontWeight: 600, color: config.badgeColor, textDecoration: 'underline',
-          }}>Manage</a>
+          }}>{t("Manage", { defaultValue: "Manage" })}</a>
           <button onClick={() => handleDismiss(latest.id)} style={{
             background: 'none', border: 'none', cursor: 'pointer', color: config.textColor, opacity: 0.7,
           }}>

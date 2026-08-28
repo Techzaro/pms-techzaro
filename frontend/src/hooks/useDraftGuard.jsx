@@ -1,3 +1,8 @@
+import { useTranslation } from "react-i18next";
+/**
+ * useDraftGuard.jsx
+ * Enhanced version of useConfirmOnClose that adds "Save as Draft" option
+ * for modules that support the draft system.
 /**
  * useDraftGuard.jsx
  * Enhanced version of useConfirmOnClose that adds "Save as Draft" option
@@ -12,6 +17,7 @@ export default function useDraftGuard(
   onClose,
   { draftSaveHandler, hasDraftFeature = true } = {}
 ) {
+  const { t } = useTranslation();
   const [isDirty, setIsDirty] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -50,10 +56,10 @@ export default function useDraftGuard(
       isOpen={showConfirm}
       onClose={() => setShowConfirm(false)}
       onConfirm={handleDiscard}
-      title="Unsaved Changes"
-      message="You have unsaved changes. Are you sure you want to close? All changes will be lost."
-      confirmText="Yes, Discard"
-      cancelText="Keep Editing"
+      title={t("Unsaved Changes", { defaultValue: "Unsaved Changes" })}
+      message={t("You have unsaved changes. Are you sure you want to close? All changes will be lost.", { defaultValue: "You have unsaved changes. Are you sure you want to close? All changes will be lost." })}
+      confirmText={t("Yes, Discard", { defaultValue: "Yes, Discard" })}
+      cancelText={t("Keep Editing", { defaultValue: "Keep Editing" })}
       danger
     />
   );

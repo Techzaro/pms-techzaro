@@ -13,6 +13,7 @@ import useAutoSave from "../../hooks/useAutoSave";
 import AutoSaveIndicator from "../AutoSaveIndicator";
 import draftService from "../../services/draftService";
 import { useSubmit } from "../../hooks/useSubmit";
+import { useTranslation } from "react-i18next";
 import { authToken, getUser } from "../../utils/auth";
 import { publish } from "../../utils/eventBus";
 import { notify, showSuccessMessage } from "../../utils/notify";
@@ -40,6 +41,7 @@ const CreateSubtaskModal = ({
   editMode = false,
   editData = null,
 }) => {
+  const { t } = useTranslation();
   const draftSaveRef = useRef(null);
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useDraftGuard(onClose, {
     draftSaveHandler: () => draftSaveRef.current?.(),
@@ -365,17 +367,17 @@ const CreateSubtaskModal = ({
           <div className="task-header-left">
             <div className="task-icon">{editMode ? "✏️" : "⊕"}</div>
             <div>
-              <h2>{editMode ? "Edit Subtask" : "Create New Subtask"}</h2>
-              <p>{editMode ? "Update subtask details below." : "Add subtask details below."}</p>
+              <h2>{editMode ? t("Edit Subtask", { defaultValue: "Edit Subtask" }) : t("Create Subtask", { defaultValue: "Create Subtask" })}</h2>
+              <p>{editMode ? t("Update subtask details below.", { defaultValue: "Update subtask details below." }) : t("Add subtask details below.", { defaultValue: "Add subtask details below." })}</p>
             </div>
             {!editMode && <AutoSaveIndicator isSaving={isSaving} lastSaved={lastSaved} />}
           </div>
           <div className="task-header-actions">
             <button className="task-save-draft-btn" onClick={handleSaveDraft} type="button" disabled={!form.title.trim()}>
-              Save Draft
+              {t("Save Draft", { defaultValue: "Save Draft" })}
             </button>
             <LoadingButton className="task-create-btn" onClick={() => doSubmit()} loading={submitting}>
-              {editMode ? "Update Subtask" : "⊕ Create Subtask"}
+              {editMode ? t("Update Subtask", { defaultValue: "Update Subtask" }) : t("⊕ Create Subtask", { defaultValue: "⊕ Create Subtask" })}
             </LoadingButton>
             <button className="task-close-btn" onClick={handleClose}>✕</button>
           </div>
@@ -388,18 +390,18 @@ const CreateSubtaskModal = ({
             {/* Project + Parent Task */}
             <div className="task-grid-2">
               <div className="task-field">
-                <label>Projects (Optional)</label>
+                <label>{t("Projects (Optional)", { defaultValue: "Projects (Optional)" })}</label>
                 <CustomSelect
                   value={form.project_id}
                   onChange={(val) => { updateForm("project_id", val); updateForm("task_id", ""); updateForm("assigned_to", []); }}
-                  placeholder="Select project"
+                  placeholder={t("Select project", { defaultValue: "Select project" })}
                   options={projects.map((p) => ({ value: p.id, label: `${p.business_id ? p.business_id + " — " : ""}${p.title}` }))}
                   isDisabled={!!initialProjectId}
                 />
                 {formErrors.project_id && <small style={{ color: "#dc2626" }}>{formErrors.project_id}</small>}
               </div>
               <div className="task-field">
-                <label>Parent Task <span>*</span></label>
+                <label>{t("Parent Task", { defaultValue: "Parent Task" })} <span>*</span></label>
                 <CustomSelect
                   value={form.task_id}
                   onChange={(val) => {
@@ -409,7 +411,7 @@ const CreateSubtaskModal = ({
                       if (task?.project_id) updateForm("project_id", task.project_id);
                     }
                   }}
-                  placeholder={form.project_id ? "Select task from project" : "Select a task"}
+                  placeholder={form.project_id ? t("Select task from project", { defaultValue: "Select task from project" }) : t("Select a task", { defaultValue: "Select a task" })}
                   options={taskOptions}
                   isDisabled={!!initialTaskId}
                 />
@@ -419,28 +421,28 @@ const CreateSubtaskModal = ({
 
             {/* Title */}
             <div className="task-field">
-              <label>Subtask Title <span>*</span></label>
-              <input type="text" className={formErrors.title ? "field-error" : ""} value={form.title} onChange={(e) => updateForm("title", e.target.value)} placeholder="Enter subtask title" />
+              <label>{t("Subtask Title", { defaultValue: "Subtask Title" })} <span>*</span></label>
+              <input type="text" className={formErrors.title ? "field-error" : ""} value={form.title} onChange={(e) => updateForm("title", e.target.value)} placeholder={t("Enter subtask title", { defaultValue: "Enter subtask title" })} />
               {formErrors.title && <span className="field-error-text">{formErrors.title}</span>}
             </div>
 
             {/* Description */}
             <div className="task-field">
-              <label>Description</label>
-              <RichTextEditor value={form.description} onChange={(val) => updateForm("description", val)} placeholder="Enter subtask description..." />
+              <label>{t("Description", { defaultValue: "Description" })}</label>
+              <RichTextEditor value={form.description} onChange={(val) => updateForm("description", val)} placeholder={t("Enter subtask description...", { defaultValue: "Enter subtask description..." })} />
             </div>
 
             {/* Links & Attachment */}
             <div className="task-field">
-              <label>Links & Attachment</label>
+              <label>{t("Links & Attachment", { defaultValue: "Links & Attachment" })}</label>
               <div className="task-drop-zone" ref={dropRef} onDrop={handleDrop} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onClick={() => fileInputRef.current?.click()}>
                 <div className="task-drop-content">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
                   </svg>
-                  <p className="task-drop-text">Drag & drop files here</p>
+                  <p className="task-drop-text">{t("Drag & drop files here", { defaultValue: "Drag & drop files here" })}</p>
                 </div>
-                <span className="task-drop-browse">or browse</span>
+                <span className="task-drop-browse">{t("or browse", { defaultValue: "or browse" })}</span>
                 <input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={(e) => { if (e.target.files.length > 0) handleFiles(e.target.files); e.target.value = ""; }} />
               </div>
 
@@ -448,7 +450,7 @@ const CreateSubtaskModal = ({
                 <div className="cp-attachments-list">
                   {pendingFiles.map((file, index) => (
                     <div key={index} className="cp-attachment-item">
-                      <span className="cp-attachment-drag" title="Drag to reorder">
+                      <span className="cp-attachment-drag" title={t("Drag to reorder", { defaultValue: "Drag to reorder" })}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
                       </span>
                       <span className="task-attachment-icon">📄</span>
@@ -457,7 +459,7 @@ const CreateSubtaskModal = ({
                         <span className="task-attachment-size">{(file.size / 1024).toFixed(1)} KB</span>
                       </div>
                       <div className="cp-attachment-actions">
-                        <button type="button" className="cp-action-btn cp-action-btn-edit" title="Edit Name" onClick={() => {
+                        <button type="button" className="cp-action-btn cp-action-btn-edit" title={t("Edit Name", { defaultValue: "Edit Name" })} onClick={() => {
                           const newName = prompt("Rename file:", file.customName || file.name);
                           if (newName && newName.trim()) {
                             setPendingFiles((prev) => prev.map((f, i) => i === index ? { ...f, customName: newName.trim() } : f));
@@ -465,7 +467,7 @@ const CreateSubtaskModal = ({
                         }}>
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                         </button>
-                        <button type="button" className="cp-action-btn cp-action-btn-delete" title="Delete File" onClick={() => { setPendingRemoveItem({ type: "file", index }); setRemoveConfirmOpen(true); }}>
+                        <button type="button" className="cp-action-btn cp-action-btn-delete" title={t("Delete File", { defaultValue: "Delete File" })} onClick={() => { setPendingRemoveItem({ type: "file", index }); setRemoveConfirmOpen(true); }}>
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                         </button>
                       </div>
@@ -474,13 +476,13 @@ const CreateSubtaskModal = ({
                 </div>
               )}
 
-              <div className="task-or-divider"><span className="task-or-line"></span><span className="task-or-text">OR</span><span className="task-or-line"></span></div>
+              <div className="task-or-divider"><span className="task-or-line"></span><span className="task-or-text">{t("OR", { defaultValue: "OR" })}</span><span className="task-or-line"></span></div>
 
               <div className="task-link-input-row" style={{ flexDirection: "column", gap: "8px" }}>
-                <input type="text" placeholder="Link title (e.g. Figma Design, Drive Folder)" value={linkTitleInput} onChange={(e) => { setLinkTitleInput(e.target.value); markDirty(); }} />
+                <input type="text" placeholder={t("Link title (e.g. Figma Design, Drive Folder)", { defaultValue: "Link title (e.g. Figma Design, Drive Folder)" })} value={linkTitleInput} onChange={(e) => { setLinkTitleInput(e.target.value); markDirty(); }} />
                   <div style={{ display: "flex", gap: "8px" }}>
-                    <input type="text" placeholder="Paste link (Drive, Figma, Website, etc.)" value={linkInput} onChange={(e) => { setLinkInput(e.target.value); markDirty(); }} onKeyDown={handleLinkKeyDown} style={{ flex: 1 }} />
-                  <button type="button" className="task-link-add-btn" onClick={addLink} disabled={!linkInput.trim()}>Add Link</button>
+                    <input type="text" placeholder={t("Paste link (Drive, Figma, Website, etc.)", { defaultValue: "Paste link (Drive, Figma, Website, etc.)" })} value={linkInput} onChange={(e) => { setLinkInput(e.target.value); markDirty(); }} onKeyDown={handleLinkKeyDown} style={{ flex: 1 }} />
+                  <button type="button" className="task-link-add-btn" onClick={addLink} disabled={!linkInput.trim()}>{t("Add Link", { defaultValue: "Add Link" })}</button>
                 </div>
               </div>
             </div>
@@ -489,7 +491,7 @@ const CreateSubtaskModal = ({
               <div className="cp-attachments-list">
                 {links.map((link, index) => (
                   <div key={index} className="cp-attachment-item">
-                    <span className="cp-attachment-drag" title="Drag to reorder">
+                    <span className="cp-attachment-drag" title={t("Drag to reorder", { defaultValue: "Drag to reorder" })}>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
                     </span>
                     <span className="task-attachment-icon">🔗</span>
@@ -500,7 +502,7 @@ const CreateSubtaskModal = ({
                       </a>
                     </div>
                     <div className="cp-attachment-actions">
-                      <button type="button" className="cp-action-btn cp-action-btn-edit" title="Edit Link" onClick={() => {
+                      <button type="button" className="cp-action-btn cp-action-btn-edit" title={t("Edit Link", { defaultValue: "Edit Link" })} onClick={() => {
                         const newTitle = prompt("Link title:", link.customName || link.name);
                         if (newTitle !== null) {
                           setLinks((prev) => prev.map((l, i) => i === index ? { ...l, customName: newTitle.trim() || link.name } : l));
@@ -508,7 +510,7 @@ const CreateSubtaskModal = ({
                       }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                       </button>
-                      <button type="button" className="cp-action-btn cp-action-btn-delete" title="Delete Link" onClick={() => { setPendingRemoveItem({ type: "link", index }); setRemoveConfirmOpen(true); }}>
+                      <button type="button" className="cp-action-btn cp-action-btn-delete" title={t("Delete Link", { defaultValue: "Delete Link" })} onClick={() => { setPendingRemoveItem({ type: "link", index }); setRemoveConfirmOpen(true); }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                       </button>
                     </div>
@@ -522,12 +524,12 @@ const CreateSubtaskModal = ({
           <div className="task-right">
             {/* Assignee */}
             <div className="task-card">
-              <div className="task-card-top"><span>Assign To <span>*</span></span></div>
+              <div className="task-card-top"><span>{t("Assign To")} <span>*</span></span></div>
               <UserSelectDropdown
                 users={displayUsers}
                 selectedIds={form.assigned_to}
                 onChange={(ids) => updateForm("assigned_to", ids)}
-                placeholder="Click to select members"
+                placeholder={t("Click to select members", { defaultValue: "Click to select members" })}
                 error={!!formErrors.assigned_to}
               />
               {formErrors.assigned_to && <span className="field-error-text" style={{ color: "#EF4444", fontSize: "12px", marginTop: "4px", display: "block" }}>{formErrors.assigned_to}</span>}
@@ -535,48 +537,52 @@ const CreateSubtaskModal = ({
 
             {/* Followers */}
             <div className="task-card">
-              <div className="task-card-top"><span>Followers</span></div>
+              <div className="task-card-top"><span>{t("Followers (Optional)", { defaultValue: "Followers" })}</span></div>
               <UserSelectDropdown
                 users={displayUsers.filter(u => !form.assigned_to.includes(u.id))}
                 selectedIds={form.followers || []}
                 onChange={(ids) => updateForm("followers", ids)}
-                placeholder="Select followers (optional)"
+                placeholder={t("Select followers (optional)", { defaultValue: "Select followers (optional)" })}
               />
             </div>
 
             {/* Priority */}
             <div className="task-card">
-              <div className="task-card-top"><span>Priority <span>*</span></span></div>
+              <div className="task-card-top"><span>{t("Priority")} <span>*</span></span></div>
               <CustomSelect
                 value={form.priority}
                 onChange={(val) => updateForm("priority", val)}
-                options={PRIORITY_OPTIONS}
+                options={[
+                  { value: "Low", label: t("Low") },
+                  { value: "Medium", label: t("Medium") },
+                  { value: "High", label: t("High") },
+                ]}
               />
             </div>
 
             {/* Transfer To */}
             <div className="task-card">
-              <div className="task-card-top"><span>Transfer To</span></div>
+              <div className="task-card-top"><span>{t("Transfer To", { defaultValue: "Transfer To" })}</span></div>
               <CustomSelect
                 value={form.allow_transfer}
                 onChange={(val) => updateForm("allow_transfer", val)}
-                options={[{ value: "allow", label: "Allow" }, { value: "disallow", label: "Disallow" }]}
+                options={[{ value: "allow", label: t("Allow", { defaultValue: "Allow" }) }, { value: "disallow", label: t("Disallow", { defaultValue: "Disallow" }) }]}
               />
               <small style={{ fontSize: 11, color: "#9ca3af", marginTop: 4, display: "block" }}>
-                Whether assignees can transfer this subtask to others
+                {t("Whether assignees can transfer this subtask to others", { defaultValue: "Whether assignees can transfer this subtask to others" })}
               </small>
             </div>
 
             {/* Dates */}
             <div className="task-card task-card--bordered">
-              <div className="task-card-top"><span>Dates</span></div>
+              <div className="task-card-top"><span>{t("Dates", { defaultValue: "Dates" })}</span></div>
               <div className="task-deadline-grid">
                 <div>
-                  <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Start</label>
+                  <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>{t("Start", { defaultValue: "Start" })}</label>
                   <input type="datetime-local" value={form.start_date} onChange={(e) => updateForm("start_date", e.target.value)} min={getNowDatetimeLocal()} />
                 </div>
                 <div>
-                  <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>End</label>
+                  <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>{t("End", { defaultValue: "End" })}</label>
                   <input
                     type="datetime-local"
                     value={form.due_date}
@@ -596,10 +602,10 @@ const CreateSubtaskModal = ({
       {removeConfirmOpen && (
         <div style={{ position: "fixed", inset: 0, zIndex: 10010, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => setRemoveConfirmOpen(false)}>
           <div style={{ background: "var(--bg-card)", borderRadius: 16, padding: 28, maxWidth: 400, width: "90%", textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-            <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>Are you sure you want to remove this item?</p>
+            <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>{t("Are you sure you want to remove this item?", { defaultValue: "Are you sure you want to remove this item?" })}</p>
             <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
-              <button onClick={() => setRemoveConfirmOpen(false)} style={{ padding: "10px 20px", border: "1px solid var(--border-color)", borderRadius: 10, background: "var(--bg-card)", cursor: "pointer", fontWeight: 600 }}>Cancel</button>
-              <button onClick={handleRemoveConfirm} style={{ padding: "10px 20px", border: "none", borderRadius: 10, background: "#dc2626", color: "#fff", cursor: "pointer", fontWeight: 600 }}>Remove</button>
+              <button onClick={() => setRemoveConfirmOpen(false)} style={{ padding: "10px 20px", border: "1px solid var(--border-color)", borderRadius: 10, background: "var(--bg-card)", cursor: "pointer", fontWeight: 600 }}>{t("Cancel")}</button>
+              <button onClick={handleRemoveConfirm} style={{ padding: "10px 20px", border: "none", borderRadius: 10, background: "#dc2626", color: "#fff", cursor: "pointer", fontWeight: 600 }}>{t("Remove", { defaultValue: "Remove" })}</button>
             </div>
           </div>
         </div>

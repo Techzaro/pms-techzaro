@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import { MdVisibility, MdVisibilityOff } from "react-icons/md";
 import { saveSuperAdminSession, getSuperAdminToken, clearSuperAdminSession } from "../../utils/auth";
@@ -7,6 +8,7 @@ import { api } from "./api/superAdminApi";
 import "../../pages/Login.css";
 
 function SuperAdminLogin() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [email, setEmail] = useState("");
@@ -35,10 +37,10 @@ function SuperAdminLogin() {
     const errors = { email: "", password: "", form: "" };
 
     if (!email.trim()) {
-      errors.email = "Please enter your email address.";
+      errors.email = t("Please enter your email address.", { defaultValue: "Please enter your email address." });
     }
     if (!password.trim()) {
-      errors.password = "Please enter your password.";
+      errors.password = t("Please enter your password.", { defaultValue: "Please enter your password." });
     }
     if (errors.email || errors.password) {
       setFieldErrors(errors);
@@ -60,14 +62,14 @@ function SuperAdminLogin() {
           window.location.href = "/super-admin";
         }
       } else {
-        setFieldErrors({ email: "", password: "", form: data.message || "Incorrect email or password." });
+        setFieldErrors({ email: "", password: "", form: t(data.message || "Incorrect email or password.", { defaultValue: data.message || "Incorrect email or password." }) });
       }
     } catch (err) {
       let msg = err.message || "Something went wrong. Please try again.";
       if (msg.includes("429") || msg.includes("Too many")) {
         msg = "Too many failed login attempts. Please try again later.";
       }
-      setFieldErrors({ email: "", password: "", form: msg });
+      setFieldErrors({ email: "", password: "", form: t(msg, { defaultValue: msg }) });
     } finally {
       setLoading(false);
     }
@@ -77,21 +79,21 @@ function SuperAdminLogin() {
     <div className="login-page">
       <div className="login-left">
         <div className="overlay">
-          <h1>TECHXARO ADMIN</h1>
-          <p>Organization Management System</p>
+          <h1>{t('TECHXARO ADMIN', { defaultValue: 'TECHXARO ADMIN' })}</h1>
+          <p>{t('Organization Management System', { defaultValue: 'Organization Management System' })}</p>
         </div>
       </div>
 
       <div className="login-right">
         <div className="login-box">
-          <h2>Super Admin</h2>
-          <p className="subtitle">Login to manage organizations</p>
+          <h2>{t('Super Admin', { defaultValue: 'Super Admin' })}</h2>
+          <p className="subtitle">{t('Login to manage organizations', { defaultValue: 'Login to manage organizations' })}</p>
 
           {fieldErrors.form && <span className="field-error-text form-error">{fieldErrors.form}</span>}
 
           <input
             type="email"
-            placeholder="Enter Email"
+            placeholder={t("Enter Email", { defaultValue: "Enter Email" })}
             value={email}
             onChange={(e) => { setEmail(e.target.value); setFieldErrors(prev => ({ ...prev, email: "", form: "" })); }}
             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); document.getElementById("sa-login-password")?.focus(); } }}
@@ -103,7 +105,7 @@ function SuperAdminLogin() {
             <input
               id="sa-login-password"
               type={showPassword ? "text" : "password"}
-              placeholder="Enter Password"
+              placeholder={t("Enter Password", { defaultValue: "Enter Password" })}
               value={password}
               onChange={(e) => { setPassword(e.target.value); setFieldErrors(prev => ({ ...prev, password: "", form: "" })); }}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleLogin(); } }}
@@ -119,7 +121,7 @@ function SuperAdminLogin() {
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              title={showPassword ? "Hide password" : "Show password"}
+              title={showPassword ? t("Hide password", { defaultValue: "Hide password" }) : t("Show password", { defaultValue: "Show password" })}
               style={{
                 position: "absolute",
                 right: "4px",
@@ -151,9 +153,9 @@ function SuperAdminLogin() {
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
                 />
-                Remember Me
+                {t('Remember Me', { defaultValue: 'Remember Me' })}
               </label>
-              <Link to="/super-admin/forgot-password" className="forgot-password">Forgot Password?</Link>
+              <Link to="/super-admin/forgot-password" className="forgot-password">{t('Forgot Password?', { defaultValue: 'Forgot Password?' })}</Link>
             </div>
 
             <div className="button-area">
@@ -173,14 +175,14 @@ function SuperAdminLogin() {
                   transition: "background 0.2s",
                 }}
               >
-                {loading ? "Logging in..." : "Login"}
+                {loading ? t("Logging in...", { defaultValue: "Logging in..." }) : t("Login", { defaultValue: "Login" })}
               </button>
             </div>
           </div>
 
           <div style={{ textAlign: "center", marginTop: "24px" }}>
             <a href={`${getOrgBaseUrl()}/login`} style={{ color: "#4f46e5", fontSize: "14px", textDecoration: "none" }}>
-              ← Back to PMS Login
+              {t('← Back to PMS Login', { defaultValue: '← Back to PMS Login' })}
             </a>
           </div>
         </div>

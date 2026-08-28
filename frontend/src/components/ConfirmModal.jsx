@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import "./ConfirmModal.css";
 
@@ -22,6 +23,7 @@ import "./ConfirmModal.css";
  * @param {boolean} [danger=false] - If true, uses red color scheme for destructive actions
  */
 function ConfirmModal({ isOpen, onClose, onConfirm, title, message, confirmText = "Confirm", cancelText = "Cancel", confirmColor, danger = false }) {
+  const { t } = useTranslation();
   useEscapeKey(isOpen, onClose);
 
   // Resolve the confirm button color: explicit color > danger red > default blue
@@ -73,17 +75,17 @@ function ConfirmModal({ isOpen, onClose, onConfirm, title, message, confirmText 
             <line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
         </div>
-        <h3 id="cm-title">{title}</h3>
-        <p id="cm-message">{message}</p>
+        <h3 id="cm-title">{t(title)}</h3>
+        <p id="cm-message">{t(message)}</p>
         <div className="cm-actions">
-          <button className="cm-cancel-btn" onClick={handleClose} disabled={processing}>{cancelText}</button>
+          <button className="cm-cancel-btn" onClick={handleClose} disabled={processing}>{t(cancelText)}</button>
           <button
             className={`cm-confirm-btn ${danger ? "cm-confirm-btn--danger" : ""} ${processing ? "cm-confirm-btn--processing" : ""}`}
             style={{ background: resolvedColor }}
             onClick={handleConfirm}
             disabled={processing}
           >
-            {processing ? "Processing..." : confirmText}
+            {processing ? t("Processing...") : t(confirmText)}
           </button>
         </div>
       </div>

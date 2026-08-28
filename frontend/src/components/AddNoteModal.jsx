@@ -5,12 +5,14 @@
 
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import "./AddNoteModal.css";
 
 const AddNoteModal = ({ isOpen, onClose, itemType, itemId, onSaved }) => {
+  const { t } = useTranslation();
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   useEscapeKey(isOpen, onClose);
@@ -63,20 +65,20 @@ const AddNoteModal = ({ isOpen, onClose, itemType, itemId, onSaved }) => {
             <path d="M12 20h9"/>
             <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
           </svg>
-          <h3>Add Note</h3>
+          <h3>{t("Add Note", { defaultValue: "Add Note" })}</h3>
         </div>
         <textarea
           className="anm-textarea"
-          placeholder="Write your note here..."
+          placeholder={t("Write your note here...", { defaultValue: "Write your note here..." })}
           value={note}
           onChange={(e) => setNote(e.target.value)}
           rows={4}
           autoFocus
         />
         <div className="anm-actions">
-          <button className="anm-cancel" onClick={onClose} disabled={saving}>Cancel</button>
+          <button className="anm-cancel" onClick={onClose} disabled={saving}>{t("Cancel")}</button>
           <button className="anm-save" onClick={handleSave} disabled={saving || !note.trim()}>
-            {saving ? "Saving..." : "Save Note"}
+            {saving ? t("Saving...", { defaultValue: "Saving..." }) : t("Save Note", { defaultValue: "Save Note" })}
           </button>
         </div>
       </div>

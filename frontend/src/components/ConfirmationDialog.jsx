@@ -6,6 +6,7 @@
 
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import "./ConfirmationDialog.css";
 
@@ -20,6 +21,7 @@ import "./ConfirmationDialog.css";
  * @param {string} [confirmColor="#4F46E5"] - Background color for the confirm button
  */
 function ConfirmationDialog({ isOpen, onClose, onConfirm, title, message, confirmText = "Confirm", confirmColor = "#4F46E5" }) {
+  const { t } = useTranslation();
   useEscapeKey(isOpen, onClose);
 
   // Toggle body scroll lock when dialog opens/closes
@@ -37,11 +39,11 @@ function ConfirmationDialog({ isOpen, onClose, onConfirm, title, message, confir
   return createPortal(
     <div className="cd-overlay">
       <div className="cd-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <h3 className="cd-title">{title}</h3>
-        <p className="cd-message">{message}</p>
+        <h3 className="cd-title">{t(title)}</h3>
+        <p className="cd-message">{t(message)}</p>
         <div className="cd-actions">
-          <button className="cd-cancel-btn" onClick={onClose}>Cancel</button>
-          <button className="cd-confirm-btn" style={{ background: confirmColor }} onClick={onConfirm}>{confirmText}</button>
+          <button className="cd-cancel-btn" onClick={onClose}>{t("Cancel")}</button>
+          <button className="cd-confirm-btn" style={{ background: confirmColor }} onClick={onConfirm}>{t(confirmText)}</button>
         </div>
       </div>
     </div>,

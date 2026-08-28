@@ -19,6 +19,13 @@ class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
 
+    protected $attributes = [
+        'language' => 'English',
+        'timezone' => 'UTC',
+        'date_format' => 'DD/MM/YYYY',
+        'time_format' => '12-hour',
+    ];
+
     protected $fillable = [
         'name',
         'avatar',
@@ -81,6 +88,13 @@ class User extends Authenticatable
         'bank_account_number',
         'bank_account_title',
 
+        // Regional & Working Hours
+        'timezone',
+        'language',
+        'date_format',
+        'time_format',
+        'working_hours',
+
         // Documents
         'employment_contract',
         'offer_letter',
@@ -107,6 +121,7 @@ class User extends Authenticatable
         'password_changed_at' => 'datetime',
         'last_login_at' => 'datetime',
         'notification_preferences' => 'array',
+        'working_hours' => 'array',
     ];
 
     /**

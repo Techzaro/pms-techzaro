@@ -6,12 +6,14 @@
  */
 
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
 import { notify } from "../utils/notify";
 import { formatDateTime } from "../utils/formatDateTime";
 
-function DelegationChain({ task, delegationChain = [], approvalChain = [], onTaskUpdate }) {
+function DelegationChain({ task, delegationChain = [], safeApprovalChain = [], onTaskUpdate }) {
+  const { t } = useTranslation(); // Added this because t() was being used but not defined
   const currentUser = getUser();
   const [accepting, setAccepting] = useState(false);
   const [rejecting, setRejecting] = useState(false);
@@ -28,16 +30,23 @@ function DelegationChain({ task, delegationChain = [], approvalChain = [], onTas
       const res = await fetch(`${API_URL}/tasks/${task.id}/accept-delegation`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      
       if (res.ok && data.success) {
-        notify.success("Transfer accepted");
-        onTaskUpdate?.();
+        // Combined logic from both branches
+        notify.success(data.message || t("Transfer accepted", { defaultValue: "Transfer accepted" }));
+        try {
+          await onTaskUpdate?.();
+        } catch (refreshError) {
+          console.error("Post-acknowledgement refresh failed", refreshError);
+        }
       } else {
-        notify.error(data.message || "Failed to accept");
+        notify.error(data.message || t("Failed to accept", { defaultValue: "Failed to accept" }));
       }
     } catch {
-      notify.error("Error accepting transfer");
+      notify.error(t("Error accepting transfer", { defaultValue: "Error accepting transfer" }));
     } finally {
       setAccepting(false);
     }
@@ -55,13 +64,13 @@ function DelegationChain({ task, delegationChain = [], approvalChain = [], onTas
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        notify.success("Transfer rejected");
+        notify.success(t("Transfer rejected", { defaultValue: "Transfer rejected" }));
         onTaskUpdate?.();
       } else {
-        notify.error(data.message || "Failed to reject");
+        notify.error(data.message || t("Failed to reject", { defaultValue: "Failed to reject" }));
       }
     } catch {
-      notify.error("Error rejecting transfer");
+      notify.error(t("Error rejecting transfer", { defaultValue: "Error rejecting transfer" }));
     } finally {
       setRejecting(false);
     }
@@ -78,13 +87,13 @@ function DelegationChain({ task, delegationChain = [], approvalChain = [], onTas
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        notify.success("Transfer revoked");
+        notify.success(t("Transfer revoked", { defaultValue: "Transfer revoked" }));
         onTaskUpdate?.();
       } else {
-        notify.error(data.message || "Failed to revoke");
+        notify.error(data.message || t("Failed to revoke", { defaultValue: "Failed to revoke" }));
       }
     } catch {
-      notify.error("Error revoking transfer");
+      notify.error(t("Error revoking transfer", { defaultValue: "Error revoking transfer" }));
     } finally {
       setRevoking(false);
     }
@@ -111,8 +120,6 @@ function DelegationChain({ task, delegationChain = [], approvalChain = [], onTas
   };
 
   const safeDelegationChain = Array.isArray(delegationChain) ? delegationChain : [];
-  const safeApprovalChain = Array.isArray(approvalChain) ? approvalChain : [];
-
   if (!safeDelegationChain.length && !isDelegatedToMe) return null;
 
   return (
@@ -125,17 +132,17 @@ function DelegationChain({ task, delegationChain = [], approvalChain = [], onTas
           border: "1px solid var(--color-warning, #f59e0b)",
         }}>
           <div style={{ fontWeight: 700, fontSize: "14px", color: "var(--text-heading)", marginBottom: "8px" }}>
-            Task Transferred to You
+            {t("Task Transferred to You", { defaultValue: "Task Transferred to You" })}
           </div>
           <div style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "12px" }}>
-            <strong>{pendingDelegation.delegated_by_name || "Someone"}</strong> has transferred this task to you.
+            <strong>{pendingDelegation.delegated_by_name || t("Someone", { defaultValue: "Someone" })}</strong> {t("has transferred this task to you.", { defaultValue: "has transferred this task to you." })}
             {pendingDelegation.reason && (
-              <span> Reason: <em>{pendingDelegation.reason}</em></span>
+              <span> {t("Reason", { defaultValue: "Reason" })}: <em>{t(pendingDelegation.reason)}</em></span>
             )}
           </div>
           {pendingDelegation.notes && (
             <div style={{ fontSize: "12px", color: "var(--text-secondary)", fontStyle: "italic", marginBottom: "12px" }}>
-              Notes: "{pendingDelegation.notes}"
+              {t("Notes", { defaultValue: "Notes" })}: "{pendingDelegation.notes}"
             </div>
           )}
           <div style={{ display: "flex", gap: "8px" }}>
@@ -145,7 +152,7 @@ function DelegationChain({ task, delegationChain = [], approvalChain = [], onTas
               disabled={accepting || rejecting}
               style={{ fontSize: "13px", padding: "6px 16px", opacity: accepting ? 0.6 : 1, cursor: accepting ? "not-allowed" : "pointer" }}
             >
-              {accepting ? "Accepting..." : "Accept"}
+              {accepting ? t("Accepting...", { defaultValue: "Accepting..." }) : t("Accept", { defaultValue: "Accept" })}
             </button>
             <button
               className="btn btn-secondary"
@@ -153,13 +160,13 @@ function DelegationChain({ task, delegationChain = [], approvalChain = [], onTas
               disabled={accepting || rejecting}
               style={{ fontSize: "13px", padding: "6px 16px", opacity: rejecting ? 0.6 : 1, cursor: rejecting ? "not-allowed" : "pointer" }}
             >
-              {rejecting ? "Rejecting..." : "Reject"}
+              {rejecting ? t("Rejecting...", { defaultValue: "Rejecting..." }) : t("Reject", { defaultValue: "Reject" })}
             </button>
           </div>
         </div>
       )}
 
-          <h3 className="td-card-title">Transfer Chain</h3>
+      <h3 className="td-card-title">{t("Transfer Chain", { defaultValue: "Transfer Chain" })}</h3>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
         {safeDelegationChain.map((entry, idx) => {
@@ -192,10 +199,10 @@ function DelegationChain({ task, delegationChain = [], approvalChain = [], onTas
                     color: statusColor(entry.status),
                     fontSize: "11px", padding: "2px 8px", borderRadius: "12px", fontWeight: 600,
                   }}>
-                    {entry.status?.charAt(0).toUpperCase() + entry.status?.slice(1)}
+                    {t(entry.status?.charAt(0).toUpperCase() + entry.status?.slice(1))}
                   </span>
                   {entry.reason && (
-                    <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{entry.reason}</span>
+                    <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{t(entry.reason)}</span>
                   )}
                   {entry.return_to_transferor !== undefined && (
                     <span style={{
@@ -203,7 +210,7 @@ function DelegationChain({ task, delegationChain = [], approvalChain = [], onTas
                       background: entry.return_to_transferor ? "var(--color-info-bg, #f0f9ff)" : "var(--color-warning-bg, #fef3c7)",
                       color: entry.return_to_transferor ? "var(--color-info, #0369a1)" : "var(--color-warning, #d97706)",
                     }}>
-                      {entry.return_to_transferor ? "Returns to transferor" : "Direct to original assigner"}
+                      {entry.return_to_transferor ? t("Returns to transferor", { defaultValue: "Returns to transferor" }) : t("Direct to original assigner", { defaultValue: "Direct to original assigner" })}
                     </span>
                   )}
                   {entry.created_at && (
@@ -225,7 +232,7 @@ function DelegationChain({ task, delegationChain = [], approvalChain = [], onTas
                       opacity: revoking ? 0.6 : 1,
                     }}
                   >
-                    {revoking ? "Revoking..." : "Revoke"}
+                    {revoking ? t("Revoking...", { defaultValue: "Revoking..." }) : t("Revoke", { defaultValue: "Revoke" })}
                   </button>
                 )}
               </div>
@@ -234,36 +241,36 @@ function DelegationChain({ task, delegationChain = [], approvalChain = [], onTas
         })}
       </div>
 
-      {/* Approval chain */}
-      {safeApprovalChain.length > 0 && (
+      {/* Approval chain from feature/time-zone */}
+      {safeApprovalChain?.length > 0 && (
         <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid var(--border)" }}>
           <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "8px" }}>
-            Approval Route (reversed chain):
+            {t("Approval Route (reversed chain):", { defaultValue: "Approval Route (reversed chain):" })}
           </div>
           {safeApprovalChain.map((approver, idx) => (
             <div key={idx} style={{ fontSize: "12px", color: "var(--text-heading)", marginBottom: "4px" }}>
-              Level {approver.level}: <strong>{approver.approver_name}</strong>
+              {t("Level {{level}}", { defaultValue: `Level ${approver.level}`, level: approver.level })}: <strong>{approver.approver_name}</strong>
               <span className="badge" style={{
                 marginLeft: "8px",
                 background: approver.status === 'approved' ? "var(--color-success-bg)" : "var(--bg-hover)",
                 color: approver.status === 'approved' ? "var(--color-success)" : "var(--text-secondary)",
                 fontSize: "10px", padding: "1px 6px", borderRadius: "8px",
               }}>
-                {approver.status === 'approved' ? 'Approved' : 'Pending'}
+                {approver.status === 'approved' ? t("Approved") : t("Pending")}
               </span>
             </div>
           ))}
         </div>
       )}
 
-      {/* Current owner indicator */}
-      {task.current_owner && task.current_owner_name && (
+      {/* Current owner indicator from feature/time-zone */}
+      {task?.current_owner && task?.current_owner_name && (
         <div style={{
           marginTop: "12px", padding: "8px 12px", borderRadius: "6px",
           background: "var(--color-info-bg, #f0f9ff)",
           fontSize: "12px", color: "var(--text-secondary)",
         }}>
-          Current Owner: <strong style={{ color: "var(--text-heading)" }}>{task.current_owner_name}</strong>
+          {t("Current Owner", { defaultValue: "Current Owner" })}: <strong style={{ color: "var(--text-heading)" }}>{task.current_owner_name}</strong>
         </div>
       )}
     </div>

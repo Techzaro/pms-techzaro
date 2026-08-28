@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import Breadcrumb from '../components/Breadcrumb';
 import api from '../lib/api';
@@ -19,6 +20,7 @@ const STATUS_CONFIG = {
 };
 
 export default function SupportPage() {
+  const { t } = useTranslation();
   const [tickets, setTickets] = useState([]);
   const [counts, setCounts] = useState({});
   const [loading, setLoading] = useState(true);
@@ -108,7 +110,7 @@ export default function SupportPage() {
 
   return (
     <DashboardLayout hideRightSidebar>
-      <Breadcrumb items={[{ label: 'Settings' }, { label: 'Support' }]} />
+      <Breadcrumb items={[{ label: t('Settings', { defaultValue: 'Settings' }) }, { label: t('Support', { defaultValue: 'Support' }) }]} />
 
       {selectedTicket ? (
         <TicketDetail
@@ -147,13 +149,14 @@ export default function SupportPage() {
 }
 
 function TicketList({ tickets, counts, loading, filterStatus, setFilterStatus, onSelectTicket, onShowCreate, onRefresh }) {
+  const { t } = useTranslation();
   return (
     <div style={{ background: 'var(--bg-card)', borderRadius: '20px', padding: '28px', boxShadow: 'var(--shadow-sm)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
         <div>
-          <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-heading)', margin: 0 }}>Support Tickets</h1>
+          <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-heading)', margin: 0 }}>{t('Support Tickets', { defaultValue: 'Support Tickets' })}</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '14px', margin: '4px 0 0' }}>
-            Get help from our support team
+            {t('Get help from our support team', { defaultValue: 'Get help from our support team' })}
           </p>
         </div>
         <button onClick={onShowCreate} style={{
@@ -162,18 +165,18 @@ function TicketList({ tickets, counts, loading, filterStatus, setFilterStatus, o
           background: 'var(--color-primary)', color: '#fff', fontSize: '14px', fontWeight: 600,
         }}>
           <Plus style={{ width: '16px', height: '16px' }} />
-          New Ticket
+          {t('New Ticket', { defaultValue: 'New Ticket' })}
         </button>
       </div>
 
       {/* Status Tabs */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
         {[
-          { value: '', label: 'All', count: Object.values(counts).reduce((a, b) => a + b, 0) },
-          { value: 'open', label: 'Open', count: counts.open || 0 },
-          { value: 'pending', label: 'Pending', count: counts.pending || 0 },
-          { value: 'resolved', label: 'Resolved', count: counts.resolved || 0 },
-          { value: 'closed', label: 'Closed', count: counts.closed || 0 },
+          { value: '', label: t('All', { defaultValue: 'All' }), count: Object.values(counts).reduce((a, b) => a + b, 0) },
+          { value: 'open', label: t('Open', { defaultValue: 'Open' }), count: counts.open || 0 },
+          { value: 'pending', label: t('Pending', { defaultValue: 'Pending' }), count: counts.pending || 0 },
+          { value: 'resolved', label: t('Resolved', { defaultValue: 'Resolved' }), count: counts.resolved || 0 },
+          { value: 'closed', label: t('Closed', { defaultValue: 'Closed' }), count: counts.closed || 0 },
         ].map((tab) => (
           <button
             key={tab.value}
@@ -200,7 +203,7 @@ function TicketList({ tickets, counts, loading, filterStatus, setFilterStatus, o
       ) : tickets.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 0' }}>
           <MessageSquare style={{ width: '48px', height: '48px', color: 'var(--text-muted)', margin: '0 auto 12px' }} />
-          <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>No tickets found. Create your first support ticket.</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>{t('No tickets found. Create your first support ticket.', { defaultValue: 'No tickets found. Create your first support ticket.' })}</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -237,13 +240,13 @@ function TicketList({ tickets, counts, loading, filterStatus, setFilterStatus, o
                         padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600,
                         background: statusCfg.bg, color: statusCfg.color,
                       }}>
-                        {statusCfg.label}
+                        {t(statusCfg.label, { defaultValue: statusCfg.label })}
                       </span>
                       <span style={{
                         padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600,
                         background: priorityCfg.bg, color: priorityCfg.color,
                       }}>
-                        {priorityCfg.label}
+                        {t(priorityCfg.label, { defaultValue: priorityCfg.label })}
                       </span>
                       {ticket.source === 'feedback' && (
                         <span style={{
@@ -256,8 +259,8 @@ function TicketList({ tickets, counts, loading, filterStatus, setFilterStatus, o
                       )}
                     </div>
                     <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {ticket.ticket_number} · {ticket.category}
-                      {ticket.last_message && ` · Last: ${ticket.last_message.message}`}
+                      {ticket.ticket_number} · {t(ticket.category, { defaultValue: ticket.category })}
+                      {ticket.last_message && ` · ${t('Last:', { defaultValue: 'Last:' })} ${ticket.last_message.message}`}
                     </p>
                   </div>
                 </div>
@@ -276,6 +279,7 @@ function TicketList({ tickets, counts, loading, filterStatus, setFilterStatus, o
 }
 
 function TicketDetail({ ticket, messages, loading, onBack, onReply, onClose, replyText, setReplyText, sendingReply, messagesEndRef }) {
+  const { t } = useTranslation();
   const statusCfg = STATUS_CONFIG[ticket.status] || STATUS_CONFIG.open;
   const priorityCfg = PRIORITY_CONFIG[ticket.priority] || PRIORITY_CONFIG.medium;
   const isFeedback = ticket.source === 'feedback';
@@ -304,13 +308,13 @@ function TicketDetail({ ticket, messages, loading, onBack, onReply, onClose, rep
                 padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600,
                 background: statusCfg.bg, color: statusCfg.color,
               }}>
-                {statusCfg.label}
+                {t(statusCfg.label, { defaultValue: statusCfg.label })}
               </span>
               <span style={{
                 padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600,
                 background: priorityCfg.bg, color: priorityCfg.color,
               }}>
-                {priorityCfg.label}
+                {t(priorityCfg.label, { defaultValue: priorityCfg.label })}
               </span>
               {isFeedback && (
                 <span style={{
@@ -323,7 +327,7 @@ function TicketDetail({ ticket, messages, loading, onBack, onReply, onClose, rep
               )}
             </div>
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0' }}>
-              {ticket.ticket_number} · {ticket.category}
+{ticket.ticket_number} · {t(ticket.category, { defaultValue: ticket.category })}
               {isFeedback && ticket.feedback_reference_number && ` · Ref: ${ticket.feedback_reference_number}`}
             </p>
           </div>
@@ -334,7 +338,7 @@ function TicketDetail({ ticket, messages, loading, onBack, onReply, onClose, rep
             background: 'var(--bg-hover)', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
             color: 'var(--text-secondary)',
           }}>
-            Close Ticket
+            {t('Close Ticket', { defaultValue: 'Close Ticket' })}
           </button>
         )}
       </div>
@@ -384,7 +388,7 @@ function TicketDetail({ ticket, messages, loading, onBack, onReply, onClose, rep
             <div className="h-16 bg-gray-200 dark:bg-gray-700 rounded-lg w-3/4 ml-auto" />
           </div>
         ) : messages.length === 0 ? (
-          <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '20px 0' }}>No messages yet.</p>
+          <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '20px 0' }}>{t('No messages yet.', { defaultValue: 'No messages yet.' })}</p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {/* Initial message */}
@@ -394,7 +398,7 @@ function TicketDetail({ ticket, messages, loading, onBack, onReply, onClose, rep
             }}>
               <p style={{ fontSize: '13px', color: 'var(--text-dark)', margin: 0, whiteSpace: 'pre-wrap' }}>{ticket.message}</p>
               <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '6px 0 0' }}>
-                {ticket.user?.name || 'You'} · {new Date(ticket.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                {ticket.user?.name || t('You', { defaultValue: 'You' })} · {new Date(ticket.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
               </p>
             </div>
 
@@ -409,7 +413,7 @@ function TicketDetail({ ticket, messages, loading, onBack, onReply, onClose, rep
                 }}>
                   <p style={{ fontSize: '13px', color: 'var(--text-dark)', margin: 0, whiteSpace: 'pre-wrap' }}>{msg.message}</p>
                   <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '6px 0 0' }}>
-                    {isOrg ? (msg.user?.name || 'You') : 'Support Team'} · {new Date(msg.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                    {isOrg ? (msg.user?.name || t('You', { defaultValue: 'You' })) : t('Support Team', { defaultValue: 'Support Team' })} · {new Date(msg.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                   </p>
                 </div>
               );
@@ -427,7 +431,7 @@ function TicketDetail({ ticket, messages, loading, onBack, onReply, onClose, rep
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && onReply()}
-            placeholder="Type your reply..."
+            placeholder={t('Type your reply...', { defaultValue: 'Type your reply...' })}
             style={{
               flex: 1, padding: '10px 14px', borderRadius: '10px', border: '1px solid var(--border-light)',
               background: 'var(--bg-hover)', fontSize: '14px', color: 'var(--text-dark)', outline: 'none',
@@ -451,6 +455,7 @@ function TicketDetail({ ticket, messages, loading, onBack, onReply, onClose, rep
 }
 
 function CreateTicketModal({ onClose, onCreated }) {
+  const { t } = useTranslation();
   const [form, setForm] = useState({ subject: '', message: '', priority: 'medium', category: 'general' });
   const [submitting, setSubmitting] = useState(false);
 
@@ -479,7 +484,7 @@ function CreateTicketModal({ onClose, onCreated }) {
         boxShadow: 'var(--shadow-md)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-heading)', margin: 0 }}>New Support Ticket</h2>
+          <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-heading)', margin: 0 }}>{t('New Support Ticket', { defaultValue: 'New Support Ticket' })}</h2>
           <button onClick={onClose} style={{
             width: '32px', height: '32px', borderRadius: '8px', border: 'none',
             background: 'var(--bg-hover)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -490,12 +495,12 @@ function CreateTicketModal({ onClose, onCreated }) {
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div>
-            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-dark)', marginBottom: '6px', display: 'block' }}>Subject</label>
+            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-dark)', marginBottom: '6px', display: 'block' }}>{t('Subject', { defaultValue: 'Subject' })}</label>
             <input
               type="text"
               value={form.subject}
               onChange={(e) => setForm({ ...form, subject: e.target.value })}
-              placeholder="Brief description of your issue"
+              placeholder={t('Brief description of your issue', { defaultValue: 'Brief description of your issue' })}
               required
               style={{
                 width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1px solid var(--border-light)',
@@ -506,11 +511,11 @@ function CreateTicketModal({ onClose, onCreated }) {
           </div>
 
           <div>
-            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-dark)', marginBottom: '6px', display: 'block' }}>Message</label>
+            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-dark)', marginBottom: '6px', display: 'block' }}>{t('Message', { defaultValue: 'Message' })}</label>
             <textarea
               value={form.message}
               onChange={(e) => setForm({ ...form, message: e.target.value })}
-              placeholder="Describe your issue in detail..."
+              placeholder={t('Describe your issue in detail...', { defaultValue: 'Describe your issue in detail...' })}
               rows={4}
               required
               style={{
@@ -523,7 +528,7 @@ function CreateTicketModal({ onClose, onCreated }) {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div>
-              <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-dark)', marginBottom: '6px', display: 'block' }}>Priority</label>
+              <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-dark)', marginBottom: '6px', display: 'block' }}>{t('Priority', { defaultValue: 'Priority' })}</label>
               <select
                 value={form.priority}
                 onChange={(e) => setForm({ ...form, priority: e.target.value })}
@@ -533,14 +538,14 @@ function CreateTicketModal({ onClose, onCreated }) {
                   boxSizing: 'border-box',
                 }}
               >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="urgent">Urgent</option>
+                <option value="low">{t('Low', { defaultValue: 'Low' })}</option>
+                <option value="medium">{t('Medium', { defaultValue: 'Medium' })}</option>
+                <option value="high">{t('High', { defaultValue: 'High' })}</option>
+                <option value="urgent">{t('Urgent', { defaultValue: 'Urgent' })}</option>
               </select>
             </div>
             <div>
-              <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-dark)', marginBottom: '6px', display: 'block' }}>Category</label>
+              <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-dark)', marginBottom: '6px', display: 'block' }}>{t('Category', { defaultValue: 'Category' })}</label>
               <select
                 value={form.category}
                 onChange={(e) => setForm({ ...form, category: e.target.value })}
@@ -550,11 +555,11 @@ function CreateTicketModal({ onClose, onCreated }) {
                   boxSizing: 'border-box',
                 }}
               >
-                <option value="general">General</option>
-                <option value="billing">Billing</option>
-                <option value="technical">Technical</option>
-                <option value="feature_request">Feature Request</option>
-                <option value="bug_report">Bug Report</option>
+                <option value="general">{t('General', { defaultValue: 'General' })}</option>
+                <option value="billing">{t('Billing', { defaultValue: 'Billing' })}</option>
+                <option value="technical">{t('Technical', { defaultValue: 'Technical' })}</option>
+                <option value="feature_request">{t('Feature Request', { defaultValue: 'Feature Request' })}</option>
+                <option value="bug_report">{t('Bug Report', { defaultValue: 'Bug Report' })}</option>
               </select>
             </div>
           </div>
@@ -565,14 +570,14 @@ function CreateTicketModal({ onClose, onCreated }) {
               background: 'var(--bg-hover)', cursor: 'pointer', fontSize: '14px', fontWeight: 600,
               color: 'var(--text-secondary)',
             }}>
-              Cancel
+              {t('Cancel', { defaultValue: 'Cancel' })}
             </button>
             <button type="submit" disabled={submitting} style={{
               padding: '10px 20px', borderRadius: '10px', border: 'none',
               background: 'var(--color-primary)', color: '#fff', cursor: submitting ? 'not-allowed' : 'pointer',
               fontSize: '14px', fontWeight: 600, opacity: submitting ? 0.7 : 1,
             }}>
-              {submitting ? 'Creating...' : 'Create Ticket'}
+              {submitting ? t('Creating...', { defaultValue: 'Creating...' }) : t('Create Ticket', { defaultValue: 'Create Ticket' })}
             </button>
           </div>
         </form>

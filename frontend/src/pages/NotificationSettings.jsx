@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import api from '../lib/api';
 import API_URL from '../config/api';
 import { authToken } from '../utils/auth';
@@ -6,7 +7,7 @@ import DashboardLayout from '../components/layout/DashboardLayout';
 import Breadcrumb from '../components/Breadcrumb';
 import './NotificationSettings.css';
 
-const CATEGORIES = [
+const CATEGORY_DEFS = [
   { key: 'project', label: 'Project Activity', description: 'Updates when you are added to a project, project status changes, and milestone updates' },
   { key: 'task', label: 'Task Notifications', description: 'When someone assigns a task to you, updates status, or submits work for review' },
   { key: 'sub_task', label: 'Sub-Tasks & Deliverables', description: 'When deliverables or sub-tasks are assigned to you or updated' },
@@ -17,6 +18,7 @@ const CATEGORIES = [
 ];
 
 export default function NotificationSettings() {
+  const { t } = useTranslation();
   const [preferences, setPreferences] = useState({
     project: { email: true, desktop: true, slack: true, google_chat: true, teams_channel: true },
     task: { email: true, desktop: true, slack: true, google_chat: true, teams_channel: true },
@@ -75,7 +77,7 @@ export default function NotificationSettings() {
   const handleToggleAllChannel = (channel, value) => {
     setPreferences((prev) => {
       const updated = { ...prev };
-      CATEGORIES.forEach(({ key }) => {
+      CATEGORY_DEFS.forEach(({ key }) => {
         const currentCat = updated[key] || { email: true, desktop: true, slack: true, google_chat: true, teams_channel: true };
         updated[key] = { ...currentCat, [channel]: value };
       });
@@ -92,13 +94,13 @@ export default function NotificationSettings() {
         { preferences, webhooks }
       );
       if (response?.success) {
-        setMessage('Notification preferences & webhooks saved successfully!');
+        setMessage(t('Notification preferences & webhooks saved successfully!', { defaultValue: 'Notification preferences & webhooks saved successfully!' }));
       } else {
-        setMessage('Failed to save preferences.');
+        setMessage(t('Failed to save preferences.', { defaultValue: 'Failed to save preferences.' }));
       }
     } catch (err) {
       console.error('Save preferences error:', err);
-      setMessage('Failed to save preferences.');
+      setMessage(t('Failed to save preferences.', { defaultValue: 'Failed to save preferences.' }));
     } finally {
       setSaving(false);
       setTimeout(() => setMessage(''), 4000);
@@ -107,14 +109,14 @@ export default function NotificationSettings() {
 
   return (
     <DashboardLayout>
-      <Breadcrumb items={[{ label: 'Notification Preferences' }]} />
+      <Breadcrumb items={[{ label: t('Notification Preferences', { defaultValue: 'Notification Preferences' }) }]} />
       <div className="dashboard-page-content" style={{ padding: '1rem 0', boxSizing: 'border-box' }}>
         {/* Page Header Row */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
           <div>
-            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Settings</span>
-            <h1 style={{ fontSize: '1.75rem', fontWeight: 700, color: '#0f172a', margin: '0.2rem 0 0.4rem 0' }}>Multi-Channel Notification Preferences</h1>
-            <p style={{ fontSize: '0.9rem', color: '#64748b', margin: 0 }}>Configure Outlook Email, Desktop, Slack, Google Chat, and Microsoft Teams alerts.</p>
+            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('Settings', { defaultValue: 'Settings' })}</span>
+            <h1 style={{ fontSize: '1.75rem', fontWeight: 700, color: '#0f172a', margin: '0.2rem 0 0.4rem 0' }}>{t('Multi-Channel Notification Preferences', { defaultValue: 'Multi-Channel Notification Preferences' })}</h1>
+            <p style={{ fontSize: '0.9rem', color: '#64748b', margin: 0 }}>{t('Configure Outlook Email, Desktop, Slack, Google Chat, and Microsoft Teams alerts.', { defaultValue: 'Configure Outlook Email, Desktop, Slack, Google Chat, and Microsoft Teams alerts.' })}</p>
           </div>
           <button
             onClick={handleSave}
@@ -132,7 +134,7 @@ export default function NotificationSettings() {
               transition: 'all 0.2s',
             }}
           >
-            {saving ? 'Saving...' : 'Save Preferences'}
+            {saving ? t('Saving...', { defaultValue: 'Saving...' }) : t('Save Preferences', { defaultValue: 'Save Preferences' })}
           </button>
         </div>
 
@@ -164,7 +166,7 @@ export default function NotificationSettings() {
           gap: '0.5rem',
         }}>
           <span>ℹ️</span>
-          <div><strong>Receiver-Only Spam Prevention:</strong> The sender performing an action will never receive email, desktop, or 3rd-party webhook notifications. Senders only view history in the in-app Notifications tab.</div>
+          <div><strong>{t('Receiver-Only Spam Prevention:', { defaultValue: 'Receiver-Only Spam Prevention:' })}</strong> {t('The sender performing an action will never receive email, desktop, or 3rd-party webhook notifications. Senders only view history in the in-app Notifications tab.', { defaultValue: 'The sender performing an action will never receive email, desktop, or 3rd-party webhook notifications. Senders only view history in the in-app Notifications tab.' })}</div>
         </div>
 
         {/* THIRD-PARTY WEBHOOK INTEGRATIONS */}
@@ -176,11 +178,11 @@ export default function NotificationSettings() {
           padding: '1.5rem',
           marginBottom: '1.5rem',
         }}>
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#0f172a', marginTop: 0, marginBottom: '1rem' }}>Third-Party Integration Webhooks</h3>
+          <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#0f172a', marginTop: 0, marginBottom: '1rem' }}>{t('Third-Party Integration Webhooks', { defaultValue: 'Third-Party Integration Webhooks' })}</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
             <div>
               <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#334155', display: 'block', marginBottom: '4px' }}>
-                Slack Webhook URL
+                {t('Slack Webhook URL', { defaultValue: 'Slack Webhook URL' })}
               </label>
               <input
                 type="url"
@@ -192,7 +194,7 @@ export default function NotificationSettings() {
             </div>
             <div>
               <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#334155', display: 'block', marginBottom: '4px' }}>
-                Google Chat Webhook URL
+                {t('Google Chat Webhook URL', { defaultValue: 'Google Chat Webhook URL' })}
               </label>
               <input
                 type="url"
@@ -204,7 +206,7 @@ export default function NotificationSettings() {
             </div>
             <div>
               <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#334155', display: 'block', marginBottom: '4px' }}>
-                Microsoft Teams Webhook URL
+                {t('Microsoft Teams Webhook URL', { defaultValue: 'Microsoft Teams Webhook URL' })}
               </label>
               <input
                 type="url"
@@ -226,41 +228,41 @@ export default function NotificationSettings() {
           padding: '1.5rem',
           boxSizing: 'border-box',
         }}>
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#0f172a', marginTop: 0, marginBottom: '1.2rem' }}>Category Channels Matrix</h3>
+          <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#0f172a', marginTop: 0, marginBottom: '1.2rem' }}>{t('Category Channels Matrix', { defaultValue: 'Category Channels Matrix' })}</h3>
 
           {loading ? (
-            <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>Loading preferences...</div>
+            <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>{t('Loading preferences...', { defaultValue: 'Loading preferences...' })}</div>
           ) : (
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                    <th style={{ padding: '0.75rem 1rem', fontSize: '0.8rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', width: '30%' }}>Category</th>
+                    <th style={{ padding: '0.75rem 1rem', fontSize: '0.8rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', width: '30%' }}>{t('Category', { defaultValue: 'Category' })}</th>
                     {['email', 'desktop', 'slack', 'google_chat', 'teams_channel'].map((channel) => (
                       <th key={channel} style={{ padding: '0.75rem 0.5rem', fontSize: '0.78rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', textAlign: 'center' }}>
                         <div>
-                          {channel === 'email' && '📧 Outlook'}
-                          {channel === 'desktop' && '💻 Desktop'}
-                          {channel === 'slack' && '💬 Slack'}
-                          {channel === 'google_chat' && '🟢 G-Chat'}
-                          {channel === 'teams_channel' && '🟦 Teams'}
+                          {channel === 'email' && `📧 ${t('Outlook', { defaultValue: 'Outlook' })}`}
+                          {channel === 'desktop' && `💻 ${t('Desktop', { defaultValue: 'Desktop' })}`}
+                          {channel === 'slack' && `💬 ${t('Slack', { defaultValue: 'Slack' })}`}
+                          {channel === 'google_chat' && `🟢 ${t('G-Chat', { defaultValue: 'G-Chat' })}`}
+                          {channel === 'teams_channel' && `🟦 ${t('Teams', { defaultValue: 'Teams' })}`}
                         </div>
                         <div style={{ fontSize: '0.68rem', fontWeight: 500, marginTop: '2px' }}>
-                          <button type="button" onClick={() => handleToggleAllChannel(channel, true)} style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', padding: 0, fontSize: '0.68rem' }}>On</button>
+                          <button type="button" onClick={() => handleToggleAllChannel(channel, true)} style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', padding: 0, fontSize: '0.68rem' }}>{t('On', { defaultValue: 'On' })}</button>
                           <span style={{ margin: '0 2px', color: '#cbd5e1' }}>•</span>
-                          <button type="button" onClick={() => handleToggleAllChannel(channel, false)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: 0, fontSize: '0.68rem' }}>Off</button>
+                          <button type="button" onClick={() => handleToggleAllChannel(channel, false)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: 0, fontSize: '0.68rem' }}>{t('Off', { defaultValue: 'Off' })}</button>
                         </div>
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {CATEGORIES.map(({ key, label, description }, index) => {
+                  {CATEGORY_DEFS.map(({ key, label, description }, index) => {
                     return (
-                      <tr key={key} style={{ borderBottom: index < CATEGORIES.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                      <tr key={key} style={{ borderBottom: index < CATEGORY_DEFS.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
                         <td style={{ padding: '0.85rem 1rem' }}>
-                          <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '0.9rem' }}>{label}</div>
-                          <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '2px' }}>{description}</div>
+                          <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '0.9rem' }}>{t(label, { defaultValue: label })}</div>
+                          <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '2px' }}>{t(description, { defaultValue: description })}</div>
                         </td>
                         {['email', 'desktop', 'slack', 'google_chat', 'teams_channel'].map((channel) => {
                           const checked = preferences?.[key]?.[channel] ?? (key !== 'draft' && (channel === 'email' || channel === 'desktop'));

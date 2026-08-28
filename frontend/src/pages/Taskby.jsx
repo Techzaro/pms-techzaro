@@ -9,12 +9,14 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
+import { publish } from "../utils/eventBus";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { CiCalendar } from "react-icons/ci";
 import { IoIosArrowDown } from "react-icons/io";
 import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { IoSearchOutline, IoEyeOutline, IoCheckmarkCircle } from "react-icons/io5";
 import { ArrowUpRight, Lock, Pencil, StickyNote, Trash2, Sliders, CheckCircle2, XCircle, RotateCcw, AlertOctagon } from "lucide-react";
 import CreateTaskModal from "../components/CreateTaskModal";
@@ -79,6 +81,7 @@ const PRIORITY_TEXT_COLORS = {
 
 /** Main Taskby page — renders tasks assigned by the current user. */
 const Taskby = () => {
+  const { t } = useTranslation();
   const currentUser = getUser();
   const navigate = useNavigate();
   const notify = useNotification();
@@ -135,6 +138,47 @@ const Taskby = () => {
     setPage(1);
   };
 
+  const handleTaskReorder = (newItems) => {
+    setItems(newItems);
+  };
+
+  const handleModalClose = (refresh) => {
+    setShowTaskModal(false);
+    if (refresh) fetchTasks();
+  };
+
+  const selectStatusFilter = (filter) => {
+    if (filter === statusFilter && filter === "") {
+      setShowAll(!showAll);
+    } else {
+      setStatusFilter(filter);
+      setShowAll(false);
+      setPage(1);
+      if (filter) {
+        setSearchParams({ status: filter });
+      } else {
+        setSearchParams({});
+      }
+    }
+  };
+
+  const getInitials = useCallback((name) => {
+    if (!name) return "??";
+    return name.split(" ").map((w) => w[0]).join("").substring(0, 2).toUpperCase();
+  }, []);
+
+  const getRandomColors = useCallback((id) => {
+    const colors = [
+      { bg: "#E0E7FF", text: "#4338CA" },
+      { bg: "#FEE2E2", text: "#B91C1C" },
+      { bg: "#DCFCE7", text: "#22C55E" },
+      { bg: "#FEF3C7", text: "#D97706" },
+      { bg: "#EDE9FE", text: "#7C3AED" },
+      { bg: "#FCE7F3", text: "#DB2777" },
+    ];
+    return colors[(id || 0) % colors.length];
+  }, []);
+
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(timer);
@@ -148,9 +192,6 @@ const Taskby = () => {
       const params = new URLSearchParams();
       if (timeFilter) params.append("time_filter", timeFilter);
       if (debouncedSearch) params.append("search", debouncedSearch);
-      if (statusFilter && (!advancedFilters.statuses || advancedFilters.statuses.length === 0)) {
-        params.append("status", statusFilter);
-      }
 
       const stList = Array.isArray(advancedFilters.statuses)
         ? advancedFilters.statuses
@@ -194,7 +235,7 @@ const Taskby = () => {
       }
 
       fetch(`${API_URL}/assigned-tasks?${params.toString()}`, {
-        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        headers: { Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
         skipLoader: true,
       })
         .then((res) => (res.ok ? res.json() : { data: [] }))
@@ -212,11 +253,11 @@ const Taskby = () => {
       setLoading(false);
       setItems([]);
     }
-  }, [debouncedSearch, timeFilter, statusFilter, advancedFilters, sortBy, sortDirection]);
+  }, [timeFilter, debouncedSearch, statusFilter, advancedFilters, sortBy, sortDirection]);
 
   useEffect(() => {
     fetchTasks();
-  }, [fetchTasks]);
+  }, [fetchTasks, page]);
 
   useAutoRefresh(fetchTasks, {
     events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
@@ -226,169 +267,9 @@ const Taskby = () => {
     setOrderedItems(items);
   }, [items]);
 
-  useEffect(() => {
-    const filterParam = searchParams.get("filter");
-    const statusParam = searchParams.get("status");
-    const nextFilter = filterParam === "due_today" ? "due_today" : (statusParam || filterParam || "");
-    setStatusFilter(nextFilter);
-  }, [searchParams]);
-
-  const handleTaskReorder = useCallback((reordered) => {
-    setOrderedItems(reordered);
-    if (reordered.length) {
-      const payload = reordered.map((item, idx) => ({ id: item.id, sort_order: idx }));
-      const token = authToken();
-      fetch(`${API_URL}/tasks/reorder`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ items: payload }),
-        _notifHandled: true,
-      }).catch(() => { });
-    }
-  }, []);
-
-  const selectStatusFilter = (filter) => {
-    if (filter === statusFilter && filter === "") {
-      setShowAll(!showAll);
-    } else {
-      setStatusFilter(filter);
-      setShowAll(false);
-      setPage(1);
-      if (filter) {
-        setSearchParams({ status: filter });
-      } else {
-        setSearchParams({});
-      }
-    }
-  };
-
-  const handleModalClose = (refresh) => {
-    setShowTaskModal(false);
-    if (refresh) fetchTasks();
-  };
-
-  const handleAssignerPause = async (taskId, { reason, reason_detail } = {}) => {
-    setHoldingTaskId(taskId);
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}/assigner-pause`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ reason: reason_detail || reason || "other" }),
-        _notifHandled: true,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setItems((prev) => prev.map((item) => item.id === taskId ? { ...item, assigner_paused: true, ...(data.task || {}) } : item));
-        setOrderedItems((prev) => prev.map((item) => item.id === taskId ? { ...item, assigner_paused: true, ...(data.task || {}) } : item));
-        showSuccessMessage("Task", "paused");
-      } else {
-        notify.error(data.message || data.error || "Failed to pause task.");
-      }
-    } catch {
-      notify.error("Failed to pause task.");
-    }
-    setHoldingTaskId(null);
-  };
-
-  const handleAssignerResume = async (taskId) => {
-    setResumingTaskId(taskId);
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}/assigner-resume`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-        _notifHandled: true,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setItems((prev) => prev.map((item) => item.id === taskId ? { ...item, assigner_paused: false, ...(data.task || {}) } : item));
-        setOrderedItems((prev) => prev.map((item) => item.id === taskId ? { ...item, assigner_paused: false, ...(data.task || {}) } : item));
-        showSuccessMessage("Task", "resumed by assigner");
-      } else {
-        notify.error(data.message || data.error || "Failed to resume task.");
-      }
-    } catch {
-      notify.error("Failed to resume task.");
-    }
-    setResumingTaskId(null);
-  };
-
-  const handleDelete = (e, taskId) => {
-    if (e && e.stopPropagation) {
-      e.stopPropagation();
-      e.preventDefault();
-    }
-    setDeleteTargetId(taskId);
-    setDeleteConfirmOpen(true);
-  };
-
-  const confirmDelete = async () => {
-    const taskId = deleteTargetId;
-    setDeleteConfirmOpen(false);
-    setDeleteTargetId(null);
-    if (!taskId) return;
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}`, {
-        method: "DELETE",
-        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-        _notifHandled: true,
-      });
-      if (res.ok) {
-        setItems((prev) => prev.filter((item) => String(item.id) !== String(taskId)));
-        setOrderedItems((prev) => prev.filter((item) => String(item.id) !== String(taskId)));
-        publish('task:deleted', { id: taskId });
-        publish('data:changed', { type: 'task', action: 'deleted' });
-        toast.success("Task deleted successfully");
-      } else {
-        const data = await res.json().catch(() => ({}));
-        toast.error(data.message || "Failed to delete task.");
-      }
-    } catch {
-      toast.error("Failed to delete task.");
-    }
-  };
-
-  const getInitials = (name) => {
-    if (!name) return "??";
-    return name.split(" ").map((w) => w[0]).join("").substring(0, 2).toUpperCase();
-  };
-
-  const getRandomColors = (id) => {
-    const colors = [
-      { bg: "#E0E7FF", text: "#4338CA" },
-      { bg: "#FEE2E2", text: "#B91C1C" },
-      { bg: "#DCFCE7", text: "#22C55E" },
-      { bg: "#FEF3C7", text: "#D97706" },
-      { bg: "#EDE9FE", text: "#7C3AED" },
-      { bg: "#FCE7F3", text: "#DB2777" },
-    ];
-    return colors[id % colors.length];
-  };
-
-  const formatDate = (dateStr) => {
-    return formatDateTimeInline(dateStr);
-  };
-
-  const formatStatus = (status) => {
-    const map = {
-      pending: "Pending",
-      in_progress: "In Progress",
-      paused: "Paused",
-      submitted: "Submitted",
-      reopened: "Reopened",
-      approved: "Approved",
-      rejected: "Declined",
-      abandon_requested: "Abandon Requested",
-      abandoned: "Abandoned",
-    };
-    return map[status] || status;
-  };
-
   const baseItems = orderedItems.length ? orderedItems : items;
   const pendingStatuses = ["pending", "planned", "Planning", "Planned"];
-  const inProgressStatuses = ["in_progress", "In Progress", "In-progress"];
+  const inProgressStatuses = ["in_progress", "In Progress", "In-progress", "reopened", "Reopened"];
 
   const allCount = useMemo(() => baseItems.length, [baseItems]);
   const dueTodayCount = useMemo(() => baseItems.filter((i) => { const d = i.end_date ? new Date(i.end_date) : null; return d && d.toDateString() === new Date().toDateString(); }).length, [baseItems]);
@@ -438,27 +319,122 @@ const Taskby = () => {
   const paginatedItems = showAllItems ? filteredItems : filteredItems.slice((page - 1) * itemsPerPage, page * itemsPerPage);
 
   const breadcrumbs = [
-    { label: "Tasks", path: rolePath("tasks") },
-    { label: "Assigned By You" },
+    { label: t("Tasks", { defaultValue: "Tasks" }), path: rolePath("tasks") },
+    { label: t("Assigned By You", { defaultValue: "Assigned By You" }) },
   ];
+
+  const handleDelete = (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    setDeleteTargetId(taskId);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    const taskId = deleteTargetId;
+    setDeleteConfirmOpen(false);
+    setDeleteTargetId(null);
+    if (!taskId) return;
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        _notifHandled: true,
+      });
+      if (res.ok) {
+        setItems((prev) => prev.filter((item) => String(item.id) !== String(taskId)));
+        setOrderedItems((prev) => prev.filter((item) => String(item.id) !== String(taskId)));
+        publish('task:deleted', { id: taskId });
+        publish('data:changed', { type: 'task', action: 'deleted' });
+        toast.success(t("Task deleted successfully", { defaultValue: "Task deleted successfully" }));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.message || t("Failed to delete task.", { defaultValue: "Failed to delete task." }));
+      }
+    } catch {
+      toast.error(t("Failed to delete task.", { defaultValue: "Failed to delete task." }));
+    }
+  };
+
+  const handleAssignerPause = async (taskId, data) => {
+    try {
+      setHoldingTaskId(taskId);
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/assigner-pause`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        body: JSON.stringify({ reason: data?.reason_detail || data?.reason || "other" }),
+        _notifHandled: true,
+      });
+      const resData = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === taskId ? { ...item, status: "paused", assigner_paused: true, ...(resData.task || {}) } : item
+          )
+        );
+        publish('task:updated', { id: taskId, status: 'paused' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage(t("Task", { defaultValue: "Task" }), t("paused", { defaultValue: "paused" }));
+      } else {
+        notify.error(resData?.message || t("Failed to pause task.", { defaultValue: "Failed to pause task." }));
+      }
+    } catch {
+      notify.error(t("Failed to pause task.", { defaultValue: "Failed to pause task." }));
+    } finally {
+      setHoldingTaskId(null);
+    }
+  };
+
+  const handleAssignerResume = async (taskId) => {
+    try {
+      setResumingTaskId(taskId);
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/assigner-resume`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === taskId ? { ...item, status: "in_progress", assigner_paused: false, ...(data.task || {}) } : item
+          )
+        );
+        publish('task:updated', { id: taskId, status: 'in_progress' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage(t("Task", { defaultValue: "Task" }), t("resumed", { defaultValue: "resumed" }));
+      } else {
+        notify.error(data?.message || t("Failed to resume task.", { defaultValue: "Failed to resume task." }));
+      }
+    } catch {
+      notify.error(t("Failed to resume task.", { defaultValue: "Failed to resume task." }));
+    } finally {
+      setResumingTaskId(null);
+    }
+  };
 
   return (
     <DashboardLayout>
       <Breadcrumb items={breadcrumbs} />
       <div className="Task">
         <div className="task-text">
-          <h3>Tasks Assigned By You</h3>
-          <p>Manage and track tasks you assigned</p>
+          <h3>{t("Tasks Assigned By You", { defaultValue: "Tasks Assigned By You" })}</h3>
+          <p>{t("Manage and track tasks you assigned", { defaultValue: "Manage and track tasks you assigned" })}</p>
         </div>
 
         <div className="task-btns">
           <div className="all-time">
             <select value={timeFilter} onChange={(e) => { setTimeFilter(e.target.value); setPage(1); }}>
-              <option value="">All Time</option>
-              <option value="today">Today</option>
-              <option value="7">Last 7 Days</option>
-              <option value="30">Last 30 Days</option>
-              <option value="180">Last 6 Months</option>
+              <option value="">{t("All Time", { defaultValue: "All Time" })}</option>
+              <option value="today">{t("Today", { defaultValue: "Today" })}</option>
+              <option value="7">{t("Last 7 Days", { defaultValue: "Last 7 Days" })}</option>
+              <option value="30">{t("Last 30 Days", { defaultValue: "Last 30 Days" })}</option>
+              <option value="180">{t("Last 6 Months", { defaultValue: "Last 6 Months" })}</option>
             </select>
           </div>
 
@@ -467,7 +443,7 @@ const Taskby = () => {
             onClick={() => setShowTaskModal(true)}
             style={{ whiteSpace: "nowrap" }}
           >
-            + Task
+            {t("+ Task", { defaultValue: "+ Task" })}
           </button>
         </div>
       </div>
@@ -478,14 +454,14 @@ const Taskby = () => {
 
       <DraggableStatusBadges
         badges={[
-          { id: "", label: "All", count: allCount, className: "All" },
-          { id: "pending", label: "Pending", count: pendingCount, className: "Pending" },
-          { id: "in_progress", label: "In Progress", count: inProgressCount, className: "InProgress" },
-          { id: "submitted", label: "Submitted", count: submittedCount, className: "Submitted" },
-          { id: "approved", label: "Approved", count: approvedCount, className: "Approved" },
-          { id: "paused", label: "Paused", count: pausedCount, className: "Paused" },
-          { id: "rejected", label: "Declined", count: rejectedCount, className: "Rejected" },
-          { id: "abandoned", label: "Abandoned", count: abandonedCount, className: "Abandoned", dotColor: "#DC2626" },
+          { id: "", label: t("All", { defaultValue: "All" }), count: allCount, className: "All" },
+          { id: "pending", label: t("Pending", { defaultValue: "Pending" }), count: pendingCount, className: "Pending" },
+          { id: "in_progress", label: t("In Progress", { defaultValue: "In Progress" }), count: inProgressCount, className: "InProgress" },
+          { id: "submitted", label: t("Submitted", { defaultValue: "Submitted" }), count: submittedCount, className: "Submitted" },
+          { id: "approved", label: t("Approved", { defaultValue: "Approved" }), count: approvedCount, className: "Approved" },
+          { id: "paused", label: t("Paused", { defaultValue: "Paused" }), count: pausedCount, className: "Paused" },
+          { id: "rejected", label: t("Declined", { defaultValue: "Declined" }), count: rejectedCount, className: "Rejected" },
+          { id: "abandoned", label: t("Abandoned", { defaultValue: "Abandoned" }), count: abandonedCount, className: "Abandoned", dotColor: "#DC2626" },
         ]}
         activeStatus={statusFilter}
         onSelectStatus={selectStatusFilter}
@@ -508,32 +484,30 @@ const Taskby = () => {
       <div className="container">
         {/* Header Table */}
         <div className="table-header1">
-          <div style={{ fontSize: 12, fontWeight: 600 }}>ID</div>
+          <div style={{ fontSize: 12, fontWeight: 600 }}>{t("ID", { defaultValue: "ID" })}</div>
           <div style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("assigned_to")}>
-            Assigned To
+            {t("Assigned To", { defaultValue: "Assigned To" })}
           </div>
           <div className="task-name-column" style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("title")}>
-            Task Name
+            {t("Task Name", { defaultValue: "Task Name" })}
           </div>
           <div className="status-column" style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("status")}>
-            Status
+            {t("Status", { defaultValue: "Status" })}
           </div>
-          <div>Progress</div>
+          <div>{t("Progress", { defaultValue: "Progress" })}</div>
           <div className="priority-column" style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("priority")}>
-            Priority
+            {t("Priority", { defaultValue: "Priority" })}
           </div>
           <div className="date-column" style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("due_date")}>
-            Start & Due Date
+            {t("Start & Due Date", { defaultValue: "Start & Due Date" })}
           </div>
-          <div>Action</div>
+          <div>{t("Action", { defaultValue: "Action" })}</div>
         </div>
 
-
-
         {loading ? (
-          <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
+          <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>{t("Loading...", { defaultValue: "Loading..." })}</div>
         ) : filteredItems.length === 0 ? (
-          <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No items found</div>
+          <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>{t("No items found", { defaultValue: "No items found" })}</div>
         ) : (
           <div className="sortable-table-container">
             <SortableTableWrapper
@@ -563,15 +537,15 @@ const Taskby = () => {
                         </div>
                         <div style={{ minWidth: 0 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                            <div className="user-name">{primaryAssignee?.name || "Unassigned"}</div>
+                            <div className="user-name">{primaryAssignee?.name || t("Unassigned", { defaultValue: "Unassigned" })}</div>
                             {item.is_transferee && (
-                              <span style={{ fontSize: "10px", fontWeight: 600, color: "#6B7280", background: "#F3F4F6", padding: "1px 6px", borderRadius: "4px", border: "1px solid #D1D5DB" }}>Transferee</span>
+                              <span style={{ fontSize: "10px", fontWeight: 600, color: "#6B7280", background: "#F3F4F6", padding: "1px 6px", borderRadius: "4px", border: "1px solid #D1D5DB" }}>{t("Transferee", { defaultValue: "Transferee" })}</span>
                             )}
                           </div>
-                          <div className="user-role">{primaryAssignee?.role || ""}</div>
+                          <div className="user-role">{primaryAssignee?.role ? t(primaryAssignee.role, { defaultValue: primaryAssignee.role }) : ""}</div>
                           {isDirectToOa && item.delegator_name && (
                             <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "2px" }}>
-                              via {item.delegator_name}
+                              {t("via {{name}}", { name: item.delegator_name, defaultValue: `via ${item.delegator_name}` })}
                             </div>
                           )}
                         </div>
@@ -607,7 +581,7 @@ const Taskby = () => {
                             <div className="progress-bar-fill" style={{ width: `${prog}%` }}></div>
                           </div>
                           <div style={{ fontSize: "12px", color: "#6b7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                            {item.approved_deliverables || 0}/{item.total_deliverables || 0} subtasks
+                            {t("{{approved}}/{{total}} subtasks", { approved: item.approved_deliverables || 0, total: item.total_deliverables || 0, defaultValue: `${item.approved_deliverables || 0}/${item.total_deliverables || 0} subtasks` })}
                           </div>
                         </div>
                       );
@@ -616,7 +590,7 @@ const Taskby = () => {
                     <div className="col-priority">
                       <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
                         <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
-                        {item.priority}
+                        {t(item.priority || "Medium", { defaultValue: item.priority || "Medium" })}
                       </span>
                     </div>
 
@@ -629,19 +603,19 @@ const Taskby = () => {
                     <div className="col-action" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                       <button
                         className="action-icon-btn action-view action-trigger-lg"
-                        title="View Task"
+                        title={t("View Task", { defaultValue: "View Task" })}
                         onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } })}
                       >
                         <IoEyeOutline size={18} />
                       </button>
                       <ActionPopover
                         trigger={
-                          <button className="action-icon-btn action-manage action-trigger-lg" title="Status Actions" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "4px", borderRadius: "6px", background: "var(--bg-hover, #f3f4f6)", color: "var(--text-primary, #374151)", border: "1px solid var(--border-color, #e5e7eb)", cursor: "pointer" }}>
+                          <button className="action-icon-btn action-manage action-trigger-lg" title={t("Status Actions", { defaultValue: "Status Actions" })} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "4px", borderRadius: "6px", background: "var(--bg-hover, #f3f4f6)", color: "var(--text-primary, #374151)", border: "1px solid var(--border-color, #e5e7eb)", cursor: "pointer" }}>
                             <Sliders size={18} />
                           </button>
                         }
                       >
-                        <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
+                        <button className="action-icon-btn action-note" title={t("Add Note", { defaultValue: "Add Note" })} onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
                         {(() => {
                           const isRecurrence = item.task_type === "recurring" || !!item.recurrence_settings;
                           const recEnd = item.recurrence_end_date || item.end_date;
@@ -654,7 +628,7 @@ const Taskby = () => {
                               {item.status?.toLowerCase() !== "approved" && (
                                 <button
                                   className="action-icon-btn action-edit"
-                                  title="Edit"
+                                  title={t("Edit", { defaultValue: "Edit" })}
                                   onClick={async () => {
                                     try {
                                       const token = authToken();
@@ -677,7 +651,7 @@ const Taskby = () => {
                               )}
                               <button
                                 className="action-icon-btn action-delete"
-                                title="Delete"
+                                title={t("Delete", { defaultValue: "Delete" })}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   e.preventDefault();
@@ -702,7 +676,7 @@ const Taskby = () => {
                               {canUserApprove && (item.status === "submitted" || item.status === "reopened") && (
                                 <button
                                   className="action-icon-btn"
-                                  title="Approve Task"
+                                  title={t("Approve Task", { defaultValue: "Approve Task" })}
                                   style={{ color: "#16A34A" }}
                                   onClick={(e) => { e.stopPropagation(); navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } }); }}
                                 >
@@ -712,7 +686,7 @@ const Taskby = () => {
                               {canUserApprove && (item.status === "submitted" || item.status === "reopened") && (
                                 <button
                                   className="action-icon-btn"
-                                  title="Decline Task"
+                                  title={t("Decline Task", { defaultValue: "Decline Task" })}
                                   style={{ color: "#DC2626" }}
                                   onClick={(e) => { e.stopPropagation(); navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } }); }}
                                 >
@@ -722,7 +696,7 @@ const Taskby = () => {
                               {canUserApprove && (item.status === "approved" || item.status === "submitted" || item.status === "reopened" || item.status === "abandoned") && (
                                 <button
                                   className="action-icon-btn"
-                                  title="Reopen Task"
+                                  title={t("Reopen Task", { defaultValue: "Reopen Task" })}
                                   style={{ color: "#2563EB" }}
                                   onClick={(e) => { e.stopPropagation(); navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } }); }}
                                 >
@@ -732,7 +706,7 @@ const Taskby = () => {
                               {item.status !== "abandoned" && (
                                 <button
                                   className="action-icon-btn"
-                                  title={isUserAdminOrManager ? "Abandon Task" : "Request Abandon"}
+                                  title={isUserAdminOrManager ? t("Abandon Task", { defaultValue: "Abandon Task" }) : t("Request Abandon", { defaultValue: "Request Abandon" })}
                                   style={{ color: "#F59E0B" }}
                                   onClick={(e) => { e.stopPropagation(); navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } }); }}
                                 >
@@ -745,7 +719,7 @@ const Taskby = () => {
                         {["pending", "in_progress", "reopened", "paused", "submitted"].includes(item.status?.toLowerCase()) && !item.assigner_paused && (
                           <button
                             className="action-icon-btn"
-                            title="Pause"
+                            title={t("Pause", { defaultValue: "Pause" })}
                             disabled={holdingTaskId === item.id}
                             onClick={(e) => { e.stopPropagation(); e.preventDefault(); setPauseModalTaskId(item.id); setPauseModalOpen(true); }}
                             style={{ color: "#7C3AED", cursor: holdingTaskId === item.id ? "not-allowed" : "pointer" }}
@@ -756,7 +730,7 @@ const Taskby = () => {
                         {item.assigner_paused && (
                           <button
                             className="action-icon-btn"
-                            title="Resume"
+                            title={t("Resume", { defaultValue: "Resume" })}
                             disabled={resumingTaskId === item.id}
                             onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleAssignerResume(item.id); }}
                             style={{ color: "#059669", cursor: resumingTaskId === item.id ? "not-allowed" : "pointer" }}
@@ -810,10 +784,10 @@ const Taskby = () => {
         isOpen={deleteConfirmOpen}
         onClose={() => { setDeleteConfirmOpen(false); setDeleteTargetId(null); }}
         onConfirm={confirmDelete}
-        title="Confirm Deletion"
-        message="Are you sure you want to delete this task? This action cannot be undone."
-        confirmText="Delete"
-        cancelText="Cancel"
+        title={t("Confirm Deletion", { defaultValue: "Confirm Deletion" })}
+        message={t("Are you sure you want to delete this task? This action cannot be undone.", { defaultValue: "Are you sure you want to delete this task? This action cannot be undone." })}
+        confirmText={t("Delete", { defaultValue: "Delete" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
         danger
       />
 
@@ -824,7 +798,7 @@ const Taskby = () => {
         onSuccess={fetchTasks}
       />
 
-      <DynamicWidgetSection storageKey="pms_taskby_widgets" sectionTitle="Subtasks Widgets" />
+      <DynamicWidgetSection storageKey="pms_taskby_widgets" sectionTitle={t("Subtasks Widgets", { defaultValue: "Subtasks Widgets" })} />
     </DashboardLayout>
   );
 };

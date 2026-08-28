@@ -1,14 +1,17 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import { authToken } from "../utils/auth";
 import API_URL from "../config/api";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { getUserTimezone, formatLocalDate, formatLocalTime, formatReadableDateTime } from "../utils/timezoneUtils";
 import "./AuditLogExportModal.css";
 
 function AuditLogExportModal({ onClose }) {
+  const { t } = useTranslation();
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
   useEscapeKey(true, handleClose);
   const [format, setFormat] = useState("pdf");
@@ -23,20 +26,20 @@ function AuditLogExportModal({ onClose }) {
     const token = authToken();
     if (!token) return;
     try {
-      const res = await fetch(`${API_URL}/audit-logs?per_page=10000`, {
+      const res = await fetch(`${API_URL}/audit-logs/export-data`, {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-        skipLoader: true,
       });
-      if (!res.ok) throw new Error("Failed to fetch audit logs");
+      if (!res.ok) throw new Error("Failed to fetch export data");
       const data = await res.json();
-      const logs = data.data || [];
+      const logs = data.logs || [];
+      const userTz = data.organization_timezone || getUserTimezone() || "UTC";
 
       const doc = new jsPDF({ orientation: "landscape" });
       const PW = doc.internal.pageSize.getWidth();
       const PH = doc.internal.pageSize.getHeight();
       const M = 14;
-      const genDate = new Date().toLocaleDateString();
-      const genTime = new Date().toLocaleTimeString();
+      const genDate = formatLocalDate(new Date().toISOString(), userTz);
+      const genTime = formatLocalTime(new Date().toISOString(), userTz);
 
       // ── HEADER ──
       doc.setFillColor(15, 23, 42); doc.rect(0, 0, PW, 14, "F");
@@ -51,9 +54,9 @@ function AuditLogExportModal({ onClose }) {
       doc.text("APPLICATION AUDIT LOGS REPORT", PW / 2, 8, { align: "center" });
 
       // ── TABLE ──
-      const headers = ["Date & Time", "User", "Module", "Action", "Description", "Status", "IP Address", "Browser", "Device"];
+      const headers = [`Date & Time (${userTz})`, "User", "Module", "Action", "Description", "Status", "IP Address", "Browser", "Device"];
       const rows = logs.map((l) => [
-        l.created_at ? new Date(l.created_at).toLocaleString() : "-",
+        l.created_at ? formatReadableDateTime(l.created_at, userTz) : "-",
         l.user?.name || "System",
         l.module || "-",
         l.action || "-",
@@ -98,8 +101,8 @@ function AuditLogExportModal({ onClose }) {
         doc.setFontSize(4.5); doc.setFont("helvetica", "normal"); doc.setTextColor(156, 163, 175);
         doc.text("PMS Portal", M + 8.5, fY + 7.5);
         doc.text(`Generated Date:   ${genDate}`, M + 38, fY + 4);
-        doc.text(`Generated Time:   ${genTime}`, M + 38, fY + 7.5);
-        doc.text("Report Type:  Application Audit Logs", PW - M - 42, fY + 4);
+        doc.text(`Generated Time:   ${genTime} (${userTz})`, M + 38, fY + 7.5);
+        doc.text(`Timezone: ${userTz} | Report Type: Application Audit Logs`, PW - M - 60, fY + 4);
         doc.text(`Page ${i} of ${totalPages}`, PW - M, fY + 7.5, { align: "right" });
       }
 
@@ -113,13 +116,14 @@ function AuditLogExportModal({ onClose }) {
     const token = authToken();
     if (!token) return;
     try {
+      const userTz = getUserTimezone();
       const res = await fetch(`${API_URL}/audit-logs/export`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ format: "xlsx" }),
+        body: JSON.stringify({ format: "xlsx", timezone: userTz }),
       });
       if (!res.ok) throw new Error("Export failed");
       const resBlob = await res.blob();
@@ -166,8 +170,8 @@ function AuditLogExportModal({ onClose }) {
                 </svg>
               </div>
               <div>
-                <h2 className="ael-title">Export Audit Logs</h2>
-                <p className="ael-subtitle">Choose a format to export the audit log data</p>
+                <h2 className="ael-title">{t("Export Audit Logs", { defaultValue: "Export Audit Logs" })}</h2>
+                <p className="ael-subtitle">{t("Choose a format to export the audit log data", { defaultValue: "Choose a format to export the audit log data" })}</p>
               </div>
             </div>
             <button className="ael-close-btn" onClick={handleClose}>
@@ -191,7 +195,7 @@ function AuditLogExportModal({ onClose }) {
                 <span className="ael-radio-mark" />
                 <div className="ael-radio-content">
                   <span className="ael-radio-title">PDF</span>
-                  <span className="ael-radio-desc">Portable Document Format - best for viewing and printing</span>
+                  <span className="ael-radio-desc">{t("Portable Document Format - best for viewing and printing", { defaultValue: "Portable Document Format - best for viewing and printing" })}</span>
                 </div>
               </label>
               <label className="ael-radio-label">
@@ -205,16 +209,16 @@ function AuditLogExportModal({ onClose }) {
                 <span className="ael-radio-mark" />
                 <div className="ael-radio-content">
                   <span className="ael-radio-title">Excel</span>
-                  <span className="ael-radio-desc">Spreadsheet format - best for data analysis and filtering</span>
+                  <span className="ael-radio-desc">{t("Spreadsheet format - best for data analysis and filtering", { defaultValue: "Spreadsheet format - best for data analysis and filtering" })}</span>
                 </div>
               </label>
             </div>
           </div>
 
           <div className="ael-footer">
-            <button className="ael-cancel-btn" onClick={handleClose} disabled={exporting}>Cancel</button>
+            <button className="ael-cancel-btn" onClick={handleClose} disabled={exporting}>{t("Cancel")}</button>
             <button className="ael-export-btn" onClick={handleExport} disabled={exporting}>
-              {exporting ? "Exporting..." : "Export"}
+              {exporting ? t("Exporting...", { defaultValue: "Exporting..." }) : t("Export", { defaultValue: "Export" })}
             </button>
           </div>
         </div>

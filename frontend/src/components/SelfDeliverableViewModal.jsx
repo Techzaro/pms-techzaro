@@ -7,6 +7,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { FileText } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
@@ -33,7 +34,7 @@ function fileUrl(path) {
  * @param {Object} deliverable - The deliverable with submissions and workflow events.
  * @returns {Array} Sorted array of timeline items.
  */
-function buildHistoryTimeline(deliverable) {
+function buildHistoryTimeline(deliverable, t) {
   if (!deliverable) return [];
 
   const items = [];
@@ -46,9 +47,9 @@ function buildHistoryTimeline(deliverable) {
     items.push({
       id: `submission-${sub.id}`,
       type: index === 0 ? "submission" : "resubmission",
-      label: index === 0 ? "Original Submission" : "Resubmission",
+      label: index === 0 ? t("Original Submission", { defaultValue: "Original Submission" }) : t("Resubmission", { defaultValue: "Resubmission" }),
       date: sub.created_at,
-      user: sub.submitted_by?.name || sub.submittedBy?.name || "You",
+      user: sub.submitted_by?.name || sub.submittedBy?.name || t("You", { defaultValue: "You" }),
       comment: sub.comment,
       file_path: sub.file_path,
       file_name: sub.file_name,
@@ -60,9 +61,9 @@ function buildHistoryTimeline(deliverable) {
     items.push({
       id: `event-${event.id}`,
       type: event.event_type,
-      label: event.event_type === "rework" ? "Rework Required" : "Approved",
+      label: event.event_type === "rework" ? t("Rework Required", { defaultValue: "Rework Required" }) : t("Approved", { defaultValue: "Approved" }),
       date: event.created_at,
-      user: event.user?.name || "You",
+      user: event.user?.name || t("You", { defaultValue: "You" }),
       comment: event.comment,
       instructions: event.instructions,
       new_deadline: event.new_deadline,
@@ -84,6 +85,7 @@ function buildHistoryTimeline(deliverable) {
  * @param {Function} [onResubmit] - Callback to open the resubmit form.
  */
 function SelfDeliverableViewModal({ isOpen, onClose, subtask: initialSubtask, onActionSuccess, onResubmit }) {
+  const { t } = useTranslation();
   useEscapeKey(isOpen, onClose);
 
   const [subtask, setSubtask] = useState(null);
@@ -144,14 +146,16 @@ function SelfDeliverableViewModal({ isOpen, onClose, subtask: initialSubtask, on
     onClose();
   };
 
+  const deliverable = subtask || initialSubtask;
+
   /** Builds the memoized history timeline from subtask data */
-  const historyTimeline = useMemo(() => buildHistoryTimeline(subtask), [subtask]);
+  const historyTimeline = useMemo(() => buildHistoryTimeline(deliverable, t), [deliverable, t]);
 
   if (!isOpen || !initialSubtask) return null;
 
   const status = subtask?.status || initialSubtask.status || "pending";
-  const statusLabel = status === "pending" ? "Draft" : status === "rework_required" ? "Rework Required" : status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, " ");
-  const latestSubmission = subtask?.latest_submission || subtask?.latestSubmission;
+  const statusLabel = status === "pending" ? t("Draft", { defaultValue: "Draft" }) : status === "rework_required" ? t("Rework Required", { defaultValue: "Rework Required" }) : t(status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, " "));
+  const latestSubmission = deliverable?.latest_submission || deliverable?.latestSubmission;
   const isSubmitted = status === "submitted";
   const isReworkRequired = status === "rework_required";
   const isApproved = status === "approved";
@@ -172,34 +176,34 @@ function SelfDeliverableViewModal({ isOpen, onClose, subtask: initialSubtask, on
       <div className="sdvm-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="sdvm-header">
           <div className="sdvm-header-top">
-            <h2 className="sdvm-title">{subtask?.title || initialSubtask.title}</h2>
+            <h2 className="sdvm-title">{deliverable?.title}</h2>
             <span className={`sdvm-status-badge sdvm-status-${status}`}>{statusLabel}</span>
           </div>
-          {(subtask?.due_date || initialSubtask.due_date) && (
-            <div className="sdvm-due">Due Date & Time {formatDateTime(subtask?.due_date || initialSubtask.due_date)}</div>
+          {deliverable?.due_date && (
+            <div className="sdvm-due">{t("Due Date & Time", { defaultValue: "Due Date & Time" })} {formatDateTime(deliverable.due_date)}</div>
           )}
         </div>
 
         <div className="sdvm-body">
           {loading ? (
-            <div className="sdvm-loading">Loading details...</div>
+            <div className="sdvm-loading">{t("Loading details...", { defaultValue: "Loading details..." })}</div>
           ) : (
             <>
               <div className="sdvm-section">
-                <h3 className="sdvm-section-title">Subtask Details</h3>
+                <h3 className="sdvm-section-title">{t("Subtask Details", { defaultValue: "Subtask Details" })}</h3>
                 <div className="sdvm-details-grid">
                   <div className="sdvm-detail-item">
-                    <span className="sdvm-detail-label">Task / Project</span>
+                    <span className="sdvm-detail-label">{t("Task / Project", { defaultValue: "Task / Project" })}</span>
                     <span className="sdvm-detail-value">{deliverable?.task?.title || deliverable?.project?.title || "\u2014"}</span>
                   </div>
                   <div className="sdvm-detail-item">
-                    <span className="sdvm-detail-label">Priority</span>
-                    <span className="sdvm-detail-value">{deliverable?.priority || "Medium"}</span>
+                    <span className="sdvm-detail-label">{t("Priority", { defaultValue: "Priority" })}</span>
+                    <span className="sdvm-detail-value">{deliverable?.priority ? t(deliverable.priority) : t("Medium")}</span>
                   </div>
                 </div>
                 {deliverable?.description && (
                   <div className="sdvm-description">
-                    <span className="sdvm-detail-label">Description</span>
+                    <span className="sdvm-detail-label">{t("Description", { defaultValue: "Description" })}</span>
                     <div className="rte-display sdvm-description-text" dangerouslySetInnerHTML={{ __html: deliverable.description }} />
                   </div>
                 )}
@@ -207,28 +211,28 @@ function SelfDeliverableViewModal({ isOpen, onClose, subtask: initialSubtask, on
 
               {isReworkRequired && (
                 <div className="sdvm-section sdvm-rework-section">
-                  <h3 className="sdvm-section-title">Rework Instructions</h3>
+                  <h3 className="sdvm-section-title">{t("Rework Instructions", { defaultValue: "Rework Instructions" })}</h3>
                   {deliverable.rework_comment && (
                     <div className="sdvm-detail-item">
-                      <span className="sdvm-detail-label">Rework Notes</span>
+                      <span className="sdvm-detail-label">{t("Rework Notes", { defaultValue: "Rework Notes" })}</span>
                       <p className="sdvm-description-text">{deliverable.rework_comment}</p>
                     </div>
                   )}
                   {deliverable.rework_instructions && (
                     <div className="sdvm-detail-item" style={{ marginTop: "12px" }}>
-                      <span className="sdvm-detail-label">Improvement Instructions</span>
+                      <span className="sdvm-detail-label">{t("Improvement Instructions", { defaultValue: "Improvement Instructions" })}</span>
                       <p className="sdvm-description-text">{deliverable.rework_instructions}</p>
                     </div>
                   )}
                   {deliverable.rework_new_deadline && (
                     <div className="sdvm-detail-item" style={{ marginTop: "12px" }}>
-                      <span className="sdvm-detail-label">New Target Date</span>
+                      <span className="sdvm-detail-label">{t("New Target Date", { defaultValue: "New Target Date" })}</span>
                       <span className="sdvm-detail-value">{formatDateTime(deliverable.rework_new_deadline)}</span>
                     </div>
                   )}
                   {deliverable.rework_file_name && (
                     <div className="sdvm-detail-item" style={{ marginTop: "12px" }}>
-                      <span className="sdvm-detail-label">Attached File</span>
+                      <span className="sdvm-detail-label">{t("Attached File", { defaultValue: "Attached File" })}</span>
                       <a
                         className="sdvm-file-link"
                         href={fileUrl(deliverable.rework_file_path)}
@@ -245,27 +249,27 @@ function SelfDeliverableViewModal({ isOpen, onClose, subtask: initialSubtask, on
 
               {latestSubmission && (
                 <div className="sdvm-section">
-                  <h3 className="sdvm-section-title">Submission Details</h3>
+                  <h3 className="sdvm-section-title">{t("Submission Details", { defaultValue: "Submission Details" })}</h3>
                   <div className="sdvm-submission">
                     <div className="sdvm-submission-grid">
                       <div className="sdvm-detail-item">
-                        <span className="sdvm-detail-label">Submitted By</span>
-                        <span className="sdvm-detail-value">{latestSubmission.submitted_by?.name || latestSubmission.submittedBy?.name || "You"}</span>
+                        <span className="sdvm-detail-label">{t("Submitted By", { defaultValue: "Submitted By" })}</span>
+                        <span className="sdvm-detail-value">{latestSubmission.submitted_by?.name || latestSubmission.submittedBy?.name || t("You", { defaultValue: "You" })}</span>
                       </div>
                       <div className="sdvm-detail-item">
-                        <span className="sdvm-detail-label">Submission Date</span>
+                        <span className="sdvm-detail-label">{t("Submission Date", { defaultValue: "Submission Date" })}</span>
                         <span className="sdvm-detail-value">{formatDateTime(latestSubmission.created_at || deliverable?.submitted_at)}</span>
                       </div>
                     </div>
                     {latestSubmission.comment && (
                       <div className="sdvm-detail-item" style={{ marginTop: "12px" }}>
-                        <span className="sdvm-detail-label">Notes</span>
+                        <span className="sdvm-detail-label">{t("Notes", { defaultValue: "Notes" })}</span>
                         <p className="sdvm-description-text">{latestSubmission.comment}</p>
                       </div>
                     )}
                     {latestSubmission.file_name && (
                       <div className="sdvm-detail-item" style={{ marginTop: "12px" }}>
-                        <span className="sdvm-detail-label">Attached File</span>
+                        <span className="sdvm-detail-label">{t("Attached File", { defaultValue: "Attached File" })}</span>
                         <a
                           className="sdvm-file-link"
                           href={fileUrl(latestSubmission.file_path)}
@@ -279,7 +283,7 @@ function SelfDeliverableViewModal({ isOpen, onClose, subtask: initialSubtask, on
                     )}
                     {latestSubmission.attachments?.length > 0 && (
                       <div className="sdvm-detail-item" style={{ marginTop: "12px" }}>
-                        <span className="sdvm-detail-label">Additional Attachments</span>
+                        <span className="sdvm-detail-label">{t("Additional Attachments", { defaultValue: "Additional Attachments" })}</span>
                         {latestSubmission.attachments.map((att) => (
                           att.attachment_type === "link" ? (
                             <a key={att.id} className="sdvm-file-link" href={att.url} target="_blank" rel="noopener noreferrer" style={{ display: "block", marginTop: "4px" }}>
@@ -289,7 +293,7 @@ function SelfDeliverableViewModal({ isOpen, onClose, subtask: initialSubtask, on
                           ) : (
                             <a key={att.id} className="sdvm-file-link" href={attachmentUrl(att.id, "download")} target="_blank" rel="noopener noreferrer" style={{ display: "block", marginTop: "4px" }}>
                               <FileText size={14} />
-                              <span>{att.original_name || att.file_name || "Download File"}</span>
+                              <span>{att.original_name || att.file_name || t("Download File", { defaultValue: "Download File" })}</span>
                             </a>
                           )
                         ))}
@@ -301,9 +305,9 @@ function SelfDeliverableViewModal({ isOpen, onClose, subtask: initialSubtask, on
 
               {isApproved && deliverable?.approved_at && (
                 <div className="sdvm-section sdvm-approved-section">
-                  <h3 className="sdvm-section-title">Approval</h3>
+                  <h3 className="sdvm-section-title">{t("Approval", { defaultValue: "Approval" })}</h3>
                   <div className="sdvm-detail-item">
-                    <span className="sdvm-detail-label">Approved On</span>
+                    <span className="sdvm-detail-label">{t("Approved On", { defaultValue: "Approved On" })}</span>
                     <span className="sdvm-detail-value">{formatDateTime(deliverable.approved_at)}</span>
                   </div>
                 </div>
@@ -311,7 +315,7 @@ function SelfDeliverableViewModal({ isOpen, onClose, subtask: initialSubtask, on
 
               {historyTimeline.length > 0 && (
                 <div className="sdvm-section">
-                  <h3 className="sdvm-section-title">Timeline History</h3>
+                  <h3 className="sdvm-section-title">{t("Timeline History", { defaultValue: "Timeline History" })}</h3>
                   <div className="sdvm-history">
                     {historyTimeline.map((item) => (
                       <div key={item.id} className={`sdvm-history-item sdvm-history-${item.type}`}>
@@ -319,13 +323,13 @@ function SelfDeliverableViewModal({ isOpen, onClose, subtask: initialSubtask, on
                           <span className="sdvm-history-label">{item.label}</span>
                           <span className="sdvm-history-date">{formatDateTime(item.date)}</span>
                         </div>
-                        <div className="sdvm-history-user">By {item.user}</div>
+                        <div className="sdvm-history-user">{t("By {{name}}", { defaultValue: `By ${item.user}`, name: item.user })}</div>
                         {item.comment && <p className="sdvm-history-text">{item.comment}</p>}
                         {item.instructions && (
-                          <p className="sdvm-history-text"><strong>Instructions:</strong> {item.instructions}</p>
+                          <p className="sdvm-history-text"><strong>{t("Instructions", { defaultValue: "Instructions" })}:</strong> {item.instructions}</p>
                         )}
                         {item.new_deadline && (
-                            <p className="sdvm-history-text"><strong>Target Date:</strong> {formatDateTime(item.new_deadline)}</p>
+                            <p className="sdvm-history-text"><strong>{t("Target Date", { defaultValue: "Target Date" })}:</strong> {formatDateTime(item.new_deadline)}</p>
                         )}
                         {item.file_name && (
                           <a className="sdvm-file-link" href={fileUrl(item.file_path)} target="_blank" rel="noopener noreferrer">
@@ -344,7 +348,7 @@ function SelfDeliverableViewModal({ isOpen, onClose, subtask: initialSubtask, on
                               ) : (
                                 <a key={att.id} className="sdvm-file-link" href={attachmentUrl(att.id, "download")} target="_blank" rel="noopener noreferrer">
                                   <FileText size={14} />
-                                  <span>{att.original_name || att.file_name || "Download File"}</span>
+                                  <span>{att.original_name || att.file_name || t("Download File", { defaultValue: "Download File" })}</span>
                                 </a>
                               )
                             ))}
@@ -358,7 +362,7 @@ function SelfDeliverableViewModal({ isOpen, onClose, subtask: initialSubtask, on
 
               {!latestSubmission && !isReworkRequired && status === "pending" && (
                 <div className="sdvm-empty">
-                  <p>No submission yet. Submit your subtask to begin review.</p>
+                  <p>{t("No submission yet. Submit your subtask to begin review.", { defaultValue: "No submission yet. Submit your subtask to begin review." })}</p>
                 </div>
               )}
             </>
@@ -366,19 +370,19 @@ function SelfDeliverableViewModal({ isOpen, onClose, subtask: initialSubtask, on
         </div>
 
         <div className="sdvm-footer">
-          <button className="sdvm-close-btn" onClick={onClose}>Close</button>
+          <button className="sdvm-close-btn" onClick={onClose}>{t("Close", { defaultValue: "Close" })}</button>
           {isReworkRequired && onResubmit && (
-            <button className="sdvm-resubmit-btn" onClick={() => { onResubmit(deliverable || initialDeliverable); onClose(); }}>
-              Resubmit Subtask
+            <button className="sdvm-resubmit-btn" onClick={() => { onResubmit(deliverable); onClose(); }}>
+              {t("Resubmit Subtask", { defaultValue: "Resubmit Subtask" })}
             </button>
           )}
           {isSubmitted && (
             <div className="sdvm-action-btns">
               <button className="sdvm-action-btn sdvm-approve-btn" disabled={acting} onClick={() => setConfirmApprove(true)}>
-                Mark as Approved
+                {t("Mark as Approved", { defaultValue: "Mark as Approved" })}
               </button>
               <button className="sdvm-action-btn sdvm-rework-btn" disabled={acting} onClick={() => setReworkDialog(true)}>
-                Rework Required
+                {t("Rework Required", { defaultValue: "Rework Required" })}
               </button>
             </div>
           )}
@@ -392,16 +396,16 @@ function SelfDeliverableViewModal({ isOpen, onClose, subtask: initialSubtask, on
           setConfirmApprove(false);
           handleSelfApprove();
         }}
-        title="Mark as Approved"
-        message="Are you sure you want to mark this subtask as completed and approved?"
-        confirmText="Mark as Approved"
+        title={t("Mark as Approved", { defaultValue: "Mark as Approved" })}
+        message={t("Are you sure you want to mark this subtask as completed and approved?", { defaultValue: "Are you sure you want to mark this subtask as completed and approved?" })}
+        confirmText={t("Mark as Approved", { defaultValue: "Mark as Approved" })}
         confirmColor="#16A34A"
       />
 
       <SelfReworkDialog
         isOpen={reworkDialog}
         onClose={() => setReworkDialog(false)}
-        deliverable={deliverable || initialDeliverable}
+        deliverable={deliverable}
         onReworkSuccess={handleReworkSuccess}
       />
     </div>,

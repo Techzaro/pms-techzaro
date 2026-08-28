@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Building2, Send, Plus, ArrowLeft, Loader2, ExternalLink } from 'lucide-react';
 import { api } from '../api/superAdminApi';
 import './SuperAdminChatWidget.css';
 
 export default function SuperAdminChatWidget() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [conversations, setConversations] = useState([]);
@@ -123,7 +125,7 @@ export default function SuperAdminChatWidget() {
       <button
         className={`sacw-bubble ${isOpen ? 'sacw-bubble--open' : ''}`}
         onClick={() => setIsOpen(!isOpen)}
-        aria-label="Toggle chat"
+        aria-label={t("Toggle chat", { defaultValue: "Toggle chat" })}
       >
         {isOpen ? (
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -143,17 +145,17 @@ export default function SuperAdminChatWidget() {
             {/* Sidebar: Conversations */}
             <div className="sacw-sidebar">
               <div className="sacw-sidebar-header">
-                <h3>Org Chat</h3>
+                <h3>{t("Org Chat", { defaultValue: "Org Chat" })}</h3>
                 <div className="sacw-header-actions">
-                  <button className="sacw-expand-btn" onClick={() => navigate('/super-admin/chat')} title="Open full page">
+                  <button className="sacw-expand-btn" onClick={() => navigate('/super-admin/chat')} title={t("Open full page", { defaultValue: "Open full page" })}>
                     <ExternalLink size={14} />
                   </button>
-                  <button className="sacw-new-btn" onClick={openNewChat}>+ New</button>
+                  <button className="sacw-new-btn" onClick={openNewChat}>+ {t("New", { defaultValue: "New" })}</button>
                 </div>
               </div>
               <div className="sacw-conversation-list">
                 {conversations.length === 0 && (
-                  <p className="sacw-empty-text">No conversations yet</p>
+                  <p className="sacw-empty-text">{t("No conversations yet", { defaultValue: "No conversations yet" })}</p>
                 )}
                 {conversations.map((conv) => (
                   <div
@@ -163,11 +165,11 @@ export default function SuperAdminChatWidget() {
                   >
                     <div className="sacw-conv-info">
                       <div className="sacw-conv-subject">
-                        {conv.subject || conv.organization?.name || 'Untitled'}
+                        {conv.subject || conv.organization?.name || t('Untitled', { defaultValue: 'Untitled' })}
                       </div>
                       <div className="sacw-conv-org">
                         <Building2 size={11} style={{ display: 'inline', marginRight: 3 }} />
-                        {conv.organization?.name || 'Unknown Org'}
+                        {conv.organization?.name || t('Unknown Org', { defaultValue: 'Unknown Org' })}
                       </div>
                       {conv.latest_message && (
                         <div className="sacw-conv-preview">
@@ -189,13 +191,13 @@ export default function SuperAdminChatWidget() {
                     <button onClick={() => setShowNewChat(false)} className="sacw-back-btn">
                       <ArrowLeft size={18} />
                     </button>
-                    <h4>New Conversation</h4>
+                    <h4>{t("New Conversation", { defaultValue: "New Conversation" })}</h4>
                   </div>
                   <div className="sacw-form-group">
-                    <label>Organization *</label>
+                    <label>{t("Organization", { defaultValue: "Organization" })} *</label>
                     <input
                       type="text"
-                      placeholder="Search organizations..."
+                      placeholder={t("Search organizations...", { defaultValue: "Search organizations..." })}
                       value={orgSearch}
                       onChange={(e) => setOrgSearch(e.target.value)}
                     />
@@ -214,33 +216,33 @@ export default function SuperAdminChatWidget() {
                     </div>
                   </div>
                   <div className="sacw-form-group">
-                    <label>Subject</label>
+                    <label>{t("Subject", { defaultValue: "Subject" })}</label>
                     <input
                       type="text"
                       value={chatSubject}
                       onChange={(e) => setChatSubject(e.target.value)}
-                      placeholder="Optional subject"
+                      placeholder={t("Optional subject", { defaultValue: "Optional subject" })}
                     />
                   </div>
                   <div className="sacw-form-group">
-                    <label>Message *</label>
+                    <label>{t("Message", { defaultValue: "Message" })} *</label>
                     <textarea
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
-                      placeholder="Type your message..."
+                      placeholder={t("Type your message...", { defaultValue: "Type your message..." })}
                       rows={3}
                     />
                   </div>
                   <div className="sacw-form-actions">
-                    <button className="sacw-btn-cancel" onClick={() => setShowNewChat(false)}>Cancel</button>
-                    <button className="sacw-btn-primary" onClick={handleCreateConversation} disabled={!selectedOrg}>Create</button>
+                    <button className="sacw-btn-cancel" onClick={() => setShowNewChat(false)}>{t("Cancel", { defaultValue: "Cancel" })}</button>
+                    <button className="sacw-btn-primary" onClick={handleCreateConversation} disabled={!selectedOrg}>{t("Create", { defaultValue: "Create" })}</button>
                   </div>
                 </div>
               ) : activeConversation ? (
                 <>
                   <div className="sacw-chat-header">
                     <div>
-                      <h4>{activeConversation.subject || activeConversation.organization?.name || 'Conversation'}</h4>
+                      <h4>{activeConversation.subject || activeConversation.organization?.name || t('Conversation', { defaultValue: 'Conversation' })}</h4>
                       <span className="sacw-participants">
                         <Building2 size={12} style={{ display: 'inline', marginRight: 3 }} />
                         {activeConversation.organization?.name}
@@ -249,7 +251,7 @@ export default function SuperAdminChatWidget() {
                   </div>
                   <div className="sacw-messages">
                     {messages.length === 0 && (
-                      <p className="sacw-no-msgs">No messages yet</p>
+                      <p className="sacw-no-msgs">{t("No messages yet", { defaultValue: "No messages yet" })}</p>
                     )}
                     {messages.map((msg) => {
                       const isOrg = msg.organization_id && !msg.user_id;
@@ -260,7 +262,7 @@ export default function SuperAdminChatWidget() {
                           </div>
                           <div className="sacw-msg-content">
                             <div className="sacw-msg-header">
-                              <span className="sacw-msg-sender">{isOrg ? msg.organization?.name : 'Admin'}</span>
+                              <span className="sacw-msg-sender">{isOrg ? msg.organization?.name : t('Admin', { defaultValue: 'Admin' })}</span>
                               <span className="sacw-msg-time">{formatTime(msg.created_at)}</span>
                             </div>
                             <div className="sacw-msg-body" dangerouslySetInnerHTML={{ __html: msg.body }} />
@@ -276,7 +278,7 @@ export default function SuperAdminChatWidget() {
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
                       onKeyDown={handleKeyDown}
-                      placeholder="Type a message..."
+                      placeholder={t("Type a message...", { defaultValue: "Type a message..." })}
                       className="sacw-msg-input"
                     />
                     <button
@@ -293,7 +295,7 @@ export default function SuperAdminChatWidget() {
                   <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
                   </svg>
-                  <p>Select a conversation</p>
+                  <p>{t("Select a conversation", { defaultValue: "Select a conversation" })}</p>
                 </div>
               )}
             </div>

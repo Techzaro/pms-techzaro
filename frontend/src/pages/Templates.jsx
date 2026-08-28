@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import CreateTemplateModal from "../components/CreateTemplateModal";
@@ -10,6 +11,7 @@ import { useNotification } from "../context/NotificationContext";
 import { Plus, Search, FileText, Lock, Users, Building, ShieldCheck, Edit, Trash2, ArrowRight, Paperclip, Download } from "lucide-react";
 
 export default function Templates() {
+  const { t } = useTranslation();
   const user = getUser();
   const notify = useNotification();
   const [templates, setTemplates] = useState([]);
@@ -29,7 +31,7 @@ export default function Templates() {
     setLoading(true);
     const token = authToken();
     fetch(`${API_URL}/templates`, {
-      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      headers: { Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
       skipLoader: true,
     })
       .then((r) => (r.ok ? r.json() : { data: [] }))
@@ -48,16 +50,16 @@ export default function Templates() {
       const token = authToken();
       const res = await fetch(`${API_URL}/templates/${deletingTemplate.id}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        headers: { Authorization: token ? `Bearer ${token}` : "", Accept: "application/json" },
       });
       if (res.ok) {
-        notify.success("Template deleted successfully.");
+        notify.success(t("Template deleted successfully.", { defaultValue: "Template deleted successfully." }));
         fetchTemplates();
       } else {
-        notify.error("Failed to delete template.");
+        notify.error(t("Failed to delete template.", { defaultValue: "Failed to delete template." }));
       }
     } catch (e) {
-      notify.error("An error occurred while deleting template.");
+      notify.error(t("An error occurred while deleting template.", { defaultValue: "An error occurred while deleting template." }));
     } finally {
       setDeletingTemplate(null);
     }
@@ -90,22 +92,22 @@ export default function Templates() {
   });
 
   const breadcrumbs = [
-    { label: "Drafts", path: rolePath("drafts") },
-    { label: "Templates" },
+    { label: t("Drafts", { defaultValue: "Drafts" }), path: rolePath("drafts") },
+    { label: t("Templates", { defaultValue: "Templates" }) },
   ];
 
   const visibilityBadge = (level) => {
     switch (level) {
       case "private":
-        return <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: "12px", background: "#f3f4f6", color: "#4b5563" }}><Lock size={12} /> Private</span>;
-      case "project_team":
-        return <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: "12px", background: "#eff6ff", color: "#1d4ed8" }}><Users size={12} /> Project Team</span>;
-      case "department_team":
-        return <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: "12px", background: "#f0fdf4", color: "#15803d" }}><Building size={12} /> Department</span>;
       case "organization":
-        return <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: "12px", background: "#fef3c7", color: "#b45309" }}><ShieldCheck size={12} /> Organization</span>;
+        return <span style={{ fontSize: "11px", fontWeight: 600, color: "#10b981", background: "#d1fae5", padding: "2px 8px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}><Globe size={11} /> {t("Organization", { defaultValue: "Organization" })}</span>;
+      case "department_team":
+        return <span style={{ fontSize: "11px", fontWeight: 600, color: "#6366f1", background: "#e0e7ff", padding: "2px 8px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}><Building size={11} /> {t("Department Team", { defaultValue: "Department Team" })}</span>;
+      case "project_team":
+        return <span style={{ fontSize: "11px", fontWeight: 600, color: "#f59e0b", background: "#fef3c7", padding: "2px 8px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}><FolderGit2 size={11} /> {t("Project Team", { defaultValue: "Project Team" })}</span>;
+      case "private":
       default:
-        return null;
+        return <span style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", background: "#f1f5f9", padding: "2px 8px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}><Lock size={11} /> {t("Private", { defaultValue: "Private" })}</span>;
     }
   };
 
@@ -117,13 +119,12 @@ export default function Templates() {
         {/* HEADER BAR */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "12px" }}>
           <div>
-            <h2 style={{ fontSize: "20px", fontWeight: 700, margin: 0 }}>Task & Project Templates</h2>
+            <h2 style={{ fontSize: "20px", fontWeight: 700, margin: 0 }}>{t("Task & Project Templates", { defaultValue: "Task & Project Templates" })}</h2>
             <p style={{ fontSize: "13px", color: "var(--text-secondary)", margin: "4px 0 0" }}>
-              Standardized workflows and templates accessible based on visibility settings.
+              {t("Standardized workflows and templates accessible based on visibility settings.", { defaultValue: "Standardized workflows and templates accessible based on visibility settings." })}
             </p>
           </div>
 
-          {/* Universal Creation Button accessible to ALL roles */}
           <button
             onClick={() => { setEditingTemplate(null); setCreateModalOpen(true); }}
             style={{
@@ -141,7 +142,7 @@ export default function Templates() {
               boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
             }}
           >
-            <Plus size={16} /> Create / Upload Template
+            <Plus size={16} /> {t("Create / Upload Template", { defaultValue: "Create / Upload Template" })}
           </button>
         </div>
 
@@ -151,7 +152,7 @@ export default function Templates() {
             <Search style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#9ca3af" }} size={16} />
             <input
               type="text"
-              placeholder="Search templates by title or keyword..."
+              placeholder={t("Search templates by title or keyword...", { defaultValue: "Search templates by title or keyword..." })}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               style={{ width: "100%", padding: "8px 12px 8px 34px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "13px" }}
@@ -163,13 +164,10 @@ export default function Templates() {
             onChange={(e) => setCategoryFilter(e.target.value)}
             style={{ padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "13px" }}
           >
-            <option value="all">All Categories</option>
-            <option value="General">General</option>
-            <option value="Development">Development</option>
-            <option value="Design">Design</option>
-            <option value="QA & Testing">QA & Testing</option>
-            <option value="Operations">Operations</option>
-            <option value="Marketing">Marketing</option>
+            <option value="all">{t("All Categories", { defaultValue: "All Categories" })}</option>
+            {availableCategories.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
           </select>
 
           <select
@@ -177,22 +175,22 @@ export default function Templates() {
             onChange={(e) => setVisibilityFilter(e.target.value)}
             style={{ padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "13px" }}
           >
-            <option value="all">All Visibility Levels</option>
-            <option value="private">Private (Only me)</option>
-            <option value="project_team">Project Team</option>
-            <option value="department_team">Department Team</option>
-            <option value="organization">Organization</option>
+            <option value="all">{t("All Visibility Levels", { defaultValue: "All Visibility Levels" })}</option>
+            <option value="private">{t("Private (Only me)", { defaultValue: "Private (Only me)" })}</option>
+            <option value="project_team">{t("Project Team", { defaultValue: "Project Team" })}</option>
+            <option value="department_team">{t("Department Team", { defaultValue: "Department Team" })}</option>
+            <option value="organization">{t("Organization", { defaultValue: "Organization" })}</option>
           </select>
         </div>
 
         {/* TEMPLATE GRID */}
         {loading ? (
-          <div style={{ textAlign: "center", padding: "60px 0", color: "var(--text-secondary)" }}>Loading templates...</div>
+          <div style={{ textAlign: "center", padding: "60px 0", color: "var(--text-secondary)" }}>{t("Loading templates...", { defaultValue: "Loading templates..." })}</div>
         ) : filteredTemplates.length === 0 ? (
           <div style={{ textAlign: "center", padding: "60px 0", background: "var(--bg-card)", borderRadius: "12px", border: "1px solid var(--border-color)" }}>
             <FileText size={40} style={{ color: "#9ca3af", marginBottom: "12px" }} />
-            <h4 style={{ margin: "0 0 4px", fontSize: "15px", fontWeight: 600 }}>No templates found</h4>
-            <p style={{ margin: 0, fontSize: "13px", color: "var(--text-secondary)" }}>Create a new template to standardize task workflows.</p>
+            <h4 style={{ margin: "0 0 4px", fontSize: "15px", fontWeight: 600 }}>{t("No templates found", { defaultValue: "No templates found" })}</h4>
+            <p style={{ margin: 0, fontSize: "13px", color: "var(--text-secondary)" }}>{t("Create a new template to standardize task workflows.", { defaultValue: "Create a new template to standardize task workflows." })}</p>
           </div>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "16px" }}>
@@ -204,9 +202,11 @@ export default function Templates() {
                 <div key={template.id} style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "12px", padding: "16px", display: "flex", flexDirection: "column", justifyContent: "space-between", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
                   <div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
-                      <span style={{ fontSize: "11px", fontWeight: 600, color: "#2563eb", background: "#dbeafe", padding: "2px 8px", borderRadius: "4px" }}>
-                        {template.category || "General"}
-                      </span>
+                      {template.category && (
+                        <span style={{ fontSize: "11px", fontWeight: 600, color: "#2563eb", background: "#dbeafe", padding: "2px 8px", borderRadius: "4px" }}>
+                          {template.category}
+                        </span>
+                      )}
                       {visibilityBadge(template.visibility_level)}
                     </div>
 
@@ -215,12 +215,12 @@ export default function Templates() {
                     </h3>
 
                     <p style={{ margin: "0 0 12px", fontSize: "12px", color: "var(--text-secondary)", minHeight: "36px", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                      {template.description || "No description provided."}
+                      {template.description || t("No description provided.", { defaultValue: "No description provided." })}
                     </p>
 
                     {template.project && (
                       <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "8px" }}>
-                        Linked Project: <strong>{template.project.title}</strong>
+                        {t("Linked Project:", { defaultValue: "Linked Project:" })} <strong>{template.project.title}</strong>
                       </div>
                     )}
 
@@ -238,7 +238,7 @@ export default function Templates() {
                             target="_blank"
                             rel="noopener noreferrer"
                             style={{ color: "#2563eb", display: "inline-flex", alignItems: "center" }}
-                            title="Download Attachment"
+                            title={t("Download Attachment", { defaultValue: "Download Attachment" })}
                           >
                             <Download size={14} />
                           </a>
@@ -247,14 +247,14 @@ export default function Templates() {
                               <button
                                 onClick={() => { setEditingTemplate(template); setCreateModalOpen(true); }}
                                 style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", padding: 0 }}
-                                title="Edit / Replace Attachment"
+                                title={t("Edit / Replace Attachment", { defaultValue: "Edit / Replace Attachment" })}
                               >
                                 <Edit size={14} />
                               </button>
                               <button
                                 onClick={() => setDeletingTemplate(template)}
                                 style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", padding: 0 }}
-                                title="Delete Template File"
+                                title={t("Delete Template File", { defaultValue: "Delete Template File" })}
                               >
                                 <Trash2 size={14} />
                               </button>
@@ -265,7 +265,7 @@ export default function Templates() {
                     )}
 
                     <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "12px" }}>
-                      Subtasks: <strong>{subtaskCount}</strong> | By: {template.creator?.name || "System"}
+                      {t("Subtasks: {{count}} | By: {{author}}", { count: subtaskCount, author: template.creator?.name || t("System", { defaultValue: "System" }), defaultValue: `Subtasks: ${subtaskCount} | By: ${template.creator?.name || "System"}` })}
                     </div>
                   </div>
 
@@ -277,14 +277,14 @@ export default function Templates() {
                           <button
                             onClick={() => { setEditingTemplate(template); setCreateModalOpen(true); }}
                             style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "4px" }}
-                            title="Edit Template"
+                            title={t("Edit Template", { defaultValue: "Edit Template" })}
                           >
                             <Edit size={16} />
                           </button>
                           <button
                             onClick={() => setDeletingTemplate(template)}
                             style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", padding: "4px" }}
-                            title="Delete Template"
+                            title={t("Delete Template", { defaultValue: "Delete Template" })}
                           >
                             <Trash2 size={16} />
                           </button>
@@ -309,7 +309,7 @@ export default function Templates() {
                         cursor: "pointer",
                       }}
                     >
-                      Use Template <ArrowRight size={14} />
+                      {t("Use Template", { defaultValue: "Use Template" })} <ArrowRight size={14} />
                     </button>
                   </div>
                 </div>
@@ -334,10 +334,10 @@ export default function Templates() {
         isOpen={!!deletingTemplate}
         onClose={() => setDeletingTemplate(null)}
         onConfirm={handleDeleteConfirm}
-        title="Delete Template"
-        message={`Are you sure you want to delete "${deletingTemplate?.title}"?`}
-        confirmText="Delete"
-        cancelText="Cancel"
+        title={t("Delete Template", { defaultValue: "Delete Template" })}
+        message={t("Are you sure you want to delete \"{{title}}\"?", { title: deletingTemplate?.title, defaultValue: `Are you sure you want to delete "${deletingTemplate?.title}"?` })}
+        confirmText={t("Delete", { defaultValue: "Delete" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
         danger
       />
 
@@ -345,10 +345,11 @@ export default function Templates() {
       {spawnTaskData && (
         <CreateTaskModal
           onClose={() => setSpawnTaskData(null)}
-          onTaskCreated={() => { setSpawnTaskData(null); notify.success("Task created from template successfully!"); }}
+          onTaskCreated={() => { setSpawnTaskData(null); notify.success(t("Task created from template successfully!", { defaultValue: "Task created from template successfully!" })); }}
           prefillData={spawnTaskData}
         />
       )}
     </DashboardLayout>
   );
 }
+

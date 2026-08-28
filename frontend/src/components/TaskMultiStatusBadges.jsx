@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { RotateCcw, ArrowRightLeft, Lock } from "lucide-react";
 
 export const STATUS_COLORS = {
@@ -62,7 +63,7 @@ export const STATUS_LABELS = {
   "in-progress": "In Progress",
   paused: "Paused",
   submitted: "Submitted",
-  reopened: "Pending",
+  reopened: "Reopened",
   approved: "Approved",
   rejected: "Declined",
   declined: "Declined",
@@ -85,15 +86,20 @@ export function formatStatus(status) {
  * Uses defensive CSS layout to prevent text overlap.
  */
 export default function TaskMultiStatusBadges({ item }) {
+  const { t } = useTranslation();
   if (!item) return null;
 
-  const rawStatus = item?.status || "Pending";
+  const viewerStatus = item?.display_status || item?.status || "Pending";
+  // Lists use the normal workflow status as the primary badge. Reopened is
+  // represented by the dedicated modifier icon; Task Details still shows the
+  // explicit Reopened status from its own header.
+  const rawStatus = String(viewerStatus).toLowerCase() === "reopened" ? "in_progress" : viewerStatus;
   const normalizedKey = String(rawStatus).toLowerCase();
   const primaryBg = STATUS_COLORS[rawStatus] || STATUS_COLORS[normalizedKey] || "#F3F4F6";
   const primaryColor = STATUS_TEXT_COLORS[rawStatus] || STATUS_TEXT_COLORS[normalizedKey] || "#374151";
   const primaryLabel = formatStatus(rawStatus);
 
-  // 1. Subtle Reopened Indicator (SRS Section 5 & 10)
+  // Subtle Reopened Indicator
   const isReopened = Boolean(
     (Array.isArray(item?.states) && item.states.some((s) => String(s).toLowerCase() === "reopened")) ||
     item?.is_reopened ||
@@ -101,14 +107,14 @@ export default function TaskMultiStatusBadges({ item }) {
     (item?.reopen_count && item.reopen_count > 0)
   );
 
-  // 2. Subtle Transferred Indicator (SRS Section 5 & 10)
+  // Subtle Transferred Indicator (SRS Section 5 & 10)
   const isTransferred = Boolean(
     (Array.isArray(item?.states) && item.states.some((s) => String(s).toLowerCase() === "transferred")) ||
     item?.is_transferred ||
     (Array.isArray(item?.delegation_chain) && item.delegation_chain.length > 0)
   );
 
-  // 3. Assigner Paused Lock Indicator
+  // Assigner Paused Lock Indicator
   const isAssignerPaused = Boolean(item?.assigner_paused);
 
   return (
@@ -148,13 +154,13 @@ export default function TaskMultiStatusBadges({ item }) {
             display: "inline-block",
           }}
         />
-        {primaryLabel}
+        {t(primaryLabel)}
       </span>
 
       {/* Subtle Modifier Icons without text clutter */}
       {isReopened && (
         <span
-          title={item?.reopen_count && item.reopen_count > 1 ? `Reopened (${item.reopen_count}x)` : "Reopened"}
+          title={item?.reopen_count && item.reopen_count > 1 ? t("Reopened ({{count}}x)", { count: item.reopen_count, defaultValue: `Reopened (${item.reopen_count}x)` }) : t("Reopened", { defaultValue: "Reopened" })}
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -175,7 +181,7 @@ export default function TaskMultiStatusBadges({ item }) {
 
       {isTransferred && (
         <span
-          title="Transferred / Delegated"
+          title={t("Transferred / Delegated", { defaultValue: "Transferred / Delegated" })}
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -196,7 +202,7 @@ export default function TaskMultiStatusBadges({ item }) {
 
       {isAssignerPaused && (
         <span
-          title="Paused by Assigner (Locked)"
+          title={t("Paused by Assigner (Locked)", { defaultValue: "Paused by Assigner (Locked)" })}
           style={{
             display: "inline-flex",
             alignItems: "center",

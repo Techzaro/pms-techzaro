@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { GripVertical } from "lucide-react";
 import { GoDotFill } from "react-icons/go";
 
@@ -15,6 +16,7 @@ export default function DraggableStatusBadges({
   storageKey = "pms_status_badge_order",
   containerClassName = "task-progress",
 }) {
+  const { t } = useTranslation();
   // Disallowed badges per SRS Section 5 & 8
   const disallowedBadgeIds = new Set(["due_today", "reopened", "transferred"]);
   const validBadges = Array.isArray(badges) ? badges.filter((b) => b && !disallowedBadgeIds.has(b.id)) : [];
@@ -197,7 +199,7 @@ export default function DraggableStatusBadges({
                 opacity: 0.5,
                 marginRight: "-2px",
               }}
-              title="Drag to reorder"
+              title={t("Drag to reorder", { defaultValue: "Drag to reorder" })}
             >
               <GripVertical size={12} />
             </span>
@@ -206,7 +208,7 @@ export default function DraggableStatusBadges({
               <GoDotFill style={{ color: badge.dotColor, fontSize: "14px", marginRight: "-2px" }} />
             )}
 
-            <span>{badge.label}</span>
+            <span>{t(badge.label)}</span>
 
             {typeof badge.count === "number" && (
               <span

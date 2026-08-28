@@ -114,6 +114,8 @@ class NotificationMail extends Mailable
         $taskId = $this->entity->task_id ?? ($this->entity->task->id ?? null);
         $deliverableId = $this->entity->id ?? null;
 
+        $recipientTimezone = \App\Services\NotificationService::resolveUserTimezone($notification->user);
+
         return [
             'userName' => $notification->user->name ?? '',
             'projectName' => $changes['project_name'] ?? ($this->entity->project->title ?? ''),
@@ -124,7 +126,10 @@ class NotificationMail extends Mailable
             'deliverableUrl' => $deliverableId ? "{$this->frontendUrl}/{$role}/deliverables/deliverable-details/{$deliverableId}" : null,
             'deliverableDescription' => $changes['deliverable_description'] ?? ($this->entity->description ?? ''),
             'addedByName' => $sender->name ?? 'System',
-            'addedAt' => $notification->created_at ? $notification->created_at->format('d M Y, g:i A') : now()->format('d M Y, g:i A'),
+            'addedAt' => $notification->created_at 
+                ? \Carbon\Carbon::parse($notification->created_at)->setTimezone($recipientTimezone)->format('d M Y, g:i A') 
+                : now()->setTimezone($recipientTimezone)->format('d M Y, g:i A'),
+            'recipientTimezone' => $recipientTimezone,
             'contextType' => $changes['context_type'] ?? 'task',
             'loginUrl' => $this->frontendUrl,
         ];
@@ -144,9 +149,12 @@ class NotificationMail extends Mailable
             ? 'emails.deliverable-added'
             : 'emails.notification';
 
+        $recipientTimezone = \App\Services\NotificationService::resolveUserTimezone($this->notification->user);
+
         $withData = array_merge($this->deliverableContext, [
             'entityUrl' => $this->resolveEntityUrl(),
             'projectUrl' => $this->resolveProjectUrl(),
+            'recipientTimezone' => $recipientTimezone,
         ]);
 
         return new Content(

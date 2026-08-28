@@ -1,4 +1,4 @@
-﻿/* Knowledge Base Modern Styles */
+/* Knowledge Base Modern Styles */
 .kb-container {
   display: flex;
   gap: 24px;
@@ -141,21 +141,76 @@
 .kb-editor-canvas .ql-container {
   font-size: 15px;
   line-height: 1.7;
-  border: none !important;
+  border: 1px solid var(--border-color) !important;
+  border-top: none !important;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
   min-height: 400px;
+  background: var(--bg-card, #ffffff);
   font-family: inherit;
 }
 
 .kb-editor-canvas .ql-toolbar {
-  border: none !important;
-  border-bottom: 1px solid var(--border-color) !important;
-  padding: 10px 0 !important;
-  margin-bottom: 16px;
+  border: 1px solid var(--border-color) !important;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+  padding: 8px 12px !important;
+  background: var(--bg-hover, #f8fafc);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.kb-editor-canvas .ql-toolbar .ql-formats {
+  margin-right: 8px !important;
+  margin-bottom: 4px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .kb-editor-canvas .ql-editor {
-  padding: 0 !important;
+  padding: 18px !important;
   min-height: 400px;
+}
+
+/* Quill Font Family Whitelist Styles */
+.ql-font-arial, .ql-editor .ql-font-arial { font-family: Arial, sans-serif; }
+.ql-font-courier, .ql-editor .ql-font-courier { font-family: 'Courier New', Courier, monospace; }
+.ql-font-garamond, .ql-editor .ql-font-garamond { font-family: Garamond, Georgia, serif; }
+.ql-font-tahoma, .ql-editor .ql-font-tahoma { font-family: Tahoma, sans-serif; }
+.ql-font-times-new-roman, .ql-editor .ql-font-times-new-roman { font-family: 'Times New Roman', Times, serif; }
+.ql-font-verdana, .ql-editor .ql-font-verdana { font-family: Verdana, Geneva, sans-serif; }
+
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="arial"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="arial"]::before {
+  content: 'Arial';
+  font-family: Arial, sans-serif;
+}
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="courier"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="courier"]::before {
+  content: 'Courier';
+  font-family: 'Courier New', Courier, monospace;
+}
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="garamond"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="garamond"]::before {
+  content: 'Garamond';
+  font-family: Garamond, serif;
+}
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="tahoma"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="tahoma"]::before {
+  content: 'Tahoma';
+  font-family: Tahoma, sans-serif;
+}
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="times-new-roman"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="times-new-roman"]::before {
+  content: 'Times New Roman';
+  font-family: 'Times New Roman', Times, serif;
+}
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="verdana"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="verdana"]::before {
+  content: 'Verdana';
+  font-family: Verdana, sans-serif;
 }
 
 @media (max-width: 900px) {

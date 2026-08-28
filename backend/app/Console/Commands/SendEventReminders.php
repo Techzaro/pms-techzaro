@@ -76,6 +76,11 @@ class SendEventReminders extends Command
                         continue;
                     }
 
+                    // Resolve recipient timezone and format localized time (SRS Sec 21)
+                    $userTz = \App\Services\NotificationService::resolveUserTimezone($recipientId);
+                    $localStartTime = $event->start_date ? \Carbon\Carbon::parse($event->start_date)->setTimezone($userTz)->format('d M Y, g:i A') : '';
+                    $timeSuffix = $localStartTime ? " (at {$localStartTime} {$userTz})" : '';
+
                     // Create the reminder notification
                     Notification::create([
                         'user_id' => $recipientId,
@@ -84,7 +89,7 @@ class SendEventReminders extends Command
                         'related_module' => 'event',
                         'related_id' => $event->id,
                         'title' => 'Event Reminder',
-                        'message' => "Reminder: '".$event->title."' starts in ".$interval['label'].'.',
+                        'message' => "Reminder: '".$event->title."' starts in ".$interval['label'].$timeSuffix.'.',
                         'link' => '/calender',
                     ]);
 

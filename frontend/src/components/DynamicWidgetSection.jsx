@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Plus, X, GripVertical, RotateCcw, Search, Maximize2, Minimize2, Pin } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import CalendarEventsWidget, { CalendarWidget, EventsWidget, KnowledgeBaseWidget } from "./CalendarEventsWidget";
@@ -6,6 +7,7 @@ import { usePinnedTasks, togglePinTask } from "../utils/pinnedTasks";
 import { rolePath } from "../utils/auth";
 
 function PinnedTasksSubWidget() {
+  const { t } = useTranslation();
   const [pinnedTasks] = usePinnedTasks();
   const navigate = useNavigate();
 
@@ -13,7 +15,7 @@ function PinnedTasksSubWidget() {
     return (
       <div style={{ padding: "16px 8px", textAlign: "center" }}>
         <p style={{ margin: 0, fontSize: "13px", color: "var(--text-secondary)" }}>
-          No pinned tasks. Click "Pin to Dashboard" on any task to show it here.
+          {t('No pinned tasks. Click "Pin to Dashboard" on any task to show it here.', { defaultValue: 'No pinned tasks. Click "Pin to Dashboard" on any task to show it here.' })}
         </p>
       </div>
     );
@@ -21,12 +23,12 @@ function PinnedTasksSubWidget() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "200px", overflowY: "auto" }}>
-      {pinnedTasks.map((t) => (
-        <div key={t.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", borderRadius: "8px", background: "var(--bg-card-subtle, #f8fafc)", border: "1px solid var(--border-color, #e2e8f0)" }}>
-          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-heading)", cursor: "pointer" }} onClick={() => navigate(rolePath(`tasks/task-details/${t.id}`))}>
-            #{t.id} - {t.title}
+      {pinnedTasks.map((tItem) => (
+        <div key={tItem.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", borderRadius: "8px", background: "var(--bg-card-subtle, #f8fafc)", border: "1px solid var(--border-color, #e2e8f0)" }}>
+          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-heading)", cursor: "pointer" }} onClick={() => navigate(rolePath(`tasks/task-details/${tItem.id}`))}>
+            #{tItem.id} - {tItem.title}
           </span>
-          <button onClick={() => togglePinTask(t)} style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer" }} title="Unpin">
+          <button onClick={() => togglePinTask(tItem)} style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer" }} title={t("Unpin", { defaultValue: "Unpin" })}>
             <X size={14} />
           </button>
         </div>
@@ -60,6 +62,7 @@ function WidgetCardItem({
   handleUpdateContent,
   setWidgets
 }) {
+  const { t } = useTranslation();
   const cardRef = useRef(null);
 
   const startResize = (e, direction) => {
@@ -163,7 +166,7 @@ function WidgetCardItem({
             draggable={true}
             onDragStart={(e) => handleDragStart(e, index)}
             onDragEnd={() => { setDraggedIndex(null); setDragOverIndex(null); }}
-            title="Drag handle to reorder widget"
+            title={t("Drag handle to reorder widget", { defaultValue: "Drag handle to reorder widget" })}
             style={{
               cursor: "grab",
               color: "var(--text-secondary, #94a3b8)",
@@ -177,16 +180,16 @@ function WidgetCardItem({
 
           {w.type === "calendar_events" || w.type === "calendar" || w.type === "events" || w.type === "knowledge_base" ? (
             <h4 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "var(--text-heading)" }}>
-              {w.type === "calendar" ? "📅 " : w.type === "events" ? "🗓️ " : w.type === "knowledge_base" ? "📖 " : "📅 "}{w.title || (w.type === "calendar" ? "Calendar Widget" : w.type === "events" ? "Events Widget" : w.type === "knowledge_base" ? "Knowledge Base" : "Calendar & Events")}
+              {w.type === "calendar" ? "📅 " : w.type === "events" ? "🗓️ " : w.type === "knowledge_base" ? "📖 " : "📅 "}{w.title ? t(w.title) : (w.type === "calendar" ? t("Calendar Widget") : w.type === "events" ? t("Events Widget") : w.type === "knowledge_base" ? t("Knowledge Base") : t("Calendar & Events"))}
             </h4>
           ) : (
             <div style={{ display: "flex", alignItems: "center", gap: "6px", flex: 1 }}>
               <span style={{ fontSize: "18px" }}>📝</span>
               <input
                 type="text"
-                value={w.title || "Notes"}
+                value={w.title || t("Notes")}
                 onChange={(e) => handleUpdateTitle(w.id, e.target.value)}
-                placeholder="Widget Title..."
+                placeholder={t("Widget Title...", { defaultValue: "Widget Title..." })}
                 style={{
                   border: "none",
                   background: "transparent",
@@ -204,7 +207,7 @@ function WidgetCardItem({
         {/* Remove 'X' button */}
         <button
           onClick={() => handleRemoveWidget(w.id)}
-          title="Remove Widget"
+          title={t("Remove Widget", { defaultValue: "Remove Widget" })}
           style={{
             background: "transparent",
             border: "none",
@@ -236,7 +239,7 @@ function WidgetCardItem({
           <textarea
             value={w.content || ""}
             onChange={(e) => handleUpdateContent(w.id, e.target.value)}
-            placeholder="Type your notes or reminders here..."
+            placeholder={t("Type your notes or reminders here...", { defaultValue: "Type your notes or reminders here..." })}
             style={{
               width: "100%",
               height: "100%",
@@ -259,6 +262,7 @@ function WidgetCardItem({
 }
 
 export default function DynamicWidgetSection({ storageKey = "pms_dashboard_widgets", sectionTitle = "Dashboard Widgets" }) {
+  const { t } = useTranslation();
   const [widgets, setWidgets] = useState(() => {
     try {
       const saved = localStorage.getItem(storageKey);
@@ -385,12 +389,12 @@ export default function DynamicWidgetSection({ storageKey = "pms_dashboard_widge
 
   // Predefined widgets
   const predefinedWidgets = [
-    { type: "pinned_tasks", title: "Pinned Tasks & Reminders", desc: "View and access your pinned dashboard tasks" },
-    { type: "calendar", title: "Calendar Widget", desc: "Mini monthly calendar grid & schedule navigator" },
-    { type: "events", title: "Events Widget", desc: "Upcoming events schedule and attendee assignments" },
-    { type: "knowledge_base", title: "Knowledge Base", desc: "Recently added and updated documentation and guidelines" },
-    { type: "calendar_events", title: "Calendar & Events (Combined)", desc: "Combined mini calendar and schedule view" },
-    { type: "notes", title: "Notes Widget", desc: "Custom card with editable title and notes" }
+    { type: "pinned_tasks", title: t("Pinned Tasks & Reminders", { defaultValue: "Pinned Tasks & Reminders" }), desc: t("View and access your pinned dashboard tasks", { defaultValue: "View and access your pinned dashboard tasks" }) },
+    { type: "calendar", title: t("Calendar Widget", { defaultValue: "Calendar Widget" }), desc: t("Mini monthly calendar grid & schedule navigator", { defaultValue: "Mini monthly calendar grid & schedule navigator" }) },
+    { type: "events", title: t("Events Widget", { defaultValue: "Events Widget" }), desc: t("Upcoming events schedule and attendee assignments", { defaultValue: "Upcoming events schedule and attendee assignments" }) },
+    { type: "knowledge_base", title: t("Knowledge Base", { defaultValue: "Knowledge Base" }), desc: t("Recently added and updated documentation and guidelines", { defaultValue: "Recently added and updated documentation and guidelines" }) },
+    { type: "calendar_events", title: t("Calendar & Events (Combined)", { defaultValue: "Calendar & Events (Combined)" }), desc: t("Combined mini calendar and schedule view", { defaultValue: "Combined mini calendar and schedule view" }) },
+    { type: "notes", title: t("Notes Widget", { defaultValue: "Notes Widget" }), desc: t("Custom card with editable title and notes", { defaultValue: "Custom card with editable title and notes" }) }
   ];
 
   const searchTrimmed = searchTerm.trim().toLowerCase();
@@ -469,10 +473,10 @@ export default function DynamicWidgetSection({ storageKey = "pms_dashboard_widge
             <Plus size={20} />
           </div>
           <h4 style={{ margin: "0 0 2px 0", fontSize: "15px", fontWeight: "700", color: "var(--text-heading)" }}>
-            Add Widget
+            {t("Add Widget", { defaultValue: "Add Widget" })}
           </h4>
           <p style={{ margin: 0, fontSize: "12px", color: "var(--text-secondary)" }}>
-            Click to add Notes, Calendar & Events, or create a Custom Widget
+            {t("Click to add Notes, Calendar & Events, or create a Custom Widget", { defaultValue: "Click to add Notes, Calendar & Events, or create a Custom Widget" })}
           </p>
         </div>
       </div>
@@ -511,10 +515,10 @@ export default function DynamicWidgetSection({ storageKey = "pms_dashboard_widge
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: "20px", fontWeight: 700, color: "var(--text-heading)" }}>
-                  Add Widget
+                  {t("Add Widget", { defaultValue: "Add Widget" })}
                 </h3>
                 <p style={{ margin: "4px 0 0 0", fontSize: "13px", color: "var(--text-secondary)" }}>
-                  Search predefined widgets or type to create a custom widget.
+                  {t("Search predefined widgets or type to create a custom widget.", { defaultValue: "Search predefined widgets or type to create a custom widget." })}
                 </p>
               </div>
               <button
@@ -541,7 +545,7 @@ export default function DynamicWidgetSection({ storageKey = "pms_dashboard_widge
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search or type custom widget name..."
+                placeholder={t("Search or type custom widget name...", { defaultValue: "Search or type custom widget name..." })}
                 autoFocus
                 style={{
                   width: "100%",
@@ -593,7 +597,7 @@ export default function DynamicWidgetSection({ storageKey = "pms_dashboard_widge
                       cursor: "pointer"
                     }}
                   >
-                    + Add
+                    {t("+ Add", { defaultValue: "+ Add" })}
                   </button>
                 </div>
               ))}
@@ -615,10 +619,10 @@ export default function DynamicWidgetSection({ storageKey = "pms_dashboard_widge
                     <span style={{ fontSize: "22px" }}>✨</span>
                     <div>
                       <div style={{ fontWeight: 600, fontSize: "14px", color: "#4f46e5" }}>
-                        Create "{searchTerm.trim()}" as Widget
+                        {t('Create "{{name}}" as Widget', { defaultValue: `Create "${searchTerm.trim()}" as Widget`, name: searchTerm.trim() })}
                       </div>
                       <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
-                        Custom card with editable notes
+                        {t("Custom card with editable notes", { defaultValue: "Custom card with editable notes" })}
                       </div>
                     </div>
                   </div>
@@ -635,7 +639,7 @@ export default function DynamicWidgetSection({ storageKey = "pms_dashboard_widge
                       cursor: "pointer"
                     }}
                   >
-                    Create
+                    {t("Create", { defaultValue: "Create" })}
                   </button>
                 </div>
               )}
@@ -646,13 +650,13 @@ export default function DynamicWidgetSection({ storageKey = "pms_dashboard_widge
                 onClick={handleResetWidgets}
                 style={{ background: "transparent", border: "none", color: "var(--text-secondary)", fontSize: "13px", fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}
               >
-                <RotateCcw size={14} /> Clear All Widgets
+                <RotateCcw size={14} /> {t("Clear All Widgets", { defaultValue: "Clear All Widgets" })}
               </button>
               <button
                 onClick={() => setShowAddModal(false)}
                 style={{ background: "var(--bg-card-subtle, #e2e8f0)", color: "var(--text-primary)", border: "none", borderRadius: "8px", padding: "8px 18px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
               >
-                Close
+                {t("Close", { defaultValue: "Close" })}
               </button>
             </div>
           </div>

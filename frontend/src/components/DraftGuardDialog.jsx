@@ -6,10 +6,12 @@
 
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import "./DraftGuardDialog.css";
 
 function DraftGuardDialog({ isOpen, onClose, onSaveDraft, onDiscard }) {
+  const { t } = useTranslation();
   useEscapeKey(isOpen, onClose);
 
   useEffect(() => {
@@ -50,20 +52,20 @@ function DraftGuardDialog({ isOpen, onClose, onSaveDraft, onDiscard }) {
             <line x1="12" y1="16" x2="12.01" y2="16" />
           </svg>
         </div>
-        <h3 id="dgd-title">Unsaved Changes</h3>
+        <h3 id="dgd-title">{t("Unsaved Changes", { defaultValue: "Unsaved Changes" })}</h3>
         <p id="dgd-message">
-          You have unsaved changes. What would you like to do?
+          {t("You have unsaved changes. What would you like to do?", { defaultValue: "You have unsaved changes. What would you like to do?" })}
         </p>
         <div className="dgd-actions">
           <button className="dgd-continue-btn" onClick={onClose}>
-            Continue Editing
+            {t("Continue Editing", { defaultValue: "Continue Editing" })}
           </button>
           <div className="dgd-primary-actions">
             <button className="dgd-discard-btn" onClick={onDiscard}>
-              Discard Changes
+              {t("Discard Changes", { defaultValue: "Discard Changes" })}
             </button>
             <button className="dgd-save-draft-btn" onClick={onSaveDraft}>
-              Save as Draft
+              {t("Save as Draft", { defaultValue: "Save as Draft" })}
             </button>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Eye, Lock, Calendar, Clock, Shield, Save, Loader2 } from 'lucide-react';
 import { getSuperAdminUser, superAdminAuthToken } from '../../utils/auth';
 import { api } from './api/superAdminApi';
@@ -21,6 +22,7 @@ const displayCNIC = (value) => {
 };
 
 export default function SuperAdminMyProfile() {
+  const { t } = useTranslation();
   const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -50,20 +52,20 @@ export default function SuperAdminMyProfile() {
     if (userEmail) {
       fetchProfile();
     } else {
-      setError('Unable to identify your account. Please log in again.');
+      setError(t('Unable to identify your account. Please log in again.', { defaultValue: 'Unable to identify your account. Please log in again.' }));
       setLoading(false);
     }
   }, []);
 
   const validatePasswordForm = () => {
     const errors = {};
-    if (!passwordForm.old_password) errors.old_password = 'Current password is required';
-    if (!passwordForm.new_password) errors.new_password = 'New password is required';
-    else if (passwordForm.new_password.length < 8) errors.new_password = 'Password must be at least 8 characters';
-    else if (!/[A-Z]/.test(passwordForm.new_password)) errors.new_password = 'Must include an uppercase letter';
-    else if (!/[a-z]/.test(passwordForm.new_password)) errors.new_password = 'Must include a lowercase letter';
-    else if (!/[0-9]/.test(passwordForm.new_password)) errors.new_password = 'Must include a number';
-    if (passwordForm.new_password !== passwordForm.confirm_password) errors.confirm_password = 'Passwords do not match';
+    if (!passwordForm.old_password) errors.old_password = t('Current password is required', { defaultValue: 'Current password is required' });
+    if (!passwordForm.new_password) errors.new_password = t('New password is required', { defaultValue: 'New password is required' });
+    else if (passwordForm.new_password.length < 8) errors.new_password = t('Password must be at least 8 characters', { defaultValue: 'Password must be at least 8 characters' });
+    else if (!/[A-Z]/.test(passwordForm.new_password)) errors.new_password = t('Must include an uppercase letter', { defaultValue: 'Must include an uppercase letter' });
+    else if (!/[a-z]/.test(passwordForm.new_password)) errors.new_password = t('Must include a lowercase letter', { defaultValue: 'Must include a lowercase letter' });
+    else if (!/[0-9]/.test(passwordForm.new_password)) errors.new_password = t('Must include a number', { defaultValue: 'Must include a number' });
+    if (passwordForm.new_password !== passwordForm.confirm_password) errors.confirm_password = t('Passwords do not match', { defaultValue: 'Passwords do not match' });
     return errors;
   };
 
@@ -76,7 +78,7 @@ export default function SuperAdminMyProfile() {
     setSaving(true);
     try {
       await api.changePassword(passwordForm.old_password, passwordForm.new_password);
-      showSuccessMessage('Password', 'changed');
+      showSuccessMessage(t('Password', { defaultValue: 'Password' }), t('changed', { defaultValue: 'changed' }));
       setShowPasswordModal(false);
       setPasswordForm({ old_password: '', new_password: '', confirm_password: '' });
     } catch (err) {
@@ -90,7 +92,7 @@ export default function SuperAdminMyProfile() {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--color-primary)' }} />
-        <span className="ml-3 text-sm" style={{ color: 'var(--text-muted)' }}>Loading profile...</span>
+        <span className="ml-3 text-sm" style={{ color: 'var(--text-muted)' }}>{t('Loading profile...', { defaultValue: 'Loading profile...' })}</span>
       </div>
     );
   }
@@ -98,8 +100,8 @@ export default function SuperAdminMyProfile() {
   if (error) {
     return (
       <div className="text-center py-20">
-        <p className="text-sm" style={{ color: 'var(--color-danger)' }}>{error}</p>
-        <button onClick={fetchProfile} className="mt-3 text-sm font-medium" style={{ color: 'var(--color-primary)' }}>Retry</button>
+        <p className="text-sm" style={{ color: 'var(--color-danger)' }}>{t(error, { defaultValue: error })}</p>
+        <button onClick={fetchProfile} className="mt-3 text-sm font-medium" style={{ color: 'var(--color-primary)' }}>{t('Retry', { defaultValue: 'Retry' })}</button>
       </div>
     );
   }
@@ -111,8 +113,8 @@ export default function SuperAdminMyProfile() {
     <div className="space-y-0">
       {/* Profile header */}
       <div className="profile-header-profile" style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--text-heading)' }}>My Profile</h1>
-        <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '4px' }}>View and manage your personal information and account settings.</p>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--text-heading)' }}>{t('My Profile', { defaultValue: 'My Profile' })}</h1>
+        <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '4px' }}>{t('View and manage your personal information and account settings.', { defaultValue: 'View and manage your personal information and account settings.' })}</p>
       </div>
 
       <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
@@ -127,8 +129,8 @@ export default function SuperAdminMyProfile() {
                 </span>
               </div>
               <div>
-                <h2 style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--text-heading)', margin: 0 }}>{u.name || 'Super Admin'}</h2>
-                <span style={{ fontSize: '0.75rem', color: 'var(--color-primary)' }}>Super Admin</span>
+                <h2 style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--text-heading)', margin: 0 }}>{u.name || t('Super Admin', { defaultValue: 'Super Admin' })}</h2>
+                <span style={{ fontSize: '0.75rem', color: 'var(--color-primary)' }}>{t('Super Admin', { defaultValue: 'Super Admin' })}</span>
               </div>
             </div>
           </div>
@@ -136,26 +138,26 @@ export default function SuperAdminMyProfile() {
           {/* Personal Information */}
           <div className="profile-info-card">
             <div className="info-card-header">
-              <h3>Personal Information</h3>
+              <h3>{t('Personal Information', { defaultValue: 'Personal Information' })}</h3>
               <button className="btn-edit" onClick={() => setShowPasswordModal(true)}>
-                <Lock size={16} /> Update Password
+                <Lock size={16} /> {t('Update Password', { defaultValue: 'Update Password' })}
               </button>
             </div>
             <div className="info-card-body">
               <div className="info-row">
-                <span className="info-label">Full Name</span>
+                <span className="info-label">{t('Full Name', { defaultValue: 'Full Name' })}</span>
                 <span className="info-value">{u.name || '---'}</span>
               </div>
               <div className="info-row">
-                <span className="info-label">Father Name</span>
+                <span className="info-label">{t('Father Name', { defaultValue: 'Father Name' })}</span>
                 <span className="info-value">{u.father_name || '---'}</span>
               </div>
               <div className="info-row">
-                <span className="info-label">ID Card Number</span>
+                <span className="info-label">{t('ID Card Number', { defaultValue: 'ID Card Number' })}</span>
                 <span className="info-value">{displayCNIC(u.id_card_number)}</span>
               </div>
               <div className="info-row">
-                <span className="info-label">Phone Number</span>
+                <span className="info-label">{t('Phone Number', { defaultValue: 'Phone Number' })}</span>
                 <span className="info-value">{displayPhone(u.phone_number || u.contact_no)}</span>
               </div>
             </div>
@@ -163,14 +165,14 @@ export default function SuperAdminMyProfile() {
 
           {/* Address */}
           <div className="profile-info-card">
-            <div className="info-card-header"><h3>Address</h3></div>
+            <div className="info-card-header"><h3>{t('Address', { defaultValue: 'Address' })}</h3></div>
             <div className="info-card-body">
               <div className="info-row">
-                <span className="info-label">Present Address</span>
+                <span className="info-label">{t('Present Address', { defaultValue: 'Present Address' })}</span>
                 <span className="info-value">{u.present_address || u.address || '---'}</span>
               </div>
               <div className="info-row">
-                <span className="info-label">Permanent Address</span>
+                <span className="info-label">{t('Permanent Address', { defaultValue: 'Permanent Address' })}</span>
                 <span className="info-value">{u.permanent_address || '---'}</span>
               </div>
             </div>
@@ -178,18 +180,18 @@ export default function SuperAdminMyProfile() {
 
           {/* Emergency Contact */}
           <div className="profile-info-card">
-            <div className="info-card-header"><h3>Emergency Contact</h3></div>
+            <div className="info-card-header"><h3>{t('Emergency Contact', { defaultValue: 'Emergency Contact' })}</h3></div>
             <div className="info-card-body">
               <div className="info-row">
-                <span className="info-label">Name</span>
+                <span className="info-label">{t('Name', { defaultValue: 'Name' })}</span>
                 <span className="info-value">{u.emergency_contact_name || '---'}</span>
               </div>
               <div className="info-row">
-                <span className="info-label">Relation</span>
+                <span className="info-label">{t('Relation', { defaultValue: 'Relation' })}</span>
                 <span className="info-value">{u.emergency_contact_relation || '---'}</span>
               </div>
               <div className="info-row">
-                <span className="info-label">Phone</span>
+                <span className="info-label">{t('Phone', { defaultValue: 'Phone' })}</span>
                 <span className="info-value">{displayPhone(u.emergency_contact_phone)}</span>
               </div>
             </div>
@@ -199,20 +201,20 @@ export default function SuperAdminMyProfile() {
         {/* RIGHT SIDE - Account Status */}
         <div style={{ width: '280px', flexShrink: 0 }}>
           <div className="account-status-card">
-            <h3>Account Status</h3>
+            <h3>{t('Account Status', { defaultValue: 'Account Status' })}</h3>
             <div className="status-list">
               <div className="status-item">
                 <span className={`status-dot ${u.active !== false ? 'dot-active' : 'dot-inactive'}`}></span>
-                <span className="status-text">{u.active !== false ? 'Active' : 'Inactive'}</span>
+                <span className="status-text">{u.active !== false ? t('Active', { defaultValue: 'Active' }) : t('Inactive', { defaultValue: 'Inactive' })}</span>
               </div>
               <div className="status-item">
                 <span className="status-icon">
                   <Calendar size={18} />
                 </span>
                 <div className="status-info">
-                  <span className="status-label">Member Since</span>
+                  <span className="status-label">{t('Member Since', { defaultValue: 'Member Since' })}</span>
                   <span className="status-value">
-                    {u.created_at ? new Date(u.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '---'}
+                    {u.created_at ? new Date(u.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '---'}
                   </span>
                 </div>
               </div>
@@ -221,11 +223,11 @@ export default function SuperAdminMyProfile() {
                   <Clock size={18} />
                 </span>
                 <div className="status-info">
-                  <span className="status-label">Last Login</span>
+                  <span className="status-label">{t('Last Login', { defaultValue: 'Last Login' })}</span>
                   <span className="status-value">
                     {u.last_login_at
-                      ? new Date(u.last_login_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
-                      : 'Never logged in'}
+                      ? new Date(u.last_login_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
+                      : t('Never logged in', { defaultValue: 'Never logged in' })}
                   </span>
                 </div>
               </div>
@@ -234,8 +236,8 @@ export default function SuperAdminMyProfile() {
                   <Shield size={18} />
                 </span>
                 <div className="status-info">
-                  <span className="status-label">Account Type</span>
-                  <span className="status-value">Super Admin</span>
+                  <span className="status-label">{t('Account Type', { defaultValue: 'Account Type' })}</span>
+                  <span className="status-value">{t('Super Admin', { defaultValue: 'Super Admin' })}</span>
                 </div>
               </div>
             </div>
@@ -249,8 +251,8 @@ export default function SuperAdminMyProfile() {
           <div className="user-modal-content" style={{ maxWidth: '480px', width: '100%' }} onClick={(e) => e.stopPropagation()}>
             <div className="user-modal-header">
               <div>
-                <h2>Change Password</h2>
-                <p className="modal-subtitle">Update your account password.</p>
+                <h2>{t('Change Password', { defaultValue: 'Change Password' })}</h2>
+                <p className="modal-subtitle">{t('Update your account password.', { defaultValue: 'Update your account password.' })}</p>
               </div>
               <button className="user-modal-close" onClick={() => setShowPasswordModal(false)}>&#10005;</button>
             </div>
@@ -259,13 +261,13 @@ export default function SuperAdminMyProfile() {
                 {passwordErrors.form && <div className="field-error-text form-error" style={{ marginBottom: '12px' }}>{passwordErrors.form}</div>}
 
                 <div className="user-form-group">
-                  <label>Current Password</label>
+                  <label>{t('Current Password', { defaultValue: 'Current Password' })}</label>
                   <div style={{ position: 'relative' }}>
                     <input
                       type={showCurrentPassword ? 'text' : 'password'}
                       value={passwordForm.old_password}
                       onChange={(e) => setPasswordForm({ ...passwordForm, old_password: e.target.value })}
-                      placeholder="Enter current password"
+                      placeholder={t("Enter current password", { defaultValue: "Enter current password" })}
                       style={{ width: '100%', paddingRight: '40px' }}
                     />
                     <button type="button" onClick={() => setShowCurrentPassword(!showCurrentPassword)}
@@ -277,31 +279,31 @@ export default function SuperAdminMyProfile() {
                 </div>
 
                 <div className="user-form-group">
-                  <label>New Password</label>
+                  <label>{t('New Password', { defaultValue: 'New Password' })}</label>
                   <input
                     type="password"
                     value={passwordForm.new_password}
                     onChange={(e) => setPasswordForm({ ...passwordForm, new_password: e.target.value })}
-                    placeholder="Enter new password"
+                    placeholder={t("Enter new password", { defaultValue: "Enter new password" })}
                   />
                   {passwordErrors.new_password && <span className="field-error-text">{passwordErrors.new_password}</span>}
                 </div>
 
                 <div className="user-form-group">
-                  <label>Confirm New Password</label>
+                  <label>{t('Confirm New Password', { defaultValue: 'Confirm New Password' })}</label>
                   <input
                     type="password"
                     value={passwordForm.confirm_password}
                     onChange={(e) => setPasswordForm({ ...passwordForm, confirm_password: e.target.value })}
-                    placeholder="Confirm new password"
+                    placeholder={t("Confirm new password", { defaultValue: "Confirm new password" })}
                   />
                   {passwordErrors.confirm_password && <span className="field-error-text">{passwordErrors.confirm_password}</span>}
                 </div>
               </div>
               <div className="user-modal-footer">
-                <button type="button" className="user-btn user-btn-secondary" onClick={() => setShowPasswordModal(false)}>Cancel</button>
+                <button type="button" className="user-btn user-btn-secondary" onClick={() => setShowPasswordModal(false)}>{t('Cancel', { defaultValue: 'Cancel' })}</button>
                 <button type="submit" className="user-btn user-btn-primary" disabled={saving}>
-                  {saving ? <><Loader2 size={16} className="animate-spin" /> Updating...</> : <><Save size={16} /> Update Password</>}
+                  {saving ? <><Loader2 size={16} className="animate-spin" /> {t('Updating...', { defaultValue: 'Updating...' })}</> : <><Save size={16} /> {t('Update Password', { defaultValue: 'Update Password' })}</>}
                 </button>
               </div>
             </form>

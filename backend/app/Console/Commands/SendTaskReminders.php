@@ -66,6 +66,11 @@ class SendTaskReminders extends Command
                         continue;
                     }
 
+                    $userTz = NotificationService::resolveUserTimezone($recipientId);
+                    $taskDate = $task->end_date ?: $task->start_date;
+                    $localTime = $taskDate ? \Carbon\Carbon::parse($taskDate)->setTimezone($userTz)->format('d M Y, g:i A') : '';
+                    $timeSuffix = $localTime ? " (Due: {$localTime} {$userTz})" : '';
+
                     Notification::create([
                         'user_id' => $recipientId,
                         'sender_user_id' => $task->assigned_by ?? $recipientId,
@@ -73,7 +78,7 @@ class SendTaskReminders extends Command
                         'related_module' => 'task',
                         'related_id' => $task->id,
                         'title' => 'Task Reminder',
-                        'message' => "Reminder: Task '{$task->title}' is scheduled for {$interval['label']}.",
+                        'message' => "Reminder: Task '{$task->title}' is scheduled for {$interval['label']}{$timeSuffix}.",
                         'link' => '/tasks/task-details/'.$task->id.'?from=tasks',
                     ]);
 

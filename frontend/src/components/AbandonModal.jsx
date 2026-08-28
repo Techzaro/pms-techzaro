@@ -5,12 +5,14 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import LoadingButton from "./LoadingButton";
 import "./AbandonModal.css";
 
 function AbandonModal({ isOpen, onClose, title, subtitle, actionLabel, onSubmit, loading }) {
+  const { t } = useTranslation();
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
   useEscapeKey(isOpen, handleClose);
 
@@ -38,16 +40,16 @@ function AbandonModal({ isOpen, onClose, title, subtitle, actionLabel, onSubmit,
     <div className="abm-overlay">
       <div className="abm-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="abm-header">
-          <h2 className="abm-title">{title || "Abandon Task"}</h2>
+          <h2 className="abm-title">{title || t("Abandon Task", { defaultValue: "Abandon Task" })}</h2>
           {subtitle && <p className="abm-subtitle">{subtitle}</p>}
         </div>
 
         <div className="abm-body">
           <div className="abm-field">
-            <label className="abm-label">Reason / Justification</label>
+            <label className="abm-label">{t("Reason / Justification", { defaultValue: "Reason / Justification" })}</label>
             <textarea
               className="abm-textarea"
-              placeholder="Provide a reason for abandoning..."
+              placeholder={t("Provide a reason for abandoning...", { defaultValue: "Provide a reason for abandoning..." })}
               value={reason}
               onChange={(e) => {
                 setReason(e.target.value);
@@ -60,10 +62,10 @@ function AbandonModal({ isOpen, onClose, title, subtitle, actionLabel, onSubmit,
 
         <div className="abm-footer">
           <button className="abm-cancel-btn" onClick={handleClose} disabled={loading}>
-            Cancel
+            {t("Cancel")}
           </button>
           <LoadingButton className="abm-submit-btn" onClick={handleSubmit} loading={loading}>
-            {actionLabel || "Confirm Abandon"}
+            {actionLabel || t("Confirm Abandon", { defaultValue: "Confirm Abandon" })}
           </LoadingButton>
         </div>
       </div>

@@ -3,19 +3,21 @@
  * Renders role-based navigation links (dashboard, projects, tasks,
  * subtasks, calendar, reports, users, team) with collapsible
  * dropdowns. Supports three viewport modes:
- *   - Desktop (>1200px): always visible, icon+text
- *   - Tablet (769-1200px): collapsible on hover/click
- *   - Mobile (≤768px): overlay drawer toggled via hamburger menu
+ *    - Desktop (>1200px): always visible, icon+text
+ *    - Tablet (769-1200px): collapsible on hover/click
+ *    - Mobile (≤768px): overlay drawer toggled via hamburger menu
  * Persists dropdown open/closed state in sessionStorage and
  * auto-expands relevant sections based on the current route.
  */
 
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useEffect, useState, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import API_URL from "../../config/api";
 import { authToken, getCurrentRole, getUser, setUser, rolePath, getUrlRole, getTenantSlug } from "../../utils/auth";
 import { useOrgBranding } from "../../hooks/useOrgBranding";
 import { useOrgSubscription } from "../../hooks/useOrgSubscription";
+import { i18n } from "../../utils/i18n";
 
 import {
   MdDashboard,
@@ -43,6 +45,7 @@ import "./Sidebar.css";
  * Sidebar navigation component.
  */
 function Sidebar() {
+  const { t } = useTranslation();
   const { data: branding } = useOrgBranding();
   const { data: subData } = useOrgSubscription();
 
@@ -58,7 +61,6 @@ function Sidebar() {
 
   // ── Viewport mode state ──
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-
   const [isTabletExpanded, setIsTabletExpanded] = useState(false);
 
   // ── Collapsible dropdown state (persisted in sessionStorage) ──
@@ -89,7 +91,11 @@ function Sidebar() {
     });
   };
 
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(() => sessionStorage.getItem("settingsOpen") === "true");
+
+  useEffect(() => {
+    sessionStorage.setItem("settingsOpen", settingsOpen);
+  }, [settingsOpen]);
 
   /** Current user info – initialised from local storage. */
   const [user, setUserState] = useState(() => {
@@ -129,6 +135,8 @@ function Sidebar() {
     return "deliveries";
   };
 
+  const rolePath = (path) => `${rolePrefix}/${path}`;
+
   // Fetch user data from API on mount
   useEffect(() => {
     const token = authToken();
@@ -146,7 +154,10 @@ function Sidebar() {
         if (data && data.name) {
           setUserState({ name: data.name, email: data.email, role: data.role, avatar: data.avatar || null });
           const role = getCurrentRole();
-          setUser(role, { id: data.id, name: data.name, email: data.email, role: data.role, avatar: data.avatar || null });
+          setUser(role, data);
+          if (data.language) {
+            i18n.changeLanguage(data.language);
+          }
         }
       })
       .catch(() => {});
@@ -207,6 +218,7 @@ function Sidebar() {
 
     const isSettingsRoute =
       isActive("audit-logs") ||
+      isActive("feedback") ||
       isActive("settings/notifications") ||
       isActive("settings/personalization") ||
       isActive("branding") ||
@@ -255,11 +267,7 @@ function Sidebar() {
         onMouseLeave={handleMouseLeave}
         onClick={handleSidebarClick}
       >
-
-
-
         <div>
-
           {/* Dashboard link */}
           <Link
             to={rolePath("dashboard")}
@@ -267,7 +275,7 @@ function Sidebar() {
             onClick={(e) => e.stopPropagation()}
           >
             <MdDashboard />
-            <span>Dashboard</span>
+            <span>{t("Dashboard")}</span>
           </Link>
 
           {/* Projects link */}
@@ -278,7 +286,7 @@ function Sidebar() {
             onClick={(e) => e.stopPropagation()}
           >
             <MdOutlineDescription />
-            <span>Projects</span>
+            <span>{t("Projects")}</span>
           </Link>
           )}
 
@@ -290,7 +298,7 @@ function Sidebar() {
             onClick={(e) => e.stopPropagation()}
           >
             <MdTask />
-            <span>Tasks</span>
+            <span>{t("Tasks")}</span>
           </Link>
           )}
 
@@ -302,7 +310,7 @@ function Sidebar() {
               onClick={toggleTasks}
             >
               <MdTask />
-              <span style={{ flex: 1 }}>Tasks</span>
+              <span style={{ flex: 1 }}>{t("Tasks")}</span>
               <MdKeyboardArrowDown
                 size={18}
                 style={{
@@ -318,7 +326,7 @@ function Sidebar() {
                   className={`sidebar-sub-link ${isActive("tasks") || (isTaskDetailPage && getTaskFrom() === "tasks") ? "active" : ""}`}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  Assigned to You
+                  {t("Assigned to You")}
                 </Link>
                 {user.role !== "guest" && (
                 <>
@@ -327,21 +335,21 @@ function Sidebar() {
                   className={`sidebar-sub-link ${isActive("taskby") || (isTaskDetailPage && getTaskFrom() === "taskby") ? "active" : ""}`}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  Assigned by You
+                  {t("Assigned by You")}
                 </Link>
                 <Link
                   to={rolePath("self-tasks")}
                   className={`sidebar-sub-link ${isActive("self-tasks") || (isTaskDetailPage && getTaskFrom() === "self-tasks") ? "active" : ""}`}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  Self Tasks
+                  {t("Self Tasks")}
                 </Link>
                 <Link
                   to={rolePath("all-tasks")}
                   className={`sidebar-sub-link ${isActive("all-tasks") || (isTaskDetailPage && getTaskFrom() === "all-tasks") ? "active" : ""}`}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  All Tasks
+                  {t("All Tasks")}
                 </Link>
                 </>
                 )}
@@ -358,7 +366,7 @@ function Sidebar() {
               onClick={toggleSubtasks}
             >
               <MdAssignment />
-              <span style={{ flex: 1 }}>Subtasks</span>
+              <span style={{ flex: 1 }}>{t("Subtasks")}</span>
               <MdKeyboardArrowDown
                 size={18}
                 style={{
@@ -374,7 +382,7 @@ function Sidebar() {
                   className={`sidebar-sub-link ${isActive("deliveries") || (isSubtaskDetailPage && getSubtaskFrom() === "deliveries") ? "active" : ""}`}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  Assigned To You
+                  {t("Assigned To You")}
                 </Link>
                 {user.role !== "guest" && (
                 <>
@@ -383,21 +391,21 @@ function Sidebar() {
                   className={`sidebar-sub-link ${isActive("deliveries-by-you") || (isSubtaskDetailPage && getSubtaskFrom() === "deliveries-by-you") ? "active" : ""}`}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  Assigned By You
+                  {t("Assigned By You")}
                 </Link>
                 <Link
                   to={rolePath("self-deliveries")}
                   className={`sidebar-sub-link ${isActive("self-deliveries") || (isSubtaskDetailPage && getSubtaskFrom() === "self-deliveries") ? "active" : ""}`}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  Self Subtasks
+                  {t("Self Subtasks")}
                 </Link>
                 <Link
                   to={rolePath("all-deliverables")}
                   className={`sidebar-sub-link ${isActive("all-deliverables") || (isSubtaskDetailPage && getSubtaskFrom() === "all-deliverables") ? "active" : ""}`}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  All Sub-Tasks
+                  {t("All Sub-Tasks")}
                 </Link>
                 </>
                 )}
@@ -414,7 +422,7 @@ function Sidebar() {
             onClick={(e) => e.stopPropagation()}
           >
             <MdEditNote />
-            <span>Drafts</span>
+            <span>{t("Drafts")}</span>
           </Link>
           )}
 
@@ -425,7 +433,7 @@ function Sidebar() {
             onClick={(e) => e.stopPropagation()}
           >
             <MdDifference />
-            <span>Templates</span>
+            <span>{t("Templates")}</span>
           </Link>
 
           {/* Calendar link */}
@@ -436,7 +444,7 @@ function Sidebar() {
             onClick={(e) => e.stopPropagation()}
           >
             <MdCalendarToday />
-            <span>Calendar</span>
+            <span>{t("Calendar")}</span>
           </Link>
           )}
 
@@ -448,7 +456,7 @@ function Sidebar() {
             onClick={(e) => e.stopPropagation()}
           >
             <MdEvent />
-            <span>Events</span>
+            <span>{t("Events")}</span>
           </Link>
           )}
 
@@ -462,7 +470,7 @@ function Sidebar() {
               onClick={(e) => e.stopPropagation()}
             >
               <MdPerson />
-              <span>Users</span>
+              <span>{t("Users")}</span>
             </Link>
           )}
 
@@ -474,7 +482,7 @@ function Sidebar() {
               onClick={(e) => e.stopPropagation()}
             >
               <MdPeople />
-              <span>Team</span>
+              <span>{t("Teams", { defaultValue: "Teams" })}</span>
             </Link>
           )}
 
@@ -486,7 +494,7 @@ function Sidebar() {
               onClick={(e) => e.stopPropagation()}
             >
               <MdPeople />
-              <span>Team</span>
+              <span>{t("Teams", { defaultValue: "Teams" })}</span>
             </Link>
           )}
 
@@ -498,7 +506,7 @@ function Sidebar() {
                 onClick={toggleReports}
               >
                 <MdBarChart />
-                <span style={{ flex: 1 }}>Reports</span>
+                <span style={{ flex: 1 }}>{t("Reports")}</span>
                 <MdKeyboardArrowDown
                   size={18}
                   style={{
@@ -514,14 +522,14 @@ function Sidebar() {
                     className={`sidebar-sub-link ${location.pathname.startsWith(`${rolePrefix}/reports/user-performance/me`) ? "active" : ""}`}
                     onClick={(e) => e.stopPropagation()}
                   >
-                    Self Report
+                    {t("Self Report")}
                   </Link>
                   <Link
                     to={rolePath("team-members-report")}
                     className={`sidebar-sub-link ${isActive("team-members-report") ? "active" : ""}`}
                     onClick={(e) => e.stopPropagation()}
                   >
-                    Team Members Reports
+                    {t("Team Members Reports")}
                   </Link>
                 </div>
               )}
@@ -534,7 +542,7 @@ function Sidebar() {
               className={`sidebar-link ${isActive("reports") || location.pathname.startsWith(`${rolePrefix}/reports/team-members/`) || location.pathname.startsWith(`${rolePrefix}/reports/user-performance/`) ? "active" : ""}`}
             >
               <MdBarChart />
-              Reports
+              <span>{t("Reports")}</span>
             </Link>
           )}
 
@@ -546,18 +554,18 @@ function Sidebar() {
               onClick={(e) => e.stopPropagation()}
             >
               <MdMenuBook />
-              <span>Knowledge Base</span>
+              <span>{t("Knowledge Base")}</span>
             </Link>
           )}
 
           {/* Settings dropdown – click to toggle like Tasks */}
-          <div className={`sidebar-dropdown-group ${settingsOpen || isActive("audit-logs") || isActive("settings/notifications") || isActive("branding") || isActive("subscription") || isActive("organization-details") ? "open active" : ""}`}>
+          <div className={`sidebar-dropdown-group ${settingsOpen || isActive("audit-logs") || isActive("feedback") || isActive("settings/notifications") || isActive("settings/regional") || isActive("regional-settings") || isActive("branding") || isActive("subscription") || isActive("organization-details") ? "open active" : ""}`}>
             <div
               className="sidebar-dropdown-header"
               onClick={() => setSettingsOpen((p) => !p)}
             >
               <MdSettings fontSize={22} />
-              <span style={{ flex: 1 }}>Settings</span>
+              <span style={{ flex: 1 }}>{t("Settings")}</span>
               <MdKeyboardArrowDown
                 size={18}
                 style={{
@@ -574,22 +582,38 @@ function Sidebar() {
                     className={`sidebar-sub-link ${isActive("audit-logs") ? "active" : ""}`}
                     onClick={(e) => e.stopPropagation()}
                   >
-                    Application Logs
+                    {t("Application Logs")}
                   </Link>
                 )}
+                {(user.role === "admin" || user.role === "manager") && (
+                  <Link
+                    to={rolePath("feedback")}
+                    className={`sidebar-sub-link ${isActive("feedback") ? "active" : ""}`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {t("User Feedback")}
+                  </Link>
+                )}
+                <Link
+                  to={rolePath("settings/regional")}
+                  className={`sidebar-sub-link ${isActive("settings/regional") || isActive("regional-settings") ? "active" : ""}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {t("Regional Settings")}
+                </Link>
                 <Link
                   to={rolePath("settings/notifications")}
                   className={`sidebar-sub-link ${isActive("settings/notifications") ? "active" : ""}`}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  Notification Preferences
+                  {t("Notification Preferences")}
                 </Link>
                 <Link
                   to={rolePath("settings/personalization")}
                   className={`sidebar-sub-link ${isActive("settings/personalization") ? "active" : ""}`}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  Personalization
+                  {t("Personalization")}
                 </Link>
                 {(user.role === "admin") && (
                   <Link
@@ -597,7 +621,7 @@ function Sidebar() {
                     className={`sidebar-sub-link ${isActive("organization-details") ? "active" : ""}`}
                     onClick={(e) => e.stopPropagation()}
                   >
-                    Organization Details
+                    {t("Organization Details")}
                   </Link>
                 )}
                 {(user.role === "admin") && (
@@ -606,15 +630,13 @@ function Sidebar() {
                     className={`sidebar-sub-link ${isActive("branding") ? "active" : ""}`}
                     onClick={(e) => e.stopPropagation()}
                   >
-                    Branding
+                    {t("Branding")}
                   </Link>
                 )}
               </div>
             )}
           </div>
-
         </div>
-
       </div>
 
       {/* Mobile backdrop – clicking closes the sidebar */}

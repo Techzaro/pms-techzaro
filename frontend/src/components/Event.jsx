@@ -7,7 +7,8 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { authToken } from "../utils/auth";
+import { useTranslation } from "react-i18next";
+import { authToken, getUser } from "../utils/auth";
 import API_URL from "../config/api";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { useSubmit } from "../hooks/useSubmit";
@@ -20,6 +21,13 @@ import useDraftGuard from "../hooks/useDraftGuard";
 import useAutoSave from "../hooks/useAutoSave";
 import AutoSaveIndicator from "./AutoSaveIndicator";
 import RichTextEditor from "./RichTextEditor";
+import { Globe, AlertTriangle } from "lucide-react";
+import {
+  convertToLocal,
+  convertToUTC,
+  getTimezoneOffsetDisplay,
+  checkWorkingHoursCompliance,
+} from "../utils/timezoneUtils";
 import "./Event.css";
 
 const TYPE_MAP = {
@@ -69,6 +77,7 @@ const COLOR_MAP = {
  * @param {Object|null} [editEvent=null] - Event object to edit (null for creation mode)
  */
 function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraftId = null }) {
+  const { t } = useTranslation();
   const draftSaveRef = useRef(null);
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useDraftGuard(onClose, {
     draftSaveHandler: () => draftSaveRef.current?.(),
@@ -82,6 +91,9 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
   const [assignedUserIds, setAssignedUserIds] = useState([]);
   const [isGlobal, setIsGlobal] = useState(false);
   const [draftId, setDraftId] = useState(null);
+  const [timezonesList, setTimezonesList] = useState([]);
+  const [enforceOrgHours, setEnforceOrgHours] = useState(false);
+
   const getLocalDateStr = (d) => {
     const pad = (n) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -98,6 +110,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
     eventType: "Meeting",
     eventTypeCustom: "",
     allDay: false,
+    eventTimezone: getUser()?.timezone || "UTC",
   });
 
   const autoSaveData = useMemo(() => {
@@ -113,6 +126,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
       event_type: finalType || "Meeting",
       event_type_custom: formData.eventTypeCustom,
       all_day: formData.allDay,
+      event_timezone: formData.eventTimezone,
       assigned_user_ids: assignedUserIds,
       is_global: isGlobal,
     };
@@ -145,12 +159,13 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
         event_type: finalType || "Meeting",
         event_type_custom: formData.eventTypeCustom,
         all_day: formData.allDay,
+        event_timezone: formData.eventTimezone,
         assigned_user_ids: assignedUserIds,
         is_global: isGlobal,
       };
       const payload = {
         module_type: "event",
-        title: formData.title || "Untitled Event Draft",
+        title: formData.title || t("Untitled Event Draft", { defaultValue: "Untitled Event Draft" }),
         draft_data: draftData,
       };
       if (draftId) {
@@ -161,7 +176,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
       }
       setIsDirty(false);
     } catch (err) {
-      notify.error(err.message || "Save draft failed");
+      notify.error(err.message || t("Save draft failed", { defaultValue: "Save draft failed" }));
     }
   };
 
@@ -189,6 +204,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
         eventType: isKnownType || "__custom__",
         eventTypeCustom: isKnownType ? "" : (editEvent.type || ""),
         allDay: editEvent.all_day || false,
+        eventTimezone: editEvent.event_timezone || editEvent.timezone || getUser()?.timezone || "UTC",
       });
       setAssignedUserIds(editEvent.assigned_user_ids || []);
       setIsGlobal(Boolean(editEvent.is_global));
@@ -204,6 +220,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
         eventType: "Meeting",
         eventTypeCustom: "",
         allDay: false,
+        eventTimezone: getUser()?.timezone || "UTC",
       });
       setAssignedUserIds([]);
       setIsGlobal(false);
@@ -222,7 +239,59 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
       .then((res) => (res.ok ? res.json() : { users: [] }))
       .then((data) => setUsers(Array.isArray(data) ? data : (data.users || [])))
       .catch(() => setUsers([]));
+
+    // Fetch timezones list & Organization regional enforcement policy
+    fetch(`${API_URL}/regional-settings/timezones`, { headers: { Authorization: `Bearer ${token}` }, skipLoader: true })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.data && Array.isArray(d.data)) setTimezonesList(d.data);
+      })
+      .catch(() => {});
+
+    fetch(`${API_URL}/organization-settings/regional`, { headers: { Authorization: `Bearer ${token}` }, skipLoader: true })
+      .then((r) => r.json())
+      .then((d) => {
+        const reg = d?.data || d?.regional_settings;
+        if (reg && reg.enforce_working_hours !== undefined) {
+          setEnforceOrgHours(Boolean(reg.enforce_working_hours));
+        }
+      })
+      .catch(() => {});
   }, [isOpen]);
+
+  // Compute UTC strings and check Working Hours Compliance (SRS Sec 11, 13, 15, 16)
+  const startDateTimeUtc = useMemo(() => {
+    if (!formData.startDate) return null;
+    const time = formData.allDay ? "00:00:00" : `${formData.startTime}:00`;
+    return convertToUTC(`${formData.startDate} ${time}`, formData.eventTimezone || "UTC");
+  }, [formData.startDate, formData.startTime, formData.allDay, formData.eventTimezone]);
+
+  const endDateTimeUtc = useMemo(() => {
+    if (!formData.startDate) return null;
+    const endD = formData.hasEndDate ? formData.endDate : formData.startDate;
+    const endT = formData.hasEndDate ? formData.endTime : (formData.allDay ? "23:59:59" : `${formData.startTime}:00`);
+    return convertToUTC(`${endD} ${endT}`, formData.eventTimezone || "UTC");
+  }, [formData.startDate, formData.endDate, formData.endTime, formData.startTime, formData.hasEndDate, formData.allDay, formData.eventTimezone]);
+
+  const participantWarnings = useMemo(() => {
+    if (formData.allDay || !startDateTimeUtc || isGlobal) return [];
+    const warnings = [];
+    const selectedUsers = users.filter((u) => assignedUserIds.includes(u.id));
+    selectedUsers.forEach((u) => {
+      const uTz = u.timezone || "UTC";
+      const comp = checkWorkingHoursCompliance(startDateTimeUtc, endDateTimeUtc, u.working_hours, uTz);
+      if (!comp.isCompliant) {
+        warnings.push({
+          user: u,
+          reason: comp.reason,
+          localTime: comp.localTimeFormatted,
+          localDay: comp.localDay,
+          scheduleText: comp.scheduleText,
+        });
+      }
+    });
+    return warnings;
+  }, [formData.allDay, startDateTimeUtc, endDateTimeUtc, isGlobal, users, assignedUserIds]);
 
   // Restore draft data when opened from DraftCenter
   useEffect(() => {
@@ -298,7 +367,18 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
    */
   const handleCreate = async () => {
     if (!formData.title.trim()) {
-      notify.error("Event title is required");
+      notify.error(t("Event title is required", { defaultValue: "Event title is required" }));
+      return;
+    }
+
+    // Check organization policy enforcement for working hours (SRS Sec 11, 15, 16)
+    if (enforceOrgHours && participantWarnings.length > 0) {
+      notify.error(
+        t("Cannot schedule event: Organization strictly enforces working hours policy, and {{count}} participant(s) are outside their scheduled hours.", {
+          defaultValue: `Cannot schedule event: Organization strictly enforces working hours policy, and ${participantWarnings.length} participant(s) are outside their scheduled hours.`,
+          count: participantWarnings.length,
+        })
+      );
       return;
     }
 
@@ -322,6 +402,8 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
           color: COLOR_MAP[TYPE_MAP[formData.eventType]] || "#6b7280",
           start_date: startDateTime,
           end_date: endDateTime,
+          event_timezone: formData.eventTimezone || "UTC",
+          timezone: formData.eventTimezone || "UTC",
           all_day: formData.allDay,
           is_global: isGlobal,
           assigned_user_ids: isGlobal ? [] : assignedUserIds,
@@ -346,10 +428,10 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
         const data = await res.json();
 
         if (!res.ok) {
-          throw new Error(data.message || "Failed to save event");
+          throw new Error(data.message || t("Failed to save event", { defaultValue: "Failed to save event" }));
         }
 
-        showSuccessMessage("Event", isEditing ? "updated" : "created");
+        showSuccessMessage(t("Event", { defaultValue: "Event" }), isEditing ? t("updated", { defaultValue: "updated" }) : t("created", { defaultValue: "created" }));
         setStep(1);
         if (isEditing) {
           publish('event:updated', data.event || data);
@@ -362,7 +444,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
         onEventCreated?.(data.event);
         onClose();
       } catch (err) {
-        notify.error(err.message || "Something went wrong");
+        notify.error(err.message || t("Something went wrong", { defaultValue: "Something went wrong" }));
       }
     });
   };
@@ -375,12 +457,12 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
 
         <div className="event-header">
           <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
-            <h2 style={{ margin: 0 }}>{isEditing ? "Edit Event" : "Add New Event"}</h2>
+            <h2 style={{ margin: 0 }}>{isEditing ? t("Edit Event", { defaultValue: "Edit Event" }) : t("Add New Event", { defaultValue: "Add New Event" })}</h2>
             <AutoSaveIndicator isSaving={isSaving} lastSaved={lastSaved} />
           </div>
           <div className="event-header-actions" style={{ display: "flex", gap: 8 }}>
             <button className="event-save-draft-btn" onClick={handleSaveDraft} type="button">
-              Save Draft
+              {t("Save Draft", { defaultValue: "Save Draft" })}
             </button>
             <button className="event-close" onClick={handleClose}>×</button>
           </div>
@@ -388,20 +470,20 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
 
         {step === 1 && (
           <div className="event-step">
-            <label className="event-label required">Event Title</label>
+            <label className="event-label required">{t("Event Title", { defaultValue: "Event Title" })}</label>
             <input
               type="text"
               className="event-input"
-              placeholder="Enter name.."
+              placeholder={t("Enter name..", { defaultValue: "Enter name.." })}
               value={formData.title}
               onChange={(e) => handleChange("title", e.target.value)}
             />
 
-            <label className="event-label">Description</label>
+            <label className="event-label">{t("Description", { defaultValue: "Description" })}</label>
             <RichTextEditor
               value={formData.description}
               onChange={(val) => handleChange("description", val)}
-              placeholder="Add event description..."
+              placeholder={t("Add event description...", { defaultValue: "Add event description..." })}
             />
 
             <div className="event-dots">
@@ -410,15 +492,15 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
             </div>
 
             <div className="event-footer">
-              <button className="btn-cancel" onClick={handleClose}>Cancel</button>
-              <button className="btn-primary" onClick={handleNext}>Next</button>
+              <button className="btn-cancel" onClick={handleClose}>{t("Cancel")}</button>
+              <button className="btn-primary" onClick={handleNext}>{t("Next", { defaultValue: "Next" })}</button>
             </div>
           </div>
         )}
 
         {step === 2 && (
           <div className="event-step">
-            <label className="event-label required">Event Date</label>
+            <label className="event-label required">{t("Event Date", { defaultValue: "Event Date" })}</label>
 
             <div className="event-datetime-row">
               <input
@@ -447,7 +529,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
                 style={{ width: 16, height: 16, cursor: "pointer" }}
               />
               <label htmlFor="allDay" style={{ fontSize: 14, color: "#374151", cursor: "pointer" }}>
-                All Day Event
+                {t("All Day Event", { defaultValue: "All Day Event" })}
               </label>
             </div>
 
@@ -466,7 +548,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
                 style={{ width: 16, height: 16, cursor: "pointer" }}
               />
               <label htmlFor="hasEndDate" style={{ fontSize: 14, color: "#374151", cursor: "pointer" }}>
-                Add End Date &amp; Time
+                {t("Add End Date & Time", { defaultValue: "Add End Date & Time" })}
               </label>
             </div>
 
@@ -490,13 +572,36 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
               </div>
             )}
 
-            <label className="event-label">Event Type</label>
+            {/* Event Timezone Selector (SRS Sec 11) */}
+            <div style={{ marginBottom: 12 }}>
+              <label className="event-label" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <Globe size={13} style={{ color: "var(--color-primary, #4f46e5)" }} /> {t("Event Timezone (IANA)", { defaultValue: "Event Timezone (IANA)" })}
+              </label>
+              <select
+                className="event-input"
+                value={formData.eventTimezone}
+                onChange={(e) => handleChange("eventTimezone", e.target.value)}
+                style={{ marginBottom: 0 }}
+              >
+                {timezonesList.length > 0 ? (
+                  timezonesList.map((tz) => (
+                    <option key={tz} value={tz}>{tz} {getTimezoneOffsetDisplay(tz)}</option>
+                  ))
+                ) : (
+                  ['UTC', 'America/New_York', 'America/Chicago', 'America/Los_Angeles', 'Europe/London', 'Europe/Berlin', 'Asia/Dubai', 'Asia/Karachi', 'Asia/Kolkata', 'Asia/Tokyo'].map((tz) => (
+                    <option key={tz} value={tz}>{tz} {getTimezoneOffsetDisplay(tz)}</option>
+                  ))
+                )}
+              </select>
+            </div>
+
+            <label className="event-label">{t("Event Type", { defaultValue: "Event Type" })}</label>
             {formData.eventType === "__custom__" ? (
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
                 <input
                   type="text"
                   className="event-input"
-                  placeholder="Enter custom event type"
+                  placeholder={t("Enter custom event type", { defaultValue: "Enter custom event type" })}
                   value={formData.eventTypeCustom}
                   onChange={(e) => handleChange("eventTypeCustom", e.target.value)}
                   autoFocus
@@ -506,7 +611,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
                   type="button"
                   className="custom-input-revert"
                   onClick={() => handleChange("eventType", "Meeting")}
-                  title="Back to list"
+                  title={t("Back to list", { defaultValue: "Back to list" })}
                   style={{ flexShrink: 0, width: 36, height: 36, border: "1px solid var(--border-color)", borderRadius: 10, background: "var(--bg-hover)", color: "var(--text-secondary)", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
                 >
                   &times;
@@ -521,7 +626,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
               >
                 {eventTypes.map((type) => (
                   <option key={type.label} value={type.value || type.label}>
-                    {type.label}
+                    {t(type.label)}
                   </option>
                 ))}
               </select>
@@ -540,19 +645,96 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
                 style={{ width: 16, height: 16, cursor: "pointer" }}
               />
               <label htmlFor="assignAll" style={{ fontSize: 14, color: "#374151", cursor: "pointer" }}>
-                Assign To All Users
+                {t("Assign To All Users", { defaultValue: "Assign To All Users" })}
               </label>
             </div>
 
             {!isGlobal && (
               <div style={{ marginTop: 14 }}>
-                <label className="event-label">Assign Users</label>
+                <label className="event-label">{t("Assign Users", { defaultValue: "Assign Users" })}</label>
                 <UserSelectDropdown
                   users={users}
                   selectedIds={assignedUserIds}
                   onChange={(ids) => { setIsDirty(true); setAssignedUserIds(ids); }}
-                  placeholder="Select users to assign"
+                  placeholder={t("Select users to assign", { defaultValue: "Select users to assign" })}
                 />
+
+                {/* Selected Attendees Working Hours & Local Event Time (SRS Sec 13 & 15) */}
+                {assignedUserIds.length > 0 && startDateTimeUtc && (
+                  <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+                    {users
+                      .filter((u) => assignedUserIds.includes(u.id))
+                      .map((u) => {
+                        const uTz = u.timezone || "UTC";
+                        const comp = checkWorkingHoursCompliance(startDateTimeUtc, endDateTimeUtc, u.working_hours, uTz);
+                        return (
+                          <div
+                            key={u.id}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              padding: "4px 8px",
+                              borderRadius: 6,
+                              background: comp.isCompliant ? "var(--bg-hover, #f8fafc)" : "rgba(239, 68, 68, 0.08)",
+                              border: `1px solid ${comp.isCompliant ? "var(--border-light, #e2e8f0)" : "rgba(239, 68, 68, 0.3)"}`,
+                              fontSize: 11,
+                              flexWrap: "wrap",
+                              gap: 4,
+                            }}
+                          >
+                            <span style={{ fontWeight: 600 }}>{u.name}</span>
+                            <span style={{ color: "var(--text-secondary)" }}>
+                              {t("Local", { defaultValue: "Local" })}: <strong>{comp.localTimeFormatted}</strong> ({uTz})
+                            </span>
+                            <span style={{ color: comp.isCompliant ? "var(--color-success, #10b981)" : "var(--color-danger, #ef4444)", fontWeight: 600 }}>
+                              {comp.isCompliant ? `✓ ${comp.scheduleText}` : `⚠ ${t("Outside Hours", { defaultValue: "Outside Hours" })} (${comp.scheduleText})`}
+                            </span>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* WORKING HOURS WARNING BANNER (SRS Sec 15 & 16) */}
+            {participantWarnings.length > 0 && (
+              <div
+                style={{
+                  marginTop: 14,
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  background: enforceOrgHours ? "rgba(239, 68, 68, 0.1)" : "rgba(245, 158, 11, 0.1)",
+                  border: `1px solid ${enforceOrgHours ? "#ef4444" : "#f59e0b"}`,
+                  color: enforceOrgHours ? "#b91c1c" : "#b45309",
+                  fontSize: 12,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 700, marginBottom: 4 }}>
+                  <AlertTriangle size={15} />
+                  {enforceOrgHours
+                    ? t("Strict Organization Policy: Outside Working Hours", { defaultValue: "Strict Organization Policy: Outside Working Hours" })
+                    : t("Working Hours Warning (Non-Blocking)", { defaultValue: "Working Hours Warning (Non-Blocking)" })}
+                </div>
+                <ul style={{ margin: 0, paddingLeft: 16, display: "flex", flexDirection: "column", gap: 2 }}>
+                  {participantWarnings.map((w, idx) => (
+                    <li key={idx}>
+                      {t("{{name}}'s local time will be {{time}} ({{day}}), outside their working hours of {{schedule}}.", {
+                        defaultValue: `${w.user.name}'s local time will be ${w.localTime} (${w.localDay}), outside their working hours of ${w.scheduleText}.`,
+                        name: w.user.name,
+                        time: w.localTime,
+                        day: w.localDay,
+                        schedule: w.scheduleText,
+                      })}
+                    </li>
+                  ))}
+                </ul>
+                {enforceOrgHours && (
+                  <p style={{ margin: "6px 0 0 0", fontSize: 11, fontWeight: 600 }}>
+                    ⛔ {t("Organization policy strictly enforces working hours. Submission blocked.", { defaultValue: "Organization policy strictly enforces working hours. Submission blocked." })}
+                  </p>
+                )}
               </div>
             )}
 
@@ -562,13 +744,13 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
             </div>
 
             <div className="event-footer">
-              <button className="btn-cancel" onClick={handleBack}>Back</button>
+              <button className="btn-cancel" onClick={handleBack}>{t("Back", { defaultValue: "Back" })}</button>
               <LoadingButton
                 className="btn-primary"
                 onClick={handleCreate}
                 loading={submitting}
               >
-                {isEditing ? "Update Event" : "Create Event"}
+                {isEditing ? t("Update Event", { defaultValue: "Update Event" }) : t("Create Event", { defaultValue: "Create Event" })}
               </LoadingButton>
             </div>
           </div>

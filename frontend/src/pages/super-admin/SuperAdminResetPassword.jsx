@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useSearchParams, Link } from "react-router-dom";
 import { api } from "./api/superAdminApi";
 import "../../pages/ResetPassword.css";
 
 function SuperAdminResetPassword() {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
   const email = searchParams.get("email");
@@ -28,11 +30,11 @@ function SuperAdminResetPassword() {
   };
 
   const getStrengthLabel = (score) => {
-    if (score <= 1) return { label: "Very Weak", color: "#dc2626", bg: "#fef2f2" };
-    if (score === 2) return { label: "Weak", color: "#ea580c", bg: "#fff7ed" };
-    if (score === 3) return { label: "Fair", color: "#ca8a04", bg: "#fefce8" };
-    if (score === 4) return { label: "Strong", color: "#16a34a", bg: "#f0fdf4" };
-    return { label: "Very Strong", color: "#15803d", bg: "#f0fdf4" };
+    if (score <= 1) return { labelKey: "Very Weak", defaultLabel: "Very Weak", color: "#dc2626", bg: "#fef2f2" };
+    if (score === 2) return { labelKey: "Weak", defaultLabel: "Weak", color: "#ea580c", bg: "#fff7ed" };
+    if (score === 3) return { labelKey: "Fair", defaultLabel: "Fair", color: "#ca8a04", bg: "#fefce8" };
+    if (score === 4) return { labelKey: "Strong", defaultLabel: "Strong", color: "#16a34a", bg: "#f0fdf4" };
+    return { labelKey: "Very Strong", defaultLabel: "Very Strong", color: "#15803d", bg: "#f0fdf4" };
   };
 
   const validate = () => {
@@ -40,30 +42,30 @@ function SuperAdminResetPassword() {
     let valid = true;
 
     if (!password) {
-      errors.password = "Please enter a new password.";
+      errors.password = t("Please enter a new password.", { defaultValue: "Please enter a new password." });
       valid = false;
     } else if (password.length < 8) {
-      errors.password = "Password must be at least 8 characters long.";
+      errors.password = t("Password must be at least 8 characters long.", { defaultValue: "Password must be at least 8 characters long." });
       valid = false;
     } else if (!/[A-Z]/.test(password)) {
-      errors.password = "Password must contain at least one uppercase letter.";
+      errors.password = t("Password must contain at least one uppercase letter.", { defaultValue: "Password must contain at least one uppercase letter." });
       valid = false;
     } else if (!/[a-z]/.test(password)) {
-      errors.password = "Password must contain at least one lowercase letter.";
+      errors.password = t("Password must contain at least one lowercase letter.", { defaultValue: "Password must contain at least one lowercase letter." });
       valid = false;
     } else if (!/[0-9]/.test(password)) {
-      errors.password = "Password must contain at least one number.";
+      errors.password = t("Password must contain at least one number.", { defaultValue: "Password must contain at least one number." });
       valid = false;
     } else if (!/[@$!%*?&#]/.test(password)) {
-      errors.password = "Password must contain at least one special character (@$!%*?&#).";
+      errors.password = t("Password must contain at least one special character (@$!%*?&#).", { defaultValue: "Password must contain at least one special character (@$!%*?&#)." });
       valid = false;
     }
 
     if (!confirmPassword) {
-      errors.confirmPassword = "Please confirm your password.";
+      errors.confirmPassword = t("Please confirm your password.", { defaultValue: "Please confirm your password." });
       valid = false;
     } else if (password !== confirmPassword) {
-      errors.confirmPassword = "Password confirmation does not match";
+      errors.confirmPassword = t("Password confirmation does not match", { defaultValue: "Password confirmation does not match" });
       valid = false;
     }
 
@@ -78,7 +80,7 @@ function SuperAdminResetPassword() {
     if (!validate()) return;
 
     if (!token || !email) {
-      setError("Invalid or expired reset link. Please request a new one.");
+      setError(t("Invalid or expired reset link. Please request a new one.", { defaultValue: "Invalid or expired reset link. Please request a new one." }));
       return;
     }
 
@@ -88,7 +90,7 @@ function SuperAdminResetPassword() {
       await api.resetPassword(email, token, password);
       setSuccess(true);
     } catch (err) {
-      setError(err.message || "Failed to reset password. Please try again.");
+      setError(t(err.message || "Failed to reset password. Please try again.", { defaultValue: err.message || "Failed to reset password. Please try again." }));
     } finally {
       setLoading(false);
     }
@@ -104,8 +106,8 @@ function SuperAdminResetPassword() {
               alt="TechXaro Logo"
               className="reset-left-logo"
             />
-            <h1>TECHXARO</h1>
-            <p>Organization Management System</p>
+            <h1>{t('TECHXARO', { defaultValue: 'TECHXARO' })}</h1>
+            <p>{t('Organization Management System', { defaultValue: 'Organization Management System' })}</p>
           </div>
         </div>
 
@@ -118,13 +120,12 @@ function SuperAdminResetPassword() {
                 <line x1="9" y1="9" x2="15" y2="15"/>
               </svg>
             </div>
-            <h2>Invalid Reset Link</h2>
+            <h2>{t('Invalid Reset Link', { defaultValue: 'Invalid Reset Link' })}</h2>
             <p className="reset-error-text">
-              This password reset link is invalid or has expired.
-              Please request a new one.
+              {t('This password reset link is invalid or has expired. Please request a new one.', { defaultValue: 'This password reset link is invalid or has expired. Please request a new one.' })}
             </p>
             <Link to="/super-admin/forgot-password" className="reset-submit-btn" style={{ textAlign: "center", textDecoration: "none" }}>
-              Request New Link
+              {t('Request New Link', { defaultValue: 'Request New Link' })}
             </Link>
           </div>
         </div>
@@ -142,8 +143,8 @@ function SuperAdminResetPassword() {
               alt="TechXaro Logo"
               className="reset-left-logo"
             />
-            <h1>TECHXARO</h1>
-            <p>Organization Management System</p>
+            <h1>{t('TECHXARO', { defaultValue: 'TECHXARO' })}</h1>
+            <p>{t('Organization Management System', { defaultValue: 'Organization Management System' })}</p>
           </div>
         </div>
 
@@ -155,17 +156,16 @@ function SuperAdminResetPassword() {
                 <polyline points="22 4 12 14.01 9 11.01"/>
               </svg>
             </div>
-            <h2>Password Reset Successful</h2>
+            <h2>{t('Password Reset Successful', { defaultValue: 'Password Reset Successful' })}</h2>
             <p className="reset-success-text">
-              Your password has been reset successfully.
-              You can now log in with your new password.
+              {t('Your password has been reset successfully. You can now log in with your new password.', { defaultValue: 'Your password has been reset successfully. You can now log in with your new password.' })}
             </p>
             <Link to="/super-admin/login" className="reset-submit-btn" style={{ textAlign: "center", textDecoration: "none" }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="19" y1="12" x2="5" y2="12"/>
                 <polyline points="12 19 5 12 12 5"/>
               </svg>
-              Go to Login
+              {t('Go to Login', { defaultValue: 'Go to Login' })}
             </Link>
           </div>
         </div>
@@ -185,8 +185,8 @@ function SuperAdminResetPassword() {
             alt="TechXaro Logo"
             className="reset-left-logo"
           />
-          <h1>TECHXARO</h1>
-          <p>Organization Management System</p>
+          <h1>{t('TECHXARO', { defaultValue: 'TECHXARO' })}</h1>
+          <p>{t('Organization Management System', { defaultValue: 'Organization Management System' })}</p>
         </div>
       </div>
 
@@ -198,23 +198,23 @@ function SuperAdminResetPassword() {
                 <line x1="19" y1="12" x2="5" y2="12"/>
                 <polyline points="12 19 5 12 12 5"/>
               </svg>
-              Back to Login
+              {t('Back to Login', { defaultValue: 'Back to Login' })}
             </Link>
           </div>
 
-          <h2>Reset Password</h2>
+          <h2>{t('Reset Password', { defaultValue: 'Reset Password' })}</h2>
           <p className="reset-subtitle">
-            Enter your new password below. Make sure it's strong and secure.
+            {t("Enter your new password below. Make sure it's strong and secure.", { defaultValue: "Enter your new password below. Make sure it's strong and secure." })}
           </p>
 
           {error && <div className="reset-error-box">{error}</div>}
 
           <form onSubmit={handleSubmit}>
-            <label className="reset-label">New Password</label>
+            <label className="reset-label">{t('New Password', { defaultValue: 'New Password' })}</label>
             <div className="reset-input-wrapper">
               <input
                 type={showPassword ? "text" : "password"}
-                placeholder="Enter new password"
+                placeholder={t("Enter new password", { defaultValue: "Enter new password" })}
                 value={password}
                 onChange={(e) => { setPassword(e.target.value); setFieldErrors(prev => ({ ...prev, password: "" })); }}
                 className={fieldErrors.password ? "field-error" : ""}
@@ -254,37 +254,37 @@ function SuperAdminResetPassword() {
                   ))}
                 </div>
                 <span className="reset-strength-label" style={{ color: strengthInfo.color }}>
-                  {strengthInfo.label}
+                  {t(strengthInfo.labelKey, { defaultValue: strengthInfo.defaultLabel })}
                 </span>
               </div>
             )}
 
             <div className="reset-password-rules">
-              <p className="reset-rules-title">Password must contain:</p>
+              <p className="reset-rules-title">{t('Password must contain:', { defaultValue: 'Password must contain:' })}</p>
               <div className="reset-rules-grid">
                 <span className={password.length >= 8 ? "rule-met" : ""}>
-                  {password.length >= 8 ? "✓" : "○"} At least 8 characters
+                  {password.length >= 8 ? "✓" : "○"} {t('At least 8 characters', { defaultValue: 'At least 8 characters' })}
                 </span>
                 <span className={/[A-Z]/.test(password) ? "rule-met" : ""}>
-                  {/[A-Z]/.test(password) ? "✓" : "○"} One uppercase letter
+                  {/[A-Z]/.test(password) ? "✓" : "○"} {t('One uppercase letter', { defaultValue: 'One uppercase letter' })}
                 </span>
                 <span className={/[a-z]/.test(password) ? "rule-met" : ""}>
-                  {/[a-z]/.test(password) ? "✓" : "○"} One lowercase letter
+                  {/[a-z]/.test(password) ? "✓" : "○"} {t('One lowercase letter', { defaultValue: 'One lowercase letter' })}
                 </span>
                 <span className={/[0-9]/.test(password) ? "rule-met" : ""}>
-                  {/[0-9]/.test(password) ? "✓" : "○"} One number
+                  {/[0-9]/.test(password) ? "✓" : "○"} {t('One number', { defaultValue: 'One number' })}
                 </span>
                 <span className={/[@$!%*?&#]/.test(password) ? "rule-met" : ""}>
-                  {/[@$!%*?&#]/.test(password) ? "✓" : "○"} One special character
+                  {/[@$!%*?&#]/.test(password) ? "✓" : "○"} {t('One special character', { defaultValue: 'One special character' })}
                 </span>
               </div>
             </div>
 
-            <label className="reset-label">Confirm Password</label>
+            <label className="reset-label">{t('Confirm Password', { defaultValue: 'Confirm Password' })}</label>
             <div className="reset-input-wrapper">
               <input
                 type={showConfirmPassword ? "text" : "password"}
-                placeholder="Confirm new password"
+                placeholder={t("Confirm new password", { defaultValue: "Confirm new password" })}
                 value={confirmPassword}
                 onChange={(e) => { setConfirmPassword(e.target.value); setFieldErrors(prev => ({ ...prev, confirmPassword: "" })); }}
                 className={fieldErrors.confirmPassword ? "field-error" : ""}
@@ -316,13 +316,13 @@ function SuperAdminResetPassword() {
               className="reset-submit-btn"
               style={{ width: "100%", marginTop: "16px" }}
             >
-              {loading ? "Resetting..." : "Reset Password"}
+              {loading ? t("Resetting...", { defaultValue: "Resetting..." }) : t("Reset Password", { defaultValue: "Reset Password" })}
             </button>
           </form>
         </div>
 
         <div className="reset-footer">
-          &copy; {new Date().getFullYear()} TechXaro. All rights reserved.
+          &copy; {new Date().getFullYear()} TechXaro. {t('All rights reserved.', { defaultValue: 'All rights reserved.' })}
         </div>
       </div>
     </div>

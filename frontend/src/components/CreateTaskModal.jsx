@@ -14,9 +14,12 @@ import LoadingButton from "./LoadingButton";
 import ConfirmModal from "./ConfirmModal";
 
 import { formatDateTime, toDatetimeLocal, toUTCIso, getNowDatetimeLocal } from "../utils/formatDateTime";
+import { convertToLocal, convertToUTC, formatLocalTime, getTimezoneOffsetDisplay, formatWorkingHoursSummary } from "../utils/timezoneUtils";
+import { Clock } from "lucide-react";
 import { publish } from "../utils/eventBus";
 import { notify, showSuccessMessage } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
+import { useTranslation } from "react-i18next";
 import RichTextEditor from "./RichTextEditor";
 import CreateSubtaskModal from "./layout/CreateDeliverableModel";
 import "./layout/CreateTaskModal.css";
@@ -141,6 +144,7 @@ function generatePreview(templates, settings, startDate, endDate) {
 }
 
 const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreDraftId = null, prefillData = null, onTaskCreated = null }) => {
+  const { t } = useTranslation();
   const draftSaveRef = useRef(null);
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useDraftGuard(onClose, {
     draftSaveHandler: () => draftSaveRef.current?.(),
@@ -688,16 +692,16 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
             <div className="task-header-left">
               <div className="task-icon">⊕</div>
               <div>
-                <h2>Create New Task</h2>
-                <p>Add task details and assign it to team members.</p>
+                <h2>{t("Create Task")}</h2>
+                <p>{t("Add task details and assign it to team members.", { defaultValue: "Add task details and assign it to team members." })}</p>
               </div>
               <AutoSaveIndicator isSaving={isSaving} lastSaved={lastSaved} />
             </div>
             <div className="task-header-actions">
               <button className="task-save-draft-btn" onClick={handleSaveDraft} type="button" disabled={!form.title.trim()}>
-                Save Draft
+                {t("Save Draft", { defaultValue: "Save Draft" })}
               </button>
-              <LoadingButton className="task-create-btn" onClick={handleSubmit} loading={submitting}>+ Create Task</LoadingButton>
+              <LoadingButton className="task-create-btn" onClick={handleSubmit} loading={submitting}>{t("+ Create Task", { defaultValue: "+ Create Task" })}</LoadingButton>
               <button className="task-close-btn" onClick={handleClose}>✕</button>
             </div>
           </div>
@@ -708,61 +712,101 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
               <div className="task-grid-2">
                 {!projectId ? (
                   <div className="task-field">
-                    <label>Projects <span style={{ color: "#ef4444" }}>*</span></label>
+                    <label>{t("Projects")} <span style={{ color: "#ef4444" }}>*</span></label>
                     <MultiSelectDropdown name="project_id" value={form.project_id} onChange={(val) => handleChange({ target: { name: "project_id", value: val } })}
-                      placeholder="Select projects" searchPlaceholder="Search projects..." options={projects.map((p) => ({ value: p.id, label: p.title }))} />
+                      placeholder={t("Select projects", { defaultValue: "Select projects" })} searchPlaceholder={t("Search projects...")} options={projects.map((p) => ({ value: p.id, label: p.title }))} />
                     {formErrors.project_id && <span className="field-error-text">{formErrors.project_id}</span>}
                   </div>
                 ) : (
                   <div className="task-field">
-                    <label>Project <span style={{ color: "#ef4444" }}>*</span></label>
-                    <div className="task-project-name">{projectName || "Current Project"}</div>
+                    <label>{t("Project", { defaultValue: "Project" })} <span style={{ color: "#ef4444" }}>*</span></label>
+                    <div className="task-project-name">{projectName || t("Current Project", { defaultValue: "Current Project" })}</div>
                   </div>
                 )}
                 <div className="task-field">
-                  <label>Assign To <span>*</span></label>
+                  <label>{t("Assign To", { defaultValue: "Assign To" })} <span>*</span></label>
                   <UserSelectDropdown users={displayUsers} selectedIds={form.assigned_to} onChange={handleAssignedToChange}
-                    placeholder="Click to select members" error={!!formErrors.assigned_to} />
+                    placeholder={t("Click to select members", { defaultValue: "Click to select members" })} error={!!formErrors.assigned_to} />
                   {formErrors.assigned_to && <span className="field-error-text">{formErrors.assigned_to}</span>}
+
+                  {/* Assignee Timezone, Current Time & Working Hours (SRS Sec 13 & 17) */}
+                  {form.assigned_to && form.assigned_to.length > 0 && (
+                    <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                      {displayUsers
+                        .filter((u) => form.assigned_to.includes(u.id))
+                        .map((u) => {
+                          const tz = u.timezone || "UTC";
+                          const uTime = formatLocalTime(new Date().toISOString(), tz);
+                          const workingHoursStr = formatWorkingHoursSummary(u.working_hours, tz);
+                          return (
+                            <div
+                              key={u.id}
+                              style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "3px",
+                                fontSize: "12px",
+                                color: "var(--text-secondary, #4b5563)",
+                                background: "var(--bg-hover, #f8fafc)",
+                                padding: "6px 10px",
+                                borderRadius: "6px",
+                                border: "1px solid var(--border-light, #e2e8f0)",
+                              }}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                                <Clock size={13} style={{ color: "var(--color-primary, #4f46e5)", flexShrink: 0 }} />
+                                <span>
+                                  <strong>{u.name}</strong>'s {t("Time", { defaultValue: "Time" })}:{" "}
+                                  <span style={{ color: "var(--color-primary, #4f46e5)", fontWeight: 600 }}>{uTime}</span> ({tz})
+                                </span>
+                              </div>
+                              <div style={{ fontSize: "11px", color: "var(--text-secondary)", paddingLeft: "19px" }}>
+                                🕒 {t("Working Hours", { defaultValue: "Working Hours" })}: <span style={{ fontWeight: 500, color: "var(--text-primary, #1e293b)" }}>{workingHoursStr}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
                 </div>
               </div>
 
               <div className="task-field">
-                <label>Followers (Optional)</label>
+                <label>{t("Followers (Optional)", { defaultValue: "Followers (Optional)" })}</label>
                 <UserSelectDropdown
                   users={displayUsers.filter((u) => !form.assigned_to.includes(u.id))}
                   selectedIds={form.followers || []}
                   onChange={handleFollowersChange}
-                  placeholder="Click to select followers"
+                  placeholder={t("Click to select followers", { defaultValue: "Click to select followers" })}
                 />
               </div>
 
               <div className="task-field">
-                <label>Task Name <span>*</span></label>
-                <input type="text" name="title" placeholder="Enter task name.." value={form.title} onChange={handleChange} className={formErrors.title ? "field-error" : ""} />
+                <label>{t("Task Name")} <span>*</span></label>
+                <input type="text" name="title" placeholder={t("Enter task name..", { defaultValue: "Enter task name.." })} value={form.title} onChange={handleChange} className={formErrors.title ? "field-error" : ""} />
                 {formErrors.title && <span className="field-error-text">{formErrors.title}</span>}
               </div>
 
               <div className="task-field">
-                <label>Description</label>
+                <label>{t("Description", { defaultValue: "Description" })}</label>
                 <RichTextEditor
                   value={form.description}
                   onChange={(val) => { const clean = (s) => (s || "").replace(/<[^>]*>/g, "").trim(); setForm((prev) => ({ ...prev, description: val })); markDirty(); }}
-                  placeholder="Enter task description..."
+                  placeholder={t("Enter task description...", { defaultValue: "Enter task description..." })}
                 />
               </div>
 
               {/* LINKS & ATTACHMENTS */}
               <div className="task-field">
-                <label>Links & Attachment</label>
+                <label>{t("Links & Attachment", { defaultValue: "Links & Attachment" })}</label>
                 <div className="task-drop-zone" ref={dropRef} onDrop={handleDrop} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onClick={() => fileInputRef.current?.click()}>
                   <div className="task-drop-content">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
                     </svg>
-                    <p className="task-drop-text">Drag & drop files here</p>
+                    <p className="task-drop-text">{t("Drag & drop files here", { defaultValue: "Drag & drop files here" })}</p>
                   </div>
-                  <span className="task-drop-browse">or browse</span>
+                  <span className="task-drop-browse">{t("or browse", { defaultValue: "or browse" })}</span>
                   <input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={(e) => { if (e.target.files.length > 0) handleFiles(e.target.files); e.target.value = ""; }} />
                 </div>
 
@@ -770,7 +814,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                   <div className="cp-attachments-list">
                     {pendingFiles.map((file, index) => (
                       <div key={index} className="cp-attachment-item">
-                        <span className="cp-attachment-drag" title="Drag to reorder">
+                        <span className="cp-attachment-drag" title={t("Drag to reorder", { defaultValue: "Drag to reorder" })}>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
                         </span>
                         <span className="task-attachment-icon">📄</span>
@@ -779,7 +823,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                           <span className="task-attachment-size">{(file.size / 1024).toFixed(1)} KB</span>
                         </div>
                         <div className="cp-attachment-actions">
-                          <button type="button" className="cp-action-btn cp-action-btn-edit" title="Edit Name" onClick={() => {
+                          <button type="button" className="cp-action-btn cp-action-btn-edit" title={t("Edit Name", { defaultValue: "Edit Name" })} onClick={() => {
                             setEditingFile({ type: "pending", index, currentName: file.customName || file.name });
                             setEditFileForm({ title: file.customName || file.name.replace(/\.[^.]+$/, "") });
                             setEditFileNewFile(null);
@@ -788,7 +832,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                           }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                           </button>
-                          <button type="button" className="cp-action-btn cp-action-btn-delete" title="Delete File" onClick={() => { setPendingRemoveItem({ type: "file", index }); setRemoveConfirmOpen(true); }}>
+                          <button type="button" className="cp-action-btn cp-action-btn-delete" title={t("Delete File", { defaultValue: "Delete File" })} onClick={() => { setPendingRemoveItem({ type: "file", index }); setRemoveConfirmOpen(true); }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                           </button>
                         </div>
@@ -797,13 +841,13 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                   </div>
                 )}
 
-                <div className="task-or-divider"><span className="task-or-line"></span><span className="task-or-text">OR</span><span className="task-or-line"></span></div>
+                <div className="task-or-divider"><span className="task-or-line"></span><span className="task-or-text">{t("OR", { defaultValue: "OR" })}</span><span className="task-or-line"></span></div>
 
                 <div className="task-link-input-row" style={{ flexDirection: "column", gap: "8px" }}>
-                  <input type="text" placeholder="Link title (e.g. Figma Design, Drive Folder)" value={linkTitleInput} onChange={(e) => { setLinkTitleInput(e.target.value); markDirty(); }} />
+                  <input type="text" placeholder={t("Link title (e.g. Figma Design, Drive Folder)", { defaultValue: "Link title (e.g. Figma Design, Drive Folder)" })} value={linkTitleInput} onChange={(e) => { setLinkTitleInput(e.target.value); markDirty(); }} />
                   <div style={{ display: "flex", gap: "8px" }}>
-                    <input type="text" placeholder="Paste link (Drive, Figma, Website, etc.)" value={linkInput} onChange={(e) => { setLinkInput(e.target.value); markDirty(); }} onKeyDown={handleLinkKeyDown} style={{ flex: 1 }} />
-                    <button type="button" className="task-link-add-btn" onClick={handleAddLink} disabled={!linkInput.trim()}>Add Link</button>
+                    <input type="text" placeholder={t("Paste link (Drive, Figma, Website, etc.)", { defaultValue: "Paste link (Drive, Figma, Website, etc.)" })} value={linkInput} onChange={(e) => { setLinkInput(e.target.value); markDirty(); }} onKeyDown={handleLinkKeyDown} style={{ flex: 1 }} />
+                    <button type="button" className="task-link-add-btn" onClick={handleAddLink} disabled={!linkInput.trim()}>{t("Add Link", { defaultValue: "Add Link" })}</button>
                   </div>
                 </div>
               </div>
@@ -812,7 +856,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                 <div className="cp-attachments-list">
                   {links.map((link, index) => (
                     <div key={index} className="cp-attachment-item">
-                      <span className="cp-attachment-drag" title="Drag to reorder">
+                      <span className="cp-attachment-drag" title={t("Drag to reorder", { defaultValue: "Drag to reorder" })}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
                       </span>
                       <span className="task-attachment-icon">🔗</span>
@@ -823,13 +867,13 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                         </a>
                       </div>
                       <div className="cp-attachment-actions">
-                        <button type="button" className="cp-action-btn cp-action-btn-edit" title="Edit Link" onClick={() => {
+                        <button type="button" className="cp-action-btn cp-action-btn-edit" title={t("Edit Link", { defaultValue: "Edit Link" })} onClick={() => {
                           setEditingLink({ type: "pending", index });
                           setEditLinkForm({ title: link.customName || link.name, url: link.url });
                         }}>
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                         </button>
-                        <button type="button" className="cp-action-btn cp-action-btn-delete" title="Delete Link" onClick={() => { setPendingRemoveItem({ type: "link", index }); setRemoveConfirmOpen(true); }}>
+                        <button type="button" className="cp-action-btn cp-action-btn-delete" title={t("Delete Link", { defaultValue: "Delete Link" })} onClick={() => { setPendingRemoveItem({ type: "link", index }); setRemoveConfirmOpen(true); }}>
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                         </button>
                       </div>
@@ -844,21 +888,21 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
             <div className="task-right">
 
               <div className="task-field">
-                <label>Priority <span style={{ color: "#ef4444" }}>*</span></label>
+                <label>{t("Priority")} <span style={{ color: "#ef4444" }}>*</span></label>
                 <CustomSelect name="priority" value={form.priority}
                   onChange={(val) => { setForm((prev) => ({ ...prev, priority: val })); markDirty(); }}
                   options={[
-                    { value: "Medium", label: "Medium" },
-                    { value: "Low", label: "Low" },
-                    { value: "High", label: "High" },
+                    { value: "Medium", label: t("Medium") },
+                    { value: "Low", label: t("Low") },
+                    { value: "High", label: t("High") },
                   ]} />
               </div>
 
               <div className="task-field">
-                <label>Requirements</label>
+                <label>{t("Requirements", { defaultValue: "Requirements" })}</label>
                 <div className="cp-goals-input-row">
-                  <input type="text" placeholder="Enter a requirement" value={reqInput} onChange={(e) => { setReqInput(e.target.value); markDirty(); }} onKeyDown={handleReqKeyDown} />
-                  <button type="button" className="cp-goals-add-btn" onClick={handleAddRequirement} disabled={!reqInput.trim()}>Add</button>
+                  <input type="text" placeholder={t("Enter a requirement", { defaultValue: "Enter a requirement" })} value={reqInput} onChange={(e) => { setReqInput(e.target.value); markDirty(); }} onKeyDown={handleReqKeyDown} />
+                  <button type="button" className="cp-goals-add-btn" onClick={handleAddRequirement} disabled={!reqInput.trim()}>{t("Add", { defaultValue: "Add" })}</button>
                 </div>
                 {requirementsList.length > 0 && (
                   <div className="cp-goals-list">
@@ -873,27 +917,48 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
               </div>
 
               <div className="task-card task-card--bordered">
-                <div className="task-card-top"><span>Dates</span></div>
+                <div className="task-card-top"><span>{t("Dates", { defaultValue: "Dates" })}</span></div>
                 <div className="task-deadline-grid">
                   <div>
-                    <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Start</label>
+                    <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>{t("Start", { defaultValue: "Start" })}</label>
                     <input type="datetime-local" value={form.start_date || form.recurrence_start_date || ""}
                       onChange={(e) => { setForm((prev) => ({ ...prev, start_date: e.target.value, recurrence_start_date: e.target.value })); markDirty(); }}
                       min={getNowDatetimeLocal()} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>End</label>
+                    <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>{t("End", { defaultValue: "End" })}</label>
                     <input type="datetime-local" value={form.end_date || form.recurrence_end_date || ""}
                       onChange={(e) => { setForm((prev) => ({ ...prev, end_date: e.target.value, recurrence_end_date: e.target.value })); markDirty(); }}
                       min={getNowDatetimeLocal()}
                       max={projectEndDate ? toDatetimeLocal(projectEndDate) : undefined} />
-                    {projectEndDate && <span style={{ fontSize: 11, color: "#9ca3af", marginTop: 2, display: "block" }}>Max: {new Date(projectEndDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>}
+                    {projectEndDate && <span style={{ fontSize: 11, color: "#9ca3af", marginTop: 2, display: "block" }}>{t("Max", { defaultValue: "Max" })}: {new Date(projectEndDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>}
                   </div>
                 </div>
+
+                {/* Assignee Deadline Conversion (SRS Sec 13 & 17) */}
+                {(form.end_date || form.recurrence_end_date) && form.assigned_to && form.assigned_to.length > 0 && (
+                  <div style={{ marginTop: "10px", padding: "8px 10px", background: "var(--color-primary-bg, rgba(79, 70, 229, 0.08))", border: "1px solid var(--color-primary, #4f46e5)", borderRadius: "8px", fontSize: "12px" }}>
+                    <div style={{ fontWeight: 600, color: "var(--color-primary, #4f46e5)", marginBottom: "4px", display: "flex", alignItems: "center", gap: "4px" }}>
+                      <Clock size={13} /> {t("Assignee Deadline Equivalent", { defaultValue: "Assignee Deadline Equivalent" })}
+                    </div>
+                    {displayUsers
+                      .filter((u) => form.assigned_to.includes(u.id))
+                      .map((u) => {
+                        const tz = u.timezone || "UTC";
+                        const targetDate = form.end_date || form.recurrence_end_date;
+                        const assigneeDeadline = convertToLocal(convertToUTC(targetDate), tz);
+                        return (
+                          <div key={u.id} style={{ color: "var(--text-primary, #1e293b)", fontSize: "11px", marginTop: "2px" }}>
+                            • <strong>{u.name}</strong>: {assigneeDeadline} ({tz})
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
               </div>
 
               <div className="task-card">
-                <label>Task Type</label>
+                <label>{t("Task Type", { defaultValue: "Task Type" })}</label>
                 <CustomSelect name="task_type" value={form.task_type}
                   onChange={(val) => {
                     setForm((prev) => ({ ...prev, task_type: val })); markDirty();
@@ -903,16 +968,16 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                       }
                     }
                   }}
-                  options={[{ value: "standard", label: "Standard" }, { value: "recurring", label: "Recurring" }]} />
+                  options={[{ value: "standard", label: t("Standard", { defaultValue: "Standard" }) }, { value: "recurring", label: t("Recurring", { defaultValue: "Recurring" }) }]} />
               </div>
 
               <div className="task-card">
-                <label>Transfer To</label>
+                <label>{t("Transfer To", { defaultValue: "Transfer To" })}</label>
                 <CustomSelect name="allow_transfer" value={form.allow_transfer ?? "allow"}
                   onChange={(val) => { setForm((prev) => ({ ...prev, allow_transfer: val })); markDirty(); }}
-                  options={[{ value: "allow", label: "Allow" }, { value: "disallow", label: "Disallow" }]} />
+                  options={[{ value: "allow", label: t("Allow", { defaultValue: "Allow" }) }, { value: "disallow", label: t("Disallow", { defaultValue: "Disallow" }) }]} />
                 <small style={{ fontSize: 11, color: "#9ca3af", marginTop: 4, display: "block" }}>
-                  Whether assignees can transfer this task to others
+                  {t("Whether assignees can transfer this task to others", { defaultValue: "Whether assignees can transfer this task to others" })}
                 </small>
               </div>
 
@@ -975,7 +1040,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                     <div className="task-card-top">
                       <span>Subtask Templates</span>
                       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                        <button type="button" className="task-icon-btn" title="Available variables" onClick={() => setShowVariablesHint(!showVariablesHint)}>
+                        <button type="button" className="task-icon-btn" title={t("Available variables", { defaultValue: "Available variables" })} onClick={() => setShowVariablesHint(!showVariablesHint)}>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
                         </button>
                         <button type="button" className="task-add-phase-btn" onClick={handleAddTemplate} style={{ padding: "3px 10px", fontSize: 12 }}>+ Add</button>
@@ -1011,7 +1076,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                           <button type="button" className="task-phase-item-remove" onClick={() => { setPendingRemoveItem({ type: "template", index }); setRemoveConfirmOpen(true); }} style={{ fontSize: 14 }}>✕</button>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                          <input type="text" placeholder="Description (optional)" value={tmpl.description}
+                          <input type="text" placeholder={t("Description (optional)", { defaultValue: "Description (optional)" })} value={tmpl.description}
                             onChange={(e) => handleTemplateChange(index, "description", e.target.value)}
                             style={{ flex: 1, fontSize: 12, padding: "5px 8px", border: "1px solid #e5e7eb", borderRadius: 4, color: "#6b7280" }} />
                           <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontSize: 11, color: "#6b7280", whiteSpace: "nowrap" }}>
@@ -1117,14 +1182,14 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
         </div>
       </div>
       <ConfirmModal isOpen={removeConfirmOpen} onClose={() => { setRemoveConfirmOpen(false); setPendingRemoveItem({ type: "", index: -1 }); }}
-        onConfirm={confirmRemoveItem} title="Remove Item" message="Are you sure you want to remove this item? This action cannot be undone."
+        onConfirm={confirmRemoveItem} title={t("Remove Item", { defaultValue: "Remove Item" })} message="Are you sure you want to remove this item? This action cannot be undone."
         confirmText="Remove" cancelText="Cancel" danger />
 
       {/* Edit Link Modal */}
       {editingLink && createPortal(
         <div style={{ position: "fixed", inset: 0, zIndex: 10003, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => setEditingLink(null)}>
           <div style={{ background: "#fff", borderRadius: 12, padding: "24px 28px", width: 400, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#111827" }}>Edit File / Link</h3>
+            <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#111827" }}>{t("Edit File / Link", { defaultValue: "Edit File / Link" })}</h3>
             <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>Rename or update the URL below.</p>
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Title</label>
@@ -1166,7 +1231,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
       {editingFile && createPortal(
         <div style={{ position: "fixed", inset: 0, zIndex: 10003, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => { setEditingFile(null); setEditFileNewFile(null); setEditFileDeleted(false); setEditFileDeleteConfirm(false); }}>
           <div style={{ background: "#fff", borderRadius: 12, padding: "24px 28px", width: 420, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#111827" }}>Edit File</h3>
+            <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#111827" }}>{t("Edit File", { defaultValue: "Edit File" })}</h3>
             <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>Rename or replace this file.</p>
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Title</label>
@@ -1184,7 +1249,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                 <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8 }}>
                   <span style={{ fontSize: 14 }}>📄</span>
                   <span style={{ flex: 1, fontSize: 13, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{editingFile.currentName || "Current file"}</span>
-                  <button type="button" onClick={() => setEditFileDeleteConfirm(true)} style={{ width: 28, height: 28, borderRadius: "50%", border: "none", background: "#ef4444", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Delete file">
+                  <button type="button" onClick={() => setEditFileDeleteConfirm(true)} style={{ width: 28, height: 28, borderRadius: "50%", border: "none", background: "#ef4444", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title={t("Delete file", { defaultValue: "Delete file" })}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                   </button>
                 </div>
@@ -1233,7 +1298,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
       {editFileDeleteConfirm && createPortal(
         <div style={{ position: "fixed", inset: 0, zIndex: 10004, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => setEditFileDeleteConfirm(false)}>
           <div style={{ background: "#fff", borderRadius: 12, padding: "24px 28px", width: 380, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 700, color: "#111827" }}>Delete File</h3>
+            <h3 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 700, color: "#111827" }}>{t("Delete File", { defaultValue: "Delete File" })}</h3>
             <p style={{ margin: "0 0 20px", fontSize: 14, color: "#6b7280" }}>Are you sure you want to delete this file? You can upload a new file after.</p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
               <button type="button" onClick={() => setEditFileDeleteConfirm(false)} style={{ padding: "9px 20px", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", color: "#374151", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "#f9fafb"} onMouseLeave={(e) => e.target.style.background = "#fff"}>Cancel</button>

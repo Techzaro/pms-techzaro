@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import Breadcrumb from '../components/Breadcrumb';
 import api from '../lib/api';
@@ -39,6 +40,7 @@ function formatDate(dateStr) {
 }
 
 export default function StoragePage() {
+  const { t } = useTranslation();
   const [storage, setStorage] = useState(null);
   const [summary, setSummary] = useState(null);
   const [largeFiles, setLargeFiles] = useState([]);
@@ -110,7 +112,7 @@ export default function StoragePage() {
         if (prefRes.success) setPreferences(prefRes.preferences);
       } catch (_) { /* ignore */ }
     } catch (err) {
-      setError('Failed to load storage data.');
+      setError(t('Failed to load storage data.', { defaultValue: 'Failed to load storage data.' }));
     } finally {
       setLoading(false);
     }
@@ -126,7 +128,7 @@ export default function StoragePage() {
         fetchAllData();
       }
     } catch (err) {
-      setToast({ type: 'error', message: 'Failed to delete files.' });
+      setToast({ type: 'error', message: t('Failed to delete files.', { defaultValue: 'Failed to delete files.' }) });
     } finally {
       setDeleting(false);
     }
@@ -142,7 +144,7 @@ export default function StoragePage() {
         fetchAllData();
       }
     } catch (err) {
-      setToast({ type: 'error', message: 'Failed to delete files.' });
+      setToast({ type: 'error', message: t('Failed to delete files.', { defaultValue: 'Failed to delete files.' }) });
     } finally {
       setDeleting(false);
     }
@@ -152,11 +154,11 @@ export default function StoragePage() {
     try {
       const res = await api.delete(`/organization/storage/${id}`);
       if (res.success) {
-        setToast({ type: 'success', message: 'File record deleted.' });
+        setToast({ type: 'success', message: t('File record deleted.', { defaultValue: 'File record deleted.' }) });
         fetchAllData();
       }
     } catch (err) {
-      setToast({ type: 'error', message: 'Failed to delete file.' });
+      setToast({ type: 'error', message: t('Failed to delete file.', { defaultValue: 'Failed to delete file.' }) });
     }
   }
 
@@ -167,10 +169,10 @@ export default function StoragePage() {
   if (loading) {
     return (
       <DashboardLayout hideRightSidebar>
-        <Breadcrumb items={[{ label: 'Storage' }]} />
+        <Breadcrumb items={[{ label: t('Storage', { defaultValue: 'Storage' }) }]} />
         <div style={{ background: 'var(--bg-card)', borderRadius: '20px', padding: '40px', boxShadow: 'var(--shadow-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
           <Loader2 style={{ width: '24px', height: '24px', animation: 'spin 1s linear infinite', color: 'var(--color-primary)' }} />
-          <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Loading storage data...</span>
+          <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>{t('Loading storage data...', { defaultValue: 'Loading storage data...' })}</span>
         </div>
       </DashboardLayout>
     );
@@ -179,7 +181,7 @@ export default function StoragePage() {
   if (error) {
     return (
       <DashboardLayout hideRightSidebar>
-        <Breadcrumb items={[{ label: 'Storage' }]} />
+        <Breadcrumb items={[{ label: t('Storage', { defaultValue: 'Storage' }) }]} />
         <div style={{ background: 'var(--bg-card)', borderRadius: '20px', padding: '40px', boxShadow: 'var(--shadow-sm)', textAlign: 'center' }}>
           <AlertTriangle style={{ width: '40px', height: '40px', color: 'var(--color-danger)', margin: '0 auto 12px' }} />
           <p style={{ color: 'var(--color-danger)', fontSize: '14px' }}>{error}</p>
@@ -197,7 +199,7 @@ export default function StoragePage() {
 
   return (
     <DashboardLayout hideRightSidebar>
-      <Breadcrumb items={[{ label: 'Storage' }]} />
+      <Breadcrumb items={[{ label: t('Storage', { defaultValue: 'Storage' }) }]} />
 
       {/* Toast */}
       {toast && (
@@ -217,18 +219,18 @@ export default function StoragePage() {
       {/* Page Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
         <div>
-          <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-heading)', margin: 0 }}>Storage Management</h1>
+          <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-heading)', margin: 0 }}>{t('Storage Management', { defaultValue: 'Storage Management' })}</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '14px', margin: '4px 0 0' }}>
-            {summary?.org_name} &middot; {summary?.plan_name} Plan
+            {summary?.org_name} &middot; {t('{{plan}} Plan', { plan: summary?.plan_name, defaultValue: `${summary?.plan_name} Plan` })}
           </p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
           {[
-            { key: 'overview', label: 'Overview', icon: BarChart3 },
-            { key: 'files', label: 'Files', icon: FileText },
-            { key: 'cleanup', label: 'Cleanup', icon: Trash2 },
-            { key: 'notifications', label: 'Notifications', icon: Bell, badge: notifications.filter(n => !n.is_read).length },
-            { key: 'preferences', label: 'Preferences', icon: Settings },
+            { key: 'overview', label: t('Overview', { defaultValue: 'Overview' }), icon: BarChart3 },
+            { key: 'files', label: t('Files', { defaultValue: 'Files' }), icon: FileText },
+            { key: 'cleanup', label: t('Cleanup', { defaultValue: 'Cleanup' }), icon: Trash2 },
+            { key: 'notifications', label: t('Notifications', { defaultValue: 'Notifications' }), icon: Bell, badge: notifications.filter(n => !n.is_read).length },
+            { key: 'preferences', label: t('Preferences', { defaultValue: 'Preferences' }), icon: Settings },
           ].map((tab) => (
             <button
               key={tab.key}
@@ -271,9 +273,9 @@ export default function StoragePage() {
         }}>
           <AlertTriangle style={{ width: '20px', height: '20px', color: 'var(--color-danger)', flexShrink: 0 }} />
           <div>
-            <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-danger)', margin: 0 }}>Storage Almost Full</p>
+            <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-danger)', margin: 0 }}>{t('Storage Almost Full', { defaultValue: 'Storage Almost Full' })}</p>
             <p style={{ fontSize: '12px', color: 'var(--color-danger)', margin: '2px 0 0', opacity: 0.8 }}>
-              You've used {usagePercent}% of your storage. Consider deleting old or large files.
+              {t("You've used {{percent}}% of your storage. Consider deleting old or large files.", { percent: usagePercent, defaultValue: `You've used ${usagePercent}% of your storage. Consider deleting old or large files.` })}
             </p>
           </div>
         </div>
@@ -287,9 +289,9 @@ export default function StoragePage() {
         }}>
           <AlertTriangle style={{ width: '20px', height: '20px', color: 'var(--color-warning)', flexShrink: 0 }} />
           <div>
-            <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-warning)', margin: 0 }}>Storage Warning</p>
+            <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-warning)', margin: 0 }}>{t('Storage Warning', { defaultValue: 'Storage Warning' })}</p>
             <p style={{ fontSize: '12px', color: 'var(--color-warning)', margin: '2px 0 0', opacity: 0.8 }}>
-              You've used {usagePercent}% of your storage. Consider cleaning up unused files.
+              {t("You've used {{percent}}% of your storage. Consider cleaning up unused files.", { percent: usagePercent, defaultValue: `You've used ${usagePercent}% of your storage. Consider cleaning up unused files.` })}
             </p>
           </div>
         </div>
@@ -319,9 +321,9 @@ export default function StoragePage() {
                   )}
                 </div>
                 <div>
-                  <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-heading)', margin: 0 }}>Storage Usage</h2>
+                  <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-heading)', margin: 0 }}>{t('Storage Usage', { defaultValue: 'Storage Usage' })}</h2>
                   <p style={{ color: 'var(--text-secondary)', fontSize: '13px', margin: '2px 0 0' }}>
-                    {summary?.total_files || 0} files uploaded
+                    {t('{{count}} files uploaded', { count: summary?.total_files || 0, defaultValue: `${summary?.total_files || 0} files uploaded` })}
                   </p>
                 </div>
               </div>
@@ -331,7 +333,7 @@ export default function StoragePage() {
                 fontSize: '13px', fontWeight: 700,
                 color: isCritical ? 'var(--color-danger)' : isWarning ? 'var(--color-warning)' : 'var(--color-success)',
               }}>
-                {usagePercent}% Used
+                {t('{{percent}}% Used', { percent: usagePercent, defaultValue: `${usagePercent}% Used` })}
               </div>
             </div>
 
@@ -339,11 +341,16 @@ export default function StoragePage() {
             <div style={{ marginBottom: '24px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                 <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-heading)' }}>
-                   {fmtBytesToUnit(summary?.total_bytes || storage?.total_bytes || 0, summary?.storage_unit || storage?.storage_unit || 'GB')}
-                 </span>
-                   <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
-                   of {summary?.max_storage_gb || storage?.max_storage_gb || 0} {summary?.storage_unit || storage?.storage_unit || 'GB'}
-                 </span>
+<span style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-dark)' }}>
+                  {fmtBytesToUnit(summary?.total_bytes || storage?.total_bytes || 0, summary?.storage_unit || storage?.storage_unit || 'GB')}
+                </span>
+                <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
+                  {t('of {{max}} {{unit}}', {
+                    max: summary?.max_storage_gb || storage?.max_storage_gb || 0,
+                    unit: summary?.storage_unit || storage?.storage_unit || 'GB',
+                    defaultValue: `of ${summary?.max_storage_gb || storage?.max_storage_gb || 0} ${summary?.storage_unit || storage?.storage_unit || 'GB'}`
+                  })}
+                </span>
               </div>
               <div style={{ width: '100%', height: '14px', borderRadius: '7px', background: 'var(--bg-hover)', overflow: 'hidden' }}>
                 <div style={{
@@ -360,18 +367,25 @@ export default function StoragePage() {
                 }} />
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px' }}>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{usagePercent}% used</span>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{fmtBytesToUnit(summary?.remaining_bytes, summary?.storage_unit || 'GB')} remaining</span>
+<span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                  {t('{{percent}}% used', { percent: usagePercent, defaultValue: `${usagePercent}% used` })}
+                </span>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                  {t('{{remaining}} remaining', { 
+                    remaining: fmtBytesToUnit(summary?.remaining_bytes, summary?.storage_unit || 'GB'), 
+                    defaultValue: `${fmtBytesToUnit(summary?.remaining_bytes, summary?.storage_unit || 'GB')} remaining` 
+                  })}
+                </span>
               </div>
             </div>
 
             {/* Stats Grid */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
               {[
-                { label: 'Total Files', value: summary?.total_files || 0, color: 'var(--color-primary)', icon: FileText },
-                { label: 'Used Space', value: fmtBytesToUnit(summary?.total_bytes || 0, summary?.storage_unit || 'GB'), color: 'var(--color-blue)', icon: HardDrive },
-                { label: 'Storage Limit', value: `${summary?.max_storage_gb || 0} ${summary?.storage_unit || 'GB'}`, color: 'var(--color-success)', icon: Shield },
-                { label: 'Remaining', value: fmtBytesToUnit(summary?.remaining_bytes, summary?.storage_unit || 'GB'), color: isCritical ? 'var(--color-danger)' : 'var(--color-warning)', icon: ArrowDown },
+{ label: t('Total Files', { defaultValue: 'Total Files' }), value: summary?.total_files || 0, color: 'var(--color-primary)', icon: FileText },
+                { label: t('Used Space', { defaultValue: 'Used Space' }), value: fmtBytesToUnit(summary?.total_bytes || 0, summary?.storage_unit || 'GB'), color: 'var(--color-blue)', icon: HardDrive },
+                { label: t('Storage Limit', { defaultValue: 'Storage Limit' }), value: `${summary?.max_storage_gb || 0} ${summary?.storage_unit || 'GB'}`, color: 'var(--color-success)', icon: Shield },
+                { label: t('Remaining', { defaultValue: 'Remaining' }), value: fmtBytesToUnit(summary?.remaining_bytes, summary?.storage_unit || 'GB'), color: isCritical ? 'var(--color-danger)' : 'var(--color-warning)', icon: ArrowDown },
               ].map((stat) => (
                 <div key={stat.label} style={{
                   padding: '16px', borderRadius: '14px',
@@ -395,7 +409,7 @@ export default function StoragePage() {
             }}>
               <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-heading)', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <PieChart style={{ width: '18px', height: '18px', color: 'var(--color-primary)' }} />
-                Usage by Category
+                {t('Usage by Category', { defaultValue: 'Usage by Category' })}
               </h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {storage.by_category.map((cat) => {
@@ -416,8 +430,8 @@ export default function StoragePage() {
                           <Icon style={{ width: '18px', height: '18px' }} />
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-dark)', margin: 0 }}>{config.label}</p>
-                          <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '2px 0 0' }}>{cat.file_count} files</p>
+                          <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-dark)', margin: 0 }}>{t(config.label, { defaultValue: config.label })}</p>
+                          <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '2px 0 0' }}>{t('{{count}} files', { count: cat.file_count, defaultValue: `${cat.file_count} files` })}</p>
                         </div>
                         <div style={{ textAlign: 'right', flexShrink: 0 }}>
                           <p style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-dark)', margin: 0 }}>{cat.total_mb} MB</p>
@@ -445,13 +459,13 @@ export default function StoragePage() {
             }}>
               <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-heading)', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Clock style={{ width: '18px', height: '18px', color: 'var(--color-primary)' }} />
-                File Age Distribution
+                {t('File Age Distribution', { defaultValue: 'File Age Distribution' })}
               </h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
                 {[
-                  { label: 'Older than 3 months', count: summary.old_files['3_months']?.count || 0, size: summary.old_files['3_months']?.size_mb || 0, color: '#f59e0b' },
-                  { label: 'Older than 6 months', count: summary.old_files['6_months']?.count || 0, size: summary.old_files['6_months']?.size_mb || 0, color: '#f97316' },
-                  { label: 'Older than 1 year', count: summary.old_files['12_months']?.count || 0, size: summary.old_files['12_months']?.size_mb || 0, color: '#ef4444' },
+                  { label: t('Older than 3 months', { defaultValue: 'Older than 3 months' }), count: summary.old_files['3_months']?.count || 0, size: summary.old_files['3_months']?.size_mb || 0, color: '#f59e0b' },
+                  { label: t('Older than 6 months', { defaultValue: 'Older than 6 months' }), count: summary.old_files['6_months']?.count || 0, size: summary.old_files['6_months']?.size_mb || 0, color: '#f97316' },
+                  { label: t('Older than 1 year', { defaultValue: 'Older than 1 year' }), count: summary.old_files['12_months']?.count || 0, size: summary.old_files['12_months']?.size_mb || 0, color: '#ef4444' },
                 ].map((item) => (
                   <div key={item.label} style={{
                     padding: '16px', borderRadius: '14px',
@@ -459,16 +473,16 @@ export default function StoragePage() {
                     borderLeft: `3px solid ${item.color}`,
                   }}>
                     <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{item.label}</p>
-                    <p style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-heading)', margin: '6px 0 0' }}>{item.count} files</p>
-                    <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '2px 0 0' }}>{item.size} MB total</p>
+                    <p style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-heading)', margin: '6px 0 0' }}>{t('{{count}} files', { count: item.count, defaultValue: `${item.count} files` })}</p>
+                    <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '2px 0 0' }}>{t('{{size}} MB total', { size: item.size, defaultValue: `${item.size} MB total` })}</p>
                   </div>
                 ))}
               </div>
               {summary?.large_files && (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginTop: '12px' }}>
                   {[
-                    { label: 'Files > 1 GB', count: summary.large_files['over_1gb']?.count || 0, size: summary.large_files['over_1gb']?.size_mb || 0, color: '#ef4444' },
-                    { label: 'Files > 2 GB', count: summary.large_files['over_2gb']?.count || 0, size: summary.large_files['over_2gb']?.size_mb || 0, color: '#dc2626' },
+                    { label: t('Files > 1 GB', { defaultValue: 'Files > 1 GB' }), count: summary.large_files['over_1gb']?.count || 0, size: summary.large_files['over_1gb']?.size_mb || 0, color: '#ef4444' },
+                    { label: t('Files > 2 GB', { defaultValue: 'Files > 2 GB' }), count: summary.large_files['over_2gb']?.count || 0, size: summary.large_files['over_2gb']?.size_mb || 0, color: '#dc2626' },
                   ].map((item) => (
                     <div key={item.label} style={{
                       padding: '16px', borderRadius: '14px',
@@ -476,8 +490,8 @@ export default function StoragePage() {
                       borderLeft: `3px solid ${item.color}`,
                     }}>
                       <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{item.label}</p>
-                      <p style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-heading)', margin: '6px 0 0' }}>{item.count} files</p>
-                      <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '2px 0 0' }}>{item.size} MB total</p>
+                      <p style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-heading)', margin: '6px 0 0' }}>{t('{{count}} files', { count: item.count, defaultValue: `${item.count} files` })}</p>
+                      <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '2px 0 0' }}>{t('{{size}} MB total', { size: item.size, defaultValue: `${item.size} MB total` })}</p>
                     </div>
                   ))}
                 </div>
@@ -498,10 +512,10 @@ export default function StoragePage() {
             }}>
               <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-heading)', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <AlertTriangle style={{ width: '18px', height: '18px', color: 'var(--color-warning)' }} />
-                Large Files ({largeFiles.length})
+                {t('Large Files ({{count}})', { count: largeFiles.length, defaultValue: `Large Files (${largeFiles.length})` })}
               </h3>
               <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 16px' }}>
-                Files larger than 500 MB that may be consuming significant storage.
+                {t('Files larger than 500 MB that may be consuming significant storage.', { defaultValue: 'Files larger than 500 MB that may be consuming significant storage.' })}
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {largeFiles.map((file) => (
@@ -523,7 +537,7 @@ export default function StoragePage() {
                           {file.file_name}
                         </p>
                         <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '2px 0 0' }}>
-                          {file.category} {file.uploaded_by ? `· ${file.uploaded_by}` : ''} · {formatDate(file.created_at)}
+                          {t(file.category, { defaultValue: file.category })} {file.uploaded_by ? `· ${file.uploaded_by}` : ''} · {formatDate(file.created_at)}
                         </p>
                       </div>
                     </div>
@@ -545,7 +559,7 @@ export default function StoragePage() {
                         }}
                       >
                         <Trash2 style={{ width: '12px', height: '12px' }} />
-                        Delete
+                        {t('Delete', { defaultValue: 'Delete' })}
                       </button>
                     </div>
                   </div>
@@ -561,7 +575,7 @@ export default function StoragePage() {
               boxShadow: 'var(--shadow-sm)',
             }}>
               <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-heading)', margin: '0 0 16px' }}>
-                Recent Files
+                {t('Recent Files', { defaultValue: 'Recent Files' })}
               </h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {storage.recent_files.map((file) => (
@@ -577,7 +591,7 @@ export default function StoragePage() {
                           {file.file_name}
                         </p>
                         <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '2px 0 0' }}>
-                          {file.category} {file.uploaded_by ? `· ${file.uploaded_by}` : ''}
+                          {t(file.category, { defaultValue: file.category })} {file.uploaded_by ? `· ${file.uploaded_by}` : ''}
                         </p>
                       </div>
                     </div>
@@ -593,7 +607,7 @@ export default function StoragePage() {
                           background: 'transparent', color: 'var(--text-muted)',
                           cursor: 'pointer', display: 'flex', alignItems: 'center',
                         }}
-                        title="Delete"
+                        title={t('Delete', { defaultValue: 'Delete' })}
                       >
                         <Trash2 style={{ width: '14px', height: '14px' }} />
                       </button>
@@ -616,16 +630,16 @@ export default function StoragePage() {
           }}>
             <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-heading)', margin: '0 0 8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Clock style={{ width: '18px', height: '18px', color: 'var(--color-warning)' }} />
-              Delete Old Files
+              {t('Delete Old Files', { defaultValue: 'Delete Old Files' })}
             </h3>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 20px' }}>
-              Remove files older than a specific time period to free up storage space.
+              {t('Remove files older than a specific time period to free up storage space.', { defaultValue: 'Remove files older than a specific time period to free up storage space.' })}
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
               {[
-                { months: 3, label: '3+ Months Old', desc: 'Delete files older than 3 months', count: summary?.old_files?.['3_months']?.count || 0, size: summary?.old_files?.['3_months']?.size_mb || 0, color: '#f59e0b' },
-                { months: 6, label: '6+ Months Old', desc: 'Delete files older than 6 months', count: summary?.old_files?.['6_months']?.count || 0, size: summary?.old_files?.['6_months']?.size_mb || 0, color: '#f97316' },
-                { months: 12, label: '1+ Year Old', desc: 'Delete files older than 1 year', count: summary?.old_files?.['12_months']?.count || 0, size: summary?.old_files?.['12_months']?.size_mb || 0, color: '#ef4444' },
+                { months: 3, label: t('3+ Months Old', { defaultValue: '3+ Months Old' }), desc: t('Delete files older than 3 months', { defaultValue: 'Delete files older than 3 months' }), count: summary?.old_files?.['3_months']?.count || 0, size: summary?.old_files?.['3_months']?.size_mb || 0, color: '#f59e0b' },
+                { months: 6, label: t('6+ Months Old', { defaultValue: '6+ Months Old' }), desc: t('Delete files older than 6 months', { defaultValue: 'Delete files older than 6 months' }), count: summary?.old_files?.['6_months']?.count || 0, size: summary?.old_files?.['6_months']?.size_mb || 0, color: '#f97316' },
+                { months: 12, label: t('1+ Year Old', { defaultValue: '1+ Year Old' }), desc: t('Delete files older than 1 year', { defaultValue: 'Delete files older than 1 year' }), count: summary?.old_files?.['12_months']?.count || 0, size: summary?.old_files?.['12_months']?.size_mb || 0, color: '#ef4444' },
               ].map((item) => (
                 <div key={item.months} style={{
                   padding: '20px', borderRadius: '14px',
@@ -661,7 +675,7 @@ export default function StoragePage() {
                       }}
                     >
                       <Trash2 style={{ width: '12px', height: '12px' }} />
-                      Delete
+                      {t('Delete', { defaultValue: 'Delete' })}
                     </button>
                   </div>
                 </div>
@@ -676,15 +690,15 @@ export default function StoragePage() {
           }}>
             <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-heading)', margin: '0 0 8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Zap style={{ width: '18px', height: '18px', color: 'var(--color-danger)' }} />
-              Delete Large Files
+              {t('Delete Large Files', { defaultValue: 'Delete Large Files' })}
             </h3>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 20px' }}>
-              Remove files that exceed a specific size threshold to quickly reclaim storage.
+              {t('Remove files that exceed a specific size threshold to quickly reclaim storage.', { defaultValue: 'Remove files that exceed a specific size threshold to quickly reclaim storage.' })}
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
               {[
-                { minGb: 1, label: '> 1 GB Files', count: summary?.large_files?.['over_1gb']?.count || 0, size: summary?.large_files?.['over_1gb']?.size_mb || 0, color: '#ef4444' },
-                { minGb: 2, label: '> 2 GB Files', count: summary?.large_files?.['over_2gb']?.count || 0, size: summary?.large_files?.['over_2gb']?.size_mb || 0, color: '#dc2626' },
+                { minGb: 1, label: t('> 1 GB Files', { defaultValue: '> 1 GB Files' }), count: summary?.large_files?.['over_1gb']?.count || 0, size: summary?.large_files?.['over_1gb']?.size_mb || 0, color: '#ef4444' },
+                { minGb: 2, label: t('> 2 GB Files', { defaultValue: '> 2 GB Files' }), count: summary?.large_files?.['over_2gb']?.count || 0, size: summary?.large_files?.['over_2gb']?.size_mb || 0, color: '#dc2626' },
               ].map((item) => (
                 <div key={item.minGb} style={{
                   padding: '20px', borderRadius: '14px',
@@ -700,7 +714,7 @@ export default function StoragePage() {
                     </div>
                     <div>
                       <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-heading)', margin: 0 }}>{item.label}</p>
-                      <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '2px 0 0' }}>Files larger than {item.minGb} GB</p>
+                      <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '2px 0 0' }}>{t('Files larger than {{min}} GB', { min: item.minGb, defaultValue: `Files larger than ${item.minGb} GB` })}</p>
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -720,7 +734,7 @@ export default function StoragePage() {
                       }}
                     >
                       <Trash2 style={{ width: '12px', height: '12px' }} />
-                      Delete
+                      {t('Delete', { defaultValue: 'Delete' })}
                     </button>
                   </div>
                 </div>
@@ -735,7 +749,7 @@ export default function StoragePage() {
           }}>
             <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-heading)', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Info style={{ width: '18px', height: '18px', color: 'var(--color-primary)' }} />
-              Storage Report
+              {t('Storage Report', { defaultValue: 'Storage Report' })}
             </h3>
             <div style={{
               padding: '16px', borderRadius: '12px',
@@ -743,19 +757,23 @@ export default function StoragePage() {
             }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
                 <div>
-                  <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Organization</p>
+                  <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('Organization', { defaultValue: 'Organization' })}</p>
                   <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-dark)', margin: '4px 0 0' }}>{summary?.org_name}</p>
                 </div>
                 <div>
-                  <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Current Plan</p>
+                  <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('Current Plan', { defaultValue: 'Current Plan' })}</p>
                   <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-dark)', margin: '4px 0 0' }}>{summary?.plan_name}</p>
                 </div>
                 <div>
-                  <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Storage Used</p>
-                  <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-dark)', margin: '4px 0 0' }}>{fmtBytesToUnit(summary?.total_bytes || 0, summary?.storage_unit || 'GB')} / {summary?.max_storage_gb || 0} {summary?.storage_unit || 'GB'}</p>
+<p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {t('Storage Used', { defaultValue: 'Storage Used' })}
+                  </p>
+                  <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-dark)', margin: '4px 0 0' }}>
+                    {fmtBytesToUnit(summary?.total_bytes || 0, summary?.storage_unit || 'GB')} / {summary?.max_storage_gb || 0} {summary?.storage_unit || 'GB'}
+                  </p>
                 </div>
                 <div>
-                  <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Files</p>
+                  <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('Total Files', { defaultValue: 'Total Files' })}</p>
                   <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-dark)', margin: '4px 0 0' }}>{summary?.total_files}</p>
                 </div>
               </div>
@@ -773,7 +791,7 @@ export default function StoragePage() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
             <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-heading)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Bell style={{ width: '18px', height: '18px', color: 'var(--color-primary)' }} />
-              Storage Notifications
+              {t('Storage Notifications', { defaultValue: 'Storage Notifications' })}
             </h3>
             {notifications.length > 0 && (
               <button
@@ -781,7 +799,7 @@ export default function StoragePage() {
                   await api.post('/organization/storage/notifications/dismiss-all');
                   setNotifications([]);
                   setPinnedNotifications([]);
-                  setToast({ type: 'success', message: 'All notifications dismissed.' });
+                  setToast({ type: 'success', message: t('All notifications dismissed.', { defaultValue: 'All notifications dismissed.' }) });
                 }}
                 style={{
                   padding: '6px 14px', borderRadius: '8px', border: '1px solid var(--border-light)',
@@ -789,14 +807,14 @@ export default function StoragePage() {
                   fontSize: '12px', fontWeight: 600, cursor: 'pointer',
                 }}
               >
-                Dismiss All
+                {t('Dismiss All', { defaultValue: 'Dismiss All' })}
               </button>
             )}
           </div>
 
           {pinnedNotifications.length > 0 && (
             <div style={{ marginBottom: '20px' }}>
-              <p style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>Active Alerts</p>
+              <p style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>{t('Active Alerts', { defaultValue: 'Active Alerts' })}</p>
               {pinnedNotifications.map(n => (
                 <div key={n.id} style={{
                   padding: '14px 18px', borderRadius: '12px', marginBottom: '8px',
@@ -827,12 +845,12 @@ export default function StoragePage() {
           {notifications.length === 0 && pinnedNotifications.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px 20px' }}>
               <Bell style={{ width: '40px', height: '40px', color: 'var(--text-muted)', margin: '0 auto 12px' }} />
-              <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: 0 }}>No storage notifications</p>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0' }}>You'll see alerts here when storage thresholds are reached</p>
+              <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: 0 }}>{t('No storage notifications', { defaultValue: 'No storage notifications' })}</p>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0' }}>{t("You'll see alerts here when storage thresholds are reached", { defaultValue: "You'll see alerts here when storage thresholds are reached" })}</p>
             </div>
           ) : (
             <div>
-              <p style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>History</p>
+              <p style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>{t('History', { defaultValue: 'History' })}</p>
               {notifications.map(n => (
                 <div key={n.id} style={{
                   padding: '12px 16px', borderRadius: '10px', marginBottom: '6px',
@@ -871,7 +889,7 @@ export default function StoragePage() {
         }}>
           <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-heading)', margin: '0 0 24px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Settings style={{ width: '18px', height: '18px', color: 'var(--color-primary)' }} />
-            Storage Preferences
+            {t('Storage Preferences', { defaultValue: 'Storage Preferences' })}
           </h3>
 
           {prefLoading ? (
@@ -887,9 +905,9 @@ export default function StoragePage() {
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div>
-                    <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-heading)', margin: 0 }}>Auto-Delete Old Files</p>
+                    <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-heading)', margin: 0 }}>{t('Auto-Delete Old Files', { defaultValue: 'Auto-Delete Old Files' })}</p>
                     <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '4px 0 0' }}>
-                      Automatically delete oldest files when storage is full
+                      {t('Automatically delete oldest files when storage is full', { defaultValue: 'Automatically delete oldest files when storage is full' })}
                     </p>
                   </div>
                   <button
@@ -916,9 +934,9 @@ export default function StoragePage() {
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div>
-                    <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-heading)', margin: 0 }}>Overwrite When Full</p>
+                    <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-heading)', margin: 0 }}>{t('Overwrite When Full', { defaultValue: 'Overwrite When Full' })}</p>
                     <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '4px 0 0' }}>
-                      Allow overwriting oldest files when storage limit is reached
+                      {t('Allow overwriting oldest files when storage limit is reached', { defaultValue: 'Allow overwriting oldest files when storage limit is reached' })}
                     </p>
                   </div>
                   <button
@@ -943,12 +961,12 @@ export default function StoragePage() {
                 padding: '18px 20px', borderRadius: '14px',
                 background: 'var(--bg-hover)', border: '1px solid var(--border-light)',
               }}>
-                <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-heading)', margin: '0 0 16px' }}>Notification Thresholds</p>
+                <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-heading)', margin: '0 0 16px' }}>{t('Notification Thresholds', { defaultValue: 'Notification Thresholds' })}</p>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
                   {[
-                    { key: 'warn_threshold', label: 'Warning', color: 'var(--color-warning)', desc: 'First alert' },
-                    { key: 'critical_threshold', label: 'Critical', color: 'var(--color-danger)', desc: 'Urgent alert' },
-                    { key: 'pin_threshold', label: 'Pinned', color: '#dc2626', desc: 'Header banner' },
+                    { key: 'warn_threshold', label: t('Warning', { defaultValue: 'Warning' }), color: 'var(--color-warning)', desc: t('First alert', { defaultValue: 'First alert' }) },
+                    { key: 'critical_threshold', label: t('Critical', { defaultValue: 'Critical' }), color: 'var(--color-danger)', desc: t('Urgent alert', { defaultValue: 'Urgent alert' }) },
+                    { key: 'pin_threshold', label: t('Pinned', { defaultValue: 'Pinned' }), color: '#dc2626', desc: t('Header banner', { defaultValue: 'Header banner' }) },
                   ].map(({ key, label, color, desc }) => (
                     <div key={key}>
                       <label style={{ fontSize: '12px', fontWeight: 600, color, display: 'block', marginBottom: '6px' }}>{label}</label>
@@ -1020,11 +1038,11 @@ export default function StoragePage() {
                 padding: '18px 20px', borderRadius: '14px',
                 background: 'var(--bg-hover)', border: '1px solid var(--border-light)',
               }}>
-                <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-heading)', margin: '0 0 12px' }}>Storage Driver</p>
+                <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-heading)', margin: '0 0 12px' }}>{t('Storage Driver', { defaultValue: 'Storage Driver' })}</p>
                 <div style={{ display: 'flex', gap: '10px' }}>
                   {[
-                    { value: 'local', label: 'Local Server', desc: 'Files stored on hosting server' },
-                    { value: 's3', label: 'AWS S3', desc: 'Object storage (recommended for scale)' },
+                    { value: 'local', label: t('Local Server', { defaultValue: 'Local Server' }), desc: t('Files stored on hosting server', { defaultValue: 'Files stored on hosting server' }) },
+                    { value: 's3', label: t('AWS S3', { defaultValue: 'AWS S3' }), desc: t('Object storage (recommended for scale)', { defaultValue: 'Object storage (recommended for scale)' }) },
                   ].map(({ value, label, desc }) => (
                     <button
                       key={value}
@@ -1046,12 +1064,12 @@ export default function StoragePage() {
                 {preferences.driver === 's3' && (
                   <div style={{ marginTop: '16px', padding: '16px', borderRadius: '12px', background: 'var(--bg-card)', border: '1px solid var(--border-light)' }}>
                     <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-primary)', margin: '0 0 12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      S3 Configuration
+                      {t('S3 Configuration', { defaultValue: 'S3 Configuration' })}
                     </p>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                       <div>
                         <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
-                          Bucket Prefix
+                          {t('Bucket Prefix', { defaultValue: 'Bucket Prefix' })}
                         </label>
                         <input
                           type="text"
@@ -1070,7 +1088,7 @@ export default function StoragePage() {
                       </div>
                       <div>
                         <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
-                          AWS Region
+                          {t('AWS Region', { defaultValue: 'AWS Region' })}
                         </label>
                         <input
                           type="text"
@@ -1089,8 +1107,7 @@ export default function StoragePage() {
                     </div>
                     <div style={{ marginTop: '12px', padding: '10px 14px', borderRadius: '8px', background: '#eff6ff', border: '1px solid #bfdbfe' }}>
                       <p style={{ fontSize: '12px', color: '#1e40af', margin: 0, lineHeight: 1.5 }}>
-                        <strong>Note:</strong> AWS credentials (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_BUCKET) must be configured in the server's <code>.env</code> file. 
-                        Each organization's files are isolated under its own prefix for security.
+                        <strong>{t('Note:', { defaultValue: 'Note:' })}</strong> {t("AWS credentials (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_BUCKET) must be configured in the server's .env file. Each organization's files are isolated under its own prefix for security.", { defaultValue: "AWS credentials (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_BUCKET) must be configured in the server's .env file. Each organization's files are isolated under its own prefix for security." })}
                       </p>
                     </div>
                   </div>
@@ -1099,7 +1116,7 @@ export default function StoragePage() {
                 {preferences.driver === 'local' && (
                   <div style={{ marginTop: '12px', padding: '10px 14px', borderRadius: '8px', background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
                     <p style={{ fontSize: '12px', color: '#166534', margin: 0 }}>
-                      Files are stored on the hosting server's local disk. Storage limit is enforced per organization.
+                      {t("Files are stored on the hosting server's local disk. Storage limit is enforced per organization.", { defaultValue: "Files are stored on the hosting server's local disk. Storage limit is enforced per organization." })}
                     </p>
                   </div>
                 )}
@@ -1115,7 +1132,7 @@ export default function StoragePage() {
                     fontSize: '13px', fontWeight: 600, cursor: 'pointer',
                   }}
                 >
-                  Reset
+                  {t('Reset', { defaultValue: 'Reset' })}
                 </button>
                 <button
                   onClick={async () => {
@@ -1130,10 +1147,10 @@ export default function StoragePage() {
                       }
                       const res = await api.put('/organization/storage/preferences', payload);
                       if (res.success) {
-                        setToast({ type: 'success', message: 'Storage preferences saved.' });
+                        setToast({ type: 'success', message: t('Storage preferences saved.', { defaultValue: 'Storage preferences saved.' }) });
                       }
                     } catch (err) {
-                      setToast({ type: 'error', message: 'Failed to save preferences.' });
+                      setToast({ type: 'error', message: t('Failed to save preferences.', { defaultValue: 'Failed to save preferences.' }) });
                     } finally {
                       setPrefSaving(false);
                     }
@@ -1147,13 +1164,13 @@ export default function StoragePage() {
                   }}
                 >
                   {prefSaving && <Loader2 style={{ width: '14px', height: '14px', animation: 'spin 1s linear infinite' }} />}
-                  {prefSaving ? 'Saving...' : 'Save Preferences'}
+                  {prefSaving ? t('Saving...', { defaultValue: 'Saving...' }) : t('Save Preferences', { defaultValue: 'Save Preferences' })}
                 </button>
               </div>
             </div>
           ) : (
             <p style={{ fontSize: '14px', color: 'var(--text-secondary)', textAlign: 'center', padding: '40px' }}>
-              Failed to load preferences.
+              {t('Failed to load preferences.', { defaultValue: 'Failed to load preferences.' })}
             </p>
           )}
         </div>
@@ -1178,14 +1195,14 @@ export default function StoragePage() {
                 <AlertTriangle style={{ width: '22px', height: '22px', color: 'var(--color-danger)' }} />
               </div>
               <div>
-                <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-heading)', margin: 0 }}>Confirm Delete</h3>
-                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '2px 0 0' }}>This action cannot be undone</p>
+                <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-heading)', margin: 0 }}>{t('Confirm Delete', { defaultValue: 'Confirm Delete' })}</h3>
+                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '2px 0 0' }}>{t('This action cannot be undone', { defaultValue: 'This action cannot be undone' })}</p>
               </div>
             </div>
             <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
-              Are you sure you want to delete <strong style={{ color: 'var(--text-heading)' }}>{deleteModal.count} files</strong> ({deleteModal.size} MB)?
-              {deleteModal.type === 'old' && ` These are files ${deleteModal.label.toLowerCase()}.`}
-              {deleteModal.type === 'large' && ` These are ${deleteModal.label} files.`}
+              {t('Are you sure you want to delete {{count}} files ({{size}} MB)?', { count: deleteModal.count, size: deleteModal.size, defaultValue: `Are you sure you want to delete ${deleteModal.count} files (${deleteModal.size} MB)?` })}
+              {deleteModal.type === 'old' && ` ${t('These are files {{label}}.', { label: deleteModal.label.toLowerCase(), defaultValue: `These are files ${deleteModal.label.toLowerCase()}.` })}`}
+              {deleteModal.type === 'large' && ` ${t('These are {{label}} files.', { label: deleteModal.label, defaultValue: `These are ${deleteModal.label} files.` })}`}
             </p>
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
               <button
@@ -1196,7 +1213,7 @@ export default function StoragePage() {
                   fontSize: '13px', fontWeight: 600, cursor: 'pointer',
                 }}
               >
-                Cancel
+                {t('Cancel', { defaultValue: 'Cancel' })}
               </button>
               <button
                 onClick={() => deleteModal.type === 'old' ? handleDeleteOldFiles(deleteModal.months) : handleDeleteLargeFiles(deleteModal.minGb)}
@@ -1209,7 +1226,7 @@ export default function StoragePage() {
                 }}
               >
                 {deleting ? <Loader2 style={{ width: '14px', height: '14px', animation: 'spin 1s linear infinite' }} /> : <Trash2 style={{ width: '14px', height: '14px' }} />}
-                {deleting ? 'Deleting...' : 'Delete'}
+                {deleting ? t('Deleting...', { defaultValue: 'Deleting...' }) : t('Delete', { defaultValue: 'Delete' })}
               </button>
             </div>
           </div>
@@ -1223,9 +1240,9 @@ export default function StoragePage() {
           handleDeleteSingleFile(singleDeleteConfirm.id);
           setSingleDeleteConfirm({ open: false, id: null });
         }}
-        title="Delete File"
-        message="Are you sure you want to delete this file? This file will be removed from storage and all linked projects, tasks, deliverables, and submissions. This action cannot be undone."
-        confirmText="Delete"
+title={t('Delete File', { defaultValue: 'Delete File' })}
+        message={t('Are you sure you want to delete this file? This file will be removed from storage and all linked projects, tasks, deliverables, and submissions. This action cannot be undone.', { defaultValue: 'Are you sure you want to delete this file? This file will be removed from storage and all linked projects, tasks, deliverables, and submissions. This action cannot be undone.' })}
+        confirmText={t('Delete', { defaultValue: 'Delete' })}
         danger
       />
     </DashboardLayout>

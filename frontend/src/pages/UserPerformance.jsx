@@ -9,6 +9,7 @@
  */
 
 import { useState, useMemo, memo, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
@@ -59,14 +60,15 @@ const CARD_META = {
 
 /** Memoised summary card used for the KPI row on the user performance page. */
 const SummaryCard = memo(function SummaryCard({ card }) {
+  const { t } = useTranslation();
   return (
     <div className="up-summary-card">
       <div className="up-summary-top">
         <div className="up-summary-icon" style={{ background: card.bgColor }}>
-          <img src={card.icon} alt={card.title} />
+          <img src={card.icon} alt={t(card.title, { defaultValue: card.title })} />
         </div>
         <div>
-          <h4 className="up-summary-title">{card.title}</h4>
+          <h4 className="up-summary-title">{t(card.title, { defaultValue: card.title })}</h4>
           <div className="up-summary-value" style={{ color: card.valueColor }}>
             {card.value}
           </div>
@@ -115,6 +117,7 @@ const PRIORITY_TEXT_COLORS = {
  * task table for the selected user.
  */
 function UserPerformance() {
+  const { t } = useTranslation();
   const { userId: urlUserId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -167,15 +170,15 @@ function UserPerformance() {
   const breakdownItems = useMemo(() => {
     if (totalTasks === 0) return [];
     return [
-      { label: "Completed", count: statusBreakdown.completed || 0, color: "var(--color-green-text)" },
-      { label: "Pending", count: statusBreakdown.pending || 0, color: "var(--color-orange-text)" },
-      { label: "In Review", count: statusBreakdown.in_review || 0, color: "var(--color-blue-text)" },
-      { label: "Overdue", count: statusBreakdown.overdue || 0, color: "var(--color-danger)" },
+      { label: t("Completed", { defaultValue: "Completed" }), count: statusBreakdown.completed || 0, color: "var(--color-green-text)" },
+      { label: t("Pending", { defaultValue: "Pending" }), count: statusBreakdown.pending || 0, color: "var(--color-orange-text)" },
+      { label: t("In Review", { defaultValue: "In Review" }), count: statusBreakdown.in_review || 0, color: "var(--color-blue-text)" },
+      { label: t("Overdue", { defaultValue: "Overdue" }), count: statusBreakdown.overdue || 0, color: "var(--color-danger)" },
     ].map((item) => ({
       ...item,
       percent: totalTasks > 0 ? Math.round((item.count / totalTasks) * 1000) / 10 : 0,
     }));
-  }, [statusBreakdown, totalTasks]);
+  }, [statusBreakdown, totalTasks, t]);
 
   // Priority breakdown data
   const priorityBreakdown = useMemo(() => data?.priority_distribution || {}, [data?.priority_distribution]);
@@ -186,13 +189,13 @@ function UserPerformance() {
     const total = high + medium + low;
     return {
       bars: [
-        { label: "High", count: high, color: "var(--color-danger)" },
-        { label: "Medium", count: medium, color: "var(--color-orange-text)" },
-        { label: "Low", count: low, color: "var(--color-green-text)" },
+        { label: t("High", { defaultValue: "High" }), count: high, color: "var(--color-danger)" },
+        { label: t("Medium", { defaultValue: "Medium" }), count: medium, color: "var(--color-orange-text)" },
+        { label: t("Low", { defaultValue: "Low" }), count: low, color: "var(--color-green-text)" },
       ],
       total,
     };
-  }, [priorityBreakdown]);
+  }, [priorityBreakdown, t]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -278,13 +281,13 @@ function UserPerformance() {
 
   const formatStatus = (status) => {
     const map = {
-      pending: "Pending",
-      in_progress: "In Progress",
-      paused: "Paused",
-      submitted: "Submitted",
-      reopened: "Reopened",
-      approved: "Approved",
-      rejected: "Declined",
+      pending: t("Pending", { defaultValue: "Pending" }),
+      in_progress: t("In Progress", { defaultValue: "In Progress" }),
+      paused: t("Paused", { defaultValue: "Paused" }),
+      submitted: t("Submitted", { defaultValue: "Submitted" }),
+      reopened: t("Reopened", { defaultValue: "Reopened" }),
+      approved: t("Approved", { defaultValue: "Approved" }),
+      rejected: t("Declined", { defaultValue: "Declined" }),
     };
     return map[status] || status;
   };
@@ -292,9 +295,9 @@ function UserPerformance() {
   return (
     <DashboardLayout>
       <Breadcrumb items={[
-        { label: "Reports", path: "/reports" },
+        { label: t("Reports", { defaultValue: "Reports" }), path: "/reports" },
         ...(location.state?.fromTeam ? [{ label: location.state.fromTeam, path: rolePath(`reports/team-members/${location.state.teamId}`) }] : []),
-        { label: isOwnPage ? "My Performance" : "User Performance" },
+        { label: isOwnPage ? t("My Performance", { defaultValue: "My Performance" }) : t("User Performance", { defaultValue: "User Performance" }) },
       ]} />
       <div className="up-layout">
         <div className="up-main">
@@ -309,8 +312,8 @@ function UserPerformance() {
                 </svg>
               </div>
               <div>
-                <h1>{isLoading ? "Loading..." : userInfo.name || "\u2014"}</h1>
-                <p className="up-role">{ROLE_LABEL[userInfo.role] || userInfo.role || "\u2014"}</p>
+                <h1>{isLoading ? t("Loading...", { defaultValue: "Loading..." }) : userInfo.name || "\u2014"}</h1>
+                <p className="up-role">{ROLE_LABEL[userInfo.role] ? t(ROLE_LABEL[userInfo.role], { defaultValue: ROLE_LABEL[userInfo.role] }) : userInfo.role || "\u2014"}</p>
               </div>
             </div>
             <div className="up-profile-actions">
@@ -318,14 +321,14 @@ function UserPerformance() {
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M8 2v8M4 6l4 4 4-4M2 14h12" />
                 </svg>
-                {isOwnPage ? "Export My Report" : "Export Report"}
+                {isOwnPage ? t("Export My Report", { defaultValue: "Export My Report" }) : t("Export Report", { defaultValue: "Export Report" })}
               </button>
               {canAssignTask && !isOwnPage && (
                 <button className="up-export-btn" onClick={() => setShowCreateTask(true)}>
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M8 3v10M3 8h10" />
                   </svg>
-                  Assign Task
+                  {t("Assign Task", { defaultValue: "Assign Task" })}
                 </button>
               )}
             </div>
@@ -352,14 +355,14 @@ function UserPerformance() {
             {/* Task Status Breakdown - Donut Chart */}
             <div className="up-chart-card">
               <div className="up-chart-header">
-                <h3>Task Status Breakdown</h3>
+                <h3>{t("Task Status Breakdown", { defaultValue: "Task Status Breakdown" })}</h3>
               </div>
               <div className="up-donut-section">
                 <DonutChart
                   segments={breakdownItems}
                   size={160}
                   strokeWidth={28}
-                  totalLabel="Total Tasks"
+                  totalLabel={t("Total Tasks", { defaultValue: "Total Tasks" })}
                 />
               </div>
             </div>
@@ -367,12 +370,12 @@ function UserPerformance() {
             {/* Priority Distribution - Horizontal Bar Chart */}
             <div className="up-chart-card">
               <div className="up-chart-header">
-                <h3>Priority Distribution</h3>
+                <h3>{t("Priority Distribution", { defaultValue: "Priority Distribution" })}</h3>
               </div>
               <div className="up-priority-section">
                 <PriorityBarChart
                   bars={priorityItems.bars}
-                  totalLabel="Total Tasks"
+                  totalLabel={t("Total Tasks", { defaultValue: "Total Tasks" })}
                 />
               </div>
             </div>
@@ -381,29 +384,29 @@ function UserPerformance() {
           {/* TASKS TABLE - EXACT SAME AS TASKBY */}
           <div style={{ marginTop: "32px" }}>
             <div className="task-text">
-              <h3>Tasks</h3>
-              <p>All tasks assigned to {isOwnPage ? "me" : (userInfo.name || "this user")}</p>
+              <h3>{t("Tasks", { defaultValue: "Tasks" })}</h3>
+              <p>{t("All tasks assigned to {{name}}", { name: isOwnPage ? t("me", { defaultValue: "me" }) : (userInfo.name || t("this user", { defaultValue: "this user" })), defaultValue: `All tasks assigned to ${isOwnPage ? "me" : (userInfo.name || "this user")}` })}</p>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "6px", flexWrap: "wrap", gap: "8px" }}>
                 <div className="task-count-badge" style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                   <span style={{ background: "var(--color-primary-bg)", color: "var(--color-primary)", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
-                    Total: {totalCount} items
+                    {t("Total: {{count}} items", { count: totalCount, defaultValue: `Total: ${totalCount} items` })}
                   </span>
                   <span style={{ background: "var(--color-success-bg)", color: "var(--color-success)", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
-                    Tasks: {filteredItems.length}
+                    {t("Tasks: {{count}}", { count: filteredItems.length, defaultValue: `Tasks: ${filteredItems.length}` })}
                   </span>
                 </div>
                 <div className="all-time" style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                   <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}>
-                    <option value="all">All Time</option>
-                    <option value="7">Last 7 Days</option>
-                    <option value="30">Last 30 Days</option>
-                    <option value="90">Last 3 Months</option>
-                    <option value="180">Last 6 Months</option>
-                    <option value="custom">Custom Date Range</option>
+                    <option value="all">{t("All Time", { defaultValue: "All Time" })}</option>
+                    <option value="7">{t("Last 7 Days", { defaultValue: "Last 7 Days" })}</option>
+                    <option value="30">{t("Last 30 Days", { defaultValue: "Last 30 Days" })}</option>
+                    <option value="90">{t("Last 3 Months", { defaultValue: "Last 3 Months" })}</option>
+                    <option value="180">{t("Last 6 Months", { defaultValue: "Last 6 Months" })}</option>
+                    <option value="custom">{t("Custom Date Range", { defaultValue: "Custom Date Range" })}</option>
                   </select>
                   {timeFilter === "custom" && (
                     <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                      <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>From:</span>
+                      <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>{t("From:", { defaultValue: "From:" })}</span>
                       <input
                         type="date"
                         value={customStart}
@@ -415,7 +418,7 @@ function UserPerformance() {
                         }}
                         style={{ padding: "4px 8px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", color: "var(--text-primary)", fontSize: "13px" }}
                       />
-                      <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>To:</span>
+                      <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>{t("To:", { defaultValue: "To:" })}</span>
                       <input
                         type="date"
                         value={customEnd}
@@ -436,13 +439,13 @@ function UserPerformance() {
 
           <DraggableStatusBadges
             badges={[
-              { id: "", label: "All", className: "All" },
-              { id: "due_today", label: "Due Today", className: "DueToday", dotColor: "#EF4444" },
-              { id: "pending", label: "Pending", className: "Pending" },
-              { id: "submitted", label: "Submitted", className: "Submitted" },
-              { id: "reopened", label: "Reopened", className: "Reopened" },
-              { id: "approved", label: "Approved", className: "Approved" },
-              { id: "rejected", label: "Declined", className: "Rejected" },
+              { id: "", label: t("All", { defaultValue: "All" }), className: "All" },
+              { id: "due_today", label: t("Due Today", { defaultValue: "Due Today" }), className: "DueToday", dotColor: "#EF4444" },
+              { id: "pending", label: t("Pending", { defaultValue: "Pending" }), className: "Pending" },
+              { id: "submitted", label: t("Submitted", { defaultValue: "Submitted" }), className: "Submitted" },
+              { id: "reopened", label: t("Reopened", { defaultValue: "Reopened" }), className: "Reopened" },
+              { id: "approved", label: t("Approved", { defaultValue: "Approved" }), className: "Approved" },
+              { id: "rejected", label: t("Declined", { defaultValue: "Declined" }), className: "Rejected" },
             ]}
             activeStatus={statusFilter}
             onSelectStatus={selectStatusFilter}
@@ -454,7 +457,7 @@ function UserPerformance() {
             <IoSearchOutline fontSize={"20px"} />
             <input
               type="text"
-              placeholder="Search by task name, status, or priority..."
+              placeholder={t("Search by task name, status, or priority...", { defaultValue: "Search by task name, status, or priority..." })}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -462,18 +465,18 @@ function UserPerformance() {
 
           <div className="container">
             <div className="up-table-header">
-              <div>Task Name</div>
-              <div>Status</div>
-              <div>Progress</div>
-              <div>Priority</div>
-              <div>Due Date</div>
-              <div>Action</div>
+              <div>{t("Task Name", { defaultValue: "Task Name" })}</div>
+              <div>{t("Status", { defaultValue: "Status" })}</div>
+              <div>{t("Progress", { defaultValue: "Progress" })}</div>
+              <div>{t("Priority", { defaultValue: "Priority" })}</div>
+              <div>{t("Due Date", { defaultValue: "Due Date" })}</div>
+              <div>{t("Action", { defaultValue: "Action" })}</div>
             </div>
 
             {tasksLoading ? (
-              <div style={{ padding: "40px", textAlign: "center", color: "var(--text-secondary)" }}>Loading...</div>
+              <div style={{ padding: "40px", textAlign: "center", color: "var(--text-secondary)" }}>{t("Loading...", { defaultValue: "Loading..." })}</div>
             ) : filteredItems.length === 0 ? (
-              <div style={{ padding: "40px", textAlign: "center", color: "var(--text-secondary)" }}>No items found</div>
+              <div style={{ padding: "40px", textAlign: "center", color: "var(--text-secondary)" }}>{t("No items found", { defaultValue: "No items found" })}</div>
             ) : (
               <div className="sortable-table-container">
                 {filteredItems.map((item, idx) => {
@@ -500,14 +503,14 @@ function UserPerformance() {
                           <div className="progress-bar-fill" style={{ width: `${item.deliverables_progress || 0}%` }}></div>
                         </div>
                         <div style={{ fontSize: "12px", color: "var(--text-secondary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {item.approved_deliverables || 0}/{item.total_deliverables || 0} subtasks
+                          {t("{{approved}}/{{total}} subtasks", { approved: item.approved_deliverables || 0, total: item.total_deliverables || 0, defaultValue: `${item.approved_deliverables || 0}/${item.total_deliverables || 0} subtasks` })}
                         </div>
                       </div>
 
                       <div className="col-priority">
                         <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "var(--bg-hover)", color: PRIORITY_TEXT_COLORS[item.priority] || "var(--text-dark)" }}>
                           <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "var(--text-dark)" }}></span>
-                          {item.priority}
+                          {item.priority ? t(item.priority, { defaultValue: item.priority }) : ""}
                         </span>
                       </div>
 
@@ -521,7 +524,7 @@ function UserPerformance() {
                         <div className="action-btns">
                           <button
                             className="action-icon-btn action-view"
-                            title="View"
+                            title={t("View", { defaultValue: "View" })}
                             onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'user-performance' } })}
                           >
                             <IoEyeOutline />
@@ -538,9 +541,9 @@ function UserPerformance() {
           {/* Mobile Task Cards */}
           <div className="up-task-cards">
             {tasksLoading ? (
-              <div style={{ padding: "40px", textAlign: "center", color: "var(--text-secondary)" }}>Loading...</div>
+              <div style={{ padding: "40px", textAlign: "center", color: "var(--text-secondary)" }}>{t("Loading...", { defaultValue: "Loading..." })}</div>
             ) : filteredItems.length === 0 ? (
-              <div style={{ padding: "40px", textAlign: "center", color: "var(--text-secondary)" }}>No items found</div>
+              <div style={{ padding: "40px", textAlign: "center", color: "var(--text-secondary)" }}>{t("No items found", { defaultValue: "No items found" })}</div>
             ) : (
               filteredItems.map((item, idx) => {
                 const uniqueKey = `card-task-${item.id}-${idx}`;
@@ -554,14 +557,14 @@ function UserPerformance() {
                            background: "var(--color-success-bg)",
                            color: "var(--color-success)"
                         }}>
-                          Task
+                          {t("Task", { defaultValue: "Task" })}
                         </span>
                       </div>
                     </div>
 
                     <div className="up-task-card-details">
                       <div className="up-task-card-detail">
-                        <span className="up-task-card-detail-label">Status</span>
+                        <span className="up-task-card-detail-label">{t("Status", { defaultValue: "Status" })}</span>
                         <span className="badge" style={{
                           background: STATUS_COLORS[item.status] || "var(--bg-hover)",
                           color: STATUS_TEXT_COLORS[item.status] || "var(--text-dark)"
@@ -570,12 +573,12 @@ function UserPerformance() {
                         </span>
                       </div>
                       <div className="up-task-card-detail">
-                        <span className="up-task-card-detail-label">Priority</span>
+                        <span className="up-task-card-detail-label">{t("Priority", { defaultValue: "Priority" })}</span>
                         <span className="badge" style={{
                           background: PRIORITY_COLORS[item.priority] || "var(--bg-hover)",
                           color: PRIORITY_TEXT_COLORS[item.priority] || "var(--text-dark)"
                         }}>
-                          {item.priority}
+                          {item.priority ? t(item.priority, { defaultValue: item.priority }) : ""}
                         </span>
                       </div>
                     </div>
@@ -586,7 +589,7 @@ function UserPerformance() {
                           {item.deliverables_progress || 0}%
                         </span>
                         <span className="up-task-card-progress-detail">
-                          {item.approved_deliverables || 0}/{item.total_deliverables || 0} subtasks
+                          {t("{{approved}}/{{total}} subtasks", { approved: item.approved_deliverables || 0, total: item.total_deliverables || 0, defaultValue: `${item.approved_deliverables || 0}/${item.total_deliverables || 0} subtasks` })}
                         </span>
                       </div>
                       <div className="progress-bar-track">
@@ -599,12 +602,12 @@ function UserPerformance() {
                     <div className="up-task-card-actions">
                       <button
                         className="action-icon-btn action-view"
-                        title="View"
+                        title={t("View", { defaultValue: "View" })}
                         onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), {
                           state: { taskIds: taskIdList, from: 'user-performance' }
                         })}
                       >
-                        <IoEyeOutline /> View
+                        <IoEyeOutline /> {t("View", { defaultValue: "View" })}
                       </button>
                     </div>
                   </div>

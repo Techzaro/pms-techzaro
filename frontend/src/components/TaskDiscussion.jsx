@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   MessageSquare,
   Send,
@@ -115,6 +116,7 @@ function CommentItem({
   depth,
   mentionableUsers = [],
 }) {
+  const { t } = useTranslation();
   const [showReplies, setShowReplies] = useState(depth === 0);
   const [replyOpen, setReplyOpen] = useState(false);
   const [replyText, setReplyText] = useState("");
@@ -263,20 +265,20 @@ function CommentItem({
       </div>
       <div className="td-comment-body">
         <div className="td-comment-header">
-          <span className="td-comment-author">{comment.user?.name || "Unknown"}</span>
-          <span className="td-comment-role">{roleLabel(comment.user?.role)}</span>
+          <span className="td-comment-author">{comment.user?.name || t("Unknown", { defaultValue: "Unknown" })}</span>
+          <span className="td-comment-role">{t(roleLabel(comment.user?.role))}</span>
           <span className="td-comment-time" title={formatDateTime(comment.created_at)}>
             {timeAgo(comment.created_at)}
           </span>
           {comment.is_edited && (
-            <span className="td-comment-edited">(edited)</span>
+            <span className="td-comment-edited">{t("(edited)", { defaultValue: "(edited)" })}</span>
           )}
           {canEdit && !editing && (
             <div className="td-comment-actions" ref={menuRef}>
               <button
                 className="td-comment-menu-btn"
                 onClick={() => setShowMenu(!showMenu)}
-                title="More actions"
+                title={t("More actions", { defaultValue: "More actions" })}
               >
                 ...
               </button>
@@ -289,12 +291,12 @@ function CommentItem({
                         setShowMenu(false);
                       }}
                     >
-                      <Pencil size={13} /> Edit
+                      <Pencil size={13} /> {t("Edit")}
                     </button>
                   )}
                   {canEdit && (
                     <button className="td-comment-dropdown-danger" onClick={handleDelete}>
-                      <Trash2 size={13} /> Delete
+                      <Trash2 size={13} /> {t("Delete", { defaultValue: "Delete" })}
                     </button>
                   )}
                 </div>
@@ -321,14 +323,14 @@ function CommentItem({
                 }}
                 disabled={editSending}
               >
-                Cancel
+                {t("Cancel")}
               </button>
               <button
                 className="td-comment-edit-save"
                 onClick={handleEdit}
                 disabled={editSending || !editText.trim()}
               >
-                {editSending ? "Saving..." : "Save"}
+                {editSending ? t("Saving...", { defaultValue: "Saving..." }) : t("Save", { defaultValue: "Save" })}
               </button>
             </div>
           </div>
@@ -352,7 +354,7 @@ function CommentItem({
                   });
                   if (!res.ok) {
                     const err = await res.json().catch(() => null);
-                    alert(err?.message || "Failed to download file");
+                    alert(err?.message || t("Failed to download file", { defaultValue: "Failed to download file" }));
                     return;
                   }
                   const blob = await res.blob();
@@ -385,7 +387,7 @@ function CommentItem({
               className="td-comment-reply-btn"
               onClick={() => setReplyOpen(!replyOpen)}
             >
-              Reply
+              {t("Reply", { defaultValue: "Reply" })}
               {replies.length > 0 && (
                 <span className="td-comment-reply-count">{replies.length}</span>
               )}
@@ -397,12 +399,11 @@ function CommentItem({
               >
                 {showReplies ? (
                   <>
-                    <ChevronUp size={14} /> Hide replies
+                    <ChevronUp size={14} /> {t("Hide replies", { defaultValue: "Hide replies" })}
                   </>
                 ) : (
                   <>
-                    <ChevronDown size={14} /> Show {replies.length}{" "}
-                    {replies.length === 1 ? "reply" : "replies"}
+                    <ChevronDown size={14} /> {t("Show {{count}} {{reply}}", { defaultValue: `Show ${replies.length} ${replies.length === 1 ? "reply" : "replies"}`, count: replies.length, reply: replies.length === 1 ? t("reply", { defaultValue: "reply" }) : t("replies", { defaultValue: "replies" }) })}
                   </>
                 )}
               </button>
@@ -430,7 +431,7 @@ function CommentItem({
                     </div>
                     <div className="td-mention-info">
                       <span className="td-mention-name">{p.name}</span>
-                      <span className="td-mention-role">{roleLabel(p.role)}</span>
+                      <span className="td-mention-role">{t(roleLabel(p.role))}</span>
                     </div>
                   </button>
                 ))}
@@ -438,7 +439,7 @@ function CommentItem({
             )}
             <textarea
               className="td-comment-textarea"
-              placeholder={`Reply to ${comment.user?.name || "comment"}...`}
+              placeholder={t("Reply to {{name}}...", { defaultValue: `Reply to ${comment.user?.name || "comment"}...`, name: comment.user?.name || t("comment", { defaultValue: "comment" }) })}
               value={replyText}
               onChange={handleReplyChange}
               rows={2}
@@ -460,14 +461,14 @@ function CommentItem({
                 }}
                 disabled={replySending}
               >
-                Cancel
+                {t("Cancel")}
               </button>
               <button
                 className="td-comment-reply-send"
                 onClick={handleReply}
                 disabled={replySending || !replyText.trim()}
               >
-                {replySending ? "Sending..." : "Reply"}
+                {replySending ? t("Sending...", { defaultValue: "Sending..." }) : t("Reply", { defaultValue: "Reply" })}
               </button>
             </div>
           </div>
@@ -497,9 +498,10 @@ function CommentItem({
         isOpen={deleteConfirmOpen}
         onClose={() => setDeleteConfirmOpen(false)}
         onConfirm={confirmDelete}
-        title="Delete Comment"
-        message="Are you sure you want to delete this comment? This action cannot be undone."
-        confirmText="Delete"
+        title={t("Delete Comment", { defaultValue: "Delete Comment" })}
+        message={t("Are you sure you want to delete this comment? This action cannot be undone.", { defaultValue: "Are you sure you want to delete this comment? This action cannot be undone." })}
+        confirmText={t("Delete", { defaultValue: "Delete" })}
+        cancelText={t("Cancel")}
         danger
       />
     </div>
@@ -507,6 +509,7 @@ function CommentItem({
 }
 
 export default function TaskDiscussion({ taskId, deliverableId, entityType, readOnly, teamUsers = [] }) {
+  const { t } = useTranslation();
   const isDeliverable = entityType === "deliverable" && deliverableId;
   const commentsEndpoint = isDeliverable
     ? `${API_URL}/deliverables/${deliverableId}/comments`
@@ -761,7 +764,7 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
     const selected = e.target.files?.[0];
     if (selected) {
       if (selected.size > 20 * 1024 * 1024) {
-        alert("File size must be less than 20MB");
+        alert(t("File size must be less than 20MB", { defaultValue: "File size must be less than 20MB" }));
         return;
       }
       setFile(selected);
@@ -780,12 +783,12 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
       <div className="td-discussion-header" onClick={() => setCollapsed(!collapsed)}>
         <div className="td-discussion-title">
           <MessageSquare size={18} />
-          <h3>Task Discussion</h3>
+          <h3>{t("Task Discussion", { defaultValue: "Task Discussion" })}</h3>
           {total > 0 && (
             <span className="td-discussion-count">{total}</span>
           )}
         </div>
-        <button className="td-discussion-toggle" title={collapsed ? "Expand" : "Collapse"}>
+        <button className="td-discussion-toggle" title={collapsed ? t("Expand", { defaultValue: "Expand" }) : t("Collapse", { defaultValue: "Collapse" })}>
           {collapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
         </button>
       </div>
@@ -793,18 +796,18 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
       {!collapsed && (
         <div className="td-discussion-content">
           {loading && comments.length === 0 ? (
-            <div className="td-discussion-loading">Loading discussion...</div>
+            <div className="td-discussion-loading">{t("Loading discussion...", { defaultValue: "Loading discussion..." })}</div>
           ) : comments.length === 0 ? (
             <div className="td-discussion-empty">
               <MessageSquare size={40} strokeWidth={1.5} />
-              <p>No discussions yet.</p>
-              <span>Start the conversation regarding this task.</span>
+              <p>{t("No discussions yet.", { defaultValue: "No discussions yet." })}</p>
+              <span>{t("Start the conversation regarding this task.", { defaultValue: "Start the conversation regarding this task." })}</span>
             </div>
           ) : (
             <div className="td-discussion-list">
               {hasMore && (
                 <button className="td-discussion-load-more" onClick={loadMore}>
-                  Load older comments
+                  {t("Load older comments", { defaultValue: "Load older comments" })}
                 </button>
               )}
               {comments.map((comment) => (
@@ -845,7 +848,7 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
                       </div>
                       <div className="td-mention-info">
                         <span className="td-mention-name">{p.name}</span>
-                        <span className="td-mention-role">{roleLabel(p.role)}</span>
+                        <span className="td-mention-role">{t(roleLabel(p.role))}</span>
                       </div>
                     </button>
                   ))}
@@ -867,7 +870,7 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
                   ref={quillRef}
                   value={newComment}
                   onChange={handleQuillChange}
-                  placeholder="Write a comment..."
+                  placeholder={t("Write a comment...", { defaultValue: "Write a comment..." })}
                   style={{ height: "auto" }}
                 />
                 <div className="td-discussion-send-row">
@@ -881,7 +884,7 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
                   <button
                     className="td-discussion-attach-btn"
                     onClick={() => fileInputRef.current?.click()}
-                    title="Attach file"
+                    title={t("Attach file", { defaultValue: "Attach file" })}
                   >
                     <Paperclip size={16} />
                   </button>
@@ -891,10 +894,10 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
                     disabled={sending || (!newComment.replace(/<[^>]*>/g, "").trim() && !file)}
                   >
                     {sending ? (
-                      "Sending..."
+                      t("Sending...", { defaultValue: "Sending..." })
                     ) : (
                       <>
-                        <Send size={14} /> Send
+                        <Send size={14} /> {t("Send", { defaultValue: "Send" })}
                       </>
                     )}
                   </button>

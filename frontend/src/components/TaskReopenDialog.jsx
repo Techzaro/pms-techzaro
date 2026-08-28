@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
@@ -29,6 +30,7 @@ const REOPEN_REASONS = [
 ];
 
 function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
+  const { t } = useTranslation();
   const [reopenReason, setReopenReason] = useState("");
   const [reopenReasonDetail, setReopenReasonDetail] = useState("");
   const [instructions, setInstructions] = useState("");
@@ -60,11 +62,11 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
 
   const handleSubmit = async () => {
     if (!reopenReason) {
-      notify.error("Please select a reason for reopening.");
+      notify.error(t("Please select a reason for reopening.", { defaultValue: "Please select a reason for reopening." }));
       return;
     }
     if (reopenReason === "Other" && !reopenReasonDetail.trim()) {
-      notify.error("Please provide details for the 'Other' reason.");
+      notify.error(t("Please provide details for the 'Other' reason.", { defaultValue: "Please provide details for the 'Other' reason." }));
       return;
     }
     await run(async () => {
@@ -99,10 +101,10 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
           onReopenSuccess(data.task);
           onClose();
         } else {
-          notify.error(data.message || "Failed to reopen task.");
+          notify.error(data.message || t("Failed to reopen task.", { defaultValue: "Failed to reopen task." }));
         }
       } catch {
-        notify.error("An error occurred. Please try again.");
+        notify.error(t("An error occurred. Please try again.", { defaultValue: "An error occurred. Please try again." }));
       }
     });
   };
@@ -115,21 +117,21 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
     <div className="rd-overlay">
       <div className="rd-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="rd-header">
-          <h2 className="rd-title">{isApprovedOrAbandoned ? "Reopen Task" : "Decline & Reopen Task"}</h2>
+          <h2 className="rd-title">{isApprovedOrAbandoned ? t("Reopen Task", { defaultValue: "Reopen Task" }) : t("Decline & Reopen Task", { defaultValue: "Decline & Reopen Task" })}</h2>
           <p className="rd-subtitle">{task.title}</p>
         </div>
 
         <div className="rd-body">
           <div className="rd-field">
-            <label className="rd-label">Reason for Reopening <span style={{ color: "var(--color-danger)" }}>*</span></label>
+            <label className="rd-label">{t("Reason for Reopening", { defaultValue: "Reason for Reopening" })} <span style={{ color: "var(--color-danger)" }}>*</span></label>
             <select
               className="rd-input"
               value={reopenReason}
               onChange={(e) => { setReopenReason(e.target.value); }}
             >
-              <option value="">Select a reason...</option>
+              <option value="">{t("Select a reason...", { defaultValue: "Select a reason..." })}</option>
               {REOPEN_REASONS.map((r) => (
-                <option key={r} value={r}>{r}</option>
+                <option key={r} value={r}>{t(r)}</option>
               ))}
             </select>
             <div className="rd-reason-tags">
@@ -140,7 +142,7 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
                   className={`rd-tag-chip ${reopenReason === r ? "rd-tag-chip--selected" : ""}`}
                   onClick={() => setReopenReason(r)}
                 >
-                  {r}
+                  {t(r)}
                 </button>
               ))}
             </div>
@@ -149,11 +151,11 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
           {(reopenReason === "Other" || reopenReason) && (
             <div className="rd-field">
               <label className="rd-label">
-                {reopenReason === "Other" ? "Specify Reason *" : "Additional Details"}
+                {reopenReason === "Other" ? t("Specify Reason *", { defaultValue: "Specify Reason *" }) : t("Additional Details", { defaultValue: "Additional Details" })}
               </label>
               <textarea
                 className="rd-textarea"
-                placeholder={reopenReason === "Other" ? "Please describe the reason..." : "Provide more details (optional)..."}
+                placeholder={reopenReason === "Other" ? t("Please describe the reason...", { defaultValue: "Please describe the reason..." }) : t("Provide more details (optional)...", { defaultValue: "Provide more details (optional)..." })}
                 value={reopenReasonDetail}
                 onChange={(e) => { setReopenReasonDetail(e.target.value); }}
                 rows={3}
@@ -162,10 +164,10 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
           )}
 
           <div className="rd-field">
-            <label className="rd-label">Additional Instructions</label>
+            <label className="rd-label">{t("Additional Instructions", { defaultValue: "Additional Instructions" })}</label>
             <textarea
               className="rd-textarea"
-              placeholder="Provide specific instructions for resubmission..."
+              placeholder={t("Provide specific instructions for resubmission...", { defaultValue: "Provide specific instructions for resubmission..." })}
               value={instructions}
               onChange={(e) => { setInstructions(e.target.value); }}
               rows={3}
@@ -173,7 +175,7 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
           </div>
 
           <div className="rd-field">
-            <label className="rd-label">Attach Link / Reference URL</label>
+            <label className="rd-label">{t("Attach Link / Reference URL", { defaultValue: "Attach Link / Reference URL" })}</label>
             <input
               type="url"
               className="rd-input"
@@ -184,7 +186,7 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
           </div>
 
           <div className="rd-field">
-            <label className="rd-label">New Deadline</label>
+            <label className="rd-label">{t("New Deadline", { defaultValue: "New Deadline" })}</label>
             <input
               type="datetime-local"
               className="rd-input"
@@ -195,7 +197,7 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
           </div>
 
           <div className="rd-field">
-            <label className="rd-label">Attach Files</label>
+            <label className="rd-label">{t("Attach Files", { defaultValue: "Attach Files" })}</label>
             <div
               className="rd-dropzone"
               onClick={() => fileInputRef.current?.click()}
@@ -207,13 +209,13 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
                   {files.map((f, idx) => (
                     <div key={idx} className="rd-file-info" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--bg-card-alt, #f9fafb)", padding: "6px 12px", borderRadius: 8, border: "1px solid var(--border-color, #e5e7eb)" }}>
                       <span className="rd-file-name" style={{ fontSize: 13, fontWeight: 500, color: "var(--text-dark)" }}>{f.name}</span>
-                      <button type="button" className="rd-file-remove" onClick={(e) => { e.stopPropagation(); setFiles((prev) => prev.filter((_, i) => i !== idx)); }}>Remove</button>
+                      <button type="button" className="rd-file-remove" onClick={(e) => { e.stopPropagation(); setFiles((prev) => prev.filter((_, i) => i !== idx)); }}>{t("Remove", { defaultValue: "Remove" })}</button>
                     </div>
                   ))}
-                  <button type="button" className="rd-browse" style={{ alignSelf: "flex-end", fontSize: 12, marginTop: 4, background: "none", border: "none" }} onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}>+ Add more files</button>
+                  <button type="button" className="rd-browse" style={{ alignSelf: "flex-end", fontSize: 12, marginTop: 4, background: "none", border: "none" }} onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}>{t("+ Add more files", { defaultValue: "+ Add more files" })}</button>
                 </div>
               ) : (
-                <p className="rd-dropzone-text">Drag & drop files or <span className="rd-browse">browse</span></p>
+                <p className="rd-dropzone-text">{t("Drag & drop files or", { defaultValue: "Drag & drop files or" })} <span className="rd-browse">{t("browse", { defaultValue: "browse" })}</span></p>
               )}
             </div>
             <input
@@ -227,9 +229,9 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
         </div>
 
         <div className="rd-footer">
-          <button className="rd-cancel-btn" onClick={handleClose} disabled={submitting}>Cancel</button>
+          <button className="rd-cancel-btn" onClick={handleClose} disabled={submitting}>{t("Cancel")}</button>
           <LoadingButton className="rd-submit-btn" onClick={handleSubmit} loading={submitting}>
-            {isApprovedOrAbandoned ? "Reopen" : "Decline & Reopen"}
+            {isApprovedOrAbandoned ? t("Reopen", { defaultValue: "Reopen" }) : t("Decline & Reopen", { defaultValue: "Decline & Reopen" })}
           </LoadingButton>
         </div>
       </div>

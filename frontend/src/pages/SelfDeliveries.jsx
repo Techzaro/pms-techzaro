@@ -11,6 +11,7 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import DraggableStatusBadges from "../components/DraggableStatusBadges";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { GoDotFill } from "react-icons/go";
@@ -65,6 +66,7 @@ const STATUS_TEXT_COLORS = {
 
 /** Main Self Subtasks page — fetches and renders the user's own subtasks. */
 function SelfDeliveries() {
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const notify = useNotification();
@@ -200,10 +202,10 @@ function SelfDeliveries() {
         publish('data:changed', { type: 'deliverable', action: 'updated' });
         showSuccessMessage("Subtask", "paused");
       } else {
-        notify.error(data.message || "Failed to pause.");
+        notify.error(data.message || t("Failed to pause.", { defaultValue: "Failed to pause." }));
       }
     } catch {
-      notify.error("Failed to pause.");
+      notify.error(t("Failed to pause.", { defaultValue: "Failed to pause." }));
     } finally {
       setActingId(null);
       setActingType(null);
@@ -227,10 +229,10 @@ function SelfDeliveries() {
         publish('data:changed', { type: 'deliverable', action: 'updated' });
         showSuccessMessage("Subtask", "resumed");
       } else {
-        notify.error(data.message || "Failed to resume.");
+        notify.error(data.message || t("Failed to resume.", { defaultValue: "Failed to resume." }));
       }
     } catch {
-      notify.error("Failed to resume.");
+      notify.error(t("Failed to resume.", { defaultValue: "Failed to resume." }));
     } finally {
       setActingId(null);
       setActingType(null);
@@ -271,7 +273,8 @@ function SelfDeliveries() {
       abandon_requested: "Abandon Requested",
       abandoned: "Abandoned",
     };
-    return map[status] || status;
+    const label = map[status] || status;
+    return t(label, { defaultValue: label });
   };
 
   const handleSubtaskUpdate = (updatedSubtask) => {
@@ -395,8 +398,8 @@ function SelfDeliveries() {
   const paginatedItems = showAll ? safeFilteredItems : safeFilteredItems.slice((page - 1) * (ITEMS_PER_PAGE || 10), page * (ITEMS_PER_PAGE || 10));
 
   const breadcrumbs = [
-    { label: "Subtasks", path: rolePath("deliveries") },
-    { label: "Self Subtasks" },
+    { label: t("Subtasks", { defaultValue: "Subtasks" }), path: rolePath("deliveries") },
+    { label: t("Self Subtasks", { defaultValue: "Self Subtasks" }) },
   ];
 
   return (
@@ -405,37 +408,37 @@ function SelfDeliveries() {
       <div className="projects-page">
         <div className="projects-header">
           <div>
-            <h1>Self Subtasks</h1>
-            <p>Subtasks assigned to yourself</p>
+            <h1>{t("Self Subtasks", { defaultValue: "Self Subtasks" })}</h1>
+            <p>{t("Subtasks assigned to yourself", { defaultValue: "Subtasks assigned to yourself" })}</p>
           </div>
           <div className="header-actions">
             {canCreateSubtask && (
               <button className="add-btn" onClick={() => setShowCreateModal(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", background: "var(--color-primary)", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: 13 }}>
-                + Create Subtask
+                {t("+ Create Subtask", { defaultValue: "+ Create Subtask" })}
               </button>
             )}
             <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)} className="reports-filter">
-              <option value="">All Time</option>
-              <option value="7">Last 7 Days</option>
-              <option value="30">Last 30 Days</option>
-              <option value="180">Last 6 Months</option>
+              <option value="">{t("All Time", { defaultValue: "All Time" })}</option>
+              <option value="7">{t("Last 7 Days", { defaultValue: "Last 7 Days" })}</option>
+              <option value="30">{t("Last 30 Days", { defaultValue: "Last 30 Days" })}</option>
+              <option value="180">{t("Last 6 Months", { defaultValue: "Last 6 Months" })}</option>
             </select>
           </div>
         </div>
 
         <DraggableStatusBadges
           badges={[
-            { id: "due_today", label: "Due Today", count: dueTodayCount, className: "DueToday", dotColor: "#EF4444" },
-            { id: "pending", label: "Pending", count: pendingCount, className: "Pending" },
-            { id: "in_progress", label: "In Progress", count: inProgressCount, className: "InProgress" },
-            { id: "paused", label: "Paused", count: pausedCount, className: "Paused" },
-            { id: "submitted", label: "Submitted", count: submittedCount, className: "Submitted" },
-            { id: "reopened", label: "Reopened", count: reopenedCount, className: "Reopened" },
-            { id: "transferred", label: "Transferred", count: transferredCount, className: "Transferred" },
-            { id: "approved", label: "Approved", count: approvedCount, className: "Approved" },
-            { id: "rejected", label: "Declined", count: rejectedCount, className: "Rejected" },
-            { id: "rework_required", label: "Rework Required", count: reworkRequiredCount, className: "Reopened" },
-            { id: "", label: "All", count: allCount, className: "All" },
+            { id: "due_today", label: t("Due Today", { defaultValue: "Due Today" }), count: dueTodayCount, className: "DueToday", dotColor: "#EF4444" },
+            { id: "pending", label: t("Pending", { defaultValue: "Pending" }), count: pendingCount, className: "Pending" },
+            { id: "in_progress", label: t("In Progress", { defaultValue: "In Progress" }), count: inProgressCount, className: "InProgress" },
+            { id: "paused", label: t("Paused", { defaultValue: "Paused" }), count: pausedCount, className: "Paused" },
+            { id: "submitted", label: t("Submitted", { defaultValue: "Submitted" }), count: submittedCount, className: "Submitted" },
+            { id: "reopened", label: t("Reopened", { defaultValue: "Reopened" }), count: reopenedCount, className: "Reopened" },
+            { id: "transferred", label: t("Transferred", { defaultValue: "Transferred" }), count: transferredCount, className: "Transferred" },
+            { id: "approved", label: t("Approved", { defaultValue: "Approved" }), count: approvedCount, className: "Approved" },
+            { id: "rejected", label: t("Declined", { defaultValue: "Declined" }), count: rejectedCount, className: "Rejected" },
+            { id: "rework_required", label: t("Rework Required", { defaultValue: "Rework Required" }), count: reworkRequiredCount, className: "Reopened" },
+            { id: "", label: t("All", { defaultValue: "All" }), count: allCount, className: "All" },
           ]}
           activeStatus={statusFilter}
           onSelectStatus={selectStatusFilter}
@@ -457,18 +460,18 @@ function SelfDeliveries() {
 
         <div className="container">
           <div className="deliveries-table-header self-deliveries-grid">
-            <div>ID</div>
-            <div>Subtask</div>
-            <div>Related Task/Project</div>
-            <div>Status</div>
-            <div>Start & Due Date</div>
-            <div style={{ textAlign: "center" }}>Action</div>
+            <div>{t("ID", { defaultValue: "ID" })}</div>
+            <div>{t("Subtask", { defaultValue: "Subtask" })}</div>
+            <div>{t("Related Task/Project", { defaultValue: "Related Task/Project" })}</div>
+            <div>{t("Status", { defaultValue: "Status" })}</div>
+            <div>{t("Start & Due Date", { defaultValue: "Start & Due Date" })}</div>
+            <div style={{ textAlign: "center" }}>{t("Action", { defaultValue: "Action" })}</div>
           </div>
 
           {loading ? (
-            <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
+            <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>{t("Loading...", { defaultValue: "Loading..." })}</div>
           ) : filteredItems.length === 0 ? (
-            <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No subtasks found</div>
+            <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>{t("No subtasks found", { defaultValue: "No subtasks found" })}</div>
           ) : (
             <SortableTableWrapper items={paginatedItems} onReorder={handleSubtaskReorder} idKey="id" as="div" handleOnly>
               {(item, idx, dndProps) => {
@@ -502,33 +505,33 @@ function SelfDeliveries() {
                     <div className="col-action" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%" }}>
                       <ActionPopover
                         trigger={
-                          <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
+                          <button className="action-icon-btn action-view action-trigger-lg" title={t("Actions", { defaultValue: "Actions" })}>
                             <IoEyeOutline size={20} />
                           </button>
                         }
                         onTriggerClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { from: "self-deliveries", subtaskIds } })}
                       >
-                        <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
+                        <button className="action-icon-btn action-note" title={t("Add Note", { defaultValue: "Add Note" })} onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
                         {["in_progress", "submitted"].includes(item.status) && !item.assigner_paused && (
-                          <button className="action-icon-btn action-submit" title="Pause" disabled={actingId === item.id} onClick={() => handlePause(item.id)} style={{ color: "#D97706" }}>
+                          <button className="action-icon-btn action-submit" title={t("Pause", { defaultValue: "Pause" })} disabled={actingId === item.id} onClick={() => handlePause(item.id)} style={{ color: "#D97706" }}>
                             <Pause size={16} />
                           </button>
                         )}
                         {item.status === "paused" && !item.assigner_paused && (
-                          <button className="action-icon-btn action-submit" title="Resume" disabled={actingId === item.id} onClick={() => handleResume(item.id)} style={{ color: "#059669" }}>
+                          <button className="action-icon-btn action-submit" title={t("Resume", { defaultValue: "Resume" })} disabled={actingId === item.id} onClick={() => handleResume(item.id)} style={{ color: "#059669" }}>
                             <Play size={16} />
                           </button>
                         )}
                         {item.assigner_paused && (
                           <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#92400E", fontSize: "11px", fontWeight: 600, border: "1px solid #F59E0B" }}>
                             <Lock size={12} />
-                            Paused by Assigner
+                            {t("Paused by Assigner", { defaultValue: "Paused by Assigner" })}
                           </span>
                         )}
                         {canSubmit && (
                           <button
                             className="action-icon-btn action-submit"
-                            title={item.task?.status === "paused" ? "Parent task is paused. Resume the task first." : item.task?.assigner_paused ? "Parent task is paused by assigner." : item.status === "rework_required" ? "Resubmit Subtask" : "Submit Subtask"}
+                            title={item.task?.status === "paused" ? t("Parent task is paused. Resume the task first.", { defaultValue: "Parent task is paused. Resume the task first." }) : item.task?.assigner_paused ? t("Parent task is paused by assigner.", { defaultValue: "Parent task is paused by assigner." }) : item.status === "rework_required" ? t("Resubmit Subtask", { defaultValue: "Resubmit Subtask" }) : t("Submit Subtask", { defaultValue: "Submit Subtask" })}
                             disabled={item.task?.status === "paused" || item.task?.assigner_paused}
                             onClick={() => setSubmitModal({ open: true, subtask: item })}
                             style={item.task?.status === "paused" || item.task?.assigner_paused ? { opacity: 0.4, cursor: "not-allowed" } : {}}
@@ -584,3 +587,4 @@ function SelfDeliveries() {
 }
 
 export default SelfDeliveries;
+

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { HardDrive, FileText, Building2, AlertTriangle, Loader2 } from 'lucide-react';
 import { api } from './api/superAdminApi';
@@ -12,6 +13,7 @@ function formatBytes(bytes) {
 }
 
 export default function SuperStoragePage() {
+  const { t } = useTranslation();
   const [orgs, setOrgs] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -45,7 +47,7 @@ export default function SuperStoragePage() {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--color-primary)' }} />
-        <span className="ml-2 text-sm" style={{ color: 'var(--text-secondary)' }}>Loading storage data...</span>
+        <span className="ml-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{t('Loading storage data...', { defaultValue: 'Loading storage data...' })}</span>
       </div>
     );
   }
@@ -53,8 +55,8 @@ export default function SuperStoragePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--text-heading)' }}>Storage Overview</h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>Monitor storage usage across all organizations</p>
+        <h1 className="text-2xl font-bold" style={{ color: 'var(--text-heading)' }}>{t('Storage Overview', { defaultValue: 'Storage Overview' })}</h1>
+        <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>{t('Monitor storage usage across all organizations', { defaultValue: 'Monitor storage usage across all organizations' })}</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -85,9 +87,9 @@ export default function SuperStoragePage() {
                 <>
                   <div className="mb-3">
                     <div className="flex justify-between mb-1">
-                      <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>{formatBytes(s.total_bytes || 0)} / {s.max_storage_gb} {s.storage_unit || 'GB'}</span>
-                      <span className="text-xs" style={{ color: isCritical ? 'var(--color-danger)' : isWarning ? 'var(--color-warning)' : 'var(--text-muted)' }}>{usagePercent}%</span>
-                    </div>
+                   <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+  {formatBytes(s.total_bytes || 0)} / {s.max_storage_gb} {t(s.storage_unit || 'GB', { defaultValue: s.storage_unit || 'GB' })}
+</span>                    </div>
                     <div className="w-full h-2 rounded-full" style={{ background: 'var(--bg-hover)' }}>
                       <div className="h-2 rounded-full" style={{
                         width: `${Math.min(usagePercent, 100)}%`,
@@ -96,12 +98,12 @@ export default function SuperStoragePage() {
                     </div>
                   </div>
                   <div className="flex justify-between text-xs" style={{ color: 'var(--text-muted)' }}>
-                    <span>{s.total_files} files</span>
-                    <span>{formatBytes(s.remaining_bytes || 0)} left</span>
+<span>{t('{{count}} files', { count: s.total_files, defaultValue: `${s.total_files} files` })}</span>
+<span>{formatBytes(s.remaining_bytes || 0)} {t('left', { defaultValue: 'left' })}</span>
                   </div>
                 </>
               ) : (
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No storage data</p>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{t('No storage data', { defaultValue: 'No storage data' })}</p>
               )}
             </div>
           );

@@ -1122,6 +1122,7 @@ class UserController extends Controller
                     'last_login_at', 'created_at', 'updated_at', 'must_change_password',
                     'credentials_managed_by_admin', 'password_reset_locked',
                     'password_changed_by', 'password_changed_at', 'password_version',
+                    'language', 'timezone', 'date_format', 'time_format', 'working_hours',
                 ]) + [
                     'password_changed_by_name' => $user->password_changed_by
                         ? ($user->passwordChangedByUser?->name ?? 'Unknown')

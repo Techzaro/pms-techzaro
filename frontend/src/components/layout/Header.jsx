@@ -19,8 +19,11 @@ import { formatDateTimeInline } from "../../utils/formatDateTime";
 import { getNotificationDestination } from "../../utils/navigation";
 import { useTheme } from "../../context/ThemeContext.jsx";
 import { useOrgBranding } from "../../hooks/useOrgBranding";
+import { useTranslation } from "react-i18next";
+import i18n from "../../utils/i18n";
 import { useOrgSubscription } from "../../hooks/useOrgSubscription";
 import "./Header.css";
+
 
 import CreateTaskModal from "../CreateTaskModal";
 import CreateProjectModal from "../CreateProjectModal";
@@ -31,6 +34,7 @@ import CreateDeliverableModel from "./CreateDeliverableModel";
  * Header component – renders the top navigation bar.
  */
 function Header() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const searchRef = useRef(null);
   const notifRef = useRef(null);
@@ -382,7 +386,6 @@ function Header() {
       .then((data) => {
 
         if (data && data.name) {
-
           setUserState({
             name: data.name,
             email: data.email,
@@ -392,7 +395,10 @@ function Header() {
           });
 
           const role = getCurrentRole();
-          setUser(role, { id: data.id, name: data.name, email: data.email, role: data.role, professional_email: data.professional_email, avatar: data.avatar || null });
+          setUser(role, data);
+          if (data.language) {
+            i18n.changeLanguage(data.language);
+          }
         }
       })
 
@@ -540,7 +546,7 @@ function Header() {
           <button
             className="header-menu-btn"
             onClick={() => window.dispatchEvent(new Event("toggle-sidebar"))}
-            aria-label="Toggle sidebar"
+            aria-label={t("Toggle sidebar", { defaultValue: "Toggle sidebar" })}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <path d="M3 12H21" />
@@ -572,7 +578,7 @@ function Header() {
           <input
             type="text"
             className="form-control"
-            placeholder="Search projects, tasks or team members..."
+            placeholder={t("Search placeholder")}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onFocus={() => searchQuery.length >= 2 && setShowSearchDropdown(true)}
@@ -582,23 +588,23 @@ function Header() {
           {showSearchDropdown && (
             <div className="search-dropdown" ref={searchDropdownRef}>
               {searchResults.pages.length === 0 && searchResults.projects.length === 0 && searchResults.tasks.length === 0 && searchResults.deliverables.length === 0 && searchResults.users.length === 0 ? (
-                <div className="search-dropdown-empty">No results found</div>
+                <div className="search-dropdown-empty">{t("No results found", { defaultValue: "No results found" })}</div>
               ) : (
                 <>
                   {searchResults.pages.length > 0 && (
                     <div className="search-dropdown-section">
-                      <div className="search-dropdown-label">Pages</div>
+                      <div className="search-dropdown-label">{t("Pages", { defaultValue: "Pages" })}</div>
                       {searchResults.pages.map((item) => (
                         <div key={item.path} className={`search-dropdown-item${isSearchItemHighlighted(item) ? ' search-dropdown-item--highlighted' : ''}`} onClick={() => handleSearchSelect(item.path)} onMouseEnter={() => setSearchItemHighlight(item)}>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
-                          <span>{item.name}</span>
+                          <span>{t(item.name)}</span>
                         </div>
                       ))}
                     </div>
                   )}
                   {searchResults.projects.length > 0 && (
                     <div className="search-dropdown-section">
-                      <div className="search-dropdown-label">Projects</div>
+                      <div className="search-dropdown-label">{t("Projects")}</div>
                       {searchResults.projects.map((item) => (
                         <div key={item.id} className={`search-dropdown-item${isSearchItemHighlighted(item) ? ' search-dropdown-item--highlighted' : ''}`} onClick={() => handleSearchSelect(item.path)} onMouseEnter={() => setSearchItemHighlight(item)}>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
@@ -612,7 +618,7 @@ function Header() {
                   )}
                   {searchResults.tasks.length > 0 && (
                     <div className="search-dropdown-section">
-                      <div className="search-dropdown-label">Tasks</div>
+                      <div className="search-dropdown-label">{t("Tasks")}</div>
                       {searchResults.tasks.map((item) => (
                         <div key={item.id} className={`search-dropdown-item${isSearchItemHighlighted(item) ? ' search-dropdown-item--highlighted' : ''}`} onClick={() => handleSearchSelect(item.path)} onMouseEnter={() => setSearchItemHighlight(item)}>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
@@ -626,7 +632,7 @@ function Header() {
                   )}
                   {searchResults.deliverables.length > 0 && (
                     <div className="search-dropdown-section">
-                      <div className="search-dropdown-label">Subtasks</div>
+                      <div className="search-dropdown-label">{t("Subtasks", { defaultValue: "Subtasks" })}</div>
                       {searchResults.deliverables.map((item) => (
                         <div key={item.id} className={`search-dropdown-item${isSearchItemHighlighted(item) ? ' search-dropdown-item--highlighted' : ''}`} onClick={() => handleSearchSelect(item.path)} onMouseEnter={() => setSearchItemHighlight(item)}>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
@@ -640,7 +646,7 @@ function Header() {
                   )}
                   {searchResults.users.length > 0 && (
                     <div className="search-dropdown-section">
-                      <div className="search-dropdown-label">Users</div>
+                      <div className="search-dropdown-label">{t("Users", { defaultValue: "Users" })}</div>
                       {searchResults.users.map((item) => (
                         <div key={item.id} className={`search-dropdown-item${isSearchItemHighlighted(item) ? ' search-dropdown-item--highlighted' : ''}`} onClick={() => handleSearchSelect(item.path)} onMouseEnter={() => setSearchItemHighlight(item)}>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -670,12 +676,12 @@ function Header() {
           {getCurrentRole() !== "guest" && hasModule("tasks") && (
           <button
             className="task-btn1"
-            title="Create Task"
+            title={t("Create Task")}
             onClick={() =>
               setShowTaskModal(true)
             }
           >
-            <span className="quick-btn-full">+ Task</span>
+            <span className="quick-btn-full">{t("Add Task")}</span>
             <span className="quick-btn-short">+T</span>
           </button>
           )}
@@ -684,12 +690,12 @@ function Header() {
           <button
             className="task-btn1"
             style={{ background: "#7c3aed" }}
-            title="Create Subtask"
+            title={t("Create Subtask", { defaultValue: "Create Subtask" })}
             onClick={() =>
               setShowSubtaskModal(true)
             }
           >
-            <span className="quick-btn-full">+ Subtask</span>
+            <span className="quick-btn-full">{t("Add Subtask")}</span>
             <span className="quick-btn-short">+S</span>
           </button>
           )}
@@ -699,12 +705,12 @@ function Header() {
           {["admin", "manager"].includes(getCurrentRole()) && hasModule("projects") && (
           <button
             className="project-btn"
-            title="Create Project"
+            title={t("Create Project")}
             onClick={() =>
               setShowProjectModal(true)
             }
           >
-            <span className="quick-btn-full">+ Project</span>
+            <span className="quick-btn-full">{t("Add Project")}</span>
             <span className="quick-btn-short">+P</span>
           </button>
           )}
@@ -714,7 +720,7 @@ function Header() {
             <button
               className="header-notif-link"
               onClick={handleEnableNotifications}
-              title={notifPermission === 'denied' ? 'Notifications blocked - click for instructions' : 'Enable desktop notifications'}
+              title={notifPermission === 'denied' ? t('Notifications blocked - click for instructions', { defaultValue: 'Notifications blocked - click for instructions' }) : t('Enable desktop notifications', { defaultValue: 'Enable desktop notifications' })}
               style={{ cursor: 'pointer', padding: '6px 10px', borderRadius: 8, border: notifPermission === 'denied' ? '1px solid #f87171' : '1px solid #fbbf24', background: notifPermission === 'denied' ? '#fee2e2' : '#fef3c7', color: notifPermission === 'denied' ? '#991b1b' : '#92400e', fontSize: 12, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4 }}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={notifPermission === 'denied' ? '#991b1b' : '#92400e'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -731,7 +737,7 @@ function Header() {
                   </>
                 )}
               </svg>
-              {notifPermission === 'denied' ? 'Notifications Blocked' : 'Enable Notifications'}
+              {notifPermission === 'denied' ? t('Notifications Blocked', { defaultValue: 'Notifications Blocked' }) : t('Enable Notifications', { defaultValue: 'Enable Notifications' })}
             </button>
           )}
 
@@ -748,7 +754,7 @@ function Header() {
           </div>
 
           {/* Theme toggle button */}
-          <button className="theme-toggle-btn" onClick={toggleTheme} title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
+          <button className="theme-toggle-btn" onClick={toggleTheme} title={theme === "dark" ? t("Switch to light mode", { defaultValue: "Switch to light mode" }) : t("Switch to dark mode", { defaultValue: "Switch to dark mode" })}>
             {theme === "dark" ? <MdLightMode fontSize="20px" /> : <MdDarkMode fontSize="20px" />}
           </button>
 
@@ -815,24 +821,24 @@ function Header() {
                 {/* Menu items */}
                 <button className={`hmc-menu-item${profileHighlightIndex === 0 ? ' hmc-menu-item--highlighted' : ''}`} onClick={() => { setIsProfileOpen(false); navigate(rolePath("my-profile")); }} onMouseEnter={() => setProfileHighlightIndex(0)}>
                   <MdPerson size={20} />
-                  <span>My Profile</span>
+                  <span>{t("My Profile")}</span>
                 </button>
                 <button className={`hmc-menu-item${profileHighlightIndex === 1 ? ' hmc-menu-item--highlighted' : ''}`} onClick={() => { setIsProfileOpen(false); navigate(`${rolePath("my-profile")}?openPassword=true`); }} onMouseEnter={() => setProfileHighlightIndex(1)}>
                   <MdLock size={20} />
-                  <span>Change Password</span>
+                  <span>{t("Change Password")}</span>
                 </button>
                 <button className={`hmc-menu-item${profileHighlightIndex === 2 ? ' hmc-menu-item--highlighted' : ''}`} onClick={() => { setIsProfileOpen(false); navigate(rolePath("history")); }} onMouseEnter={() => setProfileHighlightIndex(2)}>
                   <MdHistory size={20} />
-                  <span>My Activity</span>
+                  <span>{t("My Activity")}</span>
                 </button>
                 <button className={`hmc-menu-item${profileHighlightIndex === 3 ? ' hmc-menu-item--highlighted' : ''}`} onClick={() => { setIsProfileOpen(false); navigate(rolePath("feedback")); }} onMouseEnter={() => setProfileHighlightIndex(3)}>
                   <MdFeedback size={20} />
-                  <span>Feedback</span>
+                  <span>{t("Feedback")}</span>
                 </button>
                 <div className="hmc-logout-wrap">
                   <button className={`hmc-logout-btn${profileHighlightIndex === 4 ? ' hmc-menu-item--highlighted' : ''}`} onMouseEnter={() => setProfileHighlightIndex(4)} onClick={() => logoutUser()}>
                     <MdLogout size={18} />
-                    <span>Logout</span>
+                    <span>{t("Logout")}</span>
                   </button>
                 </div>
 
@@ -846,16 +852,16 @@ function Header() {
             <div className="notif-panel" ref={notifPanelRef}>
               <div className="notif-panel-header">
                 <button className="notif-view-all-sm" onClick={() => { setShowNotifications(false); navigate(rolePath("notifications")); }}>
-                  View All
+                  {t("View All")}
                 </button>
-                <h4>Notifications</h4>
+                <h4>{t("Notifications")}</h4>
                 {unreadCount > 0 && (
-                  <button className="notif-mark-all" onClick={markAllAsRead}>Mark all read</button>
+                  <button className="notif-mark-all" onClick={markAllAsRead}>{t("Mark all read")}</button>
                 )}
               </div>
               <div className="notif-panel-list" ref={notifListRef}>
                 {notifications.length === 0 ? (
-                  <div className="notif-panel-empty">No notifications</div>
+                  <div className="notif-panel-empty">{t("No notifications", { defaultValue: "No notifications" })}</div>
                 ) : (
                   notifications.slice(0, 7).map((n, idx) => (
                     <div

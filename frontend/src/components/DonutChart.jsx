@@ -4,8 +4,11 @@
  */
 
 import { memo, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 
-const DonutChart = memo(function DonutChart({ segments, size = 140, strokeWidth = 24, totalLabel = "Total Tasks" }) {
+const DonutChart = memo(function DonutChart({ segments, size = 140, strokeWidth = 24, totalLabel }) {
+  const { t } = useTranslation();
+  const displayTotalLabel = totalLabel || t("Total Tasks", { defaultValue: "Total Tasks" });
   const total = useMemo(() => segments.reduce((sum, s) => sum + s.count, 0), [segments]);
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -50,14 +53,14 @@ const DonutChart = memo(function DonutChart({ segments, size = 140, strokeWidth 
           textAlign: "center",
         }}>
           <div style={{ fontSize: "24px", fontWeight: "700", color: "var(--text-heading)" }}>{total}</div>
-          <div style={{ fontSize: "11px", color: "#9ca3af" }}>{totalLabel}</div>
+          <div style={{ fontSize: "11px", color: "#9ca3af" }}>{t(displayTotalLabel)}</div>
         </div>
       </div>
       <div className="donut-chart-legend">
         {arcs.map((arc) => (
           <div key={arc.label} className="donut-legend-item">
             <div className="donut-legend-dot" style={{ background: arc.color }} />
-            <span className="donut-legend-label">{arc.label}</span>
+            <span className="donut-legend-label">{t(arc.label)}</span>
             <span className="donut-legend-count">{arc.count} ({Math.round(arc.percent)}%)</span>
           </div>
         ))}

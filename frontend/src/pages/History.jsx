@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import AuditLogDetailModal from "../components/AuditLogDetailModal";
@@ -28,6 +29,7 @@ function CompanyHeader() {
 }
 
 function MyActivity() {
+  const { t } = useTranslation();
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -201,7 +203,7 @@ function MyActivity() {
 
   return (
     <DashboardLayout hideRightSidebar={true}>
-      <Breadcrumb items={[{ label: "My Activity" }]} />
+      <Breadcrumb items={[{ label: t("My Activity", { defaultValue: "My Activity" }) }]} />
       <CompanyHeader />
       <br />
       <div className="audit-layout">
@@ -215,12 +217,12 @@ function MyActivity() {
                 </svg>
               </div>
               <div>
-                <h1 className="audit-title">My Activity</h1>
-                <p className="audit-subtitle">Track your personal actions across the system</p>
+                <h1 className="audit-title">{t("My Activity", { defaultValue: "My Activity" })}</h1>
+                <p className="audit-subtitle">{t("Track your personal actions across the system", { defaultValue: "Track your personal actions across the system" })}</p>
               </div>
             </div>
             <button className="audit-export-btn" onClick={generatePdf} disabled={exporting} style={{ marginLeft: "auto" }}>
-              {exporting ? "Exporting..." : "Export PDF"}
+              {exporting ? t("Exporting...", { defaultValue: "Exporting..." }) : t("Export PDF", { defaultValue: "Export PDF" })}
             </button>
           </div>
 
@@ -230,7 +232,7 @@ function MyActivity() {
                 <svg className="audit-search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
                 </svg>
-                <input type="text" placeholder="Search by activity description..." value={searchInput} onChange={(e) => handleSearchChange(e.target.value)} />
+                <input type="text" placeholder={t("Search by activity description...", { defaultValue: "Search by activity description..." })} value={searchInput} onChange={(e) => handleSearchChange(e.target.value)} />
                 {searchInput && (
                   <button className="audit-search-clear" onClick={() => { setSearchInput(""); setSearch(""); }}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
@@ -247,9 +249,9 @@ function MyActivity() {
                     setDateFrom(val);
                     if (dateTo && val > dateTo) setDateTo(val);
                   }}
-                  title="From"
+                  title={t("From", { defaultValue: "From" })}
                 />
-                <span className="audit-date-sep">to</span>
+                <span className="audit-date-sep">{t("to", { defaultValue: "to" })}</span>
                 <input
                   type="date"
                   value={dateTo}
@@ -259,51 +261,51 @@ function MyActivity() {
                     setDateTo(val);
                     if (dateFrom && val < dateFrom) setDateFrom(val);
                   }}
-                  title="To"
+                  title={t("To", { defaultValue: "To" })}
                 />
               </div>
               <select value={moduleFilter} onChange={(e) => setModuleFilter(e.target.value)}>
-                <option value="">All Modules</option>
-                <option value="auth">Auth</option>
-                <option value="user">User</option>
-                <option value="project">Project</option>
-                <option value="task">Task</option>
-                <option value="deliverable">Subtask</option>
-                <option value="team">Team</option>
-                <option value="event">Event</option>
+                <option value="">{t("All Modules", { defaultValue: "All Modules" })}</option>
+                <option value="auth">{t("Auth", { defaultValue: "Auth" })}</option>
+                <option value="user">{t("User", { defaultValue: "User" })}</option>
+                <option value="project">{t("Project", { defaultValue: "Project" })}</option>
+                <option value="task">{t("Task", { defaultValue: "Task" })}</option>
+                <option value="deliverable">{t("Subtask", { defaultValue: "Subtask" })}</option>
+                <option value="team">{t("Team", { defaultValue: "Team" })}</option>
+                <option value="event">{t("Event", { defaultValue: "Event" })}</option>
               </select>
               <select value={actionFilter} onChange={(e) => setActionFilter(e.target.value)}>
-                <option value="">All Actions</option>
-                <option value="created">Created</option>
-                <option value="updated">Updated</option>
-                <option value="deleted">Deleted</option>
-                <option value="approved">Approved</option>
-                <option value="rejected">Declined</option>
-                <option value="submitted">Submitted</option>
-                <option value="completed">Completed</option>
-                <option value="login">Login</option>
-                <option value="logout">Logout</option>
+                <option value="">{t("All Actions", { defaultValue: "All Actions" })}</option>
+                <option value="created">{t("Created", { defaultValue: "Created" })}</option>
+                <option value="updated">{t("Updated", { defaultValue: "Updated" })}</option>
+                <option value="deleted">{t("Deleted", { defaultValue: "Deleted" })}</option>
+                <option value="approved">{t("Approved", { defaultValue: "Approved" })}</option>
+                <option value="rejected">{t("Declined", { defaultValue: "Declined" })}</option>
+                <option value="submitted">{t("Submitted", { defaultValue: "Submitted" })}</option>
+                <option value="completed">{t("Completed", { defaultValue: "Completed" })}</option>
+                <option value="login">{t("Login", { defaultValue: "Login" })}</option>
+                <option value="logout">{t("Logout", { defaultValue: "Logout" })}</option>
               </select>
             </div>
             <div className="audit-filter-actions">
-              <button className="audit-apply-btn" onClick={applyFilters}>Apply Filters</button>
-              <button className="audit-clear-btn" onClick={clearFilters}>Clear</button>
+              <button className="audit-apply-btn" onClick={applyFilters}>{t("Apply Filters", { defaultValue: "Apply Filters" })}</button>
+              <button className="audit-clear-btn" onClick={clearFilters}>{t("Clear", { defaultValue: "Clear" })}</button>
             </div>
           </div>
 
           <div className="audit-page">
             {loading ? (
-              <div className="audit-empty"><div className="audit-spinner"></div><p>Loading your activity...</p></div>
+              <div className="audit-empty"><div className="audit-spinner"></div><p>{t("Loading your activity...", { defaultValue: "Loading your activity..." })}</p></div>
             ) : error ? (
               <div className="audit-empty">
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--color-danger)" strokeWidth="1.5"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
                 <p style={{ color: "var(--color-danger)" }}>{error}</p>
-                <button onClick={() => fetchLogs(page)} style={{ marginTop: 8, padding: "6px 16px", border: "1px solid var(--border-color)", borderRadius: 8, background: "var(--bg-card)", cursor: "pointer", fontSize: 13 }}>Try again</button>
+                <button onClick={() => fetchLogs(page)} style={{ marginTop: 8, padding: "6px 16px", border: "1px solid var(--border-color)", borderRadius: 8, background: "var(--bg-card)", cursor: "pointer", fontSize: 13 }}>{t("Try again", { defaultValue: "Try again" })}</button>
               </div>
             ) : logs.length === 0 ? (
               <div className="audit-empty">
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--border-medium)" strokeWidth="1.5"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
-                <p>No activity found.</p>
+                <p>{t("No activity found.", { defaultValue: "No activity found." })}</p>
               </div>
             ) : (
               <>
@@ -311,12 +313,12 @@ function MyActivity() {
                   <table className="audit-table">
                     <thead>
                       <tr>
-                        <th>Date & Time</th>
-                        <th>Module</th>
-                        <th>Action</th>
-                        <th>Description</th>
-                        <th>Status</th>
-                        <th>IP Address</th>
+                        <th>{t("Date & Time", { defaultValue: "Date & Time" })}</th>
+                        <th>{t("Module", { defaultValue: "Module" })}</th>
+                        <th>{t("Action", { defaultValue: "Action" })}</th>
+                        <th>{t("Description", { defaultValue: "Description" })}</th>
+                        <th>{t("Status", { defaultValue: "Status" })}</th>
+                        <th>{t("IP Address", { defaultValue: "IP Address" })}</th>
                         <th></th>
                       </tr>
                     </thead>
@@ -326,18 +328,18 @@ function MyActivity() {
                           <td className="audit-cell-date" title={formatDateTimeInline(log.created_at)}>
                             {timeAgo(log.created_at)}
                           </td>
-                          <td><span style={{ textTransform: "capitalize" }}>{log.module || "-"}</span></td>
-                          <td><span style={{ textTransform: "capitalize" }}>{(log.action || "").replace(/_/g, " ")}</span></td>
+                          <td><span style={{ textTransform: "capitalize" }}>{t(log.module || "-", { defaultValue: log.module || "-" })}</span></td>
+                          <td><span style={{ textTransform: "capitalize" }}>{t((log.action || "").replace(/_/g, " "), { defaultValue: (log.action || "").replace(/_/g, " ") })}</span></td>
                           <td className="audit-cell-desc">{log.description || "-"}</td>
                           <td>
                             <span className={`audit-status-badge audit-status-${log.status || "success"}`}>
-                              {(log.status || "success").charAt(0).toUpperCase() + (log.status || "success").slice(1)}
+                              {t((log.status || "success").charAt(0).toUpperCase() + (log.status || "success").slice(1), { defaultValue: (log.status || "success").charAt(0).toUpperCase() + (log.status || "success").slice(1) })}
                             </span>
                           </td>
                           <td className="audit-cell-ip">{log.ip_address || "-"}</td>
                           <td>
-                            <button className="audit-action-btn" onClick={() => setDetailLog(log)} title="View details">
-                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
+                            <button className="audit-action-btn" onClick={() => setDetailLog(log)} title={t("View details", { defaultValue: "View details" })}>
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
                             </button>
                           </td>
                         </tr>
@@ -347,7 +349,7 @@ function MyActivity() {
                 </div>
                   <div className="audit-pagination" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", marginTop: "16px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "var(--text-secondary)" }}>
-                      <span>Rows per page:</span>
+                      <span>{t("Rows per page:", { defaultValue: "Rows per page:" })}</span>
                       <select
                         value={perPage}
                         onChange={(e) => { setPerPage(Number(e.target.value)); setPage(1); }}
@@ -363,9 +365,9 @@ function MyActivity() {
                     </div>
                     {lastPage > 1 && (
                       <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                        <button className="audit-page-btn" disabled={page <= 1} onClick={() => handlePageChange(page - 1)}>Previous</button>
-                        <span className="audit-page-info">Page {page} of {lastPage}</span>
-                        <button className="audit-page-btn" disabled={page >= lastPage} onClick={() => handlePageChange(page + 1)}>Next</button>
+                        <button className="audit-page-btn" disabled={page <= 1} onClick={() => handlePageChange(page - 1)}>{t("Previous", { defaultValue: "Previous" })}</button>
+                        <span className="audit-page-info">{t("Page {{page}} of {{lastPage}}", { page, lastPage, defaultValue: `Page ${page} of ${lastPage}` })}</span>
+                        <button className="audit-page-btn" disabled={page >= lastPage} onClick={() => handlePageChange(page + 1)}>{t("Next", { defaultValue: "Next" })}</button>
                       </div>
                     )}
                   </div>

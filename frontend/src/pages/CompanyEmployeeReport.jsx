@@ -10,6 +10,7 @@
  * - Rendered via React portal to body
  */
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import { useEscapeKey } from "../hooks/useEscapeKey";
@@ -17,6 +18,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useApiQuery } from "../hooks/useApi";
 import DonutChart from "../components/DonutChart";
+import { getUserTimezone, formatLocalDate, formatLocalTime } from "../utils/timezoneUtils";
 import "../components/Charts.css";
 import "../pages/ExportReport.css";
 
@@ -59,6 +61,7 @@ const PERIOD_MAP = { "All Time": "all", "Today": "today", "This Week": "week", "
  * both a visual preview and PDF export.
  */
 function CompanyEmployeeReport({ isOpen, onClose }) {
+  const { t } = useTranslation();
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
   useEscapeKey(true, handleClose);
   const [dateRange, setDateRange] = useState("all");
@@ -67,13 +70,14 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
   const [showReview, setShowReview] = useState(false);
   const [generating, setGenerating] = useState(false);
 
+  const userTz = getUserTimezone();
   const period = PERIOD_MAP[dateRange] || "all";
 
   // Fetch company employee report data filtered by selected time period
   const { data: reportData, isLoading } = useApiQuery(
-    ["company-employees-report", period, customStart, customEnd],
+    ["company-employees-report", period, customStart, customEnd, userTz],
     "/reports/company-employees",
-    { period, time_filter: period, start_date: customStart, end_date: customEnd, startDate: customStart, endDate: customEnd },
+    { period, time_filter: period, start_date: customStart, end_date: customEnd, startDate: customStart, endDate: customEnd, timezone: userTz },
     { staleTime: 60000, refetchOnMount: true }
   );
 
@@ -85,9 +89,8 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
   const teams = reportData?.teams || [];
   const tasksTrend = reportData?.tasks_trend || [];
 
-  const now = new Date();
-  const genDate = now.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-  const genTime = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+  const genDate = formatLocalDate(new Date().toISOString(), userTz);
+  const genTime = formatLocalTime(new Date().toISOString(), userTz);
 
   const totalAssigned = summary.total_assigned ?? 0;
   const totalCompleted = summary.completed ?? 0;
@@ -95,10 +98,10 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
   const totalOverdue = summary.overdue ?? 0;
 
   const cardMeta = [
-    { key: "total_assigned", label: "Total Assigned", value: totalAssigned, color: "var(--color-primary)", bg: "#EEF2FF", sub: "All tasks assigned" },
-    { key: "completed", label: "Completed", value: totalCompleted, color: "#22C55E", bg: "#ECFDF5", sub: "Tasks completed" },
-    { key: "pending", label: "Pending", value: totalPending, color: "#F59E0B", bg: "#FEF3C7", sub: "Tasks in progress" },
-    { key: "overdue", label: "Overdue", value: totalOverdue, color: "#EF4444", bg: "#FEF2F2", sub: "Require attention" },
+    { key: "total_assigned", label: t("Total Assigned", { defaultValue: "Total Assigned" }), value: totalAssigned, color: "var(--color-primary)", bg: "#EEF2FF", sub: t("All tasks assigned", { defaultValue: "All tasks assigned" }) },
+    { key: "completed", label: t("Completed", { defaultValue: "Completed" }), value: totalCompleted, color: "#22C55E", bg: "#ECFDF5", sub: t("Tasks completed", { defaultValue: "Tasks completed" }) },
+    { key: "pending", label: t("Pending", { defaultValue: "Pending" }), value: totalPending, color: "#F59E0B", bg: "#FEF3C7", sub: t("Tasks in progress", { defaultValue: "Tasks in progress" }) },
+    { key: "overdue", label: t("Overdue", { defaultValue: "Overdue" }), value: totalOverdue, color: "#EF4444", bg: "#FEF2F2", sub: t("Require attention", { defaultValue: "Require attention" }) },
   ];
 
   const totalStatusItems = statusDist.total || totalAssigned || 1;
@@ -405,8 +408,8 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
       doc.text("PMS Portal", M + 8.5, fY + 7.5);
       doc.setFontSize(4.5);
       doc.text("This is a system generated report.", M + 38, fY + 4);
-      doc.text(`Generated Date:   ${genDate}`, M + 38, fY + 7.5);
-      doc.text("Report Type:  Company Employee Report", PW - M - 50, fY + 4);
+      doc.text(`Generated Date: ${genDate} | Generated Time: ${genTime} (${userTz})`, M + 38, fY + 7.5);
+      doc.text(`Timezone: ${userTz} | Report: Company Employee Report`, PW - M - 60, fY + 4);
       doc.text("Page 1 of 1", PW - M, fY + 7.5, { align: "right" });
       doc.save("Company-Employee-Report.pdf");
     } catch (err) {
@@ -426,8 +429,8 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
           <div className="er-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
             <div className="er-header">
               <div>
-                <h2>Export Report</h2>
-                <p>Generate company-wide employee performance report.</p>
+                <h2>{t("Export Report", { defaultValue: "Export Report" })}</h2>
+                <p>{t("Generate company-wide employee performance report.", { defaultValue: "Generate company-wide employee performance report." })}</p>
               </div>
               <button className="er-close-btn" onClick={handleClose}>
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -436,14 +439,14 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
               </button>
             </div>
             <div className="er-section">
-              <h3>Timeline</h3>
+              <h3>{t("Timeline", { defaultValue: "Timeline" })}</h3>
               <div className="er-date-buttons" style={{ marginBottom: 12 }}>
                 {[
-                  { value: "all", label: "All Time" },
-                  { value: "today", label: "Today" },
-                  { value: "week", label: "This Week" },
-                  { value: "month", label: "This Month" },
-                  { value: "custom", label: "Custom Range" },
+                  { value: "all", label: t("All Time", { defaultValue: "All Time" }) },
+                  { value: "today", label: t("Today", { defaultValue: "Today" }) },
+                  { value: "week", label: t("This Week", { defaultValue: "This Week" }) },
+                  { value: "month", label: t("This Month", { defaultValue: "This Month" }) },
+                  { value: "custom", label: t("Custom Range", { defaultValue: "Custom Range" }) },
                 ].map((opt) => (
                   <button key={opt.value} className={`er-date-btn ${dateRange === opt.value ? "active" : ""}`} onClick={() => { setDateRange(opt.value); setIsDirty(true); }}>
                     {opt.label}
@@ -470,12 +473,12 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
               )}
             </div>
             <div className="er-footer">
-              <button className="er-cancel-btn" onClick={handleClose}>Cancel</button>
+              <button className="er-cancel-btn" onClick={handleClose}>{t("Cancel", { defaultValue: "Cancel" })}</button>
               <button className="er-export-btn" onClick={() => setShowReview(true)}>
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M8 2v8M4 6l4 4 4-4M2 14h12" />
                 </svg>
-                Report Review
+                {t("Report Review", { defaultValue: "Report Review" })}
               </button>
             </div>
           </div>
@@ -505,8 +508,8 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
                   </div>
                 </div>
                 <div className="erm-header-center">
-                  <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>COMPANY EMPLOYEE REPORT</span>
-                  <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 2 }}>All Employees Performance Overview</div>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{t("COMPANY EMPLOYEE REPORT", { defaultValue: "COMPANY EMPLOYEE REPORT" })}</span>
+                  <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 2 }}>{t("All Employees Performance Overview", { defaultValue: "All Employees Performance Overview" })}</div>
                 </div>
               </div>
 
@@ -521,12 +524,12 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
                       </svg>
                     </div>
                     <div>
-                      <div style={{ fontSize: 9, fontWeight: 600, color: "var(--text-secondary)" }}>Company Overview</div>
+                      <div style={{ fontSize: 9, fontWeight: 600, color: "var(--text-secondary)" }}>{t("Company Overview", { defaultValue: "Company Overview" })}</div>
                       <div style={{ fontSize: 12, fontWeight: 700, color: "var(--color-primary)" }}>{overview.company_name || "Techxaro Solutions"}</div>
                     </div>
                   </div>
                   <div style={{ borderTop: "1px solid var(--border-light)", paddingTop: 4 }}>
-                    <div style={{ fontSize: 8, color: "var(--text-secondary)" }}>Total Employees</div>
+                    <div style={{ fontSize: 8, color: "var(--text-secondary)" }}>{t("Total Employees", { defaultValue: "Total Employees" })}</div>
                     <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>{overview.total_employees ?? employees.length}</div>
                   </div>
                 </div>
@@ -552,30 +555,30 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
               <div className="erm-two-col">
                 {/* Left: Status Breakdown */}
                 <div style={{ border: "1px solid var(--border-color)", borderRadius: 8, padding: "12px" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 8 }}>TASK STATUS BREAKDOWN (Overall)</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 8 }}>{t("TASK STATUS BREAKDOWN (Overall)", { defaultValue: "TASK STATUS BREAKDOWN (Overall)" })}</div>
                   <DonutChart
                     segments={[
-                      { label: "Completed", count: statusDist.completed ?? 0, color: "#10b981" },
-                      { label: "Pending", count: statusDist.pending ?? 0, color: "#f59e0b" },
-                      { label: "In Review", count: statusDist.in_review ?? 0, color: "var(--color-primary)" },
-                      { label: "Overdue", count: statusDist.overdue ?? 0, color: "#ef4444" },
+                      { label: t("Completed", { defaultValue: "Completed" }), count: statusDist.completed ?? 0, color: "#10b981" },
+                      { label: t("Pending", { defaultValue: "Pending" }), count: statusDist.pending ?? 0, color: "#f59e0b" },
+                      { label: t("In Review", { defaultValue: "In Review" }), count: statusDist.in_review ?? 0, color: "var(--color-primary)" },
+                      { label: t("Overdue", { defaultValue: "Overdue" }), count: statusDist.overdue ?? 0, color: "#ef4444" },
                     ]}
                     size={140}
                     strokeWidth={24}
-                    totalLabel="Total Tasks"
+                    totalLabel={t("Total Tasks", { defaultValue: "Total Tasks" })}
                   />
                 </div>
 
                 {/* Right: Priority Distribution */}
                 <div style={{ border: "1px solid var(--border-color)", borderRadius: 8, padding: "12px" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 4 }}>PRIORITY DISTRIBUTION</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 4 }}>{t("PRIORITY DISTRIBUTION", { defaultValue: "PRIORITY DISTRIBUTION" })}</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
                     {(() => {
                       const totalPriority = (priorityDist.high ?? 0) + (priorityDist.medium ?? 0) + (priorityDist.low ?? 0);
                       return [
-                        { label: "High", count: priorityDist.high ?? 0, color: "#ef4444" },
-                        { label: "Medium", count: priorityDist.medium ?? 0, color: "#f59e0b" },
-                        { label: "Low", count: priorityDist.low ?? 0, color: "#10b981" },
+                        { label: t("High", { defaultValue: "High" }), count: priorityDist.high ?? 0, color: "#ef4444" },
+                        { label: t("Medium", { defaultValue: "Medium" }), count: priorityDist.medium ?? 0, color: "#f59e0b" },
+                        { label: t("Low", { defaultValue: "Low" }), count: priorityDist.low ?? 0, color: "#10b981" },
                       ].map((p) => {
                         const pct = totalPriority > 0 ? Math.round((p.count / totalPriority) * 1000) / 10 : 0;
                         return (
@@ -591,43 +594,52 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
                     })()}
                   </div>
                   <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 8 }}>
-                    {(priorityDist.high ?? 0) + (priorityDist.medium ?? 0) + (priorityDist.low ?? 0)} Total Tasks
+                    {t("{{count}} Total Tasks", { count: (priorityDist.high ?? 0) + (priorityDist.medium ?? 0) + (priorityDist.low ?? 0), defaultValue: `${(priorityDist.high ?? 0) + (priorityDist.medium ?? 0) + (priorityDist.low ?? 0)} Total Tasks` })}
                   </div>
                 </div>
               </div>
 
               {/* ═══ EMPLOYEE PERFORMANCE TABLE ═══ */}
               <div className="erm-table-section">
-                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>EMPLOYEE PERFORMANCE SUMMARY</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>{t("EMPLOYEE PERFORMANCE SUMMARY", { defaultValue: "EMPLOYEE PERFORMANCE SUMMARY" })}</div>
                 <div className="erm-table-wrapper">
                   <table className="erm-table">
                     <thead>
                       <tr>
-                        {["#", "Employee", "Role", "Assigned", "Completed", "Pending", "Overdue", "Rate"].map(h => (
-                          <th key={h} style={{ textAlign: ["#", "Assigned", "Completed", "Pending", "Overdue", "Rate"].includes(h) ? "center" : "left" }}>{h}</th>
+                        {[
+                          { key: "#", label: "#" },
+                          { key: "Employee", label: t("Employee", { defaultValue: "Employee" }) },
+                          { key: "Role", label: t("Role", { defaultValue: "Role" }) },
+                          { key: "Assigned", label: t("Assigned", { defaultValue: "Assigned" }) },
+                          { key: "Completed", label: t("Completed", { defaultValue: "Completed" }) },
+                          { key: "Pending", label: t("Pending", { defaultValue: "Pending" }) },
+                          { key: "Overdue", label: t("Overdue", { defaultValue: "Overdue" }) },
+                          { key: "Rate", label: t("Rate", { defaultValue: "Rate" }) },
+                        ].map(h => (
+                          <th key={h.key} style={{ textAlign: ["#", "Assigned", "Completed", "Pending", "Overdue", "Rate"].includes(h.key) ? "center" : "left" }}>{h.label}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {employees.length === 0 ? (
-                        <tr><td colSpan={8} style={{ textAlign: "center", padding: 20, color: "var(--text-muted)" }}>No data</td></tr>
+                        <tr><td colSpan={8} style={{ textAlign: "center", padding: 20, color: "var(--text-muted)" }}>{t("No data", { defaultValue: "No data" })}</td></tr>
                       ) : employees.map((e, i) => {
                         const rate = e.completion_rate ?? (e.assigned > 0 ? Math.round((e.completed / e.assigned) * 100) : 0);
                         return (
                           <tr key={e.id} style={{ borderBottom: "1px solid var(--border-light)", background: i % 2 ? "var(--bg-card-alt)" : "var(--bg-card)" }}>
                             <td data-label="#" style={{ textAlign: "center", color: "var(--text-secondary)" }}>{i + 1}</td>
-                            <td data-label="Employee" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <td data-label={t("Employee", { defaultValue: "Employee" })} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                               <div style={{ width: 26, height: 26, borderRadius: "50%", background: getAvatarColor(e.name), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
                                 {getInitials(e.name)}
                               </div>
                               <span style={{ fontWeight: 600, color: "var(--text-heading)" }}>{e.name}</span>
                             </td>
-                            <td data-label="Role" style={{ color: "var(--text-dark)" }}>{ROLE_LABEL[e.role] || e.role}</td>
-                            <td data-label="Assigned" style={{ textAlign: "center", fontWeight: 600, color: "var(--color-primary)" }}>{e.assigned ?? 0}</td>
-                            <td data-label="Completed" style={{ textAlign: "center", fontWeight: 600, color: "#22c55e" }}>{e.completed ?? 0}</td>
-                            <td data-label="Pending" style={{ textAlign: "center", fontWeight: 600, color: "#f59e0b" }}>{e.pending ?? 0}</td>
-                            <td data-label="Overdue" style={{ textAlign: "center", fontWeight: 600, color: "#ef4444" }}>{e.overdue ?? 0}</td>
-                            <td data-label="Rate">
+                            <td data-label={t("Role", { defaultValue: "Role" })} style={{ color: "var(--text-dark)" }}>{ROLE_LABEL[e.role] ? t(ROLE_LABEL[e.role], { defaultValue: ROLE_LABEL[e.role] }) : e.role}</td>
+                            <td data-label={t("Assigned", { defaultValue: "Assigned" })} style={{ textAlign: "center", fontWeight: 600, color: "var(--color-primary)" }}>{e.assigned ?? 0}</td>
+                            <td data-label={t("Completed", { defaultValue: "Completed" })} style={{ textAlign: "center", fontWeight: 600, color: "#22c55e" }}>{e.completed ?? 0}</td>
+                            <td data-label={t("Pending", { defaultValue: "Pending" })} style={{ textAlign: "center", fontWeight: 600, color: "#f59e0b" }}>{e.pending ?? 0}</td>
+                            <td data-label={t("Overdue", { defaultValue: "Overdue" })} style={{ textAlign: "center", fontWeight: 600, color: "#ef4444" }}>{e.overdue ?? 0}</td>
+                            <td data-label={t("Rate", { defaultValue: "Rate" })}>
                               <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                                 <div style={{ flex: 1, height: 4, borderRadius: 2, background: "var(--border-color)", overflow: "hidden" }}>
                                   <div style={{ width: `${rate}%`, height: "100%", borderRadius: 2, background: rate >= 80 ? "#22c55e" : rate >= 50 ? "#f59e0b" : "#ef4444" }}></div>
@@ -647,27 +659,27 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
               <div className="erm-two-col">
                 {/* Team Wise Summary */}
                 <div style={{ border: "1px solid var(--border-color)", borderRadius: 8, padding: "12px" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>TEAM WISE SUMMARY</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>{t("TEAM WISE SUMMARY", { defaultValue: "TEAM WISE SUMMARY" })}</div>
                   <div className="erm-table-wrapper" style={{ border: "none", borderRadius: 0 }}>
                     <table className="erm-table" style={{ tableLayout: "auto", minWidth: 0 }}>
                       <thead>
                         <tr style={{ background: "var(--bg-card-alt)", color: "var(--text-secondary)", fontWeight: 600 }}>
-                          <th style={{ padding: "4px 6px", textAlign: "left" }}>Team</th>
-                          <th style={{ padding: "4px 6px", textAlign: "center" }}>Assigned</th>
-                          <th style={{ padding: "4px 6px", textAlign: "center" }}>Completed</th>
-                          <th style={{ padding: "4px 6px", textAlign: "center" }}>Pending</th>
-                          <th style={{ padding: "4px 6px", textAlign: "center" }}>Rate</th>
+                          <th style={{ padding: "4px 6px", textAlign: "left" }}>{t("Team", { defaultValue: "Team" })}</th>
+                          <th style={{ padding: "4px 6px", textAlign: "center" }}>{t("Assigned", { defaultValue: "Assigned" })}</th>
+                          <th style={{ padding: "4px 6px", textAlign: "center" }}>{t("Completed", { defaultValue: "Completed" })}</th>
+                          <th style={{ padding: "4px 6px", textAlign: "center" }}>{t("Pending", { defaultValue: "Pending" })}</th>
+                          <th style={{ padding: "4px 6px", textAlign: "center" }}>{t("Rate", { defaultValue: "Rate" })}</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {teams.map((t, i) => (
+                        {teams.map((tItem, i) => (
                           <tr key={i} style={{ borderBottom: "1px solid var(--border-light)", background: i % 2 ? "var(--bg-card-alt)" : "var(--bg-card)" }}>
-                            <td data-label="Team" style={{ fontWeight: 600, color: "var(--text-heading)" }}>{t.name}</td>
-                            <td data-label="Assigned" style={{ textAlign: "center", color: "var(--text-dark)" }}>{t.assigned ?? 0}</td>
-                            <td data-label="Completed" style={{ textAlign: "center", color: "#22c55e", fontWeight: 600 }}>{t.completed ?? 0}</td>
-                            <td data-label="Pending" style={{ textAlign: "center", color: "#f59e0b", fontWeight: 600 }}>{t.pending ?? 0}</td>
-                            <td data-label="Rate" style={{ textAlign: "center", fontWeight: 700, color: (t.completion_rate ?? 0) >= 80 ? "#22c55e" : (t.completion_rate ?? 0) >= 50 ? "#f59e0b" : "#ef4444" }}>
-                              {t.completion_rate ?? 0}%
+                            <td data-label={t("Team", { defaultValue: "Team" })} style={{ fontWeight: 600, color: "var(--text-heading)" }}>{tItem.name}</td>
+                            <td data-label={t("Assigned", { defaultValue: "Assigned" })} style={{ textAlign: "center", color: "var(--text-dark)" }}>{tItem.assigned ?? 0}</td>
+                            <td data-label={t("Completed", { defaultValue: "Completed" })} style={{ textAlign: "center", color: "#22c55e", fontWeight: 600 }}>{tItem.completed ?? 0}</td>
+                            <td data-label={t("Pending", { defaultValue: "Pending" })} style={{ textAlign: "center", color: "#f59e0b", fontWeight: 600 }}>{tItem.pending ?? 0}</td>
+                            <td data-label={t("Rate", { defaultValue: "Rate" })} style={{ textAlign: "center", fontWeight: 700, color: (tItem.completion_rate ?? 0) >= 80 ? "#22c55e" : (tItem.completion_rate ?? 0) >= 50 ? "#f59e0b" : "#ef4444" }}>
+                              {tItem.completion_rate ?? 0}%
                             </td>
                           </tr>
                         ))}
@@ -678,13 +690,13 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
 
                 {/* Status Distribution */}
                 <div style={{ border: "1px solid var(--border-color)", borderRadius: 8, padding: "12px" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>STATUS DISTRIBUTION (Overall)</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>{t("STATUS DISTRIBUTION (Overall)", { defaultValue: "STATUS DISTRIBUTION (Overall)" })}</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {[
-                      { label: "Completed", count: statusDist.completed ?? 0, color: "#22c55e" },
-                      { label: "Pending", count: statusDist.pending ?? 0, color: "#f59e0b" },
-                      { label: "In Review", count: statusDist.in_review ?? 0, color: "var(--color-primary)" },
-                      { label: "Overdue", count: statusDist.overdue ?? 0, color: "#ef4444" },
+                      { label: t("Completed", { defaultValue: "Completed" }), count: statusDist.completed ?? 0, color: "#22c55e" },
+                      { label: t("Pending", { defaultValue: "Pending" }), count: statusDist.pending ?? 0, color: "#f59e0b" },
+                      { label: t("In Review", { defaultValue: "In Review" }), count: statusDist.in_review ?? 0, color: "var(--color-primary)" },
+                      { label: t("Overdue", { defaultValue: "Overdue" }), count: statusDist.overdue ?? 0, color: "#ef4444" },
                     ].map((s) => {
                       const pct = totalStatusItems > 0 ? Math.round((s.count / totalStatusItems) * 100) : 0;
                       return (
@@ -697,7 +709,7 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
                       );
                     })}
                     <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 6, display: "flex", alignItems: "center", gap: 8, fontSize: 10, fontWeight: 700 }}>
-                      <span style={{ flex: 1, color: "var(--text-heading)" }}>Total</span>
+                      <span style={{ flex: 1, color: "var(--text-heading)" }}>{t("Total", { defaultValue: "Total" })}</span>
                       <span style={{ color: "var(--text-heading)", minWidth: 20, textAlign: "right" }}>{totalStatusItems}</span>
                       <span style={{ color: "var(--text-heading)", minWidth: 40, textAlign: "right" }}>100%</span>
                     </div>
@@ -708,19 +720,19 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
               {/* ═══ REPORT NOTES + AUTHORIZED BY ═══ */}
               <div className="erm-two-col">
                 <div style={{ border: "1px solid var(--border-color)", borderRadius: 8, padding: "12px" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>REPORT NOTES</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>{t("REPORT NOTES", { defaultValue: "REPORT NOTES" })}</div>
                   {[1, 2, 3, 4].map(i => (
                     <div key={i} style={{ borderBottom: "1px solid #e5e7eb", height: 20, marginBottom: 4 }}></div>
                   ))}
                 </div>
                 <div style={{ border: "1px solid var(--border-color)", borderRadius: 8, padding: "12px" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>AUTHORIZED BY</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>{t("AUTHORIZED BY", { defaultValue: "AUTHORIZED BY" })}</div>
                   <div style={{ marginBottom: 12 }}>
-                    <div style={{ fontSize: 9, color: "var(--text-secondary)", marginBottom: 4 }}>Name</div>
+                    <div style={{ fontSize: 9, color: "var(--text-secondary)", marginBottom: 4 }}>{t("Name", { defaultValue: "Name" })}</div>
                     <div style={{ borderBottom: "1px solid var(--text-heading)", height: 20 }}></div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 9, color: "var(--text-secondary)", marginBottom: 4 }}>Date: {genDate}</div>
+                    <div style={{ fontSize: 9, color: "var(--text-secondary)", marginBottom: 4 }}>{t("Date:", { defaultValue: "Date:" })} {genDate}</div>
                     <div style={{ borderBottom: "1px solid var(--text-heading)", height: 20 }}></div>
                   </div>
                 </div>
@@ -735,18 +747,19 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
                   <span style={{ fontWeight: 600, color: "var(--text-secondary)" }}>Techxaro</span>
                   <span>PMS Portal</span>
                 </div>
-                <div>This is a system generated report.</div>
-                <div>Report Type:  Company Employee Report | Page 1 of 1</div>
+                <div>{t("This is a system generated report.", { defaultValue: "This is a system generated report." })}</div>
+                <div>{t("Generated Date: {{date}} | Generated Time: {{time}} ({{tz}})", { date: genDate, time: genTime, tz: userTz, defaultValue: `Generated Date: ${genDate} | Generated Time: ${genTime} (${userTz})` })}</div>
+                <div>{t("Timezone: {{tz}} | Report Type: Company Employee Report | Page 1 of 1", { tz: userTz, defaultValue: `Timezone: ${userTz} | Report Type: Company Employee Report | Page 1 of 1` })}</div>
               </div>
 
               {/* ═══ ACTIONS ═══ */}
               <div className="erm-actions">
-                <button className="er-cancel-btn" onClick={() => setShowReview(false)}>Back</button>
+                <button className="er-cancel-btn" onClick={() => setShowReview(false)}>{t("Back", { defaultValue: "Back" })}</button>
                 <button className="er-export-btn" onClick={generatePDF} disabled={generating}>
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M8 2v8M4 6l4 4 4-4M2 14h12" />
                   </svg>
-                  {generating ? "Generating..." : "Export PDF"}
+                  {generating ? t("Generating...", { defaultValue: "Generating..." }) : t("Export PDF", { defaultValue: "Export PDF" })}
                 </button>
               </div>
             </div>

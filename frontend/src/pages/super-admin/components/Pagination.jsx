@@ -1,6 +1,8 @@
+import { useTranslation } from 'react-i18next';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 
 export default function Pagination({ currentPage, totalPages, onPageChange }) {
+  const { t } = useTranslation();
   if (totalPages <= 1) return null;
 
   const getVisiblePages = () => {
@@ -22,7 +24,9 @@ export default function Pagination({ currentPage, totalPages, onPageChange }) {
 
   return (
     <div className="flex items-center justify-between px-4 py-3" style={{ borderTop: '1px solid var(--border-light)' }}>
-      <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Page {currentPage} of {totalPages}</p>
+      <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+        {t('Page {{current}} of {{total}}', { current: currentPage, total: totalPages, defaultValue: `Page ${currentPage} of ${totalPages}` })}
+      </p>
       <div className="flex items-center gap-1">
         <button onClick={() => onPageChange(1)} disabled={currentPage === 1}
           className="p-1.5 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors" style={btnStyle} {...hoverHandlers}>

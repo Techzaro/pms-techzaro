@@ -56,6 +56,9 @@ class Organization extends Model
         'database_password',
         'status',
         'timezone',
+        'default_timezone',
+        'enforce_working_hours',
+        'working_hours',
         'email_policy',
         'logo_path',
         'settings',
@@ -86,6 +89,8 @@ class Organization extends Model
 
     protected $casts = [
         'settings'                   => 'array',
+        'working_hours'              => 'array',
+        'enforce_working_hours'      => 'boolean',
         'database_port'              => 'integer',
         'trial_ends_at'              => 'datetime',
         'suspended_at'               => 'datetime',

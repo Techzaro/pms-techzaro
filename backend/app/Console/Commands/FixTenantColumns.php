@@ -17,6 +17,11 @@ class FixTenantColumns extends Command
     protected array $columnFixes = [
         'users' => [
             ['name' => 'status',                        'definition' => "VARCHAR(32) DEFAULT 'Active' AFTER `active`"],
+            ['name' => 'timezone',                      'definition' => "VARCHAR(64) NULL AFTER `status`"],
+            ['name' => 'language',                      'definition' => "VARCHAR(32) DEFAULT 'English' AFTER `timezone`"],
+            ['name' => 'date_format',                   'definition' => "VARCHAR(32) DEFAULT 'DD/MM/YYYY' AFTER `language`"],
+            ['name' => 'time_format',                   'definition' => "VARCHAR(32) DEFAULT '12-hour' AFTER `date_format`"],
+            ['name' => 'working_hours',                 'definition' => "JSON NULL AFTER `time_format`"],
             ['name' => 'notification_preferences',      'definition' => "JSON NULL"],
             ['name' => 'deletion_requested',            'definition' => "TINYINT(1) DEFAULT 0 AFTER `active`"],
             ['name' => 'deletion_requested_by',         'definition' => "BIGINT UNSIGNED NULL AFTER `deletion_requested`"],
@@ -37,6 +42,7 @@ class FixTenantColumns extends Command
         'teams' => [
             ['name' => 'status',                        'definition' => "VARCHAR(255) DEFAULT 'active' AFTER `description`"],
             ['name' => 'is_draft',                      'definition' => "TINYINT(1) DEFAULT 0 AFTER `status`"],
+            ['name' => 'working_hours',                 'definition' => "JSON NULL AFTER `is_draft`"],
         ],
         'conversations' => [
             ['name' => 'org_id',                        'definition' => "BIGINT UNSIGNED NULL AFTER `created_by`"],
@@ -57,6 +63,10 @@ class FixTenantColumns extends Command
             ['name' => 'meeting_link',                  'definition' => "VARCHAR(2048) NULL AFTER `description`"],
             ['name' => 'visibility_level',              'definition' => "VARCHAR(32) DEFAULT 'public' AFTER `is_global`"],
             ['name' => 'status',                        'definition' => "VARCHAR(32) DEFAULT 'scheduled' AFTER `visibility_level`"],
+            ['name' => 'event_timezone',                'definition' => "VARCHAR(64) NULL AFTER `all_day`"],
+            ['name' => 'event_date',                    'definition' => "DATE NULL AFTER `event_timezone`"],
+            ['name' => 'event_start_time',              'definition' => "TIME NULL AFTER `event_date`"],
+            ['name' => 'event_end_time',                'definition' => "TIME NULL AFTER `event_start_time`"],
         ],
     ];
 

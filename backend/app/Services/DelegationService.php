@@ -7,6 +7,7 @@ use App\Models\Task;
 use App\Models\TaskDelegation;
 use App\Models\TaskWorkflowEvent;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -20,6 +21,147 @@ class DelegationService
         private ActivityService $activityService,
         private AuditService $auditService
     ) {}
+
+    /** Permanent final owner of the task. Existing tasks fall back to assigned_by. */
+    public function creatorId(Task $task): ?int
+    {
+        $id = $task->creator_id ?: $task->assigned_by;
+        return $id ? (int) $id : null;
+    }
+
+    /**
+     * Build the return route from accepted delegations.
+     * A return_to_transferor step is required; direct-transfer users are bypassed.
+     */
+    public function submissionRoute(Task $task, ?int $submitterId = null): array
+    {
+        $submitterId ??= $task->current_submitter_id ?: $task->current_owner ?: $task->assigned_to;
+        $route = [];
+        if ($submitterId) {
+            $route[] = (int) $submitterId;
+        }
+
+        $chain = array_values(array_filter(
+            $task->delegation_chain ?? [],
+            fn ($entry) => strtolower((string) ($entry['status'] ?? '')) === 'accepted'
+        ));
+
+        foreach (array_reverse($chain) as $entry) {
+            if (($entry['return_to_transferor'] ?? true) && ! empty($entry['delegated_by'])) {
+                $route[] = (int) $entry['delegated_by'];
+            }
+        }
+
+        $creatorId = $this->creatorId($task);
+        if ($creatorId) {
+            $route[] = $creatorId;
+        }
+
+        return array_values(array_unique($route));
+    }
+
+    public function nextSubmissionReviewer(Task $task, ?int $submitterId = null, array $forwardedBy = []): ?int
+    {
+        $route = $this->submissionRoute($task, $submitterId);
+        $completed = array_map('intval', array_merge(
+            $submitterId ? [$submitterId] : [],
+            $forwardedBy
+        ));
+
+        foreach ($route as $userId) {
+            if (! in_array((int) $userId, $completed, true)) {
+                return (int) $userId;
+            }
+        }
+
+        return null;
+    }
+
+    /** Viewer-specific status and action permissions for every API consumer. */
+    public function routingPayload(Task $task, User $viewer): array
+    {
+        $rawStatus = strtolower((string) $task->status);
+        $stage = $task->submission_stage;
+        $viewerId = (int) $viewer->id;
+        $creatorId = $this->creatorId($task);
+        $reviewerId = $task->current_reviewer_id ? (int) $task->current_reviewer_id : null;
+        $submitterId = $task->current_submitter_id ? (int) $task->current_submitter_id : null;
+        $displayStatus = $rawStatus;
+
+        if (in_array($rawStatus, ['approved', 'completed', 'done'], true)) {
+            $displayStatus = 'approved';
+        } elseif (! $stage && $rawStatus === 'pending') {
+            $pendingDelegation = collect($task->delegation_chain ?? [])
+                ->reverse()
+                ->first(fn ($entry) => strtolower((string) ($entry['status'] ?? '')) === 'pending');
+
+            if ($pendingDelegation) {
+                $transferorId = (int) ($pendingDelegation['delegated_by'] ?? 0);
+                $delegateeId = (int) ($pendingDelegation['delegated_to'] ?? 0);
+
+                // Only the users participating in the unacknowledged hand-off are pending.
+                // Earlier users already have an acknowledged assignee below them, so their
+                // view remains in progress while the next delegate decides whether to accept.
+                $displayStatus = in_array($viewerId, [$transferorId, $delegateeId], true)
+                    ? 'pending'
+                    : 'in_progress';
+            }
+        } elseif (in_array($stage, ['awaiting_checkpoint', 'awaiting_creator'], true)) {
+            $route = $this->submissionRoute($task, $submitterId);
+            $reviewerIndex = array_search($reviewerId, $route, true);
+            $viewerIndex = array_search($viewerId, $route, true);
+            // The active reviewer has received the submission even if legacy or
+            // partially migrated route metadata omits them from the derived route.
+            if ($reviewerId && $viewerId === $reviewerId) {
+                $displayStatus = 'submitted';
+            } elseif ($viewerIndex !== false && $reviewerIndex !== false) {
+                $displayStatus = $viewerIndex <= $reviewerIndex ? 'submitted' : 'in_progress';
+            } elseif ($viewerId === $creatorId && $viewerId !== $reviewerId) {
+                $displayStatus = 'in_progress';
+            } else {
+                // Delegation participants omitted from the return route are bypassed.
+                $displayStatus = 'submitted';
+            }
+        } elseif (in_array($stage, ['declined', 'returned'], true) || in_array($rawStatus, ['reopened', 'rejected', 'declined'], true)) {
+            $reopenedById = (int) ($task->reopened_by ?: $task->rejected_by ?: 0);
+            $subId = (int) ($task->current_submitter_id ?: $task->assigned_to ?: 0);
+            $reopenedParticipants = [$subId, $reopenedById];
+            foreach ($task->delegation_chain ?? [] as $entry) {
+                if (strtolower((string) ($entry['status'] ?? '')) !== 'accepted') {
+                    continue;
+                }
+                $reopenedParticipants[] = (int) ($entry['delegated_by'] ?? 0);
+                $reopenedParticipants[] = (int) ($entry['delegated_to'] ?? 0);
+            }
+            $reopenedParticipants = array_values(array_unique(array_filter(array_map('intval', $reopenedParticipants))));
+
+            // Reopen is visible to the user who reopened it and accepted transfer
+            // participants below that point. The creator above the current reviewer
+            // remains In Progress until the corrected submission reaches them.
+            if (! $subId || in_array($viewerId, $reopenedParticipants, true)) {
+                $displayStatus = in_array($rawStatus, ['reopened', 'rejected', 'declined'], true) ? $rawStatus : 'declined';
+            } else {
+                $displayStatus = 'in_progress';
+            }
+        }
+
+        $nextId = null;
+        if ($reviewerId === $viewerId) {
+            $forwarded = $task->submission_forwarded_by ?? [];
+            $nextId = $this->nextSubmissionReviewer($task, $submitterId, array_merge($forwarded, [$viewerId]));
+        }
+
+        return [
+            'display_status' => $displayStatus,
+            'submission_stage' => $stage,
+            'current_reviewer_id' => $reviewerId,
+            'current_submitter_id' => $submitterId,
+            'can_submit_to_next' => $reviewerId === $viewerId && $viewerId !== $creatorId && in_array($stage, ['awaiting_checkpoint'], true),
+            'can_decline_submission' => $reviewerId === $viewerId && in_array($stage, ['awaiting_checkpoint', 'awaiting_creator'], true),
+            'can_final_approve' => $reviewerId === $viewerId && $viewerId === $creatorId && $stage === 'awaiting_creator',
+            'next_route_user_id' => $nextId,
+        ];
+    }
 
     /**
      * Delegate a task to another user, building the delegation chain.
@@ -74,7 +216,7 @@ class DelegationService
             'delegation_chain' => $existingChain,
             'approval_chain' => $approvalChain,
             'delegation_count' => $level,
-            'status' => 'paused',
+            'status' => 'pending',
             'states' => array_values(array_unique(array_merge(is_array($task->states) ? $task->states : [], ['Transferred']))),
         ]);
         $task->stopTimer();
@@ -247,62 +389,61 @@ class DelegationService
             throw new \InvalidArgumentException('This delegation is no longer pending.');
         }
 
-        $delegation->update([
-            'status' => 'accepted',
-            'accepted_at' => now(),
-        ]);
-
-        // Update chain entry status on the correct model (task or deliverable)
         $model = $delegation->deliverable_id ? $delegation->deliverable : $delegation->task;
-        $chain = $model->delegation_chain ?? [];
-        foreach ($chain as &$entry) {
-            if ((int) $entry['id'] === (int) $delegation->id) {
-                $entry['status'] = 'accepted';
-                break;
-            }
-        }
-        unset($entry);
-        $approvalChain = $this->buildApprovalChain($chain);
-        $model->update([
-            'delegation_chain' => $chain,
-            'approval_chain' => $approvalChain,
-            'status' => 'in_progress',
-            'acknowledged_at' => now(),
-            'acknowledged_by' => $acceptor->id,
-        ]);
-
-        // Auto-acknowledge: start timer and update assignee pivot
-        $model->startTimer();
-        $model->assignees()->updateExistingPivot($acceptor->id, [
-            'status' => 'in_progress',
-        ]);
-
-        // System comment
         $isDeliverable = (bool) $delegation->deliverable_id;
         $entityType = $isDeliverable ? 'deliverable' : 'task';
-        $comment = "{$acceptor->name} accepted the delegation of this {$entityType}.";
 
-        TaskWorkflowEvent::create([
-            'task_id' => $isDeliverable ? $model->task_id : $model->id,
-            'user_id' => $acceptor->id,
-            'action' => 'delegation_accepted',
-            'comment' => $comment,
-        ]);
+        // Keep every state-changing part atomic. A workflow/timer failure must not
+        // leave an accepted delegation behind while the endpoint reports failure.
+        DB::transaction(function () use ($delegation, $acceptor, $model, $isDeliverable, $entityType) {
+            $delegation->update([
+                'status' => 'accepted',
+                'accepted_at' => now(),
+            ]);
 
-        // Auto-acknowledge workflow event
-        TaskWorkflowEvent::create([
-            'task_id' => $isDeliverable ? $model->task_id : $model->id,
-            'user_id' => $acceptor->id,
-            'action' => 'acknowledged',
-            'comment' => "{$acceptor->name} acknowledged this {$entityType}",
-        ]);
+            // Update chain entry status on the correct model (task or deliverable)
+            $chain = $model->delegation_chain ?? [];
+            foreach ($chain as &$entry) {
+                if ((int) $entry['id'] === (int) $delegation->id) {
+                    $entry['status'] = 'accepted';
+                    break;
+                }
+            }
+            unset($entry);
+            $approvalChain = $this->buildApprovalChain($chain);
+            $model->update([
+                'delegation_chain' => $chain,
+                'approval_chain' => $approvalChain,
+                'status' => 'in_progress',
+                'acknowledged_at' => now(),
+                'acknowledged_by' => $acceptor->id,
+            ]);
 
-        TaskWorkflowEvent::create([
-            'task_id' => $isDeliverable ? $model->task_id : $model->id,
-            'user_id' => $acceptor->id,
-            'action' => 'timer_started',
-            'comment' => 'Work timer started',
-        ]);
+            $model->startTimer();
+            $model->assignees()->updateExistingPivot($acceptor->id, [
+                'status' => 'in_progress',
+            ]);
+
+            $taskId = $isDeliverable ? $model->task_id : $model->id;
+            TaskWorkflowEvent::create([
+                'task_id' => $taskId,
+                'user_id' => $acceptor->id,
+                'action' => 'delegation_accepted',
+                'comment' => "{$acceptor->name} accepted the delegation of this {$entityType}.",
+            ]);
+            TaskWorkflowEvent::create([
+                'task_id' => $taskId,
+                'user_id' => $acceptor->id,
+                'action' => 'acknowledged',
+                'comment' => "{$acceptor->name} acknowledged this {$entityType}",
+            ]);
+            TaskWorkflowEvent::create([
+                'task_id' => $taskId,
+                'user_id' => $acceptor->id,
+                'action' => 'timer_started',
+                'comment' => 'Work timer started',
+            ]);
+        });
 
         $link = $isDeliverable
             ? '/deliverables/'.$model->id
@@ -315,24 +456,34 @@ class DelegationService
                 ? ($model->task?->assigned_by ?? $model->created_by)
                 : $model->assigned_by;
         }
-        $this->notificationService->notify(
-            $notifyUserId,
-            $acceptor->id,
-            'task_delegation_accepted',
-            $entityType,
-            $model->id,
-            'Delegation Accepted',
-            "{$acceptor->name} has accepted the delegation of {$entityType} {$model->business_id}.",
-            $link
-        );
+        // These are secondary effects: their failure must not change a successful
+        // acknowledgement into an error response.
+        try {
+            $this->notificationService->notify(
+                $notifyUserId,
+                $acceptor->id,
+                'task_delegation_accepted',
+                $entityType,
+                $model->id,
+                'Delegation Accepted',
+                "{$acceptor->name} has accepted the delegation of {$entityType} {$model->business_id}.",
+                $link
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Delegation acceptance notification failed', ['error' => $e->getMessage()]);
+        }
 
-        $this->activityService->log(
-            $acceptor->id,
-            'task_delegation_accepted',
-            "You accepted delegation of {$entityType} \"{$model->title}\"",
-            $entityType,
-            $model->id
-        );
+        try {
+            $this->activityService->log(
+                $acceptor->id,
+                'task_delegation_accepted',
+                "You accepted delegation of {$entityType} \"{$model->title}\"",
+                $entityType,
+                $model->id
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Delegation acceptance activity log failed', ['error' => $e->getMessage()]);
+        }
 
         return $delegation;
     }

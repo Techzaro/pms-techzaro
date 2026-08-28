@@ -5,6 +5,7 @@
  */
 
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { formatEventDateTime } from "../utils/formatDateTime";
 import { TYPE_COLORS, TYPE_LABELS, DEFAULT_EVENT_COLOR } from "../utils/calendarConstants";
 import "./EventsWidget.css";
@@ -20,6 +21,7 @@ function formatDisplayDate(d) {
  * @param {Function} onClick - Callback when the event title is clicked
  */
 function EventItem({ ev, onClick }) {
+  const { t } = useTranslation();
   const colors = TYPE_COLORS[ev.type] || DEFAULT_EVENT_COLOR;
 
   return (
@@ -36,7 +38,7 @@ function EventItem({ ev, onClick }) {
           {formatEventDateTime(ev)}
         </p>
         <span className="ew-event-type" style={{ color: colors.text }}>
-          {TYPE_LABELS[ev.type] || ev.type}
+          {t(TYPE_LABELS[ev.type] || ev.type)}
         </span>
       </div>
     </div>
@@ -79,25 +81,26 @@ function EventSection({ title, subtitle, events, onEventClick, emptyText }) {
  * @param {string} [currentRole] - Current user's role (not used in rendering but available)
  */
 export default function EventsWidget({ todayEvents, upcomingEvents, onEventClick, currentRole }) {
+  const { t } = useTranslation();
   const today = useMemo(() => formatDisplayDate(new Date()), []);
 
   return (
     <>
       <EventSection
-        title="Today's Events"
+        title={t("Today's Events", { defaultValue: "Today's Events" })}
         subtitle={`• ${today}`}
         events={todayEvents}
         onEventClick={onEventClick}
-        emptyText="No events scheduled for today."
+        emptyText={t("No events scheduled for today.", { defaultValue: "No events scheduled for today." })}
       />
 
       <div style={{ height: 20 }} />
 
       <EventSection
-        title="Upcoming Events"
+        title={t("Upcoming Events", { defaultValue: "Upcoming Events" })}
         events={upcomingEvents.slice(0, 5)}
         onEventClick={onEventClick}
-        emptyText="No upcoming events found."
+        emptyText={t("No upcoming events found.", { defaultValue: "No upcoming events found." })}
       />
     </>
   );

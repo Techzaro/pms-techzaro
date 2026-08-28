@@ -30,11 +30,16 @@ class Event extends Model
         'is_global',
         'visibility_level',
         'status',
+        'event_timezone',
+        'event_date',
+        'event_start_time',
+        'event_end_time',
     ];
 
     protected $casts = [
         'start_date' => 'datetime:Y-m-d\TH:i:s',
         'end_date' => 'datetime:Y-m-d\TH:i:s',
+        'event_date' => 'date',
         'all_day' => 'boolean',
         'is_global' => 'boolean',
     ];

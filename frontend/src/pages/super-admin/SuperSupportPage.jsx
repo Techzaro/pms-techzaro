@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { MessageSquare, Building2, Circle, Clock, CheckCircle, X, Loader2, Send, ArrowLeft, FileText, Star, ExternalLink, LayoutGrid, List } from 'lucide-react';
 import { MdPerson, MdTimeline } from 'react-icons/md';
@@ -29,25 +30,26 @@ const STATUS_TO_FILTER = {
 };
 
 const PRIORITY_MAP = {
-  low: { label: 'Low', color: 'var(--text-muted)', bg: 'var(--bg-hover)' },
-  medium: { label: 'Medium', color: 'var(--color-blue)', bg: 'rgba(59,130,246,0.1)' },
-  high: { label: 'High', color: 'var(--color-warning)', bg: 'rgba(245,158,11,0.1)' },
-  urgent: { label: 'Urgent', color: 'var(--color-danger)', bg: 'rgba(239,68,68,0.1)' },
+  low: { labelKey: 'Low', defaultLabel: 'Low', color: 'var(--text-muted)', bg: 'var(--bg-hover)' },
+  medium: { labelKey: 'Medium', defaultLabel: 'Medium', color: 'var(--color-blue)', bg: 'rgba(59,130,246,0.1)' },
+  high: { labelKey: 'High', defaultLabel: 'High', color: 'var(--color-warning)', bg: 'rgba(245,158,11,0.1)' },
+  urgent: { labelKey: 'Urgent', defaultLabel: 'Urgent', color: 'var(--color-danger)', bg: 'rgba(239,68,68,0.1)' },
 };
 
 const STATUS_MAP = {
-  open: { label: 'Open', color: 'var(--color-success)', bg: 'rgba(16,185,129,0.1)', icon: Circle },
-  under_review: { label: 'Under Review', color: '#8b5cf6', bg: 'rgba(139,92,246,0.1)', icon: Clock },
-  accepted: { label: 'Accepted', color: 'var(--color-success)', bg: 'rgba(16,185,129,0.1)', icon: CheckCircle },
-  planned: { label: 'Planned', color: 'var(--color-blue)', bg: 'rgba(59,130,246,0.1)', icon: Clock },
-  in_development: { label: 'In Development', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', icon: Clock },
-  testing: { label: 'Testing', color: '#6366f1', bg: 'rgba(99,102,241,0.1)', icon: Clock },
-  resolved: { label: 'Resolved', color: 'var(--color-blue)', bg: 'rgba(59,130,246,0.1)', icon: CheckCircle },
-  closed: { label: 'Closed', color: 'var(--text-muted)', bg: 'var(--bg-hover)', icon: X },
-  rejected: { label: 'Rejected', color: 'var(--color-danger)', bg: 'rgba(239,68,68,0.1)', icon: X },
+open: { labelKey: 'Open', defaultLabel: 'Open', color: 'var(--color-success)', bg: 'rgba(16,185,129,0.1)', icon: Circle },
+  under_review: { labelKey: 'Under Review', defaultLabel: 'Under Review', color: '#8b5cf6', bg: 'rgba(139,92,246,0.1)', icon: Clock },
+  accepted: { labelKey: 'Accepted', defaultLabel: 'Accepted', color: 'var(--color-success)', bg: 'rgba(16,185,129,0.1)', icon: CheckCircle },
+  planned: { labelKey: 'Planned', defaultLabel: 'Planned', color: 'var(--color-blue)', bg: 'rgba(59,130,246,0.1)', icon: Clock },
+  in_development: { labelKey: 'In Development', defaultLabel: 'In Development', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', icon: Clock },
+  testing: { labelKey: 'Testing', defaultLabel: 'Testing', color: '#6366f1', bg: 'rgba(99,102,241,0.1)', icon: Clock },
+  resolved: { labelKey: 'Resolved', defaultLabel: 'Resolved', color: 'var(--color-blue)', bg: 'rgba(59,130,246,0.1)', icon: CheckCircle },
+  closed: { labelKey: 'Closed', defaultLabel: 'Closed', color: 'var(--text-muted)', bg: 'var(--bg-hover)', icon: X },
+  rejected: { labelKey: 'Rejected', defaultLabel: 'Rejected', color: 'var(--color-danger)', bg: 'rgba(239,68,68,0.1)', icon: X },
 };
 
 export default function SuperSupportPage() {
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [orgs, setOrgs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -225,7 +227,7 @@ export default function SuperSupportPage() {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--color-primary)' }} />
-        <span className="ml-2 text-sm" style={{ color: 'var(--text-secondary)' }}>Loading support data...</span>
+        <span className="ml-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{t('Loading support data...', { defaultValue: 'Loading support data...' })}</span>
       </div>
     );
   }
@@ -239,7 +241,7 @@ export default function SuperSupportPage() {
     });
 
     return (
-      <div className="fbc-page">
+<div className="fbc-page">
         <div className="fbc-detail-page">
           <div className="fbc-detail-page-header">
             <button onClick={() => { setSelectedTicket(null); setTicketMessages([]); updateUrl(selectedOrgId, null); }} className="fb-btn-cancel">
@@ -247,7 +249,7 @@ export default function SuperSupportPage() {
             </button>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
               <h3 style={{ margin: 0, color: "#0f172a", whiteSpace: "nowrap" }}>
-                <span style={{ fontSize: "1rem", fontWeight: 700 }}>Feedback</span>
+                <span style={{ fontSize: "1rem", fontWeight: 700 }}>{t('Feedback', { defaultValue: 'Feedback' })}</span>
                 <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "#64748b", marginLeft: 8 }}>{selectedTicket.feedback_reference_number || selectedTicket.ticket_number}</span>
               </h3>
             </div>
@@ -267,15 +269,15 @@ export default function SuperSupportPage() {
                   color: STATUS_MAP[selectedTicket.status]?.color || '#475569',
                 }}
               >
-                <option value="open">Open</option>
-                <option value="under_review">Under Review</option>
-                <option value="accepted">Accepted</option>
-                <option value="planned">Planned</option>
-                <option value="in_development">In Development</option>
-                <option value="testing">Testing</option>
-                <option value="resolved">Resolved</option>
-                <option value="closed">Closed</option>
-                <option value="rejected">Rejected</option>
+                <option value="open">{t('Open', { defaultValue: 'Open' })}</option>
+                <option value="under_review">{t('Under Review', { defaultValue: 'Under Review' })}</option>
+                <option value="accepted">{t('Accepted', { defaultValue: 'Accepted' })}</option>
+                <option value="planned">{t('Planned', { defaultValue: 'Planned' })}</option>
+                <option value="in_development">{t('In Development', { defaultValue: 'In Development' })}</option>
+                <option value="testing">{t('Testing', { defaultValue: 'Testing' })}</option>
+                <option value="resolved">{t('Resolved', { defaultValue: 'Resolved' })}</option>
+                <option value="closed">{t('Closed', { defaultValue: 'Closed' })}</option>
+                <option value="rejected">{t('Rejected', { defaultValue: 'Rejected' })}</option>
               </select>
               {selectedTicket.status !== 'closed' && (
                 <button
@@ -292,7 +294,7 @@ export default function SuperSupportPage() {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  Close Ticket
+                  {t('Close Ticket', { defaultValue: 'Close Ticket' })}
                 </button>
               )}
             </div>
@@ -303,14 +305,14 @@ export default function SuperSupportPage() {
             <div className="fbc-detail-left">
               {metadata.rating && (
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, background: "#fffbe6", border: "1px solid #ffe58f", padding: "10px 14px", borderRadius: 8 }}>
-                  <strong style={{ color: "#873800", fontSize: "0.88rem" }}>Feature Rating:</strong>
+                  <strong style={{ color: "#873800", fontSize: "0.88rem" }}>{t('Feature Rating:', { defaultValue: 'Feature Rating:' })}</strong>
                   <div style={{ color: "#faad14", fontSize: "1.2rem", display: "flex", gap: 2 }}>
                     {[1, 2, 3, 4, 5].map((s) => (
                       <span key={s} style={{ color: s <= metadata.rating ? "#faad14" : "#d9d9d9" }}>★</span>
                     ))}
                   </div>
                   <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#d48806", marginLeft: 4 }}>
-                    ({metadata.rating} / 5 Stars)
+                    ({metadata.rating} / 5 {t('Stars', { defaultValue: 'Stars' })})
                   </span>
                 </div>
               )}
@@ -318,7 +320,7 @@ export default function SuperSupportPage() {
               <h4 style={{ margin: "0 0 8px 0", color: "#0f172a" }}>
                 {cleanSubject(selectedTicket.subject)}
               </h4>
-              <div className="fbc-section-title" style={{ marginTop: 0 }}>Description</div>
+              <div className="fbc-section-title" style={{ marginTop: 0 }}>{t('Description', { defaultValue: 'Description' })}</div>
               <div
                 className="rte-display"
                 style={{ background: "#f8fafc", padding: 14, borderRadius: 8, border: "1px solid #e2e8f0", margin: "0 0 16px 0" }}
@@ -326,43 +328,43 @@ export default function SuperSupportPage() {
               />
 
               <div className="fbc-section-title">
-                <MdPerson /> Auto-Captured System Information
+                <MdPerson /> {t('Auto-Captured System Information', { defaultValue: 'Auto-Captured System Information' })}
               </div>
               <div className="fbc-auto-info-grid">
                 <div className="fbc-info-cell">
-                  <span>Submitted By</span>
+                  <span>{t('Submitted By', { defaultValue: 'Submitted By' })}</span>
                   <strong>{metadata.user_name || selectedTicket.user?.name} ({metadata.user_role})</strong>
                 </div>
                 <div className="fbc-info-cell">
-                  <span>Organization</span>
+                  <span>{t('Organization', { defaultValue: 'Organization' })}</span>
                   <strong>{selectedTicket.organization?.name}</strong>
                 </div>
                 <div className="fbc-info-cell">
-                  <span>Module</span>
+                  <span>{t('Module', { defaultValue: 'Module' })}</span>
                   <strong>{metadata.module || "General"}</strong>
                 </div>
                 <div className="fbc-info-cell">
-                  <span>Current Page Route</span>
+                  <span>{t('Current Page Route', { defaultValue: 'Current Page Route' })}</span>
                   <strong>{metadata.current_page}</strong>
                 </div>
                 <div className="fbc-info-cell">
-                  <span>Operating System</span>
+                  <span>{t('Operating System', { defaultValue: 'Operating System' })}</span>
                   <strong>{metadata.operating_system}</strong>
                 </div>
                 <div className="fbc-info-cell">
-                  <span>Browser</span>
+                  <span>{t('Browser', { defaultValue: 'Browser' })}</span>
                   <strong>{metadata.browser}</strong>
                 </div>
                 <div className="fbc-info-cell">
-                  <span>Device Type</span>
+                  <span>{t('Device Type', { defaultValue: 'Device Type' })}</span>
                   <strong>{metadata.device_type}</strong>
                 </div>
                 <div className="fbc-info-cell">
-                  <span>IP Address</span>
+                  <span>{t('IP Address', { defaultValue: 'IP Address' })}</span>
                   <strong>{metadata.ip_address || "Captured"}</strong>
                 </div>
                 <div className="fbc-info-cell">
-                  <span>App Version</span>
+                  <span>{t('App Version', { defaultValue: 'App Version' })}</span>
                   <strong>{metadata.app_version}</strong>
                 </div>
               </div>
@@ -370,12 +372,12 @@ export default function SuperSupportPage() {
               {(metadata.screenshot_path || metadata.recording_path || metadata.attachment_path) && (
                 <>
                   <div className="fbc-section-title">
-                    <FileText size={16} /> Downloadable Media Attachments
+                    <FileText size={16} /> {t('Downloadable Media Attachments', { defaultValue: 'Downloadable Media Attachments' })}
                   </div>
                   <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
                     {metadata.screenshot_path && (
                       <a href={`${metadata.screenshot_path}`} target="_blank" rel="noreferrer" className="fb-btn-cancel" style={{ textDecoration: "none", fontSize: "0.8rem" }}>
-                        View Screenshot
+                        {t('View Screenshot', { defaultValue: 'View Screenshot' })}
                       </a>
                     )}
                   </div>
@@ -383,13 +385,13 @@ export default function SuperSupportPage() {
               )}
 
               {/* Chat Conversation */}
-              <div className="fbc-section-title">Conversation</div>
+              <div className="fbc-section-title">{t('Conversation', { defaultValue: 'Conversation' })}</div>
               <div className="fbc-chat-container">
                 <div className="fbc-chat-messages">
                   {detailLoading ? (
-                    <div style={{ textAlign: "center", padding: 16, color: "#64748b", fontSize: "0.82rem" }}>Loading messages...</div>
+                    <div style={{ textAlign: "center", padding: 16, color: "#64748b", fontSize: "0.82rem" }}>{t('Loading messages...', { defaultValue: 'Loading messages...' })}</div>
                   ) : ticketMessages.length === 0 ? (
-                    <div style={{ textAlign: "center", padding: 16, color: "#64748b", fontSize: "0.82rem" }}>No messages yet. Start a conversation below.</div>
+                    <div style={{ textAlign: "center", padding: 16, color: "#64748b", fontSize: "0.82rem" }}>{t('No messages yet. Start a conversation below.', { defaultValue: 'No messages yet. Start a conversation below.' })}</div>
                   ) : (
                     ticketMessages.map((msg) => {
                       const d = (msg.message || "").toLowerCase();
@@ -399,7 +401,7 @@ export default function SuperSupportPage() {
                         <div key={msg.id} className={`fbc-chat-bubble ${isMine ? "fbc-chat-mine" : "fbc-chat-theirs"}`}>
                           <div className="fbc-chat-bubble-text">{msg.message}</div>
                           <div className="fbc-chat-bubble-meta">
-                            {isMine ? (msg.user?.name || "Support") : (msg.user?.name || "User")} · {new Date(msg.created_at).toLocaleString()}
+                            {isMine ? (msg.user?.name || t('Support', { defaultValue: 'Support' })) : (msg.user?.name || t('User', { defaultValue: 'User' }))} · {new Date(msg.created_at).toLocaleString()}
                           </div>
                         </div>
                       );
@@ -414,7 +416,7 @@ export default function SuperSupportPage() {
                       type="text"
                       value={replyText}
                       onChange={(e) => setReplyText(e.target.value)}
-                      placeholder="Reply to user..."
+                      placeholder={t('Reply to user...', { defaultValue: 'Reply to user...' })}
                       disabled={sendingReply}
                     />
                     <button type="submit" disabled={!replyText.trim() || sendingReply} className="fb-btn-submit">
@@ -429,7 +431,7 @@ export default function SuperSupportPage() {
             <div className="fbc-detail-right">
               <div className="fbc-sidebar-card">
                 <div className="fbc-sidebar-card-header">
-                  <Clock size={16} /> Status Timeline
+                  <Clock size={16} /> {t('Status Timeline', { defaultValue: 'Status Timeline' })}
                 </div>
                 <ul className="fbc-timeline">
                   {statusLogs.length > 0 ? (
@@ -439,7 +441,7 @@ export default function SuperSupportPage() {
                         <div className="fbc-timeline-content">
                           <span style={{ fontSize: "0.82rem", color: "#334155" }}>{log.message}</span>
                           <div style={{ fontSize: "0.72rem", color: "#64748b", marginTop: 4 }}>
-                            {log.user?.name || "System"}
+                            {log.user?.name || t('System', { defaultValue: 'System' })}
                           </div>
                           <span className="fbc-timeline-time">
                             {new Date(log.created_at).toLocaleString()}
@@ -448,7 +450,7 @@ export default function SuperSupportPage() {
                       </li>
                     ))
                   ) : (
-                    <div style={{ fontSize: "0.82rem", color: "#64748b", padding: "8px 0" }}>No status changes recorded yet.</div>
+                    <div style={{ fontSize: "0.82rem", color: "#64748b", padding: "8px 0" }}>{t('No status changes recorded yet.', { defaultValue: 'No status changes recorded yet.' })}</div>
                   )}
                 </ul>
               </div>
@@ -471,7 +473,7 @@ export default function SuperSupportPage() {
                 background: STATUS_MAP[confirmStatus]?.bg || '#f1f5f9',
                 display: "flex", alignItems: "center", justifyContent: "center",
               }}>
-                <Loader2 size={24} style={{ color: STATUS_MAP[confirmStatus]?.color || '#475569' }} />
+<Loader2 size={24} className="animate-spin" style={{ color: STATUS_MAP[confirmStatus]?.color || '#475569' }} />
               </div>
               <h4 style={{ margin: "0 0 8px", color: "#0f172a", fontSize: "1rem" }}>Confirm Status Change</h4>
               <p style={{ margin: "0 0 20px", color: "#64748b", fontSize: "0.88rem", lineHeight: 1.5 }}>
@@ -505,7 +507,7 @@ export default function SuperSupportPage() {
           </div>
         )}
 
-        {/* Close Ticket Confirmation Modal */}
+{/* Close Ticket Confirmation Modal */}
         {confirmClose && (
           <div style={{
             position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex",
@@ -522,9 +524,11 @@ export default function SuperSupportPage() {
               }}>
                 <X size={24} style={{ color: "#3b82f6" }} />
               </div>
-              <h4 style={{ margin: "0 0 8px", color: "#0f172a", fontSize: "1rem" }}>Close Ticket</h4>
+              <h4 style={{ margin: "0 0 8px", color: "#0f172a", fontSize: "1rem" }}>
+                {t('Close Ticket', { defaultValue: 'Close Ticket' })}
+              </h4>
               <p style={{ margin: "0 0 20px", color: "#64748b", fontSize: "0.88rem", lineHeight: 1.5 }}>
-                Are you sure you want to close this feedback ticket?<br />
+                {t('Are you sure you want to close this feedback ticket?', { defaultValue: 'Are you sure you want to close this feedback ticket?' })}<br />
                 <strong style={{ color: "#3b82f6" }}>
                   {selectedTicket?.feedback_reference_number || selectedTicket?.ticket_number}
                 </strong>?
@@ -537,7 +541,7 @@ export default function SuperSupportPage() {
                     border: "1px solid #e2e8f0", background: "#fff", color: "#475569", cursor: "pointer",
                   }}
                 >
-                  Cancel
+                  {t('Cancel', { defaultValue: 'Cancel' })}
                 </button>
                 <button
                   onClick={confirmCloseTicket}
@@ -547,10 +551,12 @@ export default function SuperSupportPage() {
                     color: "#fff", cursor: "pointer",
                   }}
                 >
-                  Yes, Close
+                  {t('Yes, Close', { defaultValue: 'Yes, Close' })}
                 </button>
               </div>
             </div>
+          </div>
+        )}
           </div>
         )}
       </div>
@@ -587,16 +593,36 @@ export default function SuperSupportPage() {
           >
             <List size={14} /> List
           </button>
+<div>
+            <h1 className="text-2xl font-bold" style={{ color: 'var(--text-heading)' }}>{selectedOrg.name} - {t('Support', { defaultValue: 'Support' })}</h1>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+              {t('{{open}} open, {{pending}} pending', {
+                open: selectedOrg.support?.counts?.open || 0,
+                pending: selectedOrg.support?.counts?.pending || 0,
+                defaultValue: `${selectedOrg.support?.counts?.open || 0} open, ${selectedOrg.support?.counts?.pending || 0} pending`
+              })}
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Cards View */}
+{/* Cards View */}
       {viewMode === 'cards' && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {orgs.map((org) => {
-              const oc = getOrgFeedbackCounts(org.id);
-              const isActive = selectedOrgId === org.id;
+          {ticketLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--color-primary)' }} />
+            </div>
+          ) : tickets.length === 0 ? (
+            <div className="text-center py-12 rounded-xl" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-light)' }}>
+              <MessageSquare className="w-12 h-12 mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{t('No support tickets', { defaultValue: 'No support tickets' })}</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {orgs.map((org) => {
+                const oc = getOrgFeedbackCounts(org.id);
+                const isActive = selectedOrgId === org.id;
               return (
                 <div
                   key={org.id}
@@ -612,25 +638,29 @@ export default function SuperSupportPage() {
                       <Building2 className="w-4 h-4" style={{ color: 'var(--color-primary)' }} />
                     </div>
                     <div>
-                      <p className="text-sm font-semibold" style={{ color: 'var(--text-heading)' }}>{org.name}</p>
-                      <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{oc.total} tickets</p>
+<p className="text-sm font-semibold" style={{ color: 'var(--text-heading)' }}>{org.name}</p>
+                      <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                        {oc.total} {t('tickets', { defaultValue: 'tickets' })}
+                      </p>
                     </div>
                   </div>
                   <div className="grid grid-cols-5 gap-x-2 gap-y-1 mt-2">
                     {[
-                      { label: 'New', value: oc.open, color: '#10b981' },
-                      { label: 'Review', value: oc.under_review, color: '#8b5cf6' },
-                      { label: 'Accepted', value: oc.accepted, color: '#10b981' },
-                      { label: 'Planned', value: oc.planned, color: '#3b82f6' },
-                      { label: 'In Dev', value: oc.in_development, color: '#f59e0b' },
-                      { label: 'Testing', value: oc.testing, color: '#6366f1' },
-                      { label: 'Resolved', value: oc.resolved, color: '#3b82f6' },
-                      { label: 'Closed', value: oc.closed, color: '#94a3b8' },
-                      { label: 'Rejected', value: oc.rejected, color: '#ef4444' },
+                      { key: 'New', defaultLabel: 'New', value: oc.open, color: '#10b981' },
+                      { key: 'Review', defaultLabel: 'Review', value: oc.under_review, color: '#8b5cf6' },
+                      { key: 'Accepted', defaultLabel: 'Accepted', value: oc.accepted, color: '#10b981' },
+                      { key: 'Planned', defaultLabel: 'Planned', value: oc.planned, color: '#3b82f6' },
+                      { key: 'In Dev', defaultLabel: 'In Dev', value: oc.in_development, color: '#f59e0b' },
+                      { key: 'Testing', defaultLabel: 'Testing', value: oc.testing, color: '#6366f1' },
+                      { key: 'Resolved', defaultLabel: 'Resolved', value: oc.resolved, color: '#3b82f6' },
+                      { key: 'Closed', defaultLabel: 'Closed', value: oc.closed, color: '#94a3b8' },
+                      { key: 'Rejected', defaultLabel: 'Rejected', value: oc.rejected, color: '#ef4444' },
                     ].map((item) => (
-                      <div key={item.label} className="text-center leading-tight">
+                      <div key={item.key} className="text-center leading-tight">
                         <span className="font-bold text-sm" style={{ color: item.color }}>{item.value}</span>
-                        <span className="text-sm ml-0.5" style={{ color: 'var(--text-muted)' }}>{item.label}</span>
+                        <span className="text-sm ml-0.5" style={{ color: 'var(--text-muted)' }}>
+                          {t(item.key, { defaultValue: item.defaultLabel })}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -639,33 +669,37 @@ export default function SuperSupportPage() {
             })}
           </div>
 
-          {/* Selected Org Ticket List */}
+{/* Selected Org Ticket List */}
           {selectedOrgId && (
             <div className="space-y-4">
               <h2 className="text-sm font-semibold" style={{ color: 'var(--text-heading)' }}>
-                {selectedOrg?.name} - Feedback Tickets
+                {selectedOrg?.name} - {t('Feedback Tickets', { defaultValue: 'Feedback Tickets' })}
               </h2>
               {ticketLoading ? (
-                <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--color-primary)' }} /></div>
+                <div className="flex justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--color-primary)' }} />
+                </div>
               ) : tickets.length === 0 ? (
                 <div className="text-center py-12 rounded-xl" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-light)' }}>
                   <FileText className="w-12 h-12 mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
-                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No feedback tickets found for this organization</p>
+                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                    {t('No feedback tickets found for this organization', { defaultValue: 'No feedback tickets found for this organization' })}
+                  </p>
                 </div>
               ) : (
                 <div className="fbc-table-card">
                   <table className="fbc-table">
                     <thead>
                       <tr>
-                        <th>Reference #</th>
-                        <th>Type</th>
-                        <th>Subject</th>
-                        <th>User</th>
-                        <th>Module</th>
-                        <th>Priority</th>
-                        <th>Status</th>
-                        <th>Submitted</th>
-                        <th>Action</th>
+                        <th>{t('Reference #', { defaultValue: 'Reference #' })}</th>
+                        <th>{t('Type', { defaultValue: 'Type' })}</th>
+                        <th>{t('Subject', { defaultValue: 'Subject' })}</th>
+                        <th>{t('User', { defaultValue: 'User' })}</th>
+                        <th>{t('Module', { defaultValue: 'Module' })}</th>
+                        <th>{t('Priority', { defaultValue: 'Priority' })}</th>
+                        <th>{t('Status', { defaultValue: 'Status' })}</th>
+                        <th>{t('Submitted', { defaultValue: 'Submitted' })}</th>
+                        <th>{t('Action', { defaultValue: 'Action' })}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -679,19 +713,19 @@ export default function SuperSupportPage() {
                             <td>{metadata.feedback_type || '-'}</td>
                             <td style={{ fontWeight: 600, maxWidth: 220 }}>{cleanSubject(ticket.subject)}</td>
                             <td>
-                              <div><strong>{metadata.user_name || 'User'}</strong></div>
+                              <div><strong>{metadata.user_name || t('User', { defaultValue: 'User' })}</strong></div>
                               <div style={{ fontSize: '0.72rem', color: '#64748b' }}>{metadata.user_role || ''}</div>
                             </td>
                             <td>{metadata.module || '-'}</td>
-                            <td><span style={{ fontSize: '0.78rem', fontWeight: 700, color: prCfg.color }}>{prCfg.label}</span></td>
-                            <td><span className={`fbc-badge fbc-status-${ticket.status.replace(/_/g, '-')}`}>{stCfg.label}</span></td>
+                            <td><span style={{ fontSize: '0.78rem', fontWeight: 700, color: prCfg.color }}>{t(prCfg.labelKey || prCfg.label, { defaultValue: prCfg.label })}</span></td>
+                            <td><span className={`fbc-badge fbc-status-${ticket.status.replace(/_/g, '-')}`}>{t(stCfg.labelKey || stCfg.label, { defaultValue: stCfg.label })}</span></td>
                             <td style={{ fontSize: '0.8rem', color: '#64748b' }}>
                               <div>{new Date(ticket.created_at).toLocaleDateString()}</div>
                               <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{new Date(ticket.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</div>
                             </td>
                             <td>
                               <button className="fb-btn-cancel" style={{ padding: '4px 10px', fontSize: '0.78rem' }} onClick={() => handleOpenTicket(ticket)}>
-                                View Detail
+                                {t('View Detail', { defaultValue: 'View Detail' })}
                               </button>
                             </td>
                           </tr>
@@ -723,51 +757,51 @@ export default function SuperSupportPage() {
                 <label>Search</label>
                 <input type="text" className="fbc-input" placeholder="Search ref #, subject, user..." value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
-              <div className="fbc-filter-item">
-                <label>Feedback Type</label>
+<div className="fbc-filter-item">
+                <label>{t('Feedback Type', { defaultValue: 'Feedback Type' })}</label>
                 <select className="fbc-select" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-                  <option value="">All Types</option>
-                  <option value="Bug Report">Bug Report</option>
-                  <option value="Feature Request">Feature Request</option>
-                  <option value="General Suggestion">General Suggestion</option>
-                  <option value="Feature Rating">Feature Rating</option>
-                  <option value="General Feedback">General Feedback</option>
+                  <option value="">{t('All Types', { defaultValue: 'All Types' })}</option>
+                  <option value="Bug Report">{t('Bug Report', { defaultValue: 'Bug Report' })}</option>
+                  <option value="Feature Request">{t('Feature Request', { defaultValue: 'Feature Request' })}</option>
+                  <option value="General Suggestion">{t('General Suggestion', { defaultValue: 'General Suggestion' })}</option>
+                  <option value="Feature Rating">{t('Feature Rating', { defaultValue: 'Feature Rating' })}</option>
+                  <option value="General Feedback">{t('General Feedback', { defaultValue: 'General Feedback' })}</option>
                 </select>
               </div>
               <div className="fbc-filter-item">
-                <label>Organization</label>
+                <label>{t('Organization', { defaultValue: 'Organization' })}</label>
                 <select className="fbc-select" value={selectedOrgId || ''} onChange={(e) => setSelectedOrgId(e.target.value || null)}>
-                  <option value="">All Organizations</option>
+                  <option value="">{t('All Organizations', { defaultValue: 'All Organizations' })}</option>
                   {orgs.map((org) => (
                     <option key={org.id} value={org.id}>{org.name}</option>
                   ))}
                 </select>
               </div>
               <div className="fbc-filter-item">
-                <label>Status</label>
+                <label>{t('Status', { defaultValue: 'Status' })}</label>
                 <select className="fbc-select" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-                  <option value="">All Statuses</option>
+                  <option value="">{t('All Statuses', { defaultValue: 'All Statuses' })}</option>
                   {STATUS_OPTIONS.map((s) => (
-                    <option key={s} value={s}>{s}</option>
+                    <option key={s} value={s}>{t(s, { defaultValue: s })}</option>
                   ))}
                 </select>
               </div>
               <div className="fbc-filter-item">
-                <label>Priority</label>
+                <label>{t('Priority', { defaultValue: 'Priority' })}</label>
                 <select className="fbc-select" value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}>
-                  <option value="">All Priorities</option>
-                  <option value="Low">Low</option>
-                  <option value="Medium">Medium</option>
-                  <option value="High">High</option>
-                  <option value="Urgent">Urgent</option>
+                  <option value="">{t('All Priorities', { defaultValue: 'All Priorities' })}</option>
+                  <option value="Low">{t('Low', { defaultValue: 'Low' })}</option>
+                  <option value="Medium">{t('Medium', { defaultValue: 'Medium' })}</option>
+                  <option value="High">{t('High', { defaultValue: 'High' })}</option>
+                  <option value="Urgent">{t('Urgent', { defaultValue: 'Urgent' })}</option>
                 </select>
               </div>
               <div className="fbc-filter-item">
-                <label>From Date</label>
+                <label>{t('From Date', { defaultValue: 'From Date' })}</label>
                 <input type="date" className="fbc-input" value={dateStart} max={dateEnd || undefined} onChange={(e) => setDateStart(e.target.value)} />
               </div>
               <div className="fbc-filter-item">
-                <label>To Date</label>
+                <label>{t('To Date', { defaultValue: 'To Date' })}</label>
                 <input type="date" className="fbc-input" value={dateEnd} min={dateStart || undefined} onChange={(e) => setDateEnd(e.target.value)} />
               </div>
             </div>

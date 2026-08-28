@@ -8,6 +8,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { useCalendarData } from "../../hooks/useCalendarData";
 import { useUnifiedSummary } from "../../hooks/useUnifiedSummary";
@@ -31,6 +32,7 @@ const LEAVE_DELAY = 150; // ms before hover tooltip disappears
  * @param {{ isOpen: boolean, onClose: () => void }} props
  */
 function RightSidebar({ isOpen, onClose }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [hoverDate, setHoverDate] = useState(null);
   const [hoverPosition, setHoverPosition] = useState({ top: 0, left: 0 });
@@ -104,7 +106,7 @@ function RightSidebar({ isOpen, onClose }) {
   const [selectedPopupItem, setSelectedPopupItem] = useState(null);
 
   /** Map event type keys to human-readable labels. */
-  const getTypeLabel = (type) => TYPE_LABELS[type] || type;
+  const getTypeLabel = (type) => TYPE_LABELS[type] ? t(TYPE_LABELS[type]) : type;
 
   return (
     <>
@@ -116,28 +118,28 @@ function RightSidebar({ isOpen, onClose }) {
           <div className="right-card-header">
             <div>
               <span className="calendar-label">{monthName}</span>
-              <h3>Calendar</h3>
+              <h3>{t("Calendar")}</h3>
             </div>
             <div className="calendar-header-actions">
               <div className="calendar-nav-group">
-                <button className="calendar-nav-btn" onClick={() => navigateMonth(-1)} aria-label="Previous month">
+                <button className="calendar-nav-btn" onClick={() => navigateMonth(-1)} aria-label={t("Previous month", { defaultValue: "Previous month" })}>
                   <ChevronLeft size={16} />
                 </button>
-                <button className="calendar-nav-btn" onClick={goToToday} aria-label="Go to today">
+                <button className="calendar-nav-btn" onClick={goToToday} aria-label={t("Go to today", { defaultValue: "Go to today" })}>
                   <Calendar size={16} />
                 </button>
-                <button className="calendar-nav-btn" onClick={() => navigateMonth(1)} aria-label="Next month">
+                <button className="calendar-nav-btn" onClick={() => navigateMonth(1)} aria-label={t("Next month", { defaultValue: "Next month" })}>
                   <ChevronRight size={16} />
                 </button>
               </div>
-              <button className="calendar-action" onClick={handleViewAllClick}>View All</button>
+              <button className="calendar-action" onClick={handleViewAllClick}>{t("View All")}</button>
             </div>
           </div>
 
           {/* Calendar grid – 7 column layout with day labels + date cells */}
           <div className="calendar-grid">
             {DAYS.map((day) => (
-              <div key={day} className="calendar-day-label">{day}</div>
+              <div key={day} className="calendar-day-label">{t(day)}</div>
             ))}
 
             {calendarDays.map((date, index) => {
@@ -186,7 +188,7 @@ function RightSidebar({ isOpen, onClose }) {
                   <span className="hover-popup-date">
                     {hoverDate.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
                   </span>
-                  <span className="hover-popup-count">{dayEvents.length} event{dayEvents.length !== 1 ? "s" : ""}</span>
+                  <span className="hover-popup-count">{t("{{count}} events", { count: dayEvents.length, defaultValue: `${dayEvents.length} events` })}</span>
                 </div>
                 <div className="hover-popup-events">
                   {dayEvents.slice(0, 5).map((ev) => {
@@ -209,11 +211,11 @@ function RightSidebar({ isOpen, onClose }) {
                     );
                   })}
                   {dayEvents.length > 5 && (
-                    <div className="hover-popup-more">+{dayEvents.length - 5} more</div>
+                    <div className="hover-popup-more">{t("+{{count}} more", { count: dayEvents.length - 5, defaultValue: `+${dayEvents.length - 5} more` })}</div>
                   )}
                 </div>
                 <button className="hover-popup-view-all" onClick={() => { setSelectedPopupDay(hoverDate); setHoverDate(null); }}>
-                  View All
+                  {t("View All")}
                 </button>
               </div>
             );

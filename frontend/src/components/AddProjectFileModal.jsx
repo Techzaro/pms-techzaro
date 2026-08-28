@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { X, Upload, Link, FileUp } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import ConfirmModal from "./ConfirmModal";
@@ -7,6 +8,7 @@ import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 
 export default function AddProjectFileModal({ isOpen, onClose, projectId, onSuccess }) {
+  const { t } = useTranslation();
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
   useEscapeKey(isOpen, handleClose);
   const [files, setFiles] = useState([]);
@@ -104,7 +106,7 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
     <div className="modal-overlay" onClick={handleClose}>
       <div className="modal-box" style={{ maxWidth: "520px", width: "95%" }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-          <h3 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: "var(--text-heading)" }}>Add Files & Links</h3>
+          <h3 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: "var(--text-heading)" }}>{t("Add Files & Links", { defaultValue: "Add Files & Links" })}</h3>
           <button onClick={handleClose} style={{ background: "none", border: "none", cursor: "pointer", padding: "4px", color: "#6b7280" }}>
             <X size={20} />
           </button>
@@ -114,7 +116,7 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
         <div style={{ marginBottom: "20px" }}>
           <label style={{ display: "block", fontSize: "14px", fontWeight: 600, color: "var(--text-dark)", marginBottom: "8px" }}>
             <Upload size={14} style={{ verticalAlign: "middle", marginRight: "6px" }} />
-            Upload Files
+            {t("Upload Files", { defaultValue: "Upload Files" })}
           </label>
           <div
             onClick={() => fileInputRef.current?.click()}
@@ -126,7 +128,7 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
             onMouseLeave={(e) => e.currentTarget.style.borderColor = "#d1d5db"}
           >
             <FileUp size={28} style={{ color: "var(--text-muted)", marginBottom: "8px" }} />
-            <p style={{ margin: 0, fontSize: "13px", color: "#6b7280" }}>Click to browse files</p>
+            <p style={{ margin: 0, fontSize: "13px", color: "#6b7280" }}>{t("Click to browse files", { defaultValue: "Click to browse files" })}</p>
           </div>
           <input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={handleFileSelect} />
 
@@ -164,7 +166,7 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
                           updated[i] = { ...updated[i], renaming: false };
                           return updated;
                         });
-                      }} style={{ background: "var(--color-success)", border: "none", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 700, borderRadius: 4, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Save name">&#10003;</button>
+                      }} style={{ background: "var(--color-success)", border: "none", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 700, borderRadius: 4, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title={t("Save name", { defaultValue: "Save name" })}>&#10003;</button>
                     </>
                   ) : (
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{item.customName || item.file.name}</span>
@@ -177,12 +179,12 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
                           updated[i] = { ...updated[i], renaming: true, customName: item.customName || item.file.name.replace(/\.[^.]+$/, "") };
                           return updated;
                         });
-                      }} style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Rename</button>
-                      <button type="button" onClick={() => { setPendingRemoveItem({ type: "file", index: i }); setRemoveConfirmOpen(true); }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1 }} title="Remove">&#10005;</button>
+                      }} style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>{t("Rename", { defaultValue: "Rename" })}</button>
+                      <button type="button" onClick={() => { setPendingRemoveItem({ type: "file", index: i }); setRemoveConfirmOpen(true); }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1 }} title={t("Remove", { defaultValue: "Remove" })}>&#10005;</button>
                     </div>
                   )}
                   {item.renaming && (
-                    <button type="button" onClick={() => { setPendingRemoveItem({ type: "file", index: i }); setRemoveConfirmOpen(true); }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1, flexShrink: 0, marginLeft: 6 }} title="Remove">&#10005;</button>
+                    <button type="button" onClick={() => { setPendingRemoveItem({ type: "file", index: i }); setRemoveConfirmOpen(true); }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1, flexShrink: 0, marginLeft: 6 }} title={t("Remove", { defaultValue: "Remove" })}>&#10005;</button>
                   )}
                 </div>
               ))}
@@ -194,11 +196,11 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
         <div style={{ marginBottom: "20px" }}>
           <label style={{ display: "block", fontSize: "14px", fontWeight: 600, color: "var(--text-dark)", marginBottom: "8px" }}>
             <Link size={14} style={{ verticalAlign: "middle", marginRight: "6px" }} />
-            Add Links
+            {t("Add Links", { defaultValue: "Add Links" })}
           </label>
           <input
             type="text"
-            placeholder="Link title (optional)"
+            placeholder={t("Link title (optional)", { defaultValue: "Link title (optional)" })}
             value={linkTitleInput}
             onChange={(e) => setLinkTitleInput(e.target.value)}
             style={{
@@ -227,7 +229,7 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
                 color: linkInput.trim() ? "#fff" : "#9ca3af",
               }}
             >
-              Add
+              {t("Add", { defaultValue: "Add" })}
             </button>
           </div>
 
@@ -271,7 +273,7 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
                           updated[i] = { ...updated[i], renaming: false };
                           return updated;
                         });
-                      }} style={{ background: "var(--color-success)", border: "none", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 700, borderRadius: 4, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginLeft: 6 }} title="Save name">&#10003;</button>
+                      }} style={{ background: "var(--color-success)", border: "none", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 700, borderRadius: 4, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginLeft: 6 }} title={t("Save name", { defaultValue: "Save name" })}>&#10003;</button>
                     </>
                   ) : (
                     <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
@@ -289,12 +291,12 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
                           updated[i] = { ...updated[i], renaming: true, customName: l.customName || l.name };
                           return updated;
                         });
-                      }} style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Rename</button>
-                      <button type="button" onClick={() => { setPendingRemoveItem({ type: "link", index: i }); setRemoveConfirmOpen(true); }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1 }} title="Remove">&#10005;</button>
+                      }} style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>{t("Rename", { defaultValue: "Rename" })}</button>
+                      <button type="button" onClick={() => { setPendingRemoveItem({ type: "link", index: i }); setRemoveConfirmOpen(true); }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1 }} title={t("Remove", { defaultValue: "Remove" })}>&#10005;</button>
                     </div>
                   )}
                   {l.renaming && (
-                    <button type="button" onClick={() => { setPendingRemoveItem({ type: "link", index: i }); setRemoveConfirmOpen(true); }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1, flexShrink: 0, marginLeft: 6 }} title="Remove">&#10005;</button>
+                    <button type="button" onClick={() => { setPendingRemoveItem({ type: "link", index: i }); setRemoveConfirmOpen(true); }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1, flexShrink: 0, marginLeft: 6 }} title={t("Remove", { defaultValue: "Remove" })}>&#10005;</button>
                   )}
                 </div>
               ))}
@@ -311,7 +313,7 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
               fontWeight: 600, fontSize: "13px", cursor: "pointer", color: "var(--text-dark)",
             }}
           >
-            Cancel
+            {t("Cancel")}
           </button>
           <button
             onClick={handleSubmit}
@@ -323,7 +325,7 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
               color: canSubmit && !uploading ? "#fff" : "#9ca3af",
             }}
           >
-            {uploading ? "Uploading..." : "Save"}
+            {uploading ? t("Uploading...", { defaultValue: "Uploading..." }) : t("Save")}
           </button>
         </div>
       </div>
@@ -337,10 +339,10 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
         setRemoveConfirmOpen(false);
         setPendingRemoveItem({ type: "", index: -1 });
       }}
-      title="Remove Item"
-      message="Are you sure you want to remove this item?"
-      confirmText="Remove"
-      cancelText="Cancel"
+      title={t("Remove Item", { defaultValue: "Remove Item" })}
+      message={t("Are you sure you want to remove this item?", { defaultValue: "Are you sure you want to remove this item?" })}
+      confirmText={t("Remove", { defaultValue: "Remove" })}
+      cancelText={t("Cancel")}
       danger
     />
     {ConfirmDialog}

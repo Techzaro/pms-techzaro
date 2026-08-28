@@ -5,12 +5,14 @@
  * Flow: Fill form → Auto-generate password → Send welcome email → Show success
  */
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import API_URL from "../../config/api";
 import { getOrgBaseUrl } from "../../utils/domain";
 import "../Login.css";
 
 function RegisterOrganization() {
+  const { t } = useTranslation();
   const [step, setStep] = useState(1); // 1 = form, 2 = success
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -40,12 +42,12 @@ function RegisterOrganization() {
 
   const validate = () => {
     const errs = {};
-    if (!form.company_name.trim()) errs.company_name = "Company name is required";
-    if (!form.name.trim()) errs.name = "Your name is required";
+    if (!form.company_name.trim()) errs.company_name = t("Company name is required", { defaultValue: "Company name is required" });
+    if (!form.name.trim()) errs.name = t("Your name is required", { defaultValue: "Your name is required" });
     if (!form.email.trim()) {
-      errs.email = "Email is required";
+      errs.email = t("Email is required", { defaultValue: "Email is required" });
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-      errs.email = "Please enter a valid email address";
+      errs.email = t("Please enter a valid email address", { defaultValue: "Please enter a valid email address" });
     }
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
@@ -76,12 +78,12 @@ function RegisterOrganization() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.message || "Registration failed. Please try again.");
+        throw new Error(data.message || t("Registration failed. Please try again.", { defaultValue: "Registration failed. Please try again." }));
       }
 
       setStep(2);
     } catch (err) {
-      setError(err.message || "Something went wrong. Please try again.");
+      setError(err.message || t("Something went wrong. Please try again.", { defaultValue: "Something went wrong. Please try again." }));
     } finally {
       setLoading(false);
     }
@@ -98,19 +100,19 @@ function RegisterOrganization() {
               alt="Techxaro Logo"
               className="logo"
             />
-            <h1>TECHXARO PMS</h1>
-            <p>Manage Projects, Teams & Tasks Professionally</p>
+            <h1>{t("TECHXARO PMS", { defaultValue: "TECHXARO PMS" })}</h1>
+            <p>{t('Manage Projects, Teams & Tasks Professionally', { defaultValue: 'Manage Projects, Teams & Tasks Professionally' })}</p>
           </div>
         </div>
 
         <div className="login-right">
           <div className="login-box" style={{ maxWidth: 420, textAlign: "center" }}>
             <div style={{ fontSize: 64, marginBottom: 16 }}>&#10003;</div>
-            <h2 style={{ fontSize: 26, marginBottom: 12 }}>Organization Created!</h2>
+            <h2 style={{ fontSize: 26, marginBottom: 12 }}>{t('Organization Created!', { defaultValue: 'Organization Created!' })}</h2>
             <p className="subtitle" style={{ marginBottom: 24, lineHeight: 1.7 }}>
-              Your organization has been successfully registered. We have sent login
-              credentials to <strong>{form.email}</strong>. Please check your inbox
-              (and spam folder) for the welcome email.
+              {t('Your organization has been successfully registered. We have sent login credentials to', { defaultValue: 'Your organization has been successfully registered. We have sent login credentials to' })}{' '}
+              <strong>{form.email}</strong>.{' '}
+              {t('Please check your inbox (and spam folder) for the welcome email.', { defaultValue: 'Please check your inbox (and spam folder) for the welcome email.' })}
             </p>
 
             <div
@@ -124,13 +126,13 @@ function RegisterOrganization() {
               }}
             >
               <p style={{ color: "#1e40af", fontSize: 14, fontWeight: 600, margin: "0 0 8px" }}>
-                What&apos;s Next?
+                {t("What's Next?", { defaultValue: "What's Next?" })}
               </p>
               <ol style={{ color: "#374151", fontSize: 13, lineHeight: 2, margin: 0, paddingLeft: 20 }}>
-                <li>Check your email for login credentials</li>
-                <li>Login at the portal with your email &amp; temporary password</li>
-                <li>Change your password when prompted</li>
-                <li>Set up your organization and invite your team</li>
+                <li>{t('Check your email for login credentials', { defaultValue: 'Check your email for login credentials' })}</li>
+                <li>{t('Login at the portal with your email & temporary password', { defaultValue: 'Login at the portal with your email & temporary password' })}</li>
+                <li>{t('Change your password when prompted', { defaultValue: 'Change your password when prompted' })}</li>
+                <li>{t('Set up your organization and invite your team', { defaultValue: 'Set up your organization and invite your team' })}</li>
               </ol>
             </div>
 
@@ -149,8 +151,8 @@ function RegisterOrganization() {
                 textAlign: "center",
               }}
             >
-              Go to Login
-            </Link>
+              {t('Go to Login', { defaultValue: 'Go to Login' })}
+            </a>
           </div>
         </div>
       </div>
@@ -167,28 +169,28 @@ function RegisterOrganization() {
             alt="Techxaro Logo"
             className="logo"
           />
-          <h1>TECHXARO PMS</h1>
-          <p>Manage Projects, Teams & Tasks Professionally</p>
+          <h1>{t("TECHXARO PMS", { defaultValue: "TECHXARO PMS" })}</h1>
+          <p>{t('Manage Projects, Teams & Tasks Professionally', { defaultValue: 'Manage Projects, Teams & Tasks Professionally' })}</p>
         </div>
       </div>
 
       <div className="login-right">
         <div className="login-box" style={{ maxWidth: 420 }}>
-          <h2>Register Organization</h2>
+          <h2>{t('Register Organization', { defaultValue: 'Register Organization' })}</h2>
           <p className="subtitle">
-            Create your organization and start managing projects
+            {t('Create your organization and start managing projects', { defaultValue: 'Create your organization and start managing projects' })}
           </p>
 
           {error && <span className="field-error-text form-error">{error}</span>}
 
           <form onSubmit={handleSubmit}>
             <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>
-              Company / Organization Name
+              {t('Company / Organization Name', { defaultValue: 'Company / Organization Name' })}
             </label>
             <input
               type="text"
               name="company_name"
-              placeholder="e.g. Acme Solutions"
+              placeholder={t("e.g. Acme Solutions", { defaultValue: "e.g. Acme Solutions" })}
               value={form.company_name}
               onChange={handleChange}
               className={fieldErrors.company_name ? "field-error" : ""}
@@ -207,12 +209,12 @@ function RegisterOrganization() {
             {fieldErrors.company_name && <span className="field-error-text">{fieldErrors.company_name}</span>}
 
             <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4, marginTop: 10 }}>
-              Your Full Name
+              {t('Your Full Name', { defaultValue: 'Your Full Name' })}
             </label>
             <input
               type="text"
               name="name"
-              placeholder="e.g. John Smith"
+              placeholder={t("e.g. John Smith", { defaultValue: "e.g. John Smith" })}
               value={form.name}
               onChange={handleChange}
               className={fieldErrors.name ? "field-error" : ""}
@@ -231,12 +233,12 @@ function RegisterOrganization() {
             {fieldErrors.name && <span className="field-error-text">{fieldErrors.name}</span>}
 
             <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4, marginTop: 10 }}>
-              Personal Email (Gmail etc.)
+              {t('Personal Email (Gmail etc.)', { defaultValue: 'Personal Email (Gmail etc.)' })}
             </label>
             <input
               type="email"
               name="email"
-              placeholder="e.g. john@gmail.com"
+              placeholder={t("e.g. john@gmail.com", { defaultValue: "e.g. john@gmail.com" })}
               value={form.email}
               onChange={handleChange}
               className={fieldErrors.email ? "field-error" : ""}
@@ -255,12 +257,12 @@ function RegisterOrganization() {
             {fieldErrors.email && <span className="field-error-text">{fieldErrors.email}</span>}
 
             <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4, marginTop: 10 }}>
-              Phone Number <span style={{ color: "#9ca3af", fontWeight: 400 }}>(optional)</span>
+              {t('Phone Number', { defaultValue: 'Phone Number' })} <span style={{ color: "#9ca3af", fontWeight: 400 }}>({t('optional', { defaultValue: 'optional' })})</span>
             </label>
             <input
               type="tel"
               name="phone"
-              placeholder="e.g. +92 300 1234567"
+              placeholder={t("e.g. +92 300 1234567", { defaultValue: "e.g. +92 300 1234567" })}
               value={form.phone}
               onChange={handleChange}
               style={{
@@ -286,8 +288,7 @@ function RegisterOrganization() {
               }}
             >
               <p style={{ color: "#166534", fontSize: 13, margin: 0, lineHeight: 1.6 }}>
-                <strong>{trialPlan ? `${trialPlan.trial_duration || 14} ${(trialPlan.trial_duration_unit || 'days').replace(/s$/, '')}` : '14-day'} free trial</strong> — No credit card required. Your
-                password will be sent to your email.
+                <strong>{trialPlan ? `${trialPlan.trial_duration || 14} ${t(trialPlan.trial_duration_unit || 'days', { defaultValue: trialPlan.trial_duration_unit || 'days' }).replace(/s$/, '')}` : t('14-day', { defaultValue: '14-day' })} {t('free trial', { defaultValue: 'free trial' })}</strong> — {t('No credit card required. Your password will be sent to your email.', { defaultValue: 'No credit card required. Your password will be sent to your email.' })}
               </p>
             </div>
 
@@ -307,15 +308,15 @@ function RegisterOrganization() {
                   width: "100%",
                 }}
               >
-                {loading ? "Creating Organization..." : "Create Organization"}
+                {loading ? t("Creating Organization...", { defaultValue: "Creating Organization..." }) : t("Create Organization", { defaultValue: "Create Organization" })}
               </button>
             </div>
           </form>
 
           <p style={{ textAlign: "center", marginTop: 20, fontSize: 14, color: "#747d8c" }}>
-            Already have an account?{" "}
+            {t('Already have an account?', { defaultValue: 'Already have an account?' })}{" "}
             <a href={`${getOrgBaseUrl()}/login`} style={{ color: "#1e90ff", textDecoration: "none" }}>
-              Login
+              {t('Login', { defaultValue: 'Login' })}
             </a>
           </p>
         </div>

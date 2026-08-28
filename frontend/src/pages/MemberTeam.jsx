@@ -9,12 +9,14 @@
  * - Auto-refreshes via real-time events
  */
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { MdPeople, MdCalendarToday, MdGroup, MdEmail, MdInfoOutline, MdSearch } from "react-icons/md";
-import { Crown } from "lucide-react";
+import { Crown, Clock } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
-import { authToken, rolePath } from "../utils/auth";
+import { authToken, rolePath, getUser } from "../utils/auth";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
+import TeamWorkingHoursModal from "../components/TeamWorkingHoursModal";
 import API_URL from "../config/api";
 import "./MemberTeam.css";
 
@@ -44,9 +46,12 @@ function formatDate(dateStr) {
 }
 
 function MemberTeam() {
+  const { t } = useTranslation();
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [workingHoursModalOpen, setWorkingHoursModalOpen] = useState(false);
+  const [selectedTeamForHours, setSelectedTeamForHours] = useState(null);
 
   const fetchTeams = async () => {
     const token = authToken();
@@ -71,8 +76,8 @@ function MemberTeam() {
   useAutoRefresh(fetchTeams, { events: ["team_created", "team_updated", "team_deleted", "team_leader_changed", "team_member_added", "team_member_removed", "data:changed"] });
 
   const breadcrumbs = [
-    { label: "Dashboard", path: rolePath("dashboard") },
-    { label: "Team" },
+    { label: t("Dashboard", { defaultValue: "Dashboard" }), path: rolePath("dashboard") },
+    { label: t("Teams", { defaultValue: "Teams" }) },
   ];
 
   return (
@@ -82,8 +87,8 @@ function MemberTeam() {
 
         <div className="mt-header">
           <div className="mt-header-left">
-            <h1 className="mt-title">My Team</h1>
-            <p className="mt-subtitle">View your assigned team information</p>
+            <h1 className="mt-title">{t("My Team", { defaultValue: "My Team" })}</h1>
+            <p className="mt-subtitle">{t("View your assigned team information", { defaultValue: "View your assigned team information" })}</p>
           </div>
           {!loading && teams.length > 0 && (
             <div className="mt-search-bar">
@@ -91,7 +96,7 @@ function MemberTeam() {
               <input
                 type="text"
                 className="mt-search-input"
-                placeholder="Search by member name or email..."
+                placeholder={t("Search by member name or email...", { defaultValue: "Search by member name or email..." })}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -101,32 +106,53 @@ function MemberTeam() {
 
         {loading ? (
           <div className="mt-card" style={{ padding: 40, textAlign: "center" }}>
-            <p style={{ color: "#94a3b8", margin: 0 }}>Loading team information...</p>
+            <p style={{ color: "#94a3b8", margin: 0 }}>{t("Loading team information...", { defaultValue: "Loading team information..." })}</p>
           </div>
         ) : teams.length === 0 ? (
           <div className="mt-card mt-empty">
             <MdInfoOutline size={48} className="mt-empty-icon" />
-            <p>You are not currently assigned to any team.</p>
+            <p>{t("You are not currently assigned to any team.", { defaultValue: "You are not currently assigned to any team." })}</p>
             <p style={{ fontSize: 14, color: "#94a3b8", marginTop: 8 }}>
-              Please contact your Manager or Administrator for more information.
+              {t("Please contact your Manager or Administrator for more information.", { defaultValue: "Please contact your Manager or Administrator for more information." })}
             </p>
           </div>
         ) : (
           <div className="mt-team-list">
             {teams.map((team) => (
-              <TeamCard key={team.id} team={team} search={search} />
+              <TeamCard
+                key={team.id}
+                team={team}
+                search={search}
+                onOpenHours={(t) => {
+                  setSelectedTeamForHours(t);
+                  setWorkingHoursModalOpen(true);
+                }}
+              />
             )).filter(Boolean)}
           </div>
         )}
       </div>
+
+      <TeamWorkingHoursModal
+        isOpen={workingHoursModalOpen}
+        onClose={() => {
+          setWorkingHoursModalOpen(false);
+          setSelectedTeamForHours(null);
+        }}
+        team={selectedTeamForHours}
+        onSaved={() => fetchTeams()}
+      />
     </DashboardLayout>
   );
 }
 
-function TeamCard({ team, search }) {
+function TeamCard({ team, search, onOpenHours }) {
+  const { t } = useTranslation();
   const leader = team.leader;
   const members = team.members || [];
   const q = (search || "").toLowerCase().trim();
+  const authUser = getUser();
+  const isTeamLead = leader && Number(leader.id) === Number(authUser?.id);
 
   const teamNameMatch = q && team.name.toLowerCase().includes(q);
 
@@ -166,15 +192,39 @@ function TeamCard({ team, search }) {
           <MdPeople size={22} className="mt-team-icon-inline" />
           <div>
             <h2 className="mt-team-name">{team.name}</h2>
-            <span className="mt-member-count">{q ? sortedMembers.length : members.length} of {members.length} member{members.length !== 1 ? "s" : ""}</span>
+            <span className="mt-member-count">{t("{{current}} of {{total}} members", { current: q ? sortedMembers.length : members.length, total: members.length, defaultValue: `${q ? sortedMembers.length : members.length} of ${members.length} members` })}</span>
           </div>
         </div>
+
+        {isTeamLead && (
+          <button
+            type="button"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "6px 14px",
+              borderRadius: "8px",
+              background: "var(--color-primary-bg, rgba(79, 70, 229, 0.1))",
+              color: "var(--color-primary, #4f46e5)",
+              border: "1px solid var(--color-primary, #4f46e5)",
+              fontSize: "12px",
+              fontWeight: 600,
+              cursor: "pointer",
+              marginLeft: "auto",
+            }}
+            onClick={() => onOpenHours && onOpenHours(team)}
+          >
+            <Clock size={14} />
+            {t("Set Working Hours", { defaultValue: "Set Working Hours" })}
+          </button>
+        )}
       </div>
 
       {/* Description */}
       {team.description && (
         <div className="mt-section">
-          <span className="mt-section-label">Description</span>
+          <span className="mt-section-label">{t("Description", { defaultValue: "Description" })}</span>
           <div className="mt-team-desc rte-display" dangerouslySetInnerHTML={{ __html: team.description }} />
         </div>
       )}
@@ -182,17 +232,17 @@ function TeamCard({ team, search }) {
       {/* Info Row: Lead + Created Date */}
       <div className="mt-info-row">
         <div className="mt-info-inline">
-          <span className="mt-info-label">Team Lead</span>
+          <span className="mt-info-label">{t("Team Lead", { defaultValue: "Team Lead" })}</span>
           {leader ? (
             <>
               <Crown size={16} className="mt-crown-icon" />
               <span className="mt-info-value">{leader.name}</span>
             </>
           ) : (
-            <span className="mt-info-value mt-no-data">Not assigned</span>
+            <span className="mt-info-value mt-no-data">{t("Not assigned", { defaultValue: "Not assigned" })}</span>
           )}
           <span className="mt-info-sep">|</span>
-          <span className="mt-info-label">Created</span>
+          <span className="mt-info-label">{t("Created", { defaultValue: "Created" })}</span>
           <MdCalendarToday size={16} style={{ color: "#64748b", flexShrink: 0 }} />
           <span className="mt-info-value">{formatDate(team.created_at)}</span>
         </div>
@@ -200,9 +250,9 @@ function TeamCard({ team, search }) {
 
       {/* Members Section */}
       <div className="mt-section">
-        <span className="mt-section-label">Team Members</span>
+        <span className="mt-section-label">{t("Team Members", { defaultValue: "Team Members" })}</span>
         {sortedMembers.length === 0 ? (
-          <p className="mt-no-data">{q ? "No members match your search" : "No members assigned"}</p>
+          <p className="mt-no-data">{q ? t("No members match your search", { defaultValue: "No members match your search" }) : t("No members assigned", { defaultValue: "No members assigned" })}</p>
         ) : (
           <div className="mt-members-grid">
             {sortedMembers.map((member) => {
@@ -221,7 +271,7 @@ function TeamCard({ team, search }) {
                       {isLeader ? (
                         <span className="mt-lead-badge">
                           <Crown size={12} />
-                          Team Lead
+                          {t("Team Lead", { defaultValue: "Team Lead" })}
                         </span>
                       ) : member.role ? (
                         <span className="mt-role-badge">{member.role.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())}</span>
@@ -231,16 +281,16 @@ function TeamCard({ team, search }) {
                   <div className="mt-member-details">
                     {isLeader ? (
                       <span className="mt-member-detail">
-                        <span className="mt-detail-label">Destination:</span> Team Lead
+                        <span className="mt-detail-label">{t("Designation:", { defaultValue: "Designation:" })}</span> {t("Team Lead", { defaultValue: "Team Lead" })}
                       </span>
                     ) : member.designation ? (
                       <span className="mt-member-detail">
-                        <span className="mt-detail-label">Destination:</span> {member.designation}
+                        <span className="mt-detail-label">{t("Designation:", { defaultValue: "Designation:" })}</span> {member.designation}
                       </span>
                     ) : null}
                     {member.department && (
                       <span className="mt-member-detail">
-                        <span className="mt-detail-label">Dept:</span> {member.department}
+                        <span className="mt-detail-label">{t("Dept:", { defaultValue: "Dept:" })}</span> {member.department}
                       </span>
                     )}
                     {member.professional_email && (

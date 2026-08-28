@@ -1,6 +1,9 @@
 /**
  * SelfTasks page component.
  *
+/**
+ * SelfTasks page component.
+ *
  * Displays tasks that the current user assigned to themselves.
  * Includes search with debounce, status filtering, time-range filtering,
  * drag-and-drop reordering and pagination.  Modals are available for
@@ -14,6 +17,7 @@ import Breadcrumb from "../components/Breadcrumb";
 import DraggableStatusBadges from "../components/DraggableStatusBadges";
 import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
 import { ArrowUpRight, CheckCircle2, Lock, Pause, Play, StickyNote, ChevronDown, XCircle, RotateCcw, AlertOctagon, Sliders, Trash2 } from "lucide-react";
@@ -78,15 +82,16 @@ const PRIORITY_TEXT_COLORS = {
 
 /** Main Self Tasks page — renders tasks assigned by the current user to themselves. */
 const SelfTasks = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const currentUser = getUser();
   const notify = useNotification();
   
   // State declarations
-  const [showTaskModal, setShowTaskModal] = useState({ open: false, projectId: null, id: null }); // Fixed to object
-  const [showSubtaskSubmitModal, setShowSubtaskSubmitModal] = useState({ open: false, subtask: null }); // Added missing state
+  const [showTaskModal, setShowTaskModal] = useState({ open: false, projectId: null, id: null });
+  const [showSubtaskSubmitModal, setShowSubtaskSubmitModal] = useState({ open: false, subtask: null });
   const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
-  const [viewModal, setViewModal] = useState({ open: false, subtask: null }); // Added missing state
+  const [viewModal, setViewModal] = useState({ open: false, subtask: null });
   const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState(null);
@@ -125,6 +130,10 @@ const SelfTasks = () => {
     setPage(1);
   };
 
+  const handleTaskReorder = (newItems) => {
+    setItems(newItems);
+  };
+
   const selectStatusFilter = (filter) => {
     if (filter === statusFilter && filter === "") {
       setShowAll(!showAll);
@@ -132,6 +141,171 @@ const SelfTasks = () => {
       setStatusFilter(filter);
       setShowAll(false);
       setPage(1);
+    }
+  };
+
+  const handleModalClose = (refresh) => {
+    setShowTaskModal({ open: false, projectId: null, id: null });
+    if (refresh) fetchTasks();
+  };
+
+  const handleTaskCreated = () => {
+    fetchTasks();
+  };
+
+  const handleTaskSubmitSuccess = (taskId, updatedTask) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === taskId
+          ? { ...item, ...updatedTask }
+          : item
+      )
+    );
+    setSubmitTaskModal({ open: false, task: null });
+  };
+
+  const handleSubtaskSubmitSuccess = () => {
+    setShowSubtaskSubmitModal({ open: false, subtask: null });
+    fetchTasks();
+  };
+
+  const handleSubtaskUpdate = () => {
+    setViewModal({ open: false, subtask: null });
+    fetchTasks();
+  };
+
+  const handleAcknowledge = async (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/acknowledge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === taskId ? { ...item, status: "in_progress", ...(data.task || {}) } : item
+          )
+        );
+        publish('task:updated', { id: taskId, status: 'in_progress' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage(t("Task", { defaultValue: "Task" }), t("acknowledged", { defaultValue: "acknowledged" }));
+      } else {
+        const errorMsg = data?.message || data?.error || (data?.errors ? Object.values(data.errors).flat().join(", ") : null) || t("Failed to acknowledge task.", { defaultValue: "Failed to acknowledge task." });
+        if (notify?.error) {
+          notify.error(errorMsg);
+        }
+      }
+    } catch (err) {
+      const errorMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || t("Failed to acknowledge task.", { defaultValue: "Failed to acknowledge task." });
+      if (notify?.error) {
+        notify.error(errorMsg);
+      }
+    }
+  };
+
+  const handleContinue = async (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/continue`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === taskId ? { ...item, status: "in_progress", ...(data.task || {}) } : item
+          )
+        );
+        publish('task:updated', { id: taskId, status: 'in_progress' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage(t("Task", { defaultValue: "Task" }), t("resumed", { defaultValue: "resumed" }));
+      } else {
+        const errorMsg = data?.message || data?.error || (data?.errors ? Object.values(data.errors).flat().join(", ") : null) || t("Failed to continue task.", { defaultValue: "Failed to continue task." });
+        notify.error(errorMsg);
+      }
+    } catch (err) {
+      const errorMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || t("Failed to continue task.", { defaultValue: "Failed to continue task." });
+      notify.error(errorMsg);
+    }
+  };
+
+  const handlePause = async (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/pause`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        body: JSON.stringify({ reason: "other", reason_detail: "Paused from task list" }),
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === taskId ? { ...item, status: "paused", ...(data.task || {}) } : item
+          )
+        );
+        publish('task:updated', { id: taskId, status: 'paused' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage(t("Task", { defaultValue: "Task" }), t("paused", { defaultValue: "paused" }));
+      } else {
+        notify.error(data?.message || data?.error || t("Failed to pause task.", { defaultValue: "Failed to pause task." }));
+      }
+    } catch {
+      notify.error(t("Failed to pause task.", { defaultValue: "Failed to pause task." }));
+    }
+  };
+
+  const handleDelete = (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    setDeleteTargetId(taskId);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    const taskId = deleteTargetId;
+    setDeleteConfirmOpen(false);
+    setDeleteTargetId(null);
+    if (!taskId) return;
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        _notifHandled: true,
+      });
+      if (res.ok) {
+        setItems((prev) => prev.filter((item) => String(item.id) !== String(taskId)));
+        setOrderedItems((prev) => prev.filter((item) => String(item.id) !== String(taskId)));
+        publish('task:deleted', { id: taskId });
+        publish('data:changed', { type: 'task', action: 'deleted' });
+        toast.success(t("Task deleted successfully", { defaultValue: "Task deleted successfully" }));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.message || t("Failed to delete task.", { defaultValue: "Failed to delete task." }));
+      }
+    } catch {
+      toast.error(t("Failed to delete task.", { defaultValue: "Failed to delete task." }));
     }
   };
 
@@ -148,9 +322,6 @@ const SelfTasks = () => {
       const params = new URLSearchParams();
       if (timeFilter) params.append("time_filter", timeFilter);
       if (debouncedSearch) params.append("search", debouncedSearch);
-      if (statusFilter && (!advancedFilters.statuses || advancedFilters.statuses.length === 0)) {
-        params.append("status", statusFilter);
-      }
 
       const stList = Array.isArray(advancedFilters.statuses)
         ? advancedFilters.statuses
@@ -194,7 +365,7 @@ const SelfTasks = () => {
       }
 
       fetch(`${API_URL}/self-tasks?${params.toString()}`, {
-        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        headers: { Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
         skipLoader: true,
       })
         .then((res) => (res.ok ? res.json() : { data: [] }))
@@ -212,11 +383,11 @@ const SelfTasks = () => {
       setLoading(false);
       setItems([]);
     }
-  }, [debouncedSearch, timeFilter, statusFilter, advancedFilters, sortBy, sortDirection]);
+  }, [timeFilter, debouncedSearch, statusFilter, advancedFilters, sortBy, sortDirection]);
 
   useEffect(() => {
     fetchTasks();
-  }, [fetchTasks]);
+  }, [fetchTasks, page]);
 
   useAutoRefresh(fetchTasks, {
     events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
@@ -226,178 +397,9 @@ const SelfTasks = () => {
     setOrderedItems(items);
   }, [items]);
 
-  const handleTaskReorder = useCallback((reordered) => {
-    setOrderedItems(reordered);
-    if (reordered.length) {
-      const payload = reordered.map((item, idx) => ({ id: item.id, sort_order: idx }));
-      const token = authToken();
-      fetch(`${API_URL}/tasks/reorder`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ items: payload }),
-        _notifHandled: true,
-      }).catch(() => {});
-    }
-  }, []);
-
-  const handleModalClose = (refresh) => {
-    setShowTaskModal({ open: false, projectId: null, id: null });
-    if (refresh) fetchTasks();
-  };
-
-  const handleTaskCreated = () => {
-    fetchTasks();
-  };
-
-  const handleSubtaskSubmitSuccess = () => {
-    fetchTasks();
-  };
-
-  const handleTaskSubmitSuccess = () => {
-    fetchTasks();
-  };
-
-  const handleSubtaskUpdate = () => {
-    fetchTasks();
-  };
-
-  const handleAcknowledge = async (e, taskId) => {
-    if (e && e.stopPropagation) {
-      e.stopPropagation();
-      e.preventDefault();
-    }
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}/acknowledge`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-        _notifHandled: true,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setItems((prev) => prev.map((item) => item.id === taskId ? { ...item, status: "in_progress", ...(data.task || {}) } : item));
-        publish('task:updated', { id: taskId, status: 'in_progress' });
-        publish('data:changed', { type: 'task', action: 'updated' });
-        showSuccessMessage("Task", "acknowledged");
-      } else {
-        notify.error(data.message || "Failed to acknowledge task.");
-      }
-    } catch {
-      notify.error("Failed to acknowledge task.");
-    }
-  };
-
-  const handleContinue = async (e, taskId) => {
-    if (e && e.stopPropagation) {
-      e.stopPropagation();
-      e.preventDefault();
-    }
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}/continue`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-        _notifHandled: true,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setItems((prev) => prev.map((item) => item.id === taskId ? { ...item, status: "in_progress", ...(data.task || {}) } : item));
-        publish('task:updated', { id: taskId, status: 'in_progress' });
-        publish('data:changed', { type: 'task', action: 'updated' });
-        showSuccessMessage("Task", "resumed");
-      } else {
-        notify.error(data.message || "Failed to continue task.");
-      }
-    } catch {
-      notify.error("Failed to continue task.");
-    }
-  };
-
-  const handlePause = async (e, taskId) => {
-    if (e && e.stopPropagation) {
-      e.stopPropagation();
-      e.preventDefault();
-    }
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}/pause`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ reason: "other", reason_detail: "Paused from task list" }),
-        _notifHandled: true,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setItems((prev) => prev.map((item) => item.id === taskId ? { ...item, status: "paused", ...(data.task || {}) } : item));
-        publish('task:updated', { id: taskId, status: 'paused' });
-        publish('data:changed', { type: 'task', action: 'updated' });
-        showSuccessMessage("Task", "paused");
-      } else {
-        notify.error(data?.message || data?.error || "Failed to pause task.");
-      }
-    } catch {
-      notify.error("Failed to pause task.");
-    }
-  };
-
-  const handleDelete = (e, taskId) => {
-    if (e && e.stopPropagation) {
-      e.stopPropagation();
-      e.preventDefault();
-    }
-    setDeleteTargetId(taskId);
-    setDeleteConfirmOpen(true);
-  };
-
-  const confirmDelete = async () => {
-    const taskId = deleteTargetId;
-    setDeleteConfirmOpen(false);
-    setDeleteTargetId(null);
-    if (!taskId) return;
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}`, {
-        method: "DELETE",
-        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-        _notifHandled: true,
-      });
-      if (res.ok) {
-        setItems((prev) => prev.filter((item) => String(item.id) !== String(taskId)));
-        setOrderedItems((prev) => prev.filter((item) => String(item.id) !== String(taskId)));
-        publish('task:deleted', { id: taskId });
-        publish('data:changed', { type: 'task', action: 'deleted' });
-        toast.success("Task deleted successfully");
-      } else {
-        const data = await res.json().catch(() => ({}));
-        toast.error(data.message || "Failed to delete task.");
-      }
-    } catch {
-      toast.error("Failed to delete task.");
-    }
-  };
-
-  const formatDate = (dateStr) => {
-    return formatDateTimeInline(dateStr);
-  };
-
-  const formatStatus = (status) => {
-    const map = {
-      pending: "Pending",
-      in_progress: "In Progress",
-      paused: "Paused",
-      submitted: "Submitted",
-      reopened: "Reopened",
-      approved: "Approved",
-      rejected: "Declined",
-      abandon_requested: "Abandon Requested",
-      abandoned: "Abandoned",
-    };
-    return map[status] || status;
-  };
-
   const baseItems = orderedItems.length ? orderedItems : items;
   const pendingStatuses = ["pending", "planned", "Planning", "Planned"];
-  const inProgressStatuses = ["in_progress", "In Progress", "In-progress"];
+  const inProgressStatuses = ["in_progress", "In Progress", "In-progress", "reopened", "Reopened"];
 
   const allCount = useMemo(() => baseItems.length, [baseItems]);
   const dueTodayCount = useMemo(() => baseItems.filter((i) => { const d = i.end_date ? new Date(i.end_date) : null; return d && d.toDateString() === new Date().toDateString(); }).length, [baseItems]);
@@ -428,6 +430,9 @@ const SelfTasks = () => {
         if (statusFilter === "pending") {
           return pendingStatuses.includes(item.status);
         }
+        if (statusFilter === "in_progress") {
+          return inProgressStatuses.includes(item.status);
+        }
         if (statusFilter === "transferred") {
           return item.delegation_chain && item.delegation_chain.length > 0;
         }
@@ -444,8 +449,8 @@ const SelfTasks = () => {
   const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * itemsPerPage, page * itemsPerPage);
 
   const breadcrumbs = [
-    { label: "Tasks", path: rolePath("tasks") },
-    { label: "Self Tasks" },
+    { label: t("Tasks", { defaultValue: "Tasks" }), path: rolePath("tasks") },
+    { label: t("Self Tasks", { defaultValue: "Self Tasks" }) },
   ];
 
   return (
@@ -453,18 +458,18 @@ const SelfTasks = () => {
       <Breadcrumb items={breadcrumbs} />
       <div className="Task">
         <div className="task-text">
-          <h3>Self Tasks</h3>
-          <p>Tasks you assigned to yourself</p>
+          <h3>{t("Self Tasks", { defaultValue: "Self Tasks" })}</h3>
+          <p>{t("Tasks you assigned to yourself", { defaultValue: "Tasks you assigned to yourself" })}</p>
         </div>
 
         <div className="task-btns">
           <div className="all-time">
             <select value={timeFilter} onChange={(e) => { setTimeFilter(e.target.value); setPage(1); }}>
-              <option value="">All Time</option>
-              <option value="today">Today</option>
-              <option value="7">Last 7 Days</option>
-              <option value="30">Last 30 Days</option>
-              <option value="180">Last 6 Months</option>
+              <option value="">{t("All Time", { defaultValue: "All Time" })}</option>
+              <option value="today">{t("Today", { defaultValue: "Today" })}</option>
+              <option value="7">{t("Last 7 Days", { defaultValue: "Last 7 Days" })}</option>
+              <option value="30">{t("Last 30 Days", { defaultValue: "Last 30 Days" })}</option>
+              <option value="180">{t("Last 6 Months", { defaultValue: "Last 6 Months" })}</option>
             </select>
           </div>
 
@@ -473,21 +478,21 @@ const SelfTasks = () => {
             onClick={() => setShowTaskModal({ open: true, projectId: null, id: Date.now() })}
             style={{ whiteSpace: "nowrap" }}
           >
-            + Task
+            {t("+ Task", { defaultValue: "+ Task" })}
           </button>
         </div>
       </div>
 
       <DraggableStatusBadges
         badges={[
-          { id: "", label: "All", count: allCount, className: "All" },
-          { id: "pending", label: "Pending", count: pendingCount, className: "Pending" },
-          { id: "in_progress", label: "In Progress", count: inProgressCount, className: "InProgress" },
-          { id: "submitted", label: "Submitted", count: submittedCount, className: "Submitted" },
-          { id: "approved", label: "Approved", count: approvedCount, className: "Approved" },
-          { id: "paused", label: "Paused", count: pausedCount, className: "Paused" },
-          { id: "rejected", label: "Declined", count: rejectedCount, className: "Rejected" },
-          { id: "abandoned", label: "Abandoned", count: abandonedCount, className: "Abandoned", dotColor: "#DC2626" },
+          { id: "", label: t("All", { defaultValue: "All" }), count: allCount, className: "All" },
+          { id: "pending", label: t("Pending", { defaultValue: "Pending" }), count: pendingCount, className: "Pending" },
+          { id: "in_progress", label: t("In Progress", { defaultValue: "In Progress" }), count: inProgressCount, className: "InProgress" },
+          { id: "submitted", label: t("Submitted", { defaultValue: "Submitted" }), count: submittedCount, className: "Submitted" },
+          { id: "approved", label: t("Approved", { defaultValue: "Approved" }), count: approvedCount, className: "Approved" },
+          { id: "paused", label: t("Paused", { defaultValue: "Paused" }), count: pausedCount, className: "Paused" },
+          { id: "rejected", label: t("Declined", { defaultValue: "Declined" }), count: rejectedCount, className: "Rejected" },
+          { id: "abandoned", label: t("Abandoned", { defaultValue: "Abandoned" }), count: abandonedCount, className: "Abandoned", dotColor: "#DC2626" },
         ]}
         activeStatus={statusFilter}
         onSelectStatus={selectStatusFilter}
@@ -509,27 +514,27 @@ const SelfTasks = () => {
 
       <div className="container">
         <div className="table-header-compact">
-          <div style={{ fontSize: 12, fontWeight: 600 }}>ID</div>
+          <div style={{ fontSize: 12, fontWeight: 600 }}>{t("ID", { defaultValue: "ID" })}</div>
           <div style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("title")}>
-            Task Name
+            {t("Task Name", { defaultValue: "Task Name" })}
           </div>
           <div style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("status")}>
-            Status
+            {t("Status", { defaultValue: "Status" })}
           </div>
-          <div>Progress</div>
+          <div>{t("Progress", { defaultValue: "Progress" })}</div>
           <div style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("priority")}>
-            Priority
+            {t("Priority", { defaultValue: "Priority" })}
           </div>
           <div style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("due_date")}>
-            Start & Due Date
+            {t("Start & Due Date", { defaultValue: "Start & Due Date" })}
           </div>
-          <div>Action</div>
+          <div>{t("Action", { defaultValue: "Action" })}</div>
         </div>
 
         {loading ? (
-          <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
+          <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>{t("Loading...", { defaultValue: "Loading..." })}</div>
         ) : filteredItems.length === 0 ? (
-          <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No items found</div>
+          <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>{t("No items found", { defaultValue: "No items found" })}</div>
         ) : (
           <SortableTableWrapper 
             as="div" 
@@ -567,7 +572,7 @@ const SelfTasks = () => {
                         </div>
                         <div className="progress-bar-track"><div className="progress-bar-fill" style={{ width: `${prog}%` }}></div></div>
                         <div style={{ fontSize: "12px", color: "#6b7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {item.approved_deliverables || 0}/{item.total_deliverables || 0} subtasks
+                          {t("{{approved}}/{{total}} subtasks", { approved: item.approved_deliverables || 0, total: item.total_deliverables || 0, defaultValue: `${item.approved_deliverables || 0}/${item.total_deliverables || 0} subtasks` })}
                         </div>
                       </div>
                     );
@@ -575,7 +580,7 @@ const SelfTasks = () => {
                   <div>
                     <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
                       <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
-                      {item.priority}
+                      {t(item.priority || "Medium", { defaultValue: item.priority || "Medium" })}
                     </span>
                   </div>
                   <div className="date-box">
@@ -584,19 +589,19 @@ const SelfTasks = () => {
                   <div className="col-action" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                     <button
                       className="action-icon-btn action-view action-trigger-lg"
-                      title="View Task"
+                      title={t("View Task", { defaultValue: "View Task" })}
                       onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'self-tasks' } })}
                     >
                       <IoEyeOutline size={20} />
                     </button>
                     <ActionPopover
                       trigger={
-                        <button className="action-icon-btn action-manage action-trigger-lg" title="Status Actions" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "4px", borderRadius: "6px", background: "var(--bg-hover, #f3f4f6)", color: "var(--text-primary, #374151)", border: "1px solid var(--border-color, #e5e7eb)", cursor: "pointer" }}>
+                        <button className="action-icon-btn action-manage action-trigger-lg" title={t("Status Actions", { defaultValue: "Status Actions" })} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "4px", borderRadius: "6px", background: "var(--bg-hover, #f3f4f6)", color: "var(--text-primary, #374151)", border: "1px solid var(--border-color, #e5e7eb)", cursor: "pointer" }}>
                           <Sliders size={18} />
                         </button>
                       }
                     >
-                      <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
+                      <button className="action-icon-btn action-note" title={t("Add Note", { defaultValue: "Add Note" })} onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
                       {(() => {
                         const isUserAdminOrManager = ["admin", "manager"].includes(currentUser?.role);
                         const canUserApprove = isUserAdminOrManager || item.created_by === currentUser?.id || item.is_next_approver;
@@ -605,7 +610,7 @@ const SelfTasks = () => {
                             {canUserApprove && (item.status === "submitted" || item.status === "reopened") && (
                               <button
                                 className="action-icon-btn"
-                                title="Approve Task"
+                                title={t("Approve Task", { defaultValue: "Approve Task" })}
                                 style={{ color: "#16A34A" }}
                                 onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'self-tasks' } })}
                               >
@@ -615,7 +620,7 @@ const SelfTasks = () => {
                             {canUserApprove && (item.status === "submitted" || item.status === "reopened") && (
                               <button
                                 className="action-icon-btn"
-                                title="Decline Task"
+                                title={t("Decline Task", { defaultValue: "Decline Task" })}
                                 style={{ color: "#DC2626" }}
                                 onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'self-tasks' } })}
                               >
@@ -625,7 +630,7 @@ const SelfTasks = () => {
                             {canUserApprove && (item.status === "approved" || item.status === "submitted" || item.status === "reopened" || item.status === "abandoned") && (
                               <button
                                 className="action-icon-btn"
-                                title="Reopen Task"
+                                title={t("Reopen Task", { defaultValue: "Reopen Task" })}
                                 style={{ color: "#2563EB" }}
                                 onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'self-tasks' } })}
                               >
@@ -635,7 +640,7 @@ const SelfTasks = () => {
                             {item.status !== "abandoned" && (
                               <button
                                 className="action-icon-btn"
-                                title={isUserAdminOrManager ? "Abandon Task" : "Request Abandon"}
+                                title={isUserAdminOrManager ? t("Abandon Task", { defaultValue: "Abandon Task" }) : t("Request Abandon", { defaultValue: "Request Abandon" })}
                                 style={{ color: "#F59E0B" }}
                                 onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'self-tasks' } })}
                               >
@@ -651,27 +656,27 @@ const SelfTasks = () => {
                           return (
                             <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#92400E", fontSize: "11px", fontWeight: 600, border: "1px solid #F59E0B" }}>
                               <Lock size={12} />
-                              Paused by Assigner
+                              {t("Paused by Assigner", { defaultValue: "Paused by Assigner" })}
                             </span>
                           );
                         }
                         if (item.status === "pending") {
                           return (
-                            <button className="action-icon-btn action-submit" title="Acknowledge Task" onClick={(e) => handleAcknowledge(e, item.id)}>
+                            <button className="action-icon-btn action-submit" title={t("Acknowledge Task", { defaultValue: "Acknowledge Task" })} onClick={(e) => handleAcknowledge(e, item.id)}>
                               <CheckCircle2 size={16} />
                             </button>
                           );
                         }
                         if (item.status === "paused") {
                           return (
-                            <button className="action-icon-btn action-submit" title="Continue Task" onClick={(e) => handleContinue(e, item.id)}>
+                            <button className="action-icon-btn action-submit" title={t("Continue Task", { defaultValue: "Continue Task" })} onClick={(e) => handleContinue(e, item.id)}>
                               <Play size={16} />
                             </button>
                           );
                         }
                         if (["in_progress", "submitted"].includes(item.status?.toLowerCase()) && !item.assigner_paused) {
                           return (
-                            <button className="action-icon-btn action-submit" title="Pause Task" onClick={(e) => handlePause(e, item.id)} style={{ color: "#D97706" }}>
+                            <button className="action-icon-btn action-submit" title={t("Pause Task", { defaultValue: "Pause Task" })} onClick={(e) => handlePause(e, item.id)} style={{ color: "#D97706" }}>
                               <Pause size={16} />
                             </button>
                           );
@@ -681,7 +686,7 @@ const SelfTasks = () => {
                             <div style={{ position: "relative", display: "inline-flex" }}>
                               <button 
                                 className="action-icon-btn action-submit" 
-                                title={item.pending_deliverables_count > 0 ? "Submit all subtasks first" : "Submit Task"} 
+                                title={item.pending_deliverables_count > 0 ? t("Submit all subtasks first", { defaultValue: "Submit all subtasks first" }) : t("Submit Task", { defaultValue: "Submit Task" })} 
                                 disabled={item.pending_deliverables_count > 0} 
                                 onClick={(e) => { e.stopPropagation(); !item.pending_deliverables_count && setSubmitTaskModal({ open: true, task: item }); }} 
                                 style={item.pending_deliverables_count > 0 ? { opacity: 0.4, cursor: "not-allowed" } : {}}
@@ -695,7 +700,7 @@ const SelfTasks = () => {
                       })()}
                       <button
                         className="action-icon-btn action-delete"
-                        title="Delete Task"
+                        title={t("Delete Task", { defaultValue: "Delete Task" })}
                         onClick={(e) => handleDelete(e, item.id)}
                       >
                         <Trash2 size={16} />
@@ -723,10 +728,10 @@ const SelfTasks = () => {
         isOpen={deleteConfirmOpen}
         onClose={() => { setDeleteConfirmOpen(false); setDeleteTargetId(null); }}
         onConfirm={confirmDelete}
-        title="Confirm Deletion"
-        message="Are you sure you want to delete this task? This action cannot be undone."
-        confirmText="Delete"
-        cancelText="Cancel"
+        title={t("Confirm Deletion", { defaultValue: "Confirm Deletion" })}
+        message={t("Are you sure you want to delete this task? This action cannot be undone.", { defaultValue: "Are you sure you want to delete this task? This action cannot be undone." })}
+        confirmText={t("Delete", { defaultValue: "Delete" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
         danger
       />
 

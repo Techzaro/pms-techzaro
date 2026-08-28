@@ -9,6 +9,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { authToken, rolePath, getUser, normalizeRole } from "../utils/auth";
@@ -144,6 +145,7 @@ function TypeIcon({ type }) {
 
 /** Main Notifications page — fetches, filters and renders the user's notification feed. */
 function Notifications() {
+  const { t } = useTranslation();
   const user = getUser();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -160,6 +162,34 @@ function Notifications() {
   const typeDropdownRef = useRef(null);
   const typeListRef = useRef(null);
   const lastSeenIdRef = useRef(0);
+
+  const NOTIFICATION_TYPES = [
+    { value: "", label: t("All Types", { defaultValue: "All Types" }) },
+    { value: "user_updated", label: t("Profile Updated", { defaultValue: "Profile Updated" }) },
+    { value: "project_updated", label: t("Project Updated", { defaultValue: "Project Updated" }) },
+    { value: "project_reopened", label: t("Project Reopened", { defaultValue: "Project Reopened" }) },
+    { value: "project_access_granted", label: t("Project Access Granted", { defaultValue: "Project Access Granted" }) },
+    { value: "project_access_removed", label: t("Project Access Removed", { defaultValue: "Project Access Removed" }) },
+    { value: "task_assigned", label: t("Task Assigned", { defaultValue: "Task Assigned" }) },
+    { value: "task_updated", label: t("Task Updated", { defaultValue: "Task Updated" }) },
+    { value: "task_submitted", label: t("Task Submitted", { defaultValue: "Task Submitted" }) },
+    { value: "task_completed", label: t("Task Completed", { defaultValue: "Task Completed" }) },
+    { value: "task_approved", label: t("Task Approved", { defaultValue: "Task Approved" }) },
+    { value: "task_rejected", label: t("Task Declined", { defaultValue: "Task Declined" }) },
+    { value: "task_reopened", label: t("Task Reopened", { defaultValue: "Task Reopened" }) },
+    { value: "deliverable_assigned", label: t("Subtask Assigned", { defaultValue: "Subtask Assigned" }) },
+    { value: "deliverable_updated", label: t("Subtask Updated", { defaultValue: "Subtask Updated" }) },
+    { value: "deliverable_submitted", label: t("Subtask Submitted", { defaultValue: "Subtask Submitted" }) },
+    { value: "deliverable_approved", label: t("Subtask Approved", { defaultValue: "Subtask Approved" }) },
+    { value: "deliverable_rejected", label: t("Subtask Declined", { defaultValue: "Subtask Declined" }) },
+    { value: "deliverable_reopened", label: t("Subtask Reopened", { defaultValue: "Subtask Reopened" }) },
+    { value: "deliverable_added", label: t("Subtask Added", { defaultValue: "Subtask Added" }) },
+    { value: "event_created", label: t("Event Created", { defaultValue: "Event Created" }) },
+    { value: "event_updated", label: t("Event Updated", { defaultValue: "Event Updated" }) },
+    { value: "event_cancelled", label: t("Event Cancelled", { defaultValue: "Event Cancelled" }) },
+    { value: "event_reminder", label: t("Event Reminder", { defaultValue: "Event Reminder" }) },
+    { value: "chat_message", label: t("Chat Message", { defaultValue: "Chat Message" }) },
+  ];
 
   // Desktop notification polling - shows new notifications as desktop notifications
   useEffect(() => {
@@ -219,34 +249,6 @@ function Notifications() {
     }
   }, [typeHighlightedIndex]);
 
-  const NOTIFICATION_TYPES = [
-    { value: "", label: "All Types" },
-    { value: "user_updated", label: "Profile Updated" },
-    { value: "project_updated", label: "Project Updated" },
-    { value: "project_reopened", label: "Project Reopened" },
-    { value: "project_access_granted", label: "Project Access Granted" },
-    { value: "project_access_removed", label: "Project Access Removed" },
-    { value: "task_assigned", label: "Task Assigned" },
-    { value: "task_updated", label: "Task Updated" },
-    { value: "task_submitted", label: "Task Submitted" },
-    { value: "task_completed", label: "Task Completed" },
-    { value: "task_approved", label: "Task Approved" },
-    { value: "task_rejected", label: "Task Declined" },
-    { value: "task_reopened", label: "Task Reopened" },
-    { value: "deliverable_assigned", label: "Subtask Assigned" },
-    { value: "deliverable_updated", label: "Subtask Updated" },
-    { value: "deliverable_submitted", label: "Subtask Submitted" },
-    { value: "deliverable_approved", label: "Subtask Approved" },
-    { value: "deliverable_rejected", label: "Subtask Declined" },
-    { value: "deliverable_reopened", label: "Subtask Reopened" },
-    { value: "deliverable_added", label: "Subtask Added" },
-    { value: "event_created", label: "Event Created" },
-    { value: "event_updated", label: "Event Updated" },
-    { value: "event_cancelled", label: "Event Cancelled" },
-    { value: "event_reminder", label: "Event Reminder" },
-    { value: "chat_message", label: "Chat Message" },
-  ];
-
   /**
    * Fetch notifications from the API with the given page, tab filter,
    * search query and type filter.
@@ -267,7 +269,7 @@ function Notifications() {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         skipLoader: true,
       });
-      if (!res.ok) throw new Error("Failed to fetch notifications");
+      if (!res.ok) throw new Error(t("Failed to fetch notifications", { defaultValue: "Failed to fetch notifications" }));
       const data = await res.json();
       setNotifications(data.data || []);
       setPage(data.meta?.current_page || data.current_page || 1);
@@ -278,7 +280,7 @@ function Notifications() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, search, typeFilter]);
+  }, [activeTab, search, typeFilter, t]);
 
   useEffect(() => {
     fetchNotifications(1, activeTab, search);
@@ -315,9 +317,9 @@ function Notifications() {
   const readCount = notifications.filter((n) => n.is_read).length;
 
   const tabs = [
-    { id: "all", label: `All (${total})` },
-    { id: "unread", label: `Unread (${unreadCount})` },
-    { id: "read", label: `Read (${readCount})` },
+    { id: "all", label: t(`All ({{count}})`, { count: total, defaultValue: `All (${total})` }) },
+    { id: "unread", label: t(`Unread ({{count}})`, { count: unreadCount, defaultValue: `Unread (${unreadCount})` }) },
+    { id: "read", label: t(`Read ({{count}})`, { count: readCount, defaultValue: `Read (${readCount})` }) },
   ];
 
   const filtered = notifications;
@@ -383,7 +385,7 @@ function Notifications() {
 
   return (
     <DashboardLayout hideRightSidebar={true}>
-      <Breadcrumb items={[{ label: "Notifications" }]} />
+      <Breadcrumb items={[{ label: t("Notifications", { defaultValue: "Notifications" }) }]} />
       <br />
       <div className="notif-layout">
         {/* Header - spans full width */}
@@ -398,8 +400,8 @@ function Notifications() {
               </svg>
             </div>
             <div>
-              <h1 className="notif-title">Notifications</h1>
-              <p className="notif-subtitle">Stay updated with your latest activities</p>
+              <h1 className="notif-title">{t("Notifications", { defaultValue: "Notifications" })}</h1>
+              <p className="notif-subtitle">{t("Stay updated with your latest activities", { defaultValue: "Stay updated with your latest activities" })}</p>
             </div>
           </div>
         </div>
@@ -413,7 +415,7 @@ function Notifications() {
               </svg>
               <input
                 type="text"
-                placeholder="Search by notification title or message..."
+                placeholder={t("Search by notification title or message...", { defaultValue: "Search by notification title or message..." })}
                 value={search}
                 onChange={(e) => handleSearch(e.target.value)}
               />
@@ -448,10 +450,11 @@ function Notifications() {
                       });
                     }
                   } else if (e.key === "Enter" && typeFilterOpen && typeHighlightedIndex >= 0) {
+                  } else if (e.key === "Enter" && typeFilterOpen && typeHighlightedIndex >= 0) {
                     e.preventDefault();
-                    const t = NOTIFICATION_TYPES[typeHighlightedIndex];
-                    setTypeFilter(t.value);
-                    fetchNotifications(1, activeTab, search, t.value);
+                    const tVal = NOTIFICATION_TYPES[typeHighlightedIndex];
+                    setTypeFilter(tVal.value);
+                    fetchNotifications(1, activeTab, search, tVal.value);
                     setTypeFilterOpen(false);
                   } else if (e.key === "Escape" && typeFilterOpen) {
                     e.preventDefault();
@@ -459,25 +462,25 @@ function Notifications() {
                   }
                 }}
               >
-                <span>{NOTIFICATION_TYPES.find((t) => t.value === typeFilter)?.label || "All Types"}</span>
+                <span>{NOTIFICATION_TYPES.find((t) => t.value === typeFilter)?.label || t("All Types", { defaultValue: "All Types" })}</span>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M6 9l6 6 6-6" />
                 </svg>
               </button>
               {typeFilterOpen && (
                 <div className="notif-type-list" ref={typeListRef}>
-                  {NOTIFICATION_TYPES.map((t, idx) => (
+                  {NOTIFICATION_TYPES.map((tVal, idx) => (
                     <button
-                      key={t.value}
-                      className={`notif-type-item ${typeFilter === t.value ? "notif-type-item--active" : ""} ${typeHighlightedIndex === idx ? "notif-type-item--highlighted" : ""}`}
+                      key={tVal.value}
+                      className={`notif-type-item ${typeFilter === tVal.value ? "notif-type-item--active" : ""} ${typeHighlightedIndex === idx ? "notif-type-item--highlighted" : ""}`}
                       onClick={() => {
-                        setTypeFilter(t.value);
-                        fetchNotifications(1, activeTab, search, t.value);
+                        setTypeFilter(tVal.value);
+                        fetchNotifications(1, activeTab, search, tVal.value);
                         setTypeFilterOpen(false);
                       }}
                       onMouseEnter={() => setTypeHighlightedIndex(idx)}
                     >
-                      {t.label}
+                      {tVal.label}
                     </button>
                   ))}
                 </div>
@@ -504,7 +507,7 @@ function Notifications() {
                   <polyline points="9 11 12 14 22 4" />
                   <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
                 </svg>
-                Mark all as read
+                {t("Mark all as read", { defaultValue: "Mark all as read" })}
               </button>
             )}
           </div>
@@ -516,7 +519,7 @@ function Notifications() {
             {loading ? (
               <div className="notif-empty">
                 <div className="notif-spinner"></div>
-                <p>Loading notifications...</p>
+                <p>{t("Loading notifications...", { defaultValue: "Loading notifications..." })}</p>
               </div>
             ) : error ? (
               <div className="notif-empty">
@@ -530,7 +533,7 @@ function Notifications() {
                   onClick={() => fetchNotifications(1, activeTab, search)}
                   style={{ marginTop: 8, padding: "6px 16px", border: "1px solid var(--border-color)", borderRadius: 8, background: "var(--bg-card)", cursor: "pointer", fontSize: 13 }}
                 >
-                  Try again
+                  {t("Try again", { defaultValue: "Try again" })}
                 </button>
               </div>
             ) : filtered.length === 0 ? (
@@ -539,7 +542,7 @@ function Notifications() {
                   <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
                   <path d="M13.73 21a2 2 0 0 1-3.46 0" />
                 </svg>
-                <p>No notifications found.</p>
+                <p>{t("No notifications found.", { defaultValue: "No notifications found." })}</p>
               </div>
             ) : (
               filtered.map((n) => (
@@ -570,7 +573,7 @@ function Notifications() {
                     <TypeIcon type={n.type} />
 
                     <div className="notif-content">
-                      <h4 className="notif-item-title">{n.title || n.type}</h4>
+                      <h4 className="notif-item-title">{t(n.title || n.type, { defaultValue: n.title || n.type })}</h4>
                       <p className="notif-item-desc">
                         {n.sender && !n.message.includes(n.sender.name) ? `${n.sender.name} - ` : ""}
                         {n.message}
@@ -595,17 +598,17 @@ function Notifications() {
                 disabled={page <= 1}
                 onClick={() => handlePageChange(page - 1)}
               >
-                Previous
+                {t("Previous", { defaultValue: "Previous" })}
               </button>
               <span className="notif-page-info">
-                Page {page} of {lastPage}
+                {t("Page {{page}} of {{lastPage}}", { page, lastPage, defaultValue: `Page ${page} of ${lastPage}` })}
               </span>
               <button
                 className="notif-page-btn"
                 disabled={page >= lastPage}
                 onClick={() => handlePageChange(page + 1)}
               >
-                Next
+                {t("Next", { defaultValue: "Next" })}
               </button>
             </div>
           )}
@@ -614,10 +617,10 @@ function Notifications() {
          {/* Account Status Sidebar */}
         <aside className="notif-sidebar">
           <div className="notif-sidebar-card">
-            <h3 className="notif-sidebar-title">Account Status</h3>
+            <h3 className="notif-sidebar-title">{t("Account Status", { defaultValue: "Account Status" })}</h3>
             <div className="notif-sidebar-status">
               <span className="notif-sidebar-dot"></span>
-              <span className="notif-sidebar-status-text">Active</span>
+              <span className="notif-sidebar-status-text">{t("Active", { defaultValue: "Active" })}</span>
             </div>
             <div className="notif-sidebar-info">
               <div className="notif-sidebar-row">
@@ -626,8 +629,8 @@ function Notifications() {
                   <circle cx="12" cy="7" r="4" />
                 </svg>
                 <div>
-                  <span className="notif-sidebar-label">Account Type</span>
-                  <span className="notif-sidebar-value">{user?.role ? normalizeRole(user.role) : "Employee"}</span>
+                  <span className="notif-sidebar-label">{t("Account Type", { defaultValue: "Account Type" })}</span>
+                  <span className="notif-sidebar-value">{user?.role ? t(normalizeRole(user.role), { defaultValue: normalizeRole(user.role) }) : t("Employee", { defaultValue: "Employee" })}</span>
                 </div>
               </div>
               <div className="notif-sidebar-row">
@@ -636,8 +639,8 @@ function Notifications() {
                   <polyline points="12 6 12 12 16 14" />
                 </svg>
                 <div>
-                  <span className="notif-sidebar-label">Last Login</span>
-                  <span className="notif-sidebar-value">Today</span>
+                  <span className="notif-sidebar-label">{t("Last Login", { defaultValue: "Last Login" })}</span>
+                  <span className="notif-sidebar-value">{t("Today", { defaultValue: "Today" })}</span>
                 </div>
               </div>
             </div>

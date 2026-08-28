@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Save } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import DashboardLayout from '../components/layout/DashboardLayout';
@@ -6,15 +7,17 @@ import Breadcrumb from '../components/Breadcrumb';
 import { useOrgBranding, useUpdateBranding } from '../hooks/useOrgBranding';
 
 export default function BrandingPage() {
+  const { t } = useTranslation();
   return (
     <DashboardLayout>
-      <Breadcrumb items={[{ label: 'Branding' }]} />
+      <Breadcrumb items={[{ label: t('Branding', { defaultValue: 'Branding' }) }]} />
       <BrandingSection />
     </DashboardLayout>
   );
 }
 
 function BrandingSection() {
+  const { t } = useTranslation();
   const { data: branding, isLoading } = useOrgBranding();
   const updateBranding = useUpdateBranding();
 
@@ -112,7 +115,7 @@ function BrandingSection() {
         <div className="flex-1 space-y-5">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1">
-              <label style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "8px" }}>Subtitle Text</label>
+              <label style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "8px" }}>{t('Subtitle Text', { defaultValue: 'Subtitle Text' })}</label>
               <input
                 type="text"
                 value={subtitle}
@@ -131,12 +134,12 @@ function BrandingSection() {
                 }}
                 onFocus={(e) => e.target.style.borderColor = "var(--color-primary)"}
                 onBlur={(e) => e.target.style.borderColor = "var(--border-light)"}
-                placeholder="e.g. PMS Portal"
+                placeholder={t("e.g. PMS Portal", { defaultValue: "e.g. PMS Portal" })}
               />
             </div>
 
             <div className="flex-1">
-              <label style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "8px" }}>Organization Name</label>
+              <label style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "8px" }}>{t('Organization Name', { defaultValue: 'Organization Name' })}</label>
               <input
                 type="text"
                 value={orgName}
@@ -155,13 +158,13 @@ function BrandingSection() {
                 }}
                 onFocus={(e) => e.target.style.borderColor = "var(--color-primary)"}
                 onBlur={(e) => e.target.style.borderColor = "var(--border-light)"}
-                placeholder="e.g. TechXaro, Foxstax"
+                placeholder={t("e.g. TechXaro, Foxstax", { defaultValue: "e.g. TechXaro, Foxstax" })}
               />
             </div>
           </div>
 
           <div>
-            <label style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-secondary)" }}>Organization Logo</label>
+            <label style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-secondary)" }}>{t('Organization Logo', { defaultValue: 'Organization Logo' })}</label>
             <input
               ref={fileInputRef}
               type="file"
@@ -193,7 +196,7 @@ function BrandingSection() {
                   <polyline points="17 8 12 3 7 8" />
                   <line x1="12" y1="3" x2="12" y2="15" />
                 </svg>
-                {logoFile ? 'Change Logo' : 'Upload Logo'}
+                {logoFile ? t('Change Logo', { defaultValue: 'Change Logo' }) : t('Upload Logo', { defaultValue: 'Upload Logo' })}
               </button>
               {logoPreview && (
                 <button
@@ -217,17 +220,17 @@ function BrandingSection() {
                     <polyline points="3 6 5 6 21 6" />
                     <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                   </svg>
-                  Remove
+                  {t('Remove', { defaultValue: 'Remove' })}
                 </button>
               )}
             </div>
-            <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "6px" }}>JPG, PNG, WebP or SVG. Max 2MB.</p>
+            <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "6px" }}>{t('JPG, PNG, WebP or SVG. Max 2MB.', { defaultValue: 'JPG, PNG, WebP or SVG. Max 2MB.' })}</p>
           </div>
         </div>
 
         {/* Right side - Preview */}
         <div className="flex-shrink-0">
-          <p style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "10px" }}>Preview</p>
+          <p style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "10px" }}>{t('Preview', { defaultValue: 'Preview' })}</p>
           <div style={{
             display: "flex",
             alignItems: "center",
@@ -255,8 +258,8 @@ function BrandingSection() {
               )}
             </div>
             <div>
-              <h4 style={{ margin: 0, fontSize: "14px", fontWeight: 700, color: "var(--text-heading)", lineHeight: 1.2 }}>{subtitle || 'PMS Portal'}</h4>
-              <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>{orgName || 'Organization'}</span>
+              <h4 style={{ margin: 0, fontSize: "14px", fontWeight: 700, color: "var(--text-heading)", lineHeight: 1.2 }}>{subtitle || t('PMS Portal', { defaultValue: 'PMS Portal' })}</h4>
+              <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>{orgName || t('Organization', { defaultValue: 'Organization' })}</span>
             </div>
           </div>
         </div>
@@ -284,7 +287,7 @@ function BrandingSection() {
           }}
         >
           <Save className="w-4 h-4" />
-          {updateBranding.isPending ? 'Saving...' : 'Save Branding'}
+          {updateBranding.isPending ? t('Saving...', { defaultValue: 'Saving...' }) : t('Save Branding', { defaultValue: 'Save Branding' })}
         </button>
       </div>
     </div>

@@ -9,12 +9,14 @@
  * - Rendered via React portal to body
  */
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import "../pages/ExportReport.css";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import { getUserTimezone, formatLocalDate, formatLocalTime } from "../utils/timezoneUtils";
 
 /** Color palette for user avatar backgrounds */
 const AVATAR_COLORS = ["#f59e0b", "#3b82f6", "#10b981", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316"];
@@ -55,6 +57,7 @@ function formatStatus(status) {
  * report preview, and PDF generation.
  */
 function ExportReport({ isOpen, onClose, summary = {}, users = [] }) {
+  const { t } = useTranslation();
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
   useEscapeKey(true, handleClose);
   const [showReview, setShowReview] = useState(false);
@@ -63,15 +66,15 @@ function ExportReport({ isOpen, onClose, summary = {}, users = [] }) {
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
 
-  const now = new Date();
-  const genDate = now.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-  const genTime = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+  const userTz = getUserTimezone();
+  const genDate = formatLocalDate(new Date().toISOString(), userTz);
+  const genTime = formatLocalTime(new Date().toISOString(), userTz);
 
   const cardData = [
-    { key: "total_assigned", label: "Total Assigned", value: summary?.total_assigned ?? 0, color: "var(--color-primary)", bg: "#EEF2FF" },
-    { key: "approved", label: "Approved", value: summary?.approved ?? 0, color: "#22C55E", bg: "#ECFDF5" },
-    { key: "pending", label: "Pending", value: summary?.pending ?? 0, color: "#F59E0B", bg: "#FEF3C7" },
-    { key: "overdue", label: "Overdue", value: summary?.overdue ?? 0, color: "#EF4444", bg: "#FEF2F2" },
+    { key: "total_assigned", label: t("Total Assigned", { defaultValue: "Total Assigned" }), value: summary?.total_assigned ?? 0, color: "var(--color-primary)", bg: "#EEF2FF", sub: t("All tasks assigned", { defaultValue: "All tasks assigned" }) },
+    { key: "approved", label: t("Approved", { defaultValue: "Approved" }), value: summary?.approved ?? 0, color: "#22C55E", bg: "#ECFDF5", sub: t("Tasks completed", { defaultValue: "Tasks completed" }) },
+    { key: "pending", label: t("Pending", { defaultValue: "Pending" }), value: summary?.pending ?? 0, color: "#F59E0B", bg: "#FEF3C7", sub: t("Tasks in progress", { defaultValue: "Tasks in progress" }) },
+    { key: "overdue", label: t("Overdue", { defaultValue: "Overdue" }), value: summary?.overdue ?? 0, color: "#EF4444", bg: "#FEF2F2", sub: t("Require attention", { defaultValue: "Require attention" }) },
   ];
 
   const formatDateShort = (d) => {
@@ -119,8 +122,7 @@ function ExportReport({ isOpen, onClose, summary = {}, users = [] }) {
         doc.text(String(c.value), cx + 18, y + 16);
         doc.setFontSize(5); doc.setFont("helvetica", "normal");
         doc.setTextColor(156, 163, 175);
-        const subs = { total_assigned: "All tasks assigned", approved: "Tasks completed", pending: "Tasks in progress", overdue: "Require attention" };
-        doc.text(subs[c.key], cx + cW / 2, y + 20, { align: "center" });
+        doc.text(c.sub, cx + cW / 2, y + 20, { align: "center" });
       });
       y += 30;
 
@@ -158,8 +160,10 @@ function ExportReport({ isOpen, onClose, summary = {}, users = [] }) {
           6: { cellWidth: 20, halign: "center" },
         },
         didParseCell(data) {
-          if (data.section === "body" && data.column.index === 1) data.cell.styles.fontStyle = "bold";
-          if (data.section === "body" && data.column.index >= 3) data.cell.styles.fontStyle = "bold";
+          if (data.section === "body") {
+            if (data.column.index === 1) data.cell.styles.fontStyle = "bold";
+            if (data.column.index >= 3) data.cell.styles.fontStyle = "bold";
+          }
         },
       });
 
@@ -177,8 +181,8 @@ function ExportReport({ isOpen, onClose, summary = {}, users = [] }) {
       doc.setFontSize(4.5); doc.setFont("helvetica", "normal"); doc.setTextColor(156, 163, 175);
       doc.text("PMS Portal", M + 8.5, fY + 7.5);
       doc.text(`Generated Date:   ${genDate}`, M + 38, fY + 4);
-      doc.text(`Generated Time:   ${genTime}`, M + 38, fY + 7.5);
-      doc.text("Report Type:  Performance Report", PW - M - 42, fY + 4);
+      doc.text(`Generated Time:   ${genTime} (${userTz})`, M + 38, fY + 7.5);
+      doc.text(`Timezone: ${userTz} | Report: Performance Report`, PW - M - 60, fY + 4);
       doc.text("Page 1 of 1", PW - M, fY + 7.5, { align: "right" });
 
       doc.save("Performance-Report.pdf");
@@ -199,8 +203,8 @@ function ExportReport({ isOpen, onClose, summary = {}, users = [] }) {
           <div className="er-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 500 }}>
             <div className="er-header">
               <div>
-                <h2>Export Report</h2>
-                <p>Review and export your performance report.</p>
+                <h2>{t("Export Report", { defaultValue: "Export Report" })}</h2>
+                <p>{t("Review and export your performance report.", { defaultValue: "Review and export your performance report." })}</p>
               </div>
                <button className="er-close-btn" onClick={handleClose}>
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -209,14 +213,14 @@ function ExportReport({ isOpen, onClose, summary = {}, users = [] }) {
               </button>
             </div>
             <div className="er-section">
-              <h3>Timeline</h3>
+              <h3>{t("Timeline", { defaultValue: "Timeline" })}</h3>
               <div className="er-date-buttons" style={{ marginBottom: 12 }}>
                 {[
-                  { value: "all", label: "All Time" },
-                  { value: "today", label: "Today" },
-                  { value: "week", label: "This Week" },
-                  { value: "month", label: "This Month" },
-                  { value: "custom", label: "Custom Range" },
+                  { value: "all", label: t("All Time", { defaultValue: "All Time" }) },
+                  { value: "today", label: t("Today", { defaultValue: "Today" }) },
+                  { value: "week", label: t("This Week", { defaultValue: "This Week" }) },
+                  { value: "month", label: t("This Month", { defaultValue: "This Month" }) },
+                  { value: "custom", label: t("Custom Range", { defaultValue: "Custom Range" }) },
                 ].map((opt) => (
                   <button key={opt.value} className={`er-date-btn ${timeRange === opt.value ? "active" : ""}`} onClick={() => { setTimeRange(opt.value); setIsDirty(true); }}>
                     {opt.label}
@@ -233,12 +237,12 @@ function ExportReport({ isOpen, onClose, summary = {}, users = [] }) {
               )}
             </div>
             <div className="er-footer">
-               <button className="er-cancel-btn" onClick={handleClose}>Cancel</button>
+               <button className="er-cancel-btn" onClick={handleClose}>{t("Cancel", { defaultValue: "Cancel" })}</button>
               <button className="er-export-btn" onClick={() => setShowReview(true)}>
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M8 2v8M4 6l4 4 4-4M2 14h12" />
                 </svg>
-                Report Review
+                {t("Report Review", { defaultValue: "Report Review" })}
               </button>
             </div>
           </div>
@@ -268,7 +272,7 @@ function ExportReport({ isOpen, onClose, summary = {}, users = [] }) {
                   </div>
                 </div>
                 <div className="erm-header-center">
-                  <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>PERFORMANCE REPORT</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{t("PERFORMANCE REPORT", { defaultValue: "PERFORMANCE REPORT" })}</span>
                 </div>
               </div>
 
@@ -284,7 +288,7 @@ function ExportReport({ isOpen, onClose, summary = {}, users = [] }) {
                     </div>
                     <div style={{ fontSize: 26, fontWeight: 700, color: c.color, marginTop: 4 }}>{c.value}</div>
                     <div style={{ fontSize: 8, color: "var(--text-muted)", marginTop: 2 }}>
-                      {c.key === "total_assigned" ? "All tasks assigned" : c.key === "approved" ? "Tasks completed" : c.key === "pending" ? "Tasks in progress" : "Require attention"}
+                      {c.sub}
                     </div>
                   </div>
                 ))}
@@ -292,28 +296,36 @@ function ExportReport({ isOpen, onClose, summary = {}, users = [] }) {
 
               {/* USER PERFORMANCE TABLE */}
               <div className="erm-table-section">
-                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>USER PERFORMANCE</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>{t("USER PERFORMANCE", { defaultValue: "USER PERFORMANCE" })}</div>
                 <div className="erm-table-wrapper">
                   <table className="erm-table">
                     <thead>
                       <tr>
-                        {["#", "User", "Role", "Assigned", "Completed", "Pending", "Overdue"].map(h => (
-                          <th key={h} style={{ textAlign: h === "#" ? "center" : "left" }}>{h}</th>
+                        {[
+                          { key: "#", label: "#" },
+                          { key: "User", label: t("User", { defaultValue: "User" }) },
+                          { key: "Role", label: t("Role", { defaultValue: "Role" }) },
+                          { key: "Assigned", label: t("Assigned", { defaultValue: "Assigned" }) },
+                          { key: "Completed", label: t("Completed", { defaultValue: "Completed" }) },
+                          { key: "Pending", label: t("Pending", { defaultValue: "Pending" }) },
+                          { key: "Overdue", label: t("Overdue", { defaultValue: "Overdue" }) },
+                        ].map(h => (
+                          <th key={h.key} style={{ textAlign: h.key === "#" ? "center" : "left" }}>{h.label}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {(users || []).length === 0 ? (
-                        <tr><td colSpan={7} style={{ textAlign: "center", padding: 20, color: "var(--text-muted)" }}>No data</td></tr>
+                        <tr><td colSpan={7} style={{ textAlign: "center", padding: 20, color: "var(--text-muted)" }}>{t("No data", { defaultValue: "No data" })}</td></tr>
                       ) : users.map((u, i) => (
                         <tr key={u.id} style={{ borderBottom: "1px solid var(--border-light)", background: i % 2 ? "var(--bg-hover)" : "var(--bg-card)" }}>
                           <td data-label="#" style={{ textAlign: "center", color: "var(--text-secondary)" }}>{i + 1}</td>
-                          <td data-label="User" style={{ fontWeight: 600, color: "var(--text-heading)" }}>{u.name || "-"}</td>
-                          <td data-label="Role" style={{ color: "var(--text-dark)" }}>{ROLE_LABEL[u.role] || u.role || "-"}</td>
-                          <td data-label="Assigned" style={{ fontWeight: 600, color: "var(--color-primary)" }}>{u.assigned ?? 0}</td>
-                          <td data-label="Completed" style={{ fontWeight: 600, color: "#22c55e" }}>{u.completed ?? 0}</td>
-                          <td data-label="Pending" style={{ fontWeight: 600, color: "#f59e0b" }}>{u.pending ?? 0}</td>
-                          <td data-label="Overdue" style={{ fontWeight: 600, color: "#ef4444" }}>{u.overdue ?? 0}</td>
+                          <td data-label={t("User", { defaultValue: "User" })} style={{ fontWeight: 600, color: "var(--text-heading)" }}>{u.name || "-"}</td>
+                          <td data-label={t("Role", { defaultValue: "Role" })} style={{ color: "var(--text-dark)" }}>{ROLE_LABEL[u.role] ? t(ROLE_LABEL[u.role], { defaultValue: ROLE_LABEL[u.role] }) : u.role || "-"}</td>
+                          <td data-label={t("Assigned", { defaultValue: "Assigned" })} style={{ fontWeight: 600, color: "var(--color-primary)" }}>{u.assigned ?? 0}</td>
+                          <td data-label={t("Completed", { defaultValue: "Completed" })} style={{ fontWeight: 600, color: "#22c55e" }}>{u.completed ?? 0}</td>
+                          <td data-label={t("Pending", { defaultValue: "Pending" })} style={{ fontWeight: 600, color: "#f59e0b" }}>{u.pending ?? 0}</td>
+                          <td data-label={t("Overdue", { defaultValue: "Overdue" })} style={{ fontWeight: 600, color: "#ef4444" }}>{u.overdue ?? 0}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -330,18 +342,18 @@ function ExportReport({ isOpen, onClose, summary = {}, users = [] }) {
                   <span style={{ fontWeight: 600, color: "var(--text-secondary)" }}>Techxaro</span>
                   <span>PMS Portal</span>
                 </div>
-                <div>Generated Date:  {genDate} | Generated Time:  {genTime}</div>
-                <div>Report Type:  Performance Report</div>
+                <div>{t("Generated Date: {{date}} | Generated Time: {{time}} ({{tz}})", { date: genDate, time: genTime, tz: userTz, defaultValue: `Generated Date: ${genDate} | Generated Time: ${genTime} (${userTz})` })}</div>
+                <div>{t("Timezone: {{tz}} | Report Type: Performance Report", { tz: userTz, defaultValue: `Timezone: ${userTz} | Report Type: Performance Report` })}</div>
               </div>
 
               {/* ACTIONS */}
               <div className="erm-actions">
-                <button className="er-cancel-btn" onClick={() => setShowReview(false)}>Back</button>
+                <button className="er-cancel-btn" onClick={() => setShowReview(false)}>{t("Back", { defaultValue: "Back" })}</button>
                 <button className="er-export-btn" onClick={generatePDF} disabled={generating}>
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M8 2v8M4 6l4 4 4-4M2 14h12" />
                   </svg>
-                  {generating ? "Generating..." : "Export PDF"}
+                  {generating ? t("Generating...", { defaultValue: "Generating..." }) : t("Export PDF", { defaultValue: "Export PDF" })}
                 </button>
               </div>
             </div>
