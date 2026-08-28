@@ -1,7 +1,32 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { MessageSquare, Building2, Circle, Clock, CheckCircle, X, Loader2, Send, ArrowLeft } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { MessageSquare, Building2, Circle, Clock, CheckCircle, X, Loader2, Send, ArrowLeft, FileText, Star, ExternalLink, LayoutGrid, List } from 'lucide-react';
+import { MdPerson, MdTimeline } from 'react-icons/md';
 import { api } from './api/superAdminApi';
+import DOMPurify from 'dompurify';
+import '../FeedbackCenter.css';
+
+function parseMarkdown(text) {
+  if (!text) return '';
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/---/g, '<hr style="border:none;border-top:1px solid var(--border-light);margin:12px 0;" />');
+}
+
+function cleanSubject(subject) {
+  if (!subject) return '';
+  return subject.replace(/^\[Feedback\]\s*/i, '');
+}
+
+const STATUS_OPTIONS = [
+  'New', 'Under Review', 'Accepted', 'Planned', 'In Development', 'Testing', 'Resolved', 'Closed', 'Rejected',
+];
+
+const STATUS_TO_FILTER = {
+  'New': 'open', 'Under Review': 'under_review', 'Accepted': 'accepted',
+  'Planned': 'planned', 'In Development': 'in_development', 'Testing': 'testing',
+  'Resolved': 'resolved', 'Closed': 'closed', 'Rejected': 'rejected',
+};
 
 const PRIORITY_MAP = {
   low: { label: 'Low', color: 'var(--text-muted)', bg: 'var(--bg-hover)' },
@@ -12,15 +37,21 @@ const PRIORITY_MAP = {
 
 const STATUS_MAP = {
   open: { label: 'Open', color: 'var(--color-success)', bg: 'rgba(16,185,129,0.1)', icon: Circle },
-  pending: { label: 'Pending', color: 'var(--color-warning)', bg: 'rgba(245,158,11,0.1)', icon: Clock },
+  under_review: { label: 'Under Review', color: '#8b5cf6', bg: 'rgba(139,92,246,0.1)', icon: Clock },
+  accepted: { label: 'Accepted', color: 'var(--color-success)', bg: 'rgba(16,185,129,0.1)', icon: CheckCircle },
+  planned: { label: 'Planned', color: 'var(--color-blue)', bg: 'rgba(59,130,246,0.1)', icon: Clock },
+  in_development: { label: 'In Development', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', icon: Clock },
+  testing: { label: 'Testing', color: '#6366f1', bg: 'rgba(99,102,241,0.1)', icon: Clock },
   resolved: { label: 'Resolved', color: 'var(--color-blue)', bg: 'rgba(59,130,246,0.1)', icon: CheckCircle },
   closed: { label: 'Closed', color: 'var(--text-muted)', bg: 'var(--bg-hover)', icon: X },
+  rejected: { label: 'Rejected', color: 'var(--color-danger)', bg: 'rgba(239,68,68,0.1)', icon: X },
 };
 
 export default function SuperSupportPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [orgs, setOrgs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedOrg, setSelectedOrg] = useState(null);
+  const [selectedOrgId, setSelectedOrgId] = useState(() => searchParams.get('org'));
   const [tickets, setTickets] = useState([]);
   const [ticketLoading, setTicketLoading] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState(null);
@@ -28,24 +59,41 @@ export default function SuperSupportPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
+  const [filterStatus, setFilterStatus] = useState('');
+  const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [priorityFilter, setPriorityFilter] = useState('');
+  const [dateStart, setDateStart] = useState('');
+  const [dateEnd, setDateEnd] = useState('');
+  const [viewMode, setViewMode] = useState('cards');
+  const [orgCounts, setOrgCounts] = useState({});
+  const [confirmStatus, setConfirmStatus] = useState(null);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const chatEndRef = useRef(null);
+
+  const ticketIdFromUrl = searchParams.get('ticket');
+
+  const updateUrl = useCallback((orgId, ticketId) => {
+    setSearchParams(prev => {
+      const params = new URLSearchParams(prev);
+      if (orgId) params.set('org', orgId); else params.delete('org');
+      if (ticketId) params.set('ticket', ticketId); else params.delete('ticket');
+      return params;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  useEffect(() => {
+    const el = chatEndRef.current?.parentElement;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [ticketMessages]);
+  const [globalCounts, setGlobalCounts] = useState({});
   const navigate = useNavigate();
 
   useEffect(() => {
     async function load() {
       try {
         const res = await api.getOrganizations();
-        const orgList = res.data || [];
-        const enriched = await Promise.all(
-          orgList.map(async (org) => {
-            try {
-              const support = await api.getOrgSupportTickets(org.id);
-              return { ...org, support };
-            } catch {
-              return { ...org, support: { tickets: [], counts: {} } };
-            }
-          })
-        );
-        setOrgs(enriched);
+        setOrgs(res.data || []);
       } catch (e) {
         console.error(e);
       } finally {
@@ -55,14 +103,32 @@ export default function SuperSupportPage() {
     load();
   }, []);
 
-  async function handleSelectOrg(org) {
-    setSelectedOrg(org);
+  useEffect(() => {
+    fetchFeedbackTickets();
+  }, [selectedOrgId, filterStatus, search, typeFilter, priorityFilter, dateStart, dateEnd]);
+
+  useEffect(() => {
+    if (ticketIdFromUrl && tickets.length > 0 && !selectedTicket) {
+      const match = tickets.find(t => String(t.id) === String(ticketIdFromUrl));
+      if (match) handleOpenTicket(match);
+    }
+  }, [ticketIdFromUrl, tickets]);
+
+  async function fetchFeedbackTickets() {
     setTicketLoading(true);
-    setSelectedTicket(null);
-    setTicketMessages([]);
     try {
-      const res = await api.getOrgSupportTickets(org.id);
-      setTickets(res.tickets || []);
+      const params = {};
+      if (filterStatus) params.status = STATUS_TO_FILTER[filterStatus] || filterStatus;
+      if (selectedOrgId) params.organization_id = selectedOrgId;
+      if (search) params.search = search;
+      if (typeFilter) params.feedback_type = typeFilter;
+      if (priorityFilter) params.priority = priorityFilter;
+      if (dateStart) params.date_start = dateStart;
+      if (dateEnd) params.date_end = dateEnd;
+      const res = await api.getFeedbackTickets(params);
+      setTickets(res.data || []);
+      setGlobalCounts(res.counts || {});
+      if (res.org_counts) setOrgCounts(res.org_counts);
     } catch (e) {
       console.error(e);
     } finally {
@@ -73,8 +139,11 @@ export default function SuperSupportPage() {
   async function handleOpenTicket(ticket) {
     setSelectedTicket(ticket);
     setDetailLoading(true);
+    const orgId = selectedOrgId || ticket.organization_id || ticket.organization?.id;
+    if (orgId && !selectedOrgId) setSelectedOrgId(String(orgId));
+    updateUrl(orgId, ticket.id);
     try {
-      const res = await api.getOrgSupportTicketDetail(selectedOrg.id, ticket.id);
+      const res = await api.getFeedbackTicketDetail(ticket.id);
       setTicketMessages(res.messages || []);
       setSelectedTicket(res.ticket || ticket);
     } catch (e) {
@@ -84,15 +153,26 @@ export default function SuperSupportPage() {
     }
   }
 
+  useEffect(() => {
+    if (!selectedTicket) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await api.getFeedbackTicketDetail(selectedTicket.id);
+        setTicketMessages(res.messages || []);
+        setSelectedTicket(prev => ({ ...prev, ...(res.ticket || {}) }));
+      } catch (e) {}
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [selectedTicket?.id]);
+
   async function handleReply() {
     if (!replyText.trim() || !selectedTicket) return;
     setSendingReply(true);
     try {
-      await api.replyOrgSupportTicket(selectedOrg.id, selectedTicket.id, replyText);
+      await api.replyFeedbackTicket(selectedTicket.id, replyText);
       setReplyText('');
       handleOpenTicket(selectedTicket);
-      const res = await api.getOrgSupportTickets(selectedOrg.id);
-      setTickets(res.tickets || []);
+      fetchFeedbackTickets();
     } catch (e) {
       console.error(e);
     } finally {
@@ -102,15 +182,44 @@ export default function SuperSupportPage() {
 
   async function handleCloseTicket() {
     if (!selectedTicket) return;
+    setConfirmClose(true);
+  }
+
+  async function confirmCloseTicket() {
+    if (!selectedTicket) return;
+    setConfirmClose(false);
     try {
-      await api.closeOrgSupportTicket(selectedOrg.id, selectedTicket.id);
+      await api.closeFeedbackTicket(selectedTicket.id);
       handleOpenTicket(selectedTicket);
-      const res = await api.getOrgSupportTickets(selectedOrg.id);
-      setTickets(res.tickets || []);
+      fetchFeedbackTickets();
     } catch (e) {
       console.error(e);
     }
   }
+
+  async function handleStatusChange(newStatus) {
+    if (!selectedTicket || newStatus === selectedTicket.status) return;
+    setConfirmStatus(newStatus);
+  }
+
+  async function confirmStatusChange() {
+    if (!selectedTicket || !confirmStatus) return;
+    const newStatus = confirmStatus;
+    setConfirmStatus(null);
+    try {
+      await api.updateFeedbackTicketStatus(selectedTicket.id, newStatus);
+      handleOpenTicket(selectedTicket);
+      fetchFeedbackTickets();
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  function getOrgFeedbackCounts(orgId) {
+    return orgCounts[orgId] || { open: 0, under_review: 0, accepted: 0, planned: 0, in_development: 0, testing: 0, resolved: 0, closed: 0, rejected: 0, total: 0 };
+  }
+
+  const selectedOrg = selectedOrgId ? orgs.find(o => o.id === selectedOrgId) : null;
 
   if (loading) {
     return (
@@ -121,162 +230,610 @@ export default function SuperSupportPage() {
     );
   }
 
-  // Ticket Detail View
+  // Feedback Ticket Detail View
   if (selectedTicket) {
-    const stCfg = STATUS_MAP[selectedTicket.status] || STATUS_MAP.open;
-    const prCfg = PRIORITY_MAP[selectedTicket.priority] || PRIORITY_MAP.medium;
+    const metadata = selectedTicket.feedback_metadata || {};
+    const statusLogs = (ticketMessages || []).filter((msg) => {
+      const d = (msg.message || "").toLowerCase();
+      return d.includes("status changed") || d.includes("status set");
+    });
+
     return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-3">
-          <button onClick={() => { setSelectedTicket(null); setTicketMessages([]); }} className="p-2 rounded-lg" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-light)' }}>
-            <ArrowLeft className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
-          </button>
-          <div className="flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-lg font-bold" style={{ color: 'var(--text-heading)' }}>{selectedTicket.subject}</h2>
-              <span className="px-2 py-0.5 text-xs font-medium rounded-full" style={{ background: stCfg.bg, color: stCfg.color }}>{stCfg.label}</span>
-              <span className="px-2 py-0.5 text-xs font-medium rounded-full" style={{ background: prCfg.bg, color: prCfg.color }}>{prCfg.label}</span>
-            </div>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{selectedTicket.ticket_number} · {selectedTicket.category} · {selectedOrg?.name}</p>
-          </div>
-          {selectedTicket.status !== 'closed' && (
-            <button onClick={handleCloseTicket} className="px-3 py-1.5 text-xs font-medium rounded-lg" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-light)', color: 'var(--text-secondary)' }}>Close Ticket</button>
-          )}
-        </div>
-
-        <div className="rounded-xl p-5 shadow-sm space-y-3 max-h-96 overflow-y-auto" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-light)' }}>
-          <div className="max-w-3/4 p-3 rounded-lg" style={{ background: 'var(--color-primary-bg)' }}>
-            <p className="text-sm" style={{ color: 'var(--text-dark)' }}>{selectedTicket.message}</p>
-            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{selectedTicket.user?.name || 'User'} · {new Date(selectedTicket.created_at).toLocaleString()}</p>
-          </div>
-
-          {detailLoading ? (
-            <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin" style={{ color: 'var(--color-primary)' }} /></div>
-          ) : ticketMessages.map((msg) => {
-            const isOrg = msg.sender_type === 'organization';
-            return (
-              <div key={msg.id} className={`max-w-3/4 p-3 rounded-lg ${isOrg ? '' : 'ml-auto'}`} style={{
-                background: isOrg ? 'var(--color-primary-bg)' : 'var(--bg-hover)',
-                border: isOrg ? 'none' : '1px solid var(--border-light)',
-              }}>
-                <p className="text-sm" style={{ color: 'var(--text-dark)' }}>{msg.message}</p>
-                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{isOrg ? (msg.user?.name || 'User') : 'Support'} · {new Date(msg.created_at).toLocaleString()}</p>
-              </div>
-            );
-          })}
-        </div>
-
-        {selectedTicket.status !== 'closed' && (
-          <div className="flex gap-2">
-            <input type="text" value={replyText} onChange={(e) => setReplyText(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleReply()}
-              placeholder="Type your reply..."
-              className="flex-1 px-3 py-2 rounded-lg text-sm" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-light)', color: 'var(--text-dark)' }} />
-            <button onClick={handleReply} disabled={!replyText.trim() || sendingReply}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium flex items-center gap-1">
-              <Send className="w-4 h-4" />
+      <div className="fbc-page">
+        <div className="fbc-detail-page">
+          <div className="fbc-detail-page-header">
+            <button onClick={() => { setSelectedTicket(null); setTicketMessages([]); updateUrl(selectedOrgId, null); }} className="fb-btn-cancel">
+              <ArrowLeft size={18} />
             </button>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
+              <h3 style={{ margin: 0, color: "#0f172a", whiteSpace: "nowrap" }}>
+                <span style={{ fontSize: "1rem", fontWeight: 700 }}>Feedback</span>
+                <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "#64748b", marginLeft: 8 }}>{selectedTicket.feedback_reference_number || selectedTicket.ticket_number}</span>
+              </h3>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+              <select
+                value={selectedTicket.status}
+                onChange={(e) => handleStatusChange(e.target.value)}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 6,
+                  fontSize: "0.78rem",
+                  fontWeight: 600,
+                  border: "1px solid var(--border-light)",
+                  cursor: "pointer",
+                  outline: "none",
+                  background: STATUS_MAP[selectedTicket.status]?.bg || '#f1f5f9',
+                  color: STATUS_MAP[selectedTicket.status]?.color || '#475569',
+                }}
+              >
+                <option value="open">Open</option>
+                <option value="under_review">Under Review</option>
+                <option value="accepted">Accepted</option>
+                <option value="planned">Planned</option>
+                <option value="in_development">In Development</option>
+                <option value="testing">Testing</option>
+                <option value="resolved">Resolved</option>
+                <option value="closed">Closed</option>
+                <option value="rejected">Rejected</option>
+              </select>
+              {selectedTicket.status !== 'closed' && (
+                <button
+                  onClick={handleCloseTicket}
+                  style={{
+                    padding: "6px 14px",
+                    borderRadius: 6,
+                    fontSize: "0.78rem",
+                    fontWeight: 600,
+                    border: "none",
+                    background: "#3b82f6",
+                    color: "#fff",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Close Ticket
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="fbc-detail-two-col">
+            {/* LEFT — Main Content */}
+            <div className="fbc-detail-left">
+              {metadata.rating && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, background: "#fffbe6", border: "1px solid #ffe58f", padding: "10px 14px", borderRadius: 8 }}>
+                  <strong style={{ color: "#873800", fontSize: "0.88rem" }}>Feature Rating:</strong>
+                  <div style={{ color: "#faad14", fontSize: "1.2rem", display: "flex", gap: 2 }}>
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <span key={s} style={{ color: s <= metadata.rating ? "#faad14" : "#d9d9d9" }}>★</span>
+                    ))}
+                  </div>
+                  <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#d48806", marginLeft: 4 }}>
+                    ({metadata.rating} / 5 Stars)
+                  </span>
+                </div>
+              )}
+
+              <h4 style={{ margin: "0 0 8px 0", color: "#0f172a" }}>
+                {cleanSubject(selectedTicket.subject)}
+              </h4>
+              <div className="fbc-section-title" style={{ marginTop: 0 }}>Description</div>
+              <div
+                className="rte-display"
+                style={{ background: "#f8fafc", padding: 14, borderRadius: 8, border: "1px solid #e2e8f0", margin: "0 0 16px 0" }}
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedTicket.description || "") }}
+              />
+
+              <div className="fbc-section-title">
+                <MdPerson /> Auto-Captured System Information
+              </div>
+              <div className="fbc-auto-info-grid">
+                <div className="fbc-info-cell">
+                  <span>Submitted By</span>
+                  <strong>{metadata.user_name || selectedTicket.user?.name} ({metadata.user_role})</strong>
+                </div>
+                <div className="fbc-info-cell">
+                  <span>Organization</span>
+                  <strong>{selectedTicket.organization?.name}</strong>
+                </div>
+                <div className="fbc-info-cell">
+                  <span>Module</span>
+                  <strong>{metadata.module || "General"}</strong>
+                </div>
+                <div className="fbc-info-cell">
+                  <span>Current Page Route</span>
+                  <strong>{metadata.current_page}</strong>
+                </div>
+                <div className="fbc-info-cell">
+                  <span>Operating System</span>
+                  <strong>{metadata.operating_system}</strong>
+                </div>
+                <div className="fbc-info-cell">
+                  <span>Browser</span>
+                  <strong>{metadata.browser}</strong>
+                </div>
+                <div className="fbc-info-cell">
+                  <span>Device Type</span>
+                  <strong>{metadata.device_type}</strong>
+                </div>
+                <div className="fbc-info-cell">
+                  <span>IP Address</span>
+                  <strong>{metadata.ip_address || "Captured"}</strong>
+                </div>
+                <div className="fbc-info-cell">
+                  <span>App Version</span>
+                  <strong>{metadata.app_version}</strong>
+                </div>
+              </div>
+
+              {(metadata.screenshot_path || metadata.recording_path || metadata.attachment_path) && (
+                <>
+                  <div className="fbc-section-title">
+                    <FileText size={16} /> Downloadable Media Attachments
+                  </div>
+                  <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
+                    {metadata.screenshot_path && (
+                      <a href={`${metadata.screenshot_path}`} target="_blank" rel="noreferrer" className="fb-btn-cancel" style={{ textDecoration: "none", fontSize: "0.8rem" }}>
+                        View Screenshot
+                      </a>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* Chat Conversation */}
+              <div className="fbc-section-title">Conversation</div>
+              <div className="fbc-chat-container">
+                <div className="fbc-chat-messages">
+                  {detailLoading ? (
+                    <div style={{ textAlign: "center", padding: 16, color: "#64748b", fontSize: "0.82rem" }}>Loading messages...</div>
+                  ) : ticketMessages.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: 16, color: "#64748b", fontSize: "0.82rem" }}>No messages yet. Start a conversation below.</div>
+                  ) : (
+                    ticketMessages.map((msg) => {
+                      const d = (msg.message || "").toLowerCase();
+                      if (d.includes("status changed") || d.includes("status set")) return null;
+                      const isMine = msg.sender_type === "support";
+                      return (
+                        <div key={msg.id} className={`fbc-chat-bubble ${isMine ? "fbc-chat-mine" : "fbc-chat-theirs"}`}>
+                          <div className="fbc-chat-bubble-text">{msg.message}</div>
+                          <div className="fbc-chat-bubble-meta">
+                            {isMine ? (msg.user?.name || "Support") : (msg.user?.name || "User")} · {new Date(msg.created_at).toLocaleString()}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
+
+                {selectedTicket.status !== 'closed' && (
+                  <form className="fbc-chat-input" onSubmit={(e) => { e.preventDefault(); handleReply(); }}>
+                    <input
+                      type="text"
+                      value={replyText}
+                      onChange={(e) => setReplyText(e.target.value)}
+                      placeholder="Reply to user..."
+                      disabled={sendingReply}
+                    />
+                    <button type="submit" disabled={!replyText.trim() || sendingReply} className="fb-btn-submit">
+                      <Send size={16} />
+                    </button>
+                  </form>
+                )}
+              </div>
+            </div>
+
+            {/* RIGHT — Status Timeline */}
+            <div className="fbc-detail-right">
+              <div className="fbc-sidebar-card">
+                <div className="fbc-sidebar-card-header">
+                  <Clock size={16} /> Status Timeline
+                </div>
+                <ul className="fbc-timeline">
+                  {statusLogs.length > 0 ? (
+                    statusLogs.map((log, idx) => (
+                      <li key={idx} className="fbc-timeline-item">
+                        <div className="fbc-timeline-dot" />
+                        <div className="fbc-timeline-content">
+                          <span style={{ fontSize: "0.82rem", color: "#334155" }}>{log.message}</span>
+                          <div style={{ fontSize: "0.72rem", color: "#64748b", marginTop: 4 }}>
+                            {log.user?.name || "System"}
+                          </div>
+                          <span className="fbc-timeline-time">
+                            {new Date(log.created_at).toLocaleString()}
+                          </span>
+                        </div>
+                      </li>
+                    ))
+                  ) : (
+                    <div style={{ fontSize: "0.82rem", color: "#64748b", padding: "8px 0" }}>No status changes recorded yet.</div>
+                  )}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Status Change Confirmation Modal */}
+        {confirmStatus && (
+          <div style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex",
+            alignItems: "center", justifyContent: "center", zIndex: 9999,
+          }}>
+            <div style={{
+              background: "#fff", borderRadius: 12, padding: "28px 32px", minWidth: 380,
+              boxShadow: "0 20px 60px rgba(0,0,0,0.2)", textAlign: "center",
+            }}>
+              <div style={{
+                width: 48, height: 48, borderRadius: "50%", margin: "0 auto 16px",
+                background: STATUS_MAP[confirmStatus]?.bg || '#f1f5f9',
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                <Loader2 size={24} style={{ color: STATUS_MAP[confirmStatus]?.color || '#475569' }} />
+              </div>
+              <h4 style={{ margin: "0 0 8px", color: "#0f172a", fontSize: "1rem" }}>Confirm Status Change</h4>
+              <p style={{ margin: "0 0 20px", color: "#64748b", fontSize: "0.88rem", lineHeight: 1.5 }}>
+                Are you sure you want to change status to<br />
+                <strong style={{ color: STATUS_MAP[confirmStatus]?.color || '#0f172a' }}>
+                  {STATUS_MAP[confirmStatus]?.label || confirmStatus}
+                </strong>?
+              </p>
+              <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+                <button
+                  onClick={() => setConfirmStatus(null)}
+                  style={{
+                    padding: "8px 20px", borderRadius: 8, fontSize: "0.85rem", fontWeight: 600,
+                    border: "1px solid #e2e8f0", background: "#fff", color: "#475569", cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmStatusChange}
+                  style={{
+                    padding: "8px 20px", borderRadius: 8, fontSize: "0.85rem", fontWeight: 600,
+                    border: "none", background: STATUS_MAP[confirmStatus]?.color || 'var(--color-primary)',
+                    color: "#fff", cursor: "pointer",
+                  }}
+                >
+                  Yes, Change
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Close Ticket Confirmation Modal */}
+        {confirmClose && (
+          <div style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex",
+            alignItems: "center", justifyContent: "center", zIndex: 9999,
+          }}>
+            <div style={{
+              background: "#fff", borderRadius: 12, padding: "28px 32px", minWidth: 380,
+              boxShadow: "0 20px 60px rgba(0,0,0,0.2)", textAlign: "center",
+            }}>
+              <div style={{
+                width: 48, height: 48, borderRadius: "50%", margin: "0 auto 16px",
+                background: "rgba(59,130,246,0.1)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                <X size={24} style={{ color: "#3b82f6" }} />
+              </div>
+              <h4 style={{ margin: "0 0 8px", color: "#0f172a", fontSize: "1rem" }}>Close Ticket</h4>
+              <p style={{ margin: "0 0 20px", color: "#64748b", fontSize: "0.88rem", lineHeight: 1.5 }}>
+                Are you sure you want to close this feedback ticket?<br />
+                <strong style={{ color: "#3b82f6" }}>
+                  {selectedTicket?.feedback_reference_number || selectedTicket?.ticket_number}
+                </strong>?
+              </p>
+              <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+                <button
+                  onClick={() => setConfirmClose(false)}
+                  style={{
+                    padding: "8px 20px", borderRadius: 8, fontSize: "0.85rem", fontWeight: 600,
+                    border: "1px solid #e2e8f0", background: "#fff", color: "#475569", cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmCloseTicket}
+                  style={{
+                    padding: "8px 20px", borderRadius: 8, fontSize: "0.85rem", fontWeight: 600,
+                    border: "none", background: "#3b82f6",
+                    color: "#fff", cursor: "pointer",
+                  }}
+                >
+                  Yes, Close
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
     );
   }
 
-  // Org List or Ticket List
-  if (selectedOrg) {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-3">
-          <button onClick={() => { setSelectedOrg(null); setTickets([]); }} className="p-2 rounded-lg" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-light)' }}>
-            <ArrowLeft className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
-          </button>
-          <div>
-            <h1 className="text-2xl font-bold" style={{ color: 'var(--text-heading)' }}>{selectedOrg.name} - Support</h1>
-            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{selectedOrg.support?.counts?.open || 0} open, {selectedOrg.support?.counts?.pending || 0} pending</p>
-          </div>
+  // Main View
+  return (
+    <div className="space-y-6">
+      {/* Header with Toggle */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--text-heading)' }}>Support Center</h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>Manage feedback tickets across all organizations</p>
         </div>
+        <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-light)' }}>
+          <button
+            onClick={() => { setViewMode('cards'); setSelectedOrgId(null); setSelectedTicket(null); updateUrl(null, null); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all"
+            style={{
+              background: viewMode === 'cards' ? 'var(--color-primary)' : 'transparent',
+              color: viewMode === 'cards' ? '#fff' : 'var(--text-secondary)',
+            }}
+          >
+            <LayoutGrid size={14} /> Cards
+          </button>
+          <button
+            onClick={() => { setViewMode('list'); setSelectedOrgId(null); setSelectedTicket(null); updateUrl(null, null); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all"
+            style={{
+              background: viewMode === 'list' ? 'var(--color-primary)' : 'transparent',
+              color: viewMode === 'list' ? '#fff' : 'var(--text-secondary)',
+            }}
+          >
+            <List size={14} /> List
+          </button>
+        </div>
+      </div>
 
-        {ticketLoading ? (
-          <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--color-primary)' }} /></div>
-        ) : tickets.length === 0 ? (
-          <div className="text-center py-12 rounded-xl" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-light)' }}>
-            <MessageSquare className="w-12 h-12 mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No support tickets</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {tickets.map((ticket) => {
-              const stCfg = STATUS_MAP[ticket.status] || STATUS_MAP.open;
-              const prCfg = PRIORITY_MAP[ticket.priority] || PRIORITY_MAP.medium;
-              const StIcon = stCfg.icon;
+      {/* Cards View */}
+      {viewMode === 'cards' && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {orgs.map((org) => {
+              const oc = getOrgFeedbackCounts(org.id);
+              const isActive = selectedOrgId === org.id;
               return (
-                <div key={ticket.id} onClick={() => handleOpenTicket(ticket)}
-                  className="flex items-center justify-between p-4 rounded-xl cursor-pointer transition-all hover:shadow-sm"
-                  style={{ background: 'var(--bg-card)', border: '1px solid var(--border-light)' }}>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: stCfg.bg }}>
-                      <StIcon className="w-5 h-5" style={{ color: stCfg.color }} />
+                <div
+                  key={org.id}
+                  onClick={() => { setSelectedOrgId(isActive ? null : org.id); setSelectedTicket(null); updateUrl(isActive ? null : org.id, null); }}
+                  className="rounded-xl p-3 shadow-sm cursor-pointer transition-all hover:shadow-md"
+                  style={{
+                    background: isActive ? 'var(--color-primary-bg)' : 'var(--bg-card)',
+                    border: isActive ? '2px solid var(--color-primary)' : '1px solid var(--border-light)',
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'var(--color-primary-bg)' }}>
+                      <Building2 className="w-4 h-4" style={{ color: 'var(--color-primary)' }} />
                     </div>
                     <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-sm font-semibold" style={{ color: 'var(--text-heading)' }}>{ticket.subject}</p>
-                        <span className="px-2 py-0.5 text-xs font-medium rounded-full" style={{ background: stCfg.bg, color: stCfg.color }}>{stCfg.label}</span>
-                        <span className="px-2 py-0.5 text-xs font-medium rounded-full" style={{ background: prCfg.bg, color: prCfg.color }}>{prCfg.label}</span>
-                      </div>
-                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{ticket.ticket_number} · {ticket.category}</p>
+                      <p className="text-sm font-semibold" style={{ color: 'var(--text-heading)' }}>{org.name}</p>
+                      <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{oc.total} tickets</p>
                     </div>
                   </div>
-                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(ticket.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                  <div className="grid grid-cols-5 gap-x-2 gap-y-1 mt-2">
+                    {[
+                      { label: 'New', value: oc.open, color: '#10b981' },
+                      { label: 'Review', value: oc.under_review, color: '#8b5cf6' },
+                      { label: 'Accepted', value: oc.accepted, color: '#10b981' },
+                      { label: 'Planned', value: oc.planned, color: '#3b82f6' },
+                      { label: 'In Dev', value: oc.in_development, color: '#f59e0b' },
+                      { label: 'Testing', value: oc.testing, color: '#6366f1' },
+                      { label: 'Resolved', value: oc.resolved, color: '#3b82f6' },
+                      { label: 'Closed', value: oc.closed, color: '#94a3b8' },
+                      { label: 'Rejected', value: oc.rejected, color: '#ef4444' },
+                    ].map((item) => (
+                      <div key={item.label} className="text-center leading-tight">
+                        <span className="font-bold text-sm" style={{ color: item.color }}>{item.value}</span>
+                        <span className="text-sm ml-0.5" style={{ color: 'var(--text-muted)' }}>{item.label}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               );
             })}
           </div>
-        )}
-      </div>
-    );
-  }
 
-  // Organization Grid
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--text-heading)' }}>Support Tickets</h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>Manage support tickets across all organizations</p>
-      </div>
+          {/* Selected Org Ticket List */}
+          {selectedOrgId && (
+            <div className="space-y-4">
+              <h2 className="text-sm font-semibold" style={{ color: 'var(--text-heading)' }}>
+                {selectedOrg?.name} - Feedback Tickets
+              </h2>
+              {ticketLoading ? (
+                <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--color-primary)' }} /></div>
+              ) : tickets.length === 0 ? (
+                <div className="text-center py-12 rounded-xl" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-light)' }}>
+                  <FileText className="w-12 h-12 mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
+                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No feedback tickets found for this organization</p>
+                </div>
+              ) : (
+                <div className="fbc-table-card">
+                  <table className="fbc-table">
+                    <thead>
+                      <tr>
+                        <th>Reference #</th>
+                        <th>Type</th>
+                        <th>Subject</th>
+                        <th>User</th>
+                        <th>Module</th>
+                        <th>Priority</th>
+                        <th>Status</th>
+                        <th>Submitted</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tickets.map((ticket) => {
+                        const stCfg = STATUS_MAP[ticket.status] || STATUS_MAP.open;
+                        const prCfg = PRIORITY_MAP[ticket.priority] || PRIORITY_MAP.medium;
+                        const metadata = ticket.feedback_metadata || {};
+                        return (
+                          <tr key={ticket.id}>
+                            <td><strong style={{ color: '#2563eb' }}>{ticket.feedback_reference_number}</strong></td>
+                            <td>{metadata.feedback_type || '-'}</td>
+                            <td style={{ fontWeight: 600, maxWidth: 220 }}>{cleanSubject(ticket.subject)}</td>
+                            <td>
+                              <div><strong>{metadata.user_name || 'User'}</strong></div>
+                              <div style={{ fontSize: '0.72rem', color: '#64748b' }}>{metadata.user_role || ''}</div>
+                            </td>
+                            <td>{metadata.module || '-'}</td>
+                            <td><span style={{ fontSize: '0.78rem', fontWeight: 700, color: prCfg.color }}>{prCfg.label}</span></td>
+                            <td><span className={`fbc-badge fbc-status-${ticket.status.replace(/_/g, '-')}`}>{stCfg.label}</span></td>
+                            <td style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                              <div>{new Date(ticket.created_at).toLocaleDateString()}</div>
+                              <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{new Date(ticket.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</div>
+                            </td>
+                            <td>
+                              <button className="fb-btn-cancel" style={{ padding: '4px 10px', fontSize: '0.78rem' }} onClick={() => handleOpenTicket(ticket)}>
+                                View Detail
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {orgs.map((org) => {
-          const counts = org.support?.counts || {};
-          const total = (counts.open || 0) + (counts.pending || 0) + (counts.resolved || 0) + (counts.closed || 0);
-          return (
-            <div key={org.id} onClick={() => handleSelectOrg(org)}
-              className="rounded-xl p-5 shadow-sm cursor-pointer transition-all hover:shadow-md"
-              style={{ background: 'var(--bg-card)', border: '1px solid var(--border-light)' }}>
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: 'var(--color-primary-bg)' }}>
-                  <Building2 className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold" style={{ color: 'var(--text-heading)' }}>{org.name}</p>
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{total} tickets</p>
-                </div>
+          {!selectedOrgId && (
+            <div className="text-center py-8 rounded-xl" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-light)' }}>
+              <Building2 className="w-10 h-10 mx-auto mb-2" style={{ color: 'var(--text-muted)' }} />
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Click an organization card to view its feedback tickets</p>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* List View */}
+      {viewMode === 'list' && (
+        <>
+          {/* Advanced Filters */}
+          <div className="fbc-filters-card">
+            <div className="fbc-filter-grid">
+              <div className="fbc-filter-item">
+                <label>Search</label>
+                <input type="text" className="fbc-input" placeholder="Search ref #, subject, user..." value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
-              <div className="flex gap-3">
-                {[
-                  { label: 'Open', value: counts.open || 0, color: 'var(--color-success)' },
-                  { label: 'Pending', value: counts.pending || 0, color: 'var(--color-warning)' },
-                  { label: 'Closed', value: counts.closed || 0, color: 'var(--text-muted)' },
-                ].map((item) => (
-                  <div key={item.label} className="text-center flex-1">
-                    <p className="text-lg font-bold" style={{ color: item.color }}>{item.value}</p>
-                    <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{item.label}</p>
-                  </div>
-                ))}
+              <div className="fbc-filter-item">
+                <label>Feedback Type</label>
+                <select className="fbc-select" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+                  <option value="">All Types</option>
+                  <option value="Bug Report">Bug Report</option>
+                  <option value="Feature Request">Feature Request</option>
+                  <option value="General Suggestion">General Suggestion</option>
+                  <option value="Feature Rating">Feature Rating</option>
+                  <option value="General Feedback">General Feedback</option>
+                </select>
+              </div>
+              <div className="fbc-filter-item">
+                <label>Organization</label>
+                <select className="fbc-select" value={selectedOrgId || ''} onChange={(e) => setSelectedOrgId(e.target.value || null)}>
+                  <option value="">All Organizations</option>
+                  {orgs.map((org) => (
+                    <option key={org.id} value={org.id}>{org.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="fbc-filter-item">
+                <label>Status</label>
+                <select className="fbc-select" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+                  <option value="">All Statuses</option>
+                  {STATUS_OPTIONS.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="fbc-filter-item">
+                <label>Priority</label>
+                <select className="fbc-select" value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}>
+                  <option value="">All Priorities</option>
+                  <option value="Low">Low</option>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                  <option value="Urgent">Urgent</option>
+                </select>
+              </div>
+              <div className="fbc-filter-item">
+                <label>From Date</label>
+                <input type="date" className="fbc-input" value={dateStart} max={dateEnd || undefined} onChange={(e) => setDateStart(e.target.value)} />
+              </div>
+              <div className="fbc-filter-item">
+                <label>To Date</label>
+                <input type="date" className="fbc-input" value={dateEnd} min={dateStart || undefined} onChange={(e) => setDateEnd(e.target.value)} />
               </div>
             </div>
-          );
-        })}
-      </div>
+          </div>
+
+          {/* Ticket Table */}
+          {ticketLoading ? (
+            <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--color-primary)' }} /></div>
+          ) : tickets.length === 0 ? (
+            <div className="text-center py-12 rounded-xl" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-light)' }}>
+              <FileText className="w-12 h-12 mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No feedback tickets found</p>
+            </div>
+          ) : (
+            <div className="fbc-table-card">
+              <table className="fbc-table">
+                <thead>
+                  <tr>
+                    <th>Reference #</th>
+                    <th>Type</th>
+                    <th>Subject</th>
+                    <th>User & Organization</th>
+                    <th>Module</th>
+                    <th>Priority</th>
+                    <th>Status</th>
+                    <th>Submitted</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tickets.map((ticket) => {
+                    const stCfg = STATUS_MAP[ticket.status] || STATUS_MAP.open;
+                    const prCfg = PRIORITY_MAP[ticket.priority] || PRIORITY_MAP.medium;
+                    const metadata = ticket.feedback_metadata || {};
+                    return (
+                      <tr key={ticket.id}>
+                        <td><strong style={{ color: '#2563eb' }}>{ticket.feedback_reference_number}</strong></td>
+                        <td>{metadata.feedback_type || '-'}</td>
+                        <td style={{ fontWeight: 600, maxWidth: 220 }}>{cleanSubject(ticket.subject)}</td>
+                        <td>
+                          <div><strong>{metadata.user_name || 'User'}</strong></div>
+                          <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                            {ticket.organization?.name || 'Org'} ({metadata.user_role || ''})
+                          </div>
+                        </td>
+                        <td>{metadata.module || '-'}</td>
+                        <td><span style={{ fontSize: '0.78rem', fontWeight: 700, color: prCfg.color }}>{prCfg.label}</span></td>
+                        <td><span className={`fbc-badge fbc-status-${ticket.status.replace(/_/g, '-')}`}>{stCfg.label}</span></td>
+                        <td style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                          <div>{new Date(ticket.created_at).toLocaleDateString()}</div>
+                          <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{new Date(ticket.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</div>
+                        </td>
+                        <td>
+                          <button className="fb-btn-cancel" style={{ padding: '4px 10px', fontSize: '0.78rem' }} onClick={() => handleOpenTicket(ticket)}>
+                            View Detail
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

@@ -263,6 +263,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/feedback/{id}', [FeedbackController::class, 'show']);
     Route::patch('/feedback/{id}', [FeedbackController::class, 'update']);
     Route::post('/feedback/{id}/notes', [FeedbackController::class, 'addNote']);
+    Route::get('/feedback/{id}/messages', [FeedbackController::class, 'getMessages']);
+    Route::post('/feedback/{id}/messages', [FeedbackController::class, 'sendMessage']);
 
     /*
     | Team Management Routes

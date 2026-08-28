@@ -760,6 +760,7 @@ class ProjectController extends Controller
 
         // Sync uploaded files if sent as multipart files
         $filesSkipped = false;
+        $uploadedFileNames = [];
         if ($request->hasFile('files')) {
             foreach ($request->file('files') as $idx => $uploadedFile) {
                 $storageCheck = $this->checkStorageLimit($request, $uploadedFile);
@@ -771,6 +772,7 @@ class ProjectController extends Controller
                         'name' => $customName,
                         'url' => '/storage/'.$path,
                     ]);
+                    $uploadedFileNames[] = $customName;
                 } else {
                     $filesSkipped = true;
                 }
@@ -872,6 +874,41 @@ class ProjectController extends Controller
                 );
             } catch (\Throwable $e) {
                 \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+            }
+        }
+
+        // Log audit when files/links/attachments are added during project edit
+        if (!empty($uploadedFileNames) || !empty($newLinks) || !empty($newAttachments)) {
+            try {
+                $fileDescriptions = [];
+                if (!empty($uploadedFileNames)) {
+                    $fileDescriptions[] = count($uploadedFileNames) . ' file(s): ' . implode(', ', $uploadedFileNames);
+                }
+                if (!empty($newLinks)) {
+                    $linkNames = array_map(fn($l) => $l['name'] ?? $l['url'], $newLinks);
+                    $fileDescriptions[] = count($newLinks) . ' link(s): ' . implode(', ', $linkNames);
+                }
+                if (!empty($newAttachments)) {
+                    $attNames = array_column($newAttachments, 'name');
+                    $fileDescriptions[] = count($newAttachments) . ' attachment(s): ' . implode(', ', $attNames);
+                }
+                $desc = 'Added ' . implode(' and ', $fileDescriptions) . ' to project "' . $project->title . '"';
+                $this->auditService->log(
+                    module: 'project_management',
+                    action: 'create',
+                    description: $desc,
+                    user: $user,
+                    entityType: 'ProjectFile',
+                    entityId: $project->id,
+                    newValues: [
+                        'uploaded_files' => $uploadedFileNames,
+                        'new_links' => array_map(fn($l) => $l['url'] ?? null, $newLinks ?? []),
+                        'new_attachments' => array_column($newAttachments ?? [], 'name'),
+                    ],
+                    status: 'success'
+                );
+            } catch (\Throwable $e) {
+                \Log::error('Failed to log file upload audit', ['error' => $e->getMessage()]);
             }
         }
 
@@ -1264,6 +1301,21 @@ class ProjectController extends Controller
             'comment' => 'File uploaded: '.$fileName,
         ]);
 
+        try {
+            $this->auditService->log(
+                module: 'project_management',
+                action: 'create',
+                description: "Uploaded file \"{$fileName}\" to project \"{$project->title}\"",
+                user: $user,
+                entityType: 'ProjectFile',
+                entityId: $attachment->id,
+                newValues: ['file_name' => $fileName, 'file_url' => $fileUrl],
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log file upload audit', ['error' => $e->getMessage()]);
+        }
+
         return response()->json(['success' => true, 'message' => 'File uploaded successfully', 'file' => $attachment], 201);
     }
 
@@ -1328,6 +1380,21 @@ class ProjectController extends Controller
             'action' => 'field_changed',
             'comment' => 'Link added: '.$linkName,
         ]);
+
+        try {
+            $this->auditService->log(
+                module: 'project_management',
+                action: 'create',
+                description: "Added link \"{$linkName}\" to project \"{$project->title}\"",
+                user: $user,
+                entityType: 'ProjectFile',
+                entityId: $attachment->id,
+                newValues: ['link_name' => $linkName, 'link_url' => $validated['url']],
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log link add audit', ['error' => $e->getMessage()]);
+        }
 
         return response()->json(['success' => true, 'message' => 'Link added successfully', 'file' => $attachment], 201);
     }
@@ -1549,6 +1616,14 @@ class ProjectController extends Controller
             'action' => 'field_changed',
             'comment' => 'File removed: '.$fileName,
         ]);
+
+        $this->auditService->log(
+            'project_management', 'delete',
+            "Deleted file \"{$fileName}\" from project \"{$project->name}\"",
+            $user, 'project_file', $file->id,
+            ['file_name' => $fileName, 'project_id' => $project->id, 'project_name' => $project->name],
+            null, 'success'
+        );
 
         return response()->json(['success' => true, 'message' => 'File deleted successfully']);
     }

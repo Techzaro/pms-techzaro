@@ -878,8 +878,8 @@ function ManageUsers() {
     }
     if (!newUser.employeeCode.trim()) errors.employeeCode = "Employee Code is required.";
     if (!newUser.jobStartedDate) errors.jobStartedDate = "Job Start Date is required.";
-    if (newUser.grossSalary && newUser.grossSalary.length > 300) {
-      errors.grossSalary = "Gross Salary must be 300 characters or less.";
+    if (newUser.grossSalary && newUser.grossSalary.length > 1000) {
+      errors.grossSalary = "Gross Salary must be 1000 characters or less.";
     }
     if (newUser.bankAccountNumber.trim() && !/^[\d\s\-a-zA-Z]+$/.test(newUser.bankAccountNumber.trim())) {
       errors.bankAccountNumber = "Bank Account Number must contain only digits, letters, spaces, or dashes.";

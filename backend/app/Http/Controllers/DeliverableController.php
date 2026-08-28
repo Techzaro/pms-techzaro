@@ -2321,6 +2321,21 @@ class DeliverableController extends Controller
 
         $deliverable->update(['updated_by' => $user->id]);
 
+        try {
+            $this->auditService->log(
+                module: 'project_management',
+                action: 'create',
+                description: "Uploaded file \"{$name}\" to subtask \"{$deliverable->title}\"",
+                user: $user,
+                entityType: 'DeliverableFile',
+                entityId: $deliverableFile->id,
+                newValues: ['file_name' => $name, 'file_url' => $fileUrl],
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log deliverable file upload audit', ['error' => $e->getMessage()]);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'File uploaded successfully',
@@ -2345,12 +2360,28 @@ class DeliverableController extends Controller
             'name' => 'nullable|string|max:255',
         ]);
 
+        $linkName = $validated['name'] ?? $validated['url'];
         $deliverableFile = $deliverable->files()->create([
-            'name' => $validated['name'] ?? $validated['url'],
+            'name' => $linkName,
             'url' => $validated['url'],
         ]);
 
         $deliverable->update(['updated_by' => $user->id]);
+
+        try {
+            $this->auditService->log(
+                module: 'project_management',
+                action: 'create',
+                description: "Added link \"{$linkName}\" to subtask \"{$deliverable->title}\"",
+                user: $user,
+                entityType: 'DeliverableFile',
+                entityId: $deliverableFile->id,
+                newValues: ['link_name' => $linkName, 'link_url' => $validated['url']],
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log deliverable link add audit', ['error' => $e->getMessage()]);
+        }
 
         return response()->json([
             'success' => true,
@@ -2387,6 +2418,7 @@ class DeliverableController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
+        $fileName = $file->name;
         $org = $request->attributes->get('currentOrganization');
         if ($org && $file->url) {
             StorageDiskResolver::delete($org, $file->url);
@@ -2396,6 +2428,14 @@ class DeliverableController extends Controller
 
         $file->delete();
         $deliverable->update(['updated_by' => $user->id]);
+
+        $this->auditService->log(
+            'deliverables', 'delete',
+            "Deleted file \"{$fileName}\" from deliverable \"{$deliverable->title}\"",
+            $user, 'deliverable_file', $file->id,
+            ['file_name' => $fileName, 'deliverable_id' => $deliverable->id, 'deliverable_title' => $deliverable->title],
+            null, 'success'
+        );
 
         return response()->json(['success' => true, 'message' => 'File deleted']);
     }

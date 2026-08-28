@@ -79,6 +79,7 @@ const KnowledgeBase = lazy(() => import("./pages/KnowledgeBase"));
 const KnowledgeBaseList = lazy(() => import("./pages/KnowledgeBaseList"));
 const KnowledgeBaseEditor = lazy(() => import("./pages/KnowledgeBaseEditor"));
 const FeedbackCenter = lazy(() => import("./pages/FeedbackCenter"));
+const FeedbackDetail = lazy(() => import("./pages/FeedbackDetail"));
 const BrandingPage = lazy(() => import("./pages/BrandingPage"));
 const SubscriptionPage = lazy(() => import("./pages/SubscriptionPage"));
 const StoragePage = lazy(() => import("./pages/StoragePage"));
@@ -328,6 +329,7 @@ function App() {
                     <Route path="settings/notifications" element={<NotificationSettings />} />
                     <Route path="audit-logs" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><AuditLogs /></RoleProtectedRoute>} />
                     <Route path="feedback" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><FeedbackCenter /></RoleProtectedRoute>} />
+                    <Route path="feedback/:id" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><FeedbackDetail /></RoleProtectedRoute>} />
                     <Route path="branding" element={<RoleProtectedRoute allowedRoles={["admin"]}><BrandingPage /></RoleProtectedRoute>} />
                     <Route path="subscription" element={<RoleProtectedRoute allowedRoles={["admin"]}><SubscriptionPage /></RoleProtectedRoute>} />
                     <Route path="organization-details" element={<RoleProtectedRoute allowedRoles={["admin"]}><OrganizationDetailsPage /></RoleProtectedRoute>} />
@@ -402,6 +404,7 @@ function App() {
                     <Route path="subscription" element={<RoleProtectedRoute allowedRoles={["admin"]}><SubscriptionPage /></RoleProtectedRoute>} />
                     <Route path="organization-details" element={<RoleProtectedRoute allowedRoles={["admin"]}><OrganizationDetailsPage /></RoleProtectedRoute>} />
                     <Route path="feedback" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><FeedbackCenter /></RoleProtectedRoute>} />
+                    <Route path="feedback/:id" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><FeedbackDetail /></RoleProtectedRoute>} />
                     <Route path="settings/personalization" element={<Personalization />} />
                     <Route path="personalization" element={<Personalization />} />
                     <Route path="storage" element={<StoragePage />} />

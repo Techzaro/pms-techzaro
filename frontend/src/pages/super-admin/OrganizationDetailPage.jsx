@@ -16,6 +16,7 @@ import PlanCustomizeModal from './components/PlanCustomizeModal';
 import SuperAdminChangePasswordModal from './components/SuperAdminChangePasswordModal';
 import { countries, getCountryByCode, formatPhoneByCountry } from './data/countries';
 import CountrySelect from '../../components/CountrySelect';
+import '../../components/AuditLogDetailModal.css';
 
 const flagMap = { PK:'🇵🇰', US:'🇺🇸', GB:'🇬🇧', IN:'🇮🇳', AE:'🇦🇪', SA:'🇸🇦', CA:'🇨🇦', AU:'🇦🇺', DE:'🇩🇪', FR:'🇫🇷', TR:'🇹🇷', CN:'🇨🇳', JP:'🇯🇵', BR:'🇧🇷', NG:'🇳🇬', ZA:'🇿🇦', EG:'🇪🇬', KE:'🇰🇪', PH:'🇵🇭', MY:'🇲🇾', BD:'🇧🇩', NP:'🇳🇵', LK:'🇱🇰', SG:'🇸🇬', HK:'🇭🇰', NZ:'🇳🇿', IT:'🇮🇹', ES:'🇪🇸', NL:'🇳🇱', SE:'🇸🇪', CH:'🇨🇭', PL:'🇵🇱', RU:'🇷🇺', KR:'🇰🇷', TH:'🇹🇭', ID:'🇮🇩', VN:'🇻🇳', MX:'🇲🇽', AR:'🇦🇷', CO:'🇨🇴', GH:'🇬🇭', TZ:'🇹🇿', UG:'🇺🇬', ET:'🇪🇹', JO:'🇯🇴', KW:'🇰🇼', BH:'🇧🇭', QA:'🇶🇦', OM:'🇴🇲', LB:'🇱🇧', IQ:'🇮🇶', MA:'🇲🇦', DZ:'🇩🇿', TN:'🇹🇳' };
 const flagEmoji = (code) => flagMap[code] || '🌍';
@@ -71,6 +72,7 @@ export default function OrganizationDetailPage() {
   const [storagePinned, setStoragePinned] = useState([]);
   const [storageFileDeleteConfirm, setStorageFileDeleteConfirm] = useState({ open: false, id: null });
   const [storagePreferences, setStoragePreferences] = useState(null);
+  const [pendingEmailPolicy, setPendingEmailPolicy] = useState(null);
   const [prefLoading, setPrefLoading] = useState(false);
   const [prefSaving, setPrefSaving] = useState(false);
   const [testingS3, setTestingS3] = useState(false);
@@ -86,6 +88,28 @@ export default function OrganizationDetailPage() {
   const [histPlanUsage, setHistPlanUsage] = useState([]);
   const [histLoading, setHistLoading] = useState(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+
+  // ─── Org Audit Logs State ─────────────────────────────────────
+  const [orgLogs, setOrgLogs] = useState([]);
+  const [orgLogsLoading, setOrgLogsLoading] = useState(false);
+  const [orgLogsPage, setOrgLogsPage] = useState(1);
+  const [orgLogsLastPage, setOrgLogsLastPage] = useState(1);
+  const [orgLogsTotal, setOrgLogsTotal] = useState(0);
+  const [orgLogsPerPage, setOrgLogsPerPage] = useState(25);
+  const [orgLogsSearch, setOrgLogsSearch] = useState('');
+  const [orgLogsSearchInput, setOrgLogsSearchInput] = useState('');
+  const [orgLogsDateFrom, setOrgLogsDateFrom] = useState('');
+  const [orgLogsDateTo, setOrgLogsDateTo] = useState('');
+  const [orgLogsModule, setOrgLogsModule] = useState('');
+  const [orgLogsAction, setOrgLogsAction] = useState('');
+  const [orgLogsStatus, setOrgLogsStatus] = useState('');
+  const [orgLogsUser, setOrgLogsUser] = useState('');
+  const [orgLogsModules, setOrgLogsModules] = useState([]);
+  const [orgLogsActions, setOrgLogsActions] = useState([]);
+  const [orgLogsUsers, setOrgLogsUsers] = useState([]);
+  const [orgLogsSortBy, setOrgLogsSortBy] = useState('created_at');
+  const [orgLogsSortDir, setOrgLogsSortDir] = useState('desc');
+  const [orgLogsDetailLog, setOrgLogsDetailLog] = useState(null);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -195,6 +219,74 @@ export default function OrganizationDetailPage() {
     if (activeView === 'history') fetchHistoryData();
   }, [activeView, fetchHistoryData]);
 
+  // ─── Org Audit Logs ──────────────────────────────────────────
+  const fetchOrgLogsFilters = useCallback(async () => {
+    try {
+      const [modRes, actRes, usrRes] = await Promise.all([
+        api.getOrgAuditLogModules(id),
+        api.getOrgAuditLogActions(id),
+        api.getOrgAuditLogUsers(id),
+      ]);
+      if (modRes.data) setOrgLogsModules(modRes.data);
+      if (actRes.data) setOrgLogsActions(actRes.data);
+      if (usrRes.data) setOrgLogsUsers(usrRes.data);
+    } catch {}
+  }, [id]);
+
+  const fetchOrgLogs = useCallback(async (p = 1) => {
+    setOrgLogsLoading(true);
+    try {
+      const params = { page: p, per_page: orgLogsPerPage, sort_field: orgLogsSortBy, sort_order: orgLogsSortDir };
+      if (orgLogsSearch) params.search = orgLogsSearch;
+      if (orgLogsDateFrom) params.date_from = orgLogsDateFrom;
+      if (orgLogsDateTo) params.date_to = orgLogsDateTo;
+      if (orgLogsModule) params.module = orgLogsModule;
+      if (orgLogsAction) params.action = orgLogsAction;
+      if (orgLogsStatus) params.status = orgLogsStatus;
+      if (orgLogsUser) params.user_id = orgLogsUser;
+
+      const res = await api.getOrgAuditLogs(id, params);
+      setOrgLogs(res.data || []);
+      setOrgLogsPage(res.meta?.current_page || 1);
+      setOrgLogsLastPage(res.meta?.last_page || 1);
+      setOrgLogsTotal(res.meta?.total || 0);
+    } catch (e) {
+      console.error('Failed to load org audit logs', e);
+    } finally {
+      setOrgLogsLoading(false);
+    }
+  }, [id, orgLogsPerPage, orgLogsSortBy, orgLogsSortDir, orgLogsSearch, orgLogsDateFrom, orgLogsDateTo, orgLogsModule, orgLogsAction, orgLogsStatus, orgLogsUser]);
+
+  useEffect(() => {
+    if (activeView === 'org-logs') {
+      fetchOrgLogsFilters();
+      fetchOrgLogs(1);
+    }
+  }, [activeView, fetchOrgLogsFilters, fetchOrgLogs]);
+
+  const orgLogsSearchTimerRef = useCallback(() => {
+    let timer;
+    return (val) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => setOrgLogsSearch(val), 400);
+    };
+  }, [])();
+
+  const handleOrgLogsSort = (col) => {
+    if (orgLogsSortBy === col) {
+      setOrgLogsSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setOrgLogsSortBy(col);
+      setOrgLogsSortDir('desc');
+    }
+  };
+
+  const orgLogsFormatDateTime = (dateStr) => {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  };
+
   const [approveModal, setApproveModal] = useState(null);
   const [rejectModal, setRejectModal] = useState(null);
 
@@ -272,6 +364,14 @@ export default function OrganizationDetailPage() {
         navigate('/super-admin/organizations');
         return;
       }
+      else if (action === 'email_policy') {
+        setEmailPolicyLoading(true);
+        await api.updateOrganization(id, { email_policy: pendingEmailPolicy });
+        setOrg((prev) => ({ ...prev, email_policy: pendingEmailPolicy }));
+        setEmailPolicyLoading(false);
+        setPendingEmailPolicy(null);
+        return;
+      }
       await fetchOrg();
     } catch (e) { alert(e.message); }
     finally { setActionLoading(null); }
@@ -301,12 +401,13 @@ export default function OrganizationDetailPage() {
   };
 
   const handleEmailPolicyChange = async (newPolicy) => {
-    setEmailPolicyLoading(true);
-    try {
-      await api.updateOrganization(id, { email_policy: newPolicy });
-      setOrg((prev) => ({ ...prev, email_policy: newPolicy }));
-    } catch (e) { alert(e.message); }
-    finally { setEmailPolicyLoading(false); }
+    setPendingEmailPolicy(newPolicy);
+    setConfirmConfig({
+      action: 'email_policy', title: 'Change Email Policy',
+      message: `Are you sure you want to change the email policy to "${newPolicy === 'standard' ? 'Standard' : 'Company Required'}"?`,
+      confirmText: 'Yes, Change', danger: false,
+    });
+    setConfirmOpen(true);
   };
 
   const handleEditSave = async (data) => {
@@ -394,6 +495,14 @@ export default function OrganizationDetailPage() {
                 color: activeView === 'history' ? '#fff' : 'var(--text-secondary)',
               }}>
               <Clock className="w-3.5 h-3.5" /> History
+            </button>
+            <button onClick={() => { setActiveView('org-logs'); setSearchParams({ tab: 'org-logs' }); }}
+              className="px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5"
+              style={{
+                background: activeView === 'org-logs' ? 'var(--color-primary)' : 'transparent',
+                color: activeView === 'org-logs' ? '#fff' : 'var(--text-secondary)',
+              }}>
+              <Clock className="w-3.5 h-3.5" /> Org Logs
             </button>
           </div>
           <button onClick={() => setEditOpen(true)}
@@ -1333,6 +1442,330 @@ export default function OrganizationDetailPage() {
               <div className="rounded-xl p-10 shadow-sm text-center" style={s.card}>
                 <Clock className="w-10 h-10 mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
                 <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>No history data available</p>
+              </div>
+            )}
+          </>
+        ) : activeView === 'org-logs' ? (
+          /* ═══════════ ORG AUDIT LOGS VIEW ═══════════ */
+          <>
+            {toast && (
+              <div style={{
+                position: 'fixed', top: '20px', right: '20px', zIndex: 9999,
+                padding: '12px 20px', borderRadius: '12px',
+                background: toast.type === 'success' ? 'var(--color-success-bg)' : 'var(--color-danger-bg)',
+                border: `1px solid ${toast.type === 'success' ? 'var(--color-success)' : 'var(--color-danger)'}`,
+                display: 'flex', alignItems: 'center', gap: '8px', boxShadow: 'var(--shadow-md)',
+              }}>
+                {toast.type === 'success' ? <Check className="w-4 h-4" style={{ color: 'var(--color-success)' }} /> : <AlertTriangle className="w-4 h-4" style={{ color: 'var(--color-danger)' }} />}
+                <span style={{ fontSize: '13px', fontWeight: 600, color: toast.type === 'success' ? 'var(--color-success)' : 'var(--color-danger)' }}>{toast.message}</span>
+              </div>
+            )}
+
+            <div className="rounded-xl p-5 shadow-sm" style={s.card}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold flex items-center gap-2" style={s.textHeading}>
+                  <Clock className="w-5 h-5" style={{ color: 'var(--color-primary)' }} /> Application Logs
+                </h3>
+                <span className="text-xs font-medium px-2 py-1 rounded-full" style={{ background: 'var(--color-primary-bg)', color: 'var(--color-primary)' }}>
+                  {orgLogsTotal} total logs
+                </span>
+              </div>
+
+              {/* Filters */}
+              <div className="flex flex-wrap gap-3 mb-4">
+                <div className="flex-1 min-w-[200px]">
+                  <input
+                    type="text"
+                    placeholder="Search description, module, action, IP..."
+                    value={orgLogsSearchInput}
+                    onChange={(e) => { setOrgLogsSearchInput(e.target.value); orgLogsSearchTimerRef(e.target.value); }}
+                    className="w-full px-3 py-2 rounded-lg text-sm"
+                    style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-light)', color: 'var(--text-dark)' }}
+                  />
+                </div>
+                <input
+                  type="date"
+                  value={orgLogsDateFrom}
+                  onChange={(e) => setOrgLogsDateFrom(e.target.value)}
+                  className="px-3 py-2 rounded-lg text-sm"
+                  style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-light)', color: 'var(--text-dark)' }}
+                />
+                <input
+                  type="date"
+                  value={orgLogsDateTo}
+                  onChange={(e) => setOrgLogsDateTo(e.target.value)}
+                  className="px-3 py-2 rounded-lg text-sm"
+                  style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-light)', color: 'var(--text-dark)' }}
+                />
+                <select value={orgLogsModule} onChange={(e) => setOrgLogsModule(e.target.value)}
+                  className="px-3 py-2 rounded-lg text-sm"
+                  style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-light)', color: 'var(--text-dark)' }}>
+                  <option value="">All Modules</option>
+                  {orgLogsModules.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+                <select value={orgLogsAction} onChange={(e) => setOrgLogsAction(e.target.value)}
+                  className="px-3 py-2 rounded-lg text-sm"
+                  style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-light)', color: 'var(--text-dark)' }}>
+                  <option value="">All Actions</option>
+                  {orgLogsActions.map((a) => <option key={a} value={a}>{a}</option>)}
+                </select>
+                <select value={orgLogsStatus} onChange={(e) => setOrgLogsStatus(e.target.value)}
+                  className="px-3 py-2 rounded-lg text-sm"
+                  style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-light)', color: 'var(--text-dark)' }}>
+                  <option value="">All Status</option>
+                  <option value="success">Success</option>
+                  <option value="failed">Failed</option>
+                </select>
+                <select value={orgLogsUser} onChange={(e) => setOrgLogsUser(e.target.value)}
+                  className="px-3 py-2 rounded-lg text-sm"
+                  style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-light)', color: 'var(--text-dark)' }}>
+                  <option value="">All Users</option>
+                  {orgLogsUsers.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+              </div>
+              <div className="flex gap-2 mb-4">
+                <button onClick={() => { setOrgLogsSearch(orgLogsSearchInput); fetchOrgLogs(1); }}
+                  className="px-4 py-2 rounded-lg text-xs font-semibold transition-colors"
+                  style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                  Apply Filters
+                </button>
+                <button onClick={() => {
+                  setOrgLogsSearchInput(''); setOrgLogsSearch(''); setOrgLogsDateFrom(''); setOrgLogsDateTo('');
+                  setOrgLogsModule(''); setOrgLogsAction(''); setOrgLogsStatus(''); setOrgLogsUser('');
+                }}
+                  className="px-4 py-2 rounded-lg text-xs font-semibold transition-colors"
+                  style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border-light)' }}>
+                  Clear
+                </button>
+              </div>
+
+              {/* Table */}
+              {orgLogsLoading ? (
+                <div className="flex items-center justify-center gap-3 py-12">
+                  <Loader2 className="w-5 h-5 animate-spin" style={{ color: 'var(--color-primary)' }} />
+                  <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Loading audit logs...</span>
+                </div>
+              ) : orgLogs.length === 0 ? (
+                <div className="text-center py-12">
+                  <Clock className="w-10 h-10 mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
+                  <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>No audit logs found</p>
+                </div>
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
+                          {[
+                            { key: 'created_at', label: 'Date & Time' },
+                            { key: null, label: 'User' },
+                            { key: 'module', label: 'Module' },
+                            { key: 'action', label: 'Action' },
+                            { key: null, label: 'Description' },
+                            { key: 'status', label: 'Status' },
+                            { key: null, label: 'IP Address' },
+                            { key: null, label: 'Browser' },
+                            { key: null, label: 'Device' },
+                            { key: null, label: '' },
+                          ].map((col, i) => (
+                            <th key={i}
+                              className={`text-left py-2.5 px-3 text-xs font-semibold uppercase tracking-wider ${col.key ? 'cursor-pointer select-none hover:opacity-80' : ''}`}
+                              style={{ color: 'var(--text-muted)' }}
+                              onClick={col.key ? () => handleOrgLogsSort(col.key) : undefined}>
+                              <span className="flex items-center gap-1">
+                                {col.label}
+                                {col.key && orgLogsSortBy === col.key && (
+                                  <span style={{ color: 'var(--color-primary)' }}>{orgLogsSortDir === 'asc' ? '↑' : '↓'}</span>
+                                )}
+                              </span>
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {orgLogs.map((log) => (
+                          <tr key={log.id} style={{ borderBottom: '1px solid var(--border-light)' }} className="hover:opacity-80 transition-opacity">
+                            <td className="py-3 px-3 text-sm whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>
+                              {orgLogsFormatDateTime(log.created_at)}
+                            </td>
+                            <td className="py-3 px-3">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium" style={{ color: 'var(--text-heading)' }}>{log.user?.name || '-'}</span>
+                                {log.user?.role && (
+                                  <span className="px-1.5 py-0.5 text-[10px] font-bold rounded uppercase"
+                                    style={{
+                                      background: log.user.role === 'admin' || log.user.role === 'super_admin' ? 'var(--color-primary-bg)' : log.user.role === 'manager' ? 'rgba(16,185,129,0.1)' : 'var(--bg-hover)',
+                                      color: log.user.role === 'admin' || log.user.role === 'super_admin' ? 'var(--color-primary)' : log.user.role === 'manager' ? 'var(--color-success)' : 'var(--text-muted)',
+                                    }}>
+                                    {log.user.role === 'super_admin' ? 'Super Admin' : log.user.role}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-3 px-3 text-sm" style={{ color: 'var(--text-secondary)' }}>{log.module || '-'}</td>
+                            <td className="py-3 px-3 text-sm" style={{ color: 'var(--text-secondary)' }}>{log.action || '-'}</td>
+                            <td className="py-3 px-3 text-sm max-w-[200px] truncate" style={{ color: 'var(--text-secondary)' }}>{log.description || '-'}</td>
+                            <td className="py-3 px-3">
+                              <span className="px-2 py-0.5 text-xs font-semibold rounded-full"
+                                style={{
+                                  background: log.status === 'success' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
+                                  color: log.status === 'success' ? 'var(--color-success)' : 'var(--color-danger)',
+                                }}>
+                                {(log.status || 'success').charAt(0).toUpperCase() + (log.status || 'success').slice(1)}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 text-sm font-mono" style={{ color: 'var(--text-muted)' }}>{log.ip_address || '-'}</td>
+                            <td className="py-3 px-3 text-sm" style={{ color: 'var(--text-secondary)' }}>{log.browser || '-'}</td>
+                            <td className="py-3 px-3 text-sm" style={{ color: 'var(--text-secondary)' }}>{log.device || log.os || '-'}</td>
+                            <td className="py-3 px-3">
+                              <button onClick={() => setOrgLogsDetailLog(log)}
+                                className="p-1.5 rounded-md transition-colors hover:opacity-80"
+                                style={{ background: 'var(--color-primary-bg)', color: 'var(--color-primary)' }}
+                                title="View details">
+                                <Eye className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Pagination */}
+                  <div className="flex items-center justify-between mt-4 pt-3" style={{ borderTop: '1px solid var(--border-light)' }}>
+                    <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
+                      <span>Rows per page:</span>
+                      <select value={orgLogsPerPage} onChange={(e) => { setOrgLogsPerPage(Number(e.target.value)); setOrgLogsPage(1); }}
+                        className="px-2 py-1 rounded-lg text-sm"
+                        style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-light)', color: 'var(--text-dark)' }}>
+                        {[10, 25, 50, 100, 500].map((n) => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                      <span className="ml-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                        Showing {((orgLogsPage - 1) * orgLogsPerPage) + 1}–{Math.min(orgLogsPage * orgLogsPerPage, orgLogsTotal)} of {orgLogsTotal}
+                      </span>
+                    </div>
+                    {orgLogsLastPage > 1 && (
+                      <div className="flex items-center gap-2">
+                        <button disabled={orgLogsPage <= 1} onClick={() => fetchOrgLogs(orgLogsPage - 1)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
+                          style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border-light)' }}>
+                          Previous
+                        </button>
+                        <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Page {orgLogsPage} of {orgLogsLastPage}</span>
+                        <button disabled={orgLogsPage >= orgLogsLastPage} onClick={() => fetchOrgLogs(orgLogsPage + 1)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
+                          style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border-light)' }}>
+                          Next
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Detail Modal */}
+            {orgLogsDetailLog && (
+              <div className="ald-overlay" onClick={() => setOrgLogsDetailLog(null)}>
+                <div className="ald-modal" onClick={(e) => e.stopPropagation()}>
+                  <div className="ald-header">
+                    <div className="ald-header-left">
+                      <div className="ald-header-icon">
+                        <Clock className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h2 className="ald-title">Audit Log Details</h2>
+                        <p className="ald-subtitle">Detailed information about this activity</p>
+                      </div>
+                    </div>
+                    <button className="ald-close-btn" onClick={() => setOrgLogsDetailLog(null)}>
+                      <X className="w-[18px] h-[18px]" />
+                    </button>
+                  </div>
+
+                  <div className="ald-body">
+                    <div className="ald-section">
+                      <h3 className="ald-section-title">Basic Information</h3>
+                      <div className="ald-grid">
+                        <div className="ald-field">
+                          <span className="ald-label">Date & Time</span>
+                          <span className="ald-value">{orgLogsFormatDateTime(orgLogsDetailLog.created_at)}</span>
+                        </div>
+                        <div className="ald-field">
+                          <span className="ald-label">Module</span>
+                          <span className="ald-value">{orgLogsDetailLog.module || '-'}</span>
+                        </div>
+                        <div className="ald-field">
+                          <span className="ald-label">Action</span>
+                          <span className="ald-value">{orgLogsDetailLog.action || '-'}</span>
+                        </div>
+                        <div className="ald-field">
+                          <span className="ald-label">Status</span>
+                          <span className={`ald-status-badge ald-status-${orgLogsDetailLog.status || 'success'}`}>
+                            {(orgLogsDetailLog.status || 'success').charAt(0).toUpperCase() + (orgLogsDetailLog.status || 'success').slice(1)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="ald-section">
+                      <h3 className="ald-section-title">User Information</h3>
+                      <div className="ald-grid">
+                        <div className="ald-field">
+                          <span className="ald-label">Name</span>
+                          <span className="ald-value">{orgLogsDetailLog.user?.name || '-'}</span>
+                        </div>
+                        <div className="ald-field">
+                          <span className="ald-label">Email</span>
+                          <span className="ald-value">{orgLogsDetailLog.user?.email || '-'}</span>
+                        </div>
+                        <div className="ald-field">
+                          <span className="ald-label">Role</span>
+                          <span className="ald-value">{orgLogsDetailLog.user?.role || '-'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="ald-section">
+                      <h3 className="ald-section-title">Description</h3>
+                      <p className="ald-description-text">{orgLogsDetailLog.description || '-'}</p>
+                    </div>
+
+                    <div className="ald-section">
+                      <h3 className="ald-section-title">Request Information</h3>
+                      <div className="ald-grid">
+                        <div className="ald-field">
+                          <span className="ald-label">IP Address</span>
+                          <span className="ald-value ald-mono">{orgLogsDetailLog.ip_address || '-'}</span>
+                        </div>
+                        <div className="ald-field">
+                          <span className="ald-label">Browser</span>
+                          <span className="ald-value">{orgLogsDetailLog.browser || '-'}</span>
+                        </div>
+                        <div className="ald-field">
+                          <span className="ald-label">OS</span>
+                          <span className="ald-value">{orgLogsDetailLog.os || '-'}</span>
+                        </div>
+                        <div className="ald-field">
+                          <span className="ald-label">Device</span>
+                          <span className="ald-value">{orgLogsDetailLog.device || '-'}</span>
+                        </div>
+                        <div className="ald-field">
+                          <span className="ald-label">URL</span>
+                          <span className="ald-value ald-url">{orgLogsDetailLog.request_url || '-'}</span>
+                        </div>
+                        <div className="ald-field">
+                          <span className="ald-label">Request Method</span>
+                          <span className="ald-value">{orgLogsDetailLog.request_method || '-'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="ald-footer">
+                    <button className="ald-close-btn ald-close-footer-btn" onClick={() => setOrgLogsDetailLog(null)}>Close</button>
+                  </div>
+                </div>
               </div>
             )}
           </>

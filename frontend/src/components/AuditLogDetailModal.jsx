@@ -20,8 +20,6 @@ function AuditLogDetailModal({ log, onClose }) {
 
   if (!log) return null;
 
-  const oldValues = log.old_values || log.old;
-  const newValues = log.new_values || log.new;
   const statusLabel = (log.status || "success").charAt(0).toUpperCase() + (log.status || "success").slice(1);
 
   return createPortal(
@@ -93,20 +91,6 @@ function AuditLogDetailModal({ log, onClose }) {
             <h3 className="ald-section-title">Description</h3>
             <p className="ald-description-text">{log.description || "-"}</p>
           </div>
-
-          {oldValues && Object.keys(oldValues).length > 0 && (
-            <div className="ald-section">
-              <h3 className="ald-section-title">Old Values</h3>
-              <pre className="ald-json">{JSON.stringify(oldValues, null, 2)}</pre>
-            </div>
-          )}
-
-          {newValues && Object.keys(newValues).length > 0 && (
-            <div className="ald-section">
-              <h3 className="ald-section-title">New Values</h3>
-              <pre className="ald-json">{JSON.stringify(newValues, null, 2)}</pre>
-            </div>
-          )}
 
           <div className="ald-section">
             <h3 className="ald-section-title">Request Information</h3>

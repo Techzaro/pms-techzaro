@@ -3874,6 +3874,21 @@ class TaskController extends Controller
             'comment' => 'File uploaded: '.$file->getClientOriginalName(),
         ]);
 
+        try {
+            $this->auditService->log(
+                module: 'project_management',
+                action: 'create',
+                description: "Uploaded file \"{$customName}\" to task \"{$task->title}\"",
+                user: $user,
+                entityType: 'TaskFile',
+                entityId: $fileRecord->id,
+                newValues: ['file_name' => $customName, 'file_url' => $fileUrl],
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log task file upload audit', ['error' => $e->getMessage()]);
+        }
+
         return response()->json(['success' => true, 'message' => 'File uploaded successfully', 'file' => $fileRecord], 201);
     }
 
@@ -3917,6 +3932,21 @@ class TaskController extends Controller
             'action' => 'field_changed',
             'comment' => 'Link added: '.$linkName,
         ]);
+
+        try {
+            $this->auditService->log(
+                module: 'project_management',
+                action: 'create',
+                description: "Added link \"{$linkName}\" to task \"{$task->title}\"",
+                user: $user,
+                entityType: 'TaskFile',
+                entityId: $fileRecord->id,
+                newValues: ['link_name' => $linkName, 'link_url' => $validated['url']],
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log task link add audit', ['error' => $e->getMessage()]);
+        }
 
         return response()->json(['success' => true, 'message' => 'Link added successfully', 'file' => $fileRecord], 201);
     }
@@ -3966,6 +3996,14 @@ class TaskController extends Controller
             'action' => 'field_changed',
             'comment' => 'File removed: '.$fileName,
         ]);
+
+        $this->auditService->log(
+            'task_management', 'delete',
+            "Deleted file \"{$fileName}\" from task \"{$task->title}\"",
+            $user, 'task_file', $file->id,
+            ['file_name' => $fileName, 'task_id' => $task->id, 'task_title' => $task->title],
+            null, 'success'
+        );
 
         return response()->json(['success' => true, 'message' => 'File deleted successfully']);
     }

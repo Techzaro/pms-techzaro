@@ -724,7 +724,7 @@ class AuthController extends Controller
             'employee_code' => 'nullable|string|max:64',
             'job_started_date' => 'nullable|date',
             'job_ended_date' => 'nullable|date',
-            'gross_salary' => 'nullable|string|max:255',
+            'gross_salary' => 'nullable|string|max:1000',
             'applied_via' => 'nullable|string|max:255',
             'bank_name' => 'nullable|string|max:255',
             'bank_account_number' => 'nullable|string|max:64',

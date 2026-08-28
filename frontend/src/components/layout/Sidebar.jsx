@@ -577,15 +577,6 @@ function Sidebar() {
                     Application Logs
                   </Link>
                 )}
-                {(user.role === "admin" || user.role === "manager") && (
-                  <Link
-                    to={rolePath("feedback")}
-                    className={`sidebar-sub-link ${isActive("feedback") ? "active" : ""}`}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    User Feedback
-                  </Link>
-                )}
                 <Link
                   to={rolePath("settings/notifications")}
                   className={`sidebar-sub-link ${isActive("settings/notifications") ? "active" : ""}`}

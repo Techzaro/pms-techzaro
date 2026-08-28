@@ -164,11 +164,29 @@ class OrganizationOrgController extends Controller
             return response()->json(['success' => false, 'message' => 'Organization not found.'], 404);
         }
 
+        // Fetch file details before deletion
+        $fileRecord = OrganizationStorageUsage::on('mysql_master')
+            ->where('organization_id', $org->id)
+            ->where('id', $id)
+            ->first();
+
+        $fileName = $fileRecord?->file_name ?? 'Unknown';
+        $fileSizeMb = $fileRecord?->file_size_bytes ? round($fileRecord->file_size_bytes / (1024 * 1024), 2) : 0;
+        $fileCategory = $fileRecord?->category ?? 'Unknown';
+
         $result = \App\Services\StorageFileService::deleteFile($org, $id);
 
         if (!$result) {
             return response()->json(['success' => false, 'message' => 'Record not found.'], 404);
         }
+
+        $this->auditService->log(
+            'storage', 'delete',
+            "Deleted file \"{$fileName}\" ({$fileSizeMb} MB) from {$fileCategory}",
+            null, 'storage_file', $id,
+            ['file_name' => $fileName, 'file_size_mb' => $fileSizeMb, 'category' => $fileCategory],
+            null, 'success'
+        );
 
         return response()->json(['success' => true, 'message' => 'File deleted from storage and database.']);
     }
@@ -185,6 +203,16 @@ class OrganizationOrgController extends Controller
         }
 
         $result = \App\Services\StorageFileService::deleteOldFiles($org, $request->months);
+
+        if ($result['deleted_count'] > 0) {
+            $this->auditService->log(
+                'storage', 'bulk_delete',
+                "Bulk deleted {$result['deleted_count']} files older than {$request->months} months (freed {$result['freed_mb']} MB)",
+                null, 'storage_bulk', null,
+                ['type' => 'old', 'months' => $request->months, 'deleted_count' => $result['deleted_count'], 'freed_mb' => $result['freed_mb']],
+                null, 'success'
+            );
+        }
 
         return response()->json([
             'success' => true,
@@ -207,6 +235,16 @@ class OrganizationOrgController extends Controller
         }
 
         $result = \App\Services\StorageFileService::deleteLargeFiles($org, $request->min_size_gb);
+
+        if ($result['deleted_count'] > 0) {
+            $this->auditService->log(
+                'storage', 'bulk_delete',
+                "Bulk deleted {$result['deleted_count']} files larger than {$request->min_size_gb} GB (freed {$result['freed_mb']} MB)",
+                null, 'storage_bulk', null,
+                ['type' => 'large', 'min_size_gb' => $request->min_size_gb, 'deleted_count' => $result['deleted_count'], 'freed_mb' => $result['freed_mb']],
+                null, 'success'
+            );
+        }
 
         return response()->json([
             'success' => true,
@@ -652,6 +690,7 @@ class OrganizationOrgController extends Controller
 
         $query = OrganizationSupportTicket::on('mysql_master')
             ->where('organization_id', $org->id)
+            ->where('source', '!=', 'feedback')
             ->with('user:id,name,email');
 
         if ($status) {
@@ -690,10 +729,10 @@ class OrganizationOrgController extends Controller
         });
 
         $counts = [
-            'open'    => OrganizationSupportTicket::on('mysql_master')->where('organization_id', $org->id)->where('status', 'open')->count(),
-            'pending' => OrganizationSupportTicket::on('mysql_master')->where('organization_id', $org->id)->where('status', 'pending')->count(),
-            'resolved'=> OrganizationSupportTicket::on('mysql_master')->where('organization_id', $org->id)->where('status', 'resolved')->count(),
-            'closed'  => OrganizationSupportTicket::on('mysql_master')->where('organization_id', $org->id)->where('status', 'closed')->count(),
+            'open'    => OrganizationSupportTicket::on('mysql_master')->where('organization_id', $org->id)->where('source', '!=', 'feedback')->where('status', 'open')->count(),
+            'pending' => OrganizationSupportTicket::on('mysql_master')->where('organization_id', $org->id)->where('source', '!=', 'feedback')->where('status', 'pending')->count(),
+            'resolved'=> OrganizationSupportTicket::on('mysql_master')->where('organization_id', $org->id)->where('source', '!=', 'feedback')->where('status', 'resolved')->count(),
+            'closed'  => OrganizationSupportTicket::on('mysql_master')->where('organization_id', $org->id)->where('source', '!=', 'feedback')->where('status', 'closed')->count(),
         ];
 
         return response()->json([
@@ -712,6 +751,7 @@ class OrganizationOrgController extends Controller
 
         $ticket = OrganizationSupportTicket::on('mysql_master')
             ->where('organization_id', $org->id)
+            ->where('source', '!=', 'feedback')
             ->with('user:id,name,email')
             ->with('messages.user:id,name,email')
             ->find($ticketId);
@@ -752,7 +792,9 @@ class OrganizationOrgController extends Controller
                 'status'        => $ticket->status,
                 'priority'      => $ticket->priority,
                 'category'      => $ticket->category,
+                'source'        => $ticket->source ?? 'manual',
                 'assigned_to'   => $ticket->assigned_to_name,
+                'feedback_metadata' => $ticket->feedback_metadata,
                 'user'          => $ticket->user ? [
                     'id'    => $ticket->user->id,
                     'name'  => $ticket->user->name,
@@ -821,6 +863,7 @@ class OrganizationOrgController extends Controller
 
         $ticket = OrganizationSupportTicket::on('mysql_master')
             ->where('organization_id', $org->id)
+            ->where('source', '!=', 'feedback')
             ->find($ticketId);
 
         if (!$ticket) {
@@ -858,6 +901,7 @@ class OrganizationOrgController extends Controller
 
         $ticket = OrganizationSupportTicket::on('mysql_master')
             ->where('organization_id', $org->id)
+            ->where('source', '!=', 'feedback')
             ->find($ticketId);
 
         if (!$ticket) {
@@ -881,6 +925,7 @@ class OrganizationOrgController extends Controller
 
         $ticketIds = OrganizationSupportTicket::on('mysql_master')
             ->where('organization_id', $org->id)
+            ->where('source', '!=', 'feedback')
             ->where('status', '!=', 'closed')
             ->pluck('id');
 
