@@ -259,7 +259,7 @@ export function KnowledgeBaseWidget() {
           {articles.map((item) => {
             if (!item) return null;
             const updatedDate = item.updated_at ? new Date(item.updated_at).toLocaleDateString([], { month: "short", day: "numeric" }) : "";
-            const catName = item.categoryRelation?.name || item.category || "General";
+            const catName = item.categoryRelation?.name || item.category || "";
 
             return (
               <div

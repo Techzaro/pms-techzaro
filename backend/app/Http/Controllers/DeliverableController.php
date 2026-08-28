@@ -1016,7 +1016,6 @@ class DeliverableController extends Controller
             \Log::error('Failed to cleanup deliverable files: ' . $e->getMessage());
         }
     }
-    }
 
     /**
      * Submit a deliverable for review by its creator.

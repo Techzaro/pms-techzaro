@@ -613,10 +613,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/projects/{project}/unified-activity', [ProjectController::class, 'unifiedActivity']);
 
     /*
-    | My Activity (all authenticated users)
-    | Personal audit log entries for the current user.
+    | My Activity & Activity Logging (all authenticated users)
+    | Personal audit log entries and direct activity event logging.
     */
     Route::get('/my-activity', [AuditLogController::class, 'myActivity']);
+    Route::post('/activity-logs', [AuditLogController::class, 'store']);
+    Route::post('/audit-logs', [AuditLogController::class, 'store']);
+    Route::get('/activity-logs', [AuditLogController::class, 'index']);
+    Route::get('/activity-logs/modules', [AuditLogController::class, 'modules']);
 
     /*
     | Audit Log Routes

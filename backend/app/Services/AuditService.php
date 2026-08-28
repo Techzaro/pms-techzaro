@@ -68,6 +68,12 @@ class AuditService
         if (!empty($filters['action'])) {
             $query->action($filters['action']);
         }
+        if (!empty($filters['entity_id'])) {
+            $query->where('entity_id', $filters['entity_id']);
+        }
+        if (!empty($filters['entity_type'])) {
+            $query->where('entity_type', $filters['entity_type']);
+        }
         if (!empty($filters['status'])) {
             $query->status($filters['status']);
         }

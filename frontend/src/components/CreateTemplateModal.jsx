@@ -14,11 +14,12 @@ export default function CreateTemplateModal({ isOpen, onClose, onSuccess, initia
   const [file, setFile] = useState(null);
   const [deleteExistingFile, setDeleteExistingFile] = useState(false);
   const [customCategory, setCustomCategory] = useState("");
+  const [categories, setCategories] = useState([]);
 
   const [form, setForm] = useState({
     title: "",
     description: "",
-    category: "General",
+    category: "",
     visibility_level: "private",
     project_id: "",
   });
@@ -29,17 +30,13 @@ export default function CreateTemplateModal({ isOpen, onClose, onSuccess, initia
 
   useEffect(() => {
     if (initialTemplate) {
-      const isKnownCategory = ["General", "Development", "Design", "QA & Testing", "Operations", "Marketing"].includes(initialTemplate.category);
       setForm({
         title: initialTemplate.title || "",
         description: initialTemplate.description || "",
-        category: isKnownCategory ? (initialTemplate.category || "General") : "custom",
+        category: initialTemplate.category_id ? String(initialTemplate.category_id) : (initialTemplate.category || ""),
         visibility_level: initialTemplate.visibility_level || "private",
         project_id: initialTemplate.project_id || "",
       });
-      if (!isKnownCategory && initialTemplate.category) {
-        setCustomCategory(initialTemplate.category);
-      }
       if (initialTemplate.data?.subtasks) {
         setSubtasks(initialTemplate.data.subtasks.map((s) => ({ title: typeof s === "string" ? s : s.title })));
       }
@@ -54,6 +51,17 @@ export default function CreateTemplateModal({ isOpen, onClose, onSuccess, initia
   useEffect(() => {
     const token = authToken();
     if (!token) return;
+
+    fetch(`${API_URL}/template-categories`, {
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      skipLoader: true,
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        const catData = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
+        setCategories(catData);
+      })
+      .catch(() => {});
 
     fetch(`${API_URL}/projects`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -74,12 +82,8 @@ export default function CreateTemplateModal({ isOpen, onClose, onSuccess, initia
   ];
 
   const categoryOptions = [
-    { value: "General", label: t("General") },
-    { value: "Development", label: t("Development", { defaultValue: "Development" }) },
-    { value: "Design", label: t("Design", { defaultValue: "Design" }) },
-    { value: "QA & Testing", label: t("QA & Testing", { defaultValue: "QA & Testing" }) },
-    { value: "Operations", label: t("Operations", { defaultValue: "Operations" }) },
-    { value: "Marketing", label: t("Marketing", { defaultValue: "Marketing" }) },
+    { value: "", label: t("Select Category...", { defaultValue: "Select Category..." }) },
+    ...categories.map((c) => ({ value: String(c.id || c.name), label: c.name })),
     { value: "custom", label: t("+ Add Custom / New Category...", { defaultValue: "+ Add Custom / New Category..." }) },
   ];
 

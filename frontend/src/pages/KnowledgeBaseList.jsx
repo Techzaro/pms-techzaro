@@ -46,7 +46,6 @@ export default function KnowledgeBaseList() {
   const [statusFilter, setStatusFilter] = useState("all");
 
   const [deletingItem, setDeletingItem] = useState(null);
-  const [readingItem, setReadingItem] = useState(null);
 
   // New Category Modal State
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
@@ -435,140 +434,6 @@ export default function KnowledgeBaseList() {
         </div>
       </div>
 
-      {/* ARTICLE READER MODAL */}
-      {readingItem && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
-          <div style={{ background: "var(--bg-card)", borderRadius: "14px", width: "100%", maxWidth: "850px", maxHeight: "90vh", display: "flex", flexDirection: "column", border: "1px solid var(--border-color)", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.3)" }}>
-            {/* HEADER */}
-            <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px" }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "8px", flexWrap: "wrap" }}>
-                  <span style={{ fontSize: "11px", fontWeight: 600, color: "#2563eb", background: "#eff6ff", padding: "2px 8px", borderRadius: "4px" }}>
-                    {readingItem.categoryRelation?.name || readingItem.category || t("General", { defaultValue: "General" })}
-                  </span>
-                  {visibilityBadge(readingItem.visibility_level)}
-                  {readingItem.status === "draft" && (
-                    <span style={{ fontSize: "11px", fontWeight: 600, color: "#d97706", background: "#fef3c7", padding: "2px 8px", borderRadius: "4px" }}>
-                      {t("Draft", { defaultValue: "Draft" })}
-                    </span>
-                  )}
-                  {readingItem.views_count > 0 && (
-                    <span style={{ fontSize: "11px", color: "var(--text-muted)", display: "inline-flex", alignItems: "center", gap: "3px" }}>
-                      <Eye size={12} /> {t("{{count}} views", { count: readingItem.views_count, defaultValue: `${readingItem.views_count} views` })}
-                    </span>
-                  )}
-                </div>
-                <h2 style={{ margin: 0, fontSize: "22px", fontWeight: 700, color: "var(--text-primary)" }}>
-                  {readingItem.title}
-                </h2>
-                <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "6px", display: "flex", alignItems: "center", gap: "16px" }}>
-                  <span>{t("Author:", { defaultValue: "Author:" })} <strong>{readingItem.creator?.name || t("System", { defaultValue: "System" })}</strong></span>
-                  <span>{t("Updated:", { defaultValue: "Updated:" })} {new Date(readingItem.updated_at || readingItem.created_at).toLocaleDateString()}</span>
-                </div>
-              </div>
-
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                {(readingItem.created_by === user.id || ["admin", "manager"].includes(user.role)) && (
-                  <button
-                    onClick={() => {
-                      const id = readingItem.id;
-                      setReadingItem(null);
-                      navigate(rolePath(`knowledge-base/edit/${id}`));
-                    }}
-                    style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 12px", borderRadius: "6px", border: "1px solid #bfdbfe", background: "#eff6ff", color: "#1d4ed8", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
-                  >
-                    <Edit size={14} /> {t("Edit", { defaultValue: "Edit" })}
-                  </button>
-                )}
-                <button
-                  onClick={() => setReadingItem(null)}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "4px" }}
-                >
-                  <X size={20} />
-                </button>
-              </div>
-            </div>
-
-            {/* BODY */}
-            <div style={{ padding: "24px", overflowY: "auto", flex: 1, fontSize: "15px", lineHeight: "1.75", color: "var(--text-primary)" }}>
-              {readingItem.content ? (
-                <div
-                  className="kb-rendered-html"
-                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(readingItem.content) }}
-                />
-              ) : (
-                <p style={{ color: "var(--text-muted)", fontStyle: "italic" }}>{t("No document body provided.", { defaultValue: "No document body provided." })}</p>
-              )}
-
-              {/* TAGS */}
-              {Array.isArray(readingItem.tags) && readingItem.tags.length > 0 && (
-                <div style={{ marginTop: "24px", paddingTop: "16px", borderTop: "1px solid var(--border-color)", display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                  {readingItem.tags.map((tItem, idx) => (
-                    <span key={idx} className="kb-tag-pill">#{tItem}</span>
-                  ))}
-                </div>
-              )}
-
-              {/* ATTACHMENT */}
-              {readingItem.file_path && (
-                <div style={{ marginTop: "20px", padding: "12px 16px", background: "var(--bg-hover)", borderRadius: "8px", border: "1px solid var(--border-color)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "13px" }}>
-                    <Paperclip color="#2563eb" size={18} />
-                    <span style={{ fontWeight: 500 }}>{readingItem.file_name || readingItem.file_path.split("/").pop()}</span>
-                  </div>
-                  <a
-                    href={`${API_URL}/storage/${readingItem.file_path}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 14px", borderRadius: "6px", background: "#2563eb", color: "#ffffff", fontSize: "12px", fontWeight: 600, textDecoration: "none" }}
-                  >
-                    <Download size={14} /> {t("Download", { defaultValue: "Download" })}
-                  </a>
-                </div>
-              )}
-
-              {/* REFERENCE / EXTERNAL LINK */}
-              {readingItem.reference_link && (
-                <div style={{ marginTop: "16px", padding: "12px 16px", background: "var(--bg-hover)", borderRadius: "8px", border: "1px solid var(--border-color)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "13px", minWidth: 0, flex: 1, marginRight: "12px" }}>
-                    <ExternalLink color="#2563eb" size={18} style={{ flexShrink: 0 }} />
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: 600, textTransform: "uppercase" }}>{t("Reference Link", { defaultValue: "Reference Link" })}</div>
-                      <a
-                        href={readingItem.reference_link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: "#2563eb", textDecoration: "none", fontWeight: 500, wordBreak: "break-all" }}
-                      >
-                        {readingItem.reference_link}
-                      </a>
-                    </div>
-                  </div>
-                  <a
-                    href={readingItem.reference_link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 14px", borderRadius: "6px", background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", fontSize: "12px", fontWeight: 600, textDecoration: "none", flexShrink: 0 }}
-                  >
-                    {t("Open Link", { defaultValue: "Open Link" })} <ExternalLink size={13} />
-                  </a>
-                </div>
-              )}
-            </div>
-
-            {/* FOOTER */}
-            <div style={{ padding: "14px 24px", borderTop: "1px solid var(--border-color)", display: "flex", justifyContent: "flex-end" }}>
-              <button
-                onClick={() => setReadingItem(null)}
-                style={{ padding: "8px 18px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-hover)", color: "var(--text-primary)", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
-              >
-                {t("Close", { defaultValue: "Close" })}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* CREATE CATEGORY MODAL */}
       {categoryModalOpen && (
         <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
@@ -718,7 +583,7 @@ export default function KnowledgeBaseList() {
                 borderRadius: "4px",
               }}
             >
-              {item.categoryRelation?.name || item.category || t("General", { defaultValue: "General" })}
+              {item.categoryRelation?.name || item.category || ""}
             </span>
 
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
@@ -728,7 +593,7 @@ export default function KnowledgeBaseList() {
           </div>
 
           <h3
-            onClick={() => setReadingItem(item)}
+            onClick={() => navigate(rolePath(`knowledge-base/${item.id}`))}
             style={{ margin: "0 0 8px", fontSize: "16px", fontWeight: 600, color: "var(--text-primary)", cursor: "pointer", lineHeight: "1.3" }}
           >
             {item.title}
@@ -809,7 +674,7 @@ export default function KnowledgeBaseList() {
           </div>
 
           <button
-            onClick={() => setReadingItem(item)}
+            onClick={() => navigate(rolePath(`knowledge-base/${item.id}`))}
             style={{
               display: "inline-flex",
               alignItems: "center",

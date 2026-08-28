@@ -21,6 +21,8 @@ class AuditLogController extends Controller
         $filters = $request->validate([
             'module' => 'nullable|string|max:50',
             'action' => 'nullable|string|max:50',
+            'entity_id' => 'nullable|integer',
+            'entity_type' => 'nullable|string|max:100',
             'status' => 'nullable|string|in:success,failed',
             'user_id' => 'nullable|integer|exists:users,id',
             'date_from' => 'nullable|date',
@@ -125,5 +127,39 @@ class AuditLogController extends Controller
         $logs = $paginator instanceof \Illuminate\Pagination\AbstractPaginator ? $paginator->getCollection() : $paginator;
 
         return $this->exportService->exportExcel($logs, $timezone);
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'module' => 'required|string|max:50',
+            'action' => 'required|string|max:50',
+            'entity_id' => 'nullable|integer',
+            'entity_type' => 'nullable|string|max:100',
+            'description' => 'nullable|string|max:1000',
+            'title' => 'nullable|string|max:255',
+            'type' => 'nullable|string|max:50',
+            'old_values' => 'nullable|array',
+            'new_values' => 'nullable|array',
+        ]);
+
+        $description = $validated['description'] ?? ($validated['title'] ?? "{$validated['module']}.{$validated['action']}");
+
+        $log = $this->auditService->log(
+            module: $validated['module'],
+            action: $validated['action'],
+            description: $description,
+            user: $request->user(),
+            entityType: $validated['entity_type'] ?? $validated['module'],
+            entityId: $validated['entity_id'] ?? null,
+            oldValues: $validated['old_values'] ?? null,
+            newValues: $validated['new_values'] ?? null,
+            status: 'success'
+        );
+
+        return response()->json([
+            'success' => true,
+            'data' => $log,
+        ], 201);
     }
 }

@@ -99,15 +99,15 @@ export default function Templates() {
   const visibilityBadge = (level) => {
     switch (level) {
       case "private":
-        return <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: "12px", background: "#f3f4f6", color: "#4b5563" }}><Lock size={12} /> {t("Private", { defaultValue: "Private" })}</span>;
-      case "project_team":
-        return <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: "12px", background: "#eff6ff", color: "#1d4ed8" }}><Users size={12} /> {t("Project Team", { defaultValue: "Project Team" })}</span>;
-      case "department_team":
-        return <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: "12px", background: "#f0fdf4", color: "#15803d" }}><Building size={12} /> {t("Department", { defaultValue: "Department" })}</span>;
       case "organization":
-        return <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: "12px", background: "#fef3c7", color: "#b45309" }}><ShieldCheck size={12} /> {t("Organization", { defaultValue: "Organization" })}</span>;
+        return <span style={{ fontSize: "11px", fontWeight: 600, color: "#10b981", background: "#d1fae5", padding: "2px 8px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}><Globe size={11} /> {t("Organization", { defaultValue: "Organization" })}</span>;
+      case "department_team":
+        return <span style={{ fontSize: "11px", fontWeight: 600, color: "#6366f1", background: "#e0e7ff", padding: "2px 8px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}><Building size={11} /> {t("Department Team", { defaultValue: "Department Team" })}</span>;
+      case "project_team":
+        return <span style={{ fontSize: "11px", fontWeight: 600, color: "#f59e0b", background: "#fef3c7", padding: "2px 8px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}><FolderGit2 size={11} /> {t("Project Team", { defaultValue: "Project Team" })}</span>;
+      case "private":
       default:
-        return null;
+        return <span style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", background: "#f1f5f9", padding: "2px 8px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}><Lock size={11} /> {t("Private", { defaultValue: "Private" })}</span>;
     }
   };
 
@@ -125,7 +125,6 @@ export default function Templates() {
             </p>
           </div>
 
-          {/* Universal Creation Button accessible to ALL roles */}
           <button
             onClick={() => { setEditingTemplate(null); setCreateModalOpen(true); }}
             style={{
@@ -166,12 +165,9 @@ export default function Templates() {
             style={{ padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "13px" }}
           >
             <option value="all">{t("All Categories", { defaultValue: "All Categories" })}</option>
-            <option value="General">{t("General", { defaultValue: "General" })}</option>
-            <option value="Development">{t("Development", { defaultValue: "Development" })}</option>
-            <option value="Design">{t("Design", { defaultValue: "Design" })}</option>
-            <option value="QA & Testing">{t("QA & Testing", { defaultValue: "QA & Testing" })}</option>
-            <option value="Operations">{t("Operations", { defaultValue: "Operations" })}</option>
-            <option value="Marketing">{t("Marketing", { defaultValue: "Marketing" })}</option>
+            {availableCategories.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
           </select>
 
           <select
@@ -206,9 +202,11 @@ export default function Templates() {
                 <div key={template.id} style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "12px", padding: "16px", display: "flex", flexDirection: "column", justifyContent: "space-between", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
                   <div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
-                      <span style={{ fontSize: "11px", fontWeight: 600, color: "#2563eb", background: "#dbeafe", padding: "2px 8px", borderRadius: "4px" }}>
-                        {t(template.category || "General", { defaultValue: template.category || "General" })}
-                      </span>
+                      {template.category && (
+                        <span style={{ fontSize: "11px", fontWeight: 600, color: "#2563eb", background: "#dbeafe", padding: "2px 8px", borderRadius: "4px" }}>
+                          {template.category}
+                        </span>
+                      )}
                       {visibilityBadge(template.visibility_level)}
                     </div>
 

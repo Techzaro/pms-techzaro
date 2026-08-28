@@ -14,31 +14,26 @@ export default function CreateKnowledgeModal({ isOpen, onClose, onSuccess, initi
   const [file, setFile] = useState(null);
   const [deleteExistingFile, setDeleteExistingFile] = useState(false);
   const [customCategory, setCustomCategory] = useState("");
+  const [categories, setCategories] = useState([]);
 
   const [form, setForm] = useState({
     title: "",
     content: "",
-    category: "General",
+    category: "",
     visibility_level: "organization",
     project_id: "",
   });
 
   useEffect(() => {
     if (initialItem) {
-      const knownCategories = ["General", "Best Practices", "Technical Documentation", "Onboarding", "Guidelines", "Process & SOPs"];
-      const isKnown = knownCategories.includes(initialItem.category);
-
       setForm({
         title: initialItem.title || "",
         content: initialItem.content || "",
-        category: isKnown ? (initialItem.category || "General") : "custom",
+        category: initialItem.category_id ? String(initialItem.category_id) : (initialItem.category || ""),
         visibility_level: initialItem.visibility_level || "organization",
         project_id: initialItem.project_id || "",
       });
 
-      if (!isKnown && initialItem.category) {
-        setCustomCategory(initialItem.category);
-      }
       setDeleteExistingFile(false);
       setFile(null);
     }
@@ -47,6 +42,17 @@ export default function CreateKnowledgeModal({ isOpen, onClose, onSuccess, initi
   useEffect(() => {
     const token = authToken();
     if (!token) return;
+
+    fetch(`${API_URL}/kb-categories`, {
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      skipLoader: true,
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        const catData = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
+        setCategories(catData);
+      })
+      .catch(() => {});
 
     fetch(`${API_URL}/projects`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -67,12 +73,8 @@ export default function CreateKnowledgeModal({ isOpen, onClose, onSuccess, initi
   ];
 
   const categoryOptions = [
-    { value: "General", label: t("General") },
-    { value: "Best Practices", label: t("Best Practices", { defaultValue: "Best Practices" }) },
-    { value: "Technical Documentation", label: t("Technical Documentation", { defaultValue: "Technical Documentation" }) },
-    { value: "Onboarding", label: t("Onboarding", { defaultValue: "Onboarding" }) },
-    { value: "Guidelines", label: t("Guidelines", { defaultValue: "Guidelines" }) },
-    { value: "Process & SOPs", label: t("Process & SOPs", { defaultValue: "Process & SOPs" }) },
+    { value: "", label: t("Select Category...", { defaultValue: "Select Category..." }) },
+    ...categories.map((c) => ({ value: String(c.id), label: c.name })),
     { value: "custom", label: t("+ Add Custom / New Category...", { defaultValue: "+ Add Custom / New Category..." }) },
   ];
 
