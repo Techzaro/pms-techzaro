@@ -77,7 +77,7 @@ function MemberTeam() {
 
   const breadcrumbs = [
     { label: t("Dashboard", { defaultValue: "Dashboard" }), path: rolePath("dashboard") },
-    { label: t("Team", { defaultValue: "Team" }) },
+    { label: t("Teams", { defaultValue: "Teams" }) },
   ];
 
   return (

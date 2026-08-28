@@ -461,7 +461,7 @@ function Sidebar() {
               onClick={(e) => e.stopPropagation()}
             >
               <MdPeople />
-              <span>{t("Team")}</span>
+              <span>{t("Teams", { defaultValue: "Teams" })}</span>
             </Link>
           )}
 
@@ -473,7 +473,7 @@ function Sidebar() {
               onClick={(e) => e.stopPropagation()}
             >
               <MdPeople />
-              <span>{t("Team")}</span>
+              <span>{t("Teams", { defaultValue: "Teams" })}</span>
             </Link>
           )}
 

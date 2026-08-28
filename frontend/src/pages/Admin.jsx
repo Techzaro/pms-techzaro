@@ -679,14 +679,6 @@ function Admin() {
   const [projectSlide, setProjectSlide] = useState(0);
   const [taskSlide, setTaskSlide] = useState(0);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
-  const [pastActivityOpen, setPastActivityOpen] = useState(false);
-  // Fetch past activity data only when the section is expanded
-  const { data: pastActivityData, isLoading: pastLoading } = useApiQuery(
-    ["activities", "past"],
-    "/activities/past",
-    null,
-    { enabled: pastActivityOpen, staleTime: 300000 }
-  );
   const PROJECTS_PER_VIEW = isMobile ? 1 : 3;
   const sliderRef = useRef(null);
   const taskSliderRef = useRef(null);
@@ -1121,15 +1113,15 @@ function Admin() {
                   onDrop={(e) => handleSecDrop(e, index)}
                   style={sectionWrapperStyle}
                 >
-                  <div className="today-activity-section" style={{ background: "var(--bg-card)", borderRadius: "20px", padding: "24px", boxShadow: "var(--shadow-sm)", marginBottom: pastActivityOpen ? "30px" : 0, position: "relative" }}>
+                  <div className="today-activity-section" style={{ background: "var(--bg-card)", borderRadius: "20px", padding: "24px", boxShadow: "var(--shadow-sm)", marginBottom: 0, position: "relative" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
                       <DragGripHeader title={t("Today's Activity", { defaultValue: "Today's Activity" })} />
                       <div>
                         <button
-                          onClick={() => setPastActivityOpen(!pastActivityOpen)}
+                          onClick={() => navigate(rolePath("history"))}
                           style={{ background: "transparent", border: "none", color: "var(--color-primary)", fontWeight: "600", cursor: "pointer", fontSize: "14px" }}
                         >
-                          {pastActivityOpen ? t("Hide Past", { defaultValue: "Hide Past" }) : t("Past Activities", { defaultValue: "Past Activities" })}
+                          {t("My Activities", { defaultValue: "My Activities" })}
                         </button>
                       </div>
                     </div>
@@ -1186,65 +1178,6 @@ function Admin() {
                       })
                     )}
                   </div>
-
-                  {pastActivityOpen && (
-                    <div className="past-activity-section" style={{ background: "var(--bg-card)", borderRadius: "20px", padding: "24px", boxShadow: "var(--shadow-sm)", marginTop: "20px" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-                        <h3 style={{ margin: 0, fontSize: "20px", fontWeight: "600", color: "var(--text-heading)" }}>{t("Past Activity", { defaultValue: "Past Activity" })}</h3>
-                        <button
-                          onClick={() => setPastActivityOpen(false)}
-                          style={{ background: "transparent", border: "none", color: "var(--color-primary)", fontWeight: "600", cursor: "pointer", fontSize: "14px" }}
-                        >
-                          {t("Collapse", { defaultValue: "Collapse" })}
-                        </button>
-                      </div>
-                      {pastLoading ? (
-                        <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>{t("Loading past activities...", { defaultValue: "Loading past activities..." })}</p>
-                      ) : (pastActivityData?.data || []).length === 0 ? (
-                        <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>{t("No past activities", { defaultValue: "No past activities" })}</p>
-                      ) : (
-                        (pastActivityData?.data || []).map((group, gi) => (
-                          <div key={group.date} style={{ marginBottom: gi < (pastActivityData?.data || []).length - 1 ? "24px" : "0" }}>
-                            <h4 style={{ margin: "0 0 12px 0", fontSize: "15px", fontWeight: "600", color: "var(--text-dark)", borderBottom: "1px solid var(--border-light)", paddingBottom: "8px" }}>
-                              {group.label}
-                            </h4>
-                            {group.activities.map((item, idx) => {
-                              const cfg = activityActionConfig[item.action] || activityActionConfig.submitted;
-                              const isViewed = viewedActivities.includes(item.id);
-                              return (
-                                <div
-                                  key={item.id || idx}
-                                  className={`activity-item ${isViewed ? "activity-item--read" : "activity-item--unread"}`}
-                                  onClick={() => {
-                                    markActivityViewed(item.id);
-                                    const from = getActivityFrom(item);
-                                    const dest = getActivityDestination(item);
-                                    navigate(`${dest}${dest.includes("?") ? "&" : "?"}from=${from}`, { state: { from } });
-                                  }}
-                                >
-                                  <div className="activity-icon-circle" style={{
-                                    width: "36px", height: "36px", borderRadius: "50%",
-                                    background: cfg.bg, display: "flex", alignItems: "center",
-                                    justifyContent: "center", flexShrink: 0,
-                                  }}>
-                                    <span style={{ fontSize: "14px", color: cfg.color }}>{cfg.icon}</span>
-                                  </div>
-                                  <div style={{ flex: 1, minWidth: 0 }}>
-                                    <p className="activity-text" style={{ margin: 0, fontSize: "14px", lineHeight: "1.4" }}>
-                                      {getActivityMessage(item)}
-                                    </p>
-                                  </div>
-                                  <span className="activity-time" style={{ fontSize: "13px", whiteSpace: "nowrap" }}>
-                                    {formatExactTime(item.created_at)}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
                 </div>
               );
             }

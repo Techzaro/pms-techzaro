@@ -92,7 +92,14 @@ function isToday(d) {
  */
 function Calender() {
   const { t } = useTranslation();
-  const [viewMode, setViewMode] = useState("Month");
+  const [viewMode, setViewMode] = useState(() => {
+    return localStorage.getItem("pms_calendar_view_mode") || "Month";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("pms_calendar_view_mode", viewMode);
+  }, [viewMode]);
+
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);

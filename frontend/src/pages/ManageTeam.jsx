@@ -138,7 +138,7 @@ function ManageTeam() {
   const [removeMemberData, setRemoveMemberData] = useState({ teamId: null, memberId: null, memberName: "" });
   const [editTeamId, setEditTeamId] = useState(null);
   const [page, setPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
+  const [pageSize, setPageSize] = useState(10);
 
   const navigate = useNavigate();
   const { submitting, run } = useSubmit();
@@ -501,12 +501,47 @@ function ManageTeam() {
     (u) => !currentTeamMembers.some((m) => m.id === u.id)
   );
 
-  // Apply search filter, team filter, and sorting to teams list
+  // Apply search filter, team filter, date range filter, and sorting to teams list
   const filteredTeams = teams
     .filter((t) => {
       const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesTeam = !selectedTeamFilter || String(t.id) === String(selectedTeamFilter);
-      return matchesSearch && matchesTeam;
+
+      let matchesDate = true;
+      if (timeFilter && t.created_at) {
+        const teamDate = new Date(t.created_at);
+        const now = new Date();
+
+        if (timeFilter === "7") {
+          const sevenDaysAgo = new Date();
+          sevenDaysAgo.setDate(now.getDate() - 7);
+          sevenDaysAgo.setHours(0, 0, 0, 0);
+          matchesDate = teamDate >= sevenDaysAgo;
+        } else if (timeFilter === "30") {
+          const thirtyDaysAgo = new Date();
+          thirtyDaysAgo.setDate(now.getDate() - 30);
+          thirtyDaysAgo.setHours(0, 0, 0, 0);
+          matchesDate = teamDate >= thirtyDaysAgo;
+        } else if (timeFilter === "180") {
+          const sixMonthsAgo = new Date();
+          sixMonthsAgo.setMonth(now.getMonth() - 6);
+          sixMonthsAgo.setHours(0, 0, 0, 0);
+          matchesDate = teamDate >= sixMonthsAgo;
+        } else if (timeFilter === "custom") {
+          if (startDate) {
+            const start = new Date(startDate);
+            start.setHours(0, 0, 0, 0);
+            if (teamDate < start) matchesDate = false;
+          }
+          if (endDate) {
+            const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+            if (teamDate > end) matchesDate = false;
+          }
+        }
+      }
+
+      return matchesSearch && matchesTeam && matchesDate;
     })
     .sort((a, b) => {
       if (sortOption === "newest") return new Date(b.created_at) - new Date(a.created_at);
@@ -517,8 +552,8 @@ function ManageTeam() {
       return 0;
     });
 
-  const totalTeamPages = Math.ceil(filteredTeams.length / ITEMS_PER_PAGE);
-  const paginatedTeams = filteredTeams.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+  const totalTeamPages = Math.ceil(filteredTeams.length / pageSize) || 1;
+  const paginatedTeams = filteredTeams.slice((page - 1) * pageSize, page * pageSize);
 
   const selectedTeamName = useMemo(() => {
     if (!selectedTeamFilter) return "";
@@ -543,9 +578,11 @@ function ManageTeam() {
         <div className="mt-header">
           <div className="mt-header-left">
             <h1 className="mt-title">{t("Team Management", { defaultValue: "Team Management" })}</h1>
-            <p className="mt-subtitle">{t("Organize your workforce into teams.", { defaultValue: "Organize your workforce into teams." })}</p>
+            <p className="mt-subtitle">
+              {t("Organize users into functional teams, assign team leads, and manage member working hours and schedules.", { defaultValue: "Organize users into functional teams, assign team leads, and manage member working hours and schedules." })}
+            </p>
           </div>
-          <button className="mt-create-btn" onClick={openCreateTeamModal}>
+          <button className="mt-create-btn" onClick={() => openCreateTeamModal()}>
             <MdAdd size={20} />
             {t("Create Team", { defaultValue: "Create Team" })}
           </button>
@@ -580,32 +617,61 @@ function ManageTeam() {
               </span>
             </div>
           )}
-          <select className="reports-filter" value={timeFilter} onChange={(e) => { setTimeFilter(e.target.value); setPage(1); }}>
-            <option value="">{t("All Time", { defaultValue: "All Time" })}</option>
-            <option value="7">{t("Last 7 Days", { defaultValue: "Last 7 Days" })}</option>
-            <option value="30">{t("Last 30 Days", { defaultValue: "Last 30 Days" })}</option>
-            <option value="180">{t("Last 6 Months", { defaultValue: "Last 6 Months" })}</option>
-            <option value="custom">{t("Custom Range", { defaultValue: "Custom Range" })}</option>
-          </select>
+
+          {/* DATE RANGE FILTER */}
+          <div className="mt-sort-box">
+            <MdCalendarToday size={15} style={{ color: "var(--text-muted)", marginRight: "2px" }} />
+            <span>
+              {timeFilter === "7"
+                ? t("Last 7 Days", { defaultValue: "Last 7 Days" })
+                : timeFilter === "30"
+                ? t("Last 30 Days", { defaultValue: "Last 30 Days" })
+                : timeFilter === "180"
+                ? t("Last 6 Months", { defaultValue: "Last 6 Months" })
+                : timeFilter === "custom"
+                ? t("Custom Range", { defaultValue: "Custom Range" })
+                : t("All Time", { defaultValue: "All Time" })}
+            </span>
+            <MdExpandMore size={18} />
+            <select value={timeFilter} onChange={(e) => { setTimeFilter(e.target.value); setPage(1); }}>
+              <option value="">{t("All Time", { defaultValue: "All Time" })}</option>
+              <option value="7">{t("Last 7 Days", { defaultValue: "Last 7 Days" })}</option>
+              <option value="30">{t("Last 30 Days", { defaultValue: "Last 30 Days" })}</option>
+              <option value="180">{t("Last 6 Months", { defaultValue: "Last 6 Months" })}</option>
+              <option value="custom">{t("Custom Range", { defaultValue: "Custom Range" })}</option>
+            </select>
+          </div>
+
           {timeFilter === "custom" && (
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <input
                 type="date"
                 value={startDate}
                 onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
-                style={{ padding: "6px 10px", borderRadius: "8px", border: "1px solid var(--border-color)", fontSize: "13px", background: "var(--bg-card)", color: "var(--text-primary)" }}
+                style={{ height: "42px", padding: "0 12px", borderRadius: "12px", border: "1px solid var(--border-color)", fontSize: "13px", background: "var(--bg-card)", color: "var(--text-primary)", boxSizing: "border-box" }}
               />
-              <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>{t("to", { defaultValue: "to" })}</span>
+              <span style={{ fontSize: "13px", color: "var(--text-secondary)", fontWeight: 500 }}>{t("to", { defaultValue: "to" })}</span>
               <input
                 type="date"
                 value={endDate}
                 onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
-                style={{ padding: "6px 10px", borderRadius: "8px", border: "1px solid var(--border-color)", fontSize: "13px", background: "var(--bg-card)", color: "var(--text-primary)" }}
+                style={{ height: "42px", padding: "0 12px", borderRadius: "12px", border: "1px solid var(--border-color)", fontSize: "13px", background: "var(--bg-card)", color: "var(--text-primary)", boxSizing: "border-box" }}
               />
             </div>
           )}
+
           <div className="mt-sort-box">
-            <span>{t("Sort by", { defaultValue: "Sort by" })}</span>
+            <span>
+              {sortOption === "newest"
+                ? t("Newest First", { defaultValue: "Newest First" })
+                : sortOption === "oldest"
+                ? t("Oldest First", { defaultValue: "Oldest First" })
+                : sortOption === "name-asc"
+                ? t("Name A-Z", { defaultValue: "Name A-Z" })
+                : sortOption === "name-desc"
+                ? t("Name Z-A", { defaultValue: "Name Z-A" })
+                : t("Sort by", { defaultValue: "Sort by" })}
+            </span>
             <MdExpandMore size={18} />
             <select value={sortOption} onChange={(e) => setSortOption(e.target.value)}>
               <option value="newest">{t("Newest First", { defaultValue: "Newest First" })}</option>
@@ -753,8 +819,44 @@ function ManageTeam() {
           )}
         </div>
 
-        {totalTeamPages > 1 && (
-          <Pagination currentPage={page} totalPages={totalTeamPages} onPageChange={setPage} />
+        {/* PAGINATION & ROWS PER PAGE */}
+        {filteredTeams.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px", marginTop: "24px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "13px", color: "var(--text-secondary)" }}>
+              <span>
+                {t("Showing", { defaultValue: "Showing" })} {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, filteredTeams.length)} {t("of", { defaultValue: "of" })} {filteredTeams.length} {t("teams", { defaultValue: "teams" })}
+              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span>{t("Rows per page:", { defaultValue: "Rows per page:" })}</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setPage(1);
+                  }}
+                  style={{
+                    padding: "4px 8px",
+                    borderRadius: "6px",
+                    border: "1px solid var(--border-color)",
+                    background: "var(--bg-card)",
+                    color: "var(--text-primary)",
+                    fontSize: "13px",
+                    cursor: "pointer",
+                    outline: "none",
+                  }}
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={30}>30</option>
+                  <option value={50}>50</option>
+                </select>
+              </div>
+            </div>
+
+            {totalTeamPages > 1 && (
+              <Pagination currentPage={page} totalPages={totalTeamPages} onPageChange={setPage} />
+            )}
+          </div>
         )}
 
         {/* MODAL */}
@@ -942,7 +1044,9 @@ function ManageTeam() {
                   </div>
 
                   <div style={{ width: "100%", marginBottom: "20px" }}>
-                    <label className="mt-field-label">{t("Select Members", { defaultValue: "Select Members" })}</label>
+                    <label className="mt-field-label">
+                      {t("Select Members", { defaultValue: "Select Members" })} <span className="text-danger" style={{ color: "#ef4444" }}>*</span>
+                    </label>
                     <div
                       style={{
                         display: "flex",

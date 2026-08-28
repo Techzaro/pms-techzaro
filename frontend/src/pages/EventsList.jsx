@@ -42,7 +42,13 @@ export default function EventsList() {
   const [loading, setLoading] = useState(true);
 
   // ── View ──────────────────────────────────────────────
-  const [viewMode, setViewMode] = useState("list");
+  const [viewMode, setViewMode] = useState(() => {
+    return localStorage.getItem("pms_events_view_mode") || "list";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("pms_events_view_mode", viewMode);
+  }, [viewMode]);
 
   // ── Filter State (Task 7) ─────────────────────────────
   const [search, setSearch]                   = useState("");          // Name

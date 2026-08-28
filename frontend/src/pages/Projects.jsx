@@ -128,7 +128,14 @@ function Projects() {
   }, [setSearchParams]);
 
   const [showAll, setShowAll] = useState(false);
-  const [viewMode, setViewMode] = useState("card");
+  const [viewMode, setViewMode] = useState(() => {
+    return localStorage.getItem("pms_projects_view_mode") || "card";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("pms_projects_view_mode", viewMode);
+  }, [viewMode]);
+
   const [orderedProjects, setOrderedProjects] = useState([]);
   const [restoreDraftId, setRestoreDraftId] = useState(null);
   const [itemsPerPage, setItemsPerPage] = useState(10);
