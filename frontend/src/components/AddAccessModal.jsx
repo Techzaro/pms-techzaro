@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { X, Globe, User, Lock, Users, ChevronDown, Check } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { authToken } from "../utils/auth";
 import API_URL from "../config/api";
 import { showSuccessMessage } from "../utils/notify";
@@ -7,6 +8,7 @@ import { useEscapeKey } from "../hooks/useEscapeKey";
 import useConfirmOnClose from "../hooks/useConfirmOnClose";
 
 export default function AddAccessModal({ isOpen, onClose, projectId, taskId, projectName, onSuccess, files = [], credential }) {
+  const { t } = useTranslation();
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
   useEscapeKey(isOpen, handleClose);
 
@@ -159,7 +161,7 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
     <div className="modal-overlay" onClick={handleClose}>
       <div className="aam-modal" onClick={(e) => e.stopPropagation()}>
         <div className="aam-header">
-          <h3>{isEdit ? "Edit Access Credential" : "Add Access Credential"}</h3>
+          <h3>{isEdit ? t("Edit Access Credential", { defaultValue: "Edit Access Credential" }) : t("Add Access Credential", { defaultValue: "Add Access Credential" })}</h3>
           <span className="aam-project-name">{projectName}</span>
           <button className="aam-close" onClick={handleClose}>
             <X size={18} />
@@ -171,11 +173,11 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
 
           <div className="aam-field">
             <label>
-              <Globe size={14} /> Website Name
+              <Globe size={14} /> {t("Website Name", { defaultValue: "Website Name" })}
             </label>
             <input
               type="text"
-              placeholder="Enter website name or URL"
+              placeholder={t("Enter website name or URL", { defaultValue: "Enter website name or URL" })}
               value={websiteName}
               onChange={(e) => { setIsDirty(true); setWebsiteName(e.target.value); }}
             />
@@ -183,11 +185,11 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
 
           <div className="aam-field">
             <label>
-              <User size={14} /> Username / Email *
+              <User size={14} /> {t("Username / Email", { defaultValue: "Username / Email" })} *
             </label>
             <input
               type="text"
-              placeholder="Enter username or email"
+              placeholder={t("Enter username or email", { defaultValue: "Enter username or email" })}
               value={username}
               onChange={(e) => { setIsDirty(true); setUsername(e.target.value); }}
               required
@@ -196,12 +198,12 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
 
           <div className="aam-field">
             <label>
-              <Lock size={14} /> Password *
+              <Lock size={14} /> {t("Password", { defaultValue: "Password" })} *
             </label>
             <div className="aam-password-wrap">
               <input
                 type="password"
-                placeholder="Enter password"
+                placeholder={t("Enter password", { defaultValue: "Enter password" })}
                 value={password}
                 onChange={(e) => { setIsDirty(true); setPassword(e.target.value); }}
                 required
@@ -211,22 +213,22 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
 
           <div className="aam-field">
             <label>
-              <Users size={14} /> Assign To *
+              <Users size={14} /> {t("Assign To")} *
             </label>
-            <p className="aam-hint">Select users who can see this credential</p>
+            <p className="aam-hint">{t("Select users who can see this credential", { defaultValue: "Select users who can see this credential" })}</p>
             <div className="aam-multiselect" ref={dropdownRef}>
               <div className={`aam-multiselect-trigger aam-combo-trigger ${dropdownOpen ? "aam-multiselect-trigger--open" : ""}`} onClick={() => { if (!dropdownOpen) { setDropdownOpen(true); } }}>
                 {assignedUserIds.length > 0 && (
-                  <span className="aam-combo-count">{assignedUserIds.length} selected</span>
+                  <span className="aam-combo-count">{assignedUserIds.length} {t("selected")}</span>
                 )}
                 {assignedUserIds.length === 0 && !dropdownOpen && (
-                  <span className="aam-combo-placeholder">Select users</span>
+                  <span className="aam-combo-placeholder">{t("Select users", { defaultValue: "Select users" })}</span>
                 )}
                 {dropdownOpen && (
                   <input
                     type="text"
                     className="aam-combo-input"
-                    placeholder="Search by user name..."
+                    placeholder={t("Search by user name...", { defaultValue: "Search by user name..." })}
                     value={aamSearch}
                     onChange={(e) => { setAamSearch(e.target.value); }}
                     onFocus={() => setDropdownOpen(true)}
@@ -261,7 +263,7 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                     <input
                       type="text"
-                      placeholder="Search by name, role, department..."
+                      placeholder={t("Search by name, role, department...", { defaultValue: "Search by name, role, department..." })}
                       value={aamSearch}
                       onChange={(e) => setAamSearch(e.target.value)}
                       autoFocus
@@ -282,7 +284,7 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
                           }
                         }}
                       />
-                      <span className="aam-multiselect-label">Select All</span>
+                      <span className="aam-multiselect-label">{t("Select All")}</span>
                     </label>
                     <div className="aam-multiselect-divider" />
                     {aamFilteredUsers
@@ -317,9 +319,9 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
                   if (pendingRemoveUser === id) {
                     return (
                       <span key={id} className="aam-tag aam-tag--confirm">
-                        <span className="aam-tag-confirm-msg">Remove {u.name}?</span>
-                        <button type="button" className="aam-tag-confirm-yes" onClick={() => { toggleUser(id); setPendingRemoveUser(null); }}>Yes</button>
-                        <button type="button" className="aam-tag-confirm-no" onClick={() => setPendingRemoveUser(null)}>No</button>
+                        <span className="aam-tag-confirm-msg">{t("Remove {{name}}?", { name: u.name, defaultValue: `Remove ${u.name}?` })}</span>
+                        <button type="button" className="aam-tag-confirm-yes" onClick={() => { toggleUser(id); setPendingRemoveUser(null); }}>{t("Yes", { defaultValue: "Yes" })}</button>
+                        <button type="button" className="aam-tag-confirm-no" onClick={() => setPendingRemoveUser(null)}>{t("No", { defaultValue: "No" })}</button>
                       </span>
                     );
                   }
@@ -338,10 +340,10 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
 
           <div className="aam-footer">
             <button type="button" className="aam-btn aam-btn-cancel" onClick={handleClose}>
-              Cancel
+              {t("Cancel")}
             </button>
             <button type="submit" className="aam-btn aam-btn-save" disabled={loading}>
-              {loading ? (isEdit ? "Updating..." : "Saving...") : (isEdit ? "Update Credential" : "Save Credential")}
+              {loading ? (isEdit ? t("Updating...", { defaultValue: "Updating..." }) : t("Saving...", { defaultValue: "Saving..." })) : (isEdit ? t("Update Credential", { defaultValue: "Update Credential" }) : t("Save Credential", { defaultValue: "Save Credential" }))}
             </button>
           </div>
         </form>

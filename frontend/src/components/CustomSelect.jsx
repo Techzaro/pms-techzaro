@@ -5,9 +5,11 @@
 
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import "./CustomSelect.css";
 
-const CustomSelect = ({ value, onChange, options, placeholder = "Select...", name }) => {
+const CustomSelect = ({ value, onChange, options = [], placeholder = "Select...", name }) => {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(0);
@@ -146,16 +148,16 @@ const CustomSelect = ({ value, onChange, options, placeholder = "Select...", nam
             ref={inputRef}
             type="text"
             className="cs-combo-input"
-            placeholder="Search..."
+            placeholder={t("Search...")}
             value={search}
             onChange={handleInputChange}
             onFocus={handleInputFocus}
             onKeyDown={handleKeyDown}
           />
         ) : selected ? (
-          <span className="cs-selected-text">{selected.label}</span>
+          <span className="cs-selected-text">{t(selected.label)}</span>
         ) : (
-          <span className="cs-placeholder-text">{placeholder}</span>
+          <span className="cs-placeholder-text">{t(placeholder)}</span>
         )}
         <svg
           className={`cs-arrow ${open ? "cs-arrow-open" : ""}`}
@@ -184,7 +186,7 @@ const CustomSelect = ({ value, onChange, options, placeholder = "Select...", nam
             }}
           >
             {filtered.length === 0 ? (
-              <div className="cs-empty">No matches found</div>
+              <div className="cs-empty">{t("No matches found")}</div>
             ) : (
               filtered.map((opt, idx) => (
                 <div
@@ -193,7 +195,7 @@ const CustomSelect = ({ value, onChange, options, placeholder = "Select...", nam
                   onClick={() => handleSelect(opt.value)}
                   onMouseEnter={() => setHighlightedIndex(idx)}
                 >
-                  {opt.label}
+                  {t(opt.label)}
                 </div>
               ))
             )}

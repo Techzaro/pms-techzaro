@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import Breadcrumb from '../components/Breadcrumb';
 import api from '../lib/api';
@@ -34,7 +35,11 @@ const fmtD = (d) => d ? new Date(d).toLocaleDateString('en-US',{year:'numeric',m
 const fmtDT = (d) => { if(!d) return null; const x=new Date(d); return { date:x.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}), time:x.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) }; };
 const fmtB = (b) => { if(!b) return '0 B'; const g=b/(1024**3); return g>=1?`${g.toFixed(2)} GB`:`${(b/(1024**2)).toFixed(2)} MB`; };
 
-function Badge({status}){ const s=STATUS_MAP[status]||STATUS_MAP.active; return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 text-xs font-semibold rounded-full" style={{background:s.bg,color:s.color}}><span className="w-1.5 h-1.5 rounded-full" style={{background:s.color}}/>{s.label}</span>; }
+function Badge({status}){
+  const { t } = useTranslation();
+  const s=STATUS_MAP[status]||STATUS_MAP.active;
+  return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 text-xs font-semibold rounded-full" style={{background:s.bg,color:s.color}}><span className="w-1.5 h-1.5 rounded-full" style={{background:s.color}}/>{t(s.label, { defaultValue: s.label })}</span>;
+}
 
 const sc = {
   card:{background:'var(--bg-card)',border:'1px solid var(--border-light)',borderRadius:'16px'},
@@ -47,6 +52,7 @@ const sc = {
 };
 
 export default function OrganizationDetailsPage() {
+  const { t } = useTranslation();
   const [data,setData]=useState(null);
   const [stSum,setStSum]=useState(null);
   const [bill,setBill]=useState(null);
@@ -135,13 +141,13 @@ export default function OrganizationDetailsPage() {
       };
       const res = await api.put('/organization-settings/regional', payload);
       if (res?.success) {
-        setToast({ t: 's', m: 'Organization regional settings updated successfully.' });
+        setToast({ t: 's', m: t('Organization regional settings updated successfully.', { defaultValue: 'Organization regional settings updated successfully.' }) });
         load();
       } else {
-        setToast({ t: 'e', m: res?.message || 'Failed to update regional settings.' });
+        setToast({ t: 'e', m: res?.message || t('Failed to update regional settings.', { defaultValue: 'Failed to update regional settings.' }) });
       }
     } catch (err) {
-      setToast({ t: 'e', m: 'Error saving organization regional settings.' });
+      setToast({ t: 'e', m: t('Error saving organization regional settings.', { defaultValue: 'Error saving organization regional settings.' }) });
     } finally {
       setSavingRegional(false);
     }
@@ -169,13 +175,13 @@ export default function OrganizationDetailsPage() {
   const isYr=sub?.billing_period==='yearly';
   const cPrice=isYr?(plan?.price_yearly||0):(plan?.price_monthly||0);
   let tl='';
-  if(sub?.ends_at){const d=new Date(sub.ends_at)-now;if(d>0){if(isTrial&&tc?.trial_duration_unit==='minutes')tl=`${Math.floor(d/60000)} min left`;else if(isTrial&&tc?.trial_duration_unit==='hours')tl=`${Math.floor(d/3600000)} hr left`;else{const dy=Math.ceil(d/864e5);tl=`${dy} day${dy!==1?'s':''} left`;}}}
+  if(sub?.ends_at){const d=new Date(sub.ends_at)-now;if(d>0){if(isTrial&&tc?.trial_duration_unit==='minutes')tl=t('{{count}} min left', { count: Math.floor(d/60000), defaultValue: `${Math.floor(d/60000)} min left` });else if(isTrial&&tc?.trial_duration_unit==='hours')tl=t('{{count}} hr left', { count: Math.floor(d/3600000), defaultValue: `${Math.floor(d/3600000)} hr left` });else{const dy=Math.ceil(d/864e5);tl=t('{{count}} days left', { count: dy, defaultValue: `${dy} day${dy!==1?'s':''} left` });}}}
 
-  if(ld)return <DashboardLayout hideRightSidebar><div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin" style={{color:'var(--color-primary)'}}/><span className="ml-2 text-sm" style={{color:'var(--text-secondary)'}}>Loading...</span></div></DashboardLayout>;
+  if(ld)return <DashboardLayout hideRightSidebar><div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin" style={{color:'var(--color-primary)'}}/><span className="ml-2 text-sm" style={{color:'var(--text-secondary)'}}>{t('Loading...', { defaultValue: 'Loading...' })}</span></div></DashboardLayout>;
 
   return (
     <DashboardLayout hideRightSidebar>
-      <Breadcrumb items={[{label:'Settings'},{label:'Organization Details'}]}/>
+      <Breadcrumb items={[{label:t('Settings', { defaultValue: 'Settings' })},{label:t('Organization Details', { defaultValue: 'Organization Details' })}]}/>
       {toast&&<div style={{position:'fixed',top:20,right:20,zIndex:9999,padding:'12px 20px',borderRadius:12,background:toast.t==='s'?'var(--color-success-bg)':'var(--color-danger-bg)',border:`1px solid ${toast.t==='s'?'var(--color-success)':'var(--color-danger)'}`,display:'flex',alignItems:'center',gap:8,boxShadow:'var(--shadow-md)'}}>
         {toast.t==='s'?<CheckCircle className="w-4 h-4" style={{color:'var(--color-success)'}}/>:<AlertTriangle className="w-4 h-4" style={{color:'var(--color-danger)'}}/>}
         <span style={{fontSize:13,fontWeight:600,color:toast.t==='s'?'var(--color-success)':'var(--color-danger)'}}>{toast.m}</span>
@@ -185,26 +191,26 @@ export default function OrganizationDetailsPage() {
         <div className="flex-1">
           <div className="flex items-center gap-3">
             {o?.id&&<span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold" style={{background:'var(--color-primary-bg)',color:'var(--color-primary)',fontFamily:'monospace'}}>#{o.id}</span>}
-            <h1 className="text-2xl font-bold" style={sc.th}>{o?.name||'Organization'}</h1>
+            <h1 className="text-2xl font-bold" style={sc.th}>{o?.name||t('Organization', { defaultValue: 'Organization' })}</h1>
             <Badge status={o?.status}/>
           </div>
           <p className="text-sm mt-0.5" style={sc.ts}>{o?.domain}</p>
         </div>
         <div className="flex items-center gap-1 p-1 rounded-xl" style={{background:'var(--bg-hover)',border:'1px solid var(--border-light)'}}>
-          {[{k:'details',l:'Details'},{k:'regional',l:'Regional & Hours',i:Globe},{k:'storage',l:'Storage',i:HardDrive},{k:'bill',l:'Billing',i:CreditCard},{k:'hist',l:'History',i:Clock}].map(t=>
-            <button key={t.k} onClick={()=>setTab(t.k)} className={`px-4 py-2 rounded-lg text-[13px] font-semibold transition-all${t.i?' flex items-center gap-1.5':''}`} style={tab===t.k?{background:'#4f46e5',color:'#fff',boxShadow:'0 2px 6px rgba(79,70,229,0.25)'}:{background:'#f1f5f9',color:'#334155',border:'1px solid #cbd5e1'}}>{t.i&&<t.i className="w-4 h-4"/>}{t.l}</button>
+          {[{k:'details',l:t('Details', { defaultValue: 'Details' })},{k:'regional',l:t('Regional & Hours', { defaultValue: 'Regional & Hours' }),i:Globe},{k:'storage',l:t('Storage', { defaultValue: 'Storage' }),i:HardDrive},{k:'bill',l:t('Billing', { defaultValue: 'Billing' }),i:CreditCard},{k:'hist',l:t('History', { defaultValue: 'History' }),i:Clock}].map(tTab=>
+            <button key={tTab.k} onClick={()=>setTab(tTab.k)} className={`px-4 py-2 rounded-lg text-[13px] font-semibold transition-all${tTab.i?' flex items-center gap-1.5':''}`} style={tab===tTab.k?{background:'#4f46e5',color:'#fff',boxShadow:'0 2px 6px rgba(79,70,229,0.25)'}:{background:'#f1f5f9',color:'#334155',border:'1px solid #cbd5e1'}}>{tTab.i&&<tTab.i className="w-4 h-4"/>}{tTab.l}</button>
           )}
         </div>
       </div>
 
       {tab==='details'&&<div className="flex flex-col gap-6">
         <div className="rounded-xl p-5 shadow-sm" style={sc.card}>
-          <h3 className="text-lg font-semibold mb-4" style={sc.th}>Admin Details</h3>
+          <h3 className="text-lg font-semibold mb-4" style={sc.th}>{t('Admin Details', { defaultValue: 'Admin Details' })}</h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {[
-              {icon:User,l:'Admin Name',v:o?.admin_name||'N/A'},
-              {icon:MailCheck,l:'Admin Email',v:o?.admin_email||'N/A'},
-              {icon:Phone,l:'Phone',v:o?.admin_phone||'N/A'},
+              {icon:User,l:t('Admin Name', { defaultValue: 'Admin Name' }),v:o?.admin_name||'N/A'},
+              {icon:MailCheck,l:t('Admin Email', { defaultValue: 'Admin Email' }),v:o?.admin_email||'N/A'},
+              {icon:Phone,l:t('Phone', { defaultValue: 'Phone' }),v:o?.admin_phone||'N/A'},
             ].map(x=>
               <div key={x.l} className="p-4 rounded-lg" style={sc.infoBox}>
                 <div className="flex items-center gap-2 mb-1">
@@ -219,12 +225,12 @@ export default function OrganizationDetailsPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[
-            {icon:Globe,l:'Domain',v:o?.domain},
-            {icon:Database,l:'Database',v:o?.database_name},
-            {icon:Shield,l:'Plan',v:plan?.name||'None'},
-            {icon:Users,l:'Users',v:usage?.users??0},
-            {icon:FolderKanban,l:'Projects',v:usage?.projects??0},
-            {icon:Calendar,l:'Created',v:o?.created_at?new Date(o.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—'},
+            {icon:Globe,l:t('Domain', { defaultValue: 'Domain' }),v:o?.domain},
+            {icon:Database,l:t('Database', { defaultValue: 'Database' }),v:o?.database_name},
+            {icon:Shield,l:t('Plan', { defaultValue: 'Plan' }),v:plan?.name||t('None', { defaultValue: 'None' })},
+            {icon:Users,l:t('Users', { defaultValue: 'Users' }),v:usage?.users??0},
+            {icon:FolderKanban,l:t('Projects', { defaultValue: 'Projects' }),v:usage?.projects??0},
+            {icon:Calendar,l:t('Created', { defaultValue: 'Created' }),v:o?.created_at?new Date(o.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—'},
           ].map(x=>
             <div key={x.l} className="flex items-center gap-3 p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow" style={sc.cardAlt}>
               <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={sc.infoBox}>
@@ -240,9 +246,9 @@ export default function OrganizationDetailsPage() {
 
         <div className="rounded-xl p-5 shadow-sm" style={sc.card}>
           <h3 className="text-lg font-semibold mb-4 flex items-center gap-2" style={sc.th}>
-            <CreditCard className="w-5 h-5" style={{color:'var(--color-primary)'}}/> Subscription Plan
+            <CreditCard className="w-5 h-5" style={{color:'var(--color-primary)'}}/> {t('Subscription Plan', { defaultValue: 'Subscription Plan' })}
             <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-md" style={{background:'var(--color-primary-bg)',color:'var(--color-primary)',fontFamily:'monospace'}}>
-              Org #{o?.id}
+              {t('Org #{{id}}', { id: o?.id, defaultValue: `Org #${o?.id}` })}
             </span>
           </h3>
           {plan?<div className="space-y-4">
@@ -251,22 +257,22 @@ export default function OrganizationDetailsPage() {
                 <div className="flex items-center gap-2">
                   <h4 className="text-xl font-bold" style={sc.th}>{plan.name}</h4>
                   <Badge status={sub?.status}/>
-                  {plan.is_custom&&<span className="px-2 py-0.5 text-xs font-medium rounded-full" style={{background:'rgba(245,158,11,0.12)',color:'#d97706'}}>Custom</span>}
+                  {plan.is_custom&&<span className="px-2 py-0.5 text-xs font-medium rounded-full" style={{background:'rgba(245,158,11,0.12)',color:'#d97706'}}>{t('Custom', { defaultValue: 'Custom' })}</span>}
                 </div>
                 <p className="text-sm mt-0.5" style={sc.ts}>
-                  {isTrial&&tc?`${tc.trial_duration} ${tc.trial_duration_unit} trial`:`${isYr?'Yearly':'Monthly'} billing`}
-                  {sub?.starts_at&&<> — Started {fmtD(sub.starts_at)}</>}
-                  {tl&&<> — {isTrial?'Expires':'Renews'} {fmtD(sub?.ends_at)} ({tl})</>}
+                  {isTrial&&tc?`${tc.trial_duration} ${t(tc.trial_duration_unit, { defaultValue: tc.trial_duration_unit })} ${t('trial', { defaultValue: 'trial' })}`:`${isYr?t('Yearly', { defaultValue: 'Yearly' }):t('Monthly', { defaultValue: 'Monthly' })} ${t('billing', { defaultValue: 'billing' })}`}
+                  {sub?.starts_at&&<> — {t('Started {{date}}', { date: fmtD(sub.starts_at), defaultValue: `Started ${fmtD(sub.starts_at)}` })}</>}
+                  {tl&&<> — {isTrial?t('Expires', { defaultValue: 'Expires' }):t('Renews', { defaultValue: 'Renews' })} {fmtD(sub?.ends_at)} ({tl})</>}
                 </p>
               </div>
               <div className="text-right">
                 <p className="text-2xl font-bold" style={sc.th}>${cPrice}</p>
-                <p className="text-sm" style={sc.ts}>/{isYr?'year':'month'}</p>
+                <p className="text-sm" style={sc.ts}>/{isYr?t('year', { defaultValue: 'year' }):t('month', { defaultValue: 'month' })}</p>
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-4 pt-3" style={{borderTop:'1px solid var(--border-light)'}}>
-              {[{icon:Users,l:'Users',v:plan.max_users>=9999?'Unlimited':plan.max_users},{icon:FolderKanban,l:'Projects',v:plan.max_projects>=9999?'Unlimited':plan.max_projects},{icon:HardDrive,l:'Storage',v:`${plan.max_storage_gb} GB`}].map(x=>
+              {[{icon:Users,l:t('Users', { defaultValue: 'Users' }),v:plan.max_users>=9999?t('Unlimited', { defaultValue: 'Unlimited' }):plan.max_users},{icon:FolderKanban,l:t('Projects', { defaultValue: 'Projects' }),v:plan.max_projects>=9999?t('Unlimited', { defaultValue: 'Unlimited' }):plan.max_projects},{icon:HardDrive,l:t('Storage', { defaultValue: 'Storage' }),v:`${plan.max_storage_gb} GB`}].map(x=>
                 <div key={x.l} className="p-3 rounded-lg" style={sc.infoBox}>
                   <div className="flex items-center gap-2 mb-1">
                     <x.icon className="w-4 h-4" style={{color:'var(--color-primary)'}}/>
@@ -279,16 +285,16 @@ export default function OrganizationDetailsPage() {
 
             {modules&&(modules.enabled?.length>0||modules.disabled?.length>0)&&
               <div className="pt-3" style={{borderTop:'1px solid var(--border-light)'}}>
-                <p className="text-xs font-medium uppercase tracking-wider mb-2" style={sc.tm}>Included Modules</p>
+                <p className="text-xs font-medium uppercase tracking-wider mb-2" style={sc.tm}>{t('Included Modules', { defaultValue: 'Included Modules' })}</p>
                 <div className="flex flex-wrap gap-2">
                   {[...(modules?.enabled||[]),...(modules?.disabled||[])].map(m=>{
                     const on=modules?.enabled?.some(e=>e.id===m.id);
-                    return <span key={m.id||m.slug} className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md" style={{background:on?'var(--color-success-bg)':'var(--bg-hover)',color:on?'var(--color-success)':'var(--text-muted)',border:`1px solid ${on?'var(--color-success)':'var(--border-light)'}`}}>{on?<Check className="w-3 h-3"/>:<X className="w-3 h-3"/>}{m.name}</span>;
+                    return <span key={m.id||m.slug} className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md" style={{background:on?'var(--color-success-bg)':'var(--bg-hover)',color:on?'var(--color-success)':'var(--text-muted)',border:`1px solid ${on?'var(--color-success)':'var(--border-light)'}`}}>{on?<Check className="w-3 h-3"/>:<X className="w-3 h-3"/>}{t(m.name, { defaultValue: m.name })}</span>;
                   })}
                 </div>
               </div>
             }
-          </div>:<p className="text-sm" style={sc.ts}>No subscription plan assigned</p>}
+          </div>:<p className="text-sm" style={sc.ts}>{t('No subscription plan assigned', { defaultValue: 'No subscription plan assigned' })}</p>}
         </div>
       </div>}
 
@@ -300,8 +306,8 @@ export default function OrganizationDetailsPage() {
                 <Globe className="w-5 h-5" style={{color:'var(--color-primary)'}}/>
               </div>
               <div>
-                <h3 className="text-lg font-bold" style={sc.th}>Organization Timezone &amp; Working Hours</h3>
-                <p className="text-xs" style={sc.ts}>Configure default timezone and working availability policy for all organization members</p>
+                <h3 className="text-lg font-bold" style={sc.th}>{t('Organization Timezone & Working Hours', { defaultValue: 'Organization Timezone & Working Hours' })}</h3>
+                <p className="text-xs" style={sc.ts}>{t('Configure default timezone and working availability policy for all organization members', { defaultValue: 'Configure default timezone and working availability policy for all organization members' })}</p>
               </div>
             </div>
           </div>
@@ -309,8 +315,8 @@ export default function OrganizationDetailsPage() {
           <form onSubmit={saveOrgRegional} className="space-y-6">
             {/* Default Timezone */}
             <div className="p-4 rounded-xl" style={{background:'var(--bg-hover)',border:'1px solid var(--border-light)'}}>
-              <label className="block text-sm font-semibold mb-1" style={sc.th}>Organization Default Timezone (IANA)</label>
-              <p className="text-xs mb-3" style={sc.ts}>Applied as the fallback default for all teams, new accounts, and organization reports.</p>
+              <label className="block text-sm font-semibold mb-1" style={sc.th}>{t('Organization Default Timezone (IANA)', { defaultValue: 'Organization Default Timezone (IANA)' })}</label>
+              <p className="text-xs mb-3" style={sc.ts}>{t('Applied as the fallback default for all teams, new accounts, and organization reports.', { defaultValue: 'Applied as the fallback default for all teams, new accounts, and organization reports.' })}</p>
               <select
                 value={orgTz}
                 onChange={(e)=>setOrgTz(e.target.value)}
@@ -318,12 +324,12 @@ export default function OrganizationDetailsPage() {
                 style={{background:'var(--bg-card)',borderColor:'var(--border-color)',color:'var(--text-primary)'}}
               >
                 {timezonesList.length > 0 ? (
-                  timezonesList.map(t=>(
-                    <option key={t} value={t}>{t} {getTimezoneOffsetDisplay(t)}</option>
+                  timezonesList.map(tTz=>(
+                    <option key={tTz} value={tTz}>{tTz} {getTimezoneOffsetDisplay(tTz)}</option>
                   ))
                 ) : (
-                  ['UTC', 'America/New_York', 'America/Chicago', 'America/Los_Angeles', 'Europe/London', 'Europe/Berlin', 'Asia/Dubai', 'Asia/Karachi', 'Asia/Kolkata', 'Asia/Tokyo'].map(t=>(
-                    <option key={t} value={t}>{t} {getTimezoneOffsetDisplay(t)}</option>
+                  ['UTC', 'America/New_York', 'America/Chicago', 'America/Los_Angeles', 'Europe/London', 'Europe/Berlin', 'Asia/Dubai', 'Asia/Karachi', 'Asia/Kolkata', 'Asia/Tokyo'].map(tTz=>(
+                    <option key={tTz} value={tTz}>{tTz} {getTimezoneOffsetDisplay(tTz)}</option>
                   ))
                 )}
               </select>
@@ -332,9 +338,9 @@ export default function OrganizationDetailsPage() {
             {/* Enforce Working Hours Toggle */}
             <div className="p-4 rounded-xl flex items-start justify-between gap-4" style={{background:'var(--bg-hover)',border:'1px solid var(--border-light)'}}>
               <div>
-                <h4 className="text-sm font-semibold mb-0.5" style={sc.th}>Enforce Working Hours Policy</h4>
+                <h4 className="text-sm font-semibold mb-0.5" style={sc.th}>{t('Enforce Working Hours Policy', { defaultValue: 'Enforce Working Hours Policy' })}</h4>
                 <p className="text-xs" style={sc.ts}>
-                  When enabled, deadlines, assignment calendars, and task alerts across the organization will strictly align with configured working hours.
+                  {t('When enabled, deadlines, assignment calendars, and task alerts across the organization will strictly align with configured working hours.', { defaultValue: 'When enabled, deadlines, assignment calendars, and task alerts across the organization will strictly align with configured working hours.' })}
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
@@ -365,7 +371,7 @@ export default function OrganizationDetailsPage() {
                 className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
                 style={{background:'var(--bg-hover)',color:'var(--text-secondary)',border:'1px solid var(--border-light)'}}
               >
-                Discard Changes
+                {t('Discard Changes', { defaultValue: 'Discard Changes' })}
               </button>
               <button
                 type="submit"
@@ -374,7 +380,7 @@ export default function OrganizationDetailsPage() {
                 style={{background:'var(--color-primary)',opacity:savingRegional?0.7:1}}
               >
                 {savingRegional ? <Loader2 className="w-4 h-4 animate-spin"/> : <Save className="w-4 h-4"/>}
-                {savingRegional ? 'Saving...' : 'Save Organization Regional Settings'}
+                {savingRegional ? t('Saving...', { defaultValue: 'Saving...' }) : t('Save Organization Regional Settings', { defaultValue: 'Save Organization Regional Settings' })}
               </button>
             </div>
           </form>
@@ -385,39 +391,39 @@ export default function OrganizationDetailsPage() {
         {stLd?(
           <div className="rounded-xl p-10 shadow-sm flex items-center justify-center gap-3" style={sc.card}>
             <Loader2 className="w-5 h-5 animate-spin" style={{color:'var(--color-primary)'}}/>
-            <span style={{color:'var(--text-secondary)',fontSize:'14px'}}>Loading storage data...</span>
+            <span style={{color:'var(--text-secondary)',fontSize:'14px'}}>{t('Loading storage data...', { defaultValue: 'Loading storage data...' })}</span>
           </div>
         ):stSum?.summary?(
           <>
             <div className="rounded-xl p-5 shadow-sm" style={sc.card}>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold flex items-center gap-2" style={sc.th}>
-                  <HardDrive className="w-5 h-5" style={{color:'var(--color-primary)'}}/> Storage Usage
+                  <HardDrive className="w-5 h-5" style={{color:'var(--color-primary)'}}/> {t('Storage Usage', { defaultValue: 'Storage Usage' })}
                 </h3>
                 <span className="px-3 py-1 rounded-full text-xs font-bold" style={{
                   background:stSum.summary.usage_percent>95?'var(--color-danger-bg)':stSum.summary.usage_percent>80?'var(--color-warning-bg)':'var(--color-success-bg)',
                   color:stSum.summary.usage_percent>95?'var(--color-danger)':stSum.summary.usage_percent>80?'var(--color-warning)':'var(--color-success)',
-                }}>{stSum.summary.usage_percent}% Used</span>
+                }}>{t('{{percent}}% Used', { percent: stSum.summary.usage_percent, defaultValue: `${stSum.summary.usage_percent}% Used` })}</span>
               </div>
               <div className="mb-3">
                 <div className="flex justify-between mb-1">
-                  <span className="text-sm font-semibold" style={sc.text}>{stSum.summary.total_gb} GB used</span>
-                  <span className="text-sm" style={sc.ts}>of {stSum.summary.max_storage_gb} GB</span>
+                  <span className="text-sm font-semibold" style={sc.text}>{t('{{count}} GB used', { count: stSum.summary.total_gb, defaultValue: `${stSum.summary.total_gb} GB used` })}</span>
+                  <span className="text-sm" style={sc.ts}>{t('of {{max}} GB', { max: stSum.summary.max_storage_gb, defaultValue: `of ${stSum.summary.max_storage_gb} GB` })}</span>
                 </div>
                 <div className="w-full h-3 rounded-full" style={{background:'var(--bg-hover)'}}>
                   <div className="h-3 rounded-full transition-all" style={{width:`${Math.min(stSum.summary.usage_percent,100)}%`,background:stSum.summary.usage_percent>95?'var(--color-danger)':stSum.summary.usage_percent>80?'var(--color-warning)':'var(--color-primary)'}}/>
                 </div>
                 <div className="flex justify-between mt-1">
-                  <span className="text-xs" style={sc.tm}>{stSum.summary.usage_percent}% used</span>
-                  <span className="text-xs" style={sc.tm}>{stSum.summary.remaining_gb} GB remaining</span>
+                  <span className="text-xs" style={sc.tm}>{t('{{percent}}% used', { percent: stSum.summary.usage_percent, defaultValue: `${stSum.summary.usage_percent}% used` })}</span>
+                  <span className="text-xs" style={sc.tm}>{t('{{remaining}} GB remaining', { remaining: stSum.summary.remaining_gb, defaultValue: `${stSum.summary.remaining_gb} GB remaining` })}</span>
                 </div>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[
-                  {l:'Total Files',v:stSum.summary.total_files,color:'var(--color-primary)'},
-                  {l:'Used Space',v:`${stSum.summary.total_gb} GB`,color:'var(--color-primary)'},
-                  {l:'Storage Limit',v:`${stSum.summary.max_storage_gb} GB`,color:'var(--color-success)'},
-                  {l:'Remaining',v:`${stSum.summary.remaining_gb} GB`,color:stSum.summary.usage_percent>95?'var(--color-danger)':'var(--color-warning)'},
+                  {l:t('Total Files', { defaultValue: 'Total Files' }),v:stSum.summary.total_files,color:'var(--color-primary)'},
+                  {l:t('Used Space', { defaultValue: 'Used Space' }),v:`${stSum.summary.total_gb} GB`,color:'var(--color-primary)'},
+                  {l:t('Storage Limit', { defaultValue: 'Storage Limit' }),v:`${stSum.summary.max_storage_gb} GB`,color:'var(--color-success)'},
+                  {l:t('Remaining', { defaultValue: 'Remaining' }),v:`${stSum.summary.remaining_gb} GB`,color:stSum.summary.usage_percent>95?'var(--color-danger)':'var(--color-warning)'},
                 ].map(x=>
                   <div key={x.l} className="p-3 rounded-lg" style={{background:'var(--bg-hover)',border:'1px solid var(--border-light)'}}>
                     <p className="text-xs" style={{color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'0.05em'}}>{x.l}</p>
@@ -428,10 +434,10 @@ export default function OrganizationDetailsPage() {
             </div>
 
             <div className="flex items-center gap-1 p-1 rounded-lg" style={{background:'var(--bg-hover)',border:'1px solid var(--border-light)'}}>
-              {[{k:'overview',l:'Overview',i:Info},{k:'files',l:'Files',i:FileText},{k:'cleanup',l:'Cleanup',i:Trash2},{k:'notifications',l:'Notifications',i:Bell,badge:stNotif.filter(n=>!n.is_read).length},{k:'preferences',l:'Preferences',i:Settings}].map(t=>
-                <button key={t.k} onClick={()=>setStTab(t.k)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all" style={{background:stTab===t.k?'var(--color-primary)':'transparent',color:stTab===t.k?'#fff':'var(--text-secondary)'}}>
-                  <t.i className="w-3.5 h-3.5"/> {t.l}
-                  {t.badge>0&&<span style={{background:'var(--color-danger)',color:'#fff',fontSize:'9px',fontWeight:700,padding:'1px 5px',borderRadius:'8px',marginLeft:'2px'}}>{t.badge}</span>}
+              {[{k:'overview',l:t('Overview', { defaultValue: 'Overview' }),i:Info},{k:'files',l:t('Files', { defaultValue: 'Files' }),i:FileText},{k:'cleanup',l:t('Cleanup', { defaultValue: 'Cleanup' }),i:Trash2},{k:'notifications',l:t('Notifications', { defaultValue: 'Notifications' }),i:Bell,badge:stNotif.filter(n=>!n.is_read).length},{k:'preferences',l:t('Preferences', { defaultValue: 'Preferences' }),i:Settings}].map(tTab=>
+                <button key={tTab.k} onClick={()=>setStTab(tTab.k)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all" style={{background:stTab===tTab.k?'var(--color-primary)':'transparent',color:stTab===tTab.k?'#fff':'var(--text-secondary)'}}>
+                  <tTab.i className="w-3.5 h-3.5"/> {tTab.l}
+                  {tTab.badge>0&&<span style={{background:'var(--color-danger)',color:'#fff',fontSize:'9px',fontWeight:700,padding:'1px 5px',borderRadius:'8px',marginLeft:'2px'}}>{tTab.badge}</span>}
                 </button>
               )}
             </div>
@@ -439,17 +445,17 @@ export default function OrganizationDetailsPage() {
             {stTab==='overview'&&stSum.summary.old_files&&(
               <div className="rounded-xl p-5 shadow-sm" style={sc.card}>
                 <h3 className="text-sm font-semibold mb-3 flex items-center gap-2" style={sc.th}>
-                  <Clock className="w-4 h-4" style={{color:'var(--color-primary)'}}/> File Age Distribution
+                  <Clock className="w-4 h-4" style={{color:'var(--color-primary)'}}/> {t('File Age Distribution', { defaultValue: 'File Age Distribution' })}
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {[
-                    {l:'Older than 3 months',count:stSum.summary.old_files['3_months']?.count||0,size:stSum.summary.old_files['3_months']?.size_mb||0,color:'#f59e0b'},
-                    {l:'Older than 6 months',count:stSum.summary.old_files['6_months']?.count||0,size:stSum.summary.old_files['6_months']?.size_mb||0,color:'#f97316'},
-                    {l:'Older than 1 year',count:stSum.summary.old_files['12_months']?.count||0,size:stSum.summary.old_files['12_months']?.size_mb||0,color:'#ef4444'},
+                    {l:t('Older than 3 months', { defaultValue: 'Older than 3 months' }),count:stSum.summary.old_files['3_months']?.count||0,size:stSum.summary.old_files['3_months']?.size_mb||0,color:'#f59e0b'},
+                    {l:t('Older than 6 months', { defaultValue: 'Older than 6 months' }),count:stSum.summary.old_files['6_months']?.count||0,size:stSum.summary.old_files['6_months']?.size_mb||0,color:'#f97316'},
+                    {l:t('Older than 1 year', { defaultValue: 'Older than 1 year' }),count:stSum.summary.old_files['12_months']?.count||0,size:stSum.summary.old_files['12_months']?.size_mb||0,color:'#ef4444'},
                   ].map(x=>
                     <div key={x.l} className="p-3 rounded-lg" style={{background:'var(--bg-hover)',border:'1px solid var(--border-light)',borderLeft:`3px solid ${x.color}`}}>
                       <p className="text-xs" style={{color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'0.05em'}}>{x.l}</p>
-                      <p className="text-lg font-bold mt-1" style={sc.th}>{x.count} files</p>
+                      <p className="text-lg font-bold mt-1" style={sc.th}>{t('{{count}} files', { count: x.count, defaultValue: `${x.count} files` })}</p>
                       <p className="text-xs" style={sc.ts}>{x.size} MB</p>
                     </div>
                   )}
@@ -457,12 +463,12 @@ export default function OrganizationDetailsPage() {
                 {stSum.summary.large_files&&(
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
                     {[
-                      {l:'Files > 1 GB',count:stSum.summary.large_files['over_1gb']?.count||0,size:stSum.summary.large_files['over_1gb']?.size_mb||0,color:'#ef4444'},
-                      {l:'Files > 2 GB',count:stSum.summary.large_files['over_2gb']?.count||0,size:stSum.summary.large_files['over_2gb']?.size_mb||0,color:'#dc2626'},
+                      {l:t('Files > 1 GB', { defaultValue: 'Files > 1 GB' }),count:stSum.summary.large_files['over_1gb']?.count||0,size:stSum.summary.large_files['over_1gb']?.size_mb||0,color:'#ef4444'},
+                      {l:t('Files > 2 GB', { defaultValue: 'Files > 2 GB' }),count:stSum.summary.large_files['over_2gb']?.count||0,size:stSum.summary.large_files['over_2gb']?.size_mb||0,color:'#dc2626'},
                     ].map(x=>
                       <div key={x.l} className="p-3 rounded-lg" style={{background:'var(--bg-hover)',border:'1px solid var(--border-light)',borderLeft:`3px solid ${x.color}`}}>
                         <p className="text-xs" style={{color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'0.05em'}}>{x.l}</p>
-                        <p className="text-lg font-bold mt-1" style={sc.th}>{x.count} files</p>
+                        <p className="text-lg font-bold mt-1" style={sc.th}>{t('{{count}} files', { count: x.count, defaultValue: `${x.count} files` })}</p>
                         <p className="text-xs" style={sc.ts}>{x.size} MB</p>
                       </div>
                     )}
@@ -473,7 +479,7 @@ export default function OrganizationDetailsPage() {
 
             {stTab==='files'&&stData?.recent_files?.length>0&&(
               <div className="rounded-xl p-5 shadow-sm" style={sc.card}>
-                <h3 className="text-sm font-semibold mb-3" style={sc.th}>Recent Files</h3>
+                <h3 className="text-sm font-semibold mb-3" style={sc.th}>{t('Recent Files', { defaultValue: 'Recent Files' })}</h3>
                 <div className="flex flex-col gap-2">
                   {stData.recent_files.map(f=>
                     <div key={f.id} className="flex items-center justify-between p-3 rounded-lg" style={{background:'var(--bg-hover)',border:'1px solid var(--border-light)'}}>
@@ -481,13 +487,13 @@ export default function OrganizationDetailsPage() {
                         <FileText className="w-4 h-4 flex-shrink-0" style={{color:'var(--text-muted)'}}/>
                         <div className="min-w-0">
                           <p className="text-sm font-medium truncate" style={sc.text}>{f.file_name}</p>
-                          <p className="text-xs" style={sc.tm}>{f.category}{f.uploaded_by?` · ${f.uploaded_by}`:''}</p>
+                          <p className="text-xs" style={sc.tm}>{t(f.category, { defaultValue: f.category })}{f.uploaded_by?` · ${f.uploaded_by}`:''}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-3 flex-shrink-0">
                         <span className="text-xs" style={sc.ts}>{f.file_size_mb} MB</span>
                         <span className="text-xs" style={sc.tm}>{new Date(f.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>
-                        <button onClick={async()=>{try{await api.delete(`/organization/storage/${f.id}`);loadStData();}catch{}}} className="p-1 rounded-md hover:opacity-80 transition-colors" title="Delete">
+                        <button onClick={async()=>{try{await api.delete(`/organization/storage/${f.id}`);loadStData();}catch{}}} className="p-1 rounded-md hover:opacity-80 transition-colors" title={t('Delete', { defaultValue: 'Delete' })}>
                           <Trash2 className="w-3.5 h-3.5" style={{color:'var(--color-danger)'}}/>
                         </button>
                       </div>
@@ -501,22 +507,22 @@ export default function OrganizationDetailsPage() {
               <>
                 <div className="rounded-xl p-5 shadow-sm" style={sc.card}>
                   <h3 className="text-sm font-semibold mb-3 flex items-center gap-2" style={sc.th}>
-                    <Clock className="w-4 h-4" style={{color:'var(--color-warning)'}}/> Delete Old Files
+                    <Clock className="w-4 h-4" style={{color:'var(--color-warning)'}}/> {t('Delete Old Files', { defaultValue: 'Delete Old Files' })}
                   </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {[
-                      {months:3,l:'3+ Months',count:stSum.summary.old_files?.['3_months']?.count||0,size:stSum.summary.old_files?.['3_months']?.size_mb||0,color:'#f59e0b'},
-                      {months:6,l:'6+ Months',count:stSum.summary.old_files?.['6_months']?.count||0,size:stSum.summary.old_files?.['6_months']?.size_mb||0,color:'#f97316'},
-                      {months:12,l:'1+ Year',count:stSum.summary.old_files?.['12_months']?.count||0,size:stSum.summary.old_files?.['12_months']?.size_mb||0,color:'#ef4444'},
+                      {months:3,l:t('3+ Months', { defaultValue: '3+ Months' }),count:stSum.summary.old_files?.['3_months']?.count||0,size:stSum.summary.old_files?.['3_months']?.size_mb||0,color:'#f59e0b'},
+                      {months:6,l:t('6+ Months', { defaultValue: '6+ Months' }),count:stSum.summary.old_files?.['6_months']?.count||0,size:stSum.summary.old_files?.['6_months']?.size_mb||0,color:'#f97316'},
+                      {months:12,l:t('1+ Year', { defaultValue: '1+ Year' }),count:stSum.summary.old_files?.['12_months']?.count||0,size:stSum.summary.old_files?.['12_months']?.size_mb||0,color:'#ef4444'},
                     ].map(x=>
                       <div key={x.months} className="p-4 rounded-lg flex flex-col gap-3" style={{background:'var(--bg-hover)',border:'1px solid var(--border-light)'}}>
                         <div>
                           <p className="text-xs font-semibold" style={{color:x.color}}>{x.l}</p>
-                          <p className="text-lg font-bold" style={sc.th}>{x.count} files</p>
+                          <p className="text-lg font-bold" style={sc.th}>{t('{{count}} files', { count: x.count, defaultValue: `${x.count} files` })}</p>
                           <p className="text-xs" style={sc.ts}>{x.size} MB</p>
                         </div>
                         <button onClick={()=>setDelModal({type:'old',months:x.months,l:x.l,count:x.count})} disabled={x.count===0} className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5" style={{background:x.count>0?'var(--color-danger)':'var(--bg-hover)',color:x.count>0?'#fff':'var(--text-muted)',cursor:x.count>0?'pointer':'not-allowed'}}>
-                          <Trash2 className="w-3 h-3"/> Delete
+                          <Trash2 className="w-3 h-3"/> {t('Delete', { defaultValue: 'Delete' })}
                         </button>
                       </div>
                     )}
@@ -524,21 +530,21 @@ export default function OrganizationDetailsPage() {
                 </div>
                 <div className="rounded-xl p-5 shadow-sm" style={sc.card}>
                   <h3 className="text-sm font-semibold mb-3 flex items-center gap-2" style={sc.th}>
-                    <AlertTriangle className="w-4 h-4" style={{color:'var(--color-danger)'}}/> Delete Large Files
+                    <AlertTriangle className="w-4 h-4" style={{color:'var(--color-danger)'}}/> {t('Delete Large Files', { defaultValue: 'Delete Large Files' })}
                   </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {[
-                      {minGb:1,l:'> 1 GB Files',count:stSum.summary.large_files?.['over_1gb']?.count||0,size:stSum.summary.large_files?.['over_1gb']?.size_mb||0,color:'#ef4444'},
-                      {minGb:2,l:'> 2 GB Files',count:stSum.summary.large_files?.['over_2gb']?.count||0,size:stSum.summary.large_files?.['over_2gb']?.size_mb||0,color:'#dc2626'},
+                      {minGb:1,l:t('> 1 GB Files', { defaultValue: '> 1 GB Files' }),count:stSum.summary.large_files?.['over_1gb']?.count||0,size:stSum.summary.large_files?.['over_1gb']?.size_mb||0,color:'#ef4444'},
+                      {minGb:2,l:t('> 2 GB Files', { defaultValue: '> 2 GB Files' }),count:stSum.summary.large_files?.['over_2gb']?.count||0,size:stSum.summary.large_files?.['over_2gb']?.size_mb||0,color:'#dc2626'},
                     ].map(x=>
                       <div key={x.minGb} className="p-4 rounded-lg flex flex-col gap-3" style={{background:'var(--bg-hover)',border:'1px solid var(--border-light)'}}>
                         <div>
                           <p className="text-xs font-semibold" style={{color:x.color}}>{x.l}</p>
-                          <p className="text-lg font-bold" style={sc.th}>{x.count} files</p>
+                          <p className="text-lg font-bold" style={sc.th}>{t('{{count}} files', { count: x.count, defaultValue: `${x.count} files` })}</p>
                           <p className="text-xs" style={sc.ts}>{x.size} MB</p>
                         </div>
                         <button onClick={()=>setDelModal({type:'large',minGb:x.minGb,l:x.l,count:x.count})} disabled={x.count===0} className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5" style={{background:x.count>0?'var(--color-danger)':'var(--bg-hover)',color:x.count>0?'#fff':'var(--text-muted)',cursor:x.count>0?'pointer':'not-allowed'}}>
-                          <Trash2 className="w-3 h-3"/> Delete
+                          <Trash2 className="w-3 h-3"/> {t('Delete', { defaultValue: 'Delete' })}
                         </button>
                       </div>
                     )}
@@ -552,14 +558,14 @@ export default function OrganizationDetailsPage() {
                 {stNotif.length===0?(
                   <div className="rounded-xl p-8 shadow-sm text-center" style={sc.card}>
                     <Bell className="w-10 h-10 mx-auto mb-3" style={{color:'var(--text-muted)'}}/>
-                    <p style={{color:'var(--text-secondary)',fontSize:'14px'}}>No storage notifications</p>
+                    <p style={{color:'var(--text-secondary)',fontSize:'14px'}}>{t('No storage notifications', { defaultValue: 'No storage notifications' })}</p>
                   </div>
                 ):(
                   <>
                     {stPinned.length>0&&(
                       <div className="rounded-xl p-4 shadow-sm" style={{...sc.card,borderLeft:'3px solid var(--color-warning)'}}>
                         <p className="text-xs font-semibold mb-2 flex items-center gap-1.5" style={{color:'var(--color-warning)'}}>
-                          <AlertTriangle className="w-3.5 h-3.5"/> Pinned Alerts ({stPinned.length})
+                          <AlertTriangle className="w-3.5 h-3.5"/> {t('Pinned Alerts ({{count}})', { count: stPinned.length, defaultValue: `Pinned Alerts (${stPinned.length})` })}
                         </p>
                         <div className="flex flex-col gap-2">
                           {stPinned.map(n=>
@@ -591,37 +597,37 @@ export default function OrganizationDetailsPage() {
             {stTab==='preferences'&&(
               <div className="rounded-xl p-5 shadow-sm" style={sc.card}>
                 <h3 className="text-sm font-semibold mb-4 flex items-center gap-2" style={sc.th}>
-                  <Settings className="w-4 h-4" style={{color:'var(--color-primary)'}}/> Storage Preferences
+                  <Settings className="w-4 h-4" style={{color:'var(--color-primary)'}}/> {t('Storage Preferences', { defaultValue: 'Storage Preferences' })}
                 </h3>
                 {stPrefLd?(
                   <div className="flex items-center gap-2 py-6 justify-center">
                     <Loader2 className="w-4 h-4 animate-spin" style={{color:'var(--color-primary)'}}/>
-                    <span className="text-xs" style={sc.ts}>Loading preferences...</span>
+                    <span className="text-xs" style={sc.ts}>{t('Loading preferences...', { defaultValue: 'Loading preferences...' })}</span>
                   </div>
                 ):stPref?(
                   <div className="space-y-4">
                     <div className="p-4 rounded-lg" style={{background:'var(--bg-hover)',border:'1px solid var(--border-light)'}}>
-                      <p className="text-xs font-semibold mb-2" style={{color:'var(--color-primary)'}}>Cleanup Policy</p>
+                      <p className="text-xs font-semibold mb-2" style={{color:'var(--color-primary)'}}>{t('Cleanup Policy', { defaultValue: 'Cleanup Policy' })}</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                          <label className="text-xs" style={sc.ts}>Delete files older than (months)</label>
+                          <label className="text-xs" style={sc.ts}>{t('Delete files older than (months)', { defaultValue: 'Delete files older than (months)' })}</label>
                           <input type="number" min="1" max="60" defaultValue={stPref.cleanup_months||6} className="w-full mt-1 p-2 rounded-lg text-sm" style={{background:'var(--bg-primary)',border:'1px solid var(--border)',color:'var(--text-heading)'}}/>
                         </div>
                         <div>
-                          <label className="text-xs" style={sc.ts}>Large file threshold (MB)</label>
+                          <label className="text-xs" style={sc.ts}>{t('Large file threshold (MB)', { defaultValue: 'Large file threshold (MB)' })}</label>
                           <input type="number" min="100" max="10000" step="100" defaultValue={stPref.large_file_threshold_mb||500} className="w-full mt-1 p-2 rounded-lg text-sm" style={{background:'var(--bg-primary)',border:'1px solid var(--border)',color:'var(--text-heading)'}}/>
                         </div>
                       </div>
                     </div>
                     <div className="p-4 rounded-lg" style={{background:'var(--bg-hover)',border:'1px solid var(--border-light)'}}>
-                      <p className="text-xs font-semibold mb-2" style={{color:'var(--color-warning)'}}>Alert Thresholds</p>
+                      <p className="text-xs font-semibold mb-2" style={{color:'var(--color-warning)'}}>{t('Alert Thresholds', { defaultValue: 'Alert Thresholds' })}</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                          <label className="text-xs" style={sc.ts}>Warning threshold (%)</label>
+                          <label className="text-xs" style={sc.ts}>{t('Warning threshold (%)', { defaultValue: 'Warning threshold (%)' })}</label>
                           <input type="number" min="50" max="95" defaultValue={stPref.warn_threshold||80} className="w-full mt-1 p-2 rounded-lg text-sm" style={{background:'var(--bg-primary)',border:'1px solid var(--border)',color:'var(--text-heading)'}}/>
                         </div>
                         <div>
-                          <label className="text-xs" style={sc.ts}>Critical threshold (%)</label>
+                          <label className="text-xs" style={sc.ts}>{t('Critical threshold (%)', { defaultValue: 'Critical threshold (%)' })}</label>
                           <input type="number" min="80" max="100" defaultValue={stPref.critical_threshold||95} className="w-full mt-1 p-2 rounded-lg text-sm" style={{background:'var(--bg-primary)',border:'1px solid var(--border)',color:'var(--text-heading)'}}/>
                         </div>
                       </div>
@@ -629,18 +635,18 @@ export default function OrganizationDetailsPage() {
                     <div className="flex justify-end">
                       <button disabled={stPrefSav} className="px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5" style={{background:'var(--color-primary)',color:'#fff'}}>
                         {stPrefSav?<Loader2 className="w-3 h-3 animate-spin"/>:<Check className="w-3 h-3"/>}
-                        {stPrefSav?'Saving...':'Save Preferences'}
+                        {stPrefSav?t('Saving...', { defaultValue: 'Saving...' }):t('Save Preferences', { defaultValue: 'Save Preferences' })}
                       </button>
                     </div>
                   </div>
-                ):<p className="text-xs text-center py-6" style={sc.tm}>No preferences data</p>}
+                ):<p className="text-xs text-center py-6" style={sc.tm}>{t('No preferences data', { defaultValue: 'No preferences data' })}</p>}
               </div>
             )}
           </>
         ):(
           <div className="rounded-xl p-10 shadow-sm text-center" style={sc.card}>
             <HardDrive className="w-10 h-10 mx-auto mb-3" style={{color:'var(--text-muted)'}}/>
-            <p style={{color:'var(--text-secondary)',fontSize:'14px'}}>No storage data available</p>
+            <p style={{color:'var(--text-secondary)',fontSize:'14px'}}>{t('No storage data available', { defaultValue: 'No storage data available' })}</p>
           </div>
         )}
       </div>}
@@ -650,16 +656,16 @@ export default function OrganizationDetailsPage() {
           <div className="rounded-xl p-5 shadow-sm" style={sc.card}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold flex items-center gap-2" style={sc.th}>
-                <CreditCard className="w-5 h-5" style={{color:'var(--color-primary)'}}/> Billing Summary
+                <CreditCard className="w-5 h-5" style={{color:'var(--color-primary)'}}/> {t('Billing Summary', { defaultValue: 'Billing Summary' })}
               </h3>
             </div>
             {bill.summary&&(
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[
-                  {l:'Total Paid',v:fmt$(bill.summary.total_paid),color:'var(--color-success)',bg:'rgba(16,185,129,0.08)'},
-                  {l:'Total Pending',v:fmt$(bill.summary.total_pending),color:'var(--color-warning)',bg:'rgba(245,158,11,0.08)'},
-                  {l:'Total Invoices',v:bill.summary.total_invoices||0,color:'var(--color-primary)',bg:'var(--color-primary-bg)'},
-                  {l:'Current Plan',v:bill.summary.current_plan?.name||plan?.name||'None',color:'var(--text-heading)',bg:'var(--bg-hover)'},
+                  {l:t('Total Paid', { defaultValue: 'Total Paid' }),v:fmt$(bill.summary.total_paid),color:'var(--color-success)',bg:'rgba(16,185,129,0.08)'},
+                  {l:t('Total Pending', { defaultValue: 'Total Pending' }),v:fmt$(bill.summary.total_pending),color:'var(--color-warning)',bg:'rgba(245,158,11,0.08)'},
+                  {l:t('Total Invoices', { defaultValue: 'Total Invoices' }),v:bill.summary.total_invoices||0,color:'var(--color-primary)',bg:'var(--color-primary-bg)'},
+                  {l:t('Current Plan', { defaultValue: 'Current Plan' }),v:bill.summary.current_plan?.name||plan?.name||t('None', { defaultValue: 'None' }),color:'var(--text-heading)',bg:'var(--bg-hover)'},
                 ].map(x=>
                   <div key={x.l} className="p-3 rounded-lg" style={{background:x.bg,border:'1px solid var(--border-light)'}}>
                     <p className="text-[10px] font-medium uppercase tracking-wider" style={{color:'var(--text-muted)'}}>{x.l}</p>
@@ -672,15 +678,15 @@ export default function OrganizationDetailsPage() {
 
           <div className="rounded-xl p-5 shadow-sm" style={sc.card}>
             <h3 className="text-sm font-semibold mb-3 flex items-center gap-2" style={sc.th}>
-              <Receipt className="w-4 h-4" style={{color:'var(--color-primary)'}}/> Invoice History
+              <Receipt className="w-4 h-4" style={{color:'var(--color-primary)'}}/> {t('Invoice History', { defaultValue: 'Invoice History' })}
             </h3>
             {bill.invoices?.length>0?(
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr style={{borderBottom:'1px solid var(--border-light)'}}>
-                      {['Invoice','Status','Plan','Total','Period','Date','Actions'].map(h=>
-                        <th key={h} className={`py-2.5 px-3 text-xs font-semibold uppercase tracking-wider ${h==='Total'?'text-right':h==='Status'||h==='Actions'?'text-center':'text-left'}`} style={{color:'var(--text-muted)'}}>{h}</th>
+                      {[t('Invoice', { defaultValue: 'Invoice' }),t('Status', { defaultValue: 'Status' }),t('Plan', { defaultValue: 'Plan' }),t('Total', { defaultValue: 'Total' }),t('Period', { defaultValue: 'Period' }),t('Date', { defaultValue: 'Date' }),t('Actions', { defaultValue: 'Actions' })].map(h=>
+                        <th key={h} className={`py-2.5 px-3 text-xs font-semibold uppercase tracking-wider ${h===t('Total', { defaultValue: 'Total' })?'text-right':h===t('Status', { defaultValue: 'Status' })||h===t('Actions', { defaultValue: 'Actions' })?'text-center':'text-left'}`} style={{color:'var(--text-muted)'}}>{h}</th>
                       )}
                     </tr>
                   </thead>
@@ -690,22 +696,22 @@ export default function OrganizationDetailsPage() {
                       const SI=si.icon;
                       let displayDate=fmtDT(inv.approved_at||inv.paid_at||inv.created_at);
                       let datePrefix='';
-                      if(inv.approved_at){datePrefix='Approved ';}
-                      else if(inv.due_at){datePrefix='Due ';}
+                      if(inv.approved_at){datePrefix=`${t('Approved', { defaultValue: 'Approved' })} `;}
+                      else if(inv.due_at){datePrefix=`${t('Due', { defaultValue: 'Due' })} `;}
                       return(
                         <tr key={inv.id} style={{borderBottom:'1px solid var(--border-light)'}} className="hover:opacity-80 transition-opacity">
                           <td className="py-3 px-3"><div className="flex items-center gap-2"><FileText className="w-4 h-4" style={{color:'var(--text-muted)'}}/><span className="font-medium" style={sc.text}>{inv.invoice_number}</span></div></td>
-                          <td className="py-3 px-3 text-center"><span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full" style={{background:si.bg,color:si.color}}><SI className="w-3.5 h-3.5"/>{inv.status}</span></td>
+                          <td className="py-3 px-3 text-center"><span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full" style={{background:si.bg,color:si.color}}><SI className="w-3.5 h-3.5"/>{t(inv.status, { defaultValue: inv.status })}</span></td>
                           <td className="py-3 px-3 text-sm" style={sc.ts}>{inv.plan?.name||'N/A'}</td>
                           <td className="py-3 px-3 text-right text-sm font-semibold" style={sc.text}>{fmt$(inv.total_amount,inv.currency)}</td>
                           <td className="py-3 px-3 text-sm" style={sc.tm}>{inv.billing_period_start&&inv.billing_period_end?<>{new Date(inv.billing_period_start).toLocaleDateString('en-US',{month:'short',day:'numeric'})} - {new Date(inv.billing_period_end).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</>:inv.billing_period||'—'}</td>
                           <td className="py-3 px-3 text-sm" style={sc.tm}>{displayDate?<div><div>{datePrefix}{displayDate.date}</div><div className="text-xs opacity-70">{displayDate.time}</div></div>:'—'}</td>
                           <td className="py-3 px-3 text-center">
                             <div className="flex items-center justify-center gap-1.5">
-                              <button onClick={()=>setViewInv(inv)} className="p-1.5 rounded-md transition-colors hover:opacity-80" style={{background:'var(--color-primary-bg)',color:'var(--color-primary)'}} title="View Invoice Details">
+                              <button onClick={()=>setViewInv(inv)} className="p-1.5 rounded-md transition-colors hover:opacity-80" style={{background:'var(--color-primary-bg)',color:'var(--color-primary)'}} title={t('View Invoice Details', { defaultValue: 'View Invoice Details' })}>
                                 <Eye className="w-4 h-4"/>
                               </button>
-                              <button onClick={async()=>{try{await api.downloadInvoice(inv.id);}catch{setToast({t:'e',m:'Download failed.'});}}} className="p-1.5 rounded-md transition-colors hover:opacity-80" style={{background:'var(--color-primary-bg)',color:'var(--color-primary)'}} title="Download Invoice">
+                              <button onClick={async()=>{try{await api.downloadInvoice(inv.id);}catch{setToast({t:'e',m:t('Download failed.', { defaultValue: 'Download failed.' })});}}} className="p-1.5 rounded-md transition-colors hover:opacity-80" style={{background:'var(--color-primary-bg)',color:'var(--color-primary)'}} title={t('Download Invoice', { defaultValue: 'Download Invoice' })}>
                                 <Download className="w-4 h-4"/>
                               </button>
                             </div>
@@ -719,11 +725,11 @@ export default function OrganizationDetailsPage() {
             ):(
               <div className="text-center py-8">
                 <Receipt className="w-10 h-10 mx-auto mb-3" style={{color:'var(--text-muted)'}}/>
-                <p className="text-sm" style={sc.ts}>No invoices yet</p>
+                <p className="text-sm" style={sc.ts}>{t('No invoices yet', { defaultValue: 'No invoices yet' })}</p>
               </div>
             )}
           </div>
-        </>:<div className="rounded-xl p-10 shadow-sm flex items-center justify-center gap-3" style={sc.card}><Loader2 className="w-5 h-5 animate-spin" style={{color:'var(--color-primary)'}}/><span style={{color:'var(--text-secondary)',fontSize:'14px'}}>Loading billing...</span></div>}
+        </>:<div className="rounded-xl p-10 shadow-sm flex items-center justify-center gap-3" style={sc.card}><Loader2 className="w-5 h-5 animate-spin" style={{color:'var(--color-primary)'}}/><span style={{color:'var(--text-secondary)',fontSize:'14px'}}>{t('Loading billing...', { defaultValue: 'Loading billing...' })}</span></div>}
       </div>}
 
       {tab==='hist'&&<div className="flex flex-col gap-6">
@@ -731,15 +737,15 @@ export default function OrganizationDetailsPage() {
           <div className="rounded-xl p-5 shadow-sm" style={sc.card}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold flex items-center gap-2" style={sc.th}>
-                <Clock className="w-5 h-5" style={{color:'var(--color-primary)'}}/> Subscription History
+                <Clock className="w-5 h-5" style={{color:'var(--color-primary)'}}/> {t('Subscription History', { defaultValue: 'Subscription History' })}
               </h3>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
-                {l:'Subscriptions',v:hist.summary?.total_subscriptions||0,color:'var(--color-primary)',bg:'var(--color-primary-bg)'},
-                {l:'Plan Changes',v:hist.summary?.total_plan_changes||0,color:'#d97706',bg:'rgba(245,158,11,0.08)'},
-                {l:'Renewals',v:hist.summary?.total_renewals||0,color:'var(--color-success)',bg:'rgba(16,185,129,0.08)'},
-                {l:'Trial Periods',v:hist.summary?.total_trial_periods||0,color:'#6366f1',bg:'rgba(99,102,241,0.08)'},
+                {l:t('Subscriptions', { defaultValue: 'Subscriptions' }),v:hist.summary?.total_subscriptions||0,color:'var(--color-primary)',bg:'var(--color-primary-bg)'},
+                {l:t('Plan Changes', { defaultValue: 'Plan Changes' }),v:hist.summary?.total_plan_changes||0,color:'#d97706',bg:'rgba(245,158,11,0.08)'},
+                {l:t('Renewals', { defaultValue: 'Renewals' }),v:hist.summary?.total_renewals||0,color:'var(--color-success)',bg:'rgba(16,185,129,0.08)'},
+                {l:t('Trial Periods', { defaultValue: 'Trial Periods' }),v:hist.summary?.total_trial_periods||0,color:'#6366f1',bg:'rgba(99,102,241,0.08)'},
               ].map(x=>
                 <div key={x.l} className="p-3 rounded-lg" style={{background:x.bg,border:'1px solid var(--border-light)'}}>
                   <p className="text-xs font-medium uppercase tracking-wider" style={{color:'var(--text-muted)'}}>{x.l}</p>
@@ -750,22 +756,22 @@ export default function OrganizationDetailsPage() {
           </div>
 
           {hist.plan_usage?.length>0&&<div className="rounded-xl p-5 shadow-sm" style={sc.card}>
-            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2" style={sc.th}><Shield className="w-4 h-4" style={{color:'var(--color-primary)'}}/>Plan Usage</h3>
+            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2" style={sc.th}><Shield className="w-4 h-4" style={{color:'var(--color-primary)'}}/>{t('Plan Usage', { defaultValue: 'Plan Usage' })}</h3>
             <div className="flex flex-wrap gap-2">{hist.plan_usage.map(p=><span key={p.plan_id} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg" style={{background:'var(--bg-hover)',border:'1px solid var(--border-light)'}}>{p.plan_name} <span className="font-bold" style={{color:'var(--color-primary)'}}>x{p.times_used}</span></span>)}</div>
           </div>}
 
           {hist.history?.length>0&&<div className="rounded-xl p-5 shadow-sm" style={sc.card}>
-            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2" style={sc.th}><Clock className="w-4 h-4" style={{color:'var(--color-primary)'}}/>Subscription History</h3>
+            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2" style={sc.th}><Clock className="w-4 h-4" style={{color:'var(--color-primary)'}}/>{t('Subscription History', { defaultValue: 'Subscription History' })}</h3>
             <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr style={{borderBottom:'1px solid var(--border-light)'}}>
-              {['Event','Plan','Date'].map(h=><th key={h} className="text-left py-2.5 px-3 text-xs font-semibold uppercase tracking-wider" style={{color:'var(--text-muted)'}}>{h}</th>)}
+              {[t('Event', { defaultValue: 'Event' }),t('Plan', { defaultValue: 'Plan' }),t('Date', { defaultValue: 'Date' })].map(h=><th key={h} className="text-left py-2.5 px-3 text-xs font-semibold uppercase tracking-wider" style={{color:'var(--text-muted)'}}>{h}</th>)}
             </tr></thead><tbody>{hist.history.map(h=>(
               <tr key={h.id} style={{borderBottom:'1px solid var(--border-light)'}} className="hover:opacity-80 transition-opacity">
-                <td className="py-3 px-3"><span className="text-sm font-medium px-2.5 py-1 rounded-full" style={{background:'var(--color-primary-bg)',color:'var(--color-primary)'}}>{h.event_type?.replace(/_/g,' ')}</span></td>
+                <td className="py-3 px-3"><span className="text-sm font-medium px-2.5 py-1 rounded-full" style={{background:'var(--color-primary-bg)',color:'var(--color-primary)'}}>{t(h.event_type?.replace(/_/g,' '), { defaultValue: h.event_type?.replace(/_/g,' ') })}</span></td>
                 <td className="py-3 px-3 text-sm" style={sc.ts}>{h.plan?.name||'—'}</td>
                 <td className="py-3 px-3 text-sm" style={sc.tm}>{fmtD(h.created_at)}</td>
               </tr>))}</tbody></table></div>
           </div>}
-        </>:<div className="rounded-xl p-10 shadow-sm flex items-center justify-center gap-3" style={sc.card}><Loader2 className="w-5 h-5 animate-spin" style={{color:'var(--color-primary)'}}/><span style={{color:'var(--text-secondary)',fontSize:'14px'}}>Loading history...</span></div>}
+        </>:<div className="rounded-xl p-10 shadow-sm flex items-center justify-center gap-3" style={sc.card}><Loader2 className="w-5 h-5 animate-spin" style={{color:'var(--color-primary)'}}/><span style={{color:'var(--text-secondary)',fontSize:'14px'}}>{t('Loading history...', { defaultValue: 'Loading history...' })}</span></div>}
       </div>}
 
       {delModal&&(
@@ -776,16 +782,16 @@ export default function OrganizationDetailsPage() {
                 <AlertTriangle className="w-5 h-5" style={{color:'var(--color-danger)'}}/>
               </div>
               <div>
-                <h3 className="text-base font-bold" style={sc.th}>Confirm Delete</h3>
-                <p className="text-xs" style={sc.ts}>This action cannot be undone</p>
+                <h3 className="text-base font-bold" style={sc.th}>{t('Confirm Delete', { defaultValue: 'Confirm Delete' })}</h3>
+                <p className="text-xs" style={sc.ts}>{t('This action cannot be undone', { defaultValue: 'This action cannot be undone' })}</p>
               </div>
             </div>
-            <p className="text-sm mb-5" style={sc.ts}>Delete <strong style={sc.th}>{delModal.count} files</strong> ({delModal.l})?</p>
+            <p className="text-sm mb-5" style={sc.ts}>{t('Delete {{count}} files ({{label}})?', { count: delModal.count, label: delModal.l, defaultValue: `Delete ${delModal.count} files (${delModal.l})?` })}</p>
             <div className="flex justify-end gap-2">
-              <button onClick={()=>setDelModal(null)} className="px-4 py-2 rounded-lg text-sm font-medium transition-colors" style={{background:'var(--bg-hover)',color:'var(--text-secondary)',border:'1px solid var(--border-light)'}}>Cancel</button>
+              <button onClick={()=>setDelModal(null)} className="px-4 py-2 rounded-lg text-sm font-medium transition-colors" style={{background:'var(--bg-hover)',color:'var(--text-secondary)',border:'1px solid var(--border-light)'}}>{t('Cancel', { defaultValue: 'Cancel' })}</button>
               <button onClick={async()=>{setDelLd(true);try{if(delModal.type==='old')await api.delete('/organization/storage/old-files',{data:{months:delModal.months}});else await api.delete('/organization/storage/large-files',{data:{min_size_gb:delModal.minGb}});setDelModal(null);loadStData();}catch{}setDelLd(false);}} disabled={delLd} className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors flex items-center gap-2" style={{background:'var(--color-danger)'}}>
                 {delLd?<Loader2 className="w-4 h-4 animate-spin"/>:<Trash2 className="w-4 h-4"/>}
-                {delLd?'Deleting...':'Delete'}
+                {delLd?t('Deleting...', { defaultValue: 'Deleting...' }):t('Delete', { defaultValue: 'Delete' })}
               </button>
             </div>
           </div>
@@ -797,68 +803,68 @@ export default function OrganizationDetailsPage() {
           <div className="rounded-2xl w-full max-w-lg max-h-[90vh] overflow-hidden" style={{background:'var(--bg-card)',boxShadow:'var(--shadow-lg)'}}>
             <div className="flex items-center justify-between p-5" style={{borderBottom:'1px solid var(--border-light)'}}>
               <div>
-                <h3 className="text-lg font-bold" style={sc.th}>Invoice Details</h3>
+                <h3 className="text-lg font-bold" style={sc.th}>{t('Invoice Details', { defaultValue: 'Invoice Details' })}</h3>
                 <p className="text-xs" style={sc.ts}>{viewInv.invoice_number}</p>
               </div>
               <button onClick={()=>setViewInv(null)} className="p-2 rounded-lg transition-colors" style={{background:'var(--bg-hover)',color:'var(--text-secondary)'}}><X className="w-5 h-5"/></button>
             </div>
             <div className="p-5 space-y-4 overflow-y-auto" style={{maxHeight:'calc(90vh - 140px)'}}>
               <div className="text-center pb-4" style={{borderBottom:'1px solid var(--border-light)'}}>
-                <h4 className="text-xl font-bold" style={{color:'var(--color-primary)'}}>TechXaro Technologies</h4>
-                <p className="text-xs mt-1" style={{color:'var(--text-muted)'}}>SaaS Platform &amp; Development Services</p>
+                <h4 className="text-xl font-bold" style={{color:'var(--color-primary)'}}>{t("TechXaro Technologies", { defaultValue: "TechXaro Technologies" })}</h4>
+                <p className="text-xs mt-1" style={{color:'var(--text-muted)'}}>{t('SaaS Platform & Development Services', { defaultValue: 'SaaS Platform & Development Services' })}</p>
                 <p className="text-xs" style={{color:'var(--text-muted)'}}>www.techxaro.com</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-3 rounded-lg" style={{background:'var(--bg-hover)',border:'1px solid var(--border-light)'}}>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{color:'var(--text-muted)'}}>Organization</p>
-                  <p className="text-sm font-semibold" style={sc.text}>{viewInv.organization?.name||org?.name||'N/A'}</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{color:'var(--text-muted)'}}>{t('Organization', { defaultValue: 'Organization' })}</p>
+                  <p className="text-sm font-semibold" style={sc.text}>{viewInv.organization?.name||'N/A'}</p>
                 </div>
                 <div className="p-3 rounded-lg" style={{background:'var(--bg-hover)',border:'1px solid var(--border-light)'}}>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{color:'var(--text-muted)'}}>Status</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{color:'var(--text-muted)'}}>{t('Status', { defaultValue: 'Status' })}</p>
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full" style={{background:INV_STATUS[viewInv.status]?.bg,color:INV_STATUS[viewInv.status]?.color}}>
                     {(() => {const I=INV_STATUS[viewInv.status]?.icon;return I?<I className="w-3 h-3"/>:null;})()}
-                    {viewInv.status}
+                    {t(viewInv.status, { defaultValue: viewInv.status })}
                   </span>
                 </div>
                 <div className="p-3 rounded-lg" style={{background:'var(--bg-hover)',border:'1px solid var(--border-light)'}}>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{color:'var(--text-muted)'}}>Plan</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{color:'var(--text-muted)'}}>{t('Plan', { defaultValue: 'Plan' })}</p>
                   <p className="text-sm font-semibold" style={sc.text}>{viewInv.plan?.name||'N/A'}</p>
                 </div>
                 <div className="p-3 rounded-lg" style={{background:'var(--bg-hover)',border:'1px solid var(--border-light)'}}>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{color:'var(--text-muted)'}}>Total Amount</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{color:'var(--text-muted)'}}>{t('Total Amount', { defaultValue: 'Total Amount' })}</p>
                   <p className="text-sm font-bold" style={{color:'var(--color-success)'}}>{fmt$(viewInv.total_amount,viewInv.currency)}</p>
                 </div>
               </div>
               <div className="p-3 rounded-lg" style={{background:'var(--bg-hover)',border:'1px solid var(--border-light)'}}>
-                <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{color:'var(--text-muted)'}}>Billing Period</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{color:'var(--text-muted)'}}>{t('Billing Period', { defaultValue: 'Billing Period' })}</p>
                 <p className="text-sm" style={sc.text}>
                   {viewInv.billing_period_start&&viewInv.billing_period_end?<>{new Date(viewInv.billing_period_start).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})} - {new Date(viewInv.billing_period_end).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</>:viewInv.billing_period||'N/A'}
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 {viewInv.due_at&&<div className="p-3 rounded-lg" style={{background:'var(--bg-hover)',border:'1px solid var(--border-light)'}}>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{color:'var(--text-muted)'}}>Due Date</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{color:'var(--text-muted)'}}>{t('Due Date', { defaultValue: 'Due Date' })}</p>
                   <p className="text-sm" style={sc.text}>{new Date(viewInv.due_at).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</p>
                 </div>}
                 {viewInv.paid_at&&<div className="p-3 rounded-lg" style={{background:'var(--bg-hover)',border:'1px solid var(--border-light)'}}>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{color:'var(--text-muted)'}}>Paid Date</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{color:'var(--text-muted)'}}>{t('Paid Date', { defaultValue: 'Paid Date' })}</p>
                   <p className="text-sm" style={sc.text}>{new Date(viewInv.paid_at).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</p>
                 </div>}
                 {viewInv.approved_at&&<div className="p-3 rounded-lg" style={{background:'rgba(16,185,129,0.05)',border:'1px solid rgba(16,185,129,0.2)'}}>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{color:'var(--color-success)'}}>Approved Date</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{color:'var(--color-success)'}}>{t('Approved Date', { defaultValue: 'Approved Date' })}</p>
                   <p className="text-sm font-medium" style={{color:'var(--color-success)'}}>{new Date(viewInv.approved_at).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</p>
                 </div>}
               </div>
               {viewInv.notes&&<div className="p-3 rounded-lg" style={{background:'var(--color-primary-bg)',border:'1px solid var(--color-primary)'}}>
-                <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{color:'var(--color-primary)'}}>Notes</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{color:'var(--color-primary)'}}>{t('Notes', { defaultValue: 'Notes' })}</p>
                 <p className="text-sm" style={sc.text}>{viewInv.notes}</p>
               </div>}
             </div>
             <div className="flex justify-end gap-2 p-5" style={{borderTop:'1px solid var(--border-light)'}}>
-              <button onClick={async()=>{try{await api.downloadInvoice(viewInv.id);}catch{setToast({t:'e',m:'Download failed.'});}}} className="px-4 py-2 rounded-lg text-sm font-medium text-white flex items-center gap-2 transition-colors" style={{background:'var(--color-primary)'}}>
-                <Download className="w-4 h-4"/> Download Invoice
+              <button onClick={async()=>{try{await api.downloadInvoice(viewInv.id);}catch{setToast({t:'e',m:t('Download failed.', { defaultValue: 'Download failed.' })});}}} className="px-4 py-2 rounded-lg text-sm font-medium text-white flex items-center gap-2 transition-colors" style={{background:'var(--color-primary)'}}>
+                <Download className="w-4 h-4"/> {t('Download Invoice', { defaultValue: 'Download Invoice' })}
               </button>
-              <button onClick={()=>setViewInv(null)} className="px-4 py-2 rounded-lg text-sm font-medium transition-colors" style={{background:'var(--bg-hover)',color:'var(--text-secondary)',border:'1px solid var(--border-light)'}}>Close</button>
+              <button onClick={()=>setViewInv(null)} className="px-4 py-2 rounded-lg text-sm font-medium transition-colors" style={{background:'var(--bg-hover)',color:'var(--text-secondary)',border:'1px solid var(--border-light)'}}>{t('Close', { defaultValue: 'Close' })}</button>
             </div>
           </div>
         </div>

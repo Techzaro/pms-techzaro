@@ -5,6 +5,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import UserSelectDropdown from "./UserSelectDropdown";
 import "./EventAssignUsers.css";
 
@@ -16,6 +17,7 @@ import "./EventAssignUsers.css";
  * @param {boolean} [allUsersAllowed=false] - Whether to show the "Assign To All" checkbox
  */
 function EventAssignUsers({ users = [], selectedIds = [], onChange, allUsersAllowed = false }) {
+  const { t } = useTranslation();
   const [selectAll, setSelectAll] = useState(false);
 
   useEffect(() => {
@@ -34,12 +36,12 @@ function EventAssignUsers({ users = [], selectedIds = [], onChange, allUsersAllo
 
   return (
     <div className="event-assign-users">
-      <label className="event-label">Assign Users</label>
+      <label className="event-label">{t("Assign Users", { defaultValue: "Assign Users" })}</label>
       <UserSelectDropdown
         users={users}
         selectedIds={selectedIds}
         onChange={onChange}
-        placeholder="Select users to assign"
+        placeholder={t("Select users to assign", { defaultValue: "Select users to assign" })}
       />
       {allUsersAllowed && (
         <label className="event-assign-all">
@@ -48,7 +50,7 @@ function EventAssignUsers({ users = [], selectedIds = [], onChange, allUsersAllo
             checked={selectAll}
             onChange={handleToggleAll}
           />
-          Assign To All Users
+          {t("Assign To All Users", { defaultValue: "Assign To All Users" })}
         </label>
       )}
     </div>

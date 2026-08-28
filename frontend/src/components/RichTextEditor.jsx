@@ -1,4 +1,5 @@
 import React, { forwardRef } from "react";
+import { useTranslation } from "react-i18next";
 import ReactQuill from "react-quill-new";
 import "react-quill-new/dist/quill.snow.css";
 import "./RichTextEditor.css";
@@ -26,6 +27,7 @@ const formats = [
 ];
 
 const RichTextEditor = forwardRef(function RichTextEditor({ value, onChange, placeholder, style }, ref) {
+  const { t } = useTranslation();
   return (
     <div className="rte-wrapper" style={style}>
       <ReactQuill
@@ -35,7 +37,7 @@ const RichTextEditor = forwardRef(function RichTextEditor({ value, onChange, pla
         onChange={onChange}
         modules={modules}
         formats={formats}
-        placeholder={placeholder || "Write here..."}
+        placeholder={placeholder || t("Write here...", { defaultValue: "Write here..." })}
       />
     </div>
   );

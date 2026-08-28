@@ -276,15 +276,16 @@ export function formatLocalTime(dateStr, userTimezone = null, timeFormat = null)
  * @param {string} [userTimezone]
  * @returns {string}
  */
-export function formatReadableDateTime(dateStr, userTimezone = null) {
+export function formatReadableDateTime(dateStr, userTimezone = null, dateFormat = null, timeFormat = null) {
   if (!dateStr) return "—";
   try {
     const tz = userTimezone || getUserTimezone();
     const d = dayjs.utc(dateStr);
     if (!d.isValid()) return String(dateStr);
 
-    const timePattern = getDayjsTimePattern();
-    return d.tz(tz).format(`DD MMM YYYY, ${timePattern}`);
+    const datePattern = getDayjsDatePattern(dateFormat);
+    const timePattern = getDayjsTimePattern(timeFormat);
+    return d.tz(tz).format(`${datePattern}, ${timePattern}`);
   } catch {
     return String(dateStr);
   }
@@ -442,7 +443,7 @@ export function checkWorkingHoursCompliance(
     const localDay = startObj.format("dddd"); // "Monday", "Tuesday", etc.
     const localStartTime = startObj.format("HH:mm");
     const localEndTime = endObj.format("HH:mm");
-    const localTimeFormatted = startObj.format("hh:mm A");
+    const localTimeFormatted = startObj.format(getDayjsTimePattern());
 
     const schedule = normalizeWorkingHoursSchedule(userWorkingHours);
     const dayItem = schedule.find((s) => s.day?.toLowerCase() === localDay.toLowerCase());

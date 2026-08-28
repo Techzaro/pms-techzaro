@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
@@ -26,6 +27,7 @@ const TRANSFER_REASONS = [
 ];
 
 function TransferTaskDialog({ isOpen, onClose, task, entityType, onTransferSuccess }) {
+  const { t } = useTranslation();
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
   useEscapeKey(isOpen, handleClose);
 
@@ -75,15 +77,15 @@ function TransferTaskDialog({ isOpen, onClose, task, entityType, onTransferSucce
 
   const handleSubmit = async () => {
     if (!delegatedTo) {
-      notify.error("Please select a user to transfer to.");
+      notify.error(t("Please select a user to transfer to.", { defaultValue: "Please select a user to transfer to." }));
       return;
     }
     if (!reason) {
-      notify.error("Please select a reason for transfer.");
+      notify.error(t("Please select a reason for transfer.", { defaultValue: "Please select a reason for transfer." }));
       return;
     }
     if (reason === "Other" && !reasonDetail.trim()) {
-      notify.error("Please provide details for the 'Other' reason.");
+      notify.error(t("Please provide details for the 'Other' reason.", { defaultValue: "Please provide details for the 'Other' reason." }));
       return;
     }
     await run(async () => {
@@ -119,10 +121,10 @@ function TransferTaskDialog({ isOpen, onClose, task, entityType, onTransferSucce
           onTransferSuccess?.(data.task || data.deliverable, { isTransfer: true });
           onClose();
         } else {
-          notify.error(data.message || "Failed to transfer task");
+          notify.error(data.message || t("Failed to transfer task", { defaultValue: "Failed to transfer task" }));
         }
       } catch {
-        notify.error("An error occurred while transferring");
+        notify.error(t("An error occurred while transferring", { defaultValue: "An error occurred while transferring" }));
       }
     });
   };
@@ -135,40 +137,40 @@ function TransferTaskDialog({ isOpen, onClose, task, entityType, onTransferSucce
         <div className="tt-modal" role="dialog" onClick={(e) => e.stopPropagation()}>
           <div className="tt-header">
             <h2 className="tt-title">
-              {entityType === "deliverable" ? "Transfer Subtask" : "Transfer Task"}
+              {entityType === "deliverable" ? t("Transfer Subtask", { defaultValue: "Transfer Subtask" }) : t("Transfer Task", { defaultValue: "Transfer Task" })}
               <button className="tt-title-close" onClick={handleClose}>&times;</button>
             </h2>
           </div>
 
           <div className="tt-body">
             <div className="tt-field">
-              <label className="tt-label">Transfer To <span>*</span></label>
+              <label className="tt-label">{t("Transfer To", { defaultValue: "Transfer To" })} <span>*</span></label>
               {loadingUsers ? (
-                <span className="tt-loading-text">Loading users...</span>
+                <span className="tt-loading-text">{t("Loading users...", { defaultValue: "Loading users..." })}</span>
               ) : (
                 <select
                   className="tt-input"
                   value={delegatedTo}
                   onChange={(e) => { setDelegatedTo(e.target.value); setIsDirty(true); }}
                 >
-                  <option value="">Select a user...</option>
+                  <option value="">{t("Select a user...", { defaultValue: "Select a user..." })}</option>
                   {users.map((u) => (
-                    <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                    <option key={u.id} value={u.id}>{u.name} ({u.role ? t(u.role) : ""})</option>
                   ))}
                 </select>
               )}
             </div>
 
             <div className="tt-field">
-              <label className="tt-label">Reason <span>*</span></label>
+              <label className="tt-label">{t("Reason", { defaultValue: "Reason" })} <span>*</span></label>
               <select
                 className="tt-input"
                 value={reason}
                 onChange={(e) => { setReason(e.target.value); setIsDirty(true); }}
               >
-                <option value="">Select a reason...</option>
+                <option value="">{t("Select a reason...", { defaultValue: "Select a reason..." })}</option>
                 {TRANSFER_REASONS.map((r) => (
-                  <option key={r} value={r}>{r}</option>
+                  <option key={r} value={r}>{t(r)}</option>
                 ))}
               </select>
               <div className="tt-reason-tags">
@@ -179,7 +181,7 @@ function TransferTaskDialog({ isOpen, onClose, task, entityType, onTransferSucce
                     className={`tt-tag-chip ${reason === r ? "tt-tag-chip--selected" : ""}`}
                     onClick={() => { setReason(r); setIsDirty(true); }}
                   >
-                    {r}
+                    {t(r)}
                   </button>
                 ))}
               </div>
@@ -188,20 +190,20 @@ function TransferTaskDialog({ isOpen, onClose, task, entityType, onTransferSucce
             {(reason === "Other" || reasonDetail.trim()) && (
               <div className="tt-field">
                 <label className="tt-label">
-                  Reason Details {reason === "Other" && <span>*</span>}
+                  {t("Reason Details", { defaultValue: "Reason Details" })} {reason === "Other" && <span>*</span>}
                 </label>
                 <textarea
                   className="tt-textarea"
                   value={reasonDetail}
                   onChange={(e) => { setReasonDetail(e.target.value); setIsDirty(true); }}
-                  placeholder="Provide additional details..."
+                  placeholder={t("Provide additional details...", { defaultValue: "Provide additional details..." })}
                   rows={3}
                 />
               </div>
             )}
 
             <div className="tt-field">
-              <label className="tt-label">After Completion</label>
+              <label className="tt-label">{t("After Completion", { defaultValue: "After Completion" })}</label>
               <div className="tt-radio-group">
                 <label className="tt-radio">
                   <input
@@ -211,8 +213,8 @@ function TransferTaskDialog({ isOpen, onClose, task, entityType, onTransferSucce
                     onChange={() => { setReturnToTransferor(true); setIsDirty(true); }}
                   />
                   <span className="tt-radio-label">
-                    <strong>Submit back to me first</strong>
-                    <small>New owner submits to you, then you approve and forward to the original assigner</small>
+                    <strong>{t("Submit back to me first", { defaultValue: "Submit back to me first" })}</strong>
+                    <small>{t("New owner submits to you, then you approve and forward to the original assigner", { defaultValue: "New owner submits to you, then you approve and forward to the original assigner" })}</small>
                   </span>
                 </label>
                 <label className="tt-radio">
@@ -223,43 +225,43 @@ function TransferTaskDialog({ isOpen, onClose, task, entityType, onTransferSucce
                     onChange={() => { setReturnToTransferor(false); setIsDirty(true); }}
                   />
                   <span className="tt-radio-label">
-                    <strong>Submit directly to my assigner</strong>
-                    <small>You will be bypassed. The submission goes to the nearest earlier return checkpoint or task creator.</small>
+                    <strong>{t("Submit directly to my assigner", { defaultValue: "Submit directly to my assigner" })}</strong>
+                    <small>{t("You will be bypassed. The submission goes to the nearest earlier return checkpoint or task creator.", { defaultValue: "You will be bypassed. The submission goes to the nearest earlier return checkpoint or task creator." })}</small>
                   </span>
                 </label>
               </div>
             </div>
 
             <div className="tt-field">
-              <label className="tt-label">Notes (Optional)</label>
+              <label className="tt-label">{t("Notes (Optional)", { defaultValue: "Notes (Optional)" })}</label>
               <textarea
                 className="tt-textarea"
                 value={notes}
                 onChange={(e) => { setNotes(e.target.value); setIsDirty(true); }}
-                placeholder="Any additional notes for the new owner..."
+                placeholder={t("Any additional notes for the new owner...", { defaultValue: "Any additional notes for the new owner..." })}
                 rows={2}
               />
             </div>
 
             <div className="tt-info">
-              <strong>How transfer works:</strong>
+              <strong>{t("How transfer works:", { defaultValue: "How transfer works:" })}</strong>
               <ul>
-                <li>The new owner will be notified and must accept the transfer</li>
-                <li>Once accepted, the {entityType === "deliverable" ? "subtask" : "task"} ownership transfers to the new owner</li>
-                <li>Approval route depends on your "After Completion" choice above</li>
-                <li>You can revoke the transfer at any time before approval</li>
+                <li>{t("The new owner will be notified and must accept the transfer", { defaultValue: "The new owner will be notified and must accept the transfer" })}</li>
+                <li>{entityType === "deliverable" ? t("Once accepted, the subtask ownership transfers to the new owner", { defaultValue: "Once accepted, the subtask ownership transfers to the new owner" }) : t("Once accepted, the task ownership transfers to the new owner", { defaultValue: "Once accepted, the task ownership transfers to the new owner" })}</li>
+                <li>{t('Approval route depends on your "After Completion" choice above', { defaultValue: 'Approval route depends on your "After Completion" choice above' })}</li>
+                <li>{t("You can revoke the transfer at any time before approval", { defaultValue: "You can revoke the transfer at any time before approval" })}</li>
               </ul>
             </div>
           </div>
 
           <div className="tt-footer">
-            <button className="tt-cancel-btn" onClick={handleClose} disabled={submitting}>Cancel</button>
+            <button className="tt-cancel-btn" onClick={handleClose} disabled={submitting}>{t("Cancel")}</button>
             <button
               className="tt-submit-btn"
               onClick={handleSubmit}
               disabled={submitting || !delegatedTo || !reason}
             >
-              {submitting ? "Transferring..." : entityType === "deliverable" ? "Transfer Subtask" : "Transfer Task"}
+              {submitting ? t("Transferring...", { defaultValue: "Transferring..." }) : entityType === "deliverable" ? t("Transfer Subtask", { defaultValue: "Transfer Subtask" }) : t("Transfer Task", { defaultValue: "Transfer Task" })}
             </button>
           </div>
         </div>

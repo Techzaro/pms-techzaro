@@ -5,19 +5,32 @@
  */
 
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { Edit3, Trash2 } from "lucide-react";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { TYPE_COLORS, TYPE_LABELS, DEFAULT_EVENT_COLOR } from "../utils/calendarConstants";
 import { formatEventTime } from "../utils/formatDateTime";
+import { formatLocalDate } from "../utils/timezoneUtils";
 
-/** Formats a date as "Month Day, Year" (e.g., "March 15, 2025"). */
+/** Formats a date using the user's configured date format. */
 function formatDisplayDate(d) {
-  return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  if (!d) return "—";
+  try {
+    const iso = d instanceof Date ? d.toISOString() : String(d);
+    return formatLocalDate(iso);
+  } catch {
+    return String(d);
+  }
 }
 
-/** Formats a date as the full weekday name (e.g., "Saturday"). */
+/** Formats a date as the full weekday name. */
 function formatWeekday(d) {
-  return d.toLocaleDateString("en-US", { weekday: "long" });
+  if (!d) return "";
+  try {
+    return new Intl.DateTimeFormat(undefined, { weekday: "long" }).format(d);
+  } catch {
+    return "";
+  }
 }
 
 /**
@@ -33,6 +46,7 @@ function formatWeekday(d) {
  * @param {Function} [onAddEvent] - Callback to add a new event
  */
 export default function DayPopup({ date, events, onClose, onEdit, onDelete, canManageEvents, onItemClick, deleteLoading, onAddEvent }) {
+  const { t } = useTranslation();
   useEscapeKey(true, onClose);
 
   if (!date) return null;
@@ -58,13 +72,13 @@ export default function DayPopup({ date, events, onClose, onEdit, onDelete, canM
         <div className="event-step">
           {events.length === 0 ? (
             <div style={{ textAlign: "center", padding: "20px 0" }}>
-              <p style={{ color: "var(--text-muted)", marginBottom: 16 }}>No events for this day</p>
+              <p style={{ color: "var(--text-muted)", marginBottom: 16 }}>{t("No events for this day", { defaultValue: "No events for this day" })}</p>
             </div>
           ) : (
             <>
               {events.map((ev) => {
                 const colors = TYPE_COLORS[ev.type] || DEFAULT_EVENT_COLOR;
-                const time = ev.all_day ? "All Day" :
+                const time = ev.all_day ? t("All Day", { defaultValue: "All Day" }) :
                   `${formatEventTime(ev)}${ev.end_date ? ` - ${formatEventTime({ ...ev, start_date: ev.end_date })}` : ""}`;
                 const sourceIcon = ev.source === "task" ? "📋" : ev.source === "deliverable" ? "📦" : ev.source === "project" ? "🚀" : "📅";
                 return (
@@ -85,7 +99,7 @@ export default function DayPopup({ date, events, onClose, onEdit, onDelete, canM
                           {sourceIcon} {ev.title}
                         </p>
                         <p style={{ margin: "4px 0 0", fontSize: 13, color: "#6b7280" }}>
-                          {time} • {TYPE_LABELS[ev.type] || ev.type}
+                          {time} • {t(TYPE_LABELS[ev.type] || ev.type)}
                         </p>
                         {ev.description && (
                           <div style={{ margin: "8px 0 0", fontSize: 13, color: "#4b5563", lineHeight: 1.5 }} className="rte-display" dangerouslySetInnerHTML={{ __html: ev.description }} />
@@ -100,7 +114,7 @@ export default function DayPopup({ date, events, onClose, onEdit, onDelete, canM
                               padding: "6px 8px", cursor: "pointer", color: colors.text,
                               display: "flex", alignItems: "center",
                             }}
-                            title="Edit"
+                            title={t("Edit", { defaultValue: "Edit" })}
                           >
                             <Edit3 size={14} />
                           </button>
@@ -114,7 +128,7 @@ export default function DayPopup({ date, events, onClose, onEdit, onDelete, canM
                               padding: "6px 8px", cursor: "pointer", color: "#ef4444",
                               display: "flex", alignItems: "center", opacity: deleteLoading === ev.id ? 0.5 : 1,
                             }}
-                            title="Delete"
+                            title={t("Delete", { defaultValue: "Delete" })}
                           >
                             <Trash2 size={14} />
                           </button>
@@ -131,7 +145,7 @@ export default function DayPopup({ date, events, onClose, onEdit, onDelete, canM
                     onClick={onAddEvent}
                     style={{ padding: "8px 20px", fontSize: 13 }}
                   >
-                    Add Another Event
+                    {t("Add Another Event", { defaultValue: "Add Another Event" })}
                   </button>
                 </div>
               )}

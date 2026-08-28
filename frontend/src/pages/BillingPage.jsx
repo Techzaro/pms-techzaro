@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import Breadcrumb from '../components/Breadcrumb';
 import api from '../lib/api';
 import { CreditCard, CheckCircle, Clock, AlertCircle, FileText, TrendingUp, Download, Calendar } from 'lucide-react';
+import { formatDate } from '../utils/formatDateTime';
 
 const STATUS_CONFIG = {
   paid: { label: 'Paid', color: 'var(--color-success)', bg: 'var(--color-success-bg)', icon: CheckCircle },
@@ -18,6 +20,7 @@ function formatCurrency(amount, currency = 'USD') {
 }
 
 export default function BillingPage() {
+  const { t } = useTranslation();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -34,7 +37,7 @@ export default function BillingPage() {
         setData(json);
       }
     } catch (err) {
-      setError('Failed to load billing data.');
+      setError(t('Failed to load billing data.', { defaultValue: 'Failed to load billing data.' }));
     } finally {
       setLoading(false);
     }
@@ -48,7 +51,7 @@ export default function BillingPage() {
         fetchBilling();
       }
     } catch (err) {
-      setError('Failed to generate invoice.');
+      setError(t('Failed to generate invoice.', { defaultValue: 'Failed to generate invoice.' }));
     } finally {
       setGenerating(false);
     }
@@ -57,7 +60,7 @@ export default function BillingPage() {
   if (loading) {
     return (
       <DashboardLayout hideRightSidebar>
-        <Breadcrumb items={[{ label: 'Settings' }, { label: 'Billing' }]} />
+        <Breadcrumb items={[{ label: t('Settings', { defaultValue: 'Settings' }) }, { label: t('Billing', { defaultValue: 'Billing' }) }]} />
         <div style={{ background: 'var(--bg-card)', borderRadius: '20px', padding: '24px', boxShadow: 'var(--shadow-sm)' }}>
           <div className="animate-pulse space-y-4">
             <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded-lg w-48" />
@@ -72,15 +75,15 @@ export default function BillingPage() {
 
   return (
     <DashboardLayout hideRightSidebar>
-      <Breadcrumb items={[{ label: 'Settings' }, { label: 'Billing' }]} />
+      <Breadcrumb items={[{ label: t('Settings', { defaultValue: 'Settings' }) }, { label: t('Billing', { defaultValue: 'Billing' }) }]} />
 
       {/* Billing Summary Card */}
       <div style={{ background: 'var(--bg-card)', borderRadius: '20px', padding: '28px', boxShadow: 'var(--shadow-sm)', marginBottom: '20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
           <div>
-            <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-heading)', margin: 0 }}>Billing & Invoices</h1>
+            <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-heading)', margin: 0 }}>{t('Billing & Invoices', { defaultValue: 'Billing & Invoices' })}</h1>
             <p style={{ color: 'var(--text-secondary)', fontSize: '14px', margin: '4px 0 0' }}>
-              Manage your subscription billing and payment history
+              {t('Manage your subscription billing and payment history', { defaultValue: 'Manage your subscription billing and payment history' })}
             </p>
           </div>
           <button
@@ -94,38 +97,38 @@ export default function BillingPage() {
             }}
           >
             <FileText style={{ width: '16px', height: '16px' }} />
-            {generating ? 'Generating...' : 'Generate Invoice'}
+            {generating ? t('Generating...', { defaultValue: 'Generating...' }) : t('Generate Invoice', { defaultValue: 'Generate Invoice' })}
           </button>
         </div>
 
         {/* Stats */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
           <div style={{ padding: '16px', borderRadius: '14px', background: 'var(--bg-hover)', border: '1px solid var(--border-light)' }}>
-            <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Paid</p>
+            <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('Total Paid', { defaultValue: 'Total Paid' })}</p>
             <p style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-success)', margin: '4px 0 0' }}>
               {formatCurrency(summary.total_paid)}
             </p>
           </div>
           <div style={{ padding: '16px', borderRadius: '14px', background: 'var(--bg-hover)', border: '1px solid var(--border-light)' }}>
-            <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pending</p>
+            <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('Pending', { defaultValue: 'Pending' })}</p>
             <p style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-warning)', margin: '4px 0 0' }}>
               {formatCurrency(summary.total_pending)}
             </p>
           </div>
           <div style={{ padding: '16px', borderRadius: '14px', background: 'var(--bg-hover)', border: '1px solid var(--border-light)' }}>
-            <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Invoices</p>
+            <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('Total Invoices', { defaultValue: 'Total Invoices' })}</p>
             <p style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-primary)', margin: '4px 0 0' }}>
               {summary.total_invoices || 0}
             </p>
           </div>
           {summary.current_plan && (
             <div style={{ padding: '16px', borderRadius: '14px', background: 'var(--bg-hover)', border: '1px solid var(--border-light)' }}>
-              <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Current Plan</p>
+              <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('Current Plan', { defaultValue: 'Current Plan' })}</p>
               <p style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-blue)', margin: '4px 0 0' }}>
                 {summary.current_plan.name}
               </p>
               <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '2px 0 0' }}>
-                {formatCurrency(summary.current_plan.billing_period === 'yearly' ? summary.current_plan.price_yearly : summary.current_plan.price_monthly)}/{summary.current_plan.billing_period === 'yearly' ? 'yr' : 'mo'}
+                {formatCurrency(summary.current_plan.billing_period === 'yearly' ? summary.current_plan.price_yearly : summary.current_plan.price_monthly)}/{summary.current_plan.billing_period === 'yearly' ? t('yr', { defaultValue: 'yr' }) : t('mo', { defaultValue: 'mo' })}
               </p>
             </div>
           )}
@@ -136,13 +139,13 @@ export default function BillingPage() {
       <div style={{ background: 'var(--bg-card)', borderRadius: '20px', padding: '24px', boxShadow: 'var(--shadow-sm)' }}>
         <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-heading)', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <FileText style={{ width: '18px', height: '18px', color: 'var(--color-primary)' }} />
-          Invoice History
+          {t('Invoice History', { defaultValue: 'Invoice History' })}
         </h3>
 
         {invoices.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 0' }}>
             <CreditCard style={{ width: '48px', height: '48px', color: 'var(--text-muted)', margin: '0 auto 12px' }} />
-            <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>No invoices yet. Generate your first invoice above.</p>
+            <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>{t('No invoices yet. Generate your first invoice above.', { defaultValue: 'No invoices yet. Generate your first invoice above.' })}</p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -171,12 +174,12 @@ export default function BillingPage() {
                           padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600,
                           background: config.bg, color: config.color,
                         }}>
-                          {config.label}
+                          {t(config.label, { defaultValue: config.label })}
                         </span>
                       </div>
                       <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0' }}>
-                        {invoice.description || invoice.plan?.name || 'Subscription'}
-                        {invoice.billing_period && ` · ${invoice.billing_period}`}
+                        {invoice.description || invoice.plan?.name || t('Subscription', { defaultValue: 'Subscription' })}
+                        {invoice.billing_period && ` · ${t(invoice.billing_period, { defaultValue: invoice.billing_period })}`}
                       </p>
                     </div>
                   </div>
@@ -187,10 +190,10 @@ export default function BillingPage() {
                       </p>
                       <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '2px 0 0' }}>
                         {invoice.paid_at
-                          ? `Paid ${new Date(invoice.paid_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                          ? t("Paid {{date}}", { date: formatDate(invoice.paid_at), defaultValue: `Paid ${formatDate(invoice.paid_at)}` })
                           : invoice.due_at
-                            ? `Due ${new Date(invoice.due_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
-                            : new Date(invoice.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                            ? t("Due {{date}}", { date: formatDate(invoice.due_at), defaultValue: `Due ${formatDate(invoice.due_at)}` })
+                            : formatDate(invoice.created_at)
                         }
                       </p>
                     </div>

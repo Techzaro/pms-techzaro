@@ -1,17 +1,19 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { api } from '../api/superAdminApi';
 
 const REQUIREMENTS = [
-  { label: 'At least 8 characters', test: (v) => v.length >= 8 },
-  { label: 'One uppercase letter', test: (v) => /[A-Z]/.test(v) },
-  { label: 'One lowercase letter', test: (v) => /[a-z]/.test(v) },
-  { label: 'One number', test: (v) => /[0-9]/.test(v) },
-  { label: 'One special character (@$!%*?&#)', test: (v) => /[@$!%*?&#]/.test(v) },
+  { labelKey: 'At least 8 characters', defaultLabel: 'At least 8 characters', test: (v) => v.length >= 8 },
+  { labelKey: 'One uppercase letter', defaultLabel: 'One uppercase letter', test: (v) => /[A-Z]/.test(v) },
+  { labelKey: 'One lowercase letter', defaultLabel: 'One lowercase letter', test: (v) => /[a-z]/.test(v) },
+  { labelKey: 'One number', defaultLabel: 'One number', test: (v) => /[0-9]/.test(v) },
+  { labelKey: 'One special character (@$!%*?&#)', defaultLabel: 'One special character (@$!%*?&#)', test: (v) => /[@$!%*?&#]/.test(v) },
 ];
 
 export default function SuperAdminChangePasswordModal({ org, onClose, onSuccess }) {
+  const { t } = useTranslation();
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showNew, setShowNew] = useState(false);
@@ -25,15 +27,15 @@ export default function SuperAdminChangePasswordModal({ org, onClose, onSuccess 
 
   const handleSubmit = async () => {
     if (!newPassword || !confirmPassword) {
-      setError('Please fill in all fields.');
+      setError(t('Please fill in all fields.', { defaultValue: 'Please fill in all fields.' }));
       return;
     }
     if (newPassword !== confirmPassword) {
-      setError('Password confirmation does not match.');
+      setError(t('Password confirmation does not match.', { defaultValue: 'Password confirmation does not match.' }));
       return;
     }
     if (!allValid) {
-      setError('Password does not meet all requirements.');
+      setError(t('Password does not meet all requirements.', { defaultValue: 'Password does not meet all requirements.' }));
       return;
     }
 
@@ -48,7 +50,7 @@ export default function SuperAdminChangePasswordModal({ org, onClose, onSuccess 
       if (onSuccess) onSuccess();
       onClose();
     } catch (err) {
-      setError(err.message || 'Failed to change password.');
+      setError(err.message || t('Failed to change password.', { defaultValue: 'Failed to change password.' }));
     } finally {
       setLoading(false);
     }
@@ -70,9 +72,9 @@ export default function SuperAdminChangePasswordModal({ org, onClose, onSuccess 
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#111827' }}>Change Password</h2>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#111827' }}>{t('Change Password', { defaultValue: 'Change Password' })}</h2>
             <p style={{ margin: '4px 0 0', fontSize: 13, color: '#6b7280' }}>
-              Update password for <strong>{org.admin_name || org.admin_email}</strong>
+              {t('Update password for', { defaultValue: 'Update password for' })} <strong>{org.admin_name || org.admin_email}</strong>
             </p>
           </div>
           <button onClick={onClose} style={{
@@ -99,9 +101,9 @@ export default function SuperAdminChangePasswordModal({ org, onClose, onSuccess 
             <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
           </svg>
           <div>
-            <strong>Admin Action</strong> — This will update the admin's password.{' '}
-            {forceLogout && 'All active sessions will be terminated.'}
-            {disableRecovery && ' Password recovery will be disabled.'}
+            <strong>{t('Admin Action', { defaultValue: 'Admin Action' })}</strong> — {t("This will update the admin's password.", { defaultValue: "This will update the admin's password." })}{' '}
+            {forceLogout && t('All active sessions will be terminated.', { defaultValue: 'All active sessions will be terminated.' })}
+            {disableRecovery && ` ${t('Password recovery will be disabled.', { defaultValue: 'Password recovery will be disabled.' })}`}
           </div>
         </div>
 
@@ -117,13 +119,13 @@ export default function SuperAdminChangePasswordModal({ org, onClose, onSuccess 
 
         {/* New Password */}
         <div style={{ marginBottom: 10 }}>
-          <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#111827', marginBottom: 6 }}>New Password</label>
+          <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#111827', marginBottom: 6 }}>{t('New Password', { defaultValue: 'New Password' })}</label>
           <div style={{ position: 'relative' }}>
             <input
               type={showNew ? 'text' : 'password'}
               value={newPassword}
               onChange={(e) => { setNewPassword(e.target.value); setError(null); }}
-              placeholder="Enter new password"
+              placeholder={t('Enter new password', { defaultValue: 'Enter new password' })}
               style={{
                 width: '100%', padding: '10px 40px 10px 12px',
                 border: '1px solid #d1d5db', borderRadius: 10,
@@ -143,26 +145,26 @@ export default function SuperAdminChangePasswordModal({ org, onClose, onSuccess 
         {/* Requirements */}
         <div style={{ marginBottom: 18, padding: '0 0 0 2px' }}>
           {REQUIREMENTS.map((r) => (
-            <div key={r.label} style={{
+            <div key={r.labelKey} style={{
               display: 'flex', alignItems: 'center', gap: 6,
               fontSize: 12, color: r.test(newPassword) ? '#16a34a' : '#6b7280',
               marginBottom: 3,
             }}>
               <span style={{ fontSize: 10 }}>●</span>
-              <span>{r.label}</span>
+              <span>{t(r.labelKey, { defaultValue: r.defaultLabel })}</span>
             </div>
           ))}
         </div>
 
         {/* Confirm Password */}
         <div style={{ marginBottom: 20 }}>
-          <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#111827', marginBottom: 6 }}>Confirm New Password</label>
+          <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#111827', marginBottom: 6 }}>{t('Confirm New Password', { defaultValue: 'Confirm New Password' })}</label>
           <div style={{ position: 'relative' }}>
             <input
               type={showConfirm ? 'text' : 'password'}
               value={confirmPassword}
               onChange={(e) => { setConfirmPassword(e.target.value); setError(null); }}
-              placeholder="Confirm new password"
+              placeholder={t('Confirm new password', { defaultValue: 'Confirm new password' })}
               style={{
                 width: '100%', padding: '10px 40px 10px 12px',
                 border: '1px solid #d1d5db', borderRadius: 10,
@@ -186,9 +188,9 @@ export default function SuperAdminChangePasswordModal({ org, onClose, onSuccess 
               onChange={(e) => setForceLogout(e.target.checked)}
               style={{ width: 16, height: 16, accentColor: '#2563eb', cursor: 'pointer' }} />
             <div>
-              <span style={{ fontWeight: 600 }}>Force logout from all devices</span>
+              <span style={{ fontWeight: 600 }}>{t('Force logout from all devices', { defaultValue: 'Force logout from all devices' })}</span>
               <span style={{ display: 'block', fontSize: 12, color: '#6b7280', marginTop: 1 }}>
-                Terminates all active sessions for this admin
+                {t('Terminates all active sessions for this admin', { defaultValue: 'Terminates all active sessions for this admin' })}
               </span>
             </div>
           </label>
@@ -198,9 +200,9 @@ export default function SuperAdminChangePasswordModal({ org, onClose, onSuccess 
               onChange={(e) => setDisableRecovery(e.target.checked)}
               style={{ width: 16, height: 16, accentColor: '#2563eb', cursor: 'pointer' }} />
             <div>
-              <span style={{ fontWeight: 600 }}>Disable self password recovery</span>
+              <span style={{ fontWeight: 600 }}>{t('Disable self password recovery', { defaultValue: 'Disable self password recovery' })}</span>
               <span style={{ display: 'block', fontSize: 12, color: '#6b7280', marginTop: 1 }}>
-                Prevents the admin from using Forgot Password
+                {t('Prevents the admin from using Forgot Password', { defaultValue: 'Prevents the admin from using Forgot Password' })}
               </span>
             </div>
           </label>
@@ -217,7 +219,7 @@ export default function SuperAdminChangePasswordModal({ org, onClose, onSuccess 
             onMouseEnter={(e) => (e.target.style.background = '#f9fafb')}
             onMouseLeave={(e) => (e.target.style.background = '#fff')}
           >
-            Cancel
+            {t('Cancel', { defaultValue: 'Cancel' })}
           </button>
           <button onClick={handleSubmit} disabled={loading || !allValid}
             style={{
@@ -229,7 +231,7 @@ export default function SuperAdminChangePasswordModal({ org, onClose, onSuccess 
             onMouseEnter={(e) => { if (!loading && allValid) e.target.style.background = '#1d4ed8'; }}
             onMouseLeave={(e) => (e.target.style.background = '#2563eb')}
           >
-            {loading ? 'Updating...' : 'Update Password'}
+            {loading ? t('Updating...', { defaultValue: 'Updating...' }) : t('Update Password', { defaultValue: 'Update Password' })}
           </button>
         </div>
       </div>

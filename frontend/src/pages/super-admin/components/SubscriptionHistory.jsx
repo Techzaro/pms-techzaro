@@ -1,33 +1,35 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Clock, ArrowUpCircle, ArrowDownCircle, RotateCcw, Play, Pause, Ban, CheckCircle, Zap, Calendar, TrendingUp, Users, FolderKanban, CreditCard } from 'lucide-react';
 import { api } from '../api/superAdminApi';
 
 const EVENT_CONFIG = {
-  trial_started: { label: 'Trial Started', icon: Zap, color: '#8b5cf6', bg: 'rgba(139,92,246,0.1)' },
-  plan_assigned: { label: 'Plan Assigned', icon: Play, color: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
-  plan_changed: { label: 'Plan Changed', icon: RotateCcw, color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
-  plan_upgraded: { label: 'Upgraded', icon: ArrowUpCircle, color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
-  plan_downgraded: { label: 'Downgraded', icon: ArrowDownCircle, color: '#ef4444', bg: 'rgba(239,68,68,0.1)' },
-  subscription_renewed: { label: 'Renewed', icon: CheckCircle, color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
-  subscription_cancelled: { label: 'Cancelled', icon: Ban, color: '#ef4444', bg: 'rgba(239,68,68,0.1)' },
-  subscription_suspended: { label: 'Suspended', icon: Pause, color: '#f97316', bg: 'rgba(249,115,22,0.1)' },
-  subscription_reactivated: { label: 'Reactivated', icon: Play, color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
+  trial_started: { labelKey: 'Trial Started', defaultLabel: 'Trial Started', icon: Zap, color: '#8b5cf6', bg: 'rgba(139,92,246,0.1)' },
+  plan_assigned: { labelKey: 'Plan Assigned', defaultLabel: 'Plan Assigned', icon: Play, color: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
+  plan_changed: { labelKey: 'Plan Changed', defaultLabel: 'Plan Changed', icon: RotateCcw, color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
+  plan_upgraded: { labelKey: 'Upgraded', defaultLabel: 'Upgraded', icon: ArrowUpCircle, color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
+  plan_downgraded: { labelKey: 'Downgraded', defaultLabel: 'Downgraded', icon: ArrowDownCircle, color: '#ef4444', bg: 'rgba(239,68,68,0.1)' },
+  subscription_renewed: { labelKey: 'Renewed', defaultLabel: 'Renewed', icon: CheckCircle, color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
+  subscription_cancelled: { labelKey: 'Cancelled', defaultLabel: 'Cancelled', icon: Ban, color: '#ef4444', bg: 'rgba(239,68,68,0.1)' },
+  subscription_suspended: { labelKey: 'Suspended', defaultLabel: 'Suspended', icon: Pause, color: '#f97316', bg: 'rgba(249,115,22,0.1)' },
+  subscription_reactivated: { labelKey: 'Reactivated', defaultLabel: 'Reactivated', icon: Play, color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
 };
 
 function formatDate(dateStr) {
   if (!dateStr) return 'N/A';
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function formatDateTime(dateStr) {
   if (!dateStr) return 'N/A';
-  return new Date(dateStr).toLocaleString('en-US', {
+  return new Date(dateStr).toLocaleString(undefined, {
     month: 'short', day: 'numeric', year: 'numeric',
     hour: 'numeric', minute: '2-digit',
   });
 }
 
 export default function SubscriptionHistory({ organizationId, orgCreatedAt }) {
+  const { t } = useTranslation();
   const [history, setHistory] = useState([]);
   const [summary, setSummary] = useState(null);
   const [planUsage, setPlanUsage] = useState([]);
@@ -88,15 +90,15 @@ export default function SubscriptionHistory({ organizationId, orgCreatedAt }) {
       <div className="rounded-xl p-5 shadow-sm" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-light)' }}>
         <h3 className="text-lg font-semibold mb-3 flex items-center gap-2" style={{ color: 'var(--text-heading)' }}>
           <Calendar className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
-          Registration
+          {t('Registration', { defaultValue: 'Registration' })}
         </h3>
         <div className="grid grid-cols-2 gap-4">
           <div className="p-3 rounded-lg" style={{ background: 'var(--color-primary-bg)', border: '1px solid var(--color-primary)' }}>
-            <p className="text-xs" style={{ color: 'var(--color-primary)' }}>Registered On</p>
+            <p className="text-xs" style={{ color: 'var(--color-primary)' }}>{t('Registered On', { defaultValue: 'Registered On' })}</p>
             <p className="text-sm font-semibold" style={{ color: 'var(--text-dark)' }}>{formatDate(orgCreatedAt)}</p>
           </div>
           <div className="p-3 rounded-lg" style={{ background: 'var(--color-primary-bg)', border: '1px solid var(--color-primary)' }}>
-            <p className="text-xs" style={{ color: 'var(--color-primary)' }}>Total Events</p>
+            <p className="text-xs" style={{ color: 'var(--color-primary)' }}>{t('Total Events', { defaultValue: 'Total Events' })}</p>
             <p className="text-sm font-semibold" style={{ color: 'var(--text-dark)' }}>{history.length}</p>
           </div>
         </div>
@@ -107,14 +109,14 @@ export default function SubscriptionHistory({ organizationId, orgCreatedAt }) {
         <div className="rounded-xl p-5 shadow-sm" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-light)' }}>
           <h3 className="text-lg font-semibold mb-3 flex items-center gap-2" style={{ color: 'var(--text-heading)' }}>
             <TrendingUp className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
-            Subscription Summary
+            {t('Subscription Summary', { defaultValue: 'Subscription Summary' })}
           </h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { label: 'Total Subscriptions', value: summary.total_subscriptions || 0, color: 'var(--color-primary)' },
-              { label: 'Plan Changes', value: summary.total_plan_changes || 0, color: 'var(--color-blue)' },
-              { label: 'Renewals', value: summary.total_renewals || 0, color: 'var(--color-success)' },
-              { label: 'Trial Periods', value: summary.total_trial_periods || 0, color: '#8b5cf6' },
+              { label: t('Total Subscriptions', { defaultValue: 'Total Subscriptions' }), value: summary.total_subscriptions || 0, color: 'var(--color-primary)' },
+              { label: t('Plan Changes', { defaultValue: 'Plan Changes' }), value: summary.total_plan_changes || 0, color: 'var(--color-blue)' },
+              { label: t('Renewals', { defaultValue: 'Renewals' }), value: summary.total_renewals || 0, color: 'var(--color-success)' },
+              { label: t('Trial Periods', { defaultValue: 'Trial Periods' }), value: summary.total_trial_periods || 0, color: '#8b5cf6' },
             ].map((item) => (
               <div key={item.label} className="p-3 rounded-lg" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-light)' }}>
                 <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{item.label}</p>
@@ -130,7 +132,7 @@ export default function SubscriptionHistory({ organizationId, orgCreatedAt }) {
         <div className="rounded-xl p-5 shadow-sm" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-light)' }}>
           <h3 className="text-lg font-semibold mb-3 flex items-center gap-2" style={{ color: 'var(--text-heading)' }}>
             <CreditCard className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
-            Plan Usage
+            {t('Plan Usage', { defaultValue: 'Plan Usage' })}
           </h3>
           <div className="space-y-2">
             {planUsage.map((item) => (
@@ -145,7 +147,7 @@ export default function SubscriptionHistory({ organizationId, orgCreatedAt }) {
                   </div>
                 </div>
                 <span className="px-3 py-1 rounded-full text-xs font-semibold" style={{ background: 'var(--color-primary-bg)', color: 'var(--color-primary)' }}>
-                  {item.times_used} {item.times_used === 1 ? 'time' : 'times'}
+                  {item.times_used} {item.times_used === 1 ? t('time', { defaultValue: 'time' }) : t('times', { defaultValue: 'times' })}
                 </span>
               </div>
             ))}
@@ -158,15 +160,15 @@ export default function SubscriptionHistory({ organizationId, orgCreatedAt }) {
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold flex items-center gap-2" style={{ color: 'var(--text-heading)' }}>
             <Clock className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
-            Subscription History
+            {t('Subscription History', { defaultValue: 'Subscription History' })}
           </h3>
           <div className="flex gap-1 flex-wrap">
             {[
-              { value: 'all', label: 'All' },
-              { value: 'trial_started', label: 'Trials' },
-              { value: 'plan_upgraded', label: 'Upgrades' },
-              { value: 'plan_downgraded', label: 'Downgrades' },
-              { value: 'subscription_renewed', label: 'Renewals' },
+              { value: 'all', label: t('All', { defaultValue: 'All' }) },
+              { value: 'trial_started', label: t('Trials', { defaultValue: 'Trials' }) },
+              { value: 'plan_upgraded', label: t('Upgrades', { defaultValue: 'Upgrades' }) },
+              { value: 'plan_downgraded', label: t('Downgrades', { defaultValue: 'Downgrades' }) },
+              { value: 'subscription_renewed', label: t('Renewals', { defaultValue: 'Renewals' }) },
             ].map((f) => (
               <button key={f.value} onClick={() => setFilter(f.value)}
                 className="px-2.5 py-1 rounded-lg text-xs font-medium transition-colors"
@@ -183,7 +185,7 @@ export default function SubscriptionHistory({ organizationId, orgCreatedAt }) {
 
         {filteredHistory.length === 0 ? (
           <p className="text-sm text-center py-6" style={{ color: 'var(--text-muted)' }}>
-            {history.length === 0 ? 'No subscription history recorded yet.' : 'No events match this filter.'}
+            {history.length === 0 ? t('No subscription history recorded yet.', { defaultValue: 'No subscription history recorded yet.' }) : t('No events match this filter.', { defaultValue: 'No events match this filter.' })}
           </p>
         ) : (
           <div className="space-y-3">
@@ -200,15 +202,15 @@ export default function SubscriptionHistory({ organizationId, orgCreatedAt }) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-semibold" style={{ color: 'var(--text-dark)' }}>
-                        {config.label}
+                        {t(config.labelKey, { defaultValue: config.defaultLabel })}
                       </span>
                       <span className="px-2 py-0.5 rounded-full text-xs font-medium"
                         style={{ background: config.bg, color: config.color }}>
-                        {item.plan?.name || 'Unknown'}
+                        {item.plan?.name || t('Unknown', { defaultValue: 'Unknown' })}
                       </span>
                       {item.previous_plan && (
                         <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                          from {item.previous_plan.name}
+                          {t('from {{name}}', { name: item.previous_plan.name, defaultValue: `from ${item.previous_plan.name}` })}
                         </span>
                       )}
                     </div>
@@ -218,7 +220,7 @@ export default function SubscriptionHistory({ organizationId, orgCreatedAt }) {
                         <span>{formatDate(item.started_at)} → {formatDate(item.ended_at)}</span>
                       )}
                       {item.changed_by && (
-                        <span>by {item.changed_by}</span>
+                        <span>{t('by {{name}}', { name: item.changed_by, defaultValue: `by ${item.changed_by}` })}</span>
                       )}
                     </div>
                   </div>
@@ -226,7 +228,7 @@ export default function SubscriptionHistory({ organizationId, orgCreatedAt }) {
                     {item.amount > 0 && (
                       <p className="text-sm font-semibold" style={{ color: 'var(--text-dark)' }}>${item.amount}</p>
                     )}
-                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{item.billing_period}</p>
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{t(item.billing_period, { defaultValue: item.billing_period })}</p>
                   </div>
                 </div>
               );

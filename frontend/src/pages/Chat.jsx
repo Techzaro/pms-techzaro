@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import API_URL from "../config/api";
 import { authToken, getCurrentRole, rolePath } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
@@ -41,6 +42,7 @@ function ChatFileImage({ msgId, fileName }) {
 }
 
 function Chat() {
+  const { t } = useTranslation();
   const { conversationId } = useParams();
   const navigate = useNavigate();
   const notify = useNotification();
@@ -113,7 +115,7 @@ function Chat() {
         setMessages(data.conversation.messages || []);
       }
     } catch (err) {
-      notify.error("Failed to load conversation");
+      notify.error(t("Failed to load conversation", { defaultValue: "Failed to load conversation" }));
     } finally {
       setLoading(false);
     }
@@ -147,7 +149,7 @@ function Chat() {
         fetchConversations();
       }
     } catch (err) {
-      notify.error("Failed to send message");
+      notify.error(t("Failed to send message", { defaultValue: "Failed to send message" }));
     } finally {
       setSending(false);
     }
@@ -205,13 +207,13 @@ function Chat() {
         setOrganizations(itemsData.organizations || []);
       }
     } catch (err) {
-      notify.error("Failed to load data");
+      notify.error(t("Failed to load data", { defaultValue: "Failed to load data" }));
     }
   };
 
   const handleCreateConversation = async () => {
     if (selectedUsers.length === 0 && !selectedOrg) {
-      notify.error("Please select at least one participant or an organization");
+      notify.error(t("Please select at least one participant or an organization", { defaultValue: "Please select at least one participant or an organization" }));
       return;
     }
     try {
@@ -230,7 +232,7 @@ function Chat() {
           org_id: selectedOrg || null,
           participant_ids: selectedUsers,
           subject: chatSubject || null,
-          message: newMessage || "Conversation started",
+          message: newMessage || t("Conversation started", { defaultValue: "Conversation started" }),
         }),
       });
       const data = await res.json();
@@ -250,10 +252,10 @@ function Chat() {
         if (data.conversation) {
           navigate(rolePath(`chat/${data.conversation.id}`));
         }
-        notify.success("Conversation created");
+        notify.success(t("Conversation created", { defaultValue: "Conversation created" }));
       }
     } catch (err) {
-      notify.error("Failed to create conversation");
+      notify.error(t("Failed to create conversation", { defaultValue: "Failed to create conversation" }));
     }
   };
 
@@ -276,12 +278,12 @@ function Chat() {
         {/* Sidebar: Conversation List */}
         <div className="chat-sidebar">
           <div className="chat-sidebar-header">
-            <h3>Conversations</h3>
-            <button className="new-chat-btn" onClick={openNewChat}>+ New</button>
+            <h3>{t("Conversations", { defaultValue: "Conversations" })}</h3>
+            <button className="new-chat-btn" onClick={openNewChat}>{t("+ New", { defaultValue: "+ New" })}</button>
           </div>
           <div className="conversation-list">
             {conversations.length === 0 && (
-              <p style={{ padding: 16, color: "#999", fontSize: 13 }}>No conversations yet</p>
+              <p style={{ padding: 16, color: "#999", fontSize: 13 }}>{t("No conversations yet", { defaultValue: "No conversations yet" })}</p>
             )}
             {conversations.map((conv) => (
               <div
@@ -291,7 +293,7 @@ function Chat() {
               >
                 <div className="conversation-info">
                   <div className="conversation-subject">
-                    {conv.subject || conv.organization?.name || conv.project?.title || conv.task?.title || conv.deliverable?.title || "Untitled"}
+                    {conv.subject || conv.organization?.name || conv.project?.title || conv.task?.title || conv.deliverable?.title || t("Untitled", { defaultValue: "Untitled" })}
                   </div>
                   <div className="conversation-project">
                     {[conv.organization?.name, conv.project?.title, conv.task?.title, conv.deliverable?.title].filter(Boolean).join(" / ")}
@@ -313,73 +315,73 @@ function Chat() {
         <div className="chat-main">
           {showNewChat ? (
             <div className="new-chat-form">
-              <h3>New Conversation</h3>
+              <h3>{t("New Conversation", { defaultValue: "New Conversation" })}</h3>
               <div className="form-group">
-                <label>Subject</label>
+                <label>{t("Subject", { defaultValue: "Subject" })}</label>
                 <input
                   type="text"
                   value={chatSubject}
                   onChange={(e) => setChatSubject(e.target.value)}
-                  placeholder="Optional subject"
+                  placeholder={t("Optional subject", { defaultValue: "Optional subject" })}
                 />
               </div>
               <div className="link-to-section">
-                <label className="link-to-label">Link to (optional)</label>
+                <label className="link-to-label">{t("Link to (optional)", { defaultValue: "Link to (optional)" })}</label>
                 <div className="link-to-row">
                   <label className="link-toggle">
                     <input type="checkbox" checked={linkProject} onChange={(e) => { setLinkProject(e.target.checked); if (!e.target.checked) setSelectedProject(""); }} />
-                    <span>Project</span>
+                    <span>{t("Project", { defaultValue: "Project" })}</span>
                   </label>
                   {linkProject && (
                     <CustomSelect
                       value={selectedProject}
                       onChange={(val) => setSelectedProject(val)}
                       options={projects.map((p) => ({ value: p.id, label: p.title }))}
-                      placeholder="Select project"
+                      placeholder={t("Select project", { defaultValue: "Select project" })}
                     />
                   )}
                 </div>
                 <div className="link-to-row">
                   <label className="link-toggle">
                     <input type="checkbox" checked={linkTask} onChange={(e) => { setLinkTask(e.target.checked); if (!e.target.checked) setSelectedTask(""); }} />
-                    <span>Task</span>
+                    <span>{t("Task", { defaultValue: "Task" })}</span>
                   </label>
                   {linkTask && (
                     <CustomSelect
                       value={selectedTask}
                       onChange={(val) => setSelectedTask(val)}
-                      options={tasks.map((t) => ({ value: t.id, label: t.title }))}
-                      placeholder="Select task"
+                      options={tasks.map((tVal) => ({ value: tVal.id, label: tVal.title }))}
+                      placeholder={t("Select task", { defaultValue: "Select task" })}
                     />
                   )}
                 </div>
                 <div className="link-to-row">
                   <label className="link-toggle">
                     <input type="checkbox" checked={linkSubtask} onChange={(e) => { setLinkSubtask(e.target.checked); if (!e.target.checked) setSelectedSubtask(""); }} />
-                    <span>Subtask</span>
+                    <span>{t("Subtask", { defaultValue: "Subtask" })}</span>
                   </label>
                   {linkSubtask && (
                     <CustomSelect
                       value={selectedSubtask}
                       onChange={(val) => setSelectedSubtask(val)}
                       options={subtasks.map((d) => ({ value: d.id, label: d.title }))}
-                      placeholder="Select subtask"
+                      placeholder={t("Select subtask", { defaultValue: "Select subtask" })}
                     />
                   )}
                 </div>
               </div>
               <div className="form-group">
-                <label>Participants *</label>
+                <label>{t("Participants *", { defaultValue: "Participants *" })}</label>
                 <input
                   type="text"
                   className="participant-search"
-                  placeholder="Search participants..."
+                  placeholder={t("Search participants...", { defaultValue: "Search participants..." })}
                   value={participantSearch}
                   onChange={(e) => setParticipantSearch(e.target.value)}
                 />
                 {organizations.length > 0 && (
                   <div className="org-section" style={{ marginBottom: 12, padding: "8px 0", borderTop: "1px solid #eee" }}>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: "#666", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6, display: "block" }}>Organizations</label>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: "#666", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6, display: "block" }}>{t("Organizations", { defaultValue: "Organizations" })}</label>
                     {organizations
                       .filter((o) => o.name.toLowerCase().includes(participantSearch.toLowerCase()))
                       .map((o) => (
@@ -417,19 +419,19 @@ function Chat() {
                 </div>
               </div>
               <div className="form-group">
-                <label>First Message *</label>
-                <RichTextEditor value={newMessage} onChange={setNewMessage} placeholder="Type your first message..." />
+                <label>{t("First Message *", { defaultValue: "First Message *" })}</label>
+                <RichTextEditor value={newMessage} onChange={setNewMessage} placeholder={t("Type your first message...", { defaultValue: "Type your first message..." })} />
               </div>
               <div className="form-actions">
-                <button className="btn-cancel" onClick={() => setShowNewChat(false)}>Cancel</button>
-                <button className="btn-primary" onClick={handleCreateConversation}>Create</button>
+                <button className="btn-cancel" onClick={() => setShowNewChat(false)}>{t("Cancel", { defaultValue: "Cancel" })}</button>
+                <button className="btn-primary" onClick={handleCreateConversation}>{t("Create", { defaultValue: "Create" })}</button>
               </div>
             </div>
           ) : activeConversation ? (
             <>
               <div className="chat-header">
                 <div>
-                  <h3>{activeConversation.subject || activeConversation.organization?.name || activeConversation.project?.title || activeConversation.task?.title || activeConversation.deliverable?.title || "Conversation"}</h3>
+                  <h3>{activeConversation.subject || activeConversation.organization?.name || activeConversation.project?.title || activeConversation.task?.title || activeConversation.deliverable?.title || t("Conversation", { defaultValue: "Conversation" })}</h3>
                   <span className="chat-participants">
                     {activeConversation.participants?.map((p) => p.name).join(", ")}
                     {activeConversation.organization?.name && (activeConversation.participants?.length > 0 ? " • " : "") + activeConversation.organization?.name}
@@ -438,7 +440,7 @@ function Chat() {
               </div>
               <div className="messages-container">
                 {messages.length === 0 && (
-                  <p style={{ textAlign: "center", color: "#999", padding: 20 }}>No messages yet</p>
+                  <p style={{ textAlign: "center", color: "#999", padding: 20 }}>{t("No messages yet", { defaultValue: "No messages yet" })}</p>
                 )}
                 {messages.map((msg) => (
                   <div key={msg.id} className={`message ${msg.user_id === user.id ? "own" : "other"}`}>
@@ -466,7 +468,7 @@ function Chat() {
                                   });
                                   if (!res.ok) {
                                     const err = await res.json().catch(() => null);
-                                    alert(err?.message || "Failed to download file");
+                                    alert(err?.message || t("Failed to download file", { defaultValue: "Failed to download file" }));
                                     return;
                                   }
                                   const blob = await res.blob();
@@ -506,24 +508,24 @@ function Chat() {
                   </div>
                 )}
                 <div className="chat-editor-row">
-                  <button className="chat-attach-btn" onClick={() => fileInputRef.current?.click()} title="Attach file">
+                  <button className="chat-attach-btn" onClick={() => fileInputRef.current?.click()} title={t("Attach file", { defaultValue: "Attach file" })}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
                     </svg>
                   </button>
                   <div className="chat-editor-wrapper">
-                    <RichTextEditor value={newMessage} onChange={setNewMessage} placeholder="Type a message..." style={{ height: "auto" }} />
+                    <RichTextEditor value={newMessage} onChange={setNewMessage} placeholder={t("Type a message...", { defaultValue: "Type a message..." })} style={{ height: "auto" }} />
                   </div>
                   <button onClick={handleSendMessage} disabled={sending || (!newMessage.replace(/<[^>]*>/g, "").trim() && !selectedFile)} className="send-btn">
-                    {sending ? "Sending..." : "Send"}
+                    {sending ? t("Sending...", { defaultValue: "Sending..." }) : t("Send", { defaultValue: "Send" })}
                   </button>
                 </div>
               </div>
             </>
           ) : (
             <div className="chat-empty">
-              <h3>Select a conversation</h3>
-              <p>Choose a conversation from the sidebar or start a new one.</p>
+              <h3>{t("Select a conversation", { defaultValue: "Select a conversation" })}</h3>
+              <p>{t("Choose a conversation from the sidebar or start a new one.", { defaultValue: "Choose a conversation from the sidebar or start a new one." })}</p>
             </div>
           )}
         </div>

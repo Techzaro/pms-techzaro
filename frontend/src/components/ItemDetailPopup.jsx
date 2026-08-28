@@ -7,8 +7,9 @@
 
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useEscapeKey } from "../hooks/useEscapeKey";
-import { formatLocalDate, convertToLocal, getUserTimezone } from "../utils/timezoneUtils";
+import { formatLocalDate, formatLocalTime, convertToLocal, getUserTimezone } from "../utils/timezoneUtils";
 
 /** Icon mapping for each item source type */
 const SOURCE_ICONS = {
@@ -33,6 +34,7 @@ const SOURCE_COLORS = {
  * @param {Function} [onEdit] - Callback to edit a manual event (admin/manager only).
  */
 function ItemDetailPopup({ item, role, onClose, onEdit }) {
+  const { t } = useTranslation();
   useEscapeKey(true, onClose);
 
   const navigate = useNavigate();
@@ -41,7 +43,7 @@ function ItemDetailPopup({ item, role, onClose, onEdit }) {
   const source = item.source || "manual";
   const icon = SOURCE_ICONS[source] || "📅";
   const colors = SOURCE_COLORS[source] || SOURCE_COLORS.manual;
-  const typeLabel = source === "manual" ? "Event" : source.charAt(0).toUpperCase() + source.slice(1);
+  const typeLabel = source === "manual" ? t("Event", { defaultValue: "Event" }) : source === "deliverable" ? t("Subtask", { defaultValue: "Subtask" }) : t(source.charAt(0).toUpperCase() + source.slice(1));
   const canManage = ["admin", "manager"].includes(role);
 
   // Extract the numeric ID by stripping the type prefix (e.g. "task-123" -> "123")
@@ -65,12 +67,12 @@ function ItemDetailPopup({ item, role, onClose, onEdit }) {
   /** Format a date string using timezoneUtils */
   const formatDateStr = (dateStr) => {
     if (!dateStr) return "—";
-    return formatLocalDate(dateStr, viewerTz, "DD MMM, YYYY");
+    return formatLocalDate(dateStr, viewerTz);
   };
 
   const formatTimeStr = (dateStr) => {
     if (!dateStr) return "—";
-    return convertToLocal(dateStr, viewerTz, "hh:mm A");
+    return formatLocalTime(dateStr, viewerTz);
   };
 
   /** Render metadata rows specific to each source type */
@@ -78,36 +80,36 @@ function ItemDetailPopup({ item, role, onClose, onEdit }) {
     switch (source) {
       case "manual": {
         const isAllDay = Boolean(item.all_day);
-        const time = isAllDay ? "All Day" : formatTimeStr(item.start_date);
+        const time = isAllDay ? t("All Day", { defaultValue: "All Day" }) : formatTimeStr(item.start_date);
         const endTime = item.end_date && !isAllDay ? formatTimeStr(item.end_date) : null;
         const assignedNames = item.assigned_users && item.assigned_users.length > 0
           ? item.assigned_users.map((u) => u.name).join(", ")
-          : item.is_global ? "All Users" : null;
+          : item.is_global ? t("All Users", { defaultValue: "All Users" }) : null;
 
         const origTz = item.event_timezone || item.timezone;
         const hasDualTz = Boolean(origTz && origTz !== viewerTz);
-        const origTime = origTz && !isAllDay ? convertToLocal(item.start_date, origTz, "hh:mm A") : null;
-        const origEndTime = origTz && !isAllDay && item.end_date ? convertToLocal(item.end_date, origTz, "hh:mm A") : null;
+        const origTime = origTz && !isAllDay ? formatLocalTime(item.start_date, origTz) : null;
+        const origEndTime = origTz && !isAllDay && item.end_date ? formatLocalTime(item.end_date, origTz) : null;
 
         return (
           <>
-            <MetaRow label="Date" value={formatDateStr(item.start_date)} />
+            <MetaRow label={t("Date", { defaultValue: "Date" })} value={formatDateStr(item.start_date)} />
             <MetaRow
-              label="Time"
+              label={t("Time", { defaultValue: "Time" })}
               value={
                 <div>
                   <div>{endTime ? `${time} - ${endTime}` : time} <span style={{ fontSize: 11, color: "var(--color-primary, #4f46e5)" }}>({viewerTz})</span></div>
                   {hasDualTz && (
                     <div style={{ fontSize: 11, color: "var(--text-muted, #64748b)", marginTop: 2 }}>
-                      Original: {origEndTime ? `${origTime} - ${origEndTime}` : origTime} ({origTz})
+                      {t("Original", { defaultValue: "Original" })}: {origEndTime ? `${origTime} - ${origEndTime}` : origTime} ({origTz})
                     </div>
                   )}
                 </div>
               }
             />
-            {item.description && <MetaRow label="Description" value={item.description} />}
-            {assignedNames && <MetaRow label="Assigned To" value={assignedNames} />}
-            <MetaRow label="Created By" value={item.creator_name || item.user_name || "—"} />
+            {item.description && <MetaRow label={t("Description", { defaultValue: "Description" })} value={item.description} />}
+            {assignedNames && <MetaRow label={t("Assigned To", { defaultValue: "Assigned To" })} value={assignedNames} />}
+            <MetaRow label={t("Created By", { defaultValue: "Created By" })} value={item.creator_name || item.user_name || "—"} />
           </>
         );
       }
@@ -119,15 +121,15 @@ function ItemDetailPopup({ item, role, onClose, onEdit }) {
         const priorityColor = (item.priority || "").toLowerCase() === "high" ? "#ef4444" : (item.priority || "").toLowerCase() === "medium" ? "#f59e0b" : "#6b7280";
         return (
           <>
-            <MetaRow label="Status" value={item.status || "—"} />
+            <MetaRow label={t("Status", { defaultValue: "Status" })} value={item.status ? t(item.status) : "—"} />
             {item.priority && (
-              <MetaRow label="Priority" value={item.priority} valueStyle={{ color: priorityColor, fontWeight: 600 }} />
+              <MetaRow label={t("Priority", { defaultValue: "Priority" })} value={t(item.priority)} valueStyle={{ color: priorityColor, fontWeight: 600 }} />
             )}
-            <MetaRow label="Due Date" value={timeStr ? `${dueLabel}, ${timeStr}` : dueLabel} />
-            {item.assignee_name && <MetaRow label="Assigned To" value={item.assignee_name} />}
-            {item.project_title && <MetaRow label="Project" value={item.project_title} />}
-            {item.assigner_name && <MetaRow label="Assigned By" value={item.assigner_name} />}
-            {item.description && <MetaRow label="Description" value={item.description} />}
+            <MetaRow label={t("Due Date", { defaultValue: "Due Date" })} value={timeStr ? `${dueLabel}, ${timeStr}` : dueLabel} />
+            {item.assignee_name && <MetaRow label={t("Assigned To", { defaultValue: "Assigned To" })} value={item.assignee_name} />}
+            {item.project_title && <MetaRow label={t("Project", { defaultValue: "Project" })} value={item.project_title} />}
+            {item.assigner_name && <MetaRow label={t("Assigned By", { defaultValue: "Assigned By" })} value={item.assigner_name} />}
+            {item.description && <MetaRow label={t("Description", { defaultValue: "Description" })} value={item.description} />}
           </>
         );
       }
@@ -136,12 +138,12 @@ function ItemDetailPopup({ item, role, onClose, onEdit }) {
         const timeStr = item.start_date ? formatTimeStr(item.start_date) : null;
         return (
           <>
-            <MetaRow label="Status" value={item.status || "—"} />
-            <MetaRow label="Due Date" value={timeStr ? `${dueLabel}, ${timeStr}` : dueLabel} />
-            {item.assigned_by_name && <MetaRow label="Assigned To" value={item.assigned_by_name} />}
-            {item.project_title && <MetaRow label="Project" value={item.project_title} />}
-            {item.task_id && <MetaRow label="Related Task" value={`Task #${item.task_id}`} />}
-            {item.description && <MetaRow label="Description" value={item.description} />}
+            <MetaRow label={t("Status", { defaultValue: "Status" })} value={item.status ? t(item.status) : "—"} />
+            <MetaRow label={t("Due Date", { defaultValue: "Due Date" })} value={timeStr ? `${dueLabel}, ${timeStr}` : dueLabel} />
+            {item.assigned_by_name && <MetaRow label={t("Assigned To", { defaultValue: "Assigned To" })} value={item.assigned_by_name} />}
+            {item.project_title && <MetaRow label={t("Project", { defaultValue: "Project" })} value={item.project_title} />}
+            {item.task_id && <MetaRow label={t("Related Task", { defaultValue: "Related Task" })} value={t("Task #{{id}}", { defaultValue: `Task #${item.task_id}`, id: item.task_id })} />}
+            {item.description && <MetaRow label={t("Description", { defaultValue: "Description" })} value={item.description} />}
           </>
         );
       }
@@ -149,10 +151,10 @@ function ItemDetailPopup({ item, role, onClose, onEdit }) {
         const dueLabel = formatDateStr(item.end_date || item.start_date || item.date);
         return (
           <>
-            <MetaRow label="Status" value={item.status || "—"} />
-            <MetaRow label="Due Date" value={dueLabel} />
-            {item.creator_name && <MetaRow label="Project Manager" value={item.creator_name} />}
-            {item.description && <MetaRow label="Description" value={item.description} />}
+            <MetaRow label={t("Status", { defaultValue: "Status" })} value={item.status ? t(item.status) : "—"} />
+            <MetaRow label={t("Due Date", { defaultValue: "Due Date" })} value={dueLabel} />
+            {item.creator_name && <MetaRow label={t("Project Manager", { defaultValue: "Project Manager" })} value={item.creator_name} />}
+            {item.description && <MetaRow label={t("Description", { defaultValue: "Description" })} value={item.description} />}
           </>
         );
       }
@@ -228,7 +230,7 @@ function ItemDetailPopup({ item, role, onClose, onEdit }) {
                 cursor: "pointer",
               }}
             >
-              Edit Event
+              {t("Edit Event", { defaultValue: "Edit Event" })}
             </button>
           </div>
         )}
@@ -244,7 +246,7 @@ function ItemDetailPopup({ item, role, onClose, onEdit }) {
                 cursor: "pointer",
               }}
             >
-              View Details
+              {t("View Details", { defaultValue: "View Details" })}
             </button>
           </div>
         )}

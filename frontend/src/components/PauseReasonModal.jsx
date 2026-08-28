@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import useConfirmOnClose from "../hooks/useConfirmOnClose";
 
@@ -15,6 +16,7 @@ const PAUSE_REASONS = [
 ];
 
 function PauseReasonModal({ isOpen, onClose, onConfirm, isAssigner = false }) {
+  const { t } = useTranslation();
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
   useEscapeKey(isOpen, handleClose);
   const [reason, setReason] = useState("");
@@ -65,9 +67,9 @@ function PauseReasonModal({ isOpen, onClose, onConfirm, isAssigner = false }) {
             <line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
         </div>
-        <h3 id="cm-title">Pause Task</h3>
+        <h3 id="cm-title">{t("Pause Task", { defaultValue: "Pause Task" })}</h3>
         <p id="cm-message" style={{ marginBottom: "16px" }}>
-          Select a reason for pausing:
+          {t("Select a reason for pausing:", { defaultValue: "Select a reason for pausing:" })}
         </p>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "12px" }}>
@@ -82,13 +84,13 @@ function PauseReasonModal({ isOpen, onClose, onConfirm, isAssigner = false }) {
                 disabled={processing}
                 style={{ accentColor: "var(--color-warning)" }}
               />
-              <span style={{ fontSize: "13px", color: "var(--text-dark)" }}>{r.label}</span>
+              <span style={{ fontSize: "13px", color: "var(--text-dark)" }}>{t(r.label)}</span>
             </label>
           ))}
         </div>
 
         <textarea
-          placeholder={reason === "other" ? "Please specify (required)" : "Optional detail (max 500 characters)"}
+          placeholder={reason === "other" ? t("Please specify (required)", { defaultValue: "Please specify (required)" }) : t("Optional detail (max 500 characters)", { defaultValue: "Optional detail (max 500 characters)" })}
           value={reasonDetail}
           onChange={e => setReasonDetail(e.target.value.slice(0, 500))}
           disabled={processing || !reason}
@@ -97,14 +99,14 @@ function PauseReasonModal({ isOpen, onClose, onConfirm, isAssigner = false }) {
         />
 
         <div className="cm-actions">
-          <button className="cm-cancel-btn" onClick={handleClose} disabled={processing}>Cancel</button>
+          <button className="cm-cancel-btn" onClick={handleClose} disabled={processing}>{t("Cancel")}</button>
           <button
             className="cm-confirm-btn"
             style={{ background: "var(--color-warning)" }}
             onClick={handleConfirm}
             disabled={!reason || processing || (reason === "other" && !reasonDetail.trim())}
           >
-            {processing ? "Processing..." : "Pause"}
+            {processing ? t("Processing...", { defaultValue: "Processing..." }) : t("Pause", { defaultValue: "Pause" })}
           </button>
         </div>
       </div>

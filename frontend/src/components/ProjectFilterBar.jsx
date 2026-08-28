@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { IoSearchOutline, IoFilterOutline } from "react-icons/io5";
+import { useTranslation } from "react-i18next";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import CustomSelect from "./CustomSelect";
@@ -16,6 +17,7 @@ export default function ProjectFilterBar({
   onFilterChange,
   onReset,
 }) {
+  const { t } = useTranslation();
   const [users, setUsers] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
 
@@ -36,18 +38,18 @@ export default function ProjectFilterBar({
   }, []);
 
   const userOptions = [
-    { value: "", label: "All Members" },
+    { value: "", label: t("All Members", { defaultValue: "All Members" }) },
     ...users.map((u) => ({ value: String(u.id), label: u.name })),
   ];
 
   const statusOptions = [
-    { value: "", label: "All Statuses" },
-    { value: "Planning", label: "Planning" },
-    { value: "In-progress", label: "In Progress" },
-    { value: "Pause", label: "Pause" },
-    { value: "Completed", label: "Completed" },
-    { value: "due_today", label: "Due Today" },
-    { value: "active", label: "Active Only" },
+    { value: "", label: t("All Statuses", { defaultValue: "All Statuses" }) },
+    { value: "Planning", label: t("Planning", { defaultValue: "Planning" }) },
+    { value: "In-progress", label: t("In Progress") },
+    { value: "Pause", label: t("Pause", { defaultValue: "Pause" }) },
+    { value: "Completed", label: t("Completed") },
+    { value: "due_today", label: t("Due Today", { defaultValue: "Due Today" }) },
+    { value: "active", label: t("Active Only", { defaultValue: "Active Only" }) },
   ];
 
   const isActive = Boolean(
@@ -99,7 +101,7 @@ export default function ProjectFilterBar({
           />
           <input
             type="text"
-            placeholder="Search project title or ID..."
+            placeholder={t("Search project title or ID...", { defaultValue: "Search project title or ID..." })}
             value={search || ""}
             onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
             style={{
@@ -139,7 +141,7 @@ export default function ProjectFilterBar({
             }}
           >
             <IoFilterOutline size={16} />
-            <span>Filters</span>
+            <span>{t("Filters", { defaultValue: "Filters" })}</span>
             {isActive && (
               <span
                 style={{
@@ -169,7 +171,7 @@ export default function ProjectFilterBar({
                 cursor: "pointer",
               }}
             >
-              Clear Filters
+              {t("Clear Filters")}
             </button>
           )}
         </div>
@@ -202,7 +204,7 @@ export default function ProjectFilterBar({
                 marginBottom: 4,
               }}
             >
-              Member / Assignee
+              {t("Member / Assignee", { defaultValue: "Member / Assignee" })}
             </label>
             <CustomSelect
               name="filter_user_id"
@@ -223,7 +225,7 @@ export default function ProjectFilterBar({
                 marginBottom: 4,
               }}
             >
-              Status
+              {t("Status")}
             </label>
             <CustomSelect
               name="filter_status"
@@ -244,7 +246,7 @@ export default function ProjectFilterBar({
                 marginBottom: 4,
               }}
             >
-              Start Date
+              {t("Start Date")}
             </label>
             <input
               type="date"
@@ -276,7 +278,7 @@ export default function ProjectFilterBar({
                 marginBottom: 4,
               }}
             >
-              End Date
+              {t("End Date")}
             </label>
             <input
               type="date"

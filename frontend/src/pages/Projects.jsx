@@ -12,6 +12,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import CreateProjectModal from "../components/CreateProjectModal";
@@ -83,6 +84,7 @@ const STATUS_TEXT_COLORS = {
 
 /** Main Projects page — renders project cards with search, filters and pagination. */
 function Projects() {
+  const { t } = useTranslation();
   const { canCreateProject, maxProjects, currentProjects, projectsRemaining, getLimitMessage } = usePlanLimits();
   const navigate = useNavigate();
   const location = useLocation();
@@ -126,7 +128,14 @@ function Projects() {
   }, [setSearchParams]);
 
   const [showAll, setShowAll] = useState(false);
-  const [viewMode, setViewMode] = useState("card");
+  const [viewMode, setViewMode] = useState(() => {
+    return localStorage.getItem("pms_projects_view_mode") || "card";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("pms_projects_view_mode", viewMode);
+  }, [viewMode]);
+
   const [orderedProjects, setOrderedProjects] = useState([]);
   const [restoreDraftId, setRestoreDraftId] = useState(null);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -253,10 +262,10 @@ function Projects() {
         showSuccessMessage("Project", "deleted");
       } else {
         const data = await res.json();
-        notify.error(data.message || "Failed to delete project.");
+        notify.error(data.message || t("Failed to delete project.", { defaultValue: "Failed to delete project." }));
       }
     } catch {
-      notify.error("Failed to delete project.");
+      notify.error(t("Failed to delete project.", { defaultValue: "Failed to delete project." }));
     }
   };
 
@@ -331,11 +340,11 @@ function Projects() {
 
   const formatStatus = (status) => {
     const map = {
-      pending: "Pending",
-      submitted: "Submitted",
-      reopened: "Reopened",
-      approved: "Approved",
-      rejected: "Declined",
+      pending: t("Pending", { defaultValue: "Pending" }),
+      submitted: t("Submitted", { defaultValue: "Submitted" }),
+      reopened: t("Reopened", { defaultValue: "Reopened" }),
+      approved: t("Approved", { defaultValue: "Approved" }),
+      rejected: t("Declined", { defaultValue: "Declined" }),
     };
     return map[status] || status;
   };
@@ -434,7 +443,7 @@ function Projects() {
   }, [totalPages, page]);
 
   const breadcrumbs = [
-    { label: "Projects" },
+    { label: t("Projects", { defaultValue: "Projects" }) },
   ];
 
   return (
@@ -445,18 +454,18 @@ function Projects() {
         {/* HEADER */}
         <div className="projects-header">
           <div>
-            <h1>Projects</h1>
-            <p>Manage and track your projects</p>
+            <h1>{t("Projects", { defaultValue: "Projects" })}</h1>
+            <p>{t("Manage and track your projects", { defaultValue: "Manage and track your projects" })}</p>
         </div>
 
           <div className="header-actions">
             <div className="all-time" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               <select value={timeFilter} onChange={(e) => { setTimeFilter(e.target.value); setPage(1); }}>
-                <option value="">All Time</option>
-                <option value="7">Last 7 Days</option>
-                <option value="30">Last 30 Days</option>
-                <option value="180">Last 6 Months</option>
-                <option value="custom">Custom Date Range</option>
+                <option value="">{t("All Time", { defaultValue: "All Time" })}</option>
+                <option value="7">{t("Last 7 Days", { defaultValue: "Last 7 Days" })}</option>
+                <option value="30">{t("Last 30 Days", { defaultValue: "Last 30 Days" })}</option>
+                <option value="180">{t("Last 6 Months", { defaultValue: "Last 6 Months" })}</option>
+                <option value="custom">{t("Custom Date Range", { defaultValue: "Custom Date Range" })}</option>
               </select>
               {timeFilter === "custom" && (
                 <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
@@ -466,7 +475,7 @@ function Projects() {
                     onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
                     style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '13px' }}
                   />
-                  <span style={{ fontSize: '12px', color: '#64748b' }}>to</span>
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>{t("to", { defaultValue: "to" })}</span>
                   <input
                     type="date"
                     value={endDate}
@@ -482,10 +491,10 @@ function Projects() {
                 className="create-btn"
                 onClick={() => setShowModal(true)}
                 disabled={!canCreateProject}
-                title={!canCreateProject ? getLimitMessage('project') : 'Create Project'}
+                title={!canCreateProject ? getLimitMessage('project') : t('Create Project', { defaultValue: 'Create Project' })}
                 style={!canCreateProject ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
               >
-                + Create Project
+                {t("+ Create Project", { defaultValue: "+ Create Project" })}
               </button>
             )}
             {!canCreateProject && isAdminOrManager && (
@@ -501,7 +510,7 @@ function Projects() {
             <IoSearchOutline fontSize={"20px"} />
             <input
               type="text"
-              placeholder="Search by project name or manager"
+              placeholder={t("Search by project name or manager", { defaultValue: "Search by project name or manager" })}
               value={searchQuery}
               onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
             />
@@ -510,11 +519,11 @@ function Projects() {
           <div className="view-toggle">
             <button className={viewMode === "card" ? "active-tab" : ""} onClick={() => setViewMode("card")}>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.5"/><rect x="9" y="1" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.5"/><rect x="1" y="9" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.5"/><rect x="9" y="9" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.5"/></svg>
-              Cards
+              {t("Cards", { defaultValue: "Cards" })}
             </button>
             <button className={viewMode === "list" ? "active-tab" : ""} onClick={() => setViewMode("list")}>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="2" width="14" height="2.5" rx="1" fill="currentColor"/><rect x="1" y="6.75" width="14" height="2.5" rx="1" fill="currentColor"/><rect x="1" y="11.5" width="14" height="2.5" rx="1" fill="currentColor"/></svg>
-              List
+              {t("List", { defaultValue: "List" })}
             </button>
           </div>
         </div>
@@ -523,13 +532,13 @@ function Projects() {
         {isWidgetEnabled("projects", "overview_cards") && (
           <DraggableStatusBadges
             badges={[
-              { id: "due_today", label: "Due Today", count: dueTodayCount, className: "DueToday", dotColor: "#EF4444" },
-              { id: "active", label: "Active Projects", count: activeCount, className: "Active", dotColor: "#22C55E" },
-              { id: "In-progress", label: "In Progress", count: inProgressCount, className: "InProgress", dotColor: "#3B82F6" },
-              { id: "Planning", label: "Planning", count: planningCount, className: "Planning", dotColor: "#8B5CF6" },
-              { id: "Pause", label: "Pause", count: pauseCount, className: "Paused", dotColor: "#F59E0B" },
-              { id: "Completed", label: "Completed", count: completedCount, className: "Completed", dotColor: "#22C55E" },
-              { id: "", label: "All", count: allCount, className: "All" },
+              { id: "due_today", label: t("Due Today", { defaultValue: "Due Today" }), count: dueTodayCount, className: "DueToday", dotColor: "#EF4444" },
+              { id: "active", label: t("Active Projects", { defaultValue: "Active Projects" }), count: activeCount, className: "Active", dotColor: "#22C55E" },
+              { id: "In-progress", label: t("In Progress", { defaultValue: "In Progress" }), count: inProgressCount, className: "InProgress", dotColor: "#3B82F6" },
+              { id: "Planning", label: t("Planning", { defaultValue: "Planning" }), count: planningCount, className: "Planning", dotColor: "#8B5CF6" },
+              { id: "Pause", label: t("Pause", { defaultValue: "Pause" }), count: pauseCount, className: "Paused", dotColor: "#F59E0B" },
+              { id: "Completed", label: t("Completed", { defaultValue: "Completed" }), count: completedCount, className: "Completed", dotColor: "#22C55E" },
+              { id: "", label: t("All", { defaultValue: "All" }), count: allCount, className: "All" },
             ]}
             activeStatus={statusFilter}
             onSelectStatus={selectStatusFilter}
@@ -544,9 +553,9 @@ function Projects() {
             {viewMode === "card" ? (
           <div className="projects-container">
             {loading ? (
-              <div className="loading-text">Loading projects...</div>
+              <div className="loading-text">{t("Loading projects...", { defaultValue: "Loading projects..." })}</div>
             ) : filteredProjects.length === 0 ? (
-              <div className="loading-text">No projects found</div>
+              <div className="loading-text">{t("No projects found", { defaultValue: "No projects found" })}</div>
             ) : (
               <SortableTableWrapper
                 items={paginatedProjects.map((p, i) => ({ ...p, sortableId: `project-${p.id}-${i}` }))}
@@ -574,7 +583,7 @@ function Projects() {
                               <span style={{ width: "16px", height: "16px", borderRadius: "50%", background: "var(--color-primary)", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: 600 }}>
                                 {project.creator.name?.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase()}
                               </span>
-                              Manager: {project.creator.name}
+                              {t("Manager: {{name}}", { name: project.creator.name, defaultValue: `Manager: ${project.creator.name}` })}
                             </span>
                           )}
                           {project.updatedBy && project.updated_by !== project.created_by && (
@@ -582,9 +591,9 @@ function Projects() {
                               <span style={{ width: "16px", height: "16px", borderRadius: "50%", background: "var(--color-warning)", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: 600 }}>
                                 {project.updatedBy.name?.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase()}
                               </span>
-                              Updated: {project.updatedBy.name}
+                              {t("Updated: {{name}}", { name: project.updatedBy.name, defaultValue: `Updated: ${project.updatedBy.name}` })}
                               <span style={{ background: project.updatedBy.role === "admin" ? "var(--color-primary-dark)" : "var(--color-success)", color: "#fff", padding: "0 4px", borderRadius: "4px", fontSize: "9px", marginLeft: "2px" }}>
-                                {project.updatedBy.role === "admin" ? "Admin" : "Manager"}
+                                {project.updatedBy.role === "admin" ? t("Admin", { defaultValue: "Admin" }) : t("Manager", { defaultValue: "Manager" })}
                               </span>
                             </span>
                           )}
@@ -593,7 +602,7 @@ function Projects() {
                               <span style={{ width: "16px", height: "16px", borderRadius: "50%", background: "var(--color-success)", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: 600 }}>
                                 {project.approvedBy.name?.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase()}
                               </span>
-                              Approved: {project.approvedBy.name}
+                              {t("Approved: {{name}}", { name: project.approvedBy.name, defaultValue: `Approved: ${project.approvedBy.name}` })}
                             </span>
                           )}
                           {project.rejectedBy && (
@@ -601,7 +610,7 @@ function Projects() {
                               <span style={{ width: "16px", height: "16px", borderRadius: "50%", background: "var(--color-danger)", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: 600 }}>
                                 {project.rejectedBy.name?.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase()}
                               </span>
-                              Declined: {project.rejectedBy.name}
+                              {t("Declined: {{name}}", { name: project.rejectedBy.name, defaultValue: `Declined: ${project.rejectedBy.name}` })}
                             </span>
                           )}
                         </div>
@@ -611,18 +620,18 @@ function Projects() {
                       >
                         <div
                           dangerouslySetInnerHTML={{
-                            __html: project.description || "No description available",
+                            __html: project.description || t("No description available", { defaultValue: "No description available" }),
                           }}
                         />
                         {overflowDetected[project.id] && !expandedDesc[project.id] && (
                           <button className="read-more-btn" style={{fontSize: "18px"}} onClick={() => toggleDescription(project.id)}>
-                            Read more
+                            {t("Read more", { defaultValue: "Read more" })}
                           </button>
                         )}
                       </div>
                       {expandedDesc[project.id] && (
                         <button className="show-less-btn" style={{fontSize: "18px"}} onClick={() => toggleDescription(project.id)}>
-                          Show less
+                          {t("Show less", { defaultValue: "Show less" })}
                         </button>
                       )}
                     </div>
@@ -630,7 +639,7 @@ function Projects() {
                     {/* PROGRESS */}
                     <div className="progress-section">
                       <div className="progress-top">
-                        <span>Progress</span>
+                        <span>{t("Progress", { defaultValue: "Progress" })}</span>
                         <span>{progress}%</span>
                       </div>
                       <div className="progress-bar">
@@ -655,14 +664,14 @@ function Projects() {
                             color: STATUS_TEXT_COLORS[project.status] || "var(--text-dark)",
                           }}
                         >
-                          {project.status || "Planning"}
+                          {t(project.status || "Planning", { defaultValue: project.status || "Planning" })}
                         </span>
                         <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
                           <span style={{ fontSize: "13px", color: "var(--text-dark)", fontWeight: 500 }}>
                             📅 {project.start_date ? formatDateTime(project.start_date).replace("\n", " ") : "-"}
                           </span>
                           <span style={{ fontSize: "13px", color: "var(--text-dark)", fontWeight: 500 }}>
-                            📅 {project.end_date ? formatDateTime(project.end_date).replace("\n", " ") : "No deadline"}
+                            📅 {project.end_date ? formatDateTime(project.end_date).replace("\n", " ") : t("No deadline", { defaultValue: "No deadline" })}
                           </span>
                         </div>
                       </div>
@@ -670,7 +679,7 @@ function Projects() {
                       <div className="project-card-actions-right">
                         <ActionPopover
                           trigger={
-                            <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
+                            <button className="action-icon-btn action-view action-trigger-lg" title={t("Actions", { defaultValue: "Actions" })}>
                               <IoEyeOutline size={18} />
                             </button>
                           }
@@ -681,7 +690,7 @@ function Projects() {
                           }}
                         >
                           {isAdminOrManager && (
-                            <button className="action-icon-btn action-edit" title="Edit Project" onClick={async () => {
+                            <button className="action-icon-btn action-edit" title={t("Edit Project", { defaultValue: "Edit Project" })} onClick={async () => {
                               try {
                                 const token = authToken();
                                 const res = await fetch(`${API_URL}/projects/${project.id}`, {
@@ -702,7 +711,7 @@ function Projects() {
                             </button>
                           )}
                           {isAdminOrManager && (
-                            <button className="action-icon-btn action-delete" title="Delete Project" onClick={() => handleDeleteProject(project)}>
+                            <button className="action-icon-btn action-delete" title={t("Delete Project", { defaultValue: "Delete Project" })} onClick={() => handleDeleteProject(project)}>
                               <Trash2 size={16} />
                             </button>
                           )}
@@ -718,18 +727,18 @@ function Projects() {
         ) : (
           <div className="project-list-container">
             <div className="project-table-header">
-              <div>Project Name</div>
-              <div>Status</div>
-              <div>Progress</div>
-              <div>Priority</div>
-              <div>Start & Due Date</div>
-              <div>Action</div>
+              <div>{t("Project Name", { defaultValue: "Project Name" })}</div>
+              <div>{t("Status", { defaultValue: "Status" })}</div>
+              <div>{t("Progress", { defaultValue: "Progress" })}</div>
+              <div>{t("Priority", { defaultValue: "Priority" })}</div>
+              <div>{t("Start & Due Date", { defaultValue: "Start & Due Date" })}</div>
+              <div>{t("Action", { defaultValue: "Action" })}</div>
             </div>
 
             {loading ? (
-                <div style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>Loading...</div>
+                <div style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>{t("Loading...", { defaultValue: "Loading..." })}</div>
             ) : filteredProjects.length === 0 ? (
-                <div style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>No projects found</div>
+                <div style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>{t("No projects found", { defaultValue: "No projects found" })}</div>
             ) : (
               <SortableTableWrapper
                 items={paginatedProjects.map((p, i) => ({ ...p, sortableId: `project-${p.id}-${i}` }))}
@@ -753,7 +762,7 @@ function Projects() {
                     <div className="col-status">
                       <span className="badge" style={{ background: STATUS_COLORS[projectStatus] || "var(--bg-hover)", color: STATUS_TEXT_COLORS[projectStatus] || "var(--text-dark)" }}>
                         <span className="dot" style={{ background: STATUS_TEXT_COLORS[projectStatus] || "var(--text-dark)" }}></span>
-                        {projectStatus}
+                        {t(projectStatus, { defaultValue: projectStatus })}
                       </span>
                     </div>
 
@@ -767,14 +776,14 @@ function Projects() {
                         <div className="progress-bar-fill" style={{ width: `${progress}%` }}></div>
                       </div>
                       <div className="subtasks-approved-text">
-                        {project.completed_tasks || 0}/{project.total_tasks || 0} tasks
+                        {t("{{completed}}/{{total}} tasks", { completed: project.completed_tasks || 0, total: project.total_tasks || 0, defaultValue: `${project.completed_tasks || 0}/${project.total_tasks || 0} tasks` })}
                       </div>
                     </div>
 
                     <div className="col-priority">
                       <span className="badge" style={{ background: PRIORITY_COLORS[project.priority] || "var(--bg-hover)", color: PRIORITY_TEXT_COLORS[project.priority] || "var(--text-dark)" }}>
                         <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[project.priority] || "var(--text-dark)" }}></span>
-                        {project.priority || "Medium"}
+                        {t(project.priority || "Medium", { defaultValue: project.priority || "Medium" })}
                       </span>
                     </div>
 
@@ -787,7 +796,7 @@ function Projects() {
                     <div className="col-action">
                       <ActionPopover
                         trigger={
-                          <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
+                          <button className="action-icon-btn action-view action-trigger-lg" title={t("Actions", { defaultValue: "Actions" })}>
                             <IoEyeOutline size={18} />
                           </button>
                         }
@@ -798,32 +807,32 @@ function Projects() {
                         }}
                       >
                         {isAdminOrManager && (
-                          <button className="action-icon-btn action-edit" title="Edit Project" onClick={async () => {
+                          <button className="action-icon-btn action-edit" title={t("Edit Project", { defaultValue: "Edit Project" })} onClick={async () => {
                             try {
                               const token = authToken();
                               const res = await fetch(`${API_URL}/projects/${project.id}`, {
                                 headers: { Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
                               });
                               if (res.ok) {
-                                const data = await res.json();
-                                setEditingProject(data.project || project);
-                              } else {
+                                  const data = await res.json();
+                                  setEditingProject(data.project || project);
+                                } else {
+                                  setEditingProject(project);
+                                }
+                              } catch {
                                 setEditingProject(project);
                               }
-                            } catch {
-                              setEditingProject(project);
-                            }
-                            setShowEditModal(true);
-                          }}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
-                          </button>
-                        )}
-                        {isAdminOrManager && (
-                          <button className="action-icon-btn action-delete" title="Delete Project" onClick={() => handleDeleteProject(project)}>
-                            <Trash2 size={16} />
-                          </button>
-                        )}
-                      </ActionPopover>
+                              setShowEditModal(true);
+                            }}>
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                            </button>
+                          )}
+                          {isAdminOrManager && (
+                            <button className="action-icon-btn action-delete" title={t("Delete Project", { defaultValue: "Delete Project" })} onClick={() => handleDeleteProject(project)}>
+                              <Trash2 size={16} />
+                            </button>
+                          )}
+                        </ActionPopover>
                     </div>
                   </div>
                 );
@@ -874,13 +883,13 @@ function Projects() {
         isOpen={deleteConfirmOpen}
         onClose={() => { setDeleteConfirmOpen(false); setDeleteTarget(null); }}
         onConfirm={confirmDeleteProject}
-        title="Delete Project"
-        message={`Are you sure you want to delete "${deleteTarget?.title || ""}"? This will permanently delete the project and all its data. This action cannot be undone.`}
-        confirmText="Delete"
-        cancelText="Cancel"
+        title={t("Delete Project", { defaultValue: "Delete Project" })}
+        message={t('Are you sure you want to delete "{{title}}"? This will permanently delete the project and all its data. This action cannot be undone.', { title: deleteTarget?.title || "", defaultValue: `Are you sure you want to delete "${deleteTarget?.title || ""}"? This will permanently delete the project and all its data. This action cannot be undone.` })}
+        confirmText={t("Delete", { defaultValue: "Delete" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
         danger
       />
-      <DynamicWidgetSection storageKey="pms_projects_widgets" sectionTitle="Projects Widgets" />
+      <DynamicWidgetSection storageKey="pms_projects_widgets" sectionTitle={t("Projects Widgets", { defaultValue: "Projects Widgets" })} />
     </DashboardLayout>
   );
 }

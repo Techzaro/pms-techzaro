@@ -2,6 +2,10 @@
  * All Tasks page component — Read-only view of all tasks within the user's visibility scope.
  *
  * Displays tasks based on role-based visibility:
+/**
+ * All Tasks page component — Read-only view of all tasks within the user's visibility scope.
+ *
+ * Displays tasks based on role-based visibility:
  * - Admin: All tasks in the company
  * - Manager: Tasks within managed teams
  * - Team Lead: Tasks within their team
@@ -17,6 +21,7 @@ import Breadcrumb from "../components/Breadcrumb";
 import DraggableStatusBadges from "../components/DraggableStatusBadges";
 import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { ArrowUpRight, StickyNote, Sliders } from "lucide-react";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
@@ -72,6 +77,7 @@ const PRIORITY_TEXT_COLORS = {
 
 /** Main AllTasks page — read-only view of tasks within the user's scope. */
 function AllTasks() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState([]);
@@ -88,6 +94,14 @@ function AllTasks() {
     return filterParam || "";
   });
   const [timeFilter, setTimeFilter] = useState("");
+  const [orderedItems, setOrderedItems] = useState([]);
+  const [page, setPage] = useState(1);
+  const [showAll, setShowAll] = useState(false);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [sortBy, setSortBy] = useState("");
+  const [sortDirection, setSortDirection] = useState("desc");
+  const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
+
   const [advancedFilters, setAdvancedFilters] = useState({
     user_id: [],
     project_id: [],
@@ -98,15 +112,6 @@ function AllTasks() {
     start_date: "",
     end_date: "",
   });
-  const [orderedItems, setOrderedItems] = useState([]);
-  const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
-
-  const [page, setPage] = useState(1);
-  const [showAll, setShowAll] = useState(false);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
-
-  const [sortBy, setSortBy] = useState("");
-  const [sortDirection, setSortDirection] = useState("desc");
 
   const handleSort = (column) => {
     if (sortBy === column) {
@@ -116,6 +121,57 @@ function AllTasks() {
       setSortDirection("asc");
     }
     setPage(1);
+  };
+
+  const selectStatusFilter = (filter) => {
+    if (filter === statusFilter && filter === "") {
+      setShowAll(!showAll);
+    } else {
+      setStatusFilter(filter);
+      setShowAll(false);
+      setPage(1);
+      if (filter) {
+        setSearchParams({ status: filter });
+      } else {
+        setSearchParams({});
+      }
+    }
+  };
+
+  const getInitials = useCallback((name) => {
+    if (!name) return "??";
+    return name.split(" ").map((w) => w[0]).join("").substring(0, 2).toUpperCase();
+  }, []);
+
+  const getRandomColors = useCallback((id) => {
+    const colors = [
+      { bg: "#E0E7FF", text: "#4338CA" },
+      { bg: "#FEE2E2", text: "#B91C1C" },
+      { bg: "#DCFCE7", text: "#22C55E" },
+      { bg: "#FEF3C7", text: "#D97706" },
+      { bg: "#EDE9FE", text: "#7C3AED" },
+      { bg: "#FCE7F3", text: "#DB2777" },
+    ];
+    return colors[(id || 0) % colors.length];
+  }, []);
+
+  const formatDate = (dateStr) => {
+    return formatDateTimeInline(dateStr);
+  };
+
+  const formatStatus = (status) => {
+    const map = {
+      pending: "Pending",
+      in_progress: "In Progress",
+      paused: "Paused",
+      submitted: "Submitted",
+      reopened: "Reopened",
+      approved: "Approved",
+      rejected: "Declined",
+      abandon_requested: "Abandon Requested",
+      abandoned: "Abandoned",
+    };
+    return map[status] || status;
   };
 
   useEffect(() => {
@@ -196,7 +252,7 @@ function AllTasks() {
 
   useEffect(() => {
     fetchTasks();
-  }, [fetchTasks]);
+  }, [fetchTasks, page]);
 
   useAutoRefresh(fetchTasks, {
     events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
@@ -212,57 +268,6 @@ function AllTasks() {
     const nextFilter = filterParam === "due_today" ? "due_today" : (statusParam || filterParam || "");
     setStatusFilter(nextFilter);
   }, [searchParams]);
-
-  const selectStatusFilter = (filter) => {
-    if (filter === statusFilter && filter === "") {
-      setShowAll(!showAll);
-    } else {
-      setStatusFilter(filter);
-      setShowAll(false);
-      setPage(1);
-      if (filter) {
-        setSearchParams({ status: filter });
-      } else {
-        setSearchParams({});
-      }
-    }
-  };
-
-  const getInitials = useCallback((name) => {
-    if (!name) return "??";
-    return name.split(" ").map((w) => w[0]).join("").substring(0, 2).toUpperCase();
-  }, []);
-
-  const getRandomColors = useCallback((id) => {
-    const colors = [
-      { bg: "#E0E7FF", text: "#4338CA" },
-      { bg: "#FEE2E2", text: "#B91C1C" },
-      { bg: "#DCFCE7", text: "#22C55E" },
-      { bg: "#FEF3C7", text: "#D97706" },
-      { bg: "#EDE9FE", text: "#7C3AED" },
-      { bg: "#FCE7F3", text: "#DB2777" },
-    ];
-    return colors[id % colors.length];
-  }, []);
-
-  const formatDate = (dateStr) => {
-    return formatDateTimeInline(dateStr);
-  };
-
-  const formatStatus = (status) => {
-    const map = {
-      pending: "Pending",
-      in_progress: "In Progress",
-      paused: "Paused",
-      submitted: "Submitted",
-      reopened: "Reopened",
-      approved: "Approved",
-      rejected: "Declined",
-      abandon_requested: "Abandon Requested",
-      abandoned: "Abandoned",
-    };
-    return map[status] || status;
-  };
 
   const baseItems = orderedItems.length ? orderedItems : items;
   const pendingStatuses = ["pending", "planned", "Planning", "Planned"];
@@ -315,8 +320,8 @@ function AllTasks() {
   const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * itemsPerPage, page * itemsPerPage);
 
   const breadcrumbs = [
-    { label: "Tasks", path: rolePath("tasks") },
-    { label: "All Tasks" },
+    { label: t("Tasks", { defaultValue: "Tasks" }), path: rolePath("tasks") },
+    { label: t("All Tasks", { defaultValue: "All Tasks" }) },
   ];
 
   return (
@@ -324,18 +329,18 @@ function AllTasks() {
       <Breadcrumb items={breadcrumbs} />
       <div className="Task">
         <div className="task-text">
-          <h3>All Tasks</h3>
-          <p>Monitor and track tasks across your scope</p>
+          <h3>{t("All Tasks", { defaultValue: "All Tasks" })}</h3>
+          <p>{t("Monitor and track tasks across your scope", { defaultValue: "Monitor and track tasks across your scope" })}</p>
         </div>
 
         <div className="task-btns">
           <div className="all-time">
             <select value={timeFilter} onChange={(e) => { setTimeFilter(e.target.value); setPage(1); }}>
-              <option value="">All Time</option>
-              <option value="today">Today</option>
-              <option value="7">Last 7 Days</option>
-              <option value="30">Last 30 Days</option>
-              <option value="180">Last 6 Months</option>
+              <option value="">{t("All Time", { defaultValue: "All Time" })}</option>
+              <option value="today">{t("Today", { defaultValue: "Today" })}</option>
+              <option value="7">{t("Last 7 Days", { defaultValue: "Last 7 Days" })}</option>
+              <option value="30">{t("Last 30 Days", { defaultValue: "Last 30 Days" })}</option>
+              <option value="180">{t("Last 6 Months", { defaultValue: "Last 6 Months" })}</option>
             </select>
           </div>
         </div>
@@ -343,14 +348,14 @@ function AllTasks() {
 
       <DraggableStatusBadges
         badges={[
-          { id: "", label: "All", count: allCount, className: "All" },
-          { id: "pending", label: "Pending", count: pendingCount, className: "Pending" },
-          { id: "in_progress", label: "In Progress", count: inProgressCount, className: "InProgress" },
-          { id: "submitted", label: "Submitted", count: submittedCount, className: "Submitted" },
-          { id: "approved", label: "Approved", count: approvedCount, className: "Approved" },
-          { id: "paused", label: "Paused", count: pausedCount, className: "Paused" },
-          { id: "rejected", label: "Declined", count: rejectedCount, className: "Rejected" },
-          { id: "abandoned", label: "Abandoned", count: abandonedCount, className: "Abandoned", dotColor: "#DC2626" },
+          { id: "", label: t("All", { defaultValue: "All" }), count: allCount, className: "All" },
+          { id: "pending", label: t("Pending", { defaultValue: "Pending" }), count: pendingCount, className: "Pending" },
+          { id: "in_progress", label: t("In Progress", { defaultValue: "In Progress" }), count: inProgressCount, className: "InProgress" },
+          { id: "submitted", label: t("Submitted", { defaultValue: "Submitted" }), count: submittedCount, className: "Submitted" },
+          { id: "approved", label: t("Approved", { defaultValue: "Approved" }), count: approvedCount, className: "Approved" },
+          { id: "paused", label: t("Paused", { defaultValue: "Paused" }), count: pausedCount, className: "Paused" },
+          { id: "rejected", label: t("Declined", { defaultValue: "Declined" }), count: rejectedCount, className: "Rejected" },
+          { id: "abandoned", label: t("Abandoned", { defaultValue: "Abandoned" }), count: abandonedCount, className: "Abandoned", dotColor: "#DC2626" },
         ]}
         activeStatus={statusFilter}
         onSelectStatus={selectStatusFilter}
@@ -373,33 +378,33 @@ function AllTasks() {
       {/* TABLE */}
       <div className="container">
         <div className="all-tasks-header">
-          <div style={{ fontSize: 12, fontWeight: 600 }}>ID</div>
+          <div style={{ fontSize: 12, fontWeight: 600 }}>{t("ID", { defaultValue: "ID" })}</div>
           <div style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("assigned_to")}>
-            Assigned To
+            {t("Assigned To", { defaultValue: "Assigned To" })}
           </div>
           <div style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("assigned_by")}>
-            Assigned By
+            {t("Assigned By", { defaultValue: "Assigned By" })}
           </div>
           <div style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("title")}>
-            Task Name
+            {t("Task Name", { defaultValue: "Task Name" })}
           </div>
           <div style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("status")}>
-            Status
+            {t("Status", { defaultValue: "Status" })}
           </div>
-          <div>Progress</div>
+          <div>{t("Progress", { defaultValue: "Progress" })}</div>
           <div style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("priority")}>
-            Priority
+            {t("Priority", { defaultValue: "Priority" })}
           </div>
           <div style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("due_date")}>
-            Start & Due Date
+            {t("Start & Due Date", { defaultValue: "Start & Due Date" })}
           </div>
-          <div style={{ textAlign: "center" }}>Action</div>
+          <div style={{ textAlign: "center" }}>{t("Action", { defaultValue: "Action" })}</div>
         </div>
 
         {loading ? (
-          <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
+          <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>{t("Loading...", { defaultValue: "Loading..." })}</div>
         ) : filteredItems.length === 0 ? (
-          <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No items found</div>
+          <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>{t("No items found", { defaultValue: "No items found" })}</div>
         ) : (
           <SortableTableWrapper
             items={paginatedItems.map((i, index) => ({
@@ -430,8 +435,8 @@ function AllTasks() {
                         {getInitials(primaryAssignee?.name)}
                       </div>
                       <div style={{ minWidth: 0 }}>
-                        <div className="user-name">{primaryAssignee?.name || "Unassigned"}</div>
-                        <div className="user-role">{primaryAssignee?.role || ""}</div>
+                        <div className="user-name">{primaryAssignee?.name || t("Unassigned", { defaultValue: "Unassigned" })}</div>
+                        <div className="user-role">{primaryAssignee?.role ? t(primaryAssignee.role, { defaultValue: primaryAssignee.role }) : ""}</div>
                       </div>
                     </div>
                   </div>
@@ -443,8 +448,8 @@ function AllTasks() {
                         {getInitials(assigner?.name)}
                       </div>
                       <div style={{ minWidth: 0 }}>
-                        <div className="user-name">{assigner?.name || "System"}</div>
-                        <div className="user-role">{assigner?.role || ""}</div>
+                        <div className="user-name">{assigner?.name || t("System", { defaultValue: "System" })}</div>
+                        <div className="user-role">{assigner?.role ? t(assigner.role, { defaultValue: assigner.role }) : ""}</div>
                       </div>
                     </div>
                   </div>
@@ -491,7 +496,7 @@ function AllTasks() {
                   <div className="col-priority">
                     <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
                       <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
-                      {item.priority}
+                      {t(item.priority || "Medium", { defaultValue: item.priority || "Medium" })}
                     </span>
                   </div>
 
@@ -506,21 +511,21 @@ function AllTasks() {
                   <div className="col-action" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                     <button
                       className="action-icon-btn action-view action-trigger-lg"
-                      title="View Task"
+                      title={t("View Task", { defaultValue: "View Task" })}
                       onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'all-tasks', readOnly: true } })}
                     >
                       <IoEyeOutline size={20} />
                     </button>
                     <ActionPopover
                       trigger={
-                        <button className="action-icon-btn action-manage action-trigger-lg" title="Status Actions" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "4px", borderRadius: "6px", background: "var(--bg-hover, #f3f4f6)", color: "var(--text-primary, #374151)", border: "1px solid var(--border-color, #e5e7eb)", cursor: "pointer" }}>
+                        <button className="action-icon-btn action-manage action-trigger-lg" title={t("Status Actions", { defaultValue: "Status Actions" })} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "4px", borderRadius: "6px", background: "var(--bg-hover, #f3f4f6)", color: "var(--text-primary, #374151)", border: "1px solid var(--border-color, #e5e7eb)", cursor: "pointer" }}>
                           <Sliders size={18} />
                         </button>
                       }
                     >
                       <button
                         className="action-icon-btn action-note"
-                        title="Add Note"
+                        title={t("Add Note", { defaultValue: "Add Note" })}
                         onClick={() => setNoteModal({ open: true, itemId: item.id })}
                       >
                         <StickyNote size={16} />

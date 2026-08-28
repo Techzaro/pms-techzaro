@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useParams, useNavigate } from "react-router-dom";
 import { IoSearchOutline } from "react-icons/io5";
 import DashboardLayout from "../components/layout/DashboardLayout";
@@ -14,6 +15,7 @@ import "../components/Charts.css";
 const ROLE_LABEL = { admin: "Admin", manager: "Manager", team_lead: "Team Lead", member: "Member", guest: "Guest" };
 
 function TeamMembersReport() {
+  const { t } = useTranslation();
   const { teamId } = useParams();
   const navigate = useNavigate();
   const stored = getUser();
@@ -32,7 +34,7 @@ function TeamMembersReport() {
     { staleTime: 60000, refetchOnMount: true }
   );
 
-  const team = Array.isArray(teamsData) ? teamsData.find((t) => String(t.id) === String(teamId)) : null;
+  const team = Array.isArray(teamsData) ? teamsData.find((tItem) => String(tItem.id) === String(teamId)) : null;
   const members = team?.members || [];
 
   const filteredMembers = useMemo(() => {
@@ -56,15 +58,15 @@ function TeamMembersReport() {
   const breakdownItems = useMemo(() => {
     const total = totalAssigned || 1;
     return [
-      { label: "Completed", count: statusBreakdown.completed || 0, color: "#10b981" },
-      { label: "Pending", count: statusBreakdown.pending || 0, color: "#f59e0b" },
-      { label: "In Review", count: (statusBreakdown.submitted || 0) + (statusBreakdown.reopened || 0), color: "var(--color-primary)" },
-      { label: "Overdue", count: statusBreakdown.overdue || totalOverdue, color: "#ef4444" },
+      { label: t("Completed", { defaultValue: "Completed" }), count: statusBreakdown.completed || 0, color: "#10b981" },
+      { label: t("Pending", { defaultValue: "Pending" }), count: statusBreakdown.pending || 0, color: "#f59e0b" },
+      { label: t("In Review", { defaultValue: "In Review" }), count: (statusBreakdown.submitted || 0) + (statusBreakdown.reopened || 0), color: "var(--color-primary)" },
+      { label: t("Overdue", { defaultValue: "Overdue" }), count: statusBreakdown.overdue || totalOverdue, color: "#ef4444" },
     ].map((item) => ({
       ...item,
       percent: total > 0 ? Math.round((item.count / total) * 1000) / 10 : 0,
     }));
-  }, [statusBreakdown, totalAssigned, totalOverdue]);
+  }, [statusBreakdown, totalAssigned, totalOverdue, t]);
 
   const priorityItems = useMemo(() => {
     const high = priorityDistribution.high || 0;
@@ -73,24 +75,24 @@ function TeamMembersReport() {
     const total = high + medium + low;
     return {
       bars: [
-        { label: "High", count: high, color: "#ef4444" },
-        { label: "Medium", count: medium, color: "#f59e0b" },
-        { label: "Low", count: low, color: "#10b981" },
+        { label: t("High", { defaultValue: "High" }), count: high, color: "#ef4444" },
+        { label: t("Medium", { defaultValue: "Medium" }), count: medium, color: "#f59e0b" },
+        { label: t("Low", { defaultValue: "Low" }), count: low, color: "#10b981" },
       ],
       total,
     };
-  }, [priorityDistribution]);
+  }, [priorityDistribution, t]);
 
   const breadcrumbs = [
-    { label: "Reports", path: rolePath("reports") },
-    { label: team?.name || "Team Members" },
+    { label: t("Reports", { defaultValue: "Reports" }), path: rolePath("reports") },
+    { label: team?.name || t("Team Members", { defaultValue: "Team Members" }) },
   ];
 
   const cardMeta = [
-    { key: "assigned", title: "Total Assigned", value: totalAssigned, icon: "/Vector-5.svg", valueColor: "#6366f1", bgColor: "#EEF2FF" },
-    { key: "completed", title: "Completed", value: totalCompleted, icon: "/Vector-2.svg", valueColor: "#22C55E", bgColor: "#ECFDF5" },
-    { key: "pending", title: "Pending", value: totalPending, icon: "/Vector-1 (3).svg", valueColor: "#F59E0B", bgColor: "#FEF3C7" },
-    { key: "overdue", title: "Overdue", value: totalOverdue, icon: "/Vector-3.svg", valueColor: "#EF4444", bgColor: "#FEF2F2" },
+    { key: "assigned", title: t("Total Assigned", { defaultValue: "Total Assigned" }), value: totalAssigned, icon: "/Vector-5.svg", valueColor: "#6366f1", bgColor: "#EEF2FF", sub: t("All tasks assigned", { defaultValue: "All tasks assigned" }) },
+    { key: "completed", title: t("Completed", { defaultValue: "Completed" }), value: totalCompleted, icon: "/Vector-2.svg", valueColor: "#22C55E", bgColor: "#ECFDF5", sub: t("Tasks completed", { defaultValue: "Tasks completed" }) },
+    { key: "pending", title: t("Pending", { defaultValue: "Pending" }), value: totalPending, icon: "/Vector-1 (3).svg", valueColor: "#F59E0B", bgColor: "#FEF3C7", sub: t("In progress", { defaultValue: "In progress" }) },
+    { key: "overdue", title: t("Overdue", { defaultValue: "Overdue" }), value: totalOverdue, icon: "/Vector-3.svg", valueColor: "#EF4444", bgColor: "#FEF2F2", sub: t("Require attention", { defaultValue: "Require attention" }) },
   ];
 
   return (
@@ -107,7 +109,7 @@ function TeamMembersReport() {
                   <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
                 </svg>
               </div>
-              <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700, color: "var(--text-heading)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{isLoading ? "Loading..." : team?.name || "Team"}</h1>
+              <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700, color: "var(--text-heading)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{isLoading ? t("Loading...", { defaultValue: "Loading..." }) : team?.name || t("Team", { defaultValue: "Team" })}</h1>
               {canExport && (
                 <button
                   className="up-export-btn"
@@ -127,11 +129,11 @@ function TeamMembersReport() {
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M8 2v8M4 6l4 4 4-4M2 14h12" />
                   </svg>
-                  Export Team Report
+                  {t("Export Team Report", { defaultValue: "Export Team Report" })}
                 </button>
               )}
             </div>
-            <p className="up-role" style={{ margin: 0, paddingLeft: 80,fontSize: 16, fontWeight: 800 }}>{`${members.length} members`}{team?.leader ? ` \u2022 Lead: ${team.leader.name}` : ""}</p>
+            <p className="up-role" style={{ margin: 0, paddingLeft: 80,fontSize: 16, fontWeight: 800 }}>{t("{{count}} members", { count: members.length, defaultValue: `${members.length} members` })}{team?.leader ? ` \u2022 ${t("Lead: {{name}}", { name: team.leader.name, defaultValue: `Lead: ${team.leader.name}` })}` : ""}</p>
             {team?.description && (
               <div style={{ color: "var(--text-secondary)", fontSize: 14, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", margin: 0, paddingLeft: 80 }} className="rte-display" dangerouslySetInnerHTML={{ __html: team.description }} />
             )}
@@ -148,9 +150,7 @@ function TeamMembersReport() {
                   <div>
                     <p className="up-summary-title">{c.title}</p>
                     <div className="up-summary-value" style={{ color: c.valueColor }}>{c.value}</div>
-                    <p className="up-summary-label">
-                      {c.key === "assigned" ? "All tasks assigned" : c.key === "completed" ? "Tasks completed" : c.key === "pending" ? "In progress" : "Require attention"}
-                    </p>
+                    <p className="up-summary-label">{c.sub}</p>
                   </div>
                 </div>
               </div>
@@ -162,14 +162,14 @@ function TeamMembersReport() {
             {/* Task Status Breakdown - Donut Chart */}
             <div className="up-chart-card">
               <div className="up-chart-header">
-                <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>Task Status Breakdown</h3>
+                <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>{t("Task Status Breakdown", { defaultValue: "Task Status Breakdown" })}</h3>
               </div>
               <div className="up-donut-section">
                 <DonutChart
                   segments={breakdownItems}
                   size={160}
                   strokeWidth={28}
-                  totalLabel="Total Tasks"
+                  totalLabel={t("Total Tasks", { defaultValue: "Total Tasks" })}
                 />
               </div>
             </div>
@@ -177,12 +177,12 @@ function TeamMembersReport() {
             {/* Priority Distribution - Horizontal Bar Chart */}
             <div className="up-chart-card">
               <div className="up-chart-header">
-                <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>Priority Distribution</h3>
+                <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>{t("Priority Distribution", { defaultValue: "Priority Distribution" })}</h3>
               </div>
               <div className="up-priority-section">
                 <PriorityBarChart
                   bars={priorityItems.bars}
-                  totalLabel="Total Tasks"
+                  totalLabel={t("Total Tasks", { defaultValue: "Total Tasks" })}
                 />
               </div>
             </div>
@@ -191,12 +191,12 @@ function TeamMembersReport() {
           {/* MEMBERS TABLE */}
           <div className="up-chart-card" style={{ marginTop: 0 }}>
             <div className="up-chart-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>Member Performance</h3>
+              <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>{t("Member Performance", { defaultValue: "Member Performance" })}</h3>
               <div className="reports-section-search">
                 <IoSearchOutline size={16} />
                 <input
                   type="text"
-                  placeholder="Search by member name or role..."
+                  placeholder={t("Search by member name or role...", { defaultValue: "Search by member name or role..." })}
                   value={memberSearch}
                   onChange={(e) => setMemberSearch(e.target.value)}
                 />
@@ -204,23 +204,23 @@ function TeamMembersReport() {
             </div>
 
             {isLoading ? (
-              <div style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>Loading...</div>
+              <div style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>{t("Loading...", { defaultValue: "Loading..." })}</div>
             ) : filteredMembers.length === 0 ? (
-              <div style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>{memberSearch ? "No matching members found." : "No members in this team."}</div>
+              <div style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>{memberSearch ? t("No matching members found.", { defaultValue: "No matching members found." }) : t("No members in this team.", { defaultValue: "No members in this team." })}</div>
             ) : (
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                   <thead>
                     <tr style={{ borderBottom: "2px solid var(--border-color)" }}>
                       <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 600, color: "var(--text-secondary)", fontSize: 13 }}>#</th>
-                      <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 600, color: "var(--text-secondary)", fontSize: 13 }}>Member</th>
-                      <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 600, color: "var(--text-secondary)", fontSize: 13 }}>Role</th>
-                      <th style={{ padding: "12px 16px", textAlign: "center", fontWeight: 600, color: "var(--text-secondary)", fontSize: 13 }}>Assigned</th>
-                      <th style={{ padding: "12px 16px", textAlign: "center", fontWeight: 600, color: "var(--text-secondary)", fontSize: 13 }}>Completed</th>
-                      <th style={{ padding: "12px 16px", textAlign: "center", fontWeight: 600, color: "var(--text-secondary)", fontSize: 13 }}>Pending</th>
-                      <th style={{ padding: "12px 16px", textAlign: "center", fontWeight: 600, color: "var(--text-secondary)", fontSize: 13 }}>Overdue</th>
-                      <th style={{ padding: "12px 16px", textAlign: "center", fontWeight: 600, color: "var(--text-secondary)", fontSize: 13 }}>Rate</th>
-                      <th style={{ padding: "12px 16px", textAlign: "center", fontWeight: 600, color: "var(--text-secondary)", fontSize: 13 }}>Action</th>
+                      <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 600, color: "var(--text-secondary)", fontSize: 13 }}>{t("Member", { defaultValue: "Member" })}</th>
+                      <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 600, color: "var(--text-secondary)", fontSize: 13 }}>{t("Role", { defaultValue: "Role" })}</th>
+                      <th style={{ padding: "12px 16px", textAlign: "center", fontWeight: 600, color: "var(--text-secondary)", fontSize: 13 }}>{t("Assigned", { defaultValue: "Assigned" })}</th>
+                      <th style={{ padding: "12px 16px", textAlign: "center", fontWeight: 600, color: "var(--text-secondary)", fontSize: 13 }}>{t("Completed", { defaultValue: "Completed" })}</th>
+                      <th style={{ padding: "12px 16px", textAlign: "center", fontWeight: 600, color: "var(--text-secondary)", fontSize: 13 }}>{t("Pending", { defaultValue: "Pending" })}</th>
+                      <th style={{ padding: "12px 16px", textAlign: "center", fontWeight: 600, color: "var(--text-secondary)", fontSize: 13 }}>{t("Overdue", { defaultValue: "Overdue" })}</th>
+                      <th style={{ padding: "12px 16px", textAlign: "center", fontWeight: 600, color: "var(--text-secondary)", fontSize: 13 }}>{t("Rate", { defaultValue: "Rate" })}</th>
+                      <th style={{ padding: "12px 16px", textAlign: "center", fontWeight: 600, color: "var(--text-secondary)", fontSize: 13 }}>{t("Action", { defaultValue: "Action" })}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -243,7 +243,7 @@ function TeamMembersReport() {
                               <span style={{ fontWeight: 600, color: "var(--text-heading)" }}>{member.name}</span>
                             </div>
                           </td>
-                          <td style={{ padding: "14px 16px", color: "var(--text-secondary)" }}>{ROLE_LABEL[member.role] || member.role}</td>
+                          <td style={{ padding: "14px 16px", color: "var(--text-secondary)" }}>{ROLE_LABEL[member.role] ? t(ROLE_LABEL[member.role], { defaultValue: ROLE_LABEL[member.role] }) : member.role}</td>
                           <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: 600, color: "var(--color-primary)" }}>{member.assigned ?? 0}</td>
                           <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: 600, color: "#22c55e" }}>{member.completed ?? 0}</td>
                           <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: 600, color: "#f59e0b" }}>{member.pending ?? 0}</td>
@@ -267,7 +267,7 @@ function TeamMembersReport() {
                                 state: { fromTeam: team?.name, teamId: team?.id }
                               })}
                             >
-                              Profile
+                              {t("Profile", { defaultValue: "Profile" })}
                               <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M5 3L9 7L5 11" />
                               </svg>
@@ -288,7 +288,7 @@ function TeamMembersReport() {
       <TeamExportReport
         isOpen={showExportModal}
         onClose={() => setShowExportModal(false)}
-        team={team || { id: "all", name: "Team Members" }}
+        team={team || { id: "all", name: t("Team Members", { defaultValue: "Team Members" }) }}
       />
     </DashboardLayout>
   );

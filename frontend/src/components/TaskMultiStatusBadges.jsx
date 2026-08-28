@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { RotateCcw, ArrowRightLeft, Lock } from "lucide-react";
 
 export const STATUS_COLORS = {
@@ -85,6 +86,7 @@ export function formatStatus(status) {
  * Uses defensive CSS layout to prevent text overlap.
  */
 export default function TaskMultiStatusBadges({ item }) {
+  const { t } = useTranslation();
   if (!item) return null;
 
   const viewerStatus = item?.display_status || item?.status || "Pending";
@@ -152,13 +154,13 @@ export default function TaskMultiStatusBadges({ item }) {
             display: "inline-block",
           }}
         />
-        {primaryLabel}
+        {t(primaryLabel)}
       </span>
 
       {/* Subtle Modifier Icons without text clutter */}
       {isReopened && (
         <span
-          title={item?.reopen_count && item.reopen_count > 1 ? `Reopened (${item.reopen_count}x)` : "Reopened"}
+          title={item?.reopen_count && item.reopen_count > 1 ? t("Reopened ({{count}}x)", { count: item.reopen_count, defaultValue: `Reopened (${item.reopen_count}x)` }) : t("Reopened", { defaultValue: "Reopened" })}
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -179,7 +181,7 @@ export default function TaskMultiStatusBadges({ item }) {
 
       {isTransferred && (
         <span
-          title="Transferred / Delegated"
+          title={t("Transferred / Delegated", { defaultValue: "Transferred / Delegated" })}
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -200,7 +202,7 @@ export default function TaskMultiStatusBadges({ item }) {
 
       {isAssignerPaused && (
         <span
-          title="Paused by Assigner (Locked)"
+          title={t("Paused by Assigner (Locked)", { defaultValue: "Paused by Assigner (Locked)" })}
           style={{
             display: "inline-flex",
             alignItems: "center",

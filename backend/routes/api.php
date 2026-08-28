@@ -77,7 +77,14 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Get current authenticated user
     Route::get('/user', function (Request $request) {
-        return $request->user();
+        $user = $request->user();
+        if ($user) {
+            $user->language = $user->language ?? 'English';
+            $user->timezone = $user->timezone ?? 'UTC';
+            $user->date_format = $user->date_format ?? 'DD/MM/YYYY';
+            $user->time_format = $user->time_format ?? '12-hour';
+        }
+        return response()->json($user);
     });
 
     // View own profile
@@ -607,10 +614,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/projects/{project}/unified-activity', [ProjectController::class, 'unifiedActivity']);
 
     /*
-    | My Activity (all authenticated users)
-    | Personal audit log entries for the current user.
+    | My Activity & Activity Logging (all authenticated users)
+    | Personal audit log entries and direct activity event logging.
     */
     Route::get('/my-activity', [AuditLogController::class, 'myActivity']);
+    Route::post('/activity-logs', [AuditLogController::class, 'store']);
+    Route::post('/audit-logs', [AuditLogController::class, 'store']);
+    Route::get('/activity-logs', [AuditLogController::class, 'index']);
+    Route::get('/activity-logs/modules', [AuditLogController::class, 'modules']);
 
     /*
     | Audit Log Routes

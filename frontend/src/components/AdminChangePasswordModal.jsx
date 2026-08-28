@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import API_URL from "../config/api";
@@ -7,11 +8,11 @@ import { authToken } from "../utils/auth";
 import { notify, showSuccessMessage } from "../utils/notify";
 
 const REQUIREMENTS = [
-  { label: "At least 8 characters", test: (v) => v.length >= 8 },
-  { label: "One uppercase letter", test: (v) => /[A-Z]/.test(v) },
-  { label: "One lowercase letter", test: (v) => /[a-z]/.test(v) },
-  { label: "One number", test: (v) => /[0-9]/.test(v) },
-  { label: "One special character (@$!%*?&#)", test: (v) => /[@$!%*?&#]/.test(v) },
+  { key: "At least 8 characters", test: (v) => v.length >= 8 },
+  { key: "One uppercase letter", test: (v) => /[A-Z]/.test(v) },
+  { key: "One lowercase letter", test: (v) => /[a-z]/.test(v) },
+  { key: "One number", test: (v) => /[0-9]/.test(v) },
+  { key: "One special character (@$!%*?&#)", test: (v) => /[@$!%*?&#]/.test(v) },
 ];
 
 /**
@@ -19,6 +20,7 @@ const REQUIREMENTS = [
  * Includes options for force logout and disabling password recovery.
  */
 export default function AdminChangePasswordModal({ user, onClose, onSuccess }) {
+  const { t } = useTranslation();
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
   useEscapeKey(true, handleClose);
 
@@ -34,15 +36,15 @@ export default function AdminChangePasswordModal({ user, onClose, onSuccess }) {
 
   const handleSubmit = async () => {
     if (!newPassword || !confirmPassword) {
-      notify.error("Please fill in all fields.");
+      notify.error(t("Please fill in all fields.", { defaultValue: "Please fill in all fields." }));
       return;
     }
     if (newPassword !== confirmPassword) {
-      notify.error("Password confirmation does not match");
+      notify.error(t("Password confirmation does not match", { defaultValue: "Password confirmation does not match" }));
       return;
     }
     if (!allValid) {
-      notify.error("Password does not meet all requirements.");
+      notify.error(t("Password does not meet all requirements.", { defaultValue: "Password does not meet all requirements." }));
       return;
     }
 
@@ -143,10 +145,10 @@ export default function AdminChangePasswordModal({ user, onClose, onSuccess }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
           <div>
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#111827" }}>
-              Change Password
+              {t("Change Password")}
             </h2>
             <p style={{ margin: "4px 0 0", fontSize: 13, color: "#6b7280" }}>
-              Update password for <strong>{user?.name}</strong>
+              {t("Update password for", { defaultValue: "Update password for" })} <strong>{user?.name}</strong>
             </p>
           </div>
           <button
@@ -179,21 +181,21 @@ export default function AdminChangePasswordModal({ user, onClose, onSuccess }) {
             <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
           </svg>
           <div>
-            <strong>Admin Action</strong> — This will update the user's password.{' '}
-            {forceLogout && 'All active sessions will be terminated.'}
-            {disableRecovery && ' Password recovery will be disabled.'}
+            <strong>{t("Admin Action", { defaultValue: "Admin Action" })}</strong> — {t("This will update the user's password.", { defaultValue: "This will update the user's password." })}{' '}
+            {forceLogout && t("All active sessions will be terminated.", { defaultValue: "All active sessions will be terminated." })}
+            {disableRecovery && t(" Password recovery will be disabled.", { defaultValue: " Password recovery will be disabled." })}
           </div>
         </div>
 
         {/* New Password */}
         <div style={{ marginBottom: 10 }}>
-          <label style={labelStyle}>New Password</label>
+          <label style={labelStyle}>{t("New Password", { defaultValue: "New Password" })}</label>
           <div style={{ position: "relative" }}>
             <input
               type={showNew ? "text" : "password"}
               value={newPassword}
               onChange={(e) => { setNewPassword(e.target.value); setIsDirty(true); }}
-              placeholder="Enter new password"
+              placeholder={t("Enter new password", { defaultValue: "Enter new password" })}
               style={inputStyle}
             />
             <button
@@ -209,22 +211,22 @@ export default function AdminChangePasswordModal({ user, onClose, onSuccess }) {
         {/* Requirements */}
         <div style={{ marginBottom: 18, padding: "0 0 0 2px" }}>
           {REQUIREMENTS.map((r) => (
-            <div key={r.label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: r.test(newPassword) ? "#16a34a" : "#6b7280", marginBottom: 3 }}>
+            <div key={r.key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: r.test(newPassword) ? "#16a34a" : "#6b7280", marginBottom: 3 }}>
               <span style={{ fontSize: 10 }}>●</span>
-              <span>{r.label}</span>
+              <span>{t(r.key, { defaultValue: r.key })}</span>
             </div>
           ))}
         </div>
 
         {/* Confirm Password */}
         <div style={{ marginBottom: 20 }}>
-          <label style={labelStyle}>Confirm New Password</label>
+          <label style={labelStyle}>{t("Confirm New Password", { defaultValue: "Confirm New Password" })}</label>
           <div style={{ position: "relative" }}>
             <input
               type={showConfirm ? "text" : "password"}
               value={confirmPassword}
               onChange={(e) => { setConfirmPassword(e.target.value); setIsDirty(true); }}
-              placeholder="Confirm new password"
+              placeholder={t("Confirm new password", { defaultValue: "Confirm new password" })}
               style={inputStyle}
             />
             <button
@@ -247,9 +249,9 @@ export default function AdminChangePasswordModal({ user, onClose, onSuccess }) {
               style={{ width: 16, height: 16, accentColor: "#2563eb", cursor: "pointer" }}
             />
             <div>
-              <span style={{ fontWeight: 600 }}>Force logout from all devices</span>
+              <span style={{ fontWeight: 600 }}>{t("Force logout from all devices", { defaultValue: "Force logout from all devices" })}</span>
               <span style={{ display: "block", fontSize: 12, color: "#6b7280", marginTop: 1 }}>
-                Terminates all active sessions for this user
+                {t("Terminates all active sessions for this user", { defaultValue: "Terminates all active sessions for this user" })}
               </span>
             </div>
           </label>
@@ -262,9 +264,9 @@ export default function AdminChangePasswordModal({ user, onClose, onSuccess }) {
               style={{ width: 16, height: 16, accentColor: "#2563eb", cursor: "pointer" }}
             />
             <div>
-              <span style={{ fontWeight: 600 }}>Disable self password recovery</span>
+              <span style={{ fontWeight: 600 }}>{t("Disable self password recovery", { defaultValue: "Disable self password recovery" })}</span>
               <span style={{ display: "block", fontSize: 12, color: "#6b7280", marginTop: 1 }}>
-                Prevents the user from using Forgot Password
+                {t("Prevents the user from using Forgot Password", { defaultValue: "Prevents the user from using Forgot Password" })}
               </span>
             </div>
           </label>
@@ -288,7 +290,7 @@ export default function AdminChangePasswordModal({ user, onClose, onSuccess }) {
             onMouseEnter={(e) => (e.target.style.background = "#f9fafb")}
             onMouseLeave={(e) => (e.target.style.background = "#fff")}
           >
-            Cancel
+            {t("Cancel")}
           </button>
           <button
             onClick={handleSubmit}
@@ -308,7 +310,7 @@ export default function AdminChangePasswordModal({ user, onClose, onSuccess }) {
             onMouseEnter={(e) => { if (!loading) e.target.style.background = "#1d4ed8"; }}
             onMouseLeave={(e) => (e.target.style.background = "#2563eb")}
           >
-            {loading ? "Updating..." : "Update Password"}
+            {loading ? t("Updating...", { defaultValue: "Updating..." }) : t("Update Password", { defaultValue: "Update Password" })}
           </button>
         </div>
       </div>

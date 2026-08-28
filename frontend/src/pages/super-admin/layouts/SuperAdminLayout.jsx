@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Building2, CreditCard, Puzzle, Globe, HeartPulse,
@@ -15,21 +16,8 @@ import {
 } from '../../../utils/browserNotification';
 import SuperAdminChatWidget from './SuperAdminChatWidget';
 
-const navItems = [
-  { label: 'Dashboard', path: '/super-admin', icon: LayoutDashboard, exact: true },
-  { label: 'Organizations', path: '/super-admin/organizations', icon: Building2 },
-  { label: 'Plans', path: '/super-admin/plans', icon: CreditCard },
-  { label: 'Modules', path: '/super-admin/modules', icon: Puzzle },
-  { label: 'Storage', path: '/super-admin/storage', icon: HardDrive },
-  { label: 'Billing', path: '/super-admin/billing', icon: FileText },
-  { label: 'Support', path: '/super-admin/support', icon: MessageSquare },
-  { label: 'Domains', path: '/super-admin/domains', icon: Globe },
-  // { label: 'System Health', path: '/super-admin/health', icon: HeartPulse },
-  { label: 'Notifications', path: '/super-admin/notifications', icon: Bell },
-  { label: 'Activity Logs', path: '/super-admin/activity', icon: ClipboardList },
-];
-
 export default function SuperAdminLayout({ isDark, toggleTheme }) {
+  const { t } = useTranslation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -51,6 +39,19 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
   const location = useLocation();
   const user = getSuperAdminUser();
   const token = getSuperAdminToken();
+
+  const navItems = [
+    { label: t('Dashboard', { defaultValue: 'Dashboard' }), path: '/super-admin', icon: LayoutDashboard, exact: true },
+    { label: t('Organizations', { defaultValue: 'Organizations' }), path: '/super-admin/organizations', icon: Building2 },
+    { label: t('Plans', { defaultValue: 'Plans' }), path: '/super-admin/plans', icon: CreditCard },
+    { label: t('Modules', { defaultValue: 'Modules' }), path: '/super-admin/modules', icon: Puzzle },
+    { label: t('Storage', { defaultValue: 'Storage' }), path: '/super-admin/storage', icon: HardDrive },
+    { label: t('Billing', { defaultValue: 'Billing' }), path: '/super-admin/billing', icon: FileText },
+    { label: t('Support', { defaultValue: 'Support' }), path: '/super-admin/support', icon: MessageSquare },
+    { label: t('Domains', { defaultValue: 'Domains' }), path: '/super-admin/domains', icon: Globe },
+    { label: t('Notifications', { defaultValue: 'Notifications' }), path: '/super-admin/notifications', icon: Bell },
+    { label: t('Activity Logs', { defaultValue: 'Activity Logs' }), path: '/super-admin/activity', icon: ClipboardList },
+  ];
 
   // Auth guard - redirect to login if not authenticated
   useEffect(() => {
@@ -137,30 +138,30 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
     setCpSuccess('');
 
     if (!cpOldPassword) {
-      setCpError('Please enter your current password.');
+      setCpError(t('Please enter your current password.', { defaultValue: 'Please enter your current password.' }));
       return;
     }
     if (!cpNewPassword) {
-      setCpError('Please enter a new password.');
+      setCpError(t('Please enter a new password.', { defaultValue: 'Please enter a new password.' }));
       return;
     }
     if (cpNewPassword.length < 8) {
-      setCpError('Password must be at least 8 characters.');
+      setCpError(t('Password must be at least 8 characters.', { defaultValue: 'Password must be at least 8 characters.' }));
       return;
     }
     if (!/[A-Z]/.test(cpNewPassword) || !/[a-z]/.test(cpNewPassword) || !/[0-9]/.test(cpNewPassword) || !/[@$!%*?&#]/.test(cpNewPassword)) {
-      setCpError('Password must include uppercase, lowercase, number, and special character.');
+      setCpError(t('Password must include uppercase, lowercase, number, and special character.', { defaultValue: 'Password must include uppercase, lowercase, number, and special character.' }));
       return;
     }
     if (cpNewPassword !== cpConfirmPassword) {
-      setCpError('Passwords do not match.');
+      setCpError(t('Passwords do not match.', { defaultValue: 'Passwords do not match.' }));
       return;
     }
 
     setCpLoading(true);
     try {
       await api.changePassword(cpOldPassword, cpNewPassword);
-      setCpSuccess('Password updated successfully!');
+      setCpSuccess(t('Password updated successfully!', { defaultValue: 'Password updated successfully!' }));
       setCpOldPassword('');
       setCpNewPassword('');
       setCpConfirmPassword('');
@@ -169,7 +170,7 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
         setCpSuccess('');
       }, 2000);
     } catch (err) {
-      setCpError(err.message || 'Failed to update password.');
+      setCpError(err.message || t('Failed to update password.', { defaultValue: 'Failed to update password.' }));
     } finally {
       setCpLoading(false);
     }
@@ -193,7 +194,7 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
         {!collapsed && (
           <div className="ml-3">
             <span className="text-sm font-bold" style={{ color: 'var(--text-heading)' }}>TechXaro</span>
-            <span className="block text-[10px] -mt-0.5" style={{ color: 'var(--text-muted)' }}>Super Admin</span>
+            <span className="block text-[10px] -mt-0.5" style={{ color: 'var(--text-muted)' }}>{t('Super Admin', { defaultValue: 'Super Admin' })}</span>
           </div>
         )}
       </div>
@@ -224,14 +225,14 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
       <div className="p-3" style={{ borderTop: '1px solid var(--border-light)' }}>
         <button
           onClick={() => { window.location.href = `${getOrgBaseUrl()}/login`; }}
-          title={collapsed ? 'Login to PMS' : undefined}
+          title={collapsed ? t('Login to PMS', { defaultValue: 'Login to PMS' }) : undefined}
           className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${collapsed ? 'justify-center' : ''}`}
           style={{ color: 'var(--text-muted)' }}
           onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
         >
           <LogOut className="w-5 h-5" />
-          {!collapsed && <span>Back to PMS</span>}
+          {!collapsed && <span>{t('Back to PMS', { defaultValue: 'Back to PMS' })}</span>}
         </button>
       </div>
     </div>
@@ -332,7 +333,7 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--text-muted)' }} />
               <input
                 type="text"
-                placeholder="Search organizations..."
+                placeholder={t("Search organizations...", { defaultValue: "Search organizations..." })}
                 value={headerSearch}
                 onChange={(e) => setHeaderSearch(e.target.value)}
                 onKeyDown={(e) => {
@@ -390,7 +391,7 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
                 >
                   {/* Header */}
                   <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid var(--border-light)' }}>
-                    <h4 className="text-sm font-semibold" style={{ color: 'var(--text-heading)' }}>Notifications</h4>
+                    <h4 className="text-sm font-semibold" style={{ color: 'var(--text-heading)' }}>{t('Notifications', { defaultValue: 'Notifications' })}</h4>
                     <div className="flex items-center gap-1">
                       {unreadCount > 0 && (
                         <button
@@ -401,7 +402,7 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
                           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                         >
                           <CheckCheck className="w-3.5 h-3.5 inline mr-1" />
-                          Mark all read
+                          {t('Mark all read', { defaultValue: 'Mark all read' })}
                         </button>
                       )}
                       <button
@@ -411,7 +412,7 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
                         onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-primary-bg)'; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                       >
-                        View All
+                        {t('View All', { defaultValue: 'View All' })}
                       </button>
                     </div>
                   </div>
@@ -420,7 +421,7 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
                   <div className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 130px)' }}>
                     {notifications.length === 0 ? (
                       <div className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
-                        No notifications
+                        {t('No notifications', { defaultValue: 'No notifications' })}
                       </div>
                     ) : (
                       notifications.slice(0, 7).map((n) => (
@@ -482,7 +483,7 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
                     {(user?.name || 'S').charAt(0).toUpperCase()}
                   </span>
                 </div>
-                <span className="hidden sm:block text-sm font-semibold" style={{ color: 'var(--text-heading)' }}>{user?.name || 'Super Admin'}</span>
+                <span className="hidden sm:block text-sm font-semibold" style={{ color: 'var(--text-heading)' }}>{user?.name || t('Super Admin', { defaultValue: 'Super Admin' })}</span>
                 {user?.email && <span className="hidden lg:block text-xs truncate max-w-[120px]" style={{ color: 'var(--text-muted)' }}>{user.email}</span>}
                 <ChevronDown className={`w-4 h-4 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} style={{ color: 'var(--text-muted)' }} />
               </button>
@@ -504,7 +505,7 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
                           </span>
                         </div>
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-heading)' }}>{user?.name || 'Super Admin'}</p>
+                          <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-heading)' }}>{user?.name || t('Super Admin', { defaultValue: 'Super Admin' })}</p>
                           <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{user?.email}</p>
                         </div>
                       </div>
@@ -518,7 +519,7 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
                         onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                       >
                         <User className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
-                        My Profile
+                        {t('My Profile', { defaultValue: 'My Profile' })}
                       </button>
                       <button
                         onClick={() => { navigate('/super-admin/activity'); setUserMenuOpen(false); }}
@@ -528,7 +529,7 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
                         onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                       >
                         <Activity className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
-                        My Activity
+                        {t('My Activity', { defaultValue: 'My Activity' })}
                       </button>
                       <button
                         onClick={() => { setShowChangePassword(true); setUserMenuOpen(false); }}
@@ -538,7 +539,7 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
                         onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                       >
                         <Key className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
-                        Change Password
+                        {t('Change Password', { defaultValue: 'Change Password' })}
                       </button>
                     </div>
                     <div className="py-1" style={{ borderTop: '1px solid var(--border-light)' }}>
@@ -550,7 +551,7 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
                         onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                       >
                         <LogOut className="w-4 h-4" />
-                        Logout
+                        {t('Logout', { defaultValue: 'Logout' })}
                       </button>
                     </div>
                   </div>
@@ -573,7 +574,7 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.5)' }}>
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4" style={{ background: 'var(--bg-card)' }}>
             <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--border-light)' }}>
-              <h3 className="text-lg font-semibold" style={{ color: 'var(--text-heading)' }}>Change Password</h3>
+              <h3 className="text-lg font-semibold" style={{ color: 'var(--text-heading)' }}>{t('Change Password', { defaultValue: 'Change Password' })}</h3>
               <button
                 onClick={() => { setShowChangePassword(false); setCpError(''); setCpSuccess(''); }}
                 className="p-1 rounded-lg transition-colors"
@@ -597,34 +598,34 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
                 </div>
               )}
               <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-heading)' }}>Current Password</label>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-heading)' }}>{t('Current Password', { defaultValue: 'Current Password' })}</label>
                 <input
                   type="password"
                   value={cpOldPassword}
                   onChange={(e) => setCpOldPassword(e.target.value)}
-                  placeholder="Enter current password"
+                  placeholder={t('Enter current password', { defaultValue: 'Enter current password' })}
                   className="w-full px-3 py-2 rounded-lg border text-sm"
                   style={{ borderColor: 'var(--border-light)', background: 'var(--bg-hover)', color: 'var(--text-dark)' }}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-heading)' }}>New Password</label>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-heading)' }}>{t('New Password', { defaultValue: 'New Password' })}</label>
                 <input
                   type="password"
                   value={cpNewPassword}
                   onChange={(e) => setCpNewPassword(e.target.value)}
-                  placeholder="Enter new password"
+                  placeholder={t('Enter new password', { defaultValue: 'Enter new password' })}
                   className="w-full px-3 py-2 rounded-lg border text-sm"
                   style={{ borderColor: 'var(--border-light)', background: 'var(--bg-hover)', color: 'var(--text-dark)' }}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-heading)' }}>Confirm New Password</label>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-heading)' }}>{t('Confirm New Password', { defaultValue: 'Confirm New Password' })}</label>
                 <input
                   type="password"
                   value={cpConfirmPassword}
                   onChange={(e) => setCpConfirmPassword(e.target.value)}
-                  placeholder="Confirm new password"
+                  placeholder={t('Confirm new password', { defaultValue: 'Confirm new password' })}
                   className="w-full px-3 py-2 rounded-lg border text-sm"
                   style={{ borderColor: 'var(--border-light)', background: 'var(--bg-hover)', color: 'var(--text-dark)' }}
                 />
@@ -636,7 +637,7 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
                 className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
                 style={{ color: 'var(--text-secondary)', background: 'var(--bg-hover)' }}
               >
-                Cancel
+                {t('Cancel', { defaultValue: 'Cancel' })}
               </button>
               <button
                 onClick={handleChangePassword}
@@ -644,7 +645,7 @@ export default function SuperAdminLayout({ isDark, toggleTheme }) {
                 className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors"
                 style={{ background: cpLoading ? '#94a3b8' : 'var(--color-primary)' }}
               >
-                {cpLoading ? 'Updating...' : 'Update Password'}
+                {cpLoading ? t('Updating...', { defaultValue: 'Updating...' }) : t('Update Password', { defaultValue: 'Update Password' })}
               </button>
             </div>
           </div>

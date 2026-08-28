@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Clock,
   FileText,
@@ -11,6 +12,7 @@ import {
   AlertCircle,
   XCircle,
 } from "lucide-react";
+import DOMPurify from "dompurify";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { formatDateTime } from "../utils/formatDateTime";
@@ -26,6 +28,7 @@ import CustomSelect from "./CustomSelect";
  * @param {Array} initialUsers - Optional list of member users for the person filter
  */
 export default function UnifiedActivityFeed({ module = "task", entityId, initialUsers = [] }) {
+  const { t } = useTranslation();
   const [activities, setActivities] = useState([]);
   const [users, setUsers] = useState(initialUsers);
   const [loading, setLoading] = useState(true);
@@ -36,7 +39,6 @@ export default function UnifiedActivityFeed({ module = "task", entityId, initial
   const [typeFilter, setTypeFilter] = useState("all");
 
   const fetchUnifiedActivity = async () => {
-    if (!entityId) return;
     try {
       setLoading(true);
       const token = authToken();
@@ -45,19 +47,39 @@ export default function UnifiedActivityFeed({ module = "task", entityId, initial
       if (userFilter) params.append("user_id", userFilter);
       if (typeFilter && typeFilter !== "all") params.append("type", typeFilter);
 
-      const endpoint =
-        module === "project"
-          ? `${API_URL}/projects/${entityId}/unified-activity?${params.toString()}`
-          : `${API_URL}/tasks/${entityId}/unified-activity?${params.toString()}`;
+      let endpoint = "";
+      if (module === "project" && entityId) {
+        endpoint = `${API_URL}/projects/${entityId}/unified-activity?${params.toString()}`;
+      } else if (module === "task" && entityId) {
+        endpoint = `${API_URL}/tasks/${entityId}/unified-activity?${params.toString()}`;
+      } else if (module === "knowledge_base" && entityId) {
+        endpoint = `${API_URL}/knowledge-base/${entityId}/activities?${params.toString()}`;
+      } else if (module === "event" && entityId) {
+        endpoint = `${API_URL}/events/${entityId}/activities?${params.toString()}`;
+      } else if (entityId) {
+        endpoint = `${API_URL}/${module}/${entityId}/activities?${params.toString()}`;
+      } else {
+        endpoint = `${API_URL}/activity-logs?module=${module}&${params.toString()}`;
+      }
 
-      const res = await fetch(endpoint, {
+      let res = await fetch(endpoint, {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         skipLoader: true,
       });
 
+      // Fallback if specific module activity route doesn't exist
+      if (!res.ok && res.status === 404) {
+        const fallbackUrl = `${API_URL}/activity-logs?${params.toString()}${entityId ? `&entity_id=${entityId}` : ""}${module ? `&module=${module}` : ""}`;
+        res = await fetch(fallbackUrl, {
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          skipLoader: true,
+        });
+      }
+
       if (res.ok) {
         const data = await res.json();
-        setActivities(data.data || []);
+        const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+        setActivities(list);
         if (data.users && data.users.length > 0) {
           setUsers(data.users);
         }
@@ -71,20 +93,46 @@ export default function UnifiedActivityFeed({ module = "task", entityId, initial
 
   useEffect(() => {
     fetchUnifiedActivity();
-  }, [entityId, dateFilter, userFilter, typeFilter]);
+  }, [module, entityId, dateFilter, userFilter, typeFilter]);
 
   const userOptions = [
-    { value: "", label: "All Persons" },
+    { value: "", label: t("All Persons", { defaultValue: "All Persons" }) },
     ...users.map((u) => ({ value: String(u.id), label: u.name })),
   ];
 
-  const typeOptions = [
-    { value: "all", label: "All Types" },
-    { value: "timelines", label: "Timelines" },
-    { value: "submissions", label: "Submissions" },
-    { value: "changes", label: "Field Changes" },
-    { value: "transfers", label: "Transfers" },
-  ];
+  const typeOptions = useMemo(() => {
+    switch (module) {
+      case "knowledge_base":
+        return [
+          { value: "all", label: t("All Types", { defaultValue: "All Types" }) },
+          { value: "published", label: t("Published", { defaultValue: "Published" }) },
+          { value: "edited", label: t("Edited", { defaultValue: "Edited" }) },
+          { value: "archived", label: t("Archived", { defaultValue: "Archived" }) },
+        ];
+      case "event":
+        return [
+          { value: "all", label: t("All Types", { defaultValue: "All Types" }) },
+          { value: "rsvp", label: t("RSVP", { defaultValue: "RSVP" }) },
+          { value: "rescheduled", label: t("Rescheduled", { defaultValue: "Rescheduled" }) },
+          { value: "updated", label: t("Updated", { defaultValue: "Updated" }) },
+        ];
+      case "regional_settings":
+        return [
+          { value: "all", label: t("All Types", { defaultValue: "All Types" }) },
+          { value: "configuration_changed", label: t("Configuration Changed", { defaultValue: "Configuration Changed" }) },
+        ];
+      case "task":
+      case "project":
+      default:
+        return [
+          { value: "all", label: t("All Types", { defaultValue: "All Types" }) },
+          { value: "timelines", label: t("Timelines", { defaultValue: "Timelines" }) },
+          { value: "submissions", label: t("Submissions", { defaultValue: "Submissions" }) },
+          { value: "changes", label: t("Field Changes", { defaultValue: "Field Changes" }) },
+          { value: "transfers", label: t("Transfers", { defaultValue: "Transfers" }) },
+        ];
+    }
+  }, [module, t]);
 
   const resetFilters = () => {
     setDateFilter("");
@@ -94,6 +142,19 @@ export default function UnifiedActivityFeed({ module = "task", entityId, initial
 
   const getActivityIcon = (type, action) => {
     switch (type) {
+      case "published":
+        return <CheckCircle2 size={15} color="#16a34a" />;
+      case "edited":
+      case "updated":
+        return <Sliders size={15} color="#0284c7" />;
+      case "archived":
+        return <XCircle size={15} color="#64748b" />;
+      case "rsvp":
+        return <CheckCircle2 size={15} color="#2563eb" />;
+      case "rescheduled":
+        return <RefreshCw size={15} color="#ea580c" />;
+      case "configuration_changed":
+        return <Sliders size={15} color="#8b5cf6" />;
       case "submissions":
         return <FileText size={15} color="#16a34a" />;
       case "transfers":
@@ -111,15 +172,29 @@ export default function UnifiedActivityFeed({ module = "task", entityId, initial
 
   const getTypeBadgeStyle = (type) => {
     switch (type) {
+      case "published":
+        return { bg: "#f0fdf4", color: "#16a34a", label: t("Published", { defaultValue: "Published" }) };
+      case "edited":
+        return { bg: "#f0f9ff", color: "#0284c7", label: t("Edited", { defaultValue: "Edited" }) };
+      case "archived":
+        return { bg: "#f1f5f9", color: "#64748b", label: t("Archived", { defaultValue: "Archived" }) };
+      case "rsvp":
+        return { bg: "#eff6ff", color: "#2563eb", label: t("RSVP", { defaultValue: "RSVP" }) };
+      case "rescheduled":
+        return { bg: "#fff7ed", color: "#ea580c", label: t("Rescheduled", { defaultValue: "Rescheduled" }) };
+      case "updated":
+        return { bg: "#f0f9ff", color: "#0284c7", label: t("Updated", { defaultValue: "Updated" }) };
+      case "configuration_changed":
+        return { bg: "#faf5ff", color: "#8b5cf6", label: t("Config Changed", { defaultValue: "Config Changed" }) };
       case "submissions":
-        return { bg: "#f0fdf4", color: "#16a34a", label: "Submission" };
+        return { bg: "#f0fdf4", color: "#16a34a", label: t("Submission", { defaultValue: "Submission" }) };
       case "transfers":
-        return { bg: "#fff7ed", color: "#ea580c", label: "Transfer" };
+        return { bg: "#fff7ed", color: "#ea580c", label: t("Transfer", { defaultValue: "Transfer" }) };
       case "changes":
-        return { bg: "#f0f9ff", color: "#0284c7", label: "Change" };
+        return { bg: "#f0f9ff", color: "#0284c7", label: t("Change", { defaultValue: "Change" }) };
       case "timelines":
       default:
-        return { bg: "#eff6ff", color: "#2563eb", label: "Timeline" };
+        return { bg: "#eff6ff", color: "#2563eb", label: t("Timeline", { defaultValue: "Timeline" }) };
     }
   };
 
@@ -161,7 +236,7 @@ export default function UnifiedActivityFeed({ module = "task", entityId, initial
           }}
         >
           <Clock size={18} color="#2563eb" />
-          Unified Activity
+          {t("Unified Activity", { defaultValue: "Unified Activity" })}
         </h3>
         <span
           style={{
@@ -173,7 +248,7 @@ export default function UnifiedActivityFeed({ module = "task", entityId, initial
             borderRadius: "10px",
           }}
         >
-          {activities.length} items
+          {t("{{count}} items", { defaultValue: `${activities.length} items`, count: activities.length })}
         </span>
       </div>
 
@@ -194,7 +269,7 @@ export default function UnifiedActivityFeed({ module = "task", entityId, initial
         {/* Date Filter */}
         <div style={{ flex: "1 1 120px", minWidth: 110 }}>
           <label style={{ fontSize: 10, fontWeight: 700, color: "#64748b", display: "block", marginBottom: 3, textTransform: "uppercase" }}>
-            Date
+            {t("Date", { defaultValue: "Date" })}
           </label>
           <input
             type="date"
@@ -218,7 +293,7 @@ export default function UnifiedActivityFeed({ module = "task", entityId, initial
         {/* Person Filter */}
         <div style={{ flex: "1 1 130px", minWidth: 120 }}>
           <label style={{ fontSize: 10, fontWeight: 700, color: "#64748b", display: "block", marginBottom: 3, textTransform: "uppercase" }}>
-            Person
+            {t("Person", { defaultValue: "Person" })}
           </label>
           <CustomSelect
             name="activity_user_id"
@@ -232,7 +307,7 @@ export default function UnifiedActivityFeed({ module = "task", entityId, initial
         {/* Type Filter */}
         <div style={{ flex: "1 1 120px", minWidth: 110 }}>
           <label style={{ fontSize: 10, fontWeight: 700, color: "#64748b", display: "block", marginBottom: 3, textTransform: "uppercase" }}>
-            Type
+            {t("Type", { defaultValue: "Type" })}
           </label>
           <CustomSelect
             name="activity_type"
@@ -262,7 +337,7 @@ export default function UnifiedActivityFeed({ module = "task", entityId, initial
                 whiteSpace: "nowrap",
               }}
             >
-              Clear
+              {t("Clear", { defaultValue: "Clear" })}
             </button>
           </div>
         )}
@@ -271,16 +346,20 @@ export default function UnifiedActivityFeed({ module = "task", entityId, initial
       {/* UNIFIED ACTIVITY FEED STREAM */}
       {loading ? (
         <div style={{ padding: "20px 0", textAlign: "center", color: "#64748b", fontSize: "13px" }}>
-          Loading activity stream...
+          {t("Loading activity stream...", { defaultValue: "Loading activity stream..." })}
         </div>
       ) : activities.length === 0 ? (
         <div style={{ padding: "24px 0", textAlign: "center", color: "#94a3b8", fontSize: "13px" }}>
-          No activities found matching filters.
+          {t("No activities found matching filters.", { defaultValue: "No activities found matching filters." })}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px", maxHeight: "540px", overflowY: "auto", paddingRight: 4 }}>
           {activities.map((item) => {
-            const badgeStyle = getTypeBadgeStyle(item.type);
+            const itemType = (item.type || item.action || "timeline").toLowerCase();
+            const badgeStyle = getTypeBadgeStyle(itemType);
+            const userName = item.user_name || item.user?.name || (item.user?.first_name ? `${item.user.first_name} ${item.user.last_name || ""}`.trim() : "System");
+            const itemTitle = item.title || item.action || item.description || "Activity Event";
+
             return (
               <div
                 key={item.id}
@@ -309,14 +388,14 @@ export default function UnifiedActivityFeed({ module = "task", entityId, initial
                     boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
                   }}
                 >
-                  {getActivityIcon(item.type, item.action)}
+                  {getActivityIcon(itemType, item.action)}
                 </div>
 
                 {/* Content Column */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px", marginBottom: "3px" }}>
                     <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary, #0f172a)", lineHeight: 1.3 }}>
-                      {item.title}
+                      {itemTitle}
                     </span>
                     <span
                       style={{
@@ -335,24 +414,28 @@ export default function UnifiedActivityFeed({ module = "task", entityId, initial
                   </div>
 
                   {/* Description */}
-                  {item.description && (
-                    <p
+                  {item.description && item.description !== itemTitle && (
+                    <div
+                      className="activity-feed-description"
                       style={{
                         margin: "0 0 6px",
                         fontSize: "12px",
                         color: "var(--text-secondary, #334155)",
-                        lineHeight: 1.5,
+                        lineHeight: 1.6,
                         wordBreak: "break-word",
-                        whiteSpace: "pre-wrap",
                       }}
-                    >
-                      {item.description}
-                    </p>
+                      dangerouslySetInnerHTML={{
+                        __html: DOMPurify.sanitize(item.description, {
+                          ALLOWED_TAGS: ["p", "br", "b", "strong", "i", "em", "u", "s", "ul", "ol", "li", "span", "a"],
+                          ALLOWED_ATTR: ["href", "target", "rel", "style"],
+                        }),
+                      }}
+                    />
                   )}
 
                   {/* Meta: User & Date */}
                   <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "11px", color: "#64748b" }}>
-                    <span style={{ fontWeight: 600, color: "#475569" }}>By: {item.user_name || "System"}</span>
+                    <span style={{ fontWeight: 600, color: "#475569" }}>{t("By: {{name}}", { defaultValue: `By: ${userName}`, name: userName })}</span>
                     <span>•</span>
                     <span>{formatDateTime(item.created_at)}</span>
                   </div>

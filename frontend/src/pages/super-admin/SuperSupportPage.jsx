@@ -1,23 +1,25 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { MessageSquare, Building2, Circle, Clock, CheckCircle, X, Loader2, Send, ArrowLeft } from 'lucide-react';
 import { api } from './api/superAdminApi';
 
 const PRIORITY_MAP = {
-  low: { label: 'Low', color: 'var(--text-muted)', bg: 'var(--bg-hover)' },
-  medium: { label: 'Medium', color: 'var(--color-blue)', bg: 'rgba(59,130,246,0.1)' },
-  high: { label: 'High', color: 'var(--color-warning)', bg: 'rgba(245,158,11,0.1)' },
-  urgent: { label: 'Urgent', color: 'var(--color-danger)', bg: 'rgba(239,68,68,0.1)' },
+  low: { labelKey: 'Low', defaultLabel: 'Low', color: 'var(--text-muted)', bg: 'var(--bg-hover)' },
+  medium: { labelKey: 'Medium', defaultLabel: 'Medium', color: 'var(--color-blue)', bg: 'rgba(59,130,246,0.1)' },
+  high: { labelKey: 'High', defaultLabel: 'High', color: 'var(--color-warning)', bg: 'rgba(245,158,11,0.1)' },
+  urgent: { labelKey: 'Urgent', defaultLabel: 'Urgent', color: 'var(--color-danger)', bg: 'rgba(239,68,68,0.1)' },
 };
 
 const STATUS_MAP = {
-  open: { label: 'Open', color: 'var(--color-success)', bg: 'rgba(16,185,129,0.1)', icon: Circle },
-  pending: { label: 'Pending', color: 'var(--color-warning)', bg: 'rgba(245,158,11,0.1)', icon: Clock },
-  resolved: { label: 'Resolved', color: 'var(--color-blue)', bg: 'rgba(59,130,246,0.1)', icon: CheckCircle },
-  closed: { label: 'Closed', color: 'var(--text-muted)', bg: 'var(--bg-hover)', icon: X },
+  open: { labelKey: 'Open', defaultLabel: 'Open', color: 'var(--color-success)', bg: 'rgba(16,185,129,0.1)', icon: Circle },
+  pending: { labelKey: 'Pending', defaultLabel: 'Pending', color: 'var(--color-warning)', bg: 'rgba(245,158,11,0.1)', icon: Clock },
+  resolved: { labelKey: 'Resolved', defaultLabel: 'Resolved', color: 'var(--color-blue)', bg: 'rgba(59,130,246,0.1)', icon: CheckCircle },
+  closed: { labelKey: 'Closed', defaultLabel: 'Closed', color: 'var(--text-muted)', bg: 'var(--bg-hover)', icon: X },
 };
 
 export default function SuperSupportPage() {
+  const { t } = useTranslation();
   const [orgs, setOrgs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrg, setSelectedOrg] = useState(null);
@@ -116,7 +118,7 @@ export default function SuperSupportPage() {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--color-primary)' }} />
-        <span className="ml-2 text-sm" style={{ color: 'var(--text-secondary)' }}>Loading support data...</span>
+        <span className="ml-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{t('Loading support data...', { defaultValue: 'Loading support data...' })}</span>
       </div>
     );
   }
@@ -134,20 +136,20 @@ export default function SuperSupportPage() {
           <div className="flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-lg font-bold" style={{ color: 'var(--text-heading)' }}>{selectedTicket.subject}</h2>
-              <span className="px-2 py-0.5 text-xs font-medium rounded-full" style={{ background: stCfg.bg, color: stCfg.color }}>{stCfg.label}</span>
-              <span className="px-2 py-0.5 text-xs font-medium rounded-full" style={{ background: prCfg.bg, color: prCfg.color }}>{prCfg.label}</span>
+              <span className="px-2 py-0.5 text-xs font-medium rounded-full" style={{ background: stCfg.bg, color: stCfg.color }}>{t(stCfg.labelKey, { defaultValue: stCfg.defaultLabel })}</span>
+              <span className="px-2 py-0.5 text-xs font-medium rounded-full" style={{ background: prCfg.bg, color: prCfg.color }}>{t(prCfg.labelKey, { defaultValue: prCfg.defaultLabel })}</span>
             </div>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{selectedTicket.ticket_number} · {selectedTicket.category} · {selectedOrg?.name}</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{selectedTicket.ticket_number} · {t(selectedTicket.category, { defaultValue: selectedTicket.category })} · {selectedOrg?.name}</p>
           </div>
           {selectedTicket.status !== 'closed' && (
-            <button onClick={handleCloseTicket} className="px-3 py-1.5 text-xs font-medium rounded-lg" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-light)', color: 'var(--text-secondary)' }}>Close Ticket</button>
+            <button onClick={handleCloseTicket} className="px-3 py-1.5 text-xs font-medium rounded-lg" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-light)', color: 'var(--text-secondary)' }}>{t('Close Ticket', { defaultValue: 'Close Ticket' })}</button>
           )}
         </div>
 
         <div className="rounded-xl p-5 shadow-sm space-y-3 max-h-96 overflow-y-auto" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-light)' }}>
           <div className="max-w-3/4 p-3 rounded-lg" style={{ background: 'var(--color-primary-bg)' }}>
             <p className="text-sm" style={{ color: 'var(--text-dark)' }}>{selectedTicket.message}</p>
-            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{selectedTicket.user?.name || 'User'} · {new Date(selectedTicket.created_at).toLocaleString()}</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{selectedTicket.user?.name || t('User', { defaultValue: 'User' })} · {new Date(selectedTicket.created_at).toLocaleString()}</p>
           </div>
 
           {detailLoading ? (
@@ -160,7 +162,7 @@ export default function SuperSupportPage() {
                 border: isOrg ? 'none' : '1px solid var(--border-light)',
               }}>
                 <p className="text-sm" style={{ color: 'var(--text-dark)' }}>{msg.message}</p>
-                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{isOrg ? (msg.user?.name || 'User') : 'Support'} · {new Date(msg.created_at).toLocaleString()}</p>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{isOrg ? (msg.user?.name || t('User', { defaultValue: 'User' })) : t('Support', { defaultValue: 'Support' })} · {new Date(msg.created_at).toLocaleString()}</p>
               </div>
             );
           })}
@@ -170,7 +172,7 @@ export default function SuperSupportPage() {
           <div className="flex gap-2">
             <input type="text" value={replyText} onChange={(e) => setReplyText(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleReply()}
-              placeholder="Type your reply..."
+              placeholder={t("Type your reply...", { defaultValue: "Type your reply..." })}
               className="flex-1 px-3 py-2 rounded-lg text-sm" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-light)', color: 'var(--text-dark)' }} />
             <button onClick={handleReply} disabled={!replyText.trim() || sendingReply}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium flex items-center gap-1">
@@ -191,8 +193,14 @@ export default function SuperSupportPage() {
             <ArrowLeft className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
           </button>
           <div>
-            <h1 className="text-2xl font-bold" style={{ color: 'var(--text-heading)' }}>{selectedOrg.name} - Support</h1>
-            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{selectedOrg.support?.counts?.open || 0} open, {selectedOrg.support?.counts?.pending || 0} pending</p>
+            <h1 className="text-2xl font-bold" style={{ color: 'var(--text-heading)' }}>{selectedOrg.name} - {t('Support', { defaultValue: 'Support' })}</h1>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+              {t('{{open}} open, {{pending}} pending', {
+                open: selectedOrg.support?.counts?.open || 0,
+                pending: selectedOrg.support?.counts?.pending || 0,
+                defaultValue: `${selectedOrg.support?.counts?.open || 0} open, ${selectedOrg.support?.counts?.pending || 0} pending`
+              })}
+            </p>
           </div>
         </div>
 
@@ -201,7 +209,7 @@ export default function SuperSupportPage() {
         ) : tickets.length === 0 ? (
           <div className="text-center py-12 rounded-xl" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-light)' }}>
             <MessageSquare className="w-12 h-12 mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No support tickets</p>
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{t('No support tickets', { defaultValue: 'No support tickets' })}</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -220,13 +228,13 @@ export default function SuperSupportPage() {
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-semibold" style={{ color: 'var(--text-heading)' }}>{ticket.subject}</p>
-                        <span className="px-2 py-0.5 text-xs font-medium rounded-full" style={{ background: stCfg.bg, color: stCfg.color }}>{stCfg.label}</span>
-                        <span className="px-2 py-0.5 text-xs font-medium rounded-full" style={{ background: prCfg.bg, color: prCfg.color }}>{prCfg.label}</span>
+                        <span className="px-2 py-0.5 text-xs font-medium rounded-full" style={{ background: stCfg.bg, color: stCfg.color }}>{t(stCfg.labelKey, { defaultValue: stCfg.defaultLabel })}</span>
+                        <span className="px-2 py-0.5 text-xs font-medium rounded-full" style={{ background: prCfg.bg, color: prCfg.color }}>{t(prCfg.labelKey, { defaultValue: prCfg.defaultLabel })}</span>
                       </div>
-                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{ticket.ticket_number} · {ticket.category}</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{ticket.ticket_number} · {t(ticket.category, { defaultValue: ticket.category })}</p>
                     </div>
                   </div>
-                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(ticket.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(ticket.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
                 </div>
               );
             })}
@@ -240,8 +248,8 @@ export default function SuperSupportPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--text-heading)' }}>Support Tickets</h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>Manage support tickets across all organizations</p>
+        <h1 className="text-2xl font-bold" style={{ color: 'var(--text-heading)' }}>{t('Support Tickets', { defaultValue: 'Support Tickets' })}</h1>
+        <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>{t('Manage support tickets across all organizations', { defaultValue: 'Manage support tickets across all organizations' })}</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -258,18 +266,18 @@ export default function SuperSupportPage() {
                 </div>
                 <div>
                   <p className="text-sm font-semibold" style={{ color: 'var(--text-heading)' }}>{org.name}</p>
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{total} tickets</p>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{t('{{count}} tickets', { count: total, defaultValue: `${total} tickets` })}</p>
                 </div>
               </div>
               <div className="flex gap-3">
                 {[
-                  { label: 'Open', value: counts.open || 0, color: 'var(--color-success)' },
-                  { label: 'Pending', value: counts.pending || 0, color: 'var(--color-warning)' },
-                  { label: 'Closed', value: counts.closed || 0, color: 'var(--text-muted)' },
+                  { labelKey: 'Open', defaultLabel: 'Open', value: counts.open || 0, color: 'var(--color-success)' },
+                  { labelKey: 'Pending', defaultLabel: 'Pending', value: counts.pending || 0, color: 'var(--color-warning)' },
+                  { labelKey: 'Closed', defaultLabel: 'Closed', value: counts.closed || 0, color: 'var(--text-muted)' },
                 ].map((item) => (
-                  <div key={item.label} className="text-center flex-1">
+                  <div key={item.labelKey} className="text-center flex-1">
                     <p className="text-lg font-bold" style={{ color: item.color }}>{item.value}</p>
-                    <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{item.label}</p>
+                    <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{t(item.labelKey, { defaultValue: item.defaultLabel })}</p>
                   </div>
                 ))}
               </div>

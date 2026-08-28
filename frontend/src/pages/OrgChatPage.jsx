@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import API_URL from "../config/api";
 import { authToken, getCurrentRole, rolePath } from "../utils/auth";
 import DashboardLayout from "../components/layout/DashboardLayout";
@@ -39,6 +40,7 @@ function OrgChatFileImage({ msgId, fileName }) {
 }
 
 function OrgChatPage() {
+  const { t } = useTranslation();
   const { conversationId } = useParams();
   const navigate = useNavigate();
   const [conversations, setConversations] = useState([]);
@@ -138,11 +140,11 @@ function OrgChatPage() {
           {/* Sidebar: Conversation List */}
           <div className="chat-sidebar">
             <div className="chat-sidebar-header">
-              <h3>Admin Chat</h3>
+              <h3>{t("Admin Chat", { defaultValue: "Admin Chat" })}</h3>
             </div>
             <div className="conversation-list">
               {conversations.length === 0 && (
-                <p style={{ padding: 16, color: "#999", fontSize: 13 }}>No conversations yet</p>
+                <p style={{ padding: 16, color: "#999", fontSize: 13 }}>{t("No conversations yet", { defaultValue: "No conversations yet" })}</p>
               )}
               {conversations.map((conv) => (
                 <div
@@ -152,11 +154,11 @@ function OrgChatPage() {
                 >
                   <div className="conversation-info">
                     <div className="conversation-subject">
-                      {conv.subject || conv.organization?.name || "Untitled"}
+                      {conv.subject || conv.organization?.name || t("Untitled", { defaultValue: "Untitled" })}
                     </div>
                     <div className="conversation-project">
                       <Shield size={12} style={{ display: "inline", marginRight: 4 }} />
-                      Platform Admin
+                      {t("Platform Admin", { defaultValue: "Platform Admin" })}
                     </div>
                     {conv.latest_message && (
                       <div className="conversation-preview">
@@ -176,16 +178,16 @@ function OrgChatPage() {
               <>
                 <div className="chat-header">
                   <div>
-                    <h3>{activeConversation.subject || activeConversation.organization?.name || "Conversation"}</h3>
+                    <h3>{activeConversation.subject || activeConversation.organization?.name || t("Conversation", { defaultValue: "Conversation" })}</h3>
                     <span className="chat-participants">
                       <Shield size={12} style={{ display: "inline", marginRight: 4 }} />
-                      Platform Admin
+                      {t("Platform Admin", { defaultValue: "Platform Admin" })}
                     </span>
                   </div>
                 </div>
                 <div className="messages-container">
                   {messages.length === 0 && (
-                    <p style={{ textAlign: "center", color: "#999", padding: 20 }}>No messages yet</p>
+                    <p style={{ textAlign: "center", color: "#999", padding: 20 }}>{t("No messages yet", { defaultValue: "No messages yet" })}</p>
                   )}
                   {messages.map((msg) => {
                     const isOrg = msg.organization_id && !msg.user_id;
@@ -196,7 +198,7 @@ function OrgChatPage() {
                         </div>
                         <div className="message-content">
                           <div className="message-header">
-                            <span className="message-sender">{isOrg ? "You" : "Admin"}</span>
+                            <span className="message-sender">{isOrg ? t("You", { defaultValue: "You" }) : t("Admin", { defaultValue: "Admin" })}</span>
                             <span className="message-time">{formatTime(msg.created_at)}</span>
                           </div>
                           <div className="message-body rte-display" dangerouslySetInnerHTML={{ __html: msg.body }} />
@@ -222,19 +224,19 @@ function OrgChatPage() {
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
                       onKeyDown={handleKeyDown}
-                      placeholder="Type a message..."
+                      placeholder={t("Type a message...", { defaultValue: "Type a message..." })}
                       style={{ flex: 1, padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: 6, fontSize: 14, background: "var(--bg-primary)", color: "var(--text-primary)" }}
                     />
                     <button onClick={handleSendMessage} disabled={sending || !newMessage.trim()} className="send-btn">
-                      {sending ? "Sending..." : "Send"}
+                      {sending ? t("Sending...", { defaultValue: "Sending..." }) : t("Send", { defaultValue: "Send" })}
                     </button>
                   </div>
                 </div>
               </>
             ) : (
               <div className="chat-empty">
-                <h3>Select a conversation</h3>
-                <p>Choose a conversation from the sidebar.</p>
+                <h3>{t("Select a conversation", { defaultValue: "Select a conversation" })}</h3>
+                <p>{t("Choose a conversation from the sidebar.", { defaultValue: "Choose a conversation from the sidebar." })}</p>
               </div>
             )}
           </div>

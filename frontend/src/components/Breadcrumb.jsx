@@ -6,6 +6,7 @@
 
 import { Link } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import "./Breadcrumb.css";
 
 /**
@@ -14,6 +15,7 @@ import "./Breadcrumb.css";
  *                        Last item should NOT have a path (current page)
  */
 export default function Breadcrumb({ items = [] }) {
+  const { t } = useTranslation();
   if (!items || items.length === 0) return null;
 
   // Sanitize labels (strip extra slashes or separators) and deduplicate consecutive identical items
@@ -31,9 +33,10 @@ export default function Breadcrumb({ items = [] }) {
   if (cleanedItems.length === 0) return null;
 
   return (
-    <nav className="breadcrumb" aria-label="Breadcrumb">
+    <nav className="breadcrumb" aria-label={t("Breadcrumb", { defaultValue: "Breadcrumb" })}>
       {cleanedItems.map((item, index) => {
         const isLast = index === cleanedItems.length - 1;
+        const translatedLabel = t(item.label);
 
         return (
           <span key={index} className="breadcrumb-item">
@@ -41,10 +44,10 @@ export default function Breadcrumb({ items = [] }) {
               <ChevronRight size={14} className="breadcrumb-separator" />
             )}
             {isLast || !item.path ? (
-              <span className="breadcrumb-current">{item.label}</span>
+              <span className="breadcrumb-current">{translatedLabel}</span>
             ) : (
               <Link to={item.path} className="breadcrumb-link">
-                {item.label}
+                {translatedLabel}
               </Link>
             )}
           </span>

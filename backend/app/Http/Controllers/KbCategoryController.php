@@ -10,35 +10,10 @@ use Illuminate\Support\Str;
 class KbCategoryController extends Controller
 {
     /**
-     * Default categories to auto-seed if none exist.
-     */
-    private const DEFAULT_CATEGORIES = [
-        ['name' => 'General', 'icon' => 'BookOpen', 'color' => '#3b82f6', 'sort_order' => 1, 'description' => 'General company guidelines and documentation'],
-        ['name' => 'Best Practices', 'icon' => 'Award', 'color' => '#10b981', 'sort_order' => 2, 'description' => 'Recommended standards, design and coding patterns'],
-        ['name' => 'Technical Documentation', 'icon' => 'Code', 'color' => '#8b5cf6', 'sort_order' => 3, 'description' => 'Architecture, APIs, databases, and infra docs'],
-        ['name' => 'Onboarding', 'icon' => 'UserCheck', 'color' => '#f59e0b', 'sort_order' => 4, 'description' => 'New team member guides, checklists, and access info'],
-        ['name' => 'Guidelines & Policies', 'icon' => 'FileText', 'color' => '#06b6d4', 'sort_order' => 5, 'description' => 'Internal rules, HR policies, and work ethics'],
-        ['name' => 'Process & SOPs', 'icon' => 'Layers', 'color' => '#ec4899', 'sort_order' => 6, 'description' => 'Standard operating procedures and workflows'],
-        ['name' => 'Security & Compliance', 'icon' => 'Shield', 'color' => '#ef4444', 'sort_order' => 7, 'description' => 'Data privacy, security protocols, and compliance requirements'],
-    ];
-
-    /**
      * Display a listing of knowledge base categories.
      */
     public function index(Request $request): JsonResponse
     {
-        // Auto-seed default categories if table is empty
-        if (KbCategory::count() === 0) {
-            $user = $request->user();
-            foreach (self::DEFAULT_CATEGORIES as $cat) {
-                KbCategory::create(array_merge($cat, [
-                    'slug' => Str::slug($cat['name']),
-                    'is_active' => true,
-                    'created_by' => $user?->id,
-                ]));
-            }
-        }
-
         $query = KbCategory::withCount('articles')
             ->orderBy('sort_order', 'asc')
             ->orderBy('name', 'asc');

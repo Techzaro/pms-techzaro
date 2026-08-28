@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
   Building2, Users, FolderKanban, Database, TrendingUp, Activity,
@@ -11,6 +12,7 @@ import { LoadingState, ErrorState } from './components/LoadingState';
 import { api } from './api/superAdminApi';
 
 export default function DashboardPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [orgs, setOrgs] = useState([]);
@@ -49,13 +51,13 @@ export default function DashboardPage() {
     const diffMs = now - d;
     const diffMin = Math.floor(diffMs / 60000);
     const diffHr = Math.floor(diffMs / 3600000);
-    if (diffMin < 1) return 'Just now';
-    if (diffMin < 60) return `${diffMin}m ago`;
-    if (diffHr < 24) return `${diffHr}h ago`;
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    if (diffMin < 1) return t('Just now', { defaultValue: 'Just now' });
+    if (diffMin < 60) return t('{{count}}m ago', { count: diffMin, defaultValue: `${diffMin}m ago` });
+    if (diffHr < 24) return t('{{count}}h ago', { count: diffHr, defaultValue: `${diffHr}h ago` });
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
-  if (loading) return <LoadingState message="Loading dashboard..." />;
+  if (loading) return <LoadingState message={t("Loading dashboard...", { defaultValue: "Loading dashboard..." })} />;
   if (error) return <ErrorState message={error} onRetry={fetchData} />;
 
   const getHealthIcon = (status) => {
@@ -79,28 +81,28 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold" style={s.textHeading}>Dashboard</h1>
-        <p className="text-sm mt-1" style={s.textSecondary}>Overview of your SaaS platform</p>
+        <h1 className="text-2xl font-bold" style={s.textHeading}>{t('Dashboard', { defaultValue: 'Dashboard' })}</h1>
+        <p className="text-sm mt-1" style={s.textSecondary}>{t('Overview of your SaaS platform', { defaultValue: 'Overview of your SaaS platform' })}</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        <StatCard title="Organizations" value={stats?.total_organizations || 0} icon={Building2} color="blue" onClick={() => navigate('/super-admin/organizations')} />
-        <StatCard title="Active Orgs" value={stats?.active_organizations || 0} icon={CheckCircle2} color="green" onClick={() => navigate('/super-admin/organizations')} />
-        <StatCard title="Trial Orgs" value={stats?.trial_organizations || 0} icon={Clock} color="purple" onClick={() => navigate('/super-admin/organizations')} />
-        <StatCard title="Suspended" value={stats?.suspended_organizations || 0} icon={AlertTriangle} color="red" onClick={() => navigate('/super-admin/organizations')} />
-        <StatCard title="Modules" value={stats?.total_modules || 0} icon={Puzzle} color="amber" onClick={() => navigate('/super-admin/modules')} />
-        <StatCard title="Plans" value={stats?.total_plans || 0} icon={CreditCard} color="blue" onClick={() => navigate('/super-admin/plans')} />
-        <StatCard title="Total Users" value={stats?.total_users || 0} icon={Users} color="purple" onClick={() => navigate('/super-admin/organizations')} />
-        <StatCard title="Total Projects" value={stats?.total_projects || 0} icon={FolderKanban} color="cyan" onClick={() => navigate('/super-admin/organizations')} />
+        <StatCard title={t("Organizations", { defaultValue: "Organizations" })} value={stats?.total_organizations || 0} icon={Building2} color="blue" onClick={() => navigate('/super-admin/organizations')} />
+        <StatCard title={t("Active Orgs", { defaultValue: "Active Orgs" })} value={stats?.active_organizations || 0} icon={CheckCircle2} color="green" onClick={() => navigate('/super-admin/organizations')} />
+        <StatCard title={t("Trial Orgs", { defaultValue: "Trial Orgs" })} value={stats?.trial_organizations || 0} icon={Clock} color="purple" onClick={() => navigate('/super-admin/organizations')} />
+        <StatCard title={t("Suspended", { defaultValue: "Suspended" })} value={stats?.suspended_organizations || 0} icon={AlertTriangle} color="red" onClick={() => navigate('/super-admin/organizations')} />
+        <StatCard title={t("Modules", { defaultValue: "Modules" })} value={stats?.total_modules || 0} icon={Puzzle} color="amber" onClick={() => navigate('/super-admin/modules')} />
+        <StatCard title={t("Plans", { defaultValue: "Plans" })} value={stats?.total_plans || 0} icon={CreditCard} color="blue" onClick={() => navigate('/super-admin/plans')} />
+        <StatCard title={t("Total Users", { defaultValue: "Total Users" })} value={stats?.total_users || 0} icon={Users} color="purple" onClick={() => navigate('/super-admin/organizations')} />
+        <StatCard title={t("Total Projects", { defaultValue: "Total Projects" })} value={stats?.total_projects || 0} icon={FolderKanban} color="cyan" onClick={() => navigate('/super-admin/organizations')} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="rounded-xl p-5" style={s.card}>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold" style={s.textHeading}>Organizations</h2>
+            <h2 className="text-lg font-semibold" style={s.textHeading}>{t('Organizations', { defaultValue: 'Organizations' })}</h2>
             <button onClick={() => navigate('/super-admin/organizations')} className="text-sm hover:underline flex items-center gap-1"
               style={{ color: 'var(--color-primary)' }}>
-              View all <ArrowUpRight className="w-3.5 h-3.5" />
+              {t('View all', { defaultValue: 'View all' })} <ArrowUpRight className="w-3.5 h-3.5" />
             </button>
           </div>
           <div className="space-y-3">
@@ -116,22 +118,22 @@ export default function DashboardPage() {
                   </div>
                   <div>
                     <p className="text-sm font-medium" style={s.textHeading}>{org.name}</p>
-                    <p className="text-xs" style={s.textSecondary}>{org.subscription?.plan?.name || org.type || 'Standard'} &middot; {org.users_count || 0} users</p>
+                    <p className="text-xs" style={s.textSecondary}>{org.subscription?.plan?.name || org.type || t('Standard', { defaultValue: 'Standard' })} &middot; {t('{{count}} users', { count: org.users_count || 0, defaultValue: `${org.users_count || 0} users` })}</p>
                   </div>
                 </div>
                 <StatusBadge status={org.status} size="sm" />
               </div>
             ))}
-            {recentOrgs.length === 0 && <p className="text-sm text-center py-4" style={s.textMuted}>No organizations yet</p>}
+            {recentOrgs.length === 0 && <p className="text-sm text-center py-4" style={s.textMuted}>{t('No organizations yet', { defaultValue: 'No organizations yet' })}</p>}
           </div>
         </div>
 
         <div className="rounded-xl p-5" style={s.card}>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold" style={s.textHeading}>Recent Activity</h2>
+            <h2 className="text-lg font-semibold" style={s.textHeading}>{t('Recent Activity', { defaultValue: 'Recent Activity' })}</h2>
             <button onClick={() => navigate('/super-admin/activity')} className="text-sm hover:underline flex items-center gap-1"
               style={{ color: 'var(--color-primary)' }}>
-              View all <ArrowUpRight className="w-3.5 h-3.5" />
+              {t('View all', { defaultValue: 'View all' })} <ArrowUpRight className="w-3.5 h-3.5" />
             </button>
           </div>
           <div className="space-y-1">
@@ -143,14 +145,14 @@ export default function DashboardPage() {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm" style={s.text}>
                     <span className="font-medium">{log.user}</span>{' '}
-                    <span style={s.textSecondary}>{log.action}</span>{' '}
+                    <span style={s.textSecondary}>{t(log.action, { defaultValue: log.action })}</span>{' '}
                     {log.target && <span className="font-medium">{log.target}</span>}
                   </p>
                 </div>
                 <p className="text-xs whitespace-nowrap" style={s.textMuted}>{formatTime(log.created_at)}</p>
               </div>
             ))}
-            {logs.length === 0 && <p className="text-sm text-center py-4" style={s.textMuted}>No activity yet</p>}
+            {logs.length === 0 && <p className="text-sm text-center py-4" style={s.textMuted}>{t('No activity yet', { defaultValue: 'No activity yet' })}</p>}
           </div>
         </div>
       </div>

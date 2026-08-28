@@ -6,6 +6,7 @@
  */
 
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import ConfirmModal from "./ConfirmModal";
 
 /**
@@ -13,6 +14,7 @@ import ConfirmModal from "./ConfirmModal";
  * @param {Function} onLinksChange - Callback with the updated array of link objects.
  */
 function SubmissionLinkSection({ onLinksChange }) {
+  const { t } = useTranslation();
   const [links, setLinks] = useState([]);
   const [linkInput, setLinkInput] = useState("");
   const [linkRemoveConfirmOpen, setLinkRemoveConfirmOpen] = useState(false);
@@ -57,11 +59,11 @@ function SubmissionLinkSection({ onLinksChange }) {
 
   return (
     <div className="sd-field">
-      <label className="sd-label">Links ({links.length})</label>
+      <label className="sd-label">{t("Links", { defaultValue: "Links" })} ({links.length})</label>
       <div className="task-link-input-row">
         <input
           type="text"
-          placeholder="Paste link (Drive, Figma, GitHub, etc.)"
+          placeholder={t("Paste link (Drive, Figma, GitHub, etc.)", { defaultValue: "Paste link (Drive, Figma, GitHub, etc.)" })}
           value={linkInput}
           onChange={(e) => setLinkInput(e.target.value)}
           onKeyDown={handleLinkKeyDown}
@@ -72,7 +74,7 @@ function SubmissionLinkSection({ onLinksChange }) {
           onClick={handleAddLink}
           disabled={!linkInput.trim()}
         >
-          Add Link
+          {t("Add Link", { defaultValue: "Add Link" })}
         </button>
       </div>
       {links.length > 0 && (
@@ -128,10 +130,10 @@ function SubmissionLinkSection({ onLinksChange }) {
         isOpen={linkRemoveConfirmOpen}
         onClose={() => { setLinkRemoveConfirmOpen(false); setPendingLinkIndex(-1); }}
         onConfirm={() => { handleRemoveLink(pendingLinkIndex); setLinkRemoveConfirmOpen(false); setPendingLinkIndex(-1); }}
-        title="Remove Link"
-        message="Are you sure you want to remove this link?"
-        confirmText="Remove"
-        cancelText="Cancel"
+        title={t("Remove Link", { defaultValue: "Remove Link" })}
+        message={t("Are you sure you want to remove this link?", { defaultValue: "Are you sure you want to remove this link?" })}
+        confirmText={t("Remove", { defaultValue: "Remove" })}
+        cancelText={t("Cancel")}
         danger
       />
     </div>

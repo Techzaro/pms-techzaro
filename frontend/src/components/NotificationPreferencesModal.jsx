@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { MdClose, MdNotifications, MdEmail, MdDesktopWindows, MdCheck } from 'react-icons/md';
 import axios from 'axios';
 import API_URL from '../config/api';
@@ -9,6 +10,7 @@ import './NotificationPreferencesModal.css';
  * FEATURE: Centered Modal for managing both Email and Desktop notification preferences.
  */
 const NotificationPreferencesModal = ({ isOpen, onClose, currentUser, onUserUpdated }) => {
+  const { t } = useTranslation();
   const [preferences, setPreferences] = useState({
     enable_email: true,
     enable_desktop: false,
@@ -39,14 +41,14 @@ const NotificationPreferencesModal = ({ isOpen, onClose, currentUser, onUserUpda
         if (permission !== 'granted') {
           setMessage({
             type: 'error',
-            text: 'Desktop notification permission was denied in your browser settings.',
+            text: t('Desktop notification permission was denied in your browser settings.', { defaultValue: 'Desktop notification permission was denied in your browser settings.' }),
           });
           return;
         }
       } else {
         setMessage({
           type: 'error',
-          text: 'Your browser does not support desktop notifications.',
+          text: t('Your browser does not support desktop notifications.', { defaultValue: 'Your browser does not support desktop notifications.' }),
         });
         return;
       }
@@ -73,7 +75,7 @@ const NotificationPreferencesModal = ({ isOpen, onClose, currentUser, onUserUpda
         }
       );
 
-      setMessage({ type: 'success', text: 'Notification preferences saved!' });
+      setMessage({ type: 'success', text: t('Notification preferences saved!', { defaultValue: 'Notification preferences saved!' }) });
 
       if (onUserUpdated && response.data.user) {
         onUserUpdated(response.data.user);
@@ -88,7 +90,7 @@ const NotificationPreferencesModal = ({ isOpen, onClose, currentUser, onUserUpda
       setLoading(false);
       setMessage({
         type: 'error',
-        text: error.response?.data?.message || 'Failed to save preferences. Please try again.',
+        text: error.response?.data?.message || t('Failed to save preferences. Please try again.', { defaultValue: 'Failed to save preferences. Please try again.' }),
       });
     }
   };
@@ -104,8 +106,8 @@ const NotificationPreferencesModal = ({ isOpen, onClose, currentUser, onUserUpda
               <MdNotifications size={24} />
             </div>
             <div>
-              <h2>Notification Settings</h2>
-              <p>Configure how and when you receive updates</p>
+              <h2>{t("Notification Settings", { defaultValue: "Notification Settings" })}</h2>
+              <p>{t("Configure how and when you receive updates", { defaultValue: "Configure how and when you receive updates" })}</p>
             </div>
           </div>
           <button
@@ -137,7 +139,7 @@ const NotificationPreferencesModal = ({ isOpen, onClose, currentUser, onUserUpda
           {/* Section 1: Channels */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <label style={{ fontSize: '13px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)' }}>
-              Notification Channels
+              {t("Notification Channels", { defaultValue: "Notification Channels" })}
             </label>
 
             {/* Desktop Toggle */}
@@ -158,8 +160,8 @@ const NotificationPreferencesModal = ({ isOpen, onClose, currentUser, onUserUpda
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <MdDesktopWindows size={20} style={{ color: 'var(--color-primary)' }} />
                 <div>
-                  <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>Desktop Notifications</div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Browser pop-up alerts</div>
+                  <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>{t("Desktop Notifications", { defaultValue: "Desktop Notifications" })}</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t("Browser pop-up alerts", { defaultValue: "Browser pop-up alerts" })}</div>
                 </div>
               </div>
               <input
@@ -188,8 +190,8 @@ const NotificationPreferencesModal = ({ isOpen, onClose, currentUser, onUserUpda
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <MdEmail size={20} style={{ color: 'var(--color-primary)' }} />
                 <div>
-                  <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>Email Notifications</div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Inbox alerts sent to your email</div>
+                  <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>{t("Email Notifications", { defaultValue: "Email Notifications" })}</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t("Inbox alerts sent to your email", { defaultValue: "Inbox alerts sent to your email" })}</div>
                 </div>
               </div>
               <input
@@ -206,13 +208,13 @@ const NotificationPreferencesModal = ({ isOpen, onClose, currentUser, onUserUpda
           {/* Section 2: Event Types */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <label style={{ fontSize: '13px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)' }}>
-              Notify Me About
+              {t("Notify Me About", { defaultValue: "Notify Me About" })}
             </label>
 
             {[
-              { key: 'task_assigned', title: 'Task Assignments', desc: 'When tasks are assigned to you or updated' },
-              { key: 'project_updates', title: 'Project Activity', desc: 'Milestone changes and project status updates' },
-              { key: 'system_announcements', title: 'System Announcements', desc: 'Broadcast updates from portal admins' },
+              { key: 'task_assigned', title: t('Task Assignments', { defaultValue: 'Task Assignments' }), desc: t('When tasks are assigned to you or updated', { defaultValue: 'When tasks are assigned to you or updated' }) },
+              { key: 'project_updates', title: t('Project Activity', { defaultValue: 'Project Activity' }), desc: t('Milestone changes and project status updates', { defaultValue: 'Milestone changes and project status updates' }) },
+              { key: 'system_announcements', title: t('System Announcements', { defaultValue: 'System Announcements' }), desc: t('Broadcast updates from portal admins', { defaultValue: 'Broadcast updates from portal admins' }) },
             ].map((item) => (
               <div
                 key={item.key}
@@ -249,7 +251,7 @@ const NotificationPreferencesModal = ({ isOpen, onClose, currentUser, onUserUpda
               onClick={onClose}
               className="close-btn"
             >
-              Cancel
+              {t("Cancel")}
             </button>
             <button
               type="submit"
@@ -258,7 +260,7 @@ const NotificationPreferencesModal = ({ isOpen, onClose, currentUser, onUserUpda
               style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
               <MdCheck size={16} />
-              {loading ? 'Saving...' : 'Save Settings'}
+              {loading ? t('Saving...', { defaultValue: 'Saving...' }) : t('Save Settings', { defaultValue: 'Save Settings' })}
             </button>
           </div>
         </form>

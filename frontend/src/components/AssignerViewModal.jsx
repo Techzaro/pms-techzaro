@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { FileText, Download, ExternalLink } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
@@ -83,6 +84,7 @@ function formatFileSize(bytes) {
  * @param {Function} onActionSuccess - Callback when an action (approve/reject/reopen) succeeds
  */
 function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
+  const { t } = useTranslation();
   useEscapeKey(isOpen, onClose);
 
   const [submission, setSubmission] = useState(null);
@@ -110,75 +112,68 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
       const token = authToken();
       const res = await fetch(`${API_URL}/deliverables/${subtask.id}/${endpoint}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ reason }),
         _notifHandled: true,
       });
       const data = await res.json();
       if (res.ok) {
-        onActionSuccess(data.deliverable);
+        let msg = "Subtask abandoned";
+        if (abandonAction === "request") msg = "Abandon requested";
+        else if (abandonAction === "approve") msg = "Abandon request approved";
+        else if (abandonAction === "decline") msg = "Abandon request declined";
+        showSuccessMessage(msg);
+        onActionSuccess?.(data.deliverable);
         onClose();
       }
     } catch {
-      // silently handle
+      // silently fail
     } finally {
       setActing(false);
     }
   };
 
-  // Fetch the latest submission when modal opens or subtask changes
   useEffect(() => {
     if (!isOpen || !subtask) return;
-    // Prevent background scrolling while modal is open
-    document.body.style.overflow = "hidden";
+    setLoading(true);
+    setSubmission(null);
 
     const token = authToken();
-    fetch(`${API_URL}/deliverables/${subtask.id}/latest-submission`, {
-      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-      skipLoader: true,
+    fetch(`${API_URL}/deliverables/${subtask.id}/submission`, {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      _notifHandled: true,
     })
-      .then((res) => res.json())
-      .then((data) => { setSubmission(data.submission); setLoading(false); })
-      .catch(() => { setLoading(false); });
-
-    // Restore scrolling on unmount
-    return () => { document.body.style.overflow = ""; };
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && data.submission) {
+          setSubmission(data.submission);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [isOpen, subtask]);
 
-  /**
-   * Handles approve, reject, or reopen actions on the subtask.
-   * Uses FormData for reopen (supports file uploads), JSON for other actions.
-   * @param {string} action - The action to perform: "approve", "reject", or "reopen"
-   * @param {Object} body - Optional payload (comment, instructions, new_deadline, file)
-   */
-  const handleAction = async (action, body = {}) => {
+  const handleAction = async (action) => {
     setActing(true);
     try {
       const token = authToken();
-      let res;
-      if (action === "reopen") {
-        // Reopen uses FormData to support file attachments
-        const formData = new FormData();
-        if (body.comment) formData.append("comment", body.comment);
-        if (body.instructions) formData.append("instructions", body.instructions);
-        if (body.new_deadline) formData.append("new_deadline", body.new_deadline);
-        if (body.file) formData.append("file", body.file);
-        res = await fetch(`${API_URL}/deliverables/${subtask.id}/reopen`, {
-          method: "POST",
-          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-          body: formData,
-          _notifHandled: true,
-        });
-      } else {
-        // Approve/reject use JSON payload
-        res = await fetch(`${API_URL}/deliverables/${subtask.id}/${action}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify(body),
-          _notifHandled: true,
-        });
-      }
-
+      const res = await fetch(`${API_URL}/deliverables/${subtask.id}/review`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ action }),
+        _notifHandled: true,
+      });
       const data = await res.json();
       if (res.ok) {
         const actionLabel = action === "approve" ? "approved" : action === "reject" ? "rejected" : "reopened";
@@ -195,9 +190,9 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
 
   // Confirmation dialog messages for each action type
   const confirmMessages = {
-    approve: "Are you sure you want to approve this subtask?",
-    reject: "Are you sure you want to decline this subtask? The assignee will not be able to resubmit.",
-    reopen: "Are you sure you want to decline and reopen this subtask?",
+    approve: t("Are you sure you want to approve this subtask?", { defaultValue: "Are you sure you want to approve this subtask?" }),
+    reject: t("Are you sure you want to decline this subtask? The assignee will not be able to resubmit.", { defaultValue: "Are you sure you want to decline this subtask? The assignee will not be able to resubmit." }),
+    reopen: t("Are you sure you want to decline and reopen this subtask?", { defaultValue: "Are you sure you want to decline and reopen this subtask?" }),
   };
 
   // Color codes for confirmation dialog confirm button
@@ -211,12 +206,6 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
 
   const token = authToken();
 
-  /**
-   * Builds a download URL for a subtask attachment.
-   * @param {number} attId - Attachment ID
-   * @param {string} [action] - Optional action parameter (e.g., "download")
-   * @returns {string} Full attachment URL with auth token
-   */
   const attachmentUrl = (attId, action) => {
     let url = `${API_URL}/deliverables/attachment/${attId}/download`;
     const params = [];
@@ -226,9 +215,7 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
     return url;
   };
 
-  // Capitalize status for display
-  const statusLabel = (subtask.status || "pending").charAt(0).toUpperCase() + (subtask.status || "pending").slice(1);
-  // Separate attachments by type for organized display
+  const statusLabel = t((subtask.status || "pending").charAt(0).toUpperCase() + (subtask.status || "pending").slice(1));
   const attachments = submission?.attachments || [];
   const files = attachments.filter((a) => a.attachment_type === "file");
   const images = attachments.filter((a) => a.attachment_type === "image");
@@ -243,35 +230,35 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
             <span className={`avm-status-badge avm-status-${subtask.status}`}>{statusLabel}</span>
           </div>
           {subtask.due_date && (
-            <div className="avm-due">Due Date & Time {formatDateTime(subtask.due_date)}</div>
+            <div className="avm-due">{t("Due Date & Time", { defaultValue: "Due Date & Time" })} {formatDateTime(subtask.due_date)}</div>
           )}
         </div>
 
         <div className="avm-body">
           {/* Deliverable Details Section */}
           <div className="avm-section">
-            <h3 className="avm-section-title">Details</h3>
+            <h3 className="avm-section-title">{t("Details")}</h3>
             <div className="avm-details-grid">
               <div className="avm-detail-item">
-                <span className="avm-detail-label">Task / Project</span>
+                <span className="avm-detail-label">{t("Task / Project", { defaultValue: "Task / Project" })}</span>
                 <span className="avm-detail-value">{subtask.task?.title || subtask.project?.title || "\u2014"}</span>
               </div>
               <div className="avm-detail-item">
-                <span className="avm-detail-label">Priority</span>
-                <span className="avm-detail-value">{subtask.priority || "Medium"}</span>
+                <span className="avm-detail-label">{t("Priority")}</span>
+                <span className="avm-detail-value">{t(subtask.priority || "Medium")}</span>
               </div>
               <div className="avm-detail-item">
-                <span className="avm-detail-label">Assigned To</span>
-                <span className="avm-detail-value">{subtask.assignee?.name || "Unassigned"}</span>
+                <span className="avm-detail-label">{t("Assigned To")}</span>
+                <span className="avm-detail-value">{subtask.assignee?.name || t("Unassigned", { defaultValue: "Unassigned" })}</span>
               </div>
               <div className="avm-detail-item">
-                <span className="avm-detail-label">Created By</span>
+                <span className="avm-detail-label">{t("Created By")}</span>
                 <span className="avm-detail-value">{subtask.creator?.name || "\u2014"}</span>
               </div>
             </div>
             {subtask.description && (
               <div className="avm-description">
-                <span className="avm-detail-label">Description</span>
+                <span className="avm-detail-label">{t("Description")}</span>
                 <div
                   className="avm-description-text rte-display"
                   dangerouslySetInnerHTML={{ __html: subtask.description }}
@@ -279,31 +266,31 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
               </div>
             )}
             <div className="avm-detail-item">
-              <span className="avm-detail-label">Created On</span>
+              <span className="avm-detail-label">{t("Created On", { defaultValue: "Created On" })}</span>
               <span className="avm-detail-value">{formatDateTime(subtask.created_at)}</span>
             </div>
           </div>
 
           {/* Submission Section */}
           <div className="avm-section">
-            <h3 className="avm-section-title">Submission</h3>
+            <h3 className="avm-section-title">{t("Submission", { defaultValue: "Submission" })}</h3>
             {loading ? (
-              <div className="avm-loading">Loading submission...</div>
+              <div className="avm-loading">{t("Loading submission...", { defaultValue: "Loading submission..." })}</div>
             ) : submission ? (
               <div className="avm-submission">
                 <div className="avm-submission-grid">
                   <div className="avm-detail-item">
-                    <span className="avm-detail-label">Submitted By</span>
-                    <span className="avm-detail-value">{submission.submitted_by?.name || "Unknown"}</span>
+                    <span className="avm-detail-label">{t("Submitted By", { defaultValue: "Submitted By" })}</span>
+                    <span className="avm-detail-value">{submission.submitted_by?.name || t("Unknown", { defaultValue: "Unknown" })}</span>
                   </div>
                   <div className="avm-detail-item">
-                    <span className="avm-detail-label">Submitted On</span>
+                    <span className="avm-detail-label">{t("Submitted On", { defaultValue: "Submitted On" })}</span>
                     <span className="avm-detail-value">{formatDateTime(submission.created_at)}</span>
                   </div>
                 </div>
                 {submission.comment && (
                   <div className="avm-detail-item" style={{ marginTop: "12px" }}>
-                    <span className="avm-detail-label">Notes</span>
+                    <span className="avm-detail-label">{t("Notes", { defaultValue: "Notes" })}</span>
                     <p className="avm-description-text">{submission.comment}</p>
                   </div>
                 )}
@@ -311,7 +298,7 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
                 {/* Files */}
                 {files.length > 0 && (
                   <div className="avm-attachments-section" style={{ marginTop: "12px" }}>
-                    <span className="avm-detail-label">Files ({files.length})</span>
+                    <span className="avm-detail-label">{t("Files", { defaultValue: "Files" })} ({files.length})</span>
                     <div className="avm-attachments-list">
                       {files.map((att) => (
                         <a key={att.id} className="avm-file-link" href={attachmentUrl(att.id, "download")} download={att.original_name || att.file_name} target="_blank" rel="noopener noreferrer">
@@ -328,7 +315,7 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
                 {/* Images */}
                 {images.length > 0 && (
                   <div className="avm-attachments-section" style={{ marginTop: "12px" }}>
-                    <span className="avm-detail-label">Images ({images.length})</span>
+                    <span className="avm-detail-label">{t("Images", { defaultValue: "Images" })} ({images.length})</span>
                     <div className="avm-image-grid">
                       {images.map((att) => (
                         <div key={att.id} className="avm-image-thumb" style={{ position: "relative" }}>
@@ -338,7 +325,7 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
                             download={att.original_name || att.file_name}
                             target="_blank"
                             rel="noopener noreferrer"
-                            title="Download Image"
+                            title={t("Download Image", { defaultValue: "Download Image" })}
                             style={{
                               position: "absolute", bottom: "4px", right: "4px",
                               background: "rgba(0,0,0,0.75)", color: "#fff",
@@ -346,7 +333,7 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
                               alignItems: "center", gap: "4px", fontSize: "11px"
                             }}
                           >
-                            <Download size={13} /> Download
+                            <Download size={13} /> {t("Download", { defaultValue: "Download" })}
                           </a>
                         </div>
                       ))}
@@ -357,7 +344,7 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
                 {/* Links */}
                 {links.length > 0 && (
                   <div className="avm-attachments-section" style={{ marginTop: "12px" }}>
-                    <span className="avm-detail-label">Links ({links.length})</span>
+                    <span className="avm-detail-label">{t("Links", { defaultValue: "Links" })} ({links.length})</span>
                     <div className="avm-attachments-list">
                       {links.map((att) => (
                         <a key={att.id} className="avm-file-link" href={att.url} target="_blank" rel="noopener noreferrer">
@@ -372,7 +359,7 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
                 {/* Old single file fallback */}
                 {submission.file_name && attachments.length === 0 && (
                   <div className="avm-detail-item" style={{ marginTop: "12px" }}>
-                    <span className="avm-detail-label">Attachment</span>
+                    <span className="avm-detail-label">{t("Attachment")}</span>
                     <a
                       className="avm-file-link"
                       href={`${API_URL}/deliverables/submission-file/${submission.id}`}
@@ -389,7 +376,7 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
               </div>
             ) : (
               <div className="avm-empty">
-                <p>Waiting for subtask submission.</p>
+                <p>{t("Waiting for subtask submission.", { defaultValue: "Waiting for subtask submission." })}</p>
               </div>
             )}
           </div>
@@ -397,38 +384,38 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
           {/* Reopen Details (if reopened) */}
           {subtask.status === "reopened" && (
             <div className="avm-section avm-reopen-section">
-              <h3 className="avm-section-title">Reopen Details</h3>
+              <h3 className="avm-section-title">{t("Reopen Details", { defaultValue: "Reopen Details" })}</h3>
               <div className="avm-submission-grid">
                 <div className="avm-detail-item">
-                  <span className="avm-detail-label">Reopened By</span>
+                  <span className="avm-detail-label">{t("Reopened By", { defaultValue: "Reopened By" })}</span>
                   <span className="avm-detail-value">{subtask.reopenedBy?.name || "\u2014"}</span>
                 </div>
                 <div className="avm-detail-item">
-                  <span className="avm-detail-label">Reopened On</span>
+                  <span className="avm-detail-label">{t("Reopened On", { defaultValue: "Reopened On" })}</span>
                   <span className="avm-detail-value">{formatDateTime(subtask.reopened_at)}</span>
                 </div>
               </div>
               {subtask.reopen_comment && (
                 <div className="avm-detail-item" style={{ marginTop: "12px" }}>
-                  <span className="avm-detail-label">Comment</span>
+                  <span className="avm-detail-label">{t("Comment", { defaultValue: "Comment" })}</span>
                   <p className="avm-description-text">{subtask.reopen_comment}</p>
                 </div>
               )}
               {subtask.reopen_instructions && (
                 <div className="avm-detail-item" style={{ marginTop: "12px" }}>
-                  <span className="avm-detail-label">Instructions</span>
+                  <span className="avm-detail-label">{t("Instructions", { defaultValue: "Instructions" })}</span>
                   <p className="avm-description-text">{subtask.reopen_instructions}</p>
                 </div>
               )}
               {subtask.reopen_new_deadline && (
                 <div className="avm-detail-item" style={{ marginTop: "12px" }}>
-                  <span className="avm-detail-label">New Deadline</span>
+                  <span className="avm-detail-label">{t("New Deadline", { defaultValue: "New Deadline" })}</span>
                   <span className="avm-detail-value">{formatDateTime(subtask.reopen_new_deadline)}</span>
                 </div>
               )}
               {subtask.reopen_link && (
                 <div className="avm-detail-item" style={{ marginTop: "12px" }}>
-                  <span className="avm-detail-label">Attached Link</span>
+                  <span className="avm-detail-label">{t("Attached Link", { defaultValue: "Attached Link" })}</span>
                   <a href={subtask.reopen_link} target="_blank" rel="noopener noreferrer" className="avm-detail-value" style={{ color: "#6366f1", textDecoration: "underline", wordBreak: "break-all" }}>
                     {subtask.reopen_link}
                   </a>
@@ -436,7 +423,7 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
               )}
               {subtask.reopen_file_name && (
                 <div className="avm-detail-item" style={{ marginTop: "12px" }}>
-                  <span className="avm-detail-label">Attached File(s) / Screenshots</span>
+                  <span className="avm-detail-label">{t("Attached File(s) / Screenshots", { defaultValue: "Attached File(s) / Screenshots" })}</span>
                   <div className="avm-attachments-list" style={{ marginTop: "6px", display: "flex", flexDirection: "column", gap: "6px" }}>
                     {(() => {
                       const paths = (subtask.reopen_file_path || "").split(",").map((p) => p.trim()).filter(Boolean);
@@ -471,22 +458,22 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
           {/* Abandon Requested Details */}
           {subtask.status === "abandon_requested" && (
             <div className="avm-section" style={{ borderLeft: "4px solid var(--color-warning, #f59e0b)" }}>
-              <h3 className="avm-section-title" style={{ color: "var(--color-warning, #d97706)" }}>Abandon Requested</h3>
+              <h3 className="avm-section-title" style={{ color: "var(--color-warning, #d97706)" }}>{t("Abandon Requested", { defaultValue: "Abandon Requested" })}</h3>
               <div className="avm-submission-grid">
                 <div className="avm-detail-item">
-                  <span className="avm-detail-label">Requested By</span>
+                  <span className="avm-detail-label">{t("Requested By", { defaultValue: "Requested By" })}</span>
                   <span className="avm-detail-value">{(subtask.abandon_requested_by || subtask.abandonRequestedBy)?.name || "—"}</span>
                 </div>
                 {subtask.abandon_requested_at && (
                   <div className="avm-detail-item">
-                    <span className="avm-detail-label">Requested On</span>
+                    <span className="avm-detail-label">{t("Requested On", { defaultValue: "Requested On" })}</span>
                     <span className="avm-detail-value">{formatDateTime(subtask.abandon_requested_at)}</span>
                   </div>
                 )}
               </div>
               {subtask.abandon_reason && (
                 <div className="avm-detail-item" style={{ marginTop: "12px" }}>
-                  <span className="avm-detail-label">Reason</span>
+                  <span className="avm-detail-label">{t("Reason", { defaultValue: "Reason" })}</span>
                   <p className="avm-description-text">{subtask.abandon_reason}</p>
                 </div>
               )}
@@ -496,22 +483,22 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
           {/* Abandoned Details */}
           {subtask.status === "abandoned" && (
             <div className="avm-section" style={{ borderLeft: "4px solid var(--color-danger, #ef4444)" }}>
-              <h3 className="avm-section-title" style={{ color: "var(--color-danger, #dc2626)" }}>Subtask Abandoned</h3>
+              <h3 className="avm-section-title" style={{ color: "var(--color-danger, #dc2626)" }}>{t("Subtask Abandoned", { defaultValue: "Subtask Abandoned" })}</h3>
               <div className="avm-submission-grid">
                 <div className="avm-detail-item">
-                  <span className="avm-detail-label">Abandoned By</span>
+                  <span className="avm-detail-label">{t("Abandoned By", { defaultValue: "Abandoned By" })}</span>
                   <span className="avm-detail-value">{(subtask.abandoned_by || subtask.abandonedBy)?.name || "—"}</span>
                 </div>
                 {subtask.abandoned_at && (
                   <div className="avm-detail-item">
-                    <span className="avm-detail-label">Abandoned On</span>
+                    <span className="avm-detail-label">{t("Abandoned On", { defaultValue: "Abandoned On" })}</span>
                     <span className="avm-detail-value">{formatDateTime(subtask.abandoned_at)}</span>
                   </div>
                 )}
               </div>
               {subtask.abandon_reason && (
                 <div className="avm-detail-item" style={{ marginTop: "12px" }}>
-                  <span className="avm-detail-label">Reason</span>
+                  <span className="avm-detail-label">{t("Reason", { defaultValue: "Reason" })}</span>
                   <p className="avm-description-text">{subtask.abandon_reason}</p>
                 </div>
               )}
@@ -527,17 +514,17 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
         )}
 
         <div className="avm-footer">
-          <button className="avm-close-btn" onClick={onClose}>Close</button>
+          <button className="avm-close-btn" onClick={onClose}>{t("Close")}</button>
           {subtask.status === "submitted" && (
             <div className="avm-action-btns">
               <button className="avm-action-btn avm-approve-btn" disabled={acting} onClick={() => setConfirmDialog({ open: true, type: "approve" })}>
-                Approve
+                {t("Approve", { defaultValue: "Approve" })}
               </button>
               <button className="avm-action-btn avm-reject-btn" disabled={acting} onClick={() => setConfirmDialog({ open: true, type: "reject" })}>
-                Decline
+                {t("Decline", { defaultValue: "Decline" })}
               </button>
               <button className="avm-action-btn avm-reopen-btn" disabled={acting} onClick={() => setReopenDialog(true)}>
-                Decline & Reopen
+                {t("Decline & Reopen", { defaultValue: "Decline & Reopen" })}
               </button>
             </div>
           )}
@@ -545,10 +532,10 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
           {isAdminOrManager && subtask.status === "abandon_requested" && (
             <div className="avm-action-btns">
               <button className="avm-action-btn avm-approve-btn" disabled={acting} onClick={() => handleAbandonSubmit("")}>
-                Approve Abandon
+                {t("Approve Abandon", { defaultValue: "Approve Abandon" })}
               </button>
               <button className="avm-action-btn avm-reject-btn" disabled={acting} onClick={() => { setAbandonAction("decline"); setAbandonModalOpen(true); }}>
-                Decline Abandon
+                {t("Decline Abandon", { defaultValue: "Decline Abandon" })}
               </button>
             </div>
           )}
@@ -556,7 +543,7 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
           {isAdminOrManager && subtask.status !== "abandon_requested" && subtask.status !== "abandoned" && subtask.status !== "submitted" && (
             <div className="avm-action-btns">
               <button className="avm-action-btn avm-reject-btn" style={{ background: "#dc2626", borderColor: "#dc2626", color: "#fff" }} disabled={acting} onClick={() => { setAbandonAction("direct"); setAbandonModalOpen(true); }}>
-                Abandon
+                {t("Abandon", { defaultValue: "Abandon" })}
               </button>
             </div>
           )}
@@ -564,7 +551,7 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
           {isMemberOrTeamLead && subtask.status !== "abandon_requested" && subtask.status !== "abandoned" && (
             <div className="avm-action-btns">
               <button className="avm-action-btn avm-reject-btn" style={{ background: "#f59e0b", borderColor: "#f59e0b", color: "#fff" }} disabled={acting} onClick={() => { setAbandonAction("request"); setAbandonModalOpen(true); }}>
-                Request Abandon
+                {t("Request Abandon", { defaultValue: "Request Abandon" })}
               </button>
             </div>
           )}
@@ -579,9 +566,9 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
           setConfirmDialog({ open: false, type: null });
           handleAction(type);
         }}
-        title={confirmDialog.type === "approve" ? "Approve Subtask" : confirmDialog.type === "reject" ? "Decline Subtask" : "Decline & Reopen"}
+        title={confirmDialog.type === "approve" ? t("Approve Subtask", { defaultValue: "Approve Subtask" }) : confirmDialog.type === "reject" ? t("Decline Subtask", { defaultValue: "Decline Subtask" }) : t("Decline & Reopen", { defaultValue: "Decline & Reopen" })}
         message={confirmMessages[confirmDialog.type] || ""}
-        confirmText={confirmDialog.type === "approve" ? "Approve" : confirmDialog.type === "reject" ? "Decline" : "Decline & Reopen"}
+        confirmText={confirmDialog.type === "approve" ? t("Approve", { defaultValue: "Approve" }) : confirmDialog.type === "reject" ? t("Decline", { defaultValue: "Decline" }) : t("Decline & Reopen", { defaultValue: "Decline & Reopen" })}
         confirmColor={confirmColors[confirmDialog.type] || "#4F46E5"}
       />
 
@@ -600,18 +587,18 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
         onClose={() => setAbandonModalOpen(false)}
         title={
           abandonAction === "request"
-            ? "Request to Abandon Subtask"
+            ? t("Request to Abandon Subtask", { defaultValue: "Request to Abandon Subtask" })
             : abandonAction === "decline"
-            ? "Decline Abandon Request"
-            : "Abandon Subtask"
+            ? t("Decline Abandon Request", { defaultValue: "Decline Abandon Request" })
+            : t("Abandon Subtask", { defaultValue: "Abandon Subtask" })
         }
         subtitle={subtask.title}
         actionLabel={
           abandonAction === "request"
-            ? "Submit Request"
+            ? t("Submit Request", { defaultValue: "Submit Request" })
             : abandonAction === "decline"
-            ? "Decline Request"
-            : "Confirm Abandon"
+            ? t("Decline Request", { defaultValue: "Decline Request" })
+            : t("Confirm Abandon", { defaultValue: "Confirm Abandon" })
         }
         onSubmit={handleAbandonSubmit}
         loading={acting}

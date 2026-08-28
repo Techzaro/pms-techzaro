@@ -19,6 +19,13 @@ class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
 
+    protected $attributes = [
+        'language' => 'English',
+        'timezone' => 'UTC',
+        'date_format' => 'DD/MM/YYYY',
+        'time_format' => '12-hour',
+    ];
+
     protected $fillable = [
         'name',
         'avatar',

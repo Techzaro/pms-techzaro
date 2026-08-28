@@ -2,10 +2,23 @@
  * @file notify.js
  * @description Global notification utility for showing toast notifications.
  * Provides a decoupled notification API that can be used anywhere in the app.
+ * Automatically translates notification messages using i18n.
  */
+
+import { i18n } from "./i18n";
 
 /** @type {Object} References to notification functions registered by the provider */
 let notifyRef = { success: null, error: null, warning: null, info: null };
+
+/**
+ * Safely translates a notification message using i18n if available.
+ */
+function translateMsg(msg) {
+  if (typeof msg === "string" && i18n && typeof i18n.t === "function") {
+    return i18n.t(msg);
+  }
+  return msg;
+}
 
 /**
  * Registers notification functions from the NotificationProvider.
@@ -29,25 +42,25 @@ export const notify = {
    * @param {string} msg - Message to display
    * @param {number} [dur] - Duration in milliseconds
    */
-  success: (msg, dur) => notifyRef.success?.(msg, dur),
+  success: (msg, dur) => notifyRef.success?.(translateMsg(msg), dur),
   /**
    * Shows an error notification.
    * @param {string} msg - Message to display
    * @param {number} [dur] - Duration in milliseconds
    */
-  error: (msg, dur) => notifyRef.error?.(msg, dur),
+  error: (msg, dur) => notifyRef.error?.(translateMsg(msg), dur),
   /**
    * Shows a warning notification.
    * @param {string} msg - Message to display
    * @param {number} [dur] - Duration in milliseconds
    */
-  warning: (msg, dur) => notifyRef.warning?.(msg, dur),
+  warning: (msg, dur) => notifyRef.warning?.(translateMsg(msg), dur),
   /**
    * Shows an info notification.
    * @param {string} msg - Message to display
    * @param {number} [dur] - Duration in milliseconds
    */
-  info: (msg, dur) => notifyRef.info?.(msg, dur),
+  info: (msg, dur) => notifyRef.info?.(translateMsg(msg), dur),
 };
 
 export const toast = notify;
@@ -59,7 +72,8 @@ export const toast = notify;
  * @example showSuccessMessage("Task", "created") // "Task created successfully"
  */
 export function showSuccessMessage(entity, action) {
-  notify.success(`${entity} ${action} successfully`);
+  const key = `${entity} ${action} successfully`;
+  notify.success(key);
 }
 
 /**

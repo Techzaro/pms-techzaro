@@ -62,6 +62,8 @@ class AuditLog extends Model
             'teams' => ['team', 'Team', 'teams', 'Teams', 'team_management', 'Team Management'],
             'event' => ['event', 'Event', 'events', 'Events'],
             'events' => ['event', 'Event', 'events', 'Events'],
+            'regional_settings' => ['regional_settings', 'Regional Settings', 'regional-settings', 'regional', 'Regional'],
+            'knowledge_base' => ['knowledge_base', 'Knowledge Base', 'knowledge-base', 'kb', 'KB'],
         ];
 
         $allowedModules = $moduleVariants[$cleanModule] ?? [$module, strtolower($module), ucfirst($module)];
@@ -81,6 +83,12 @@ class AuditLog extends Model
             'created' => ['create', 'Create', 'created', 'Created'],
             'update' => ['update', 'Update', 'updated', 'Updated', 'status_change', 'Status Change', 'status'],
             'updated' => ['update', 'Update', 'updated', 'Updated', 'status_change', 'Status Change', 'status'],
+            'configuration_changed' => ['configuration_changed', 'Configuration Changed', 'Configuration changed', 'config_change', 'configuration changed'],
+            'published' => ['published', 'Published', 'publish', 'Publish'],
+            'edited' => ['edited', 'Edited', 'edit', 'Edit'],
+            'archived' => ['archived', 'Archived', 'archive', 'Archive'],
+            'rsvp' => ['rsvp', 'RSVP', 'acknowledged', 'Acknowledged', 'Acknowledge'],
+            'rescheduled' => ['rescheduled', 'Rescheduled', 'reschedule', 'Reschedule'],
             'delete' => ['delete', 'Delete', 'deleted', 'Deleted'],
             'deleted' => ['delete', 'Delete', 'deleted', 'Deleted'],
             'approve' => ['approve', 'Approve', 'approved', 'Approved'],

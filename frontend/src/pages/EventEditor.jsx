@@ -1,8 +1,13 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import CustomSelect from "../components/CustomSelect";
+import RichTextEditor from "../components/RichTextEditor";
+import CreatableSelect from "react-select/creatable";
+import UnifiedActivityFeed from "../components/UnifiedActivityFeed";
+import DOMPurify from "dompurify";
 import API_URL from "../config/api";
 import { authToken, rolePath, getUser } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
@@ -12,7 +17,7 @@ import {
   Calendar,
   Megaphone,
   Save,
-  Plus,
+  Pipette,
   MapPin,
   Clock,
   Video,
@@ -24,6 +29,9 @@ import {
   Check,
   Globe,
   AlertTriangle,
+  Activity,
+  CheckCircle2,
+  ExternalLink,
 } from "lucide-react";
 import {
   convertToLocal,
@@ -33,9 +41,14 @@ import {
 } from "../utils/timezoneUtils";
 
 export default function EventEditor() {
+  const { t } = useTranslation();
   const { id } = useParams();
   const locationState = useLocation();
   const isEditMode = Boolean(id);
+  // View mode: route has an :id but the path does NOT contain '/edit'
+  const isViewMode = Boolean(id) && !locationState.pathname.includes("/edit");
+  // Form mode: create (no id) OR edit route
+  const isFormMode = !id || locationState.pathname.includes("/edit");
   const navigate = useNavigate();
   const notify = useNotification();
   const user = getUser();
@@ -43,13 +56,26 @@ export default function EventEditor() {
   const [loading, setLoading] = useState(isEditMode);
   const [submitting, setSubmitting] = useState(false);
 
+  // Tab for view mode: "details" | "activity"
+  const [viewTab, setViewTab] = useState("details");
+
+  // Acknowledge state (for view mode)
+  const [loadedEvent, setLoadedEvent] = useState(null);
+  const [acknowledging, setAcknowledging] = useState(false);
+  const [acknowledged, setAcknowledged] = useState(false);
+
   // Form Mode: 'event' vs 'announcement'
   const [formType, setFormType] = useState("event");
 
   // Core Form State
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [categoryId, setCategoryId] = useState("");
+  // Category: stored as a react-select option object { value, label } so
+  // CreatableSelect always reflects selection in the same render cycle —
+  // no string→option lookup that could miss a brand-new category.
+  const [selectedCategoryOption, setSelectedCategoryOption] = useState(null);
+  // Keep categoryId as a derived convenience for the API payload
+  const categoryId = selectedCategoryOption ? selectedCategoryOption.value : "";
   const [eventTimezone, setEventTimezone] = useState(user?.timezone || "UTC");
   const [timezonesList, setTimezonesList] = useState([]);
   const [enforceOrgHours, setEnforceOrgHours] = useState(false);
@@ -69,10 +95,9 @@ export default function EventEditor() {
   const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [attendeeSearch, setAttendeeSearch] = useState("");
 
-  // Inline Category Creation State
-  const [showNewCatInput, setShowNewCatInput] = useState(false);
-  const [newCatName, setNewCatName] = useState("");
+  // Inline Category Creation State (used by CreatableSelect handler)
   const [savingNewCat, setSavingNewCat] = useState(false);
+  const colorInputRef = useRef(null);
 
   // Dynamic Options from API
   const [categories, setCategories] = useState([]);
@@ -90,9 +115,6 @@ export default function EventEditor() {
       .then((d) => {
         const catData = Array.isArray(d?.data) ? d.data : [];
         setCategories(catData);
-        if (!isEditMode && catData.length > 0 && !categoryId) {
-          setCategoryId(String(catData[0].id));
-        }
       })
       .catch(() => {});
 
@@ -150,11 +172,32 @@ export default function EventEditor() {
       .then((d) => {
         const ev = d?.data || d?.event;
         if (ev) {
+          setLoadedEvent(ev);
+          // Detect if current user already acknowledged this event
+          if (Array.isArray(ev.acknowledged_by)) {
+            setAcknowledged(ev.acknowledged_by.includes(user?.id));
+          } else if (ev.user_acknowledged !== undefined) {
+            setAcknowledged(Boolean(ev.user_acknowledged));
+          }
           setTitle(ev.title || "");
           setDescription(ev.description || "");
           const isAnnounce = ev.type === "announcement" || ev.type === "Company Announcement" || ev.is_announcement;
           setFormType(isAnnounce ? "announcement" : "event");
-          setCategoryId(ev.category_id ? String(ev.category_id) : "");
+          // Resolve category: if categories already loaded (fetched in parallel), build
+          // the option object directly; otherwise store the raw ID so the resolution
+          // useEffect below can pick it up once the categories list arrives.
+          if (ev.category_id) {
+            setCategories((prevCats) => {
+              const match = prevCats.find((c) => String(c.id) === String(ev.category_id));
+              if (match) {
+                setSelectedCategoryOption({ value: String(match.id), label: match.name });
+              } else {
+                // Categories not yet loaded — store a stub; the effect below resolves it
+                setSelectedCategoryOption({ value: String(ev.category_id), label: t("Loading…", { defaultValue: "Loading…" }), __pending: true });
+              }
+              return prevCats; // do NOT mutate the categories array itself
+            });
+          }
           setVisibilityLevel(ev.visibility_level || "organization");
           setLocation(ev.location || "");
           setMeetingLink(ev.meeting_link || "");
@@ -179,20 +222,31 @@ export default function EventEditor() {
             setSelectedUserIds(ev.assigned_users.map((u) => u.id));
           }
         } else {
-          notify.error("Event not found.");
+          notify.error(t("Event not found.", { defaultValue: "Event not found." }));
           navigate(rolePath("events"));
         }
       })
       .catch(() => {
-        notify.error("Failed to load event details.");
+        notify.error(t("Failed to load event details.", { defaultValue: "Failed to load event details." }));
       })
       .finally(() => setLoading(false));
-  }, [id, isEditMode]);
+  }, [id, isEditMode, t]);
 
-  // Inline Category Creation
-  const handleCreateCategory = async (e) => {
-    if (e) e.preventDefault();
-    if (!newCatName.trim()) return;
+  // Resolve a pending category stub once the categories list has loaded.
+  // This handles the race condition in edit mode where the event API responds
+  // before the /event-categories API does.
+  useEffect(() => {
+    if (!selectedCategoryOption?.__pending || categories.length === 0) return;
+    const match = categories.find((c) => String(c.id) === selectedCategoryOption.value);
+    if (match) {
+      setSelectedCategoryOption({ value: String(match.id), label: match.name });
+    }
+  }, [categories, selectedCategoryOption]);
+
+  // Category Creation — called by CreatableSelect's onCreateOption
+  const handleCreateCategory = async (inputValue) => {
+    const name = (inputValue || "").trim();
+    if (!name) return;
 
     try {
       setSavingNewCat(true);
@@ -204,24 +258,73 @@ export default function EventEditor() {
           Accept: "application/json",
           Authorization: token ? `Bearer ${token}` : "",
         },
-        body: JSON.stringify({ name: newCatName.trim() }),
+        body: JSON.stringify({ name }),
       });
       const data = await res.json();
       if (res.ok && (data?.data?.id || data?.category?.id)) {
         const newCat = data.data || data.category;
+        // 1. Append to local categories list so it's available for future lookups
         setCategories((prev) => [...prev, newCat]);
-        setCategoryId(String(newCat.id));
-        setNewCatName("");
-        setShowNewCatInput(false);
-        notify.success("Event category created successfully");
+        // 2. Set the option object DIRECTLY — no string→lookup round-trip.
+        //    CreatableSelect uses the `value` prop object reference, so this
+        //    immediately shows the new category as selected without a second render.
+        setSelectedCategoryOption({ value: String(newCat.id), label: newCat.name });
+        notify.success(t("Event category created successfully", { defaultValue: "Event category created successfully" }));
       } else {
-        notify.error(data?.message || "Failed to create category");
+        notify.error(data?.message || t("Failed to create category", { defaultValue: "Failed to create category" }));
       }
     } catch (err) {
       console.error("Create category error:", err);
-      notify.error("Network error while creating category");
+      notify.error(t("Network error while creating category", { defaultValue: "Network error while creating category" }));
     } finally {
       setSavingNewCat(false);
+    }
+  };
+
+  // Acknowledge event (view mode — for assigned users)
+  const handleAcknowledge = async () => {
+    if (!id || acknowledging || acknowledged) return;
+    setAcknowledging(true);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/events/${id}/acknowledge`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setAcknowledged(true);
+
+        // Activity Logging: RSVP
+        fetch(`${API_URL}/activity-logs`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            module: "event",
+            action: "RSVP",
+            entity_id: Number(id),
+            entity_type: "event",
+            title: `RSVP Acknowledged: ${title || "Event Invitation"}`,
+            description: `<p>Event acknowledged by <strong>${user?.name || "User"}</strong></p>`,
+          }),
+        }).catch(() => {});
+
+        notify.success(t("Event acknowledged successfully!", { defaultValue: "Event acknowledged successfully!" }));
+      } else {
+        notify.error(data?.message || t("Failed to acknowledge event.", { defaultValue: "Failed to acknowledge event." }));
+      }
+    } catch (e) {
+      notify.error(t("Network error while acknowledging event.", { defaultValue: "Network error while acknowledging event." }));
+    } finally {
+      setAcknowledging(false);
     }
   };
 
@@ -262,18 +365,18 @@ export default function EventEditor() {
     e.preventDefault();
 
     if (!title.trim()) {
-      notify.error("Title is required.");
+      notify.error(t("Title is required.", { defaultValue: "Title is required." }));
       return;
     }
     if (!startDate) {
-      notify.error("Date is required.");
+      notify.error(t("Date is required.", { defaultValue: "Date is required." }));
       return;
     }
 
     // If Organization policy strictly enforces working hours, block submission if outside hours
     if (enforceOrgHours && participantWarnings.length > 0) {
       notify.error(
-        `Cannot schedule event: Organization strictly enforces working hours policy, and ${participantWarnings.length} participant(s) are outside their scheduled hours.`
+        t("Cannot schedule event: Organization strictly enforces working hours policy, and {{count}} participant(s) are outside their scheduled hours.", { count: participantWarnings.length, defaultValue: `Cannot schedule event: Organization strictly enforces working hours policy, and ${participantWarnings.length} participant(s) are outside their scheduled hours.` })
       );
       return;
     }
@@ -288,7 +391,7 @@ export default function EventEditor() {
 
       const payload = {
         title: title.trim(),
-        description: description.trim() || null,
+        description: description && description.replace(/<[^>]*>/g, "").trim() ? description : null,
         type: isAnnounce ? "announcement" : "event",
         category_id: categoryId ? Number(categoryId) : null,
         start_date: startDateTime,
@@ -323,13 +426,35 @@ export default function EventEditor() {
 
       const data = await res.json();
       if (res.ok && data?.success) {
-        notify.success(isEditMode ? "Event updated successfully!" : (isAnnounce ? "Company Announcement published!" : "Event created successfully!"));
+        const createdEventId = data?.data?.id || data?.event?.id || id;
+        const actionType = isEditMode ? "Updated" : "Created";
+        const isAnnounce = formType === "announcement";
+
+        // Activity Logging: Event / Announcement action
+        fetch(`${API_URL}/activity-logs`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            module: "event",
+            action: actionType,
+            entity_id: createdEventId ? Number(createdEventId) : null,
+            entity_type: "event",
+            title: isEditMode ? `Updated Event: ${title.trim()}` : `Created ${isAnnounce ? "Announcement" : "Event"}: ${title.trim()}`,
+            description: `<p><strong>${title.trim()}</strong> (${isAnnounce ? "Event Announcement" : "Event Invitation"})</p>`,
+          }),
+        }).catch(() => {});
+
+        notify.success(isEditMode ? t("Event updated successfully!", { defaultValue: "Event updated successfully!" }) : (isAnnounce ? t("Company Announcement published!", { defaultValue: "Company Announcement published!" }) : t("Event created successfully!", { defaultValue: "Event created successfully!" })));
         navigate(rolePath("events"));
       } else {
-        notify.error(data?.message || "Failed to save event.");
+        notify.error(data?.message || t("Failed to save event.", { defaultValue: "Failed to save event." }));
       }
     } catch (e) {
-      notify.error("An error occurred while saving event.");
+      notify.error(t("An error occurred while saving event.", { defaultValue: "An error occurred while saving event." }));
     } finally {
       setSubmitting(false);
     }
@@ -348,22 +473,26 @@ export default function EventEditor() {
     return u?.name?.toLowerCase().includes(q) || u?.email?.toLowerCase().includes(q);
   });
 
+  // react-select/creatable format: { value, label }
+  // Note: selectedCategoryOption is React STATE (declared at top), not derived here.
   const categoryOptions = categories.map((c) => ({
     value: String(c.id),
     label: c.name,
   }));
 
+  const PRESET_COLORS = ["#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#06b6d4", "#ec4899", "#ef4444"];
+
   const visibilityOptions = [
-    { value: "organization", label: "Organization (Everyone in Company)" },
-    { value: "department_team", label: "Department Team (My Department)" },
-    { value: "project_team", label: "Project Team (Target Project Members)" },
-    { value: "team", label: "Team (Specific Team Members)" },
-    { value: "custom", label: "Custom (Select Specific Users & Teams)" },
-    { value: "private", label: "Private (Only Me)" },
+    { value: "organization", label: t("Organization (Everyone in Company)", { defaultValue: "Organization (Everyone in Company)" }) },
+    { value: "department_team", label: t("Department Team (My Department)", { defaultValue: "Department Team (My Department)" }) },
+    { value: "project_team", label: t("Project Team (Target Project Members)", { defaultValue: "Project Team (Target Project Members)" }) },
+    { value: "team", label: t("Team (Specific Team Members)", { defaultValue: "Team (Specific Team Members)" }) },
+    { value: "custom", label: t("Custom (Select Specific Users & Teams)", { defaultValue: "Custom (Select Specific Users & Teams)" }) },
+    { value: "private", label: t("Private (Only Me)", { defaultValue: "Private (Only Me)" }) },
   ];
 
   const projectOptions = [
-    { value: "", label: "Select Target Project..." },
+    { value: "", label: t("Select Target Project...", { defaultValue: "Select Target Project..." }) },
     ...projects.map((p) => ({ value: String(p.id), label: p.title })),
   ];
 
@@ -372,22 +501,227 @@ export default function EventEditor() {
       <DashboardLayout>
         <div style={{ textAlign: "center", padding: "100px 0", color: "var(--text-secondary)" }}>
           <Loader2 className="animate-spin" size={36} style={{ margin: "0 auto 12px", color: "#2563eb" }} />
-          Loading event editor...
+          {t("Loading event editor...", { defaultValue: "Loading event editor..." })}
         </div>
       </DashboardLayout>
     );
   }
 
   const breadcrumbs = [
-    { label: "Events & Announcements", path: rolePath("events") },
-    { label: isEditMode ? "Edit Event" : "Create Event / Announcement" },
+    { label: t("Events & Announcements", { defaultValue: "Events & Announcements" }), path: rolePath("events") },
+    { label: isViewMode ? t("Event Details", { defaultValue: "Event Details" }) : isEditMode ? t("Edit Event", { defaultValue: "Edit Event" }) : t("Create Event / Announcement", { defaultValue: "Create Event / Announcement" }) },
   ];
+
+  // ── VIEW MODE: Read-only page with tabs + Acknowledge ─────────────
+  if (isViewMode && loadedEvent) {
+    const ev = loadedEvent;
+    const isAnnounce = ev.is_announcement || ev.type === "announcement" || ev.type === "Company Announcement" || ev.is_global;
+    const isAssigned = Array.isArray(ev.assigned_users) && ev.assigned_users.some((u) => u?.id === user?.id);
+    const canEdit = ev.user_id === user?.id || ev.organizer_id === user?.id || ["admin", "manager"].includes(user?.role);
+    const startDateObj = ev.start_date ? new Date(ev.start_date) : null;
+
+    return (
+      <DashboardLayout>
+        <Breadcrumb items={breadcrumbs} />
+        <div style={{ maxWidth: "840px", margin: "0 auto", padding: "0 8px" }}>
+          {/* Back + Edit bar */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+            <button
+              type="button"
+              onClick={() => navigate(rolePath("events"))}
+              style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)", fontSize: "13px", fontWeight: 600 }}
+            >
+              <ArrowLeft size={16} /> {t("Back to Events", { defaultValue: "Back to Events" })}
+            </button>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              {/* Acknowledge button for assigned users */}
+              {isAssigned && (
+                <button
+                  type="button"
+                  onClick={handleAcknowledge}
+                  disabled={acknowledging || acknowledged}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "8px 16px",
+                    borderRadius: "8px",
+                    border: "none",
+                    background: acknowledged ? "#10b981" : "#2563eb",
+                    color: "#fff",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    cursor: acknowledging || acknowledged ? "not-allowed" : "pointer",
+                    opacity: acknowledging ? 0.75 : 1,
+                  }}
+                >
+                  <CheckCircle2 size={15} />
+                  {acknowledged
+                    ? t("Acknowledged ✓", { defaultValue: "Acknowledged ✓" })
+                    : acknowledging
+                    ? t("Acknowledging…", { defaultValue: "Acknowledging…" })
+                    : t("Acknowledge", { defaultValue: "Acknowledge" })}
+                </button>
+              )}
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => navigate(rolePath(`events/edit/${id}`))}
+                  style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 14px", borderRadius: "8px", border: "1px solid #bfdbfe", background: "#eff6ff", color: "#1d4ed8", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
+                >
+                  {t("Edit", { defaultValue: "Edit" })}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* ── TAB BAR ─────────────────────────────────── */}
+          <div style={{ display: "flex", gap: "4px", marginBottom: "0", borderBottom: "2px solid var(--border-color)" }}>
+            {[
+              { id: "details",  label: t("Details", { defaultValue: "Details" }),   icon: <Calendar size={15} /> },
+              { id: "activity", label: t("Activity", { defaultValue: "Activity" }), icon: <Activity size={15} /> },
+            ].map(({ id: tabId, label, icon }) => (
+              <button
+                key={tabId}
+                type="button"
+                onClick={() => setViewTab(tabId)}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "8px 16px",
+                  border: "none",
+                  borderBottom: viewTab === tabId ? "2px solid #2563eb" : "2px solid transparent",
+                  marginBottom: "-2px",
+                  background: "transparent",
+                  color: viewTab === tabId ? "#2563eb" : "var(--text-secondary)",
+                  fontWeight: viewTab === tabId ? 700 : 500,
+                  fontSize: "13px",
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                {icon} {label}
+              </button>
+            ))}
+          </div>
+
+          {/* ── DETAILS TAB ──────────────────────────────── */}
+          {viewTab === "details" && (
+            <div style={{ background: "var(--bg-card)", borderRadius: "0 0 14px 14px", border: "1px solid var(--border-color)", borderTop: "none", padding: "28px", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+              {/* Type + Category badge */}
+              <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "16px", flexWrap: "wrap" }}>
+                {isAnnounce ? (
+                  <span style={{ fontSize: "12px", fontWeight: 700, color: "#d97706", background: "#fef3c7", padding: "3px 10px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                    <Megaphone size={13} /> {t("Company Announcement", { defaultValue: "Company Announcement" })}
+                  </span>
+                ) : (
+                  <span style={{ fontSize: "12px", fontWeight: 700, color: ev.category?.color || "#2563eb", background: "#eff6ff", padding: "3px 10px", borderRadius: "4px" }}>
+                    {ev.category?.name || t(ev.type || "Event", { defaultValue: ev.type || "Event" })}
+                  </span>
+                )}
+                {ev.visibility_level && (
+                  <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: "12px", background: "var(--bg-hover)", color: "var(--text-secondary)", border: "1px solid var(--border-color)" }}>
+                    {ev.visibility_level}
+                  </span>
+                )}
+              </div>
+
+              {/* Title */}
+              <h2 style={{ margin: "0 0 20px", fontSize: "24px", fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.3 }}>
+                {ev.title}
+              </h2>
+
+              {/* Date / Time / Location info card */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px", padding: "14px 18px", background: "var(--bg-hover)", borderRadius: "10px", border: "1px solid var(--border-color)", marginBottom: "20px", fontSize: "13px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--text-primary)" }}>
+                  <Clock size={16} color="#2563eb" />
+                  <span>
+                    {startDateObj
+                      ? startDateObj.toLocaleString([], { dateStyle: "full", timeStyle: ev.all_day ? undefined : "short" })
+                      : t("Date not set", { defaultValue: "Date not set" })}
+                    {ev.end_date && ev.end_date !== ev.start_date && (
+                      <span> – {new Date(ev.end_date).toLocaleString([], { dateStyle: "medium", timeStyle: ev.all_day ? undefined : "short" })}</span>
+                    )}
+                    {ev.all_day && <span style={{ marginLeft: "6px", fontWeight: 600, color: "#2563eb" }}>{t("(All Day)", { defaultValue: "(All Day)" })}</span>}
+                  </span>
+                </div>
+                {ev.location && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--text-primary)" }}>
+                    <MapPin size={16} color="#ef4444" /> <span>{ev.location}</span>
+                  </div>
+                )}
+                {ev.meeting_link && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <Video size={16} color="#10b981" />
+                    <a
+                      href={ev.meeting_link.startsWith("http") ? ev.meeting_link : "https://" + ev.meeting_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: "#2563eb", fontWeight: 600, textDecoration: "underline", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                    >
+                      {t("Join Video Meeting", { defaultValue: "Join Video Meeting" })} <ExternalLink size={12} />
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              {/* Description (safe HTML) */}
+              {ev.description && (
+                <div
+                  style={{ fontSize: "14px", lineHeight: "1.7", color: "var(--text-primary)", marginBottom: "20px" }}
+                  dangerouslySetInnerHTML={{
+                    __html: DOMPurify.sanitize(ev.description, {
+                      ALLOWED_TAGS: ["p","br","strong","em","u","s","ul","ol","li","h1","h2","h3","blockquote","a","span","code"],
+                      ALLOWED_ATTR: ["href","target","rel","class","style"],
+                    }),
+                  }}
+                />
+              )}
+
+              {/* Attendees */}
+              {Array.isArray(ev.assigned_users) && ev.assigned_users.length > 0 && (
+                <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "14px", marginBottom: "16px" }}>
+                  <h4 style={{ margin: "0 0 10px", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)" }}>
+                    {t("Invited Attendees ({{count}})", { count: ev.assigned_users.length, defaultValue: `Invited Attendees (${ev.assigned_users.length})` })}
+                  </h4>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                    {ev.assigned_users.map((u) => (
+                      <span key={u?.id} style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "12px", background: "var(--bg-hover)", padding: "5px 12px", borderRadius: "20px", border: "1px solid var(--border-color)" }}>
+                        <span style={{ width: "20px", height: "20px", borderRadius: "50%", background: "#2563eb", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "10px", fontWeight: 700 }}>
+                          {u?.name?.charAt(0).toUpperCase() || "U"}
+                        </span>
+                        {u?.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Footer: organizer */}
+              <div style={{ fontSize: "12px", color: "var(--text-muted)", paddingTop: "12px", borderTop: "1px solid var(--border-color)" }}>
+                {t("Organized by", { defaultValue: "Organized by" })}{" "}
+                <strong>{ev.organizer_name || ev.creator_name || t("System", { defaultValue: "System" })}</strong>
+              </div>
+            </div>
+          )}
+
+          {/* ── ACTIVITY TAB ─────────────────────────────── */}
+          {viewTab === "activity" && (
+            <div style={{ background: "var(--bg-card)", borderRadius: "0 0 14px 14px", border: "1px solid var(--border-color)", borderTop: "none", padding: "24px", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+              <UnifiedActivityFeed module="event" entityId={id} />
+            </div>
+          )}
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
       <Breadcrumb items={breadcrumbs} />
 
-      <div style={{ maxWidth: "800px", margin: "0 auto", padding: "0 8px" }}>
+      <div style={{ maxWidth: "800px", margin: "0 auto", padding: "0 8px", paddingBottom: "80px" }}>
         {/* HEADER BAR */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
           <button
@@ -395,74 +729,50 @@ export default function EventEditor() {
             onClick={() => navigate(rolePath("events"))}
             style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)", fontSize: "13px", fontWeight: 600 }}
           >
-            <ArrowLeft size={16} /> Back to Events
+            <ArrowLeft size={16} /> {t("Back to Events", { defaultValue: "Back to Events" })}
           </button>
           <h3 style={{ margin: 0, fontSize: "18px", fontWeight: 700 }}>
-            {isEditMode ? "Edit Event / Announcement" : "New Event / Announcement"}
+            {isEditMode ? t("Edit Event / Announcement", { defaultValue: "Edit Event / Announcement" }) : t("New Event / Announcement", { defaultValue: "New Event / Announcement" })}
           </h3>
         </div>
 
         <div style={{ background: "var(--bg-card)", borderRadius: "14px", border: "1px solid var(--border-color)", padding: "28px", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
-          {/* SEGMENTED FORM TYPE SELECTOR */}
-          <div style={{ background: "var(--bg-hover)", padding: "4px", borderRadius: "10px", display: "flex", gap: "6px", marginBottom: "24px", border: "1px solid var(--border-color)" }}>
-            <button
-              type="button"
-              onClick={() => setFormType("event")}
-              style={{
-                flex: 1,
-                padding: "9px 16px",
-                borderRadius: "8px",
-                fontWeight: 600,
-                fontSize: "13px",
-                border: "none",
-                background: formType === "event" ? "#2563eb" : "transparent",
-                color: formType === "event" ? "#ffffff" : "var(--text-secondary)",
-                boxShadow: formType === "event" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
-                cursor: "pointer",
-                transition: "all 0.15s ease",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "6px",
-              }}
-            >
-              <Calendar size={16} /> 📅 Scheduled Event / Meeting
-            </button>
-            <button
-              type="button"
-              onClick={() => setFormType("announcement")}
-              style={{
-                flex: 1,
-                padding: "9px 16px",
-                borderRadius: "8px",
-                fontWeight: 600,
-                fontSize: "13px",
-                border: "none",
-                background: formType === "announcement" ? "#f59e0b" : "transparent",
-                color: formType === "announcement" ? "#ffffff" : "var(--text-secondary)",
-                boxShadow: formType === "announcement" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
-                cursor: "pointer",
-                transition: "all 0.15s ease",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "6px",
-              }}
-            >
-              <Megaphone size={16} /> 📢 Company Announcement
-            </button>
-          </div>
-
           <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+            {/* MASTER TYPE DROPDOWN (Top of single unified form) */}
+            <div style={{ marginBottom: "4px" }}>
+              <label style={{ fontSize: "13px", fontWeight: 700, display: "block", marginBottom: "6px" }}>
+                {t("Type", { defaultValue: "Type" })} <span style={{ color: "#ef4444" }}>*</span>
+              </label>
+              <select
+                value={formType}
+                onChange={(e) => setFormType(e.target.value)}
+                style={{
+                  width: "100%",
+                  height: "42px",
+                  padding: "8px 12px",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border-color)",
+                  background: "var(--bg-card)",
+                  fontSize: "14px",
+                  fontWeight: 600,
+                  color: "var(--text-primary)",
+                  cursor: "pointer",
+                  boxSizing: "border-box",
+                }}
+              >
+                <option value="event">{t("📅 Event Invitation", { defaultValue: "📅 Event Invitation" })}</option>
+                <option value="announcement">{t("📢 Event Announcement", { defaultValue: "📢 Event Announcement" })}</option>
+              </select>
+            </div>
             {/* TITLE */}
             <div>
               <label style={{ fontSize: "13px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
-                {formType === "announcement" ? "Announcement Headline *" : "Event Title *"}
+                {formType === "announcement" ? t("Announcement Headline *", { defaultValue: "Announcement Headline *" }) : t("Event Title *", { defaultValue: "Event Title *" })}
               </label>
               <input
                 type="text"
                 required
-                placeholder={formType === "announcement" ? "e.g. Office Closure for National Holiday" : "e.g. Sprint Review & Architecture Planning"}
+                placeholder={formType === "announcement" ? t("e.g. Office Closure for National Holiday", { defaultValue: "e.g. Office Closure for National Holiday" }) : t("e.g. Sprint Review & Architecture Planning", { defaultValue: "e.g. Sprint Review & Architecture Planning" })}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 style={{ width: "100%", height: "42px", padding: "8px 12px", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "14px", color: "var(--text-primary)", boxSizing: "border-box" }}
@@ -471,102 +781,116 @@ export default function EventEditor() {
 
             {/* CATEGORY & THEME COLOR */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+              {/* ── Task 7: Creatable Categories ── */}
               <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                  <label style={{ fontSize: "13px", fontWeight: 600, margin: 0 }}>
-                    Category <span style={{ color: "#ef4444" }}>*</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setShowNewCatInput((prev) => !prev)}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      color: "#2563eb",
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      padding: 0,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "2px",
-                    }}
-                  >
-                    <Plus size={12} /> {showNewCatInput ? "Cancel" : "Add New"}
-                  </button>
-                </div>
-
-                {showNewCatInput && (
-                  <div style={{ display: "flex", gap: "6px", marginBottom: "8px" }}>
-                    <input
-                      type="text"
-                      placeholder="New category name..."
-                      value={newCatName}
-                      onChange={(e) => setNewCatName(e.target.value)}
-                      style={{
-                        flex: 1,
-                        padding: "6px 8px",
-                        borderRadius: "6px",
-                        border: "1px solid var(--border-color)",
-                        fontSize: "12px",
-                        background: "var(--bg-card)",
-                        color: "var(--text-primary)",
-                        outline: "none",
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleCreateCategory(e);
-                      }}
-                      autoFocus
-                    />
-                    <button
-                      type="button"
-                      onClick={handleCreateCategory}
-                      disabled={savingNewCat || !newCatName.trim()}
-                      style={{
-                        padding: "6px 10px",
-                        borderRadius: "6px",
-                        background: "#2563eb",
-                        color: "#fff",
-                        border: "none",
-                        fontSize: "12px",
-                        fontWeight: 600,
-                        cursor: savingNewCat || !newCatName.trim() ? "not-allowed" : "pointer",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {savingNewCat ? "..." : "Save"}
-                    </button>
-                  </div>
-                )}
-
-                <CustomSelect
-                  name="category_id"
-                  value={categoryId}
-                  onChange={(val) => setCategoryId(val)}
+                <label style={{ fontSize: "13px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
+                  {t("Category", { defaultValue: "Category" })} <span style={{ color: "#ef4444" }}>*</span>
+                </label>
+                <CreatableSelect
+                  isClearable
+                  isDisabled={savingNewCat}
+                  isLoading={savingNewCat}
+                  onChange={(option) => setSelectedCategoryOption(option || null)}
+                  onCreateOption={handleCreateCategory}
                   options={categoryOptions}
+                  value={selectedCategoryOption}
+                  placeholder={t("Select or type to create…", { defaultValue: "Select or type to create…" })}
+                  formatCreateLabel={(inputValue) => `➕ ${t('Create "{{name}}"', { name: inputValue, defaultValue: `Create "${inputValue}"` })}`}
+                  styles={{
+                    control: (base, state) => ({
+                      ...base,
+                      minHeight: "42px",
+                      borderRadius: "8px",
+                      border: `1px solid ${state.isFocused ? "#2563eb" : "var(--border-color, #cbd5e1)"}`,
+                      boxShadow: state.isFocused ? "0 0 0 2px rgba(37,99,235,0.15)" : "none",
+                      background: "var(--bg-card, #ffffff)",
+                      color: "var(--text-primary, #0f172a)",
+                      fontSize: "13px",
+                      cursor: "text",
+                    }),
+                    menu: (base) => ({
+                      ...base,
+                      borderRadius: "8px",
+                      border: "1px solid var(--border-color, #e2e8f0)",
+                      boxShadow: "0 4px 16px rgba(0,0,0,0.1)",
+                      zIndex: 9999,
+                    }),
+                    option: (base, state) => ({
+                      ...base,
+                      fontSize: "13px",
+                      background: state.isSelected ? "#2563eb" : state.isFocused ? "#eff6ff" : "transparent",
+                      color: state.isSelected ? "#fff" : "var(--text-primary, #0f172a)",
+                      cursor: "pointer",
+                    }),
+                    singleValue: (base) => ({ ...base, color: "var(--text-primary, #0f172a)", fontSize: "13px" }),
+                    placeholder: (base) => ({ ...base, color: "var(--text-muted, #94a3b8)", fontSize: "13px" }),
+                    input: (base) => ({ ...base, color: "var(--text-primary, #0f172a)" }),
+                  }}
                 />
               </div>
 
+              {/* ── Task 1: Custom Color Picker ── */}
               <div>
                 <label style={{ fontSize: "13px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
-                  Theme Color
+                  {t("Theme Color", { defaultValue: "Theme Color" })}
                 </label>
-                <div style={{ display: "flex", gap: "8px", alignItems: "center", height: "40px" }}>
-                  {["#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#06b6d4", "#ec4899", "#ef4444"].map((c) => (
+                <div style={{ display: "flex", gap: "7px", alignItems: "center", flexWrap: "wrap" }}>
+                  {PRESET_COLORS.map((c) => (
                     <button
                       key={c}
                       type="button"
+                      title={c}
                       onClick={() => setColor(c)}
                       style={{
                         width: "28px",
                         height: "28px",
                         borderRadius: "50%",
                         background: c,
-                        border: color === c ? "2px solid #000000" : "2px solid transparent",
+                        border: color === c ? "3px solid #0f172a" : "2px solid transparent",
+                        outline: color === c ? "2px solid #fff" : "none",
+                        outlineOffset: "-4px",
                         cursor: "pointer",
+                        flexShrink: 0,
+                        transition: "border 0.15s, outline 0.15s",
                       }}
                     />
                   ))}
+
+                  {/* Hidden native color input */}
+                  <input
+                    ref={colorInputRef}
+                    type="color"
+                    value={color}
+                    onChange={(e) => setColor(e.target.value)}
+                    style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }}
+                    tabIndex={-1}
+                    aria-hidden="true"
+                  />
+
+                  {/* Custom color trigger button */}
+                  <button
+                    type="button"
+                    title={t("Pick custom color", { defaultValue: "Pick custom color" })}
+                    onClick={() => colorInputRef.current?.click()}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      padding: "4px 10px",
+                      borderRadius: "20px",
+                      border: !PRESET_COLORS.includes(color) ? "2px solid #0f172a" : "1px solid var(--border-color, #cbd5e1)",
+                      background: !PRESET_COLORS.includes(color) ? color : "var(--bg-hover, #f8fafc)",
+                      color: !PRESET_COLORS.includes(color) ? "#fff" : "var(--text-secondary, #64748b)",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      flexShrink: 0,
+                      transition: "all 0.15s",
+                    }}
+                  >
+                    <Pipette size={12} />
+                    {!PRESET_COLORS.includes(color) ? color.toUpperCase() : t("Custom", { defaultValue: "Custom" })}
+                  </button>
                 </div>
               </div>
             </div>
@@ -575,7 +899,7 @@ export default function EventEditor() {
             {formType === "announcement" ? (
               <div>
                 <label style={{ fontSize: "13px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
-                  Announcement Date *
+                  {t("Announcement Date *", { defaultValue: "Announcement Date *" })}
                 </label>
                 <input
                   type="date"
@@ -588,7 +912,7 @@ export default function EventEditor() {
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: "12px", background: "var(--bg-hover)", padding: "16px", borderRadius: "10px", border: "1px solid var(--border-color)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: "13px", fontWeight: 700 }}>Event Timing</span>
+                  <span style={{ fontSize: "13px", fontWeight: 700 }}>{t("Event Timing", { defaultValue: "Event Timing" })}</span>
                   <label style={{ fontSize: "12px", display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
                     <input
                       type="checkbox"
@@ -596,13 +920,13 @@ export default function EventEditor() {
                       onChange={(e) => setAllDay(e.target.checked)}
                       style={{ cursor: "pointer" }}
                     />
-                    All Day Event
+                    {t("All Day Event", { defaultValue: "All Day Event" })}
                   </label>
                 </div>
 
                 <div style={{ display: "grid", gridTemplateColumns: allDay ? "1fr 1fr" : "1fr 1fr 1fr 1fr", gap: "10px" }}>
                   <div style={{ gridColumn: allDay ? "span 1" : "span 1" }}>
-                    <label style={{ fontSize: "11px", fontWeight: 600, display: "block", marginBottom: "4px" }}>Start Date *</label>
+                    <label style={{ fontSize: "11px", fontWeight: 600, display: "block", marginBottom: "4px" }}>{t("Start Date *", { defaultValue: "Start Date *" })}</label>
                     <input
                       type="date"
                       required
@@ -614,7 +938,7 @@ export default function EventEditor() {
 
                   {!allDay && (
                     <div>
-                      <label style={{ fontSize: "11px", fontWeight: 600, display: "block", marginBottom: "4px" }}>Start Time</label>
+                      <label style={{ fontSize: "11px", fontWeight: 600, display: "block", marginBottom: "4px" }}>{t("Start Time", { defaultValue: "Start Time" })}</label>
                       <input
                         type="time"
                         value={startTime}
@@ -625,7 +949,7 @@ export default function EventEditor() {
                   )}
 
                   <div style={{ gridColumn: allDay ? "span 1" : "span 1" }}>
-                    <label style={{ fontSize: "11px", fontWeight: 600, display: "block", marginBottom: "4px" }}>End Date</label>
+                    <label style={{ fontSize: "11px", fontWeight: 600, display: "block", marginBottom: "4px" }}>{t("End Date", { defaultValue: "End Date" })}</label>
                     <input
                       type="date"
                       value={endDate}
@@ -636,7 +960,7 @@ export default function EventEditor() {
 
                   {!allDay && (
                     <div>
-                      <label style={{ fontSize: "11px", fontWeight: 600, display: "block", marginBottom: "4px" }}>End Time</label>
+                      <label style={{ fontSize: "11px", fontWeight: 600, display: "block", marginBottom: "4px" }}>{t("End Time", { defaultValue: "End Time" })}</label>
                       <input
                         type="time"
                         value={endTime}
@@ -650,7 +974,7 @@ export default function EventEditor() {
                 {/* Event Timezone Selector (SRS Sec 11) */}
                 <div style={{ marginTop: "4px", paddingTop: "10px", borderTop: "1px solid var(--border-light, #e2e8f0)" }}>
                   <label style={{ fontSize: "11px", fontWeight: 600, display: "flex", alignItems: "center", gap: "4px", marginBottom: "4px", color: "var(--text-heading)" }}>
-                    <Globe size={13} style={{ color: "var(--color-primary, #4f46e5)" }} /> Event Timezone (IANA)
+                    <Globe size={13} style={{ color: "var(--color-primary, #4f46e5)" }} /> {t("Event Timezone (IANA)", { defaultValue: "Event Timezone (IANA)" })}
                   </label>
                   <select
                     value={eventTimezone}
@@ -676,11 +1000,11 @@ export default function EventEditor() {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
                 <div>
                   <label style={{ fontSize: "13px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
-                    Location (Physical)
+                    {t("Location (Physical)", { defaultValue: "Location (Physical)" })}
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. Conference Room A or Main Hall"
+                    placeholder={t("e.g. Conference Room A or Main Hall", { defaultValue: "e.g. Conference Room A or Main Hall" })}
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
                     style={{ width: "100%", height: "40px", padding: "8px 12px", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "13px", boxSizing: "border-box" }}
@@ -689,11 +1013,11 @@ export default function EventEditor() {
 
                 <div>
                   <label style={{ fontSize: "13px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
-                    Meeting Link (Virtual)
+                    {t("Meeting Link (Virtual)", { defaultValue: "Meeting Link (Virtual)" })}
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. https://meet.google.com/xyz-abcd-efg"
+                    placeholder={t("e.g. https://meet.google.com/xyz-abcd-efg", { defaultValue: "e.g. https://meet.google.com/xyz-abcd-efg" })}
                     value={meetingLink}
                     onChange={(e) => setMeetingLink(e.target.value)}
                     style={{ width: "100%", height: "40px", padding: "8px 12px", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "13px", boxSizing: "border-box" }}
@@ -702,25 +1026,24 @@ export default function EventEditor() {
               </div>
             )}
 
-            {/* DESCRIPTION */}
+            {/* DESCRIPTION — Task 2: Rich Text Editor */}
             <div>
               <label style={{ fontSize: "13px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
-                {formType === "announcement" ? "Announcement Details & Message" : "Event Description"}
+                {formType === "announcement" ? t("Announcement Details & Message", { defaultValue: "Announcement Details & Message" }) : t("Event Description", { defaultValue: "Event Description" })}
               </label>
-              <textarea
-                rows={4}
-                placeholder="Provide detailed description, agenda, or important notes..."
+              <RichTextEditor
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                style={{ width: "100%", padding: "10px 12px", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "13px", color: "var(--text-primary)", lineHeight: 1.5, boxSizing: "border-box" }}
+                onChange={(html) => setDescription(html)}
+                placeholder={t("Provide detailed description, agenda, or important notes...", { defaultValue: "Provide detailed description, agenda, or important notes..." })}
+                style={{ borderRadius: "8px", fontSize: "13px" }}
               />
             </div>
 
-            {/* DYNAMIC AUDIENCE & VISIBILITY */}
-            <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "18px", display: "flex", flexDirection: "column", gap: "14px" }}>
+            {/* AUDIENCE / VISIBILITY LEVEL */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px", borderTop: "1px solid var(--border-color)", paddingTop: "18px" }}>
               <div>
                 <label style={{ fontSize: "13px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
-                  Audience / Visibility Level <span style={{ color: "#ef4444" }}>*</span>
+                  {t("Audience / Visibility Level", { defaultValue: "Audience / Visibility Level" })} <span style={{ color: "#ef4444" }}>*</span>
                 </label>
                 <CustomSelect
                   name="visibility_level"
@@ -734,7 +1057,7 @@ export default function EventEditor() {
               {visibilityLevel === "project_team" && (
                 <div>
                   <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>
-                    Target Project *
+                    {t("Target Project *", { defaultValue: "Target Project *" })}
                   </label>
                   <CustomSelect
                     name="project_id"
@@ -749,86 +1072,161 @@ export default function EventEditor() {
               {visibilityLevel === "team" && (
                 <div>
                   <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>
-                    Target Team *
+                    {t("Target Team *", { defaultValue: "Target Team *" })}
                   </label>
                   <select
                     value={selectedTeamIds[0] || ""}
                     onChange={(e) => setSelectedTeamIds(e.target.value ? [Number(e.target.value)] : [])}
                     style={{ width: "100%", height: "40px", padding: "8px 12px", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "13px" }}
                   >
-                    <option value="">Select Team...</option>
-                    {teams.map((t) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
+                    <option value="">{t("Select Team...", { defaultValue: "Select Team..." })}</option>
+                    {teams.map((tItem) => (
+                      <option key={tItem.id} value={tItem.id}>{tItem.name}</option>
                     ))}
                   </select>
                 </div>
               )}
 
-              {/* SPECIFIC ATTENDEES */}
-              {formType === "event" && (
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                    <label style={{ fontSize: "13px", fontWeight: 600 }}>
-                      Specific Attendees / Invitees
+              {/* DYNAMIC CUSTOM VISIBILITY: TEAMS & USERS */}
+              {visibilityLevel === "custom" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px", padding: "14px", background: "var(--bg-hover)", borderRadius: "10px", border: "1px solid var(--border-color)" }}>
+                  {/* Select Specific Teams */}
+                  <div>
+                    <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>
+                      {t("Select Specific Teams", { defaultValue: "Select Specific Teams" })}
                     </label>
-                    <span style={{ fontSize: "12px", color: "#2563eb", fontWeight: 600 }}>
-                      {selectedUserIds.length} selected
-                    </span>
+                    <select
+                      multiple
+                      value={selectedTeamIds.map(String)}
+                      onChange={(e) => {
+                        const vals = Array.from(e.target.selectedOptions, (op) => Number(op.value));
+                        setSelectedTeamIds(vals);
+                      }}
+                      style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "12px", height: "80px", color: "var(--text-primary)" }}
+                    >
+                      {teams.map((tItem) => (
+                        <option key={tItem.id} value={tItem.id}>{tItem.name}</option>
+                      ))}
+                    </select>
                   </div>
 
-                  <input
-                    type="text"
-                    placeholder="Search users by name or email..."
-                    value={attendeeSearch}
-                    onChange={(e) => setAttendeeSearch(e.target.value)}
-                    style={{ width: "100%", height: "36px", padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "12px", marginBottom: "6px", boxSizing: "border-box" }}
-                  />
+                  {/* Select Specific Users */}
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                      <label style={{ fontSize: "13px", fontWeight: 600 }}>
+                        {t("Specific Users / Attendees", { defaultValue: "Specific Users / Attendees" })}
+                      </label>
+                      <span style={{ fontSize: "12px", color: "#2563eb", fontWeight: 600 }}>
+                        {t("{{count}} selected", { count: selectedUserIds.length, defaultValue: `${selectedUserIds.length} selected` })}
+                      </span>
+                    </div>
 
-                  <div style={{ maxHeight: "150px", overflowY: "auto", border: "1px solid var(--border-color)", borderRadius: "8px", padding: "6px", background: "var(--bg-card)" }}>
-                    {filteredUsers.length === 0 ? (
-                      <div style={{ fontSize: "12px", color: "var(--text-muted)", textAlign: "center", padding: "16px 0" }}>
-                        No users found
-                      </div>
-                    ) : (
-                      filteredUsers.map((u) => {
-                        if (!u?.id) return null;
-                        const isSelected = selectedUserIds.includes(u.id);
-                        return (
-                          <div
-                            key={u.id}
-                            onClick={() => toggleUserSelection(u.id)}
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              padding: "6px 10px",
-                              borderRadius: "6px",
-                              cursor: "pointer",
-                              background: isSelected ? "#eff6ff" : "transparent",
-                              fontSize: "13px",
-                              margin: "2px 0",
-                            }}
-                          >
-                            <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                              <span style={{ fontWeight: isSelected ? 600 : 400, color: isSelected ? "#1d4ed8" : "inherit" }}>
-                                {u.name || "User"} {u.email ? `(${u.email})` : ""}
-                              </span>
-                              <span style={{ fontSize: "11px", color: "var(--text-secondary, #64748b)" }}>
-                                Timezone: {u.timezone || "UTC"} {getTimezoneOffsetDisplay(u.timezone || "UTC")}
-                              </span>
+                    <input
+                      type="text"
+                      placeholder={t("Search by name, email, or designation...", { defaultValue: "Search by name, email, or designation..." })}
+                      value={attendeeSearch}
+                      onChange={(e) => setAttendeeSearch(e.target.value)}
+                      style={{ width: "100%", height: "36px", padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "12px", marginBottom: "6px", boxSizing: "border-box" }}
+                    />
+
+                    <div style={{ maxHeight: "210px", overflowY: "auto", border: "1px solid var(--border-color)", borderRadius: "8px", padding: "6px", background: "var(--bg-card)" }}>
+                      {filteredUsers.length === 0 ? (
+                        <div style={{ fontSize: "12px", color: "var(--text-muted)", textAlign: "center", padding: "20px 0" }}>
+                          {t("No users found", { defaultValue: "No users found" })}
+                        </div>
+                      ) : (
+                        filteredUsers.map((u) => {
+                          if (!u?.id) return null;
+                          const isSelected = selectedUserIds.includes(u.id);
+                          const designation = u.designation || u.job_title || u.position || u.role || null;
+                          return (
+                            <div
+                              key={u.id}
+                              onClick={() => toggleUserSelection(u.id)}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                padding: "8px 10px",
+                                borderRadius: "8px",
+                                cursor: "pointer",
+                                background: isSelected ? "#eff6ff" : "transparent",
+                                border: isSelected ? "1px solid #bfdbfe" : "1px solid transparent",
+                                margin: "3px 0",
+                                transition: "background 0.12s, border-color 0.12s",
+                              }}
+                            >
+                              <div style={{
+                                width: 36,
+                                height: 36,
+                                borderRadius: "50%",
+                                background: isSelected ? "#2563eb" : "var(--bg-hover, #f1f5f9)",
+                                color: isSelected ? "#fff" : "var(--text-secondary, #64748b)",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontWeight: 700,
+                                fontSize: "13px",
+                                flexShrink: 0,
+                                marginRight: "10px",
+                              }}>
+                                {(u.name || "?")[0].toUpperCase()}
+                              </div>
+
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontWeight: 600, fontSize: "13px", color: isSelected ? "#1d4ed8" : "var(--text-primary, #0f172a)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                  {u.name || t("User", { defaultValue: "User" })}
+                                </div>
+                                {u.email && (
+                                  <div style={{ fontSize: "11px", color: "var(--text-secondary, #64748b)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                    ✉ {u.email}
+                                  </div>
+                                )}
+                                {designation && (
+                                  <div style={{ marginTop: "2px" }}>
+                                    <span style={{
+                                      display: "inline-block",
+                                      fontSize: "10px",
+                                      fontWeight: 600,
+                                      padding: "1px 7px",
+                                      borderRadius: "10px",
+                                      background: isSelected ? "rgba(37,99,235,0.12)" : "var(--bg-hover, #f1f5f9)",
+                                      color: isSelected ? "#1d4ed8" : "var(--text-secondary, #64748b)",
+                                      textTransform: "capitalize",
+                                    }}>
+                                      {designation}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+
+                              <div style={{
+                                width: 22,
+                                height: 22,
+                                borderRadius: "6px",
+                                border: isSelected ? "2px solid #2563eb" : "2px solid #cbd5e1",
+                                background: isSelected ? "#2563eb" : "transparent",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                color: "#fff",
+                                flexShrink: 0,
+                                marginLeft: "8px",
+                              }}>
+                                {isSelected && <Check size={13} strokeWidth={3} />}
+                              </div>
                             </div>
-                            {isSelected && <Check size={14} color="#2563eb" />}
-                          </div>
-                        );
-                      })
-                    )}
+                          );
+                        })
+                      )}
+                    </div>
                   </div>
 
                   {/* Selected Attendees Working Hours & Localized Event Time (SRS Sec 13 & 15) */}
                   {selectedUserIds.length > 0 && startDateTimeUtc && (
                     <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "6px" }}>
                       <label style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "var(--text-secondary)" }}>
-                        Participant Local Event Times &amp; Availability
+                        {t("Participant Local Event Times & Availability", { defaultValue: "Participant Local Event Times & Availability" })}
                       </label>
                       {usersList
                         .filter((u) => selectedUserIds.includes(u.id))
@@ -854,10 +1252,10 @@ export default function EventEditor() {
                               <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{u.name}</span>
                               <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
                                 <span style={{ color: "var(--text-secondary)" }}>
-                                  Local: <strong>{comp.localTimeFormatted}</strong> ({uTz})
+                                  {t("Local: {{time}} ({{tz}})", { time: comp.localTimeFormatted, tz: uTz, defaultValue: `Local: ${comp.localTimeFormatted} (${uTz})` })}
                                 </span>
                                 <span style={{ color: comp.isCompliant ? "var(--color-success, #10b981)" : "var(--color-danger, #ef4444)", fontWeight: 600 }}>
-                                  {comp.isCompliant ? `✓ Hours: ${comp.scheduleText}` : `⚠ Outside Hours (${comp.scheduleText})`}
+                                  {comp.isCompliant ? `✓ ${t("Hours: {{schedule}}", { schedule: comp.scheduleText, defaultValue: `Hours: ${comp.scheduleText}` })}` : `⚠ ${t("Outside Hours ({{schedule}})", { schedule: comp.scheduleText, defaultValue: `Outside Hours (${comp.scheduleText})` })}`}
                                 </span>
                               </div>
                             </div>
@@ -868,6 +1266,7 @@ export default function EventEditor() {
                 </div>
               )}
             </div>
+
 
             {/* WORKING HOURS WARNING BANNER (SRS Sec 15 & 16) */}
             {participantWarnings.length > 0 && (
@@ -884,22 +1283,28 @@ export default function EventEditor() {
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 700, fontSize: "13px", marginBottom: "6px" }}>
                   <AlertTriangle size={16} />
                   {enforceOrgHours
-                    ? "Strict Organization Policy: Cannot Schedule Outside Working Hours"
-                    : "Working Hours Warning (Non-Blocking)"}
+                    ? t("Strict Organization Policy: Cannot Schedule Outside Working Hours", { defaultValue: "Strict Organization Policy: Cannot Schedule Outside Working Hours" })
+                    : t("Working Hours Warning (Non-Blocking)", { defaultValue: "Working Hours Warning (Non-Blocking)" })}
                 </div>
                 <p style={{ fontSize: "12px", margin: "0 0 6px 0", lineHeight: 1.4 }}>
-                  The proposed event time falls outside regular working availability for {participantWarnings.length} participant(s):
+                  {t("The proposed event time falls outside regular working availability for {{count}} participant(s):", { count: participantWarnings.length, defaultValue: `The proposed event time falls outside regular working availability for ${participantWarnings.length} participant(s):` })}
                 </p>
                 <ul style={{ margin: 0, paddingLeft: "18px", fontSize: "12px", display: "flex", flexDirection: "column", gap: "3px" }}>
                   {participantWarnings.map((w, idx) => (
                     <li key={idx}>
-                      <strong>{w.user.name}</strong>'s local time will be <strong>{w.localTime}</strong> ({w.localDay}), outside their working hours of <em>{w.scheduleText}</em>.
+                      {t("<strong>{{name}}</strong>'s local time will be <strong>{{time}}</strong> ({{day}}), outside their working hours of <em>{{schedule}}</em>.", {
+                        name: w.user.name,
+                        time: w.localTime,
+                        day: w.localDay,
+                        schedule: w.scheduleText,
+                        defaultValue: `<strong>${w.user.name}</strong>'s local time will be <strong>${w.localTime}</strong> (${w.localDay}), outside their working hours of <em>${w.scheduleText}</em>.`
+                      })}
                     </li>
                   ))}
                 </ul>
                 {enforceOrgHours && (
                   <p style={{ margin: "8px 0 0 0", fontSize: "11px", fontWeight: 600 }}>
-                    ⛔ Organization settings enforce working hours. You must select a time that fits all participants.
+                    {t("⛔ Organization settings enforce working hours. You must select a time that fits all participants.", { defaultValue: "⛔ Organization settings enforce working hours. You must select a time that fits all participants." })}
                   </p>
                 )}
               </div>
@@ -912,7 +1317,7 @@ export default function EventEditor() {
                 onClick={() => navigate(rolePath("events"))}
                 style={{ padding: "9px 18px", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--bg-hover)", color: "var(--text-primary)", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
               >
-                Cancel
+                {t("Cancel", { defaultValue: "Cancel" })}
               </button>
               <button
                 type="submit"
@@ -934,12 +1339,12 @@ export default function EventEditor() {
               >
                 <Save size={15} />
                 {submitting
-                  ? "Saving..."
+                  ? t("Saving...", { defaultValue: "Saving..." })
                   : isEditMode
-                  ? "Save Changes"
+                  ? t("Save Changes", { defaultValue: "Save Changes" })
                   : formType === "announcement"
-                  ? "Publish Announcement"
-                  : "Create Event"}
+                  ? t("Publish Announcement", { defaultValue: "Publish Announcement" })
+                  : t("Create Event", { defaultValue: "Create Event" })}
               </button>
             </div>
           </form>
@@ -948,3 +1353,4 @@ export default function EventEditor() {
     </DashboardLayout>
   );
 }
+

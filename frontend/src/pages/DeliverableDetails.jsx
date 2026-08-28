@@ -10,6 +10,7 @@
  * - Right sidebar with metadata, timer, performance, activity, notes
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useParams, useLocation, useNavigate, Link } from "react-router-dom";
 import { BarChart3, Calendar, Check, CheckCircle2, ChevronLeft, ChevronRight, Copy, Download, ExternalLink, FileText, FolderOpen, Lock, Pause, Pencil, Play, RefreshCw, Timer, Trash2, XCircle, Activity } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
@@ -48,26 +49,28 @@ import { formatDateTimeShort, formatDateTime } from "../utils/formatDateTime";
 import "./TaskDetails.css";
 import "./SubtaskDetails.css";
 
-function timeAgo(iso) {
+function timeAgo(iso, t) {
   if (!iso) return "";
   const then = new Date(iso).getTime();
   const sec = Math.max(0, Math.floor((Date.now() - then) / 1000));
-  if (sec < 60) return "just now";
-  if (sec < 3600) return `${Math.floor(sec / 60)} min ago`;
-  if (sec < 86400) return `${Math.floor(sec / 3600)} hours ago`;
-  return `${Math.floor(sec / 86400)} days ago`;
+  if (sec < 60) return t ? t("just now", { defaultValue: "just now" }) : "just now";
+  if (sec < 3600) return t ? t("{{count}} min ago", { count: Math.floor(sec / 60), defaultValue: `${Math.floor(sec / 60)} min ago` }) : `${Math.floor(sec / 60)} min ago`;
+  if (sec < 86400) return t ? t("{{count}} hours ago", { count: Math.floor(sec / 3600), defaultValue: `${Math.floor(sec / 3600)} hours ago` }) : `${Math.floor(sec / 3600)} hours ago`;
+  return t ? t("{{count}} days ago", { count: Math.floor(sec / 86400), defaultValue: `${Math.floor(sec / 86400)} days ago` }) : `${Math.floor(sec / 86400)} days ago`;
 }
 
-function statusLabel(status) {
+function statusLabel(status, t) {
   const s = (status || "").toLowerCase();
-  if (s === "pending") return "Pending";
-  if (s === "in_progress" || s === "acknowledged") return "In Progress";
-  if (s === "paused") return "Paused";
-  if (s === "submitted") return "Submitted";
-  if (s === "reopened") return "Reopened";
-  if (s === "approved") return "Approved";
-  if (s === "rejected") return "Declined";
-  return status || "Pending";
+  let label = "Pending";
+  if (s === "pending") label = "Pending";
+  else if (s === "in_progress" || s === "acknowledged") label = "In Progress";
+  else if (s === "paused") label = "Paused";
+  else if (s === "submitted") label = "Submitted";
+  else if (s === "reopened") label = "Reopened";
+  else if (s === "approved") label = "Approved";
+  else if (s === "rejected") label = "Declined";
+  else label = status || "Pending";
+  return t ? t(label, { defaultValue: label }) : label;
 }
 
 function statusColor(status) {
@@ -121,6 +124,7 @@ function initials(name) {
 }
 
 function SubtaskDetails() {
+  const { t } = useTranslation();
   const params = useParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -129,10 +133,10 @@ function SubtaskDetails() {
   const currentUser = getUser();
 
   const subtaskSourcePages = {
-    deliveries: { label: "Subtasks Assigned To You", path: rolePath("deliveries") },
-    "deliveries-by-you": { label: "Subtasks Assigned By You", path: rolePath("deliveries-by-you") },
-    "self-deliveries": { label: "Self Subtasks", path: rolePath("self-deliveries") },
-    "all-deliverables": { label: "All Sub-Tasks", path: rolePath("all-deliverables") },
+    deliveries: { label: t("Subtasks Assigned To You", { defaultValue: "Subtasks Assigned To You" }), path: rolePath("deliveries") },
+    "deliveries-by-you": { label: t("Subtasks Assigned By You", { defaultValue: "Subtasks Assigned By You" }), path: rolePath("deliveries-by-you") },
+    "self-deliveries": { label: t("Self Subtasks", { defaultValue: "Self Subtasks" }), path: rolePath("self-deliveries") },
+    "all-deliverables": { label: t("All Sub-Tasks", { defaultValue: "All Sub-Tasks" }), path: rolePath("all-deliverables") },
   };
   const subtaskSource = subtaskSourcePages[location.state?.from] || null;
   const readOnly = location.state?.readOnly === true || currentUser?.role === "guest";
@@ -201,7 +205,7 @@ function SubtaskDetails() {
         if (res.ok) return res.json();
         if (res.status === 404) {
           setSubtask(null);
-          notify.error("This subtask has been deleted.");
+          notify.error(t("This subtask has been deleted.", { defaultValue: "This subtask has been deleted." }));
           setTimeout(() => navigate(rolePath("deliveries")), 1500);
           return null;
         }
@@ -216,7 +220,7 @@ function SubtaskDetails() {
       })
       .catch(() => setSubtask(null))
       .finally(() => setLoading(false));
-  }, [subtaskId, navigate]);
+  }, [subtaskId, navigate, t]);
 
   useEffect(() => { fetchSubtask(); }, [fetchSubtask]);
 
@@ -293,7 +297,7 @@ function SubtaskDetails() {
   const handleLinkKeyDown = (e) => { if (e.key === "Enter") { e.preventDefault(); handleAddLink(); } };
 
   const handleSubmit = async () => {
-    if (!submitComment.trim() && !submitFile) { notify.error("Please add a comment or attach a file."); return; }
+    if (!submitComment.trim() && !submitFile) { notify.error(t("Please add a comment or attach a file.", { defaultValue: "Please add a comment or attach a file." })); return; }
     setSubmitting(true);
     try {
       const token = authToken();
@@ -307,8 +311,8 @@ function SubtaskDetails() {
       });
       const data = await res.json();
       if (res.ok) { publish('deliverable:updated', data.deliverable || data); publish('data:changed', { type: 'deliverable', action: 'updated' }); showSuccessMessage("Subtask", "submitted"); setShowSubmitForm(false); setSubmitComment(""); setSubmitFile(null); setSubmitFiles([]); setLinks([]); setLinkInput(""); fetchSubtask(); }
-      else { notify.error(data.message || "Failed to submit"); }
-    } catch { notify.error("An error occurred"); } finally { setSubmitting(false); }
+      else { notify.error(data.message || t("Failed to submit", { defaultValue: "Failed to submit" })); }
+    } catch { notify.error(t("An error occurred", { defaultValue: "An error occurred" })); } finally { setSubmitting(false); }
   };
 
   const handleApprove = async () => {
@@ -318,8 +322,8 @@ function SubtaskDetails() {
         const res = await fetch(`${API_URL}/deliverables/${subtaskId}/approve`, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` }, _notifHandled: true });
         const data = await res.json();
         if (res.ok) { publish('deliverable:updated', data.deliverable || data); publish('data:changed', { type: 'deliverable', action: 'updated' }); showSuccessMessage("Subtask", "approved"); fetchSubtask(); }
-        else { notify.error(data.message || "Failed to approve"); }
-      } catch { notify.error("An error occurred"); }
+        else { notify.error(data.message || t("Failed to approve", { defaultValue: "Failed to approve" })); }
+      } catch { notify.error(t("An error occurred", { defaultValue: "An error occurred" })); }
     });
   };
 
@@ -330,8 +334,8 @@ function SubtaskDetails() {
         const res = await fetch(`${API_URL}/deliverables/${subtaskId}/reject`, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ comment: rejectComment }), _notifHandled: true });
         const data = await res.json();
         if (res.ok) { publish('deliverable:updated', data.deliverable || data); publish('data:changed', { type: 'deliverable', action: 'updated' }); showSuccessMessage("Subtask", "declined"); setShowRejectForm(false); setRejectComment(""); fetchSubtask(); }
-        else { notify.error(data.message || "Failed to decline"); }
-      } catch { notify.error("An error occurred"); }
+        else { notify.error(data.message || t("Failed to decline", { defaultValue: "Failed to decline" })); }
+      } catch { notify.error(t("An error occurred", { defaultValue: "An error occurred" })); }
     });
   };
 
@@ -353,8 +357,8 @@ function SubtaskDetails() {
         const res = await fetch(`${API_URL}/deliverables/${subtaskId}/acknowledge`, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` }, _notifHandled: true });
         const data = await res.json();
         if (res.ok) { publish('deliverable:updated', data.deliverable || data); publish('data:changed', { type: 'deliverable', action: 'updated' }); showSuccessMessage("Subtask", "acknowledged"); fetchSubtask(); }
-        else { notify.error(data.message || "Failed to acknowledge"); }
-      } catch { notify.error("An error occurred"); }
+        else { notify.error(data.message || t("Failed to acknowledge", { defaultValue: "Failed to acknowledge" })); }
+      } catch { notify.error(t("An error occurred", { defaultValue: "An error occurred" })); }
     });
   };
 
@@ -365,8 +369,8 @@ function SubtaskDetails() {
         const res = await fetch(`${API_URL}/deliverables/${subtaskId}/pause`, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ reason: "other" }), _notifHandled: true });
         const data = await res.json();
         if (res.ok) { publish('deliverable:updated', data.deliverable || data); publish('data:changed', { type: 'deliverable', action: 'updated' }); showSuccessMessage("Subtask", "paused"); fetchSubtask(); }
-        else { notify.error(data.message || "Failed to pause"); }
-      } catch { notify.error("An error occurred"); }
+        else { notify.error(data.message || t("Failed to pause", { defaultValue: "Failed to pause" })); }
+      } catch { notify.error(t("An error occurred", { defaultValue: "An error occurred" })); }
     });
   };
 
@@ -377,8 +381,8 @@ function SubtaskDetails() {
         const res = await fetch(`${API_URL}/deliverables/${subtaskId}/continue`, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` }, _notifHandled: true });
         const data = await res.json();
         if (res.ok) { publish('deliverable:updated', data.deliverable || data); publish('data:changed', { type: 'deliverable', action: 'updated' }); showSuccessMessage("Subtask", "resumed"); fetchSubtask(); }
-        else { notify.error(data.message || "Failed to resume"); }
-      } catch { notify.error("An error occurred"); }
+        else { notify.error(data.message || t("Failed to resume", { defaultValue: "Failed to resume" })); }
+      } catch { notify.error(t("An error occurred", { defaultValue: "An error occurred" })); }
     });
   };
 
@@ -399,10 +403,10 @@ function SubtaskDetails() {
           showSuccessMessage("Subtask", "paused");
           fetchSubtask();
         } else {
-          notify.error(data.message || "Failed to pause subtask.");
+          notify.error(data.message || t("Failed to pause subtask.", { defaultValue: "Failed to pause subtask." }));
         }
       } catch {
-        notify.error("Failed to pause subtask.");
+        notify.error(t("Failed to pause subtask.", { defaultValue: "Failed to pause subtask." }));
       }
     });
   };
@@ -423,10 +427,10 @@ function SubtaskDetails() {
           showSuccessMessage("Subtask", "resumed by assigner");
           fetchSubtask();
         } else {
-          notify.error(data.message || "Failed to resume subtask.");
+          notify.error(data.message || t("Failed to resume subtask.", { defaultValue: "Failed to resume subtask." }));
         }
       } catch {
-        notify.error("Failed to resume subtask.");
+        notify.error(t("Failed to resume subtask.", { defaultValue: "Failed to resume subtask." }));
       }
     });
   };
@@ -448,10 +452,10 @@ function SubtaskDetails() {
           showSuccessMessage("Delegation", "revoked");
           fetchSubtask();
         } else {
-          notify.error(data.message || "Failed to revoke delegation.");
+          notify.error(data.message || t("Failed to revoke delegation.", { defaultValue: "Failed to revoke delegation." }));
         }
       } catch {
-        notify.error("Failed to revoke delegation.");
+        notify.error(t("Failed to revoke delegation.", { defaultValue: "Failed to revoke delegation." }));
       }
     });
   };
@@ -472,7 +476,7 @@ function SubtaskDetails() {
         setNotes(data.notes || []);
         setNoteInput("");
       }
-    } catch { notify.error("Could not save note."); }
+    } catch { notify.error(t("Could not save note.", { defaultValue: "Could not save note." })); }
     setNoteSaving(false);
   };
 
@@ -489,7 +493,7 @@ function SubtaskDetails() {
         const data = await res.json();
         setNotes(data.notes || []);
       }
-    } catch { notify.error("Could not delete note."); }
+    } catch { notify.error(t("Could not delete note.", { defaultValue: "Could not delete note." })); }
   };
 
   const confirmDeleteSubtask = async () => {
@@ -506,13 +510,13 @@ function SubtaskDetails() {
         navigate(-1);
       } else {
         const data = await res.json().catch(() => ({}));
-        notify.error(data.message || "Failed to delete subtask.");
+        notify.error(data.message || t("Failed to delete subtask.", { defaultValue: "Failed to delete subtask." }));
       }
-    } catch { notify.error("Failed to delete subtask."); }
+    } catch { notify.error(t("Failed to delete subtask.", { defaultValue: "Failed to delete subtask." })); }
   };
 
-  if (loading) return <DashboardLayout hideRightSidebar><div className="td-loading">Loading subtask...</div></DashboardLayout>;
-  if (!subtask) return <DashboardLayout hideRightSidebar><div className="td-loading td-error">This subtask has been deleted. Redirecting...</div></DashboardLayout>;
+  if (loading) return <DashboardLayout hideRightSidebar><div className="td-loading">{t("Loading subtask...", { defaultValue: "Loading subtask..." })}</div></DashboardLayout>;
+  if (!subtask) return <DashboardLayout hideRightSidebar><div className="td-loading td-error">{t("This subtask has been deleted. Redirecting...", { defaultValue: "This subtask has been deleted. Redirecting..." })}</div></DashboardLayout>;
 
   const ss = statusBgColor(subtask.status);
   const workflowEvents = Array.isArray(subtask.workflow_events) ? subtask.workflow_events : [];
@@ -540,7 +544,7 @@ function SubtaskDetails() {
             {/* ===== LEFT ===== */}
             <div className="td-main">
               <Breadcrumb items={[
-                { label: "Subtasks", path: rolePath("deliveries") },
+                { label: t("Subtasks", { defaultValue: "Subtasks" }), path: rolePath("deliveries") },
                 ...(subtaskSource ? [{ label: subtaskSource.label, path: subtaskSource.path }] : []),
                 { label: subtask.title },
               ]} />
@@ -548,11 +552,11 @@ function SubtaskDetails() {
               {/* Parent Info Card */}
               {(subtask.project || subtask.task) && (
                 <div className="td-parent-card">
-                  <span className="td-parent-label">Belongs To</span>
+                  <span className="td-parent-label">{t("Belongs To", { defaultValue: "Belongs To" })}</span>
                   {subtask.project && (
                     <>
                       <ChevronRight size={14} className="td-parent-chevron" />
-                      <span className="td-parent-label">Project:</span>
+                      <span className="td-parent-label">{t("Project:", { defaultValue: "Project:" })}</span>
                       <Link to={rolePath(`projects/project-details/${subtask.project.id}`)} className="td-parent-link">
                         {subtask.project.title}
                       </Link>
@@ -561,7 +565,7 @@ function SubtaskDetails() {
                   {subtask.task && (
                     <>
                       <ChevronRight size={14} className="td-parent-chevron" />
-                      <span className="td-parent-label">Task:</span>
+                      <span className="td-parent-label">{t("Task:", { defaultValue: "Task:" })}</span>
                       <Link to={rolePath(`tasks/task-details/${subtask.task.id}`)} className="td-parent-link">
                         {subtask.task.title}
                       </Link>
@@ -569,7 +573,7 @@ function SubtaskDetails() {
                     </>
                   )}
                   <ChevronRight size={14} className="td-parent-chevron" />
-                  <span className="td-parent-label">Subtask:</span>
+                  <span className="td-parent-label">{t("Subtask:", { defaultValue: "Subtask:" })}</span>
                   <span className="td-parent-current">{subtask.title}</span>
                 </div>
               )}
@@ -582,9 +586,9 @@ function SubtaskDetails() {
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 700, background: '#f0fdf4', color: '#16a34a', whiteSpace: 'nowrap', flexShrink: 0 }}>
                       {subtask.business_id}
                       <button
-                        onClick={() => { navigator.clipboard.writeText(subtask.business_id); notify.success("Subtask ID copied!"); }}
+                        onClick={() => { navigator.clipboard.writeText(subtask.business_id); notify.success(t("Subtask ID copied!", { defaultValue: "Subtask ID copied!" })); }}
                         style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
-                        title="Copy Subtask ID"
+                        title={t("Copy Subtask ID", { defaultValue: "Copy Subtask ID" })}
                       >
                         <Copy size={13} color="#16a34a" />
                       </button>
@@ -597,76 +601,76 @@ function SubtaskDetails() {
                   {isCreator && !readOnly && !["approved", "submitted"].includes(subtask.status) && (
                     <button className="td-btn-outline" onClick={() => setShowEditModal(true)}>
                       <Pencil size={15} strokeWidth={2.5} />
-                      Edit
+                      {t("Edit", { defaultValue: "Edit" })}
                     </button>
                   )}
                   {!readOnly && (isCreator || isAdminManager) && (
                     <button className="td-btn-danger" onClick={() => setDeleteConfirmOpen(true)}>
                       <Trash2 size={15} />
-                      Delete
+                      {t("Delete", { defaultValue: "Delete" })}
                     </button>
                   )}
                   {!readOnly && isAssignee && subtask?.allow_transfer === true && !["approved", "rejected", "pending", "submitted"].includes(subtask.status) && !isTransferor && !subtask?.active_outgoing_delegation && !hasPendingDelegation && !isDelegatee && (
                     <button className="td-btn-outline" onClick={() => setTransferDialog(true)}>
-                      Transfer
+                      {t("Transfer", { defaultValue: "Transfer" })}
                     </button>
                   )}
                   {canAssignerPause && !isTransferor && !subtask?.active_outgoing_delegation && (
                     <button className="td-btn-primary" onClick={() => setAssignerPauseModalOpen(true)} disabled={assignerPausing} style={{ backgroundColor: assignerPausing ? "var(--text-muted)" : "var(--color-primary)", borderColor: assignerPausing ? "var(--text-muted)" : "var(--color-primary)", opacity: assignerPausing ? 0.7 : 1, cursor: assignerPausing ? "not-allowed" : "pointer" }}>
                       <Lock size={15} />
-                      {assignerPausing ? "Pausing..." : "Pause"}
+                      {assignerPausing ? t("Pausing...", { defaultValue: "Pausing..." }) : t("Pause", { defaultValue: "Pause" })}
                     </button>
                   )}
                   {canAssignerResume && !isTransferor && !subtask?.active_outgoing_delegation && (
                     <button className="td-btn-primary" onClick={handleAssignerResume} disabled={assignerResuming} style={{ backgroundColor: assignerResuming ? "var(--text-muted)" : "var(--color-success)", borderColor: assignerResuming ? "var(--text-muted)" : "var(--color-success)", opacity: assignerResuming ? 0.7 : 1, cursor: assignerResuming ? "not-allowed" : "pointer" }}>
                       <Play size={15} />
-                      {assignerResuming ? "Resuming..." : "Resume"}
+                      {assignerResuming ? t("Resuming...", { defaultValue: "Resuming..." }) : t("Resume", { defaultValue: "Resume" })}
                     </button>
                   )}
                   {isAssignerLocked && !isCreator && (
                     <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 14px", borderRadius: "6px", backgroundColor: "var(--color-warning-bg)", color: "var(--color-warning)", fontSize: "13px", fontWeight: 600, border: "1px solid var(--color-warning)" }}>
                       <Lock size={14} />
-                      Paused by Assigner
+                      {t("Paused by Assigner", { defaultValue: "Paused by Assigner" })}
                     </span>
                   )}
                   {isPending && !readOnly && isAssignee && !isTransferor && !subtask?.active_outgoing_delegation && (
                     <button className="td-btn-primary" onClick={handleAcknowledge} disabled={acknowledging}>
                       <CheckCircle2 size={15} />
-                      {acknowledging ? "Acknowledging..." : "Acknowledge"}
+                      {acknowledging ? t("Acknowledging...", { defaultValue: "Acknowledging..." }) : t("Acknowledge", { defaultValue: "Acknowledge" })}
                     </button>
                   )}
                   {canPauseSubtask && (
-                    <button className="td-btn-primary" onClick={handlePause} disabled={pausing} style={{ backgroundColor: pausing ? "#9CA3AF" : "#D97706" }}><Pause size={15} />{pausing ? "Pausing..." : "Pause"}</button>
+                    <button className="td-btn-primary" onClick={handlePause} disabled={pausing} style={{ backgroundColor: pausing ? "#9CA3AF" : "#D97706" }}><Pause size={15} />{pausing ? t("Pausing...", { defaultValue: "Pausing..." }) : t("Pause", { defaultValue: "Pause" })}</button>
                   )}
                   {canResumeSubtask && (
-                    <button className="td-btn-primary" onClick={handleResume} disabled={resuming}><Play size={15} />{resuming ? "Resuming..." : "Resume"}</button>
+                    <button className="td-btn-primary" onClick={handleResume} disabled={resuming}><Play size={15} />{resuming ? t("Resuming...", { defaultValue: "Resuming..." }) : t("Resume", { defaultValue: "Resume" })}</button>
                   )}
                   {!readOnly && canSubmit && !showSubmitForm && (!isTransferor || transferorHasApproved) && !subtask?.active_outgoing_delegation && !hasPendingDelegation && (
-                    <button className="td-btn-primary" onClick={() => setShowSubmitForm(true)}>{isRejected ? "Resubmit" : "Submit"}</button>
+                    <button className="td-btn-primary" onClick={() => setShowSubmitForm(true)}>{isRejected ? t("Resubmit", { defaultValue: "Resubmit" }) : t("Submit", { defaultValue: "Submit" })}</button>
                   )}
                   {!readOnly && isSubmitted && canApproveReject && !transferorHasApproved && (
                     <>
-                      <button className="td-btn-primary" onClick={handleApprove} disabled={approving} style={{ background: "#166534" }}>{approving ? "Approving..." : "Approve"}</button>
-                      <button className="td-btn-danger" onClick={() => setShowRejectForm(true)}>Decline</button>
+                      <button className="td-btn-primary" onClick={handleApprove} disabled={approving} style={{ background: "#166534" }}>{approving ? t("Approving...", { defaultValue: "Approving..." }) : t("Approve", { defaultValue: "Approve" })}</button>
+                      <button className="td-btn-danger" onClick={() => setShowRejectForm(true)}>{t("Decline", { defaultValue: "Decline" })}</button>
                     </>
                   )}
                   {!readOnly && isApproved && canApproveReject && (
-                    <button className="td-btn-outline" onClick={handleReopen}>Reopen</button>
+                    <button className="td-btn-outline" onClick={handleReopen}>{t("Reopen", { defaultValue: "Reopen" })}</button>
                   )}
                   {isTransferor && transferorReturnToSelf && subtask?.status === "submitted" && !transferorHasApproved && (
                     <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 14px", borderRadius: "6px", backgroundColor: "#EFF6FF", color: "#1D4ED8", fontSize: "13px", fontWeight: 600 }}>
-                      Transferred
+                      {t("Transferred", { defaultValue: "Transferred" })}
                     </span>
                   )}
                   {!transferorHasApproved && (isTransferor || subtask?.active_outgoing_delegation) && !(isTransferor && transferorReturnToSelf && subtask?.status === "submitted") && (
                     <>
                       <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 14px", borderRadius: "6px", backgroundColor: "#EFF6FF", color: "#1D4ED8", fontSize: "13px", fontWeight: 600 }}>
-                        Transferred
+                        {t("Transferred", { defaultValue: "Transferred" })}
                       </span>
                       {subtask?.can_revoke_delegation && subtask?.active_outgoing_delegation_id && (
                         <button className="td-btn-danger" onClick={handleRevokeDelegation} disabled={revoking}>
                           <Trash2 size={15} />
-                          {revoking ? "Revoking..." : "Revoke"}
+                          {revoking ? t("Revoking...", { defaultValue: "Revoking..." }) : t("Revoke", { defaultValue: "Revoke" })}
                         </button>
                       )}
                     </>
@@ -678,22 +682,22 @@ function SubtaskDetails() {
               <div className="td-badges">
                 <span className="td-badge" style={{ background: statusBgColor(subtask.status), color: statusColor(subtask.status) }}>
                   <span className="td-badge-dot" style={{ background: statusColor(subtask.status) }} />
-                  {statusLabel(subtask.status)}
+                  {statusLabel(subtask.status, t)}
                 </span>
                 <span className="td-badge" style={{ background: priorityBgColor(subtask.priority), color: priorityColor(subtask.priority) }}>
                   <span className="td-badge-dot" style={{ background: priorityColor(subtask.priority) }} />
-                  {subtask.priority || "Medium"} Priority
+                  {t("{{priority}} Priority", { priority: t(subtask.priority || "Medium", { defaultValue: subtask.priority || "Medium" }), defaultValue: `${subtask.priority || "Medium"} Priority` })}
                 </span>
                 <span className="td-badge" style={{ background: subtask.allow_transfer ? "#f0fdf4" : "#fef2f2", color: subtask.allow_transfer ? "#16a34a" : "#dc2626" }}>
                   <span className="td-badge-dot" style={{ background: subtask.allow_transfer ? "#16a34a" : "#dc2626" }} />
-                  {subtask.allow_transfer ? "Transfer Allowed" : "Transfer Not Allowed"}
+                  {subtask.allow_transfer ? t("Transfer Allowed", { defaultValue: "Transfer Allowed" }) : t("Transfer Not Allowed", { defaultValue: "Transfer Not Allowed" })}
                 </span>
               </div>
 
               {/* STATS — matches TaskDetails duo layout */}
               <div className="td-stats">
                 <div className="td-stat td-stat--progress">
-                  <span className="td-stat-label">Attachments</span>
+                  <span className="td-stat-label">{t("Attachments", { defaultValue: "Attachments" })}</span>
                   <div className="td-stat-top">
                     <div className="td-stat-ic td-stat-ic--orange"><FolderOpen size={18} /></div>
                     <span className="td-stat-big">{files.length}</span>
@@ -704,14 +708,14 @@ function SubtaskDetails() {
                     <div className="td-stat-ic td-stat-ic--green"><Calendar size={18} /></div>
                     <div>
                       <span className="td-stat-big td-stat-big--sm">{formatDateTimeShort(subtask.due_date)}</span>
-                      <span className="td-stat-label">Deadline</span>
+                      <span className="td-stat-label">{t("Deadline", { defaultValue: "Deadline" })}</span>
                     </div>
                   </div>
                   <div className="td-trio-item">
                     <div className="td-stat-ic" style={{ background: "#EDE9FE", color: "#7C3AED" }}><CheckCircle2 size={18} /></div>
                     <div>
                       <span className="td-stat-big td-stat-big--sm">{subtask.assignee?.name || "—"}</span>
-                      <span className="td-stat-label">Assigned To</span>
+                      <span className="td-stat-label">{t("Assigned To", { defaultValue: "Assigned To" })}</span>
                     </div>
                   </div>
                 </div>
@@ -721,18 +725,18 @@ function SubtaskDetails() {
               <div className="td-content">
                 <div style={{ marginBottom: "16px", marginTop: "4px", paddingLeft: "4px" }}>
                   <h2 style={{ fontSize: "20px", fontWeight: 700, color: "#111827", margin: 0 }}>
-                    {location.state?.from === "deliveries" && "Assigned to You"}
-                    {location.state?.from === "deliveries-by-you" && "Assigned by You"}
-                    {location.state?.from === "self-deliveries" && "Self Subtasks"}
-                    {location.state?.from === "all-deliverables" && "All Sub-Tasks"}
+                    {location.state?.from === "deliveries" && t("Assigned to You", { defaultValue: "Assigned to You" })}
+                    {location.state?.from === "deliveries-by-you" && t("Assigned by You", { defaultValue: "Assigned by You" })}
+                    {location.state?.from === "self-deliveries" && t("Self Subtasks", { defaultValue: "Self Subtasks" })}
+                    {location.state?.from === "all-deliverables" && t("All Sub-Tasks", { defaultValue: "All Sub-Tasks" })}
                   </h2>
                 </div>
 
                 <div className="td-tabs">
                   {[
-                    { id: "overview", label: "Overview", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg> },
-                    { id: "files", label: "Platform files & links", icon: <FolderOpen size={16} /> },
-                    { id: "activity", label: "Activity", icon: <Activity size={16} /> },
+                    { id: "overview", label: t("Overview", { defaultValue: "Overview" }), icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg> },
+                    { id: "files", label: t("Platform files & links", { defaultValue: "Platform files & links" }), icon: <FolderOpen size={16} /> },
+                    { id: "activity", label: t("Activity", { defaultValue: "Activity" }), icon: <Activity size={16} /> },
                   ].map(({ id, label, icon }) => (
                     <button key={id} className={`td-tab ${tab === id ? "td-tab--on" : ""}`} onClick={() => setTab(id)}>
                       {icon}
@@ -745,7 +749,7 @@ function SubtaskDetails() {
                   {tab === "overview" && (
                     <div className="td-overview">
                       <div className="td-section-header">
-                        <h2 className="td-section-title">Subtask Details</h2>
+                        <h2 className="td-section-title">{t("Subtask Details", { defaultValue: "Subtask Details" })}</h2>
                       </div>
                       <div className="td-overview-grid">
                         <div className="td-overview-left">
@@ -755,7 +759,7 @@ function SubtaskDetails() {
                               dangerouslySetInnerHTML={{ __html: subtask.description }}
                             />
                           ) : (
-                            <p style={{ color: "#6b7280", fontSize: "14px" }}>No description provided for this subtask.</p>
+                            <p style={{ color: "#6b7280", fontSize: "14px" }}>{t("No description provided for this subtask.", { defaultValue: "No description provided for this subtask." })}</p>
                           )}
 
                           {/* Labels/Tags */}
@@ -775,25 +779,25 @@ function SubtaskDetails() {
                       {/* Submit Form */}
                       {!readOnly && canSubmit && showSubmitForm && (
                         <div className="td-card" style={{ padding: 20, marginTop: 20 }}>
-                          <h3 className="td-card-title">{isRejected ? "Resubmit Subtask" : "Submit Subtask"}</h3>
+                          <h3 className="td-card-title">{isRejected ? t("Resubmit Subtask", { defaultValue: "Resubmit Subtask" }) : t("Submit Subtask", { defaultValue: "Submit Subtask" })}</h3>
                           <div style={{ marginTop: 12 }}>
-                            <label className="td-form-label">Comment</label>
-                            <textarea className="td-textarea" placeholder="Add a comment..." value={submitComment} onChange={(e) => setSubmitComment(e.target.value)} />
+                            <label className="td-form-label">{t("Comment", { defaultValue: "Comment" })}</label>
+                            <textarea className="td-textarea" placeholder={t("Add a comment...", { defaultValue: "Add a comment..." })} value={submitComment} onChange={(e) => setSubmitComment(e.target.value)} />
                           </div>
                           <div style={{ marginTop: 12 }}>
-                            <label className="td-form-label">File Attachment</label>
+                            <label className="td-form-label">{t("File Attachment", { defaultValue: "File Attachment" })}</label>
                             <input type="file" ref={fileInputRef} onChange={(e) => setSubmitFile(e.target.files[0])} style={{ fontSize: 14 }} />
                           </div>
                           <div style={{ marginTop: 12 }}>
-                            <label className="td-form-label">Links</label>
+                            <label className="td-form-label">{t("Links", { defaultValue: "Links" })}</label>
                             <div style={{ display: "flex", gap: 8 }}>
                               <input type="text" placeholder="https://..." value={linkInput} onChange={(e) => setLinkInput(e.target.value)} onKeyDown={handleLinkKeyDown} className="td-input" />
-                              <button type="button" onClick={handleAddLink} disabled={!linkInput.trim()} className="td-btn-primary">Add</button>
+                              <button type="button" onClick={handleAddLink} disabled={!linkInput.trim()} className="td-btn-primary">{t("Add", { defaultValue: "Add" })}</button>
                             </div>
                           </div>
                           <div style={{ marginTop: 16, display: "flex", gap: 10 }}>
-                            <button className="td-btn-primary" onClick={handleSubmit} disabled={submitting}>{submitting ? "Submitting..." : "Submit"}</button>
-                            <button className="td-btn-outline" onClick={() => { setShowSubmitForm(false); setSubmitComment(""); setSubmitFile(null); setLinks([]); setLinkInput(""); }}>Cancel</button>
+                            <button className="td-btn-primary" onClick={handleSubmit} disabled={submitting}>{submitting ? t("Submitting...", { defaultValue: "Submitting..." }) : t("Submit", { defaultValue: "Submit" })}</button>
+                            <button className="td-btn-outline" onClick={() => { setShowSubmitForm(false); setSubmitComment(""); setSubmitFile(null); setLinks([]); setLinkInput(""); }}>{t("Cancel", { defaultValue: "Cancel" })}</button>
                           </div>
                         </div>
                       )}
@@ -801,28 +805,28 @@ function SubtaskDetails() {
                       {/* Reject Info */}
                       {isRejected && subtask.rejection_comment && (
                         <div className="td-info-banner td-info-banner--danger" style={{ marginTop: 20 }}>
-                          <h3 className="td-card-title" style={{ color: "#991B1B" }}>Decline Reason</h3>
+                          <h3 className="td-card-title" style={{ color: "#991B1B" }}>{t("Decline Reason", { defaultValue: "Decline Reason" })}</h3>
                           <p style={{ color: "#7F1D1D", marginTop: 6 }}>{subtask.rejection_comment}</p>
-                          {subtask.rejected_by && <p style={{ color: "#7F1D1D", fontSize: 12, marginTop: 4 }}>By: {subtask.rejected_by.name}</p>}
+                          {subtask.rejected_by && <p style={{ color: "#7F1D1D", fontSize: 12, marginTop: 4 }}>{t("By: {{name}}", { name: subtask.rejected_by.name, defaultValue: `By: ${subtask.rejected_by.name}` })}</p>}
                         </div>
                       )}
 
                       {/* Approved Info */}
                       {isApproved && (
                         <div className="td-info-banner td-info-banner--success" style={{ marginTop: 20 }}>
-                          <h3 className="td-card-title" style={{ color: "#166534" }}>Approved</h3>
-                          {subtask.approved_by && <p style={{ color: "#166534", marginTop: 4, fontSize: 13 }}>Approved by: {subtask.approved_by.name}</p>}
+                          <h3 className="td-card-title" style={{ color: "#166534" }}>{t("Approved", { defaultValue: "Approved" })}</h3>
+                          {subtask.approved_by && <p style={{ color: "#166534", marginTop: 4, fontSize: 13 }}>{t("Approved by: {{name}}", { name: subtask.approved_by.name, defaultValue: `Approved by: ${subtask.approved_by.name}` })}</p>}
                         </div>
                       )}
 
                       {/* Reject Form */}
                       {!readOnly && showRejectForm && (
                         <div className="td-card" style={{ padding: 16, marginTop: 20 }}>
-                          <label className="td-form-label">Decline Comment</label>
-                          <textarea className="td-textarea" placeholder="Reason for decline..." value={rejectComment} onChange={(e) => setRejectComment(e.target.value)} />
+                          <label className="td-form-label">{t("Decline Comment", { defaultValue: "Decline Comment" })}</label>
+                          <textarea className="td-textarea" placeholder={t("Reason for decline...", { defaultValue: "Reason for decline..." })} value={rejectComment} onChange={(e) => setRejectComment(e.target.value)} />
                           <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
-                            <button className="td-btn-danger" onClick={handleReject} disabled={declining}>{declining ? "Declining..." : "Confirm Decline"}</button>
-                            <button className="td-btn-outline" onClick={() => { setShowRejectForm(false); setRejectComment(""); }}>Cancel</button>
+                            <button className="td-btn-danger" onClick={handleReject} disabled={declining}>{declining ? t("Declining...", { defaultValue: "Declining..." }) : t("Confirm Decline", { defaultValue: "Confirm Decline" })}</button>
+                            <button className="td-btn-outline" onClick={() => { setShowRejectForm(false); setRejectComment(""); }}>{t("Cancel", { defaultValue: "Cancel" })}</button>
                           </div>
                         </div>
                       )}
@@ -849,9 +853,9 @@ function SubtaskDetails() {
             {/* Rejection info - shown when rejected */}
             {isRejected && subtask.rejection_comment && (
               <div style={{ marginTop: "20px", padding: "16px", background: "#FEE2E2", borderRadius: "8px", border: "1px solid #FECACA" }}>
-                <h3 className="td-card-title" style={{ color: "var(--color-danger)" }}>Decline Reason</h3>
+                <h3 className="td-card-title" style={{ color: "var(--color-danger)" }}>{t("Decline Reason", { defaultValue: "Decline Reason" })}</h3>
                 <p style={{ color: "#7F1D1D", marginTop: "6px" }}>{subtask.rejection_comment}</p>
-                {subtask.rejected_by && <p style={{ color: "#7F1D1D", fontSize: "12px", marginTop: "4px" }}>By: {subtask.rejected_by.name}</p>}
+                {subtask.rejected_by && <p style={{ color: "#7F1D1D", fontSize: "12px", marginTop: "4px" }}>{t("By: {{name}}", { name: subtask.rejected_by.name, defaultValue: `By: ${subtask.rejected_by.name}` })}</p>}
               </div>
             )}
 
@@ -875,7 +879,7 @@ function SubtaskDetails() {
                 <div className="td-card">
                   <h3 className="td-card-title" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                     <Timer size={16} />
-                    {timerState === 'completed' ? 'Time Summary' : 'Work Duration'}
+                    {timerState === 'completed' ? t('Time Summary', { defaultValue: 'Time Summary' }) : t('Work Duration', { defaultValue: 'Work Duration' })}
                   </h3>
                   <div className="td-timer-display">
                     <span className={`td-timer-value ${timerState === 'running' ? 'td-timer-running' : ''} ${timerState === 'completed' ? 'td-timer-completed' : ''}`}>
@@ -885,34 +889,34 @@ function SubtaskDetails() {
                   </div>
                   <div className="td-timer-metrics">
                     <div className="td-timer-metric">
-                      <span className="td-timer-metric-label">Elapsed</span>
+                      <span className="td-timer-metric-label">{t("Elapsed", { defaultValue: "Elapsed" })}</span>
                       <span className="td-timer-metric-value">{elapsedDisplay}</span>
                     </div>
                     <div className="td-timer-metric">
-                      <span className="td-timer-metric-label">Pauses</span>
+                      <span className="td-timer-metric-label">{t("Pauses", { defaultValue: "Pauses" })}</span>
                       <span className="td-timer-metric-value">{pauseCount} ({pauseDisplay})</span>
                     </div>
                     <div className="td-timer-metric">
-                      <span className="td-timer-metric-label">Resumes</span>
+                      <span className="td-timer-metric-label">{t("Resumes", { defaultValue: "Resumes" })}</span>
                       <span className="td-timer-metric-value">{timerData.resume_count || 0}</span>
                     </div>
                   </div>
                   {timerData.work_started_at && (
                     <div className="td-timer-meta">
-                      <span>Started: {formatDateTime(timerData.work_started_at)}</span>
-                      {timerData.work_completed_at && <span>Finished: {formatDateTime(timerData.work_completed_at)}</span>}
+                      <span>{t("Started: {{time}}", { time: formatDateTime(timerData.work_started_at), defaultValue: `Started: ${formatDateTime(timerData.work_started_at)}` })}</span>
+                      {timerData.work_completed_at && <span>{t("Finished: {{time}}", { time: formatDateTime(timerData.work_completed_at), defaultValue: `Finished: ${formatDateTime(timerData.work_completed_at)}` })}</span>}
                     </div>
                   )}
                 </div>
               )}
 
               <div className="td-card">
-                <h3 className="td-card-title">Subtask Information</h3>
+                <h3 className="td-card-title">{t("Subtask Information", { defaultValue: "Subtask Information" })}</h3>
                 <ul className="td-info">
                   <li>
                     <span className="td-dot" style={{ background: "#3b82f6" }} />
                     <div>
-                      <span className="td-info-label">Project</span>
+                      <span className="td-info-label">{t("Project", { defaultValue: "Project" })}</span>
                       <span className="td-info-val">
                         {subtask.project ? (
                           <Link to={rolePath(`projects/project-details/${subtask.project.id}`)} className="td-project-link">{subtask.project.title}</Link>
@@ -923,7 +927,7 @@ function SubtaskDetails() {
                   <li>
                     <span className="td-dot" style={{ background: "#8b5cf6" }} />
                     <div>
-                      <span className="td-info-label">Parent Task</span>
+                      <span className="td-info-label">{t("Parent Task", { defaultValue: "Parent Task" })}</span>
                       <span className="td-info-val">
                         {subtask.task ? (
                           <Link to={rolePath(`tasks/task-details/${subtask.task.id}`)} className="td-project-link">{subtask.task.title}</Link>
@@ -934,35 +938,35 @@ function SubtaskDetails() {
                   <li>
                     <span className="td-dot" style={{ background: "#f59e0b" }} />
                     <div>
-                      <span className="td-info-label">Created By</span>
+                      <span className="td-info-label">{t("Created By", { defaultValue: "Created By" })}</span>
                       <span className="td-info-val">{subtask.creator?.name || "—"}</span>
                     </div>
                   </li>
                   <li>
                     <span className="td-dot" style={{ background: "#8b5cf6" }} />
                     <div>
-                      <span className="td-info-label">Assigned To</span>
+                      <span className="td-info-label">{t("Assigned To", { defaultValue: "Assigned To" })}</span>
                       <span className="td-info-val">{subtask.assignee?.name || "—"}</span>
                     </div>
                   </li>
                   <li>
                     <span className="td-dot" style={{ background: "#22c55e" }} />
                     <div>
-                      <span className="td-info-label">Last Updated</span>
-                      <span className="td-info-val">{subtask.updated_at ? timeAgo(subtask.updated_at) : "—"}</span>
+                      <span className="td-info-label">{t("Last Updated", { defaultValue: "Last Updated" })}</span>
+                      <span className="td-info-val">{subtask.updated_at ? timeAgo(subtask.updated_at, t) : "—"}</span>
                     </div>
                   </li>
                   <li>
                     <span className="td-dot" style={{ background: "#3b82f6" }} />
                     <div>
-                      <span className="td-info-label">Start Date</span>
+                      <span className="td-info-label">{t("Start Date", { defaultValue: "Start Date" })}</span>
                       <span className="td-info-val">{subtask.start_date ? formatDateTime(subtask.start_date) : "—"}</span>
                     </div>
                   </li>
                   <li>
                     <span className="td-dot" style={{ background: "#ef4444" }} />
                     <div>
-                      <span className="td-info-label">Due Date</span>
+                      <span className="td-info-label">{t("Due Date", { defaultValue: "Due Date" })}</span>
                       <span className="td-info-val">{subtask.due_date ? formatDateTime(subtask.due_date) : "—"}</span>
                     </div>
                   </li>
@@ -994,12 +998,13 @@ function SubtaskDetails() {
                     assigner_paused: "Paused by Assigner",
                     assigner_resumed: "Resumed",
                   };
-                  return map[action] || action?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                  const label = map[action] || action?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                  return t(label, { defaultValue: label });
                 };
                 if (historyItems.length === 0) return null;
                 return (
                   <div className="td-card">
-                    <h3 className="td-card-title">Timeline History</h3>
+                    <h3 className="td-card-title">{t("Timeline History", { defaultValue: "Timeline History" })}</h3>
                     <ul className="td-history-list">
                       {historyItems.map((item) => (
                         <li key={item.id} className="td-history-item">
@@ -1008,7 +1013,7 @@ function SubtaskDetails() {
                             <span className="td-history-date">{formatDateTime(item.date)}</span>
                           </div>
                           <div className="td-history-meta">
-                            by {item.user?.name || "Unknown"}
+                            {t("by {{name}}", { name: item.user?.name || "Unknown", defaultValue: `by ${item.user?.name || "Unknown"}` })}
                           </div>
                           {item.comment && <p className="td-submission-text">{item.comment}</p>}
                         </li>
@@ -1021,7 +1026,7 @@ function SubtaskDetails() {
               {/* SUBMISSION HISTORY */}
               {(subtask.submissions || []).length > 0 && (
                 <div className="td-card">
-                  <h3 className="td-card-title">Submission History</h3>
+                  <h3 className="td-card-title">{t("Submission History", { defaultValue: "Submission History" })}</h3>
                   {(subtask.submissions || []).map((sub, idx) => (
                     <div key={sub.id} style={{
                       padding: "10px 0",
@@ -1029,23 +1034,23 @@ function SubtaskDetails() {
                     }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
                         <span style={{ fontWeight: 600, fontSize: "13px" }}>
-                          Submission #{sub.version_number || ((subtask.submissions || []).length - idx)}
+                          {t("Submission #{{num}}", { num: sub.version_number || ((subtask.submissions || []).length - idx), defaultValue: `Submission #${sub.version_number || ((subtask.submissions || []).length - idx)}` })}
                         </span>
                         <span className="badge" style={{
                           background: sub.status === "approved" ? "var(--color-success-bg)" : sub.status === "reopened" ? "var(--color-warning-bg)" : "var(--color-blue-bg)",
                           color: sub.status === "approved" ? "var(--color-success)" : sub.status === "reopened" ? "var(--color-warning)" : "var(--color-blue)",
                           fontSize: "11px", padding: "2px 8px", borderRadius: "12px", fontWeight: 600,
                         }}>
-                          {sub.status === "approved" ? "Approved" : sub.status === "reopened" ? "Reopened" : "Pending"}
+                          {sub.status === "approved" ? t("Approved", { defaultValue: "Approved" }) : sub.status === "reopened" ? t("Reopened", { defaultValue: "Reopened" }) : t("Pending", { defaultValue: "Pending" })}
                         </span>
                       </div>
                       <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
-                        <span>By: {sub.submitted_by?.name || sub.submittedBy?.name || "Unknown"}</span>
-                        <span style={{ marginLeft: 12 }}>On: {formatDateTime(sub.created_at)}</span>
+                        <span>{t("By: {{name}}", { name: sub.submitted_by?.name || sub.submittedBy?.name || "Unknown", defaultValue: `By: ${sub.submitted_by?.name || sub.submittedBy?.name || "Unknown"}` })}</span>
+                        <span style={{ marginLeft: 12 }}>{t("On: {{date}}", { date: formatDateTime(sub.created_at), defaultValue: `On: ${formatDateTime(sub.created_at)}` })}</span>
                       </div>
                       {sub.reopen_reason && (
                         <p style={{ fontSize: "12px", color: "var(--color-warning)", marginTop: "4px" }}>
-                          Reason: {sub.reopen_reason}
+                          {t("Reason: {{reason}}", { reason: sub.reopen_reason, defaultValue: `Reason: ${sub.reopen_reason}` })}
                         </p>
                       )}
                       {(sub.attachments?.length > 0 || sub.file_name) && (
@@ -1079,7 +1084,7 @@ function SubtaskDetails() {
               {(subtask.reopen_count > 0 || workflowEvents.filter(e => e.event_type === 'reopened').length > 0) && (
                 <div className="td-card" style={{ padding: "12px 16px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>Reopen Count</span>
+                    <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>{t("Reopen Count", { defaultValue: "Reopen Count" })}</span>
                     <span style={{ fontSize: "18px", fontWeight: 700, color: "var(--color-warning)" }}>
                       {subtask.reopen_count || workflowEvents.filter(e => e.event_type === 'reopened').length}
                     </span>
@@ -1092,32 +1097,32 @@ function SubtaskDetails() {
                 <div className="td-card">
                   <h3 className="td-card-title" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                     <BarChart3 size={16} />
-                    Performance
+                    {t("Performance", { defaultValue: "Performance" })}
                   </h3>
                   <div className="td-timer-metrics">
                     {subtask.submitted_at && (
                       <div className="td-timer-metric">
-                        <span className="td-timer-metric-label">Submitted</span>
+                        <span className="td-timer-metric-label">{t("Submitted", { defaultValue: "Submitted" })}</span>
                         <span className="td-timer-metric-value">{formatDateTime(subtask.submitted_at)}</span>
                       </div>
                     )}
                     {subtask.approved_at && (
                       <div className="td-timer-metric">
-                        <span className="td-timer-metric-label">Approved</span>
+                        <span className="td-timer-metric-label">{t("Approved", { defaultValue: "Approved" })}</span>
                         <span className="td-timer-metric-value">{formatDateTime(subtask.approved_at)}</span>
                       </div>
                     )}
                     {subtask.due_date && (
                       <div className="td-timer-metric">
-                        <span className="td-timer-metric-label">Deadline</span>
+                        <span className="td-timer-metric-label">{t("Deadline", { defaultValue: "Deadline" })}</span>
                         <span className="td-timer-metric-value">{formatDateTime(subtask.due_date)}</span>
                       </div>
                     )}
                     {subtask.approved_at && subtask.due_date && (
                       <div className="td-timer-metric">
-                        <span className="td-timer-metric-label">Result</span>
+                        <span className="td-timer-metric-label">{t("Result", { defaultValue: "Result" })}</span>
                         <span className="td-timer-metric-value" style={{ color: new Date(subtask.approved_at) <= new Date(subtask.due_date) ? "#059669" : "#ef4444" }}>
-                          {new Date(subtask.approved_at) <= new Date(subtask.due_date) ? "On Time" : "Late"}
+                          {new Date(subtask.approved_at) <= new Date(subtask.due_date) ? t("On Time", { defaultValue: "On Time" }) : t("Late", { defaultValue: "Late" })}
                         </span>
                       </div>
                     )}
@@ -1125,7 +1130,7 @@ function SubtaskDetails() {
                       const reworkCount = workflowEvents.filter(e => e.event_type === 'reopened').length;
                       return reworkCount > 0 ? (
                         <div className="td-timer-metric">
-                          <span className="td-timer-metric-label">Reworks</span>
+                          <span className="td-timer-metric-label">{t("Reworks", { defaultValue: "Reworks" })}</span>
                           <span className="td-timer-metric-value">{reworkCount}</span>
                         </div>
                       ) : null;
@@ -1134,7 +1139,7 @@ function SubtaskDetails() {
                       const approvalAttempts = workflowEvents.filter(e => e.event_type === 'submitted').length;
                       return (
                         <div className="td-timer-metric">
-                          <span className="td-timer-metric-label">Attempts</span>
+                          <span className="td-timer-metric-label">{t("Attempts", { defaultValue: "Attempts" })}</span>
                           <span className="td-timer-metric-value">{approvalAttempts}</span>
                         </div>
                       );
@@ -1146,23 +1151,23 @@ function SubtaskDetails() {
               {/* NOTES — matches TaskDetails multi-note support */}
               <div className="td-card">
                 <div className="td-card-head">
-                  <h3 className="td-card-title">Notes</h3>
+                  <h3 className="td-card-title">{t("Notes", { defaultValue: "Notes" })}</h3>
                 </div>
                 <textarea
                   className="td-notes-textarea"
                   rows={3}
-                  placeholder="Write a note..."
+                  placeholder={t("Write a note...", { defaultValue: "Write a note..." })}
                   value={noteInput}
                   onChange={(e) => setNoteInput(e.target.value)}
                 />
                 <button type="button" className="td-save-notes-btn" disabled={noteSaving || !noteInput.trim()} onClick={saveNote}>
-                  {noteSaving ? "Saving\u2026" : "Add Note"}
+                  {noteSaving ? t("Saving…", { defaultValue: "Saving…" }) : t("Add Note", { defaultValue: "Add Note" })}
                 </button>
                 {notes.length > 0 && (
                   <div className="td-notes-list">
                     {notes.map((n) => (
                       <div key={n.id} className="td-saved-note">
-                        <button type="button" className="td-note-delete" onClick={() => { setPendingNoteId(n.id); setNoteDeleteOpen(true); }} title="Delete note">&times;</button>
+                        <button type="button" className="td-note-delete" onClick={() => { setPendingNoteId(n.id); setNoteDeleteOpen(true); }} title={t("Delete note", { defaultValue: "Delete note" })}>&times;</button>
                         <p className="td-notes">{n.note}</p>
                       </div>
                     ))}
@@ -1177,10 +1182,10 @@ function SubtaskDetails() {
         isOpen={noteDeleteOpen}
         onClose={() => { setNoteDeleteOpen(false); setPendingNoteId(null); }}
         onConfirm={() => { deleteNote(pendingNoteId); setNoteDeleteOpen(false); setPendingNoteId(null); }}
-        title="Delete Note"
-        message="Are you sure you want to delete this note? This action cannot be undone."
-        confirmText="Delete"
-        cancelText="Cancel"
+        title={t("Delete Note", { defaultValue: "Delete Note" })}
+        message={t("Are you sure you want to delete this note? This action cannot be undone.", { defaultValue: "Are you sure you want to delete this note? This action cannot be undone." })}
+        confirmText={t("Delete", { defaultValue: "Delete" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
         danger
       />
       <PauseReasonModal
@@ -1215,10 +1220,10 @@ function SubtaskDetails() {
         isOpen={deleteConfirmOpen}
         onClose={() => setDeleteConfirmOpen(false)}
         onConfirm={confirmDeleteSubtask}
-        title="Delete Subtask"
-        message="Are you sure you want to delete this subtask? This action cannot be undone."
-        confirmText="Delete"
-        cancelText="Cancel"
+        title={t("Delete Subtask", { defaultValue: "Delete Subtask" })}
+        message={t("Are you sure you want to delete this subtask? This action cannot be undone.", { defaultValue: "Are you sure you want to delete this subtask? This action cannot be undone." })}
+        confirmText={t("Delete", { defaultValue: "Delete" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
         danger
       />
     </>

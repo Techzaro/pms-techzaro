@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { MessageSquare, Building2, Send, Plus, X, ArrowLeft, Loader2 } from 'lucide-react';
 import { api } from './api/superAdminApi';
 
 export default function SuperOrgChatPage() {
+  const { t } = useTranslation();
   const { conversationId } = useParams();
   const navigate = useNavigate();
   const [conversations, setConversations] = useState([]);
@@ -69,7 +71,7 @@ export default function SuperOrgChatPage() {
       const data = await api.createOrgChatConversation({
         organization_id: selectedOrg,
         subject: chatSubject || null,
-        message: newMessage || 'Conversation started',
+        message: newMessage || t('Conversation started', { defaultValue: 'Conversation started' }),
       });
       setShowNewChat(false);
       fetchConversations();
@@ -119,14 +121,14 @@ export default function SuperOrgChatPage() {
       {/* Sidebar: Conversation List */}
       <div style={{ width: 320, borderRight: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: '16px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Org Chat</h3>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{t('Org Chat', { defaultValue: 'Org Chat' })}</h3>
           <button onClick={openNewChat} style={{ background: 'var(--color-primary)', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Plus size={14} /> New
+            <Plus size={14} /> {t('New', { defaultValue: 'New' })}
           </button>
         </div>
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {conversations.length === 0 && (
-            <p style={{ padding: 16, color: 'var(--text-muted)', fontSize: 13 }}>No conversations yet</p>
+            <p style={{ padding: 16, color: 'var(--text-muted)', fontSize: 13 }}>{t('No conversations yet', { defaultValue: 'No conversations yet' })}</p>
           )}
           {conversations.map((conv) => (
             <div
@@ -139,10 +141,10 @@ export default function SuperOrgChatPage() {
                 background: activeConversation?.id === conv.id ? 'var(--bg-hover)' : 'transparent',
               }}
             >
-              <div style={{ fontWeight: 500, fontSize: 14, marginBottom: 2 }}>{conv.subject || conv.organization?.name || 'Untitled'}</div>
+              <div style={{ fontWeight: 500, fontSize: 14, marginBottom: 2 }}>{conv.subject || conv.organization?.name || t('Untitled', { defaultValue: 'Untitled' })}</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 2 }}>
                 <Building2 size={12} style={{ display: 'inline', marginRight: 4 }} />
-                {conv.organization?.name || 'Unknown Org'}
+                {conv.organization?.name || t('Unknown Org', { defaultValue: 'Unknown Org' })}
               </div>
               {conv.latest_message && (
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -162,13 +164,13 @@ export default function SuperOrgChatPage() {
               <button onClick={() => setShowNewChat(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-primary)' }}>
                 <ArrowLeft size={20} />
               </button>
-              <h3 style={{ margin: 0 }}>New Conversation</h3>
+              <h3 style={{ margin: 0 }}>{t('New Conversation', { defaultValue: 'New Conversation' })}</h3>
             </div>
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>Organization *</label>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>{t('Organization', { defaultValue: 'Organization' })} *</label>
               <input
                 type="text"
-                placeholder="Search organizations..."
+                placeholder={t("Search organizations...", { defaultValue: "Search organizations..." })}
                 value={orgSearch}
                 onChange={(e) => setOrgSearch(e.target.value)}
                 style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border-color)', borderRadius: 6, fontSize: 14, background: 'var(--bg-primary)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
@@ -188,28 +190,28 @@ export default function SuperOrgChatPage() {
               </div>
             </div>
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>Subject</label>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>{t('Subject', { defaultValue: 'Subject' })}</label>
               <input
                 type="text"
                 value={chatSubject}
                 onChange={(e) => setChatSubject(e.target.value)}
-                placeholder="Optional subject"
+                placeholder={t("Optional subject", { defaultValue: "Optional subject" })}
                 style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border-color)', borderRadius: 6, fontSize: 14, background: 'var(--bg-primary)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
               />
             </div>
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>Message *</label>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>{t('Message', { defaultValue: 'Message' })} *</label>
               <textarea
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
-                placeholder="Type your message..."
+                placeholder={t("Type your message...", { defaultValue: "Type your message..." })}
                 rows={4}
                 style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border-color)', borderRadius: 6, fontSize: 14, background: 'var(--bg-primary)', color: 'var(--text-primary)', resize: 'vertical', boxSizing: 'border-box' }}
               />
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button onClick={() => setShowNewChat(false)} style={{ padding: '8px 16px', border: '1px solid var(--border-color)', borderRadius: 6, cursor: 'pointer', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>Cancel</button>
-              <button onClick={handleCreateConversation} disabled={!selectedOrg} style={{ padding: '8px 16px', background: 'var(--color-primary)', color: '#fff', border: 'none', borderRadius: 6, cursor: selectedOrg ? 'pointer' : 'not-allowed', opacity: selectedOrg ? 1 : 0.5 }}>Create</button>
+              <button onClick={() => setShowNewChat(false)} style={{ padding: '8px 16px', border: '1px solid var(--border-color)', borderRadius: 6, cursor: 'pointer', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>{t('Cancel', { defaultValue: 'Cancel' })}</button>
+              <button onClick={handleCreateConversation} disabled={!selectedOrg} style={{ padding: '8px 16px', background: 'var(--color-primary)', color: '#fff', border: 'none', borderRadius: 6, cursor: selectedOrg ? 'pointer' : 'not-allowed', opacity: selectedOrg ? 1 : 0.5 }}>{t('Create', { defaultValue: 'Create' })}</button>
             </div>
           </div>
         ) : activeConversation ? (
@@ -220,7 +222,7 @@ export default function SuperOrgChatPage() {
                 <ArrowLeft size={18} />
               </button>
               <div>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>{activeConversation.subject || activeConversation.organization?.name || 'Conversation'}</div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{activeConversation.subject || activeConversation.organization?.name || t('Conversation', { defaultValue: 'Conversation' })}</div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                   <Building2 size={12} style={{ display: 'inline', marginRight: 4 }} />
                   {activeConversation.organization?.name}
@@ -230,7 +232,7 @@ export default function SuperOrgChatPage() {
 
             {/* Messages */}
             <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
-              {messages.length === 0 && <p style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No messages yet</p>}
+              {messages.length === 0 && <p style={{ textAlign: 'center', color: 'var(--text-muted)' }}>{t('No messages yet', { defaultValue: 'No messages yet' })}</p>}
               {messages.map((msg) => {
                 const isOrg = msg.organization_id && !msg.user_id;
                 return (
@@ -240,7 +242,7 @@ export default function SuperOrgChatPage() {
                     </div>
                     <div style={{ maxWidth: '70%' }}>
                       <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 2 }}>
-                        {isOrg ? msg.organization?.name : 'Admin'} · {formatTime(msg.created_at)}
+                        {isOrg ? msg.organization?.name : t('Admin', { defaultValue: 'Admin' })} · {formatTime(msg.created_at)}
                       </div>
                       <div style={{ padding: '8px 12px', borderRadius: 12, background: isOrg ? 'var(--bg-hover)' : 'var(--color-primary)', color: isOrg ? 'var(--text-primary)' : '#fff', fontSize: 14 }} dangerouslySetInnerHTML={{ __html: msg.body }} />
                     </div>
@@ -257,12 +259,12 @@ export default function SuperOrgChatPage() {
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Type a message..."
+                placeholder={t("Type a message...", { defaultValue: "Type a message..." })}
                 style={{ flex: 1, padding: '8px 12px', border: '1px solid var(--border-color)', borderRadius: 6, fontSize: 14, background: 'var(--bg-primary)', color: 'var(--text-primary)' }}
               />
               <button onClick={handleSendMessage} disabled={sending || !newMessage.trim()} style={{ padding: '8px 16px', background: 'var(--color-primary)', color: '#fff', border: 'none', borderRadius: 6, cursor: sending ? 'not-allowed' : 'pointer', opacity: sending || !newMessage.trim() ? 0.5 : 1, display: 'flex', alignItems: 'center', gap: 4 }}>
                 {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                Send
+                {t('Send', { defaultValue: 'Send' })}
               </button>
             </div>
           </>
@@ -270,8 +272,8 @@ export default function SuperOrgChatPage() {
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
             <div style={{ textAlign: 'center' }}>
               <MessageSquare size={48} style={{ marginBottom: 12, opacity: 0.3 }} />
-              <h3 style={{ margin: 0, fontWeight: 500 }}>Select a conversation</h3>
-              <p style={{ fontSize: 13 }}>Choose a conversation from the sidebar or start a new one.</p>
+              <h3 style={{ margin: 0, fontWeight: 500 }}>{t('Select a conversation', { defaultValue: 'Select a conversation' })}</h3>
+              <p style={{ fontSize: 13 }}>{t('Choose a conversation from the sidebar or start a new one.', { defaultValue: 'Choose a conversation from the sidebar or start a new one.' })}</p>
             </div>
           </div>
         )}

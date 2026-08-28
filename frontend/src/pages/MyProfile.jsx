@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { MdEdit } from "react-icons/md";
@@ -61,6 +62,7 @@ const displayDate = (dateStr) => {
  * password-change modal.
  */
 function MyProfile() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const notify = useNotification();
@@ -110,7 +112,7 @@ function MyProfile() {
         headers: { Accept: "application/json", ...authHeaders() },
         skipLoader: true,
       });
-      if (!res.ok) throw new Error("Unable to load profile");
+      if (!res.ok) throw new Error(t("Unable to load profile", { defaultValue: "Unable to load profile" }));
       const data = await res.json();
       setProfileData(data);
 
@@ -122,7 +124,7 @@ function MyProfile() {
         }
       }
     } catch (err) {
-      setError(err.message || "Failed to load profile");
+      setError(err.message || t("Failed to load profile", { defaultValue: "Failed to load profile" }));
     } finally {
       setLoading(false);
     }
@@ -202,17 +204,17 @@ function MyProfile() {
   const validatePasswordForm = () => {
     const errors = {};
     if (!passwordForm.old_password) {
-      errors.old_password = "Please enter current password.";
+      errors.old_password = t("Please enter current password.", { defaultValue: "Please enter current password." });
     }
     if (!passwordForm.new_password) {
-      errors.new_password = "Please enter new password.";
+      errors.new_password = t("Please enter new password.", { defaultValue: "Please enter new password." });
     } else if (!isPasswordValid(passwordForm.new_password)) {
-      errors.new_password = "Password does not meet all requirements.";
+      errors.new_password = t("Password does not meet all requirements.", { defaultValue: "Password does not meet all requirements." });
     } else if (passwordForm.old_password && passwordForm.new_password === passwordForm.old_password) {
-      errors.new_password = "New password must be different from current password.";
+      errors.new_password = t("New password must be different from current password.", { defaultValue: "New password must be different from current password." });
     }
     if (!passwordForm.confirm_password) {
-      errors.confirm_password = "Please confirm your password.";
+      errors.confirm_password = t("Please confirm your password.", { defaultValue: "Please confirm your password." });
     }
     return errors;
   };
@@ -255,12 +257,12 @@ function MyProfile() {
           if (data.errors.new_password) errObj.new_password = data.errors.new_password;
         }
 
-        let msg = data.message || "Failed to change password";
+        let msg = data.message || t("Failed to change password", { defaultValue: "Failed to change password" });
         if (msg.toLowerCase().includes("current password") || msg.toLowerCase().includes("old_password") || msg.toLowerCase().includes("incorrect")) {
-          if (!errObj.old_password) errObj.old_password = "Current password is incorrect.";
+          if (!errObj.old_password) errObj.old_password = t("Current password is incorrect.", { defaultValue: "Current password is incorrect." });
         }
         if (msg.toLowerCase().includes("confirm") || msg.toLowerCase().includes("match")) {
-          if (!errObj.confirm_password) errObj.confirm_password = "Password confirmation does not match";
+          if (!errObj.confirm_password) errObj.confirm_password = t("Password confirmation does not match", { defaultValue: "Password confirmation does not match" });
         }
 
         if (Object.keys(errObj).length > 0) {
@@ -275,9 +277,9 @@ function MyProfile() {
     } catch (err) {
       if (err.message) {
         if (err.message.toLowerCase().includes("current password") || err.message.toLowerCase().includes("incorrect")) {
-          setPasswordErrors((prev) => ({ ...prev, old_password: "Current password is incorrect." }));
+          setPasswordErrors((prev) => ({ ...prev, old_password: t("Current password is incorrect.", { defaultValue: "Current password is incorrect." }) }));
         } else if (err.message.toLowerCase().includes("confirm") || err.message.toLowerCase().includes("match")) {
-          setPasswordErrors((prev) => ({ ...prev, confirm_password: "Password confirmation does not match" }));
+          setPasswordErrors((prev) => ({ ...prev, confirm_password: t("Password confirmation does not match", { defaultValue: "Password confirmation does not match" }) }));
         } else {
           notify.error(err.message);
         }
@@ -291,7 +293,7 @@ function MyProfile() {
     return (
       <DashboardLayout hideRightSidebar={true}>
         <div className="user-profile-page">
-          <div className="profile-loading">Loading profile...</div>
+          <div className="profile-loading">{t("Loading profile...", { defaultValue: "Loading profile..." })}</div>
         </div>
       </DashboardLayout>
     );
@@ -304,7 +306,7 @@ function MyProfile() {
           <div className="profile-error">
             <p>{error}</p>
             <button className="primary-button" onClick={() => navigate(-1)}>
-              Go Back
+              {t("Go Back", { defaultValue: "Go Back" })}
             </button>
           </div>
         </div>
@@ -317,7 +319,7 @@ function MyProfile() {
   const roleDisplay = normalizeRole(user.role);
 
   const breadcrumbs = [
-    { label: "Profile" },
+    { label: t("Profile", { defaultValue: "Profile" }) },
   ];
 
   return (
@@ -327,8 +329,8 @@ function MyProfile() {
           <div className="profile-layout">
             <Breadcrumb items={breadcrumbs} />
             <div className="profile-header-profile">
-              <h1>My Profile</h1>
-              <p>View and manage your personal information and account settings.</p>
+              <h1>{t("My Profile", { defaultValue: "My Profile" })}</h1>
+              <p>{t("View and manage your personal information and account settings.", { defaultValue: "View and manage your personal information and account settings." })}</p>
             </div>
             {/* LEFT SIDE */}
             <div className="profile-left">
@@ -363,29 +365,29 @@ function MyProfile() {
               {/* Personal Information */}
               <div className="profile-info-card">
                 <div className="info-card-header">
-                  <h3>Personal Information</h3>
+                  <h3>{t("Personal Information", { defaultValue: "Personal Information" })}</h3>
                   <button className="btn-edit" onClick={openPasswordModal}>
-                    <MdEdit size={16} /> Update Password
+                    <MdEdit size={16} /> {t("Update Password", { defaultValue: "Update Password" })}
                   </button>
                 </div>
                 <div className="info-card-body">
                   {user.role === "guest" ? (
                     <>
                       <div className="info-row">
-                        <span className="info-label">Client Name</span>
+                        <span className="info-label">{t("Client Name", { defaultValue: "Client Name" })}</span>
                         <span className="info-value">{user.name || "---"}</span>
                       </div>
                       <div className="info-row">
-                        <span className="info-label">Email</span>
+                        <span className="info-label">{t("Email", { defaultValue: "Email" })}</span>
                         <span className="info-value">{user.personal_email || user.email || "---"}</span>
                       </div>
                       <div className="info-row">
-                        <span className="info-label">Phone</span>
+                        <span className="info-label">{t("Phone", { defaultValue: "Phone" })}</span>
                         <span className="info-value">{displayPhone(user.phone_number || user.contact_no)}</span>
                       </div>
                       {user.company_name && (
                         <div className="info-row">
-                          <span className="info-label">Company Name</span>
+                          <span className="info-label">{t("Company Name", { defaultValue: "Company Name" })}</span>
                           <span className="info-value">{user.company_name}</span>
                         </div>
                       )}
@@ -393,19 +395,19 @@ function MyProfile() {
                   ) : (
                     <>
                       <div className="info-row">
-                        <span className="info-label">Full Name</span>
+                        <span className="info-label">{t("Full Name", { defaultValue: "Full Name" })}</span>
                         <span className="info-value">{user.name || "---"}</span>
                       </div>
                       <div className="info-row">
-                        <span className="info-label">Father Name</span>
+                        <span className="info-label">{t("Father Name", { defaultValue: "Father Name" })}</span>
                         <span className="info-value">{user.father_name || "---"}</span>
                       </div>
                       <div className="info-row">
-                        <span className="info-label">ID Card Number</span>
+                        <span className="info-label">{t("ID Card Number", { defaultValue: "ID Card Number" })}</span>
                         <span className="info-value">{displayCNIC(user.id_card_number)}</span>
                       </div>
                       <div className="info-row">
-                        <span className="info-label">Phone Number</span>
+                        <span className="info-label">{t("Phone Number", { defaultValue: "Phone Number" })}</span>
                         <span className="info-value">{displayPhone(user.phone_number || user.contact_no)}</span>
                       </div>
                     </>
@@ -417,15 +419,15 @@ function MyProfile() {
               {user.role !== "guest" && (
               <div className="profile-info-card">
                 <div className="info-card-header">
-                  <h3>Address</h3>
+                  <h3>{t("Address", { defaultValue: "Address" })}</h3>
                 </div>
                 <div className="info-card-body">
                   <div className="info-row">
-                    <span className="info-label">Present Address</span>
+                    <span className="info-label">{t("Present Address", { defaultValue: "Present Address" })}</span>
                     <span className="info-value">{user.present_address || user.address || "---"}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Permanent Address</span>
+                    <span className="info-label">{t("Permanent Address", { defaultValue: "Permanent Address" })}</span>
                     <span className="info-value">{user.permanent_address || "---"}</span>
                   </div>
                 </div>
@@ -436,19 +438,19 @@ function MyProfile() {
               {user.role !== "guest" && (
               <div className="profile-info-card">
                 <div className="info-card-header">
-                  <h3>Emergency Contact</h3>
+                  <h3>{t("Emergency Contact", { defaultValue: "Emergency Contact" })}</h3>
                 </div>
                 <div className="info-card-body">
                   <div className="info-row">
-                    <span className="info-label">Name</span>
+                    <span className="info-label">{t("Name", { defaultValue: "Name" })}</span>
                     <span className="info-value">{user.emergency_contact_name || "---"}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Relation</span>
+                    <span className="info-label">{t("Relation", { defaultValue: "Relation" })}</span>
                     <span className="info-value">{user.emergency_contact_relation || "---"}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Phone</span>
+                    <span className="info-label">{t("Phone", { defaultValue: "Phone" })}</span>
                     <span className="info-value">{displayPhone(user.emergency_contact_phone)}</span>
                   </div>
                 </div>
@@ -459,24 +461,24 @@ function MyProfile() {
               {user.role !== "guest" && (
               <div className="profile-info-card">
                 <div className="info-card-header">
-                  <h3>Email Accounts</h3>
+                  <h3>{t("Email Accounts", { defaultValue: "Email Accounts" })}</h3>
                 </div>
                 <div className="info-card-body">
                   <div className="info-row">
-                    <span className="info-label">Personal Email</span>
+                    <span className="info-label">{t("Personal Email", { defaultValue: "Personal Email" })}</span>
                     <span className="info-value">{user.personal_email || "---"}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Professional Email</span>
+                    <span className="info-label">{t("Professional Email", { defaultValue: "Professional Email" })}</span>
                     <span className="info-value">{user.professional_email || "---"}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Password of Professional Email</span>
+                    <span className="info-label">{t("Password of Professional Email", { defaultValue: "Password of Professional Email" })}</span>
                     <span className="info-value" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       {user.professional_email_password ? (showProfPassword ? user.professional_email_password : "********") : "---"}
                       {user.professional_email_password && (
                         <button type="button" onClick={() => setShowProfPassword(!showProfPassword)} style={{ background: 'none', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '2px 8px', cursor: 'pointer', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                          {showProfPassword ? "Hide" : "Show"}
+                          {showProfPassword ? t("Hide", { defaultValue: "Hide" }) : t("Show", { defaultValue: "Show" })}
                         </button>
                       )}
                     </span>
@@ -489,45 +491,45 @@ function MyProfile() {
               {user.role !== "guest" && (
               <div className="profile-info-card">
                 <div className="info-card-header">
-                  <h3>Employment Details</h3>
+                  <h3>{t("Employment Details", { defaultValue: "Employment Details" })}</h3>
                 </div>
                 <div className="info-card-body">
                   {user.company_name && (
                     <div className="info-row">
-                      <span className="info-label">Company Name</span>
+                      <span className="info-label">{t("Company Name", { defaultValue: "Company Name" })}</span>
                       <span className="info-value">{user.company_name}</span>
                     </div>
                   )}
                   <div className="info-row">
-                    <span className="info-label">Designation</span>
+                    <span className="info-label">{t("Designation", { defaultValue: "Designation" })}</span>
                     <span className="info-value">{user.designation || "---"}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Department</span>
+                    <span className="info-label">{t("Department", { defaultValue: "Department" })}</span>
                     <span className="info-value">{user.department || "---"}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Hired For</span>
+                    <span className="info-label">{t("Hired For", { defaultValue: "Hired For" })}</span>
                     <span className="info-value">{user.hired_for || "---"}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Employee Code</span>
+                    <span className="info-label">{t("Employee Code", { defaultValue: "Employee Code" })}</span>
                     <span className="info-value">{user.employee_code || "---"}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Role</span>
+                    <span className="info-label">{t("Role", { defaultValue: "Role" })}</span>
                     <span className="info-value">{roleDisplay}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Job Started Date</span>
+                    <span className="info-label">{t("Job Started Date", { defaultValue: "Job Started Date" })}</span>
                     <span className="info-value">{displayDate(user.job_started_date)}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Job Ended Date</span>
+                    <span className="info-label">{t("Job Ended Date", { defaultValue: "Job Ended Date" })}</span>
                     <span className="info-value">{displayDate(user.job_ended_date)}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Applied Via</span>
+                    <span className="info-label">{t("Applied Via", { defaultValue: "Applied Via" })}</span>
                     <span className="info-value">{user.applied_via || "---"}</span>
                   </div>
                 </div>
@@ -538,23 +540,23 @@ function MyProfile() {
               {user.role !== "guest" && (
               <div className="profile-info-card">
                 <div className="info-card-header">
-                  <h3>Salary & Bank Details</h3>
+                  <h3>{t("Salary & Bank Details", { defaultValue: "Salary & Bank Details" })}</h3>
                 </div>
                 <div className="info-card-body">
                   <div className="info-row">
-                    <span className="info-label">Gross Salary</span>
+                    <span className="info-label">{t("Gross Salary", { defaultValue: "Gross Salary" })}</span>
                     <span className="info-value">{user.gross_salary || "---"}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Bank Name</span>
+                    <span className="info-label">{t("Bank Name", { defaultValue: "Bank Name" })}</span>
                     <span className="info-value">{user.bank_name || "---"}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Bank Account Number</span>
+                    <span className="info-label">{t("Bank Account Number", { defaultValue: "Bank Account Number" })}</span>
                     <span className="info-value">{user.bank_account_number || "---"}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Bank Account Title</span>
+                    <span className="info-label">{t("Bank Account Title", { defaultValue: "Bank Account Title" })}</span>
                     <span className="info-value">{user.bank_account_title || "---"}</span>
                   </div>
                 </div>
@@ -565,13 +567,13 @@ function MyProfile() {
               {user.role !== "guest" && (
               <div className="profile-info-card">
                 <div className="info-card-header">
-                  <h3>Documents</h3>
+                  <h3>{t("Documents", { defaultValue: "Documents" })}</h3>
                 </div>
                 <div className="info-card-body">
                   {[
-                    { label: "Employment Contract", key: "employment_contract" },
-                    { label: "Offer Letter", key: "offer_letter" },
-                    { label: "Techxaro Regulations", key: "techxaro_regulations" },
+                    { label: t("Employment Contract", { defaultValue: "Employment Contract" }), key: "employment_contract" },
+                    { label: t("Offer Letter", { defaultValue: "Offer Letter" }), key: "offer_letter" },
+                    { label: t("Techxaro Regulations", { defaultValue: "Techxaro Regulations" }), key: "techxaro_regulations" },
                   ].map(({ label, key }) => (
                     <div className="info-row" key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                       <span className="info-label">{label}</span>
@@ -582,7 +584,7 @@ function MyProfile() {
                             target="_blank"
                             rel="noopener noreferrer"
                             style={{ background: "var(--color-primary)", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "inline-flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
-                            title="View"
+                            title={t("View", { defaultValue: "View" })}
                           >
                             <Eye size={16} />
                           </a>
@@ -599,7 +601,7 @@ function MyProfile() {
                     if (docs.length === 0) {
                       return (
                         <div className="info-row">
-                          <span className="info-label">Other Documents</span>
+                          <span className="info-label">{t("Other Documents", { defaultValue: "Other Documents" })}</span>
                           <span className="info-value">---</span>
                         </div>
                       );
@@ -617,7 +619,7 @@ function MyProfile() {
                               target="_blank"
                               rel="noopener noreferrer"
                               style={{ background: "var(--color-primary)", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
-                              title="View"
+                              title={t("View", { defaultValue: "View" })}
                             >
                               <Eye size={16} />
                             </a>
@@ -628,14 +630,14 @@ function MyProfile() {
                   })()}
                   {companyDocs?.company_logo?.exists && (
                     <div className="info-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <span className="info-label">Company Logo</span>
+                      <span className="info-label">{t("Company Logo", { defaultValue: "Company Logo" })}</span>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: 1 }}>
                         <a
                           href={`${API_URL.replace("/api", "")}/storage/${companyDocs.company_logo.path}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{ background: "var(--color-primary)", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
-                          title="View"
+                          title={t("View", { defaultValue: "View" })}
                         >
                           <Eye size={16} />
                         </a>
@@ -644,14 +646,14 @@ function MyProfile() {
                   )}
                   {companyDocs?.qr_code?.exists && (
                     <div className="info-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <span className="info-label">QR Code</span>
+                      <span className="info-label">{t("QR Code", { defaultValue: "QR Code" })}</span>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: 1 }}>
                         <a
                           href={`${API_URL.replace("/api", "")}/storage/${companyDocs.qr_code.path}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{ background: "var(--color-primary)", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
-                          title="View"
+                          title={t("View", { defaultValue: "View" })}
                         >
                           <Eye size={16} />
                         </a>
@@ -669,7 +671,7 @@ function MyProfile() {
                             target="_blank"
                             rel="noopener noreferrer"
                             style={{ background: "var(--color-primary)", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
-                            title="View"
+                            title={t("View", { defaultValue: "View" })}
                           >
                             <Eye size={16} />
                           </a>
@@ -686,18 +688,19 @@ function MyProfile() {
           {/* RIGHT SIDE - Account Status */}
           <div className="profile-right">
             <div className="account-status-card">
-              <h3>Account Status</h3>
+              <h3>{t("Account Status", { defaultValue: "Account Status" })}</h3>
               <div className="status-list">
                 <div className="status-item">
                   {(() => {
                     const st = String(user?.status || (user?.active ? "Active" : "Resigned")).toLowerCase();
                     const colorClass = st === "resigned" ? "text-red-500" : st === "inactive" ? "text-yellow-500" : "text-green-500";
                     const colorStyle = st === "resigned" ? "#ef4444" : st === "inactive" ? "#f59e0b" : "#10b981";
+                    const label = st === "resigned" ? t("Resigned", { defaultValue: "Resigned" }) : st === "inactive" ? t("Inactive", { defaultValue: "Inactive" }) : t("Active", { defaultValue: "Active" });
                     return (
                       <>
                         <span className={`status-dot ${st === "active" ? "dot-active" : "dot-inactive"}`} style={{ backgroundColor: colorStyle }}></span>
                         <span className={`status-text ${colorClass}`} style={{ color: colorStyle, fontWeight: 600 }}>
-                          {user?.status || (user?.active ? "Active" : "Resigned")}
+                          {label}
                         </span>
                       </>
                     );
@@ -708,7 +711,7 @@ function MyProfile() {
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
                   </span>
                   <div className="status-info">
-                    <span className="status-label">Member Since</span>
+                    <span className="status-label">{t("Member Since", { defaultValue: "Member Since" })}</span>
                     <span className="status-value">
                       {user.created_at ? new Date(user.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "---"}
                     </span>
@@ -719,7 +722,7 @@ function MyProfile() {
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
                   </span>
                   <div className="status-info">
-                    <span className="status-label">Last Login</span>
+                    <span className="status-label">{t("Last Login", { defaultValue: "Last Login" })}</span>
                     <span className="status-value">
                       {user.last_login_at
                         ? new Date(user.last_login_at).toLocaleString("en-US", {
@@ -729,7 +732,7 @@ function MyProfile() {
                           minute: "2-digit",
                           hour12: true,
                         })
-                        : "Never logged in"}
+                        : t("Never logged in", { defaultValue: "Never logged in" })}
                     </span>
                   </div>
                 </div>
@@ -738,8 +741,8 @@ function MyProfile() {
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 21h18"></path><path d="M9 8h1"></path><path d="M9 12h1"></path><path d="M9 16h1"></path><path d="M14 8h1"></path><path d="M14 12h1"></path><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"></path></svg>
                   </span>
                   <div className="status-info">
-                    <span className="status-label">Account Type</span>
-                    <span className="status-value">Employee</span>
+                    <span className="status-label">{t("Account Type", { defaultValue: "Account Type" })}</span>
+                    <span className="status-value">{t("Employee", { defaultValue: "Employee" })}</span>
                   </div>
                 </div>
               </div>
@@ -759,8 +762,8 @@ function MyProfile() {
           >
             <div className="user-modal-header">
               <div>
-                <h2>Change Password</h2>
-                <p className="modal-subtitle">Update your account password.</p>
+                <h2>{t("Change Password", { defaultValue: "Change Password" })}</h2>
+                <p className="modal-subtitle">{t("Update your account password.", { defaultValue: "Update your account password." })}</p>
               </div>
               <button className="user-modal-close" onClick={handlePasswordClose}>
                 &#10005;
@@ -770,7 +773,7 @@ function MyProfile() {
             <form className="user-form" onSubmit={handlePasswordSubmit}>
               <div className="user-form-grid" style={{ gridTemplateColumns: "1fr", gap: "12px" }}>
                 <div className="form-row" style={{ position: "relative" }}>
-                  <label htmlFor="old-password">Current Password</label>
+                  <label htmlFor="old-password">{t("Current Password", { defaultValue: "Current Password" })}</label>
                   <div style={{ position: "relative" }}>
                     <svg style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
@@ -782,7 +785,7 @@ function MyProfile() {
                       name="old_password"
                       value={passwordForm.old_password}
                       onChange={(e) => { handlePasswordChange(e); setPasswordIsDirty(true); }}
-                      placeholder="Enter current password"
+                      placeholder={t("Enter current password", { defaultValue: "Enter current password" })}
                       className={passwordErrors.old_password ? "field-error" : ""}
                       style={{ width: "100%", padding: "8px 36px 8px 32px", border: "1px solid var(--border-color)", borderRadius: "6px", fontSize: "14px", outline: "none", boxSizing: "border-box" }}
                     />
@@ -802,8 +805,8 @@ function MyProfile() {
                   name="new_password"
                   value={passwordForm.new_password}
                   onChange={(e) => { handlePasswordChange(e); setPasswordIsDirty(true); }}
-                  placeholder="Enter new password"
-                  label="New Password"
+                  placeholder={t("Enter new password", { defaultValue: "Enter new password" })}
+                  label={t("New Password", { defaultValue: "New Password" })}
                   error={passwordErrors.new_password}
                 />
 
@@ -812,8 +815,8 @@ function MyProfile() {
                   name="confirm_password"
                   value={passwordForm.confirm_password}
                   onChange={(e) => { handlePasswordChange(e); setPasswordIsDirty(true); }}
-                  placeholder="Confirm new password"
-                  label="Confirm New Password"
+                  placeholder={t("Confirm new password", { defaultValue: "Confirm new password" })}
+                  label={t("Confirm New Password", { defaultValue: "Confirm New Password" })}
                   showStrength={false}
                   showRules={false}
                   error={passwordErrors.confirm_password}
@@ -826,14 +829,14 @@ function MyProfile() {
                   className="secondary-button"
                   onClick={handlePasswordClose}
                 >
-                  Cancel
+                  {t("Cancel", { defaultValue: "Cancel" })}
                 </button>
                 <button
                   type="submit"
                   className="primary-button"
                   disabled={saving || !canSubmitPassword}
                 >
-                  {saving ? "Saving..." : "Change Password"}
+                  {saving ? t("Saving...", { defaultValue: "Saving..." }) : t("Change Password", { defaultValue: "Change Password" })}
                 </button>
               </div>
             </form>

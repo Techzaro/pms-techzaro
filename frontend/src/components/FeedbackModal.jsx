@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { getAutoCapturedMetadata } from "../utils/feedbackAutoCapture";
 import { authToken } from "../utils/auth";
 import API_URL from "../config/api";
@@ -33,15 +34,8 @@ const MODULE_OPTIONS = [
   "Settings",
 ];
 
-const RATING_LABELS = {
-  1: "1 Star - Very Poor",
-  2: "2 Stars - Poor / Needs Work",
-  3: "3 Stars - Average",
-  4: "4 Stars - Good / Satisfactory",
-  5: "5 Stars - Excellent / Amazing",
-};
-
 export default function FeedbackModal({ isOpen, onClose }) {
+  const { t } = useTranslation();
   const location = useLocation();
 
   const [feedbackType, setFeedbackType] = useState("Bug Report");
@@ -59,6 +53,14 @@ export default function FeedbackModal({ isOpen, onClose }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [confirmationData, setConfirmationData] = useState(null);
+
+  const ratingLabels = {
+    1: t("1 Star - Very Poor", { defaultValue: "1 Star - Very Poor" }),
+    2: t("2 Stars - Poor / Needs Work", { defaultValue: "2 Stars - Poor / Needs Work" }),
+    3: t("3 Stars - Average", { defaultValue: "3 Stars - Average" }),
+    4: t("4 Stars - Good / Satisfactory", { defaultValue: "4 Stars - Good / Satisfactory" }),
+    5: t("5 Stars - Excellent / Amazing", { defaultValue: "5 Stars - Excellent / Amazing" }),
+  };
 
   // Auto-detect module from URL path and reset state when opening
   useEffect(() => {
@@ -97,12 +99,12 @@ export default function FeedbackModal({ isOpen, onClose }) {
 
     const isDescriptionEmpty = !description || description.replace(/<[^>]*>/g, "").trim() === "";
     if (!subject.trim() || isDescriptionEmpty) {
-      setErrorMsg("Subject and Detailed Description are required.");
+      setErrorMsg(t("Subject and Detailed Description are required.", { defaultValue: "Subject and Detailed Description are required." }));
       return;
     }
 
     if (feedbackType === "Feature Rating" && rating === 0) {
-      setErrorMsg("Please select a 5-star rating (1 to 5 stars) for Feature Rating.");
+      setErrorMsg(t("Please select a star rating (1 to 5) for your feature rating.", { defaultValue: "Please select a star rating (1 to 5) for your feature rating." }));
       return;
     }
 
@@ -112,21 +114,23 @@ export default function FeedbackModal({ isOpen, onClose }) {
     try {
       const formData = new FormData();
       formData.append("feedback_type", feedbackType);
-      formData.append("subject", subject);
+      formData.append("subject", subject.trim());
       formData.append("description", description);
       formData.append("module", moduleName);
       formData.append("priority", priority);
 
-      if (feedbackType === "Feature Rating" || rating > 0) {
+      if (feedbackType === "Feature Rating" && rating > 0) {
         formData.append("rating", rating);
       }
 
-      // Auto-captured data payload
+      // Metadata
+      formData.append("page_url", autoCaptured.page_url);
       formData.append("current_page", autoCaptured.current_page);
       formData.append("browser", autoCaptured.browser);
       formData.append("operating_system", autoCaptured.operating_system);
       formData.append("device_type", autoCaptured.device_type);
-      formData.append("app_version", autoCaptured.app_version);
+      formData.append("screen_resolution", autoCaptured.screen_resolution);
+      formData.append("viewport_size", autoCaptured.viewport_size);
 
       if (autoCaptured.organization_id) {
         formData.append("organization_id", autoCaptured.organization_id);
@@ -152,13 +156,13 @@ export default function FeedbackModal({ isOpen, onClose }) {
       const json = await res.json();
 
       if (!res.ok || !json.success) {
-        throw new Error(json.message || "Failed to submit feedback.");
+        throw new Error(json.message || t("Failed to submit feedback.", { defaultValue: "Failed to submit feedback." }));
       }
 
       // Show confirmation modal view
       setConfirmationData(json.data);
     } catch (err) {
-      setErrorMsg(err.message || "Something went wrong. Please try again.");
+      setErrorMsg(err.message || t("Something went wrong. Please try again.", { defaultValue: "Something went wrong. Please try again." }));
     } finally {
       setIsSubmitting(false);
     }
@@ -171,7 +175,7 @@ export default function FeedbackModal({ isOpen, onClose }) {
         <div className="fb-modal-header">
           <h3>
             <MdOutlineFeedback color="#2563eb" size={22} />
-            User Feedback & Product Improvement
+            {t("User Feedback & Product Improvement", { defaultValue: "User Feedback & Product Improvement" })}
           </h3>
           <button className="fb-modal-close" onClick={onClose}>
             <MdClose />
@@ -186,10 +190,10 @@ export default function FeedbackModal({ isOpen, onClose }) {
                 <MdCheckCircle />
               </div>
               <h3 style={{ margin: "0 0 8px 0", color: "#0f172a" }}>
-                Thank You for Your Feedback!
+                {t("Thank You for Your Feedback!", { defaultValue: "Thank You for Your Feedback!" })}
               </h3>
               <p style={{ margin: 0, color: "#64748b", fontSize: "0.9rem" }}>
-                Your submission has been logged and routed to the Product Improvement Team.
+                {t("Your submission has been logged and routed to the Product Improvement Team.", { defaultValue: "Your submission has been logged and routed to the Product Improvement Team." })}
               </p>
 
               <div className="fb-confirm-ref">
@@ -198,31 +202,31 @@ export default function FeedbackModal({ isOpen, onClose }) {
 
               <div className="fb-confirm-meta">
                 <div className="fb-confirm-meta-item">
-                  <span>Submission Date</span>
+                  <span>{t("Submission Date", { defaultValue: "Submission Date" })}</span>
                   <strong>
                     {new Date(confirmationData.submitted_at).toLocaleString()}
                   </strong>
                 </div>
                 <div className="fb-confirm-meta-item">
-                  <span>Feedback Type</span>
-                  <strong>{confirmationData.feedback_type}</strong>
+                  <span>{t("Feedback Type", { defaultValue: "Feedback Type" })}</span>
+                  <strong>{t(confirmationData.feedback_type)}</strong>
                 </div>
                 <div className="fb-confirm-meta-item">
-                  <span>Status</span>
+                  <span>{t("Status")}</span>
                   <strong style={{ color: "#2563eb" }}>
-                    {confirmationData.status}
+                    {t(confirmationData.status)}
                   </strong>
                 </div>
                 <div className="fb-confirm-meta-item">
-                  <span>Module</span>
-                  <strong>{moduleName}</strong>
+                  <span>{t("Module", { defaultValue: "Module" })}</span>
+                  <strong>{t(moduleName)}</strong>
                 </div>
               </div>
             </div>
 
             <div className="fb-modal-footer">
               <button className="fb-btn-submit" onClick={onClose}>
-                Done
+                {t("Done", { defaultValue: "Done" })}
               </button>
             </div>
           </div>
@@ -248,15 +252,15 @@ export default function FeedbackModal({ isOpen, onClose }) {
 
               {/* Auto-Captured Info Banner */}
               <div className="fb-auto-badge">
-                <span>💻 <strong>OS:</strong> {autoCaptured.operating_system}</span>
-                <span>🌐 <strong>Browser:</strong> {autoCaptured.browser}</span>
-                <span>📍 <strong>Page:</strong> {autoCaptured.current_page}</span>
+                <span>💻 <strong>{t("OS", { defaultValue: "OS" })}:</strong> {autoCaptured.operating_system}</span>
+                <span>🌐 <strong>{t("Browser", { defaultValue: "Browser" })}:</strong> {autoCaptured.browser}</span>
+                <span>📍 <strong>{t("Page", { defaultValue: "Page" })}:</strong> {autoCaptured.current_page}</span>
               </div>
 
               {/* Grid: Type & Module */}
               <div className="fb-form-grid">
                 <div className="fb-form-group">
-                  <label>Feedback Type *</label>
+                  <label>{t("Feedback Type *", { defaultValue: "Feedback Type *" })}</label>
                   <select
                     className="fb-form-select"
                     value={feedbackType}
@@ -265,16 +269,16 @@ export default function FeedbackModal({ isOpen, onClose }) {
                       setErrorMsg("");
                     }}
                   >
-                    {FEEDBACK_TYPES.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
+                    {FEEDBACK_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {t(type)}
                       </option>
                     ))}
                   </select>
                 </div>
 
                 <div className="fb-form-group">
-                  <label>Module / Area</label>
+                  <label>{t("Module / Area", { defaultValue: "Module / Area" })}</label>
                   <select
                     className="fb-form-select"
                     value={moduleName}
@@ -282,7 +286,7 @@ export default function FeedbackModal({ isOpen, onClose }) {
                   >
                     {MODULE_OPTIONS.map((m) => (
                       <option key={m} value={m}>
-                        {m}
+                        {t(m)}
                       </option>
                     ))}
                   </select>
@@ -293,7 +297,7 @@ export default function FeedbackModal({ isOpen, onClose }) {
               {feedbackType === "Feature Rating" && (
                 <div className="fb-rating-block">
                   <div className="fb-rating-label">
-                    Rate Your Experience with this Feature *
+                    {t("Rate Your Experience with this Feature *", { defaultValue: "Rate Your Experience with this Feature *" })}
                   </div>
                   <div className="fb-rating-stars">
                     {[1, 2, 3, 4, 5].map((star) => {
@@ -314,18 +318,18 @@ export default function FeedbackModal({ isOpen, onClose }) {
                     })}
                   </div>
                   <div className="fb-rating-text">
-                    {RATING_LABELS[hoverRating || rating] || "Click stars to select rating (1 - 5)"}
+                    {ratingLabels[hoverRating || rating] || t("Click stars to select rating (1 - 5)", { defaultValue: "Click stars to select rating (1 - 5)" })}
                   </div>
                 </div>
               )}
 
               {/* Subject */}
               <div className="fb-form-group full-width">
-                <label>Subject *</label>
+                <label>{t("Subject *", { defaultValue: "Subject *" })}</label>
                 <input
                   type="text"
                   className="fb-form-input"
-                  placeholder="Brief summary of your feedback or feature rating..."
+                  placeholder={t("Brief summary of your feedback or feature rating...", { defaultValue: "Brief summary of your feedback or feature rating..." })}
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
                   required
@@ -334,37 +338,37 @@ export default function FeedbackModal({ isOpen, onClose }) {
 
               {/* Description */}
               <div className="fb-form-group full-width">
-                <label>Detailed Description *</label>
+                <label>{t("Detailed Description *", { defaultValue: "Detailed Description *" })}</label>
                 <RichTextEditor
                   value={description}
                   onChange={(content) => setDescription(content)}
-                  placeholder="Describe your feedback, feature rating justification, or steps to reproduce in detail..."
+                  placeholder={t("Describe your feedback, feature rating justification, or steps to reproduce in detail...", { defaultValue: "Describe your feedback, feature rating justification, or steps to reproduce in detail..." })}
                 />
               </div>
 
               {/* Priority Selector */}
               <div className="fb-form-group full-width">
-                <label>Priority (Optional)</label>
+                <label>{t("Priority (Optional)", { defaultValue: "Priority (Optional)" })}</label>
                 <select
                   className="fb-form-select"
                   value={priority}
                   onChange={(e) => setPriority(e.target.value)}
                 >
-                  <option value="Low">Low - Cosmetic or minor suggestion</option>
-                  <option value="Medium">Medium - General improvement or feature request</option>
-                  <option value="High">High - Significant feature gap or workflow issue</option>
-                  <option value="Urgent">Urgent - Blocking bug or critical failure</option>
+                  <option value="Low">{t("Low - Cosmetic or minor suggestion", { defaultValue: "Low - Cosmetic or minor suggestion" })}</option>
+                  <option value="Medium">{t("Medium - General improvement or feature request", { defaultValue: "Medium - General improvement or feature request" })}</option>
+                  <option value="High">{t("High - Significant feature gap or workflow issue", { defaultValue: "High - Significant feature gap or workflow issue" })}</option>
+                  <option value="Urgent">{t("Urgent - Blocking bug or critical failure", { defaultValue: "Urgent - Blocking bug or critical failure" })}</option>
                 </select>
               </div>
 
               {/* Attachments Section with EXPLICIT File Inputs */}
               <div className="fb-form-group full-width">
-                <label>Attachments (Optional)</label>
+                <label>{t("Attachments (Optional)", { defaultValue: "Attachments (Optional)" })}</label>
                 <div className="fb-file-inputs">
                   {/* 1. Screenshot File Input */}
                   <label className="fb-file-box">
                     <MdCloudUpload size={24} color="#3b82f6" />
-                    <div className="fb-file-box-title">Upload Screenshot</div>
+                    <div className="fb-file-box-title">{t("Upload Screenshot", { defaultValue: "Upload Screenshot" })}</div>
                     <span style={{ fontSize: "0.72rem", color: "#64748b" }}>PNG, JPG, WEBP</span>
                     <input
                       type="file"
@@ -379,7 +383,7 @@ export default function FeedbackModal({ isOpen, onClose }) {
                   {/* 2. Screen Recording File Input */}
                   <label className="fb-file-box">
                     <MdCloudUpload size={24} color="#8b5cf6" />
-                    <div className="fb-file-box-title">Screen Recording</div>
+                    <div className="fb-file-box-title">{t("Screen Recording", { defaultValue: "Screen Recording" })}</div>
                     <span style={{ fontSize: "0.72rem", color: "#64748b" }}>MP4, WEBM, MOV</span>
                     <input
                       type="file"
@@ -394,7 +398,7 @@ export default function FeedbackModal({ isOpen, onClose }) {
                   {/* 3. Document / General File Input */}
                   <label className="fb-file-box">
                     <MdCloudUpload size={24} color="#10b981" />
-                    <div className="fb-file-box-title">File Attachment</div>
+                    <div className="fb-file-box-title">{t("File Attachment", { defaultValue: "File Attachment" })}</div>
                     <span style={{ fontSize: "0.72rem", color: "#64748b" }}>PDF, DOCX, ZIP</span>
                     <input
                       type="file"
@@ -416,14 +420,14 @@ export default function FeedbackModal({ isOpen, onClose }) {
                 onClick={onClose}
                 disabled={isSubmitting}
               >
-                Cancel
+                {t("Cancel")}
               </button>
               <button
                 type="submit"
                 className="fb-btn-submit"
                 disabled={isSubmitting}
               >
-                {isSubmitting ? "Submitting..." : "Submit Feedback"}
+                {isSubmitting ? t("Submitting...", { defaultValue: "Submitting..." }) : t("Submit Feedback", { defaultValue: "Submit Feedback" })}
               </button>
             </div>
           </form>

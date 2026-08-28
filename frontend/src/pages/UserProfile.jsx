@@ -9,6 +9,7 @@
  */
 
 import { useState, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { useParams, useNavigate } from "react-router-dom";
 import { MdEdit, MdArrowBack } from "react-icons/md";
@@ -80,6 +81,7 @@ const displayDate = (dateStr) => {
 
 /** Main UserProfile page — fetches and displays another user's full profile. */
 function UserProfile() {
+  const { t } = useTranslation();
   const { userId } = useParams();
   const navigate = useNavigate();
   const notify = useNotification();
@@ -242,7 +244,7 @@ function UserProfile() {
       const data = await res.json();
       if (data.success) setResignImpact(data.impact);
     } catch (err) {
-      notify.error("Failed to load impact analysis");
+      notify.error(t("Failed to load impact analysis", { defaultValue: "Failed to load impact analysis" }));
       setResignConfirmOpen(false);
     } finally {
       setResignImpactLoading(false);
@@ -271,7 +273,7 @@ function UserProfile() {
         _notifHandled: true,
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to unlock password recovery");
+      if (!res.ok) throw new Error(data.message || t("Failed to unlock password recovery", { defaultValue: "Failed to unlock password recovery" }));
 
       setProfileData((prev) => ({
         ...prev,
@@ -318,14 +320,14 @@ function UserProfile() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Action failed");
+      if (!res.ok) throw new Error(data.message || t("Action failed", { defaultValue: "Action failed" }));
 
       if (type === "resign") {
         setProfileData((prev) => ({ ...prev, user: { ...prev.user, active: false, must_change_password: false } }));
         showSuccessMessage("Guest", "resigned");
       } else {
         showSuccessMessage("Guest", type === "resend-invitation" ? "invitation resent" : "password reset");
-        if (data.email_sent === false) notify.error("Email sending failed.");
+        if (data.email_sent === false) notify.error(t("Email sending failed.", { defaultValue: "Email sending failed." }));
       }
       publish("data:changed", { type: "guest", action: type });
     } catch (err) {
@@ -355,7 +357,7 @@ function UserProfile() {
   const handleGuestEditSubmit = async (e) => {
     e.preventDefault();
     if (!guestEditData.name.trim() || !guestEditData.personal_email.trim()) {
-      notify.error("Name and email are required.");
+      notify.error(t("Name and email are required.", { defaultValue: "Name and email are required." }));
       return;
     }
     setGuestEditSubmitting(true);
@@ -376,7 +378,7 @@ function UserProfile() {
         body: formData,
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to update guest");
+      if (!res.ok) throw new Error(data.message || t("Failed to update guest", { defaultValue: "Failed to update guest" }));
 
       setProfileData((prev) => ({ ...prev, user: { ...prev.user, ...data.user } }));
       showSuccessMessage("Guest", "updated");
@@ -398,11 +400,11 @@ function UserProfile() {
         headers: { Accept: "application/json", ...authHeaders() },
         skipLoader: true,
       });
-      if (!res.ok) throw new Error("Unable to load user profile");
+      if (!res.ok) throw new Error(t("Unable to load user profile", { defaultValue: "Unable to load user profile" }));
       const data = await res.json();
       setProfileData(data);
     } catch (err) {
-      setError(err.message || "Failed to load profile");
+      setError(err.message || t("Failed to load profile", { defaultValue: "Failed to load profile" }));
     } finally {
       setLoading(false);
     }
@@ -670,7 +672,7 @@ function UserProfile() {
           _notifHandled: true,
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.message || "Failed to delete document");
+        if (!res.ok) throw new Error(data.message || t("Failed to delete document", { defaultValue: "Failed to delete document" }));
         if (data.user) {
           setProfileData((prev) => {
             if (!prev) return prev;
@@ -698,7 +700,7 @@ function UserProfile() {
           _notifHandled: true,
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.message || "Failed to replace document");
+        if (!res.ok) throw new Error(data.message || t("Failed to replace document", { defaultValue: "Failed to replace document" }));
         if (data.user) {
           setProfileData((prev) => {
             if (!prev) return prev;
@@ -721,7 +723,7 @@ function UserProfile() {
             _notifHandled: true,
           });
           const data = await res.json();
-          if (!res.ok) throw new Error(data.message || "Failed to rename document");
+          if (!res.ok) throw new Error(data.message || t("Failed to rename document", { defaultValue: "Failed to rename document" }));
           if (data.user) {
             setProfileData((prev) => {
               if (!prev) return prev;
@@ -773,7 +775,7 @@ function UserProfile() {
         _notifHandled: true,
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to delete document");
+      if (!res.ok) throw new Error(data.message || t("Failed to delete document", { defaultValue: "Failed to delete document" }));
 
       if (data.user) {
         setProfileData((prev) => {
@@ -799,56 +801,56 @@ function UserProfile() {
   const validateEditForm = () => {
     const errors = {};
     if (!editUser.name.trim()) {
-      errors.name = "Full Name is required.";
+      errors.name = t("Full Name is required.", { defaultValue: "Full Name is required." });
     } else if (!/^[a-zA-Z\s]+$/.test(editUser.name.trim())) {
-      errors.name = "Full Name must contain only letters and spaces.";
+      errors.name = t("Full Name must contain only letters and spaces.", { defaultValue: "Full Name must contain only letters and spaces." });
     }
     if (!editUser.father_name.trim()) {
-      errors.father_name = "Father Name is required.";
+      errors.father_name = t("Father Name is required.", { defaultValue: "Father Name is required." });
     } else if (!/^[a-zA-Z\s]+$/.test(editUser.father_name.trim())) {
-      errors.father_name = "Father Name must contain only letters and spaces.";
+      errors.father_name = t("Father Name must contain only letters and spaces.", { defaultValue: "Father Name must contain only letters and spaces." });
     }
     if (!editUser.id_card_number.trim()) {
-      errors.id_card_number = "ID Card Number is required.";
+      errors.id_card_number = t("ID Card Number is required.", { defaultValue: "ID Card Number is required." });
     } else if (!/^\d{5}-\d{7}-\d$/.test(editUser.id_card_number.trim())) {
-      errors.id_card_number = "CNIC must be in format XXXXX-XXXXXXX-X (13 digits).";
+      errors.id_card_number = t("CNIC must be in format XXXXX-XXXXXXX-X (13 digits).", { defaultValue: "CNIC must be in format XXXXX-XXXXXXX-X (13 digits)." });
     }
-    if (!editUser.present_address.trim()) errors.present_address = "Present Address is required.";
+    if (!editUser.present_address.trim()) errors.present_address = t("Present Address is required.", { defaultValue: "Present Address is required." });
     if (!editUser.phone_number.trim()) {
-      errors.phone_number = "Phone Number is required.";
+      errors.phone_number = t("Phone Number is required.", { defaultValue: "Phone Number is required." });
     } else if (!/^0\d{3}-\d{7}$/.test(editUser.phone_number.trim())) {
-      errors.phone_number = "Phone Number must be in format 03XX-XXXXXXX.";
+      errors.phone_number = t("Phone Number must be in format 03XX-XXXXXXX.", { defaultValue: "Phone Number must be in format 03XX-XXXXXXX." });
     }
     if (editUser.emergency_contact_phone.trim() && !/^0\d{3}-\d{7}$/.test(editUser.emergency_contact_phone.trim())) {
-      errors.emergency_contact_phone = "Emergency Phone must be in format 03XX-XXXXXXX.";
+      errors.emergency_contact_phone = t("Emergency Phone must be in format 03XX-XXXXXXX.", { defaultValue: "Emergency Phone must be in format 03XX-XXXXXXX." });
     }
     if (editUser.personal_email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editUser.personal_email.trim())) {
-      errors.personal_email = "Please enter a valid personal email address.";
+      errors.personal_email = t("Please enter a valid personal email address.", { defaultValue: "Please enter a valid personal email address." });
     }
     if (editUser.professional_email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editUser.professional_email.trim())) {
-      errors.professional_email = "Please enter a valid professional email address.";
+      errors.professional_email = t("Please enter a valid professional email address.", { defaultValue: "Please enter a valid professional email address." });
     }
     const isExistingProEmail = editUser.professional_email.trim() === (profileData?.user?.professional_email || "").trim();
     if (editUser.professional_email.trim() && !editUser.professional_email_password.trim() && !isExistingProEmail) {
-      errors.professional_email_password = "Password is required when professional email is provided.";
+      errors.professional_email_password = t("Password is required when professional email is provided.", { defaultValue: "Password is required when professional email is provided." });
     }
     if (!editUser.department) {
-      errors.department = "Department is required.";
+      errors.department = t("Department is required.", { defaultValue: "Department is required." });
     } else if (editUser.department === "__custom__" && !editUser.departmentCustom.trim()) {
-      errors.departmentCustom = "Custom Department is required.";
+      errors.departmentCustom = t("Custom Department is required.", { defaultValue: "Custom Department is required." });
     }
     if (!editUser.designation) {
-      errors.designation = "Designation is required.";
+      errors.designation = t("Designation is required.", { defaultValue: "Designation is required." });
     } else if (editUser.designation === "__custom__" && !editUser.designationCustom.trim()) {
-      errors.designationCustom = "Custom Designation is required.";
+      errors.designationCustom = t("Custom Designation is required.", { defaultValue: "Custom Designation is required." });
     }
-    if (!editUser.employee_code.trim()) errors.employee_code = "Employee Code is required.";
-    if (!editUser.job_started_date) errors.job_started_date = "Job Start Date is required.";
+    if (!editUser.employee_code.trim()) errors.employee_code = t("Employee Code is required.", { defaultValue: "Employee Code is required." });
+    if (!editUser.job_started_date) errors.job_started_date = t("Job Start Date is required.", { defaultValue: "Job Start Date is required." });
     if (editUser.gross_salary && editUser.gross_salary.length > 100) {
-      errors.gross_salary = "Gross Salary must be 300 characters or less.";
+      errors.gross_salary = t("Gross Salary must be 300 characters or less.", { defaultValue: "Gross Salary must be 300 characters or less." });
     }
     if (editUser.bank_account_number.trim() && !/^[\d\s\-a-zA-Z]+$/.test(editUser.bank_account_number.trim())) {
-      errors.bank_account_number = "Bank Account Number must contain only digits, letters, spaces, or dashes.";
+      errors.bank_account_number = t("Bank Account Number must contain only digits, letters, spaces, or dashes.", { defaultValue: "Bank Account Number must contain only digits, letters, spaces, or dashes." });
     }
     return errors;
   };
@@ -994,7 +996,7 @@ function UserProfile() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Unable to update user");
+      if (!res.ok) throw new Error(data.message || t("Unable to update user", { defaultValue: "Unable to update user" }));
 
       setIsEditModalOpen(false);
       setEditFiles({});
@@ -1029,7 +1031,7 @@ function UserProfile() {
     return (
       <DashboardLayout hideRightSidebar={true}>
         <div className="user-profile-page">
-          <div className="profile-loading">Loading profile...</div>
+          <div className="profile-loading">{t("Loading profile...", { defaultValue: "Loading profile..." })}</div>
         </div>
       </DashboardLayout>
     );
@@ -1042,7 +1044,7 @@ function UserProfile() {
           <div className="profile-error">
             <p>{error}</p>
             <button className="primary-button" onClick={() => navigate(rolePath("manage-users"))}>
-              Go Back
+              {t("Go Back", { defaultValue: "Go Back" })}
             </button>
           </div>
         </div>
@@ -1050,13 +1052,14 @@ function UserProfile() {
     );
   }
 
+
   const { user, account } = profileData;
   const isResignedProfile = user?.status === "Resigned" || user?.status === "resigned" || account?.status === "Resigned" || account?.status === "resigned";
   const isOwnProfile = String(getUser()?.id) === String(userId);
 
   const breadcrumbs = [
-    { label: "Users", path: rolePath("manage-users") },
-    { label: user?.name || "User Profile" },
+    { label: t("Users", { defaultValue: "Users" }), path: rolePath("manage-users") },
+    { label: user?.name || t("User Profile", { defaultValue: "User Profile" }) },
   ];
 
   const currentUserIndex = allUsers.findIndex((u) => String(u.id) === String(userId));
@@ -1071,8 +1074,8 @@ function UserProfile() {
         <Breadcrumb items={breadcrumbs} />
             <div className="profile-header-profile" style={{ display: "flex", alignItems: "center",gap: 310, }}>
               <div>
-                <h1>{user?.role === "guest" ? "Guest Profile" : "User Profile"}</h1>
-                <p>{user?.role === "guest" ? "View and manage guest information and account settings." : "View and manage your personal information and account settings."}</p>
+                <h1>{user?.role === "guest" ? t("Guest Profile", { defaultValue: "Guest Profile" }) : t("User Profile", { defaultValue: "User Profile" })}</h1>
+                <p>{user?.role === "guest" ? t("View and manage guest information and account settings.", { defaultValue: "View and manage guest information and account settings." }) : t("View and manage your personal information and account settings.", { defaultValue: "View and manage your personal information and account settings." })}</p>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
                 <button
@@ -1083,7 +1086,7 @@ function UserProfile() {
                   onMouseLeave={(e) => { if (hasPrev) e.target.style.background = "var(--bg-card)"; }}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-                  Previous
+                  {t("Previous", { defaultValue: "Previous" })}
                 </button>
                 <button
                   disabled={!hasNext}
@@ -1092,7 +1095,7 @@ function UserProfile() {
                   onMouseEnter={(e) => { if (hasNext) e.target.style.background = "var(--border-light)"; }}
                   onMouseLeave={(e) => { if (hasNext) e.target.style.background = "var(--bg-card)"; }}
                 >
-                  Next
+                  {t("Next", { defaultValue: "Next" })}
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
                 </button>
               </div>
@@ -1130,26 +1133,26 @@ function UserProfile() {
               {/* Personal Information */}
               <div className="profile-info-card">
                 <div className="info-card-header">
-                  <h3>Personal Information</h3>
+                  <h3>{t("Personal Information", { defaultValue: "Personal Information" })}</h3>
                   <div style={{ display: "flex", gap: "8px" }}>
                     {user.role !== "guest" && (!["admin", "manager"].includes(user.role) || currentUserRole === "admin") && (
                       <button className="btn-edit" onClick={openEditModal} disabled={isResignedProfile || isOwnProfile} style={isResignedProfile || isOwnProfile ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
-                        <MdEdit size={16} /> Edit
+                        <MdEdit size={16} /> {t("Edit", { defaultValue: "Edit" })}
                       </button>
                     )}
                     {user.role !== "guest" && (!["admin", "manager"].includes(user.role) || currentUserRole === "admin") && user.active !== false && String(getUser()?.id) !== String(userId) && (
                       <button className="btn-edit" onClick={handleResignUser} style={{ background: "var(--color-danger)" }}>
-                        <ResignIcon /> Resign
+                        <ResignIcon /> {t("Resign", { defaultValue: "Resign" })}
                       </button>
                     )}
                     {user.role === "guest" && currentUserRole !== "guest" && (
                       <>
                         <button className="btn-edit" onClick={openGuestEditModal}>
-                          <MdEdit size={16} /> Edit
+                          <MdEdit size={16} /> {t("Edit", { defaultValue: "Edit" })}
                         </button>
                         {!(user.active === false && user.must_change_password === false) && (
                           <button className="btn-edit" onClick={() => setGuestActionModal({ open: true, type: "resign" })} style={{ background: "var(--color-danger)" }}>
-                            <ResignIcon /> Resign
+                            <ResignIcon /> {t("Resign", { defaultValue: "Resign" })}
                           </button>
                         )}
                       </>
@@ -1160,38 +1163,38 @@ function UserProfile() {
                   {user.role === "guest" ? (
                     <>
                       <div className="info-row">
-                        <span className="info-label">Client Name</span>
+                        <span className="info-label">{t("Client Name", { defaultValue: "Client Name" })}</span>
                         <span className="info-value">{user.name || "---"}</span>
                       </div>
                       <div className="info-row">
-                        <span className="info-label">Email</span>
+                        <span className="info-label">{t("Email", { defaultValue: "Email" })}</span>
                         <span className="info-value">{user.personal_email || user.email || "---"}</span>
                       </div>
                       <div className="info-row">
-                        <span className="info-label">Phone</span>
+                        <span className="info-label">{t("Phone", { defaultValue: "Phone" })}</span>
                         <span className="info-value">{displayPhone(user.phone_number || user.contact_no)}</span>
                       </div>
                       <div className="info-row">
-                        <span className="info-label">Company Name</span>
+                        <span className="info-label">{t("Company Name", { defaultValue: "Company Name" })}</span>
                         <span className="info-value">{user.company_name || "---"}</span>
                       </div>
                     </>
                   ) : (
                     <>
                       <div className="info-row">
-                        <span className="info-label">Full Name</span>
+                        <span className="info-label">{t("Full Name", { defaultValue: "Full Name" })}</span>
                         <span className="info-value">{user.name || "---"}</span>
                       </div>
                       <div className="info-row">
-                        <span className="info-label">Father Name</span>
+                        <span className="info-label">{t("Father Name", { defaultValue: "Father Name" })}</span>
                         <span className="info-value">{user.father_name || "---"}</span>
                       </div>
                       <div className="info-row">
-                        <span className="info-label">ID Card Number</span>
+                        <span className="info-label">{t("ID Card Number", { defaultValue: "ID Card Number" })}</span>
                         <span className="info-value">{displayCNIC(user.id_card_number)}</span>
                       </div>
                       <div className="info-row">
-                        <span className="info-label">Phone Number</span>
+                        <span className="info-label">{t("Phone Number", { defaultValue: "Phone Number" })}</span>
                         <span className="info-value">{displayPhone(user.phone_number || user.contact_no)}</span>
                       </div>
                     </>
@@ -1203,15 +1206,15 @@ function UserProfile() {
               {user.role !== "guest" && (
               <div className="profile-info-card">
                 <div className="info-card-header">
-                  <h3>Address</h3>
+                  <h3>{t("Address", { defaultValue: "Address" })}</h3>
                 </div>
                 <div className="info-card-body">
                   <div className="info-row">
-                    <span className="info-label">Present Address</span>
+                    <span className="info-label">{t("Present Address", { defaultValue: "Present Address" })}</span>
                     <span className="info-value">{user.present_address || user.address || "---"}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Permanent Address</span>
+                    <span className="info-label">{t("Permanent Address", { defaultValue: "Permanent Address" })}</span>
                     <span className="info-value">{user.permanent_address || "---"}</span>
                   </div>
                 </div>
@@ -1222,19 +1225,19 @@ function UserProfile() {
               {user.role !== "guest" && (
               <div className="profile-info-card">
                 <div className="info-card-header">
-                  <h3>Emergency Contact</h3>
+                  <h3>{t("Emergency Contact", { defaultValue: "Emergency Contact" })}</h3>
                 </div>
                 <div className="info-card-body">
                   <div className="info-row">
-                    <span className="info-label">Name</span>
+                    <span className="info-label">{t("Name", { defaultValue: "Name" })}</span>
                     <span className="info-value">{user.emergency_contact_name || "---"}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Relation</span>
+                    <span className="info-label">{t("Relation", { defaultValue: "Relation" })}</span>
                     <span className="info-value">{user.emergency_contact_relation || "---"}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Phone</span>
+                    <span className="info-label">{t("Phone", { defaultValue: "Phone" })}</span>
                     <span className="info-value">{displayPhone(user.emergency_contact_phone)}</span>
                   </div>
                 </div>
@@ -1245,24 +1248,24 @@ function UserProfile() {
               {user.role !== "guest" && (
               <div className="profile-info-card">
                 <div className="info-card-header">
-                  <h3>Email Accounts</h3>
+                  <h3>{t("Email Accounts", { defaultValue: "Email Accounts" })}</h3>
                 </div>
                 <div className="info-card-body">
                   <div className="info-row">
-                    <span className="info-label">Personal Email</span>
+                    <span className="info-label">{t("Personal Email", { defaultValue: "Personal Email" })}</span>
                     <span className="info-value">{user.personal_email || "---"}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Professional Email</span>
+                    <span className="info-label">{t("Professional Email", { defaultValue: "Professional Email" })}</span>
                     <span className="info-value">{user.professional_email || "---"}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Password of Professional Email</span>
+                    <span className="info-label">{t("Password of Professional Email", { defaultValue: "Password of Professional Email" })}</span>
                     <span className="info-value" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       {user.professional_email_password ? (showProfPassword ? user.professional_email_password : "********") : "---"}
                       {user.professional_email_password && (
                         <button type="button" onClick={() => setShowProfPassword(!showProfPassword)} style={{ background: 'none', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '2px 8px', cursor: 'pointer', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                          {showProfPassword ? "Hide" : "Show"}
+                          {showProfPassword ? t("Hide", { defaultValue: "Hide" }) : t("Show", { defaultValue: "Show" })}
                         </button>
                       )}
                     </span>
@@ -1275,41 +1278,41 @@ function UserProfile() {
               {user.role !== "guest" && (
               <div className="profile-info-card">
                 <div className="info-card-header">
-                  <h3>Employment Details</h3>
+                  <h3>{t("Employment Details", { defaultValue: "Employment Details" })}</h3>
                 </div>
                 <div className="info-card-body">
                   <div className="info-row">
-                    <span className="info-label">Designation</span>
+                    <span className="info-label">{t("Designation", { defaultValue: "Designation" })}</span>
                     <span className="info-value">{user.designation || "---"}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Department</span>
+                    <span className="info-label">{t("Department", { defaultValue: "Department" })}</span>
                     <span className="info-value">{user.department || "---"}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Hired For</span>
+                    <span className="info-label">{t("Hired For", { defaultValue: "Hired For" })}</span>
                     <span className="info-value">{user.hired_for || "---"}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Employee Code</span>
+                    <span className="info-label">{t("Employee Code", { defaultValue: "Employee Code" })}</span>
                     <span className="info-value">{user.employee_code || "---"}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Role</span>
+                    <span className="info-label">{t("Role", { defaultValue: "Role" })}</span>
                     <span className="info-value">
                       {normalizeRole(user.role)}
                     </span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Job Started Date</span>
+                    <span className="info-label">{t("Job Started Date", { defaultValue: "Job Started Date" })}</span>
                     <span className="info-value">{displayDate(user.job_started_date)}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Job Ended Date</span>
+                    <span className="info-label">{t("Job Ended Date", { defaultValue: "Job Ended Date" })}</span>
                     <span className="info-value">{displayDate(user.job_ended_date)}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Applied Via</span>
+                    <span className="info-label">{t("Applied Via", { defaultValue: "Applied Via" })}</span>
                     <span className="info-value">{user.applied_via || "---"}</span>
                   </div>
                 </div>
@@ -1325,7 +1328,7 @@ function UserProfile() {
                       <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
                       <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                     </svg>
-                    Credential Management
+                    {t("Credential Management", { defaultValue: "Credential Management" })}
                   </h3>
                   <div style={{ display: "flex", gap: 8 }}>
                     {user.password_reset_locked && (
@@ -1339,7 +1342,7 @@ function UserProfile() {
                           <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
                           <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
                         </svg>
-                        {unlockRecoveryLoading ? "Unlocking..." : "Enable Password Recovery"}
+                        {unlockRecoveryLoading ? t("Unlocking...", { defaultValue: "Unlocking..." }) : t("Enable Password Recovery", { defaultValue: "Enable Password Recovery" })}
                       </button>
                     )}
                       <button
@@ -1351,45 +1354,45 @@ function UserProfile() {
                           <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
                           <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                         </svg>
-                        Change Password
+                        {t("Change Password", { defaultValue: "Change Password" })}
                       </button>
                   </div>
                 </div>
                 <div className="info-card-body">
                   <div className="info-row">
-                    <span className="info-label">Password Status</span>
+                    <span className="info-label">{t("Password Status", { defaultValue: "Password Status" })}</span>
                     <span className="info-value">
                       {user.credentials_managed_by_admin ? (
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                           <span style={{ padding: "2px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: "#dbeafe", color: "#1e40af" }}>
-                            Admin Managed
+                            {t("Admin Managed", { defaultValue: "Admin Managed" })}
                           </span>
                         </span>
                       ) : (
                         <span style={{ padding: "2px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: "#dcfce7", color: "#166534" }}>
-                          Self-Managed
+                          {t("Self-Managed", { defaultValue: "Self-Managed" })}
                         </span>
                       )}
                     </span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Password Recovery</span>
+                    <span className="info-label">{t("Password Recovery", { defaultValue: "Password Recovery" })}</span>
                     <span className="info-value">
                       {user.password_reset_locked ? (
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                           <span style={{ padding: "2px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: "#fee2e2", color: "#991b1b" }}>
-                            Locked
+                            {t("Locked", { defaultValue: "Locked" })}
                           </span>
                         </span>
                       ) : (
                         <span style={{ padding: "2px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: "#dcfce7", color: "#166534" }}>
-                          Enabled
+                          {t("Enabled", { defaultValue: "Enabled" })}
                         </span>
                       )}
                     </span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Last Password Change</span>
+                    <span className="info-label">{t("Last Password Change", { defaultValue: "Last Password Change" })}</span>
                     <span className="info-value">
                       {user.password_changed_at
                         ? new Date(user.password_changed_at).toLocaleString("en-US", {
@@ -1404,11 +1407,11 @@ function UserProfile() {
                     </span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Changed By</span>
+                    <span className="info-label">{t("Changed By", { defaultValue: "Changed By" })}</span>
                     <span className="info-value">{user.password_changed_by_name || "---"}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Password Version</span>
+                    <span className="info-label">{t("Password Version", { defaultValue: "Password Version" })}</span>
                     <span className="info-value">v{user.password_version || 1}</span>
                   </div>
                 </div>
@@ -1419,23 +1422,23 @@ function UserProfile() {
               {user.role !== "guest" && (
               <div className="profile-info-card">
                 <div className="info-card-header">
-                  <h3>Salary & Bank Details</h3>
+                  <h3>{t("Salary & Bank Details", { defaultValue: "Salary & Bank Details" })}</h3>
                 </div>
                 <div className="info-card-body">
                   <div className="info-row">
-                    <span className="info-label">Gross Salary</span>
+                    <span className="info-label">{t("Gross Salary", { defaultValue: "Gross Salary" })}</span>
                     <span className="info-value">{user.gross_salary || "---"}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Bank Name</span>
+                    <span className="info-label">{t("Bank Name", { defaultValue: "Bank Name" })}</span>
                     <span className="info-value">{user.bank_name || "---"}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Bank Account Number</span>
+                    <span className="info-label">{t("Bank Account Number", { defaultValue: "Bank Account Number" })}</span>
                     <span className="info-value">{user.bank_account_number || "---"}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Bank Account Title</span>
+                    <span className="info-label">{t("Bank Account Title", { defaultValue: "Bank Account Title" })}</span>
                     <span className="info-value">{user.bank_account_title || "---"}</span>
                   </div>
                 </div>
@@ -1446,13 +1449,13 @@ function UserProfile() {
               {user.role !== "guest" && (
               <div className="profile-info-card">
                 <div className="info-card-header">
-                  <h3>Documents</h3>
+                  <h3>{t("Documents", { defaultValue: "Documents" })}</h3>
                 </div>
                 <div className="info-card-body">
                   {[
-                    { label: "Employment Contract", key: "employment_contract" },
-                    { label: "Offer Letter", key: "offer_letter" },
-                    { label: "Techxaro Regulations", key: "techxaro_regulations" },
+                    { label: t("Employment Contract", { defaultValue: "Employment Contract" }), key: "employment_contract" },
+                    { label: t("Offer Letter", { defaultValue: "Offer Letter" }), key: "offer_letter" },
+                    { label: t("Techxaro Regulations", { defaultValue: "Techxaro Regulations" }), key: "techxaro_regulations" },
                   ].map(({ label, key }) => (
                     <div className="info-row" key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                       <span className="info-label">{label}</span>
@@ -1464,7 +1467,7 @@ function UserProfile() {
                               target="_blank"
                               rel="noopener noreferrer"
                               style={{ background: "var(--color-primary)", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
-                              title="View"
+                              title={t("View", { defaultValue: "View" })}
                             >
                               <Eye size={16} />
                             </a>
@@ -1472,7 +1475,7 @@ function UserProfile() {
                               href={`${API_URL}/users/${userId}/documents/${key}?token=${authToken()}&download=1`}
                               download
                               style={{ background: "var(--bg-hover)", border: "1px solid var(--border-color)", color: "var(--text-dark)", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
-                              title="Download"
+                              title={t("Download", { defaultValue: "Download" })}
                             >
                               <Download size={16} />
                             </a>
@@ -1490,7 +1493,7 @@ function UserProfile() {
                     if (docs.length === 0) {
                       return (
                         <div className="info-row">
-                          <span className="info-label">Other Documents</span>
+                          <span className="info-label">{t("Other Documents", { defaultValue: "Other Documents" })}</span>
                           <span className="info-value">---</span>
                         </div>
                       );
@@ -1508,7 +1511,7 @@ function UserProfile() {
                               target="_blank"
                               rel="noopener noreferrer"
                               style={{ background: "var(--color-primary)", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
-                              title="View"
+                              title={t("View", { defaultValue: "View" })}
                             >
                               <Eye size={16} />
                             </a>
@@ -1516,7 +1519,7 @@ function UserProfile() {
                               href={`${docUrl}&download=1`}
                               download
                               style={{ background: "var(--bg-hover)", border: "1px solid var(--border-color)", color: "var(--text-dark)", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
-                              title="Download"
+                              title={t("Download", { defaultValue: "Download" })}
                             >
                               <Download size={16} />
                             </a>
@@ -1537,7 +1540,7 @@ function UserProfile() {
                             target="_blank"
                             rel="noopener noreferrer"
                             style={{ background: "var(--color-primary)", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
-                            title="View"
+                            title={t("View", { defaultValue: "View" })}
                           >
                             <Eye size={16} />
                           </a>
@@ -1545,7 +1548,7 @@ function UserProfile() {
                             href={storageUrl}
                             download
                             style={{ background: "var(--bg-hover)", border: "1px solid var(--border-color)", color: "var(--text-dark)", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
-                            title="Download"
+                            title={t("Download", { defaultValue: "Download" })}
                           >
                             <Download size={16} />
                           </a>
@@ -1563,18 +1566,19 @@ function UserProfile() {
             {/* RIGHT SIDE - Account Status */}
             <div className="profile-right">
               <div className="account-status-card">
-                <h3>Account Status</h3>
+                <h3>{t("Account Status", { defaultValue: "Account Status" })}</h3>
                 <div className="status-list">
                   <div className="status-item">
                     {(() => {
                       const st = String(user?.status || account?.status || (user?.active ? "Active" : "Inactive")).toLowerCase();
                       const colorClass = st === "resigned" ? "text-red-500" : st === "inactive" ? "text-yellow-500" : "text-green-500";
                       const colorStyle = st === "resigned" ? "#ef4444" : st === "inactive" ? "#f59e0b" : "#10b981";
+                      const label = st === "resigned" ? t("Resigned", { defaultValue: "Resigned" }) : st === "inactive" ? t("Inactive", { defaultValue: "Inactive" }) : t("Active", { defaultValue: "Active" });
                       return (
                         <>
                           <span className={`status-dot ${st === "active" ? "dot-active" : "dot-inactive"}`} style={{ backgroundColor: colorStyle }}></span>
                           <span className={`status-text ${colorClass}`} style={{ color: colorStyle, fontWeight: 600 }}>
-                            {user?.status || account?.status || (user?.active ? "Active" : "Inactive")}
+                            {label}
                           </span>
                         </>
                       );
@@ -1585,7 +1589,7 @@ function UserProfile() {
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
                     </span>
                     <div className="status-info">
-                      <span className="status-label">Member Since</span>
+                      <span className="status-label">{t("Member Since", { defaultValue: "Member Since" })}</span>
                       <span className="status-value">
                         {user.created_at ? new Date(user.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "---"}
                       </span>
@@ -1596,7 +1600,7 @@ function UserProfile() {
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
                     </span>
                     <div className="status-info">
-                      <span className="status-label">Last Login</span>
+                      <span className="status-label">{t("Last Login", { defaultValue: "Last Login" })}</span>
                       <span className="status-value">
                         {user.last_login_at
                           ? new Date(user.last_login_at).toLocaleString("en-US", {
@@ -1606,7 +1610,7 @@ function UserProfile() {
                               minute: "2-digit",
                               hour12: true,
                             })
-                          : "Never logged in"}
+                          : t("Never logged in", { defaultValue: "Never logged in" })}
                       </span>
                     </div>
                   </div>
@@ -1615,8 +1619,8 @@ function UserProfile() {
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 21h18"></path><path d="M9 8h1"></path><path d="M9 12h1"></path><path d="M9 16h1"></path><path d="M14 8h1"></path><path d="M14 12h1"></path><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"></path></svg>
                     </span>
                     <div className="status-info">
-                      <span className="status-label">Account Type</span>
-                      <span className="status-value">{user?.role === "guest" ? "Guest" : "Employee"}</span>
+                      <span className="status-label">{t("Account Type", { defaultValue: "Account Type" })}</span>
+                      <span className="status-value">{user?.role === "guest" ? t("Guest", { defaultValue: "Guest" }) : t("Employee", { defaultValue: "Employee" })}</span>
                     </div>
                   </div>
                 </div>
@@ -1639,8 +1643,8 @@ function UserProfile() {
               <div className="user-header-left">
                 <div className="user-icon-box">👤</div>
                 <div>
-                  <h2>Edit User</h2>
-                  <p className="modal-subtitle">Update user details.</p>
+                  <h2>{t("Edit User", { defaultValue: "Edit User" })}</h2>
+                  <p className="modal-subtitle">{t("Update user details.", { defaultValue: "Update user details." })}</p>
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -1649,7 +1653,7 @@ function UserProfile() {
                   className="primary-button"
                   style={{ fontSize: 14 }}
                 >
-                  Update User
+                  {t("Update User", { defaultValue: "Update User" })}
                 </LoadingButton>
                 <button className="user-modal-close" onClick={handleEditClose}>
                   &#10005;
@@ -1661,26 +1665,26 @@ function UserProfile() {
               {/* ===== Profile Photo + Personal Information Row ===== */}
               <div className="personal-info-top-row">
                 <div className="personal-info-fields">
-                  <h3 className="form-section-title">Personal Information</h3>
+                  <h3 className="form-section-title">{t("Personal Information", { defaultValue: "Personal Information" })}</h3>
                   <div className="user-form-grid">
                     <div className="form-row">
-                      <label htmlFor="edit-name">Employee Full Name *</label>
-                      <input type="text" id="edit-name" name="name" value={editUser.name} onChange={handleEditChange} placeholder="Enter full name" className={editErrors.name ? "field-error" : ""} />
+                      <label htmlFor="edit-name">{t("Employee Full Name *", { defaultValue: "Employee Full Name *" })}</label>
+                      <input type="text" id="edit-name" name="name" value={editUser.name} onChange={handleEditChange} placeholder={t("Enter full name", { defaultValue: "Enter full name" })} className={editErrors.name ? "field-error" : ""} />
                       {editErrors.name && <span className="field-error-text">{editErrors.name}</span>}
                     </div>
                     <div className="form-row">
-                      <label htmlFor="edit-father_name">Father Name *</label>
-                      <input type="text" id="edit-father_name" name="father_name" value={editUser.father_name} onChange={handleEditChange} placeholder="Enter father name" className={editErrors.father_name ? "field-error" : ""} />
+                      <label htmlFor="edit-father_name">{t("Father Name *", { defaultValue: "Father Name *" })}</label>
+                      <input type="text" id="edit-father_name" name="father_name" value={editUser.father_name} onChange={handleEditChange} placeholder={t("Enter father name", { defaultValue: "Enter father name" })} className={editErrors.father_name ? "field-error" : ""} />
                       {editErrors.father_name && <span className="field-error-text">{editErrors.father_name}</span>}
                     </div>
                     <div className="form-row">
-                      <label htmlFor="edit-id_card_number">ID Card Number *</label>
+                      <label htmlFor="edit-id_card_number">{t("ID Card Number *", { defaultValue: "ID Card Number *" })}</label>
                       <input type="text" id="edit-id_card_number" name="id_card_number" value={editUser.id_card_number} onChange={handleEditChange} placeholder="XXXXX-XXXXXXX-X" maxLength={15} className={editErrors.id_card_number ? "field-error" : ""} />
                       {editErrors.id_card_number && <span className="field-error-text">{editErrors.id_card_number}</span>}
                     </div>
                     <div className="form-row">
-                      <label htmlFor="edit-phone_number">Phone Number *</label>
-                      <input type="text" id="edit-phone_number" name="phone_number" value={editUser.phone_number} onChange={handleEditChange} placeholder="03XX-XXXXXXX" maxLength={12} className={editErrors.phone_number ? "field-error" : ""} />
+                      <label htmlFor="edit-phone_number">{t("Phone Number *", { defaultValue: "Phone Number *" })}</label>
+                      <input type="text" id="edit-phone_number" name="phone_number" value={editUser.phone_number} onChange={handleEditChange} placeholder={t("03XX-XXXXXXX", { defaultValue: "03XX-XXXXXXX" })} maxLength={12} className={editErrors.phone_number ? "field-error" : ""} />
                       {editErrors.phone_number && <span className="field-error-text">{editErrors.phone_number}</span>}
                     </div>
                   </div>
@@ -1688,7 +1692,7 @@ function UserProfile() {
 
                 {/* ===== Profile Photo ===== */}
                 <div className="avatar-upload-section">
-                  <label className="avatar-upload-label">Profile Photo</label>
+                  <label className="avatar-upload-label">{t("Profile Photo", { defaultValue: "Profile Photo" })}</label>
                   <div className="avatar-upload-row">
                     <div className="avatar-preview" onClick={() => document.getElementById('edit-avatar-input').click()}>
                       {editAvatarFile ? (
@@ -1701,7 +1705,7 @@ function UserProfile() {
                             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                             <circle cx="12" cy="7" r="4" />
                           </svg>
-                          <span className="avatar-upload-hint">Click to upload</span>
+                          <span className="avatar-upload-hint">{t("Click to upload", { defaultValue: "Click to upload" })}</span>
                         </>
                       )}
                     </div>
@@ -1709,7 +1713,7 @@ function UserProfile() {
                     {(editAvatarFile || (!avatarRemoved && user.avatar)) && (
                       <button type="button" className="avatar-remove-btn" onClick={() => setAvatarRemoveConfirmOpen(true)}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                        Remove
+                        {t("Remove", { defaultValue: "Remove" })}
                       </button>
                     )}
                   </div>
@@ -1717,66 +1721,66 @@ function UserProfile() {
               </div>
 
               {/* ===== Address ===== */}
-              <h3 className="form-section-title">Address</h3>
+              <h3 className="form-section-title">{t("Address", { defaultValue: "Address" })}</h3>
               <div className="user-form-grid">
                 <div className="form-row">
-                  <label htmlFor="edit-present_address">Present Address *</label>
-                  <input type="text" id="edit-present_address" name="present_address" value={editUser.present_address} onChange={handleEditChange} placeholder="Enter present address" className={editErrors.present_address ? "field-error" : ""} />
+                  <label htmlFor="edit-present_address">{t("Present Address *", { defaultValue: "Present Address *" })}</label>
+                  <input type="text" id="edit-present_address" name="present_address" value={editUser.present_address} onChange={handleEditChange} placeholder={t("Enter present address", { defaultValue: "Enter present address" })} className={editErrors.present_address ? "field-error" : ""} />
                   {editErrors.present_address && <span className="field-error-text">{editErrors.present_address}</span>}
                 </div>
                 <div className="form-row">
-                  <label htmlFor="edit-permanent_address">Permanent Address</label>
-                  <input type="text" id="edit-permanent_address" name="permanent_address" value={editUser.permanent_address} onChange={handleEditChange} placeholder="Enter permanent address" />
+                  <label htmlFor="edit-permanent_address">{t("Permanent Address", { defaultValue: "Permanent Address" })}</label>
+                  <input type="text" id="edit-permanent_address" name="permanent_address" value={editUser.permanent_address} onChange={handleEditChange} placeholder={t("Enter permanent address", { defaultValue: "Enter permanent address" })} />
                 </div>
               </div>
 
               {/* ===== Emergency Contact ===== */}
-              <h3 className="form-section-title">Emergency Contact</h3>
+              <h3 className="form-section-title">{t("Emergency Contact", { defaultValue: "Emergency Contact" })}</h3>
               <div className="user-form-grid">
                 <div className="form-row">
-                  <label htmlFor="edit-emergency_contact_name">Name</label>
-                  <input type="text" id="edit-emergency_contact_name" name="emergency_contact_name" value={editUser.emergency_contact_name} onChange={handleEditChange} placeholder="Emergency contact name" />
+                  <label htmlFor="edit-emergency_contact_name">{t("Name", { defaultValue: "Name" })}</label>
+                  <input type="text" id="edit-emergency_contact_name" name="emergency_contact_name" value={editUser.emergency_contact_name} onChange={handleEditChange} placeholder={t("Emergency contact name", { defaultValue: "Emergency contact name" })} />
                 </div>
                 <div className="form-row">
-                  <label htmlFor="edit-emergency_contact_relation">Relation</label>
-                  <input type="text" id="edit-emergency_contact_relation" name="emergency_contact_relation" value={editUser.emergency_contact_relation} onChange={handleEditChange} placeholder="e.g. Father, Mother, Spouse" />
+                  <label htmlFor="edit-emergency_contact_relation">{t("Relation", { defaultValue: "Relation" })}</label>
+                  <input type="text" id="edit-emergency_contact_relation" name="emergency_contact_relation" value={editUser.emergency_contact_relation} onChange={handleEditChange} placeholder={t("e.g. Father, Mother, Spouse", { defaultValue: "e.g. Father, Mother, Spouse" })} />
                 </div>
                 <div className="form-row">
-                  <label htmlFor="edit-emergency_contact_phone">Phone</label>
-                  <input type="text" id="edit-emergency_contact_phone" name="emergency_contact_phone" value={editUser.emergency_contact_phone} onChange={handleEditChange} placeholder="03XX-XXXXXXX" maxLength={12} className={editErrors.emergency_contact_phone ? "field-error" : ""} />
+                  <label htmlFor="edit-emergency_contact_phone">{t("Phone", { defaultValue: "Phone" })}</label>
+                  <input type="text" id="edit-emergency_contact_phone" name="emergency_contact_phone" value={editUser.emergency_contact_phone} onChange={handleEditChange} placeholder={t("03XX-XXXXXXX", { defaultValue: "03XX-XXXXXXX" })} maxLength={12} className={editErrors.emergency_contact_phone ? "field-error" : ""} />
                   {editErrors.emergency_contact_phone && <span className="field-error-text">{editErrors.emergency_contact_phone}</span>}
                 </div>
               </div>
 
               {/* ===== Email Accounts ===== */}
-              <h3 className="form-section-title">Email Accounts</h3>
+              <h3 className="form-section-title">{t("Email Accounts", { defaultValue: "Email Accounts" })}</h3>
               <div className="user-form-grid">
                 <div className="form-row">
-                  <label htmlFor="edit-personal_email">Personal Email Address</label>
-                  <input type="email" id="edit-personal_email" name="personal_email" value={editUser.personal_email} onChange={handleEditChange} placeholder="Enter personal email address" className={editErrors.personal_email ? "field-error" : ""} />
+                  <label htmlFor="edit-personal_email">{t("Personal Email Address", { defaultValue: "Personal Email Address" })}</label>
+                  <input type="email" id="edit-personal_email" name="personal_email" value={editUser.personal_email} onChange={handleEditChange} placeholder={t("Enter personal email address", { defaultValue: "Enter personal email address" })} className={editErrors.personal_email ? "field-error" : ""} />
                   {editErrors.personal_email && <span className="field-error-text">{editErrors.personal_email}</span>}
                 </div>
                 <div className="form-row">
-                  <label htmlFor="edit-professional_email">Professional Email</label>
-                  <input type="email" id="edit-professional_email" name="professional_email" value={editUser.professional_email || ""} onChange={handleEditChange} placeholder="Enter professional email address" className={editErrors.professional_email ? "field-error" : ""} />
+                  <label htmlFor="edit-professional_email">{t("Professional Email", { defaultValue: "Professional Email" })}</label>
+                  <input type="email" id="edit-professional_email" name="professional_email" value={editUser.professional_email || ""} onChange={handleEditChange} placeholder={t("Enter professional email address", { defaultValue: "Enter professional email address" })} className={editErrors.professional_email ? "field-error" : ""} />
                   {editErrors.professional_email && <span className="field-error-text">{editErrors.professional_email}</span>}
                 </div>
                 <div className="form-row">
-                  <label htmlFor="edit-professional_email_password">Password of Professional Email</label>
-                  <input type="password" id="edit-professional_email_password" name="professional_email_password" value={editUser.professional_email_password || ""} onChange={handleEditChange} placeholder="Enter professional email password" className={editErrors.professional_email_password ? "field-error" : ""} />
+                  <label htmlFor="edit-professional_email_password">{t("Password of Professional Email", { defaultValue: "Password of Professional Email" })}</label>
+                  <input type="password" id="edit-professional_email_password" name="professional_email_password" value={editUser.professional_email_password || ""} onChange={handleEditChange} placeholder={t("Enter professional email password", { defaultValue: "Enter professional email password" })} className={editErrors.professional_email_password ? "field-error" : ""} />
                   {editErrors.professional_email_password && <span className="field-error-text">{editErrors.professional_email_password}</span>}
                 </div>
               </div>
 
               {/* ===== Employment Details ===== */}
-              <h3 className="form-section-title">Employment Details</h3>
+              <h3 className="form-section-title">{t("Employment Details", { defaultValue: "Employment Details" })}</h3>
               <div className="user-form-grid">
                 <div className="form-row">
-                  <label htmlFor="edit-designation">Designation / Role *</label>
+                  <label htmlFor="edit-designation">{t("Designation / Role *", { defaultValue: "Designation / Role *" })}</label>
                   {editUser.designation === "__custom__" ? (
                     <div className="custom-input-container">
-                      <input type="text" id="edit-designationCustom" name="designationCustom" value={editUser.designationCustom} onChange={handleEditChange} placeholder="Enter custom designation" autoFocus className={editErrors.designationCustom ? "field-error" : ""} />
-                      <button type="button" className="custom-input-revert" onClick={() => handleCustomRevert("designation")} title="Back to list">&times;</button>
+                      <input type="text" id="edit-designationCustom" name="designationCustom" value={editUser.designationCustom} onChange={handleEditChange} placeholder={t("Enter custom designation", { defaultValue: "Enter custom designation" })} autoFocus className={editErrors.designationCustom ? "field-error" : ""} />
+                      <button type="button" className="custom-input-revert" onClick={() => handleCustomRevert("designation")} title={t("Back to list", { defaultValue: "Back to list" })}>&times;</button>
                     </div>
                   ) : (
                     <div className="category-dropdown-container" ref={desgDropdownRef}>
@@ -1803,20 +1807,20 @@ function UserProfile() {
                           setDesgDropdownOpen(false);
                         }
                       }} style={editErrors.designation ? { border: "1px solid var(--color-danger)" } : {}}>
-                        {editUser.designation || "Select Designation"} <span className={`category-dropdown-arrow ${desgDropdownOpen ? "open" : ""}`}>&#9662;</span>
+                        {editUser.designation || t("Select Designation", { defaultValue: "Select Designation" })} <span className={`category-dropdown-arrow ${desgDropdownOpen ? "open" : ""}`}>&#9662;</span>
                       </button>
                       {desgDropdownOpen && (
                         <div className="category-dropdown-options" ref={desgOptionsRef}>
                           <div className={`category-dropdown-option ${desgHighlightedIndex === 0 ? "category-dropdown-option--highlighted" : ""}`} onClick={() => { setEditUser((prev) => ({ ...prev, designation: "" })); setEditIsDirty(true); setDesgDropdownOpen(false); }} onMouseEnter={() => setDesgHighlightedIndex(0)} style={{ fontWeight: !editUser.designation ? "600" : "400", background: !editUser.designation ? "var(--color-primary-bg)" : "transparent" }}>
-                            Select Designation
+                            {t("Select Designation", { defaultValue: "Select Designation" })}
                           </div>
                           {designations.map((d, idx) => (
                             <div key={d} className={`category-dropdown-option ${desgHighlightedIndex === idx + 1 ? "category-dropdown-option--highlighted" : ""}`} onClick={() => { setEditUser((prev) => ({ ...prev, designation: d })); setEditIsDirty(true); setDesgDropdownOpen(false); }} onMouseEnter={() => setDesgHighlightedIndex(idx + 1)} style={{ fontWeight: editUser.designation === d ? "600" : "400", background: editUser.designation === d ? "var(--color-primary-bg)" : "transparent" }}>
                               {d}
-                              <span className="category-option-delete" onClick={(e) => { e.stopPropagation(); deleteDesignation(d); }} title="Delete">&times;</span>
+                              <span className="category-option-delete" onClick={(e) => { e.stopPropagation(); deleteDesignation(d); }} title={t("Delete", { defaultValue: "Delete" })}>&times;</span>
                             </div>
                           ))}
-                          <div className={`category-dropdown-option category-dropdown-custom ${desgHighlightedIndex === designations.length + 1 ? "category-dropdown-option--highlighted" : ""}`} onClick={() => { setEditUser((prev) => ({ ...prev, designation: "__custom__" })); setEditIsDirty(true); setDesgDropdownOpen(false); }} onMouseEnter={() => setDesgHighlightedIndex(designations.length + 1)}>Custom / Type Here</div>
+                          <div className={`category-dropdown-option category-dropdown-custom ${desgHighlightedIndex === designations.length + 1 ? "category-dropdown-option--highlighted" : ""}`} onClick={() => { setEditUser((prev) => ({ ...prev, designation: "__custom__" })); setEditIsDirty(true); setDesgDropdownOpen(false); }} onMouseEnter={() => setDesgHighlightedIndex(designations.length + 1)}>{t("Custom / Type Here", { defaultValue: "Custom / Type Here" })}</div>
                         </div>
                       )}
                     </div>
@@ -1825,11 +1829,11 @@ function UserProfile() {
                   {editErrors.designationCustom && <span className="field-error-text">{editErrors.designationCustom}</span>}
                 </div>
                 <div className="form-row">
-                  <label htmlFor="edit-department">Department *</label>
+                  <label htmlFor="edit-department">{t("Department *", { defaultValue: "Department *" })}</label>
                   {editUser.department === "__custom__" ? (
                     <div className="custom-input-container">
-                      <input type="text" id="edit-departmentCustom" name="departmentCustom" value={editUser.departmentCustom} onChange={handleEditChange} placeholder="Enter custom department" autoFocus className={editErrors.departmentCustom ? "field-error" : ""} />
-                      <button type="button" className="custom-input-revert" onClick={() => handleCustomRevert("department")} title="Back to list">&times;</button>
+                      <input type="text" id="edit-departmentCustom" name="departmentCustom" value={editUser.departmentCustom} onChange={handleEditChange} placeholder={t("Enter custom department", { defaultValue: "Enter custom department" })} autoFocus className={editErrors.departmentCustom ? "field-error" : ""} />
+                      <button type="button" className="custom-input-revert" onClick={() => handleCustomRevert("department")} title={t("Back to list", { defaultValue: "Back to list" })}>&times;</button>
                     </div>
                   ) : (
                     <div className="category-dropdown-container" ref={deptDropdownRef}>
@@ -1856,20 +1860,20 @@ function UserProfile() {
                           setDeptDropdownOpen(false);
                         }
                       }} style={editErrors.department ? { border: "1px solid var(--color-danger)" } : {}}>
-                        {editUser.department || "Select Department"} <span className={`category-dropdown-arrow ${deptDropdownOpen ? "open" : ""}`}>&#9662;</span>
+                        {editUser.department || t("Select Department", { defaultValue: "Select Department" })} <span className={`category-dropdown-arrow ${deptDropdownOpen ? "open" : ""}`}>&#9662;</span>
                       </button>
                       {deptDropdownOpen && (
                         <div className="category-dropdown-options" ref={deptOptionsRef}>
                           <div className={`category-dropdown-option ${deptHighlightedIndex === 0 ? "category-dropdown-option--highlighted" : ""}`} onClick={() => { setEditUser((prev) => ({ ...prev, department: "" })); setEditIsDirty(true); setDeptDropdownOpen(false); }} onMouseEnter={() => setDeptHighlightedIndex(0)} style={{ fontWeight: !editUser.department ? "600" : "400", background: !editUser.department ? "var(--color-primary-bg)" : "transparent" }}>
-                            Select Department
+                            {t("Select Department", { defaultValue: "Select Department" })}
                           </div>
                           {departments.map((d, idx) => (
                             <div key={d} className={`category-dropdown-option ${deptHighlightedIndex === idx + 1 ? "category-dropdown-option--highlighted" : ""}`} onClick={() => { setEditUser((prev) => ({ ...prev, department: d })); setEditIsDirty(true); setDeptDropdownOpen(false); }} onMouseEnter={() => setDeptHighlightedIndex(idx + 1)} style={{ fontWeight: editUser.department === d ? "600" : "400", background: editUser.department === d ? "var(--color-primary-bg)" : "transparent" }}>
                               {d}
-                              <span className="category-option-delete" onClick={(e) => { e.stopPropagation(); deleteDepartment(d); }} title="Delete">&times;</span>
+                              <span className="category-option-delete" onClick={(e) => { e.stopPropagation(); deleteDepartment(d); }} title={t("Delete", { defaultValue: "Delete" })}>&times;</span>
                             </div>
                           ))}
-                          <div className={`category-dropdown-option category-dropdown-custom ${deptHighlightedIndex === departments.length + 1 ? "category-dropdown-option--highlighted" : ""}`} onClick={() => { setEditUser((prev) => ({ ...prev, department: "__custom__" })); setEditIsDirty(true); setDeptDropdownOpen(false); }} onMouseEnter={() => setDeptHighlightedIndex(departments.length + 1)}>Custom / Type Here</div>
+                          <div className={`category-dropdown-option category-dropdown-custom ${deptHighlightedIndex === departments.length + 1 ? "category-dropdown-option--highlighted" : ""}`} onClick={() => { setEditUser((prev) => ({ ...prev, department: "__custom__" })); setEditIsDirty(true); setDeptDropdownOpen(false); }} onMouseEnter={() => setDeptHighlightedIndex(departments.length + 1)}>{t("Custom / Type Here", { defaultValue: "Custom / Type Here" })}</div>
                         </div>
                       )}
                     </div>
@@ -1878,69 +1882,69 @@ function UserProfile() {
                   {editErrors.departmentCustom && <span className="field-error-text">{editErrors.departmentCustom}</span>}
                 </div>
                 <div className="form-row">
-                  <label htmlFor="edit-hired_for">Hired For</label>
-                  <input type="text" id="edit-hired_for" name="hired_for" value={editUser.hired_for} onChange={handleEditChange} placeholder="e.g. Full-time, Part-time, Contract" />
+                  <label htmlFor="edit-hired_for">{t("Hired For", { defaultValue: "Hired For" })}</label>
+                  <input type="text" id="edit-hired_for" name="hired_for" value={editUser.hired_for} onChange={handleEditChange} placeholder={t("e.g. Full-time, Part-time, Contract", { defaultValue: "e.g. Full-time, Part-time, Contract" })} />
                 </div>
                 <div className="form-row">
-                  <label htmlFor="edit-employee_code">Employee Code *</label>
-                  <input type="text" id="edit-employee_code" name="employee_code" value={editUser.employee_code} onChange={handleEditChange} placeholder="Enter employee code" className={editErrors.employee_code ? "field-error" : ""} />
+                  <label htmlFor="edit-employee_code">{t("Employee Code *", { defaultValue: "Employee Code *" })}</label>
+                  <input type="text" id="edit-employee_code" name="employee_code" value={editUser.employee_code} onChange={handleEditChange} placeholder={t("Enter employee code", { defaultValue: "Enter employee code" })} className={editErrors.employee_code ? "field-error" : ""} />
                   {editErrors.employee_code && <span className="field-error-text">{editErrors.employee_code}</span>}
                 </div>
                 <div className="form-row">
-                  <label htmlFor="edit-role">System Role</label>
+                  <label htmlFor="edit-role">{t("System Role", { defaultValue: "System Role" })}</label>
                   <select id="edit-role" name="role" value={editUser.role} onChange={handleEditChange}>
-                    {getCurrentRole() === "admin" && <option value="admin">Admin</option>}
-                    {getCurrentRole() === "admin" && <option value="manager">Manager</option>}
-                    <option value="team_lead">Team Lead</option>
-                    <option value="member">Member</option>
-                    <option value="guest">Guest</option>
+                    {getCurrentRole() === "admin" && <option value="admin">{t("Admin", { defaultValue: "Admin" })}</option>}
+                    {getCurrentRole() === "admin" && <option value="manager">{t("Manager", { defaultValue: "Manager" })}</option>}
+                    <option value="team_lead">{t("Team Lead", { defaultValue: "Team Lead" })}</option>
+                    <option value="member">{t("Member", { defaultValue: "Member" })}</option>
+                    <option value="guest">{t("Guest", { defaultValue: "Guest" })}</option>
                   </select>
                 </div>
                 <div className="form-row">
-                  <label htmlFor="edit-job_started_date">Job Started Date *</label>
+                  <label htmlFor="edit-job_started_date">{t("Job Started Date *", { defaultValue: "Job Started Date *" })}</label>
                   <input type="date" id="edit-job_started_date" name="job_started_date" value={editUser.job_started_date} onChange={handleEditChange} className={editErrors.job_started_date ? "field-error" : ""} />
                   {editErrors.job_started_date && <span className="field-error-text">{editErrors.job_started_date}</span>}
                 </div>
                 <div className="form-row">
-                  <label htmlFor="edit-job_ended_date">Job Ended Date</label>
+                  <label htmlFor="edit-job_ended_date">{t("Job Ended Date", { defaultValue: "Job Ended Date" })}</label>
                   <input type="date" id="edit-job_ended_date" name="job_ended_date" value={editUser.job_ended_date} onChange={handleEditChange} />
                 </div>
                 <div className="form-row">
-                  <label htmlFor="edit-applied_via">Applied Via</label>
-                  <input type="text" id="edit-applied_via" name="applied_via" value={editUser.applied_via} onChange={handleEditChange} placeholder="e.g. Website, Referral, LinkedIn" />
+                  <label htmlFor="edit-applied_via">{t("Applied Via", { defaultValue: "Applied Via" })}</label>
+                  <input type="text" id="edit-applied_via" name="applied_via" value={editUser.applied_via} onChange={handleEditChange} placeholder={t("e.g. Website, Referral, LinkedIn", { defaultValue: "e.g. Website, Referral, LinkedIn" })} />
                 </div>
               </div>
 
               {/* ===== Salary & Bank ===== */}
-              <h3 className="form-section-title">Salary & Bank Details</h3>
+              <h3 className="form-section-title">{t("Salary & Bank Details", { defaultValue: "Salary & Bank Details" })}</h3>
               <div className="user-form-grid">
                 <div className="form-row">
-                  <label htmlFor="edit-gross_salary">Gross Salary</label>
-                  <input type="text" id="edit-gross_salary" name="gross_salary" value={editUser.gross_salary} onChange={handleEditChange} placeholder="e.g. 50000 or Negotiable" className={editErrors.gross_salary ? "field-error" : ""} />
+                  <label htmlFor="edit-gross_salary">{t("Gross Salary", { defaultValue: "Gross Salary" })}</label>
+                  <input type="text" id="edit-gross_salary" name="gross_salary" value={editUser.gross_salary} onChange={handleEditChange} placeholder={t("e.g. 50000 or Negotiable", { defaultValue: "e.g. 50000 or Negotiable" })} className={editErrors.gross_salary ? "field-error" : ""} />
                   {editErrors.gross_salary && <span className="field-error-text">{editErrors.gross_salary}</span>}
                 </div>
                 <div className="form-row">
-                  <label htmlFor="edit-bank_name">Bank Name</label>
-                  <input type="text" id="edit-bank_name" name="bank_name" value={editUser.bank_name} onChange={handleEditChange} placeholder="Enter bank name" />
+                  <label htmlFor="edit-bank_name">{t("Bank Name", { defaultValue: "Bank Name" })}</label>
+                  <input type="text" id="edit-bank_name" name="bank_name" value={editUser.bank_name} onChange={handleEditChange} placeholder={t("Enter bank name", { defaultValue: "Enter bank name" })} />
                 </div>
                 <div className="form-row">
-                  <label htmlFor="edit-bank_account_number">Bank Account Number</label>
-                  <input type="text" id="edit-bank_account_number" name="bank_account_number" value={editUser.bank_account_number} onChange={handleEditChange} placeholder="Enter account number" className={editErrors.bank_account_number ? "field-error" : ""} />
+                  <label htmlFor="edit-bank_account_number">{t("Bank Account Number", { defaultValue: "Bank Account Number" })}</label>
+                  <input type="text" id="edit-bank_account_number" name="bank_account_number" value={editUser.bank_account_number} onChange={handleEditChange} placeholder={t("Enter account number", { defaultValue: "Enter account number" })} className={editErrors.bank_account_number ? "field-error" : ""} />
                   {editErrors.bank_account_number && <span className="field-error-text">{editErrors.bank_account_number}</span>}
                 </div>
                 <div className="form-row">
-                  <label htmlFor="edit-bank_account_title">Bank Account Title</label>
-                  <input type="text" id="edit-bank_account_title" name="bank_account_title" value={editUser.bank_account_title} onChange={handleEditChange} placeholder="Enter account title" />
+                  <label htmlFor="edit-bank_account_title">{t("Bank Account Title", { defaultValue: "Bank Account Title" })}</label>
+                  <input type="text" id="edit-bank_account_title" name="bank_account_title" value={editUser.bank_account_title} onChange={handleEditChange} placeholder={t("Enter account title", { defaultValue: "Enter account title" })} />
                 </div>
               </div>
 
               {/* ===== Documents ===== */}
-              <h3 className="form-section-title">Documents</h3>
+              <h3 className="form-section-title">{t("Documents", { defaultValue: "Documents" })}</h3>
               <div className="user-form-grid">
                 {[
-                  { label: "Employment Contract", key: "employment_contract", api: "employment_contract" },
-                  { label: "Offer Letter", key: "offer_letter", api: "offer_letter" },
-                  { label: "Techxaro Regulations", key: "techxaro_regulations", api: "techxaro_regulations" },
+                  { label: t("Employment Contract", { defaultValue: "Employment Contract" }), key: "employment_contract", api: "employment_contract" },
+                  { label: t("Offer Letter", { defaultValue: "Offer Letter" }), key: "offer_letter", api: "offer_letter" },
+                  { label: t("Techxaro Regulations", { defaultValue: "Techxaro Regulations" }), key: "techxaro_regulations", api: "techxaro_regulations" },
                 ].map(({ label, key, api }) => {
                   const hasNewFile = editFiles[key] instanceof File;
                   const hasExistingFile = user[key] && !hasNewFile;
@@ -1969,20 +1973,20 @@ function UserProfile() {
                           <div className="mu-attachment-actions">
                             {hasNewFile && (
                               <>
-                                <button type="button" className="mu-action-btn mu-action-btn-edit" title="Edit" onClick={() => openEditDocModal(api, -1, label, fileName, "pending")}>
+                                <button type="button" className="mu-action-btn mu-action-btn-edit" title={t("Edit", { defaultValue: "Edit" })} onClick={() => openEditDocModal(api, -1, label, fileName, "pending")}>
                                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                                 </button>
-                                <button type="button" className="mu-action-btn mu-action-btn-delete" title="Remove" onClick={() => { setPendingRemoveDoc({ type: "fixed", api, index: -1, label }); setRemoveDocConfirmOpen(true); }}>
+                                <button type="button" className="mu-action-btn mu-action-btn-delete" title={t("Remove", { defaultValue: "Remove" })} onClick={() => { setPendingRemoveDoc({ type: "fixed", api, index: -1, label }); setRemoveDocConfirmOpen(true); }}>
                                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                                 </button>
                               </>
                             )}
                             {hasExistingFile && (
                               <>
-                                <button type="button" className="mu-action-btn mu-action-btn-edit" title="Edit" onClick={() => openEditDocModal(api, -1, label, fileName, "existing")}>
+                                <button type="button" className="mu-action-btn mu-action-btn-edit" title={t("Edit", { defaultValue: "Edit" })} onClick={() => openEditDocModal(api, -1, label, fileName, "existing")}>
                                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                                 </button>
-                                <button type="button" className="mu-action-btn mu-action-btn-delete" title="Delete" onClick={() => { setPendingRemoveDoc({ type: "fixed", api, index: -1, label }); setRemoveDocConfirmOpen(true); }}>
+                                <button type="button" className="mu-action-btn mu-action-btn-delete" title={t("Delete", { defaultValue: "Delete" })} onClick={() => { setPendingRemoveDoc({ type: "fixed", api, index: -1, label }); setRemoveDocConfirmOpen(true); }}>
                                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                                 </button>
                               </>
@@ -1997,7 +2001,7 @@ function UserProfile() {
                         onChange={(e) => {
                           const f = e.target.files[0];
                           if (f && !["application/pdf","image/jpeg","image/png","image/webp"].includes(f.type)) {
-                            notify.error("Only PDF and image files are allowed.");
+                            notify.error(t("Only PDF and image files are allowed.", { defaultValue: "Only PDF and image files are allowed." }));
                             e.target.value = "";
                             return;
                           }
@@ -2013,7 +2017,7 @@ function UserProfile() {
 
                 {/* Other Document — right after Previous Salary Slip */}
                 <div className="form-row">
-                  <label htmlFor="edit-other_document">Other Document</label>
+                  <label htmlFor="edit-other_document">{t("Other Documents", { defaultValue: "Other Documents" })}</label>
                   <input
                     type="file"
                     id="edit-other_document"
@@ -2024,7 +2028,7 @@ function UserProfile() {
                       const valid = [];
                       for (const f of files) {
                         if (!["application/pdf","image/jpeg","image/png","image/webp","image/gif","image/bmp","image/svg+xml","image/tiff"].includes(f.type)) {
-                          notify.error(`"${f.name}" is not a supported file type. Skipped.`);
+                          notify.error(t("\"{{name}}\" is not a supported file type. Skipped.", { name: f.name, defaultValue: `"${f.name}" is not a supported file type. Skipped.` }));
                           continue;
                         }
                         valid.push(f);
@@ -2048,10 +2052,10 @@ function UserProfile() {
                             <span className="mu-attachment-size">{item.file.size < 1024 ? item.file.size + " B" : item.file.size < 1048576 ? (item.file.size / 1024).toFixed(1) + " KB" : (item.file.size / 1048576).toFixed(1) + " MB"}</span>
                           </div>
                           <div className="mu-attachment-actions">
-                            <button type="button" className="mu-action-btn mu-action-btn-edit" title="Edit" onClick={() => openEditDocModal("other_document", i, item.customName, item.file.name, "pending")}>
+                            <button type="button" className="mu-action-btn mu-action-btn-edit" title={t("Edit", { defaultValue: "Edit" })} onClick={() => openEditDocModal("other_document", i, item.customName, item.file.name, "pending")}>
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                             </button>
-                            <button type="button" className="mu-action-btn mu-action-btn-delete" title="Delete" onClick={() => { setPendingRemoveDoc({ source: "new", index: i }); setRemoveDocConfirmOpen(true); }}>
+                            <button type="button" className="mu-action-btn mu-action-btn-delete" title={t("Delete", { defaultValue: "Delete" })} onClick={() => { setPendingRemoveDoc({ source: "new", index: i }); setRemoveDocConfirmOpen(true); }}>
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                             </button>
                           </div>
@@ -2068,10 +2072,10 @@ function UserProfile() {
                             <span className="mu-attachment-name" title={doc.name || `Document ${i + 1}`}>{doc.name || `Document ${i + 1}`}</span>
                           </div>
                           <div className="mu-attachment-actions">
-                            <button type="button" className="mu-action-btn mu-action-btn-edit" title="Edit" onClick={() => openEditDocModal("other_document", i, doc.name, doc.name, "existing")}>
+                            <button type="button" className="mu-action-btn mu-action-btn-edit" title={t("Edit", { defaultValue: "Edit" })} onClick={() => openEditDocModal("other_document", i, doc.name, doc.name, "existing")}>
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                             </button>
-                            <button type="button" className="mu-action-btn mu-action-btn-delete" title="Delete" onClick={() => { setPendingRemoveDoc({ source: "existing", index: i }); setRemoveDocConfirmOpen(true); }}>
+                            <button type="button" className="mu-action-btn mu-action-btn-delete" title={t("Delete", { defaultValue: "Delete" })} onClick={() => { setPendingRemoveDoc({ source: "existing", index: i }); setRemoveDocConfirmOpen(true); }}>
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                             </button>
                           </div>
@@ -2081,7 +2085,7 @@ function UserProfile() {
                   )}
                   {existingOtherDocs.length === 0 && editOtherDocs.length === 0 && (
                     <div style={{ marginTop: 4, fontSize: 13, color: "var(--text-muted)" }}>
-                      No documents uploaded
+                      {t("No documents uploaded", { defaultValue: "No documents uploaded" })}
                     </div>
                   )}
                 </div>
@@ -2104,10 +2108,10 @@ function UserProfile() {
         isOpen={confirmDeleteOpen}
         onClose={() => { setConfirmDeleteOpen(false); setPendingDelete({ type: "", value: "" }); }}
         onConfirm={handleConfirmDelete}
-        title="Confirm Deletion"
-        message={`Are you sure you want to delete "${pendingDelete.value}"? This action cannot be undone.`}
-        confirmText="Delete"
-        cancelText="Cancel"
+        title={t("Confirm Deletion", { defaultValue: "Confirm Deletion" })}
+        message={t("Are you sure you want to delete \"{{value}}\"? This action cannot be undone.", { value: pendingDelete.value, defaultValue: `Are you sure you want to delete "${pendingDelete.value}"? This action cannot be undone.` })}
+        confirmText={t("Delete", { defaultValue: "Delete" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
         danger
       />
       <ConfirmModal
@@ -2122,20 +2126,20 @@ function UserProfile() {
           setRemoveDocConfirmOpen(false);
           setPendingRemoveDoc({ source: "", index: -1 });
         }}
-        title="Remove Document"
-        message="Are you sure you want to remove this document?"
-        confirmText="Remove"
-        cancelText="Cancel"
+        title={t("Remove Document", { defaultValue: "Remove Document" })}
+        message={t("Are you sure you want to remove this document?", { defaultValue: "Are you sure you want to remove this document?" })}
+        confirmText={t("Remove", { defaultValue: "Remove" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
         danger
       />
       <ConfirmModal
         isOpen={avatarRemoveConfirmOpen}
         onClose={() => setAvatarRemoveConfirmOpen(false)}
         onConfirm={() => { setEditAvatarFile(null); setAvatarRemoved(true); setAvatarRemoveConfirmOpen(false); }}
-        title="Remove Photo"
-        message="Are you sure you want to remove this profile photo?"
-        confirmText="Remove"
-        cancelText="Cancel"
+        title={t("Remove Photo", { defaultValue: "Remove Photo" })}
+        message={t("Are you sure you want to remove this profile photo?", { defaultValue: "Are you sure you want to remove this profile photo?" })}
+        confirmText={t("Remove", { defaultValue: "Remove" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
         danger
       />
 
@@ -2143,22 +2147,22 @@ function UserProfile() {
       {editDocItem && (
         <div style={{ position: "fixed", inset: 0, zIndex: 10003, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => { setEditDocItem(null); setEditDocNewFile(null); setEditDocDeleted(false); setEditDocDeleteConfirm(false); }}>
           <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: "24px 28px", width: 420, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>Edit File</h3>
-            <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--text-secondary)" }}>Rename or replace this file.</p>
+            <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>{t("Edit File", { defaultValue: "Edit File" })}</h3>
+            <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--text-secondary)" }}>{t("Rename or replace this file.", { defaultValue: "Rename or replace this file." })}</p>
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-dark)", marginBottom: 6 }}>Title</label>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-dark)", marginBottom: 6 }}>{t("Title", { defaultValue: "Title" })}</label>
               <input type="text" value={editDocForm.title}
                 onChange={(e) => setEditDocForm({ title: e.target.value })} autoFocus
                 onKeyDown={(e) => { if (e.key === "Enter") handleSaveEditDoc(); }}
                 style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--border-color)", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "var(--text-heading)" }} />
             </div>
             <div style={{ marginBottom: 24 }}>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-dark)", marginBottom: 6 }}>File</label>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-dark)", marginBottom: 6 }}>{t("File", { defaultValue: "File" })}</label>
               {editDocItem.existingFileName && !editDocDeleted && !editDocNewFile ? (
                 <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "var(--bg-card-alt)", border: "1px solid var(--border-color)", borderRadius: 8 }}>
                   <span style={{ fontSize: 14 }}>📄</span>
                   <span style={{ flex: 1, fontSize: 13, color: "var(--text-dark)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{editDocItem.existingFileName}</span>
-                  <button type="button" onClick={() => setEditDocDeleteConfirm(true)} className="mu-action-btn mu-action-btn-delete" title="Delete current file" style={{ width: 24, height: 24 }}>
+                  <button type="button" onClick={() => setEditDocDeleteConfirm(true)} className="mu-action-btn mu-action-btn-delete" title={t("Delete current file", { defaultValue: "Delete current file" })} style={{ width: 24, height: 24 }}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                   </button>
                 </div>
@@ -2171,7 +2175,7 @@ function UserProfile() {
                 </div>
               ) : (
                 <label style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", padding: "10px 12px", border: "1px dashed var(--border-color)", borderRadius: 8, background: "var(--bg-card-alt)", color: "var(--text-secondary)", fontSize: 13, cursor: "pointer", textAlign: "center" }}>
-                  Click to select a file
+                  {t("Click to select a file", { defaultValue: "Click to select a file" })}
                   <input type="file" style={{ display: "none" }}
                     accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.bmp,.svg,.tiff,.tif"
                     onChange={(e) => { if (e.target.files.length > 0) { const f = e.target.files[0]; setEditDocNewFile(f); setEditDocDeleted(false); if (!editDocForm.title) setEditDocForm({ title: f.name.replace(/\.[^.]+$/, "") }); } e.target.value = ""; }} />
@@ -2181,10 +2185,10 @@ function UserProfile() {
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
               <button type="button" onClick={() => { setEditDocItem(null); setEditDocNewFile(null); setEditDocDeleted(false); setEditDocDeleteConfirm(false); }}
                 style={{ padding: "9px 20px", borderRadius: 8, border: "1px solid var(--border-medium)", background: "var(--bg-card)", color: "var(--text-dark)", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }}
-                onMouseEnter={(e) => e.target.style.background = "var(--bg-card-alt)"} onMouseLeave={(e) => e.target.style.background = "var(--bg-card)"}>Cancel</button>
+                onMouseEnter={(e) => e.target.style.background = "var(--bg-card-alt)"} onMouseLeave={(e) => e.target.style.background = "var(--bg-card)"}>{t("Cancel", { defaultValue: "Cancel" })}</button>
               <button type="button" onClick={handleSaveEditDoc}
                 style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: "var(--color-primary)", color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }}
-                onMouseEnter={(e) => e.target.style.background = "var(--color-primary-dark)"} onMouseLeave={(e) => e.target.style.background = "var(--color-primary)"}>Save</button>
+                onMouseEnter={(e) => e.target.style.background = "var(--color-primary-dark)"} onMouseLeave={(e) => e.target.style.background = "var(--color-primary)"}>{t("Save", { defaultValue: "Save" })}</button>
             </div>
           </div>
         </div>
@@ -2195,10 +2199,10 @@ function UserProfile() {
         isOpen={editDocDeleteConfirm}
         onClose={() => setEditDocDeleteConfirm(false)}
         onConfirm={() => { setEditDocDeleteConfirm(false); setEditDocDeleted(true); setEditDocNewFile(null); }}
-        title="Delete File"
-        message="Are you sure you want to delete this file? You can upload a new file after."
-        confirmText="Delete"
-        cancelText="Cancel"
+        title={t("Delete File", { defaultValue: "Delete File" })}
+        message={t("Are you sure you want to delete this file? You can upload a new file after.", { defaultValue: "Are you sure you want to delete this file? You can upload a new file after." })}
+        confirmText={t("Delete", { defaultValue: "Delete" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
         danger
       />
 
@@ -2207,9 +2211,9 @@ function UserProfile() {
         isOpen={deleteDocConfirmOpen}
         onClose={() => { setDeleteDocConfirmOpen(false); setPendingDeleteDoc(null); }}
         onConfirm={handleDeleteDoc}
-        title="Delete Document"
-        message={`Are you sure you want to delete this document? This action cannot be undone.`}
-        confirmText="Delete"
+        title={t("Delete Document", { defaultValue: "Delete Document" })}
+        message={t("Are you sure you want to delete this document? This action cannot be undone.", { defaultValue: "Are you sure you want to delete this document? This action cannot be undone." })}
+        confirmText={t("Delete", { defaultValue: "Delete" })}
         danger
       />
 
@@ -2219,27 +2223,27 @@ function UserProfile() {
         onClose={() => setGuestActionModal({ open: false, type: "" })}
         onConfirm={() => handleGuestAction(guestActionModal.type)}
         title={
-          guestActionModal.type === "resend-invitation" ? "Resend Invitation" :
-          guestActionModal.type === "reset-password" ? "Reset Password" :
-          guestActionModal.type === "resign" ? "Resign Guest" :
-          "Guest Action"
+          guestActionModal.type === "resend-invitation" ? t("Resend Invitation", { defaultValue: "Resend Invitation" }) :
+          guestActionModal.type === "reset-password" ? t("Reset Password", { defaultValue: "Reset Password" }) :
+          guestActionModal.type === "resign" ? t("Resign Guest", { defaultValue: "Resign Guest" }) :
+          t("Guest Action", { defaultValue: "Guest Action" })
         }
         message={
           guestActionModal.type === "resend-invitation"
-            ? `A new password will be generated and sent to ${user.personal_email || user.email}. Continue?`
+            ? t("A new password will be generated and sent to {{email}}. Continue?", { email: user.personal_email || user.email, defaultValue: `A new password will be generated and sent to ${user.personal_email || user.email}. Continue?` })
             : guestActionModal.type === "reset-password"
-            ? `A new password will be generated and sent to ${user.personal_email || user.email}. The old password will stop working. Continue?`
+            ? t("A new password will be generated and sent to {{email}}. The old password will stop working. Continue?", { email: user.personal_email || user.email, defaultValue: `A new password will be generated and sent to ${user.personal_email || user.email}. The old password will stop working. Continue?` })
             : guestActionModal.type === "resign"
-            ? `Are you sure you want to resign ${user.name}? They will no longer be able to access the portal.`
+            ? t("Are you sure you want to resign {{name}}? They will no longer be able to access the portal.", { name: user.name, defaultValue: `Are you sure you want to resign ${user.name}? They will no longer be able to access the portal.` })
             : ""
         }
         confirmText={
-          guestActionModal.type === "resend-invitation" ? "Resend" :
-          guestActionModal.type === "reset-password" ? "Reset" :
-          guestActionModal.type === "resign" ? "Resign" :
-          "Confirm"
+          guestActionModal.type === "resend-invitation" ? t("Resend", { defaultValue: "Resend" }) :
+          guestActionModal.type === "reset-password" ? t("Reset", { defaultValue: "Reset" }) :
+          guestActionModal.type === "resign" ? t("Resign", { defaultValue: "Resign" }) :
+          t("Confirm", { defaultValue: "Confirm" })
         }
-        cancelText="Cancel"
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
         danger={guestActionModal.type === "resign" || guestActionModal.type === "reset-password"}
       />
 
@@ -2251,12 +2255,12 @@ function UserProfile() {
               <div className="user-header-left">
                 <div className="user-icon-box">👥</div>
                 <div>
-                  <h2>Edit Guest</h2>
+                  <h2>{t("Edit Guest", { defaultValue: "Edit Guest" })}</h2>
                 </div>
               </div>
               <div className="user-header-actions">
                 <button className="primary-button" disabled={guestEditSubmitting} onClick={handleGuestEditSubmit}>
-                  {guestEditSubmitting ? "Updating..." : "Update Guest"}
+                  {guestEditSubmitting ? t("Updating...", { defaultValue: "Updating..." }) : t("Update Guest", { defaultValue: "Update Guest" })}
                 </button>
                 <button className="user-modal-close" onClick={handleGuestEditClose}>&#10005;</button>
               </div>
@@ -2264,7 +2268,7 @@ function UserProfile() {
             <form className="user-form" onSubmit={handleGuestEditSubmit} style={{ pointerEvents: guestEditSubmitting ? "none" : "auto", opacity: guestEditSubmitting ? 0.7 : 1 }}>
               {/* Profile Photo */}
               <div className="avatar-upload-section">
-                <label className="avatar-upload-label">Profile Photo</label>
+                <label className="avatar-upload-label">{t("Profile Photo", { defaultValue: "Profile Photo" })}</label>
                 <div className="avatar-upload-row">
                   <div className="avatar-preview" onClick={() => document.getElementById('guest-profile-avatar-input').click()}>
                     {guestEditData.avatar ? (
@@ -2277,7 +2281,7 @@ function UserProfile() {
                           <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                           <circle cx="12" cy="7" r="4" />
                         </svg>
-                        <span className="avatar-upload-hint">Click to upload</span>
+                        <span className="avatar-upload-hint">{t("Click to upload", { defaultValue: "Click to upload" })}</span>
                       </>
                     )}
                   </div>
@@ -2285,29 +2289,29 @@ function UserProfile() {
                   {(guestEditData.avatar || guestEditData._existingAvatar) && (
                     <button type="button" className="avatar-remove-btn" onClick={() => setGuestEditData((prev) => ({ ...prev, avatar: null, _existingAvatar: null }))}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                      Remove
+                      {t("Remove", { defaultValue: "Remove" })}
                     </button>
                   )}
                 </div>
               </div>
 
-              <h3 className="form-section-title">Guest Information</h3>
+              <h3 className="form-section-title">{t("Guest Information", { defaultValue: "Guest Information" })}</h3>
               <div className="user-form-grid">
                 <div className="form-row">
-                  <label>Guest Name *</label>
-                  <input type="text" value={guestEditData.name} onChange={(e) => { setGuestEditData((p) => ({ ...p, name: e.target.value })); setGuestIsDirty(true); }} placeholder="Enter guest / company name" />
+                  <label>{t("Guest Name *", { defaultValue: "Guest Name *" })}</label>
+                  <input type="text" value={guestEditData.name} onChange={(e) => { setGuestEditData((p) => ({ ...p, name: e.target.value })); setGuestIsDirty(true); }} placeholder={t("Enter guest / company name", { defaultValue: "Enter guest / company name" })} />
                 </div>
                 <div className="form-row">
-                  <label>Personal Email *</label>
-                  <input type="email" value={guestEditData.personal_email} onChange={(e) => { setGuestEditData((p) => ({ ...p, personal_email: e.target.value })); setGuestIsDirty(true); }} placeholder="guest@example.com" />
+                  <label>{t("Personal Email *", { defaultValue: "Personal Email *" })}</label>
+                  <input type="email" value={guestEditData.personal_email} onChange={(e) => { setGuestEditData((p) => ({ ...p, personal_email: e.target.value })); setGuestIsDirty(true); }} placeholder={t("guest@example.com", { defaultValue: "guest@example.com" })} />
                 </div>
                 <div className="form-row">
-                  <label>Phone Number</label>
-                  <input type="text" value={guestEditData.phone_number} onChange={(e) => { setGuestEditData((p) => ({ ...p, phone_number: e.target.value })); setGuestIsDirty(true); }} placeholder="03XX-XXXXXXX" />
+                  <label>{t("Phone Number", { defaultValue: "Phone Number" })}</label>
+                  <input type="text" value={guestEditData.phone_number} onChange={(e) => { setGuestEditData((p) => ({ ...p, phone_number: e.target.value })); setGuestIsDirty(true); }} placeholder={t("03XX-XXXXXXX", { defaultValue: "03XX-XXXXXXX" })} />
                 </div>
                 <div className="form-row">
-                  <label>Company Name</label>
-                  <input type="text" value={guestEditData.company_name} onChange={(e) => { setGuestEditData((p) => ({ ...p, company_name: e.target.value })); setGuestIsDirty(true); }} placeholder="Enter company name (optional)" />
+                  <label>{t("Company Name", { defaultValue: "Company Name" })}</label>
+                  <input type="text" value={guestEditData.company_name} onChange={(e) => { setGuestEditData((p) => ({ ...p, company_name: e.target.value })); setGuestIsDirty(true); }} placeholder={t("Enter company name (optional)", { defaultValue: "Enter company name (optional)" })} />
                 </div>
               </div>
             </form>

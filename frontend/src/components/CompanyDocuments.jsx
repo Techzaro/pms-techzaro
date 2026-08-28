@@ -9,6 +9,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { Upload, FileText, Image, Check, X, Loader2, Trash2 } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
@@ -22,6 +23,7 @@ const SINGLE_TYPES = [
 ];
 
 function CompanyDocuments({ isOpen, onClose }) {
+  const { t } = useTranslation();
   const [documents, setDocuments] = useState({});
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(null);
@@ -49,7 +51,7 @@ function CompanyDocuments({ isOpen, onClose }) {
         setDocuments(data.documents);
       }
     } catch {
-      notify.error("Failed to load company documents.");
+      notify.error(t("Failed to load company documents.", { defaultValue: "Failed to load company documents." }));
     } finally {
       setLoading(false);
     }
@@ -73,10 +75,10 @@ function CompanyDocuments({ isOpen, onClose }) {
         notify.success(data.message);
         fetchDocuments();
       } else {
-        notify.error(data.message || "Upload failed.");
+        notify.error(data.message || t("Upload failed.", { defaultValue: "Upload failed." }));
       }
     } catch {
-      notify.error("An error occurred during upload.");
+      notify.error(t("An error occurred during upload.", { defaultValue: "An error occurred during upload." }));
     } finally {
       setUploading(null);
     }
@@ -97,10 +99,10 @@ function CompanyDocuments({ isOpen, onClose }) {
         notify.success(data.message);
         fetchDocuments();
       } else {
-        notify.error(data.message || "Delete failed.");
+        notify.error(data.message || t("Delete failed.", { defaultValue: "Delete failed." }));
       }
     } catch {
-      notify.error("An error occurred during deletion.");
+      notify.error(t("An error occurred during deletion.", { defaultValue: "An error occurred during deletion." }));
     }
   };
 
@@ -114,9 +116,9 @@ function CompanyDocuments({ isOpen, onClose }) {
         <div className="cd-modal" onClick={(e) => e.stopPropagation()}>
           <div className="cd-header">
             <div>
-              <h2 className="cd-title">Company Documents</h2>
+              <h2 className="cd-title">{t("Company Documents", { defaultValue: "Company Documents" })}</h2>
               <p className="cd-subtitle">
-                These standard documents are attached to user onboarding emails.
+                {t("These standard documents are attached to user onboarding emails.", { defaultValue: "These standard documents are attached to user onboarding emails." })}
               </p>
             </div>
             <button className="cd-close" onClick={onClose}>
@@ -128,7 +130,7 @@ function CompanyDocuments({ isOpen, onClose }) {
             {loading ? (
               <div className="cd-loading">
                 <Loader2 size={24} className="cd-spin" />
-                <span>Loading documents...</span>
+                <span>{t("Loading documents...", { defaultValue: "Loading documents..." })}</span>
               </div>
             ) : (
               <>
@@ -144,14 +146,14 @@ function CompanyDocuments({ isOpen, onClose }) {
                           {icon === "image" ? <Image size={20} /> : <FileText size={20} />}
                         </div>
                         <div className="cd-doc-info">
-                          <span className="cd-doc-label">{label}</span>
+                          <span className="cd-doc-label">{t(label)}</span>
                           <span className={`cd-doc-status ${exists ? "cd-doc-status--ok" : ""}`}>
                             {exists ? (
                               <>
-                                <Check size={14} /> Uploaded
+                                <Check size={14} /> {t("Uploaded", { defaultValue: "Uploaded" })}
                               </>
                             ) : (
-                              "Not uploaded"
+                              t("Not uploaded", { defaultValue: "Not uploaded" })
                             )}
                           </span>
                         </div>
@@ -162,7 +164,7 @@ function CompanyDocuments({ isOpen, onClose }) {
                             ) : (
                               <Upload size={14} />
                             )}
-                            <span>{exists ? "Replace" : "Upload"}</span>
+                            <span>{exists ? t("Replace", { defaultValue: "Replace" }) : t("Upload", { defaultValue: "Upload" })}</span>
                             <input
                               type="file"
                               accept={accept}
@@ -183,10 +185,10 @@ function CompanyDocuments({ isOpen, onClose }) {
                                 rel="noopener noreferrer"
                                 className="cd-view-btn"
                               >
-                                View
+                                {t("View", { defaultValue: "View" })}
                               </a>
                               <button className="cd-delete-btn" onClick={() => { setPendingDelete({ type: key, filename: "" }); setConfirmDeleteOpen(true); }}>
-                                Delete
+                                {t("Delete", { defaultValue: "Delete" })}
                               </button>
                             </>
                           )}
@@ -202,14 +204,14 @@ function CompanyDocuments({ isOpen, onClose }) {
                       <FileText size={20} />
                     </div>
                     <div className="cd-doc-info">
-                      <span className="cd-doc-label">Other Documents</span>
+                      <span className="cd-doc-label">{t("Other Documents", { defaultValue: "Other Documents" })}</span>
                       <span className={`cd-doc-status ${otherDocs?.exists ? "cd-doc-status--ok" : ""}`}>
                         {otherDocs?.exists ? (
                           <>
-                            <Check size={14} /> {otherDocs.files.length} file(s) uploaded
+                            <Check size={14} /> {t("{{count}} file(s) uploaded", { defaultValue: `${otherDocs.files.length} file(s) uploaded`, count: otherDocs.files.length })}
                           </>
                         ) : (
-                          "No files uploaded"
+                          t("No files uploaded", { defaultValue: "No files uploaded" })
                         )}
                       </span>
                     </div>
@@ -220,7 +222,7 @@ function CompanyDocuments({ isOpen, onClose }) {
                         ) : (
                           <Upload size={14} />
                         )}
-                        <span>Upload</span>
+                        <span>{t("Upload", { defaultValue: "Upload" })}</span>
                         <input
                           type="file"
                           accept=".pdf,.png,.jpg,.jpeg,.webp"
@@ -265,7 +267,7 @@ function CompanyDocuments({ isOpen, onClose }) {
 
           <div className="cd-footer">
             <p className="cd-footer-note">
-              Company Logo, QR Code, and Other Documents are attached to new user welcome emails.
+              {t("Company Logo, QR Code, and Other Documents are attached to new user welcome emails.", { defaultValue: "Company Logo, QR Code, and Other Documents are attached to new user welcome emails." })}
             </p>
           </div>
         </div>
@@ -274,10 +276,10 @@ function CompanyDocuments({ isOpen, onClose }) {
         isOpen={confirmDeleteOpen}
         onClose={() => { setConfirmDeleteOpen(false); setPendingDelete({ type: "", filename: "" }); }}
         onConfirm={() => { handleDelete(pendingDelete.type, pendingDelete.filename); setConfirmDeleteOpen(false); setPendingDelete({ type: "", filename: "" }); }}
-        title="Delete Document"
-        message="Are you sure you want to delete this document? This action cannot be undone."
-        confirmText="Delete"
-        cancelText="Cancel"
+        title={t("Delete Document", { defaultValue: "Delete Document" })}
+        message={t("Are you sure you want to delete this document? This action cannot be undone.", { defaultValue: "Are you sure you want to delete this document? This action cannot be undone." })}
+        confirmText={t("Delete", { defaultValue: "Delete" })}
+        cancelText={t("Cancel")}
         danger
       />
     </>,

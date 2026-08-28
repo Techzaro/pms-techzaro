@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+
 const statusStyles = {
   active: { bg: 'rgba(16,185,129,0.1)', color: '#10b981', border: 'rgba(16,185,129,0.3)' },
   trial: { bg: 'var(--color-primary-bg)', color: 'var(--color-primary)', border: 'var(--color-primary)' },
@@ -26,6 +28,7 @@ const dotColor = {
 };
 
 export default function StatusBadge({ status, size = 'md', className = '' }) {
+  const { t } = useTranslation();
   const style = statusStyles[status] || statusStyles.pending;
   const sizeStyle = sizeStyles[size];
 
@@ -33,7 +36,7 @@ export default function StatusBadge({ status, size = 'md', className = '' }) {
     <span className={`inline-flex items-center font-medium rounded-full capitalize ${sizeStyle} ${className}`}
       style={{ background: style.bg, color: style.color, border: `1px solid ${style.border}` }}>
       <span className="w-1.5 h-1.5 rounded-full mr-1.5" style={{ background: dotColor[status] || 'var(--text-muted)' }} />
-      {status}
+      {t(status, { defaultValue: status })}
     </span>
   );
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Calendar, CalendarDays, MessageSquare, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { MessageSquare, X } from "lucide-react";
 import API_URL from "../../config/api";
 import { authToken, getCurrentRole, rolePath } from "../../utils/auth";
 import { useNotification } from "../../context/NotificationContext";
@@ -45,10 +46,10 @@ function ChatFileImage({ msgId, fileName }) {
 }
 
 function ChatWidget() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const notify = useNotification();
   const [isOpen, setIsOpen] = useState(false);
-  const [speedDialOpen, setSpeedDialOpen] = useState(false);
   const [conversations, setConversations] = useState([]);
   const [activeConversation, setActiveConversation] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -78,39 +79,6 @@ function ChatWidget() {
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const user = JSON.parse(localStorage.getItem(`user_${getCurrentRole()}`) || "{}");
-  const speedDialTimeoutRef = useRef(null);
-
-  const handleFabMouseEnter = () => {
-    if (speedDialTimeoutRef.current) {
-      clearTimeout(speedDialTimeoutRef.current);
-      speedDialTimeoutRef.current = null;
-    }
-    setSpeedDialOpen(true);
-  };
-
-  const handleFabMouseLeave = () => {
-    if (speedDialTimeoutRef.current) {
-      clearTimeout(speedDialTimeoutRef.current);
-    }
-    speedDialTimeoutRef.current = setTimeout(() => {
-      setSpeedDialOpen(false);
-    }, 200);
-  };
-
-  const handleActionsMouseEnter = () => {
-    if (speedDialTimeoutRef.current) {
-      clearTimeout(speedDialTimeoutRef.current);
-      speedDialTimeoutRef.current = null;
-    }
-  };
-
-  useEffect(() => {
-    return () => {
-      if (speedDialTimeoutRef.current) {
-        clearTimeout(speedDialTimeoutRef.current);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -177,7 +145,7 @@ function ChatWidget() {
         setMessages(data.conversation.messages || []);
       }
     } catch (err) {
-      notify.error("Failed to load conversation");
+      notify.error(t("Failed to load conversation", { defaultValue: "Failed to load conversation" }));
     } finally {
       setLoading(false);
     }
@@ -211,7 +179,7 @@ function ChatWidget() {
         fetchConversations();
       }
     } catch (err) {
-      notify.error("Failed to send message");
+      notify.error(t("Failed to send message", { defaultValue: "Failed to send message" }));
     } finally {
       setSending(false);
     }
@@ -267,13 +235,13 @@ function ChatWidget() {
         setSubtasks(itemsData.deliverables || []);
       }
     } catch (err) {
-      notify.error("Failed to load data");
+      notify.error(t("Failed to load data", { defaultValue: "Failed to load data" }));
     }
   };
 
   const handleCreateConversation = async () => {
     if (selectedUsers.length === 0) {
-      notify.error("Please select at least one participant");
+      notify.error(t("Please select at least one participant", { defaultValue: "Please select at least one participant" }));
       return;
     }
     try {
@@ -310,10 +278,10 @@ function ChatWidget() {
         if (data.conversation) {
           loadConversation(data.conversation.id);
         }
-        notify.success("Conversation created");
+        notify.success(t("Conversation created", { defaultValue: "Conversation created" }));
       }
     } catch (err) {
-      notify.error("Failed to create conversation");
+      notify.error(t("Failed to create conversation", { defaultValue: "Failed to create conversation" }));
     }
   };
 
@@ -324,102 +292,37 @@ function ChatWidget() {
   };
 
   return (
-    <div
-      className="fab-speed-dial-container"
-      onMouseLeave={handleFabMouseLeave}
-    >
-      {/* Vertically Stacked Speed Dial Actions */}
-      <div
-        className={`fab-speed-dial-actions ${speedDialOpen ? "fab-speed-dial-actions--open" : ""}`}
-        onMouseEnter={handleActionsMouseEnter}
-        onMouseLeave={handleFabMouseLeave}
-      >
-        {/* 1. Events */}
-        <button
-          type="button"
-          className="fab-action-item"
-          onClick={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            setSpeedDialOpen(false);
-            navigate(rolePath("events"));
-          }}
-          title="Events"
-        >
-          <span className="fab-action-label">Events</span>
-          <div className="fab-action-btn">
-            <Calendar size={18} />
-          </div>
-        </button>
-
-        {/* 2. Calendar */}
-        <button
-          type="button"
-          className="fab-action-item"
-          onClick={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            setSpeedDialOpen(false);
-            navigate(rolePath("calendar"));
-          }}
-          title="Calendar"
-        >
-          <span className="fab-action-label">Calendar</span>
-          <div className="fab-action-btn">
-            <CalendarDays size={18} />
-          </div>
-        </button>
-
-        {/* 3. Chat */}
-        <button
-          type="button"
-          className="fab-action-item"
-          onClick={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            setIsOpen((prev) => !prev);
-            setSpeedDialOpen(false);
-          }}
-          title="Chat"
-        >
-          <span className="fab-action-label">Chat</span>
-          <div className="fab-action-btn">
-            <MessageSquare size={18} />
-          </div>
-        </button>
-      </div>
-
-      {/* Main Plus (+) Trigger Button */}
+    <div className="fab-speed-dial-container">
+      {/* ── Task 4: Direct Chat FAB — no hover menu ── */}
       <button
         type="button"
-        className={`fab-main-btn ${(speedDialOpen || isOpen) ? "fab-main-btn--open" : ""}`}
-        onMouseEnter={handleFabMouseEnter}
-        onMouseLeave={handleFabMouseLeave}
+        className={`fab-main-btn ${isOpen ? "fab-main-btn--open" : ""}`}
         onClick={(e) => {
           e.stopPropagation();
           e.preventDefault();
-          if (isOpen) {
-            setIsOpen(false);
-            setSpeedDialOpen(false);
-          } else {
-            setSpeedDialOpen((prev) => !prev);
-          }
+          setIsOpen((prev) => !prev);
         }}
-        aria-label="Speed Dial Menu"
+        aria-label={t("Open Chat", { defaultValue: "Open Chat" })}
+        title={t("Chat", { defaultValue: "Chat" })}
       >
-        <Plus size={26} style={{ transition: "transform 0.3s ease", transform: (speedDialOpen || isOpen) ? "rotate(45deg)" : "rotate(0deg)" }} />
+        {isOpen ? (
+          <X size={22} style={{ transition: "transform 0.25s ease" }} />
+        ) : (
+          <MessageSquare size={22} style={{ transition: "transform 0.25s ease" }} />
+        )}
       </button>
 
       {/* Chat Panel */}
       {isOpen && (
+
         <div className="chat-widget-panel">
           <div className="chat-widget-container">
             {/* Sidebar: Conversations */}
             <div className="cw-sidebar">
               <div className="cw-sidebar-header">
-                <h3>Chats</h3>
+                <h3>{t("Chats", { defaultValue: "Chats" })}</h3>
                 <div className="cw-header-actions">
-                  <button className="cw-expand-btn" onClick={() => window.open(rolePath("chat"), "_blank")} title="Open in new tab">
+                  <button className="cw-expand-btn" onClick={() => window.open(rolePath("chat"), "_blank")} title={t("Open in new tab", { defaultValue: "Open in new tab" })}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="15 3 21 3 21 9" />
                       <polyline points="9 21 3 21 3 15" />
@@ -436,7 +339,7 @@ function ChatWidget() {
                       setIsOpen(false);
                       setSpeedDialOpen(false);
                     }}
-                    title="Close Chat Drawer"
+                    title={t("Close Chat Drawer", { defaultValue: "Close Chat Drawer" })}
                   >
                     <X size={18} />
                   </button>
@@ -444,7 +347,7 @@ function ChatWidget() {
               </div>
               <div className="cw-conversation-list">
                 {conversations.length === 0 && (
-                  <p className="cw-empty-text">No conversations yet</p>
+                  <p className="cw-empty-text">{t("No conversations yet", { defaultValue: "No conversations yet" })}</p>
                 )}
                 {conversations.map((conv) => (
                   <div
@@ -454,7 +357,7 @@ function ChatWidget() {
                   >
                     <div className="cw-conv-info">
                       <div className="cw-conv-subject">
-                        {conv.subject || conv.project?.title || "Untitled"}
+                        {conv.subject || conv.project?.title || t("Untitled", { defaultValue: "Untitled" })}
                       </div>
                       <div className="cw-conv-project">{conv.project?.title}</div>
                       {conv.latest_message && (
@@ -474,63 +377,63 @@ function ChatWidget() {
             <div className="cw-main">
               {showNewChat ? (
                 <div className="cw-new-chat-form">
-                  <h4>New Conversation</h4>
+                  <h4>{t("New Conversation", { defaultValue: "New Conversation" })}</h4>
                   <div className="cw-form-group">
-                    <label>Subject</label>
+                    <label>{t("Subject", { defaultValue: "Subject" })}</label>
                     <input
                       type="text"
                       value={chatSubject}
                       onChange={(e) => setChatSubject(e.target.value)}
-                      placeholder="Optional subject"
+                      placeholder={t("Optional subject", { defaultValue: "Optional subject" })}
                     />
                   </div>
                   <div className="cw-link-to-section">
-                    <label className="cw-link-to-label">Link to (optional)</label>
+                    <label className="cw-link-to-label">{t("Link to (optional)", { defaultValue: "Link to (optional)" })}</label>
                     <div className="cw-link-to-row">
                       <label className="cw-link-toggle">
                         <input type="checkbox" checked={linkProject} onChange={(e) => { setLinkProject(e.target.checked); if (!e.target.checked) setSelectedProject(""); }} />
-                        <span>Project</span>
+                        <span>{t("Project")}</span>
                       </label>
                       {linkProject && (
                         <CustomSelect
                           value={selectedProject}
                           onChange={(val) => setSelectedProject(val)}
                           options={projects.map((p) => ({ value: p.id, label: p.title }))}
-                          placeholder="Select project"
+                          placeholder={t("Select project", { defaultValue: "Select project" })}
                         />
                       )}
                     </div>
                     <div className="cw-link-to-row">
                       <label className="cw-link-toggle">
                         <input type="checkbox" checked={linkTask} onChange={(e) => { setLinkTask(e.target.checked); if (!e.target.checked) setSelectedTask(""); }} />
-                        <span>Task</span>
+                        <span>{t("Task")}</span>
                       </label>
                       {linkTask && (
                         <CustomSelect
                           value={selectedTask}
                           onChange={(val) => setSelectedTask(val)}
                           options={tasks.map((t) => ({ value: t.id, label: t.title }))}
-                          placeholder="Select task"
+                          placeholder={t("Select task", { defaultValue: "Select task" })}
                         />
                       )}
                     </div>
                     <div className="cw-link-to-row">
                       <label className="cw-link-toggle">
                         <input type="checkbox" checked={linkSubtask} onChange={(e) => { setLinkSubtask(e.target.checked); if (!e.target.checked) setSelectedSubtask(""); }} />
-                        <span>Subtask</span>
+                        <span>{t("Subtask")}</span>
                       </label>
                       {linkSubtask && (
                         <CustomSelect
                           value={selectedSubtask}
                           onChange={(val) => setSelectedSubtask(val)}
                           options={subtasks.map((d) => ({ value: d.id, label: d.title }))}
-                          placeholder="Select subtask"
+                          placeholder={t("Select subtask", { defaultValue: "Select subtask" })}
                         />
                       )}
                     </div>
                   </div>
                   <div className="cw-form-group" ref={participantDropdownRef}>
-                    <label>Participants *</label>
+                    <label>{t("Participants", { defaultValue: "Participants" })} *</label>
                     <div className="cw-participant-dropdown">
                       <button
                         type="button"
@@ -541,8 +444,8 @@ function ChatWidget() {
                         }}
                       >
                         {selectedUsers.length === 0
-                          ? "Select participants..."
-                          : `${selectedUsers.length} selected`}
+                          ? t("Select participants...", { defaultValue: "Select participants..." })
+                          : `${selectedUsers.length} ${t("selected")}`}
                         <span className="cw-participant-trigger-arrow">{showParticipantDropdown ? "\u25B2" : "\u25BC"}</span>
                       </button>
                       {showParticipantDropdown && (
@@ -551,7 +454,7 @@ function ChatWidget() {
                             ref={participantSearchRef}
                             type="text"
                             className="cw-participant-search"
-                            placeholder="Search participants..."
+                            placeholder={t("Search participants...", { defaultValue: "Search participants..." })}
                             value={participantSearch}
                             onChange={(e) => {
                               setParticipantSearch(e.target.value);
@@ -605,7 +508,7 @@ function ChatWidget() {
                                 </label>
                               ))}
                             {filteredUsers.length === 0 && (
-                              <div className="cw-participant-empty">No users found</div>
+                              <div className="cw-participant-empty">{t("No users found", { defaultValue: "No users found" })}</div>
                             )}
                           </div>
                         </div>
@@ -633,19 +536,19 @@ function ChatWidget() {
                     )}
                   </div>
                   <div className="cw-form-group">
-                    <label>First Message *</label>
-                    <RichTextEditor value={newMessage} onChange={setNewMessage} placeholder="Type your first message..." />
+                    <label>{t("First Message", { defaultValue: "First Message" })} *</label>
+                    <RichTextEditor value={newMessage} onChange={setNewMessage} placeholder={t("Type your first message...", { defaultValue: "Type your first message..." })} />
                   </div>
                   <div className="cw-form-actions">
-                    <button className="cw-btn-cancel" onClick={() => setShowNewChat(false)}>Cancel</button>
-                    <button className="cw-btn-primary" onClick={handleCreateConversation}>Create</button>
+                    <button className="cw-btn-cancel" onClick={() => setShowNewChat(false)}>{t("Cancel")}</button>
+                    <button className="cw-btn-primary" onClick={handleCreateConversation}>{t("Create", { defaultValue: "Create" })}</button>
                   </div>
                 </div>
               ) : activeConversation ? (
                 <>
                   <div className="cw-chat-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div>
-                      <h4>{activeConversation.subject || activeConversation.project?.title || "Conversation"}</h4>
+                      <h4>{activeConversation.subject || activeConversation.project?.title || t("Conversation", { defaultValue: "Conversation" })}</h4>
                       <span className="cw-participants">
                         {activeConversation.participants?.map((p) => p.name).join(", ")}
                       </span>
@@ -659,14 +562,14 @@ function ChatWidget() {
                         setIsOpen(false);
                         setSpeedDialOpen(false);
                       }}
-                      title="Close Chat Drawer"
+                      title={t("Close Chat Drawer", { defaultValue: "Close Chat Drawer" })}
                     >
                       <X size={18} />
                     </button>
                   </div>
                   <div className="cw-messages">
                     {messages.length === 0 && (
-                      <p className="cw-no-msgs">No messages yet</p>
+                      <p className="cw-no-msgs">{t("No messages yet", { defaultValue: "No messages yet" })}</p>
                     )}
                     {messages.map((msg) => (
                       <div key={msg.id} className={`cw-message ${msg.user_id === user.id ? "own" : "other"}`}>
@@ -735,13 +638,13 @@ function ChatWidget() {
                       </div>
                     )}
                     <div className="cw-editor-row">
-                      <button className="cw-attach-btn" onClick={() => fileInputRef.current?.click()} title="Attach file">
+                      <button className="cw-attach-btn" onClick={() => fileInputRef.current?.click()} title={t("Attach file", { defaultValue: "Attach file" })}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
                         </svg>
                       </button>
                       <div className="cw-editor-wrapper">
-                        <RichTextEditor value={newMessage} onChange={setNewMessage} placeholder="Type a message..." />
+                        <RichTextEditor value={newMessage} onChange={setNewMessage} placeholder={t("Type a message...", { defaultValue: "Type a message..." })} />
                       </div>
                       <button onClick={handleSendMessage} disabled={sending || (!newMessage.replace(/<[^>]*>/g, "").trim() && !selectedFile)} className="cw-send-btn">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -757,7 +660,7 @@ function ChatWidget() {
                   <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
                   </svg>
-                  <p>Select a conversation</p>
+                  <p>{t("Select a conversation", { defaultValue: "Select a conversation" })}</p>
                 </div>
               )}
             </div>

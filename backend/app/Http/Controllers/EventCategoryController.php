@@ -11,34 +11,10 @@ use Illuminate\Support\Str;
 class EventCategoryController extends Controller
 {
     /**
-     * Default event categories to auto-seed if none exist.
-     */
-    private const DEFAULT_CATEGORIES = [
-        ['name' => 'Meeting', 'icon' => 'Users', 'color' => '#3b82f6', 'sort_order' => 1, 'description' => 'Team standups, 1-on-1s, syncs, and client meetings'],
-        ['name' => 'Company Announcement', 'icon' => 'Megaphone', 'color' => '#f59e0b', 'sort_order' => 2, 'description' => 'Important organizational news, updates, and broadcasts'],
-        ['name' => 'Workshop & Training', 'icon' => 'Award', 'color' => '#10b981', 'sort_order' => 3, 'description' => 'Skill development, seminars, and technical workshops'],
-        ['name' => 'Company Event', 'icon' => 'Calendar', 'color' => '#8b5cf6', 'sort_order' => 4, 'description' => 'Town halls, annual celebrations, team outings, and parties'],
-        ['name' => 'Holiday & Off-Day', 'icon' => 'Sun', 'color' => '#ef4444', 'sort_order' => 5, 'description' => 'Public holidays, company closures, and non-working days'],
-        ['name' => 'Project Milestone', 'icon' => 'Flag', 'color' => '#06b6d4', 'sort_order' => 6, 'description' => 'Key project delivery dates, release cycles, and milestones'],
-        ['name' => 'Review & Demo', 'icon' => 'CheckCircle', 'color' => '#ec4899', 'sort_order' => 7, 'description' => 'Sprint reviews, product demos, and quarterly evaluations'],
-    ];
-
-    /**
      * Display a listing of event categories.
      */
     public function index(Request $request): JsonResponse
     {
-        if (EventCategory::count() === 0) {
-            $user = $request->user();
-            foreach (self::DEFAULT_CATEGORIES as $cat) {
-                EventCategory::create(array_merge($cat, [
-                    'slug' => Str::slug($cat['name']),
-                    'is_active' => true,
-                    'created_by' => $user?->id,
-                ]));
-            }
-        }
-
         $query = EventCategory::withCount('events')
             ->orderBy('sort_order', 'asc')
             ->orderBy('name', 'asc');

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { api } from "./api/superAdminApi";
 import { formatDateTimeInline } from "../../utils/formatDateTime";
@@ -69,18 +70,19 @@ function TypeIcon({ type }) {
 }
 
 const NOTIFICATION_TYPES = [
-  { value: "", label: "All Types" },
-  { value: "subscription_renewed", label: "Subscription Renewed" },
-  { value: "organization_created", label: "Organization Created" },
-  { value: "organization_updated", label: "Organization Updated" },
-  { value: "organization_suspended", label: "Organization Suspended" },
-  { value: "organization_activated", label: "Organization Activated" },
-  { value: "plan_changed", label: "Plan Changed" },
-  { value: "trial_activated", label: "Trial Activated" },
-  { value: "trial_expired", label: "Trial Expired" },
+  { value: "", labelKey: "All Types", defaultLabel: "All Types" },
+  { value: "subscription_renewed", labelKey: "Subscription Renewed", defaultLabel: "Subscription Renewed" },
+  { value: "organization_created", labelKey: "Organization Created", defaultLabel: "Organization Created" },
+  { value: "organization_updated", labelKey: "Organization Updated", defaultLabel: "Organization Updated" },
+  { value: "organization_suspended", labelKey: "Organization Suspended", defaultLabel: "Organization Suspended" },
+  { value: "organization_activated", labelKey: "Organization Activated", defaultLabel: "Organization Activated" },
+  { value: "plan_changed", labelKey: "Plan Changed", defaultLabel: "Plan Changed" },
+  { value: "trial_activated", labelKey: "Trial Activated", defaultLabel: "Trial Activated" },
+  { value: "trial_expired", labelKey: "Trial Expired", defaultLabel: "Trial Expired" },
 ];
 
 function SuperAdminNotifications() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -187,9 +189,9 @@ function SuperAdminNotifications() {
   const readCount = notifications.filter((n) => n.is_read).length;
 
   const tabs = [
-    { id: "all", label: `All (${total})` },
-    { id: "unread", label: `Unread (${unreadCount})` },
-    { id: "read", label: `Read (${readCount})` },
+    { id: "all", label: t('All ({{count}})', { count: total, defaultValue: `All (${total})` }) },
+    { id: "unread", label: t('Unread ({{count}})', { count: unreadCount, defaultValue: `Unread (${unreadCount})` }) },
+    { id: "read", label: t('Read ({{count}})', { count: readCount, defaultValue: `Read (${readCount})` }) },
   ];
 
   const toggleSelect = (id) => {
@@ -226,8 +228,8 @@ function SuperAdminNotifications() {
     <div>
       {/* Header */}
       <div style={{ marginBottom: 24 }}>
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--text-heading)' }}>Notifications</h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>Stay updated with platform activity</p>
+        <h1 className="text-2xl font-bold" style={{ color: 'var(--text-heading)' }}>{t('Notifications', { defaultValue: 'Notifications' })}</h1>
+        <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>{t('Stay updated with platform activity', { defaultValue: 'Stay updated with platform activity' })}</p>
       </div>
 
       {/* Search + Type Filter */}
@@ -238,7 +240,7 @@ function SuperAdminNotifications() {
           </svg>
           <input
             type="text"
-            placeholder="Search notifications..."
+            placeholder={t("Search notifications...", { defaultValue: "Search notifications..." })}
             value={search}
             onChange={(e) => handleSearch(e.target.value)}
           />
@@ -270,9 +272,9 @@ function SuperAdminNotifications() {
                 }
               } else if (e.key === "Enter" && typeFilterOpen && typeHighlightedIndex >= 0) {
                 e.preventDefault();
-                const t = NOTIFICATION_TYPES[typeHighlightedIndex];
-                setTypeFilter(t.value);
-                fetchNotifications(1, activeTab, search, t.value);
+                const tObj = NOTIFICATION_TYPES[typeHighlightedIndex];
+                setTypeFilter(tObj.value);
+                fetchNotifications(1, activeTab, search, tObj.value);
                 setTypeFilterOpen(false);
               } else if (e.key === "Escape" && typeFilterOpen) {
                 e.preventDefault();
@@ -280,25 +282,28 @@ function SuperAdminNotifications() {
               }
             }}
           >
-            <span>{NOTIFICATION_TYPES.find((t) => t.value === typeFilter)?.label || "All Types"}</span>
+            <span>{(() => {
+              const found = NOTIFICATION_TYPES.find((tObj) => tObj.value === typeFilter);
+              return found ? t(found.labelKey, { defaultValue: found.defaultLabel }) : t("All Types", { defaultValue: "All Types" });
+            })()}</span>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M6 9l6 6 6-6" />
             </svg>
           </button>
           {typeFilterOpen && (
             <div className="sanotif-type-list" ref={typeListRef}>
-              {NOTIFICATION_TYPES.map((t, idx) => (
+              {NOTIFICATION_TYPES.map((tObj, idx) => (
                 <button
-                  key={t.value}
-                  className={`sanotif-type-item ${typeFilter === t.value ? "sanotif-type-item--active" : ""} ${typeHighlightedIndex === idx ? "sanotif-type-item--highlighted" : ""}`}
+                  key={tObj.value}
+                  className={`sanotif-type-item ${typeFilter === tObj.value ? "sanotif-type-item--active" : ""} ${typeHighlightedIndex === idx ? "sanotif-type-item--highlighted" : ""}`}
                   onClick={() => {
-                    setTypeFilter(t.value);
-                    fetchNotifications(1, activeTab, search, t.value);
+                    setTypeFilter(tObj.value);
+                    fetchNotifications(1, activeTab, search, tObj.value);
                     setTypeFilterOpen(false);
                   }}
                   onMouseEnter={() => setTypeHighlightedIndex(idx)}
                 >
-                  {t.label}
+                  {t(tObj.labelKey, { defaultValue: tObj.defaultLabel })}
                 </button>
               ))}
             </div>
@@ -324,7 +329,7 @@ function SuperAdminNotifications() {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
             </svg>
-            Mark all as read
+            {t('Mark all as read', { defaultValue: 'Mark all as read' })}
           </button>
         )}
       </div>
@@ -336,16 +341,16 @@ function SuperAdminNotifications() {
         {loading ? (
           <div className="sanotif-empty">
             <div className="sanotif-spinner"></div>
-            <p>Loading notifications...</p>
+            <p>{t('Loading notifications...', { defaultValue: 'Loading notifications...' })}</p>
           </div>
         ) : error ? (
           <div className="sanotif-empty">
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--color-danger)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
-            <p style={{ color: "var(--color-danger)" }}>{error}</p>
+            <p style={{ color: "var(--color-danger)" }}>{t(error, { defaultValue: error })}</p>
             <button onClick={() => fetchNotifications(1, activeTab, search)} className="sanotif-retry-btn">
-              Try again
+              {t('Try again', { defaultValue: 'Try again' })}
             </button>
           </div>
         ) : notifications.length === 0 ? (
@@ -353,7 +358,7 @@ function SuperAdminNotifications() {
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--border-medium)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
             </svg>
-            <p>No notifications found.</p>
+            <p>{t('No notifications found.', { defaultValue: 'No notifications found.' })}</p>
           </div>
         ) : (
           notifications.map((n) => (
@@ -375,8 +380,8 @@ function SuperAdminNotifications() {
               >
                 <TypeIcon type={n.type} />
                 <div className="sanotif-content">
-                  <h4 className="sanotif-item-title">{n.title || n.type}</h4>
-                  <p className="sanotif-item-desc">{n.message}</p>
+                  <h4 className="sanotif-item-title">{t(n.title || n.type, { defaultValue: n.title || n.type })}</h4>
+                  <p className="sanotif-item-desc">{t(n.message, { defaultValue: n.message })}</p>
                 </div>
                 <div className="sanotif-meta">
                   <span className="sanotif-time">{formatDateTimeInline(n.created_at)}</span>
@@ -392,11 +397,13 @@ function SuperAdminNotifications() {
       {lastPage > 1 && !loading && (
         <div className="sanotif-pagination">
           <button className="sanotif-page-btn" disabled={page <= 1} onClick={() => handlePageChange(page - 1)}>
-            Previous
+            {t('Previous', { defaultValue: 'Previous' })}
           </button>
-          <span className="sanotif-page-info">Page {page} of {lastPage}</span>
+          <span className="sanotif-page-info">
+            {t('Page {{page}} of {{lastPage}}', { page, lastPage, defaultValue: `Page ${page} of ${lastPage}` })}
+          </span>
           <button className="sanotif-page-btn" disabled={page >= lastPage} onClick={() => handlePageChange(page + 1)}>
-            Next
+            {t('Next', { defaultValue: 'Next' })}
           </button>
         </div>
       )}

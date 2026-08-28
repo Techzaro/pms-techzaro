@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Search, X, Hash } from 'lucide-react';
 import { LoadingState, ErrorState } from './components/LoadingState';
@@ -15,10 +16,11 @@ const orgStatusConfig = {
 
 function formatDate(dateStr) {
   if (!dateStr) return '—';
-  return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  return new Date(dateStr).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 export default function DomainsPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [domains, setDomains] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -92,29 +94,29 @@ export default function DomainsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold" style={s.textHeading}>Domains</h1>
-        <p className="text-sm mt-1" style={s.textSecondary}>{domains.length} registered domains</p>
+        <h1 className="text-2xl font-bold" style={s.textHeading}>{t('Domains', { defaultValue: 'Domains' })}</h1>
+        <p className="text-sm mt-1" style={s.textSecondary}>{t('{{count}} registered domains', { count: domains.length, defaultValue: `${domains.length} registered domains` })}</p>
       </div>
 
       <div className="rounded-xl" style={s.card}>
         <div className="p-4 flex flex-wrap items-center gap-3" style={s.divider}>
           <div className="relative flex-1 min-w-[200px] max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={s.textMuted} />
-            <input type="text" placeholder="Search by name, domain, or ID..." value={search} onChange={(e) => setSearch(e.target.value)}
+            <input type="text" placeholder={t("Search by name, domain, or ID...", { defaultValue: "Search by name, domain, or ID..." })} value={search} onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-9 pr-4 py-2 text-sm rounded-lg focus:ring-2 focus:ring-blue-500" style={s.input} />
           </div>
 
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
             className="px-3 py-2 text-sm rounded-lg focus:ring-2 focus:ring-blue-500" style={s.filterSelect}>
-            <option value="">All Status</option>
+            <option value="">{t('All Status', { defaultValue: 'All Status' })}</option>
             {Object.entries(orgStatusConfig).map(([key, cfg]) => (
-              <option key={key} value={key}>{cfg.label}</option>
+              <option key={key} value={key}>{t(cfg.label, { defaultValue: cfg.label })}</option>
             ))}
           </select>
 
           <select value={planFilter} onChange={(e) => setPlanFilter(e.target.value)}
             className="px-3 py-2 text-sm rounded-lg focus:ring-2 focus:ring-blue-500" style={s.filterSelect}>
-            <option value="">All Plans</option>
+            <option value="">{t('All Plans', { defaultValue: 'All Plans' })}</option>
             {plans.map(p => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
@@ -124,7 +126,7 @@ export default function DomainsPage() {
             <button onClick={() => { setStatusFilter(''); setPlanFilter(''); }}
               className="flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors"
               style={{ ...s.filterBtn, color: '#dc2626', background: 'rgba(220,38,38,0.08)' }}>
-              <X className="w-3.5 h-3.5" /> Clear
+              <X className="w-3.5 h-3.5" /> {t('Clear', { defaultValue: 'Clear' })}
             </button>
           )}
         </div>
@@ -133,9 +135,17 @@ export default function DomainsPage() {
           <table className="w-full">
             <thead>
               <tr style={s.divider}>
-                {['ID', 'Organization', 'Domain', 'Plan', 'Status', 'Users', 'Created'].map((h) => (
-                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider"
-                    style={s.textMuted}>{h}</th>
+                {[
+                  { key: 'ID', defaultLabel: 'ID' },
+                  { key: 'Organization', defaultLabel: 'Organization' },
+                  { key: 'Domain', defaultLabel: 'Domain' },
+                  { key: 'Plan', defaultLabel: 'Plan' },
+                  { key: 'Status', defaultLabel: 'Status' },
+                  { key: 'Users', defaultLabel: 'Users' },
+                  { key: 'Created', defaultLabel: 'Created' },
+                ].map((h) => (
+                  <th key={h.key} className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider"
+                    style={s.textMuted}>{t(h.key, { defaultValue: h.defaultLabel })}</th>
                 ))}
               </tr>
             </thead>
@@ -154,7 +164,7 @@ export default function DomainsPage() {
                       <span style={s.idBadge}><Hash className="w-3 h-3" />{org?.id}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className="text-sm font-medium" style={{ color: 'var(--color-primary)', textDecoration: 'underline', textUnderlineOffset: '2px' }}>{org?.name || 'Unknown'}</span>
+                      <span className="text-sm font-medium" style={{ color: 'var(--color-primary)', textDecoration: 'underline', textUnderlineOffset: '2px' }}>{org?.name || t('Unknown', { defaultValue: 'Unknown' })}</span>
                     </td>
                     <td className="px-4 py-3">
                       <code className="text-sm px-2 py-0.5 rounded" style={{ background: 'var(--bg-hover)', color: 'var(--text)' }}>{domain.domain}</code>
@@ -166,7 +176,7 @@ export default function DomainsPage() {
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
                         style={{ color: cfg.color, background: cfg.bg }}>
                         <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }} />
-                        {cfg.label}
+                        {t(cfg.label, { defaultValue: cfg.label })}
                       </span>
                     </td>
                     <td className="px-4 py-3">
@@ -179,7 +189,7 @@ export default function DomainsPage() {
                 );
               })}
               {filtered.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-sm" style={s.textMuted}>No domains found</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-sm" style={s.textMuted}>{t('No domains found', { defaultValue: 'No domains found' })}</td></tr>
               )}
             </tbody>
           </table>

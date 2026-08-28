@@ -1,4 +1,5 @@
 /**
+/**
  * Tasks page component — "Tasks Assigned To You".
  *
  * Displays tasks that have been assigned to the current user
@@ -12,6 +13,7 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
 import { CheckCircle2, Lock, Pause, Play, StickyNote, Users, ArrowUpRight, ChevronDown, XCircle, RotateCcw, AlertOctagon, Sliders, Pin, Trash2 } from "lucide-react";
@@ -107,6 +109,7 @@ function formatTaskId(id) {
 
 /** Main Tasks page — renders tasks assigned to the current user by others. */
 function Tasks() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const { isWidgetEnabled } = usePersonalization();
@@ -139,6 +142,10 @@ function Tasks() {
   const [showAll, setShowAll] = useState(false);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
+
+  const [sortBy, setSortBy] = useState("");
+  const [sortDirection, setSortDirection] = useState("desc");
+
   const [advancedFilters, setAdvancedFilters] = useState({
     user_id: [],
     project_id: [],
@@ -149,9 +156,6 @@ function Tasks() {
     start_date: "",
     end_date: "",
   });
-
-  const [sortBy, setSortBy] = useState("");
-  const [sortDirection, setSortDirection] = useState("desc");
 
   const handleSort = (column) => {
     if (sortBy === column) {
@@ -166,6 +170,33 @@ function Tasks() {
   const handleReorder = (newItems) => {
     setItems(newItems);
   };
+
+  const selectStatusFilter = (status) => {
+    setStatusFilter(status);
+    setPage(1);
+    if (status) {
+      setSearchParams({ status });
+    } else {
+      setSearchParams({});
+    }
+  };
+
+  const getInitials = useCallback((name) => {
+    if (!name) return "??";
+    return name.split(" ").map((w) => w[0]).join("").substring(0, 2).toUpperCase();
+  }, []);
+
+  const getRandomColors = useCallback((id) => {
+    const colors = [
+      { bg: "#E0E7FF", text: "#4338CA" },
+      { bg: "#FEE2E2", text: "#B91C1C" },
+      { bg: "#DCFCE7", text: "#22C55E" },
+      { bg: "#FEF3C7", text: "#D97706" },
+      { bg: "#EDE9FE", text: "#7C3AED" },
+      { bg: "#FCE7F3", text: "#DB2777" },
+    ];
+    return colors[(id || 0) % colors.length];
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -223,7 +254,7 @@ function Tasks() {
       }
 
       fetch(`${API_URL}/my-tasks?${params.toString()}`, {
-        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        headers: { Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
         skipLoader: true,
       })
         .then((res) => (res.ok ? res.json() : { data: [] }))
@@ -241,286 +272,19 @@ function Tasks() {
       setLoading(false);
       setItems([]);
     }
-  }, [debouncedSearch, timeFilter, statusFilter, advancedFilters, sortBy, sortDirection]);
+  }, [timeFilter, debouncedSearch, statusFilter, advancedFilters, sortBy, sortDirection]);
 
   useEffect(() => {
     fetchTasks();
-  }, [fetchTasks]);
+  }, [fetchTasks, page]);
 
   useAutoRefresh(fetchTasks, {
     events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
   });
 
-  // Handle draft restoration from DraftCenter
-  useEffect(() => {
-    const draftId = location.state?.openDraft;
-    if (!draftId) return;
-    window.history.replaceState({}, document.title);
-    setRestoreDraftId(draftId);
-    setShowTaskModal(true);
-  }, [location.state]);
-
   useEffect(() => {
     setOrderedItems(items);
   }, [items]);
-
-  const handleTaskListReorder = useCallback((reordered) => {
-    setOrderedItems(reordered);
-    if (reordered.length) {
-      const payload = reordered.map((item, idx) => ({ id: item.id, sort_order: idx }));
-      const token = authToken();
-      fetch(`${API_URL}/tasks/reorder`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ items: payload }),
-        _notifHandled: true,
-      }).catch(() => {});
-    }
-  }, []);
-
-  useEffect(() => {
-    const filterParam = searchParams.get("filter");
-    const statusParam = searchParams.get("status");
-    const nextFilter = filterParam === "due_today" ? "due_today" : (statusParam || filterParam || "");
-    setStatusFilter((current) => {
-      if (nextFilter === "due_today" || current === "due_today" || nextFilter !== current) {
-        return nextFilter;
-      }
-      return current;
-    });
-  }, [searchParams]);
-
-  const selectStatusFilter = (filter) => {
-    if (filter === statusFilter && filter === "") {
-      setShowAll(!showAll);
-    } else {
-      setStatusFilter(filter);
-      setShowAll(false);
-      setPage(1);
-      if (filter) {
-        setSearchParams({ status: filter });
-      } else {
-        setSearchParams({});
-      }
-    }
-  };
-
-  const handleModalClose = (refresh) => {
-    setShowTaskModal(false);
-    if (refresh) fetchTasks();
-  };
-
-  const getInitials = (name) => {
-    if (!name) return "??";
-    return name.split(" ").map((w) => w[0]).join("").substring(0, 2).toUpperCase();
-  };
-
-  const getRandomColors = (id) => {
-    const colors = [
-      { bg: "#E0E7FF", text: "#4338CA" },
-      { bg: "#FEE2E2", text: "#B91C1C" },
-      { bg: "#DCFCE7", text: "#22C55E" },
-      { bg: "#FEF3C7", text: "#D97706" },
-      { bg: "#EDE9FE", text: "#7C3AED" },
-      { bg: "#FCE7F3", text: "#DB2777" },
-    ];
-    return colors[id % colors.length];
-  };
-
-  const formatDate = (dateStr) => {
-    return formatDateTimeInline(dateStr);
-  };
-
-  const formatStatus = (status) => {
-    const map = {
-      pending: "Pending",
-      in_progress: "In Progress",
-      paused: "Paused",
-      submitted: "Submitted",
-      reopened: "Reopened",
-      approved: "Approved",
-      rejected: "Declined",
-      abandon_requested: "Abandon Requested",
-      abandoned: "Abandoned",
-    };
-    return map[status] || status;
-  };
-
-  const handleTaskSubmitSuccess = (updatedTask) => {
-    setItems((prev) =>
-      prev.map((item) =>
-        item.id === updatedTask.id
-          ? { ...item, ...updatedTask }
-          : item
-      )
-    );
-    setSubmitTaskModal({ open: false, task: null });
-  };
-
-  const handleDirectApprove = async (e, taskId) => {
-    if (e) {
-      e.stopPropagation();
-      e.preventDefault();
-    }
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}/approve`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-        _notifHandled: true,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setItems((prev) =>
-          prev.map((item) =>
-            item.id === taskId ? { ...item, status: "approved", ...(data.task || {}) } : item
-          )
-        );
-        publish('task:updated', { id: taskId, status: 'approved' });
-        publish('data:changed', { type: 'task', action: 'updated' });
-        showSuccessMessage("Task", "approved");
-      } else {
-        notify.error(data.message || "Failed to approve task.");
-      }
-    } catch {
-      notify.error("An error occurred while approving task.");
-    }
-  };
-
-  const handleAcknowledge = async (e, taskId) => {
-    if (e && e.stopPropagation) {
-      e.stopPropagation();
-      e.preventDefault();
-    }
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}/acknowledge`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-        _notifHandled: true,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setItems((prev) =>
-          prev.map((item) =>
-            item.id === taskId ? { ...item, status: "in_progress", ...(data.task || {}) } : item
-          )
-        );
-        publish('task:updated', { id: taskId, status: 'in_progress' });
-        publish('data:changed', { type: 'task', action: 'updated' });
-        showSuccessMessage("Task", "acknowledged");
-      } else {
-        const errorMsg = data?.message || data?.error || (data?.errors ? Object.values(data.errors).flat().join(", ") : null) || "Failed to acknowledge task.";
-        if (notify?.error) {
-          notify.error(errorMsg);
-        }
-      }
-    } catch (err) {
-      const errorMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed to acknowledge task.";
-      if (notify?.error) {
-        notify.error(errorMsg);
-      }
-    }
-  };
-
-  const handleContinue = async (e, taskId) => {
-    if (e && e.stopPropagation) {
-      e.stopPropagation();
-      e.preventDefault();
-    }
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}/continue`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-        _notifHandled: true,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setItems((prev) =>
-          prev.map((item) =>
-            item.id === taskId ? { ...item, status: "in_progress", ...(data.task || {}) } : item
-          )
-        );
-        publish('task:updated', { id: taskId, status: 'in_progress' });
-        publish('data:changed', { type: 'task', action: 'updated' });
-        showSuccessMessage("Task", "resumed");
-      } else {
-        const errorMsg = data?.message || data?.error || (data?.errors ? Object.values(data.errors).flat().join(", ") : null) || "Failed to continue task.";
-        notify.error(errorMsg);
-      }
-    } catch (err) {
-      const errorMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed to continue task.";
-      notify.error(errorMsg);
-    }
-  };
-
-  const handlePause = async (e, taskId) => {
-    if (e && e.stopPropagation) {
-      e.stopPropagation();
-      e.preventDefault();
-    }
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}/pause`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ reason: "other", reason_detail: "Paused from task list" }),
-        _notifHandled: true,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setItems((prev) =>
-          prev.map((item) =>
-            item.id === taskId ? { ...item, status: "paused", ...(data.task || {}) } : item
-          )
-        );
-        publish('task:updated', { id: taskId, status: 'paused' });
-        publish('data:changed', { type: 'task', action: 'updated' });
-        showSuccessMessage("Task", "paused");
-      } else {
-        notify.error(data?.message || data?.error || "Failed to pause task.");
-      }
-    } catch {
-      notify.error("Failed to pause task.");
-    }
-  };
-
-  const handleDelete = (e, taskId) => {
-    if (e && e.stopPropagation) {
-      e.stopPropagation();
-      e.preventDefault();
-    }
-    setDeleteTargetId(taskId);
-    setDeleteConfirmOpen(true);
-  };
-
-  const confirmDelete = async () => {
-    const taskId = deleteTargetId;
-    setDeleteConfirmOpen(false);
-    setDeleteTargetId(null);
-    if (!taskId) return;
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}`, {
-        method: "DELETE",
-        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-        _notifHandled: true,
-      });
-      if (res.ok) {
-        setItems((prev) => prev.filter((item) => String(item.id) !== String(taskId)));
-        setOrderedItems((prev) => prev.filter((item) => String(item.id) !== String(taskId)));
-        publish('task:deleted', { id: taskId });
-        publish('data:changed', { type: 'task', action: 'deleted' });
-        toast.success("Task deleted successfully");
-      } else {
-        const data = await res.json().catch(() => ({}));
-        toast.error(data.message || "Failed to delete task.");
-      }
-    } catch {
-      toast.error("Failed to delete task.");
-    }
-  };
 
   const baseItems = orderedItems.length ? orderedItems : items;
   const pendingStatuses = ["pending", "planned", "Planning", "Planned"];
@@ -574,27 +338,203 @@ function Tasks() {
   const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * itemsPerPage, page * itemsPerPage);
 
   const breadcrumbs = [
-    { label: "Tasks", path: rolePath("tasks") },
-    { label: "Assigned To You" },
+    { label: t("Tasks", { defaultValue: "Tasks" }), path: rolePath("tasks") },
+    { label: t("Assigned To You", { defaultValue: "Assigned To You" }) },
   ];
+
+  const handleTaskSubmitSuccess = (taskId, updatedTask) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === taskId
+          ? { ...item, ...updatedTask }
+          : item
+      )
+    );
+    setSubmitTaskModal({ open: false, task: null });
+  };
+
+  const handleDirectApprove = async (e, taskId) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === taskId ? { ...item, status: "approved", ...(data.task || {}) } : item
+          )
+        );
+        publish('task:updated', { id: taskId, status: 'approved' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage(t("Task", { defaultValue: "Task" }), t("approved", { defaultValue: "approved" }));
+      } else {
+        notify.error(data.message || t("Failed to approve task.", { defaultValue: "Failed to approve task." }));
+      }
+    } catch {
+      notify.error(t("An error occurred while approving task.", { defaultValue: "An error occurred while approving task." }));
+    }
+  };
+
+  const handleAcknowledge = async (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/acknowledge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === taskId ? { ...item, status: "in_progress", ...(data.task || {}) } : item
+          )
+        );
+        publish('task:updated', { id: taskId, status: 'in_progress' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage(t("Task", { defaultValue: "Task" }), t("acknowledged", { defaultValue: "acknowledged" }));
+      } else {
+        const errorMsg = data?.message || data?.error || (data?.errors ? Object.values(data.errors).flat().join(", ") : null) || t("Failed to acknowledge task.", { defaultValue: "Failed to acknowledge task." });
+        if (notify?.error) {
+          notify.error(errorMsg);
+        }
+      }
+    } catch (err) {
+      const errorMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || t("Failed to acknowledge task.", { defaultValue: "Failed to acknowledge task." });
+      if (notify?.error) {
+        notify.error(errorMsg);
+      }
+    }
+  };
+
+  const handleContinue = async (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/continue`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === taskId ? { ...item, status: "in_progress", ...(data.task || {}) } : item
+          )
+        );
+        publish('task:updated', { id: taskId, status: 'in_progress' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage(t("Task", { defaultValue: "Task" }), t("resumed", { defaultValue: "resumed" }));
+      } else {
+        const errorMsg = data?.message || data?.error || (data?.errors ? Object.values(data.errors).flat().join(", ") : null) || t("Failed to continue task.", { defaultValue: "Failed to continue task." });
+        notify.error(errorMsg);
+      }
+    } catch (err) {
+      const errorMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || t("Failed to continue task.", { defaultValue: "Failed to continue task." });
+      notify.error(errorMsg);
+    }
+  };
+
+  const handlePause = async (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/pause`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        body: JSON.stringify({ reason: "other", reason_detail: "Paused from task list" }),
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === taskId ? { ...item, status: "paused", ...(data.task || {}) } : item
+          )
+        );
+        publish('task:updated', { id: taskId, status: 'paused' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage(t("Task", { defaultValue: "Task" }), t("paused", { defaultValue: "paused" }));
+      } else {
+        notify.error(data?.message || data?.error || t("Failed to pause task.", { defaultValue: "Failed to pause task." }));
+      }
+    } catch {
+      notify.error(t("Failed to pause task.", { defaultValue: "Failed to pause task." }));
+    }
+  };
+
+  const handleDelete = (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    setDeleteTargetId(taskId);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    const taskId = deleteTargetId;
+    setDeleteConfirmOpen(false);
+    setDeleteTargetId(null);
+    if (!taskId) return;
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        _notifHandled: true,
+      });
+      if (res.ok) {
+        setItems((prev) => prev.filter((item) => String(item.id) !== String(taskId)));
+        setOrderedItems((prev) => prev.filter((item) => String(item.id) !== String(taskId)));
+        publish('task:deleted', { id: taskId });
+        publish('data:changed', { type: 'task', action: 'deleted' });
+        toast.success(t("Task deleted successfully", { defaultValue: "Task deleted successfully" }));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.message || t("Failed to delete task.", { defaultValue: "Failed to delete task." }));
+      }
+    } catch {
+      toast.error(t("Failed to delete task.", { defaultValue: "Failed to delete task." }));
+    }
+  };
 
   return (
     <DashboardLayout>
       <Breadcrumb items={breadcrumbs} />
       <div className="Task">
         <div className="task-text">
-          <h3>Tasks Assigned To You</h3>
-          <p>Manage and track your tasks and projects</p>
+          <h3>{t("Tasks Assigned To You", { defaultValue: "Tasks Assigned To You" })}</h3>
+          <p>{t("Manage and track your tasks and projects", { defaultValue: "Manage and track your tasks and projects" })}</p>
         </div>
 
         <div className="task-btns">
           <div className="all-time">
             <select value={timeFilter} onChange={(e) => { setTimeFilter(e.target.value); setPage(1); }}>
-              <option value="">All Time</option>
-              <option value="today">Today</option>
-              <option value="7">Last 7 Days</option>
-              <option value="30">Last 30 Days</option>
-              <option value="180">Last 6 Months</option>
+              <option value="">{t("All Time", { defaultValue: "All Time" })}</option>
+              <option value="today">{t("Today", { defaultValue: "Today" })}</option>
+              <option value="7">{t("Last 7 Days", { defaultValue: "Last 7 Days" })}</option>
+              <option value="30">{t("Last 30 Days", { defaultValue: "Last 30 Days" })}</option>
+              <option value="180">{t("Last 6 Months", { defaultValue: "Last 6 Months" })}</option>
             </select>
           </div>
         </div>
@@ -614,14 +554,14 @@ function Tasks() {
       {isWidgetEnabled("tasks", "stats_cards") && (
         <DraggableStatusBadges
         badges={[
-          { id: "", label: "All", count: allCount, className: "All" },
-          { id: "pending", label: "Pending", count: pendingCount, className: "Pending" },
-          { id: "in_progress", label: "In Progress", count: inProgressCount, className: "InProgress" },
-          { id: "submitted", label: "Submitted", count: submittedCount, className: "Submitted" },
-          { id: "approved", label: "Approved", count: approvedCount, className: "Approved" },
-          { id: "paused", label: "Paused", count: pausedCount, className: "Paused" },
-          { id: "rejected", label: "Declined", count: rejectedCount, className: "Rejected" },
-          { id: "abandoned", label: "Abandoned", count: abandonedCount, className: "Abandoned", dotColor: "#DC2626" },
+          { id: "", label: t("All", { defaultValue: "All" }), count: allCount, className: "All" },
+          { id: "pending", label: t("Pending", { defaultValue: "Pending" }), count: pendingCount, className: "Pending" },
+          { id: "in_progress", label: t("In Progress", { defaultValue: "In Progress" }), count: inProgressCount, className: "InProgress" },
+          { id: "submitted", label: t("Submitted", { defaultValue: "Submitted" }), count: submittedCount, className: "Submitted" },
+          { id: "approved", label: t("Approved", { defaultValue: "Approved" }), count: approvedCount, className: "Approved" },
+          { id: "paused", label: t("Paused", { defaultValue: "Paused" }), count: pausedCount, className: "Paused" },
+          { id: "rejected", label: t("Declined", { defaultValue: "Declined" }), count: rejectedCount, className: "Rejected" },
+          { id: "abandoned", label: t("Abandoned", { defaultValue: "Abandoned" }), count: abandonedCount, className: "Abandoned", dotColor: "#DC2626" },
         ]}
         activeStatus={statusFilter}
           onSelectStatus={selectStatusFilter}
@@ -647,30 +587,30 @@ function Tasks() {
       {/* TABLE */}
       <div className="container">
         <div className="table-header1">
-          <div style={{ fontSize: 12, fontWeight: 600 }}>ID</div>
+          <div style={{ fontSize: 12, fontWeight: 600 }}>{t("ID", { defaultValue: "ID" })}</div>
           <div style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("assigned_by")}>
-            Assigned by
+            {t("Assigned by", { defaultValue: "Assigned by" })}
           </div>
           <div className="task-name-column" style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("title")}>
-            Task Name
+            {t("Task Name", { defaultValue: "Task Name" })}
           </div>
           <div className="status-column" style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("status")}>
-            Status
+            {t("Status", { defaultValue: "Status" })}
           </div>
-          <div>Progress</div>
+          <div>{t("Progress", { defaultValue: "Progress" })}</div>
           <div className="priority-column" style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("priority")}>
-            Priority
+            {t("Priority", { defaultValue: "Priority" })}
           </div>
           <div className="date-column" style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("due_date")}>
-            Start & Due Date
+            {t("Start & Due Date", { defaultValue: "Start & Due Date" })}
           </div>
-          <div>Action</div>
+          <div>{t("Action", { defaultValue: "Action" })}</div>
         </div>
 
         {loading ? (
-          <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
+          <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>{t("Loading...", { defaultValue: "Loading..." })}</div>
         ) : filteredItems.length === 0 ? (
-          <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No items found</div>
+          <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>{t("No items found", { defaultValue: "No items found" })}</div>
         ) : (
           <SortableTableWrapper 
             items={paginatedItems.map((i) => ({ ...i, sortableId: `task-${i.id}` }))} 
@@ -685,7 +625,7 @@ function Tasks() {
               const hasChain = item.delegation_chain && item.delegation_chain.length > 0;
               const assigner = item.assigner;
               const displayName = item.transferred_by_name || assigner?.name || "System";
-              const displayRole = item.transferred_by_name ? "Transferred" : (assigner?.role || "");
+              const displayRole = item.transferred_by_name ? t("Transferred", { defaultValue: "Transferred" }) : (assigner?.role ? t(assigner.role, { defaultValue: assigner.role }) : "");
               return (
                 <div className="taskby-row" key={item.sortableId}>
                   <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={item.id} businessId={item.business_id} />
@@ -728,7 +668,7 @@ function Tasks() {
                           <div className="progress-bar-fill" style={{ width: `${prog}%` }}></div>
                         </div>
                         <div style={{ fontSize: "12px", color: "#6b7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {item.approved_deliverables || 0}/{item.total_deliverables || 0} subtasks
+                          {t("{{approved}}/{{total}} subtasks", { approved: item.approved_deliverables || 0, total: item.total_deliverables || 0, defaultValue: `${item.approved_deliverables || 0}/${item.total_deliverables || 0} subtasks` })}
                         </div>
                       </div>
                     );
@@ -737,7 +677,7 @@ function Tasks() {
                   <div className="col-priority">
                     <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
                       <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
-                      {item.priority}
+                      {t(item.priority || "Medium", { defaultValue: item.priority || "Medium" })}
                     </span>
                   </div>
                   
@@ -750,22 +690,22 @@ function Tasks() {
                   <div className="col-action" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                     <button
                       className="action-icon-btn action-view action-trigger-lg"
-                      title="View Task"
+                      title={t("View Task", { defaultValue: "View Task" })}
                       onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } })}
                     >
                       <IoEyeOutline size={18} />
                     </button>
                     <ActionPopover
                       trigger={
-                        <button className="action-icon-btn action-manage action-trigger-lg" title="Status Actions" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "4px", borderRadius: "6px", background: "var(--bg-hover, #f3f4f6)", color: "var(--text-primary, #374151)", border: "1px solid var(--border-color, #e5e7eb)", cursor: "pointer" }}>
+                        <button className="action-icon-btn action-manage action-trigger-lg" title={t("Status Actions", { defaultValue: "Status Actions" })} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "4px", borderRadius: "6px", background: "var(--bg-hover, #f3f4f6)", color: "var(--text-primary, #374151)", border: "1px solid var(--border-color, #e5e7eb)", cursor: "pointer" }}>
                           <Sliders size={18} />
                         </button>
                       }
                     >
-                      <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
+                      <button className="action-icon-btn action-note" title={t("Add Note", { defaultValue: "Add Note" })} onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
                       <button
                         className="action-icon-btn"
-                        title={isTaskPinned(item.id) ? "Unpin from Dashboard" : "Pin to Dashboard"}
+                        title={isTaskPinned(item.id) ? t("Unpin from Dashboard", { defaultValue: "Unpin from Dashboard" }) : t("Pin to Dashboard", { defaultValue: "Pin to Dashboard" })}
                         onClick={(e) => { e.stopPropagation(); e.preventDefault(); togglePinTask(item); }}
                       >
                         <Pin size={14} style={{ color: isTaskPinned(item.id) ? "#4f46e5" : "var(--text-secondary)", fill: isTaskPinned(item.id) ? "#4f46e5" : "none" }} />
@@ -778,7 +718,7 @@ function Tasks() {
                             {canUserApprove && (item.status === "submitted" || item.status === "reopened") && (
                               <button
                                 className="action-icon-btn"
-                                title="Approve Task"
+                                title={t("Approve Task", { defaultValue: "Approve Task" })}
                                 style={{ color: "#16A34A", fontWeight: "bold" }}
                                 onClick={(e) => handleDirectApprove(e, item.id)}
                               >
@@ -788,7 +728,7 @@ function Tasks() {
                             {canUserApprove && (item.status === "submitted" || item.status === "reopened") && (
                               <button
                                 className="action-icon-btn"
-                                title="Decline Task"
+                                title={t("Decline Task", { defaultValue: "Decline Task" })}
                                 style={{ color: "#DC2626" }}
                                 onClick={(e) => { e.stopPropagation(); e.preventDefault(); navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } }); }}
                               >
@@ -798,7 +738,7 @@ function Tasks() {
                             {canUserApprove && (item.status === "approved" || item.status === "submitted" || item.status === "reopened" || item.status === "abandoned") && (
                               <button
                                 className="action-icon-btn"
-                                title="Reopen Task"
+                                title={t("Reopen Task", { defaultValue: "Reopen Task" })}
                                 style={{ color: "#2563EB" }}
                                 onClick={(e) => { e.stopPropagation(); e.preventDefault(); navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } }); }}
                               >
@@ -808,7 +748,7 @@ function Tasks() {
                             {item.status !== "abandoned" && (
                               <button
                                 className="action-icon-btn"
-                                title={isUserAdminOrManager ? "Abandon Task" : "Request Abandon"}
+                                title={isUserAdminOrManager ? t("Abandon Task", { defaultValue: "Abandon Task" }) : t("Request Abandon", { defaultValue: "Request Abandon" })}
                                 style={{ color: "#F59E0B" }}
                                 onClick={(e) => { e.stopPropagation(); e.preventDefault(); navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } }); }}
                               >
@@ -822,7 +762,7 @@ function Tasks() {
                         if (item.is_transferor) {
                           return (
                             <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "6px", backgroundColor: "#EFF6FF", color: "#1D4ED8", fontSize: "11px", fontWeight: 600 }}>
-                              Transferred
+                              {t("Transferred", { defaultValue: "Transferred" })}
                             </span>
                           );
                         }
@@ -831,27 +771,27 @@ function Tasks() {
                           return (
                             <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#92400E", fontSize: "11px", fontWeight: 600, border: "1px solid #F59E0B" }}>
                               <Lock size={12} />
-                              Paused by Assigner
+                              {t("Paused by Assigner", { defaultValue: "Paused by Assigner" })}
                             </span>
                           );
                         }
                         if (item.status === "pending") {
                           return (
-                            <button className="action-icon-btn action-submit" title="Acknowledge Task" onClick={(e) => handleAcknowledge(e, item.id)}>
+                            <button className="action-icon-btn action-submit" title={t("Acknowledge Task", { defaultValue: "Acknowledge Task" })} onClick={(e) => handleAcknowledge(e, item.id)}>
                               <CheckCircle2 size={16} />
                             </button>
                           );
                         }
                         if (item.status === "paused" && canUserPauseResume(item, currentUser)) {
                           return (
-                            <button className="action-icon-btn action-submit" title="Continue Task" onClick={(e) => handleContinue(e, item.id)}>
+                            <button className="action-icon-btn action-submit" title={t("Continue Task", { defaultValue: "Continue Task" })} onClick={(e) => handleContinue(e, item.id)}>
                               <Play size={16} />
                             </button>
                           );
                         }
                         if (["in_progress", "submitted"].includes(item.status?.toLowerCase()) && !item.assigner_paused && canUserPauseResume(item, currentUser)) {
                           return (
-                            <button className="action-icon-btn action-submit" title="Pause Task" onClick={(e) => handlePause(e, item.id)} style={{ color: "#D97706" }}>
+                            <button className="action-icon-btn action-submit" title={t("Pause Task", { defaultValue: "Pause Task" })} onClick={(e) => handlePause(e, item.id)} style={{ color: "#D97706" }}>
                               <Pause size={16} />
                             </button>
                           );
@@ -861,7 +801,7 @@ function Tasks() {
                             <div style={{ position: "relative", display: "inline-flex" }}>
                               <button
                                 className="action-icon-btn action-submit"
-                                title={item.pending_deliverables_count > 0 ? "Submit all subtasks first" : item.status === "paused" || item.assigner_paused ? "Task is paused. Resume first." : "Submit Task"}
+                                title={item.pending_deliverables_count > 0 ? t("Submit all subtasks first", { defaultValue: "Submit all subtasks first" }) : item.status === "paused" || item.assigner_paused ? t("Task is paused. Resume first.", { defaultValue: "Task is paused. Resume first." }) : t("Submit Task", { defaultValue: "Submit Task" })}
                                 disabled={item.pending_deliverables_count > 0 || item.status === "paused" || item.assigner_paused}
                                 onClick={(e) => { e.stopPropagation(); !item.pending_deliverables_count && item.status !== "paused" && !item.assigner_paused && setSubmitTaskModal({ open: true, task: item }); }}
                                 style={item.pending_deliverables_count > 0 || item.status === "paused" || item.assigner_paused ? { opacity: 0.4, cursor: "not-allowed" } : {}}
@@ -879,7 +819,7 @@ function Tasks() {
                         return (
                           <button
                             className="action-icon-btn action-delete"
-                            title="Delete Task"
+                            title={t("Delete Task", { defaultValue: "Delete Task" })}
                             onClick={(e) => handleDelete(e, item.id)}
                           >
                             <Trash2 size={16} />
@@ -889,7 +829,7 @@ function Tasks() {
                       {!["approved", "rejected", "pending", "submitted"].includes(item.status) && !item.is_transferor && (
                         <button
                           className="action-icon-btn"
-                          title="Transfer Task"
+                          title={t("Transfer Task", { defaultValue: "Transfer Task" })}
                           onClick={(e) => { e.stopPropagation(); setTransferDialog({ open: true, task: item }); }}
                           style={{ color: "#2563EB", cursor: "pointer" }}
                         >
@@ -919,10 +859,10 @@ function Tasks() {
         isOpen={deleteConfirmOpen}
         onClose={() => { setDeleteConfirmOpen(false); setDeleteTargetId(null); }}
         onConfirm={confirmDelete}
-        title="Confirm Deletion"
-        message="Are you sure you want to delete this task? This action cannot be undone."
-        confirmText="Delete"
-        cancelText="Cancel"
+        title={t("Confirm Deletion", { defaultValue: "Confirm Deletion" })}
+        message={t("Are you sure you want to delete this task? This action cannot be undone.", { defaultValue: "Are you sure you want to delete this task? This action cannot be undone." })}
+        confirmText={t("Delete", { defaultValue: "Delete" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
         danger
       />
 
@@ -947,11 +887,11 @@ function Tasks() {
           isOpen={transferDialog.open}
           onClose={() => setTransferDialog({ open: false, task: null })}
           task={transferDialog.task}
-          onTransferSuccess={() => { setTransferDialog({ open: false, task: null }); fetchTasks(); showSuccessMessage("Task", "transferred"); }}
+          onTransferSuccess={() => { setTransferDialog({ open: false, task: null }); fetchTasks(); showSuccessMessage(t("Task", { defaultValue: "Task" }), t("transferred", { defaultValue: "transferred" })); }}
         />
       )}
 
-      <DynamicWidgetSection storageKey="pms_tasks_widgets" sectionTitle="Tasks Widgets" />
+      <DynamicWidgetSection storageKey="pms_tasks_widgets" sectionTitle={t("Tasks Widgets", { defaultValue: "Tasks Widgets" })} />
     </DashboardLayout>
   );
 }

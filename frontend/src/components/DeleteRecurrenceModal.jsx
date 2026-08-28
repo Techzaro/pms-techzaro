@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import ConfirmationDialog from "./ConfirmationDialog";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
@@ -6,6 +7,7 @@ import { useNotification } from "../context/NotificationContext";
 import { publish } from "../utils/eventBus";
 
 export default function DeleteRecurrenceModal({ isOpen, onClose, task, onSuccess }) {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const notify = useNotification();
 
@@ -25,10 +27,10 @@ export default function DeleteRecurrenceModal({ isOpen, onClose, task, onSuccess
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.message || "Failed to delete recurrence series.");
+        throw new Error(data.message || t("Failed to delete recurrence series.", { defaultValue: "Failed to delete recurrence series." }));
       }
 
-      notify.success(data.message || "Recurrence rule deleted successfully.");
+      notify.success(data.message || t("Recurrence rule deleted successfully.", { defaultValue: "Recurrence rule deleted successfully." }));
       publish("task:updated", { taskId: task.id });
       publish("data:changed", { type: "task", action: "recurrence_deleted" });
       if (onSuccess) onSuccess();
@@ -45,9 +47,12 @@ export default function DeleteRecurrenceModal({ isOpen, onClose, task, onSuccess
       isOpen={isOpen}
       onClose={onClose}
       onConfirm={handleDelete}
-      title="Delete Recurrence Series"
-      message={`Are you sure you want to delete the recurrence rule for "${task.title}"? Future pending task instances will be removed, but all completed instances will be preserved.`}
-      confirmText="Delete Recurrence"
+      title={t("Delete Recurrence Series", { defaultValue: "Delete Recurrence Series" })}
+      message={t('Are you sure you want to delete the recurrence rule for "{{title}}"? Future pending task instances will be removed, but all completed instances will be preserved.', {
+        defaultValue: `Are you sure you want to delete the recurrence rule for "${task.title}"? Future pending task instances will be removed, but all completed instances will be preserved.`,
+        title: task.title,
+      })}
+      confirmText={t("Delete Recurrence", { defaultValue: "Delete Recurrence" })}
       confirmColor="#dc2626"
       loading={loading}
     />
