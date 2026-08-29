@@ -41,8 +41,9 @@
 /* TITLE ROW */
 .td-title-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
   margin-bottom: 8px;
 }
 .td-title {
@@ -51,12 +52,14 @@
   color: var(--text-primary);
   margin: 0;
   line-height: 1.2;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 .td-title-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-shrink: 0;
+  flex-wrap: wrap;
 }
 .td-nav-btn {
   width: 36px;
@@ -560,7 +563,6 @@
 
 @media (max-width: 480px) {
   .td-title { font-size: 18px; }
-  .td-title-row { flex-direction: column; align-items: flex-start; gap: 10px; }
   .td-title-actions { width: 100%; flex-wrap: wrap; }
   .td-btn-primary,
   .td-btn-outline,

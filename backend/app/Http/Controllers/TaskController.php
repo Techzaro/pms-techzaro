@@ -1058,6 +1058,22 @@ class TaskController extends Controller
             }
         }
 
+        // Normalize ISO datetime strings to MySQL datetime format
+        foreach (['start_date', 'end_date', 'recurrence_start_date', 'recurrence_end_date'] as $dateField) {
+            if (! empty($validated[$dateField]) && is_string($validated[$dateField])) {
+                $validated[$dateField] = \Carbon\Carbon::parse($validated[$dateField])->format('Y-m-d H:i:s');
+            }
+        }
+        if (! empty($validated['deliverables']) && is_array($validated['deliverables'])) {
+            foreach ($validated['deliverables'] as &$del) {
+                foreach (['start_date', 'due_date'] as $df) {
+                    if (! empty($del[$df]) && is_string($del[$df])) {
+                        $del[$df] = \Carbon\Carbon::parse($del[$df])->format('Y-m-d H:i:s');
+                    }
+                }
+            }
+        }
+
         // Validate task end_date does not exceed project end_date
         if (! empty($validated['end_date']) && $project->end_date) {
             $taskEnd = Carbon::parse($validated['end_date']);
@@ -1441,6 +1457,22 @@ class TaskController extends Controller
             }
         }
 
+        // Normalize ISO datetime strings to MySQL datetime format
+        foreach (['start_date', 'end_date', 'recurrence_start_date', 'recurrence_end_date'] as $dateField) {
+            if (! empty($validated[$dateField]) && is_string($validated[$dateField])) {
+                $validated[$dateField] = \Carbon\Carbon::parse($validated[$dateField])->format('Y-m-d H:i:s');
+            }
+        }
+        if (! empty($validated['deliverables']) && is_array($validated['deliverables'])) {
+            foreach ($validated['deliverables'] as &$del) {
+                foreach (['start_date', 'due_date'] as $df) {
+                    if (! empty($del[$df]) && is_string($del[$df])) {
+                        $del[$df] = \Carbon\Carbon::parse($del[$df])->format('Y-m-d H:i:s');
+                    }
+                }
+            }
+        }
+
         // Validate deliverable due_date does not exceed task end_date
         if (! empty($validated['end_date']) && ! empty($validated['deliverables'])) {
             $endDateTime = Carbon::parse($validated['end_date']);
@@ -1723,6 +1755,13 @@ class TaskController extends Controller
         unset($validated['due_dates']);
         $existingFileNames = $validated['existing_file_names'] ?? null;
         unset($validated['existing_file_names']);
+
+        // Normalize ISO datetime strings to MySQL datetime format
+        foreach (['start_date', 'end_date'] as $dateField) {
+            if (! empty($validated[$dateField]) && is_string($validated[$dateField])) {
+                $validated[$dateField] = \Carbon\Carbon::parse($validated[$dateField])->format('Y-m-d H:i:s');
+            }
+        }
 
         // Validate start_date is not later than end_date
         $startDateVal = $validated['start_date'] ?? $task->start_date;
@@ -3291,6 +3330,9 @@ class TaskController extends Controller
         $submission->save();
 
         if ($request->hasFile('files')) {
+            if (!isset($org)) {
+                $org = $request->attributes->get('currentOrganization');
+            }
             $submission->attachments()->createMany(
                 collect($request->file('files'))->map(fn ($file) => [
                     'submission_type' => 'task',
@@ -3897,6 +3939,20 @@ class TaskController extends Controller
         }
 
         $fileName = $submission->file_name ?: basename($resolved['path']);
+
+        if ($resolved['disk'] === 's3') {
+            $org = $request->attributes->get('currentOrganization');
+            if ($org) {
+                try {
+                    $temporaryUrl = \App\Services\StorageDiskResolver::getTemporaryUrl($org, $resolved['path'], 60);
+                    $disposition = 'attachment; filename="' . $fileName . '"';
+                    $temporaryUrl .= '&response-content-disposition=' . urlencode($disposition);
+                    return redirect()->away($temporaryUrl);
+                } catch (\Throwable $e) {
+                    \Log::error('S3 redirect failed for task submission', ['path' => $resolved['path'], 'error' => $e->getMessage()]);
+                }
+            }
+        }
 
         return Storage::disk($resolved['disk'])->download($resolved['path'], $fileName);
     }

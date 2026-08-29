@@ -278,7 +278,18 @@ class ChatController extends Controller
         }
 
         if ($org) {
-            return Storage::disk(StorageDiskResolver::getDisk($org))->download($message->file_path, $message->file_name);
+            $disk = StorageDiskResolver::getDisk($org);
+            if ($disk === 's3') {
+                try {
+                    $temporaryUrl = StorageDiskResolver::getTemporaryUrl($org, $message->file_path, 60);
+                    $disposition = 'attachment; filename="' . $message->file_name . '"';
+                    $temporaryUrl .= '&response-content-disposition=' . urlencode($disposition);
+                    return redirect()->away($temporaryUrl);
+                } catch (\Throwable $e) {
+                    \Log::error('S3 redirect failed for chat file', ['file_path' => $message->file_path, 'error' => $e->getMessage()]);
+                }
+            }
+            return Storage::disk($disk)->download($message->file_path, $message->file_name);
         }
         return Storage::disk('public')->download($message->file_path, $message->file_name);
     }

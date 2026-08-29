@@ -1823,6 +1823,20 @@ class DeliverableController extends Controller
 
         $fileName = $submission->file_name ?: basename($resolved['path']);
 
+        if ($resolved['disk'] === 's3') {
+            $org = $request->attributes->get('currentOrganization');
+            if ($org) {
+                try {
+                    $temporaryUrl = \App\Services\StorageDiskResolver::getTemporaryUrl($org, $resolved['path'], 60);
+                    $disposition = 'attachment; filename="' . $fileName . '"';
+                    $temporaryUrl .= '&response-content-disposition=' . urlencode($disposition);
+                    return redirect()->away($temporaryUrl);
+                } catch (\Throwable $e) {
+                    \Log::error('S3 redirect failed for deliverable submission', ['path' => $resolved['path'], 'error' => $e->getMessage()]);
+                }
+            }
+        }
+
         return Storage::disk($resolved['disk'])->download($resolved['path'], $fileName);
     }
 
@@ -1996,6 +2010,22 @@ class DeliverableController extends Controller
         }
 
         $filename = $attachment->original_name ?? basename($resolved['path']);
+
+        if ($resolved['disk'] === 's3') {
+            $org = $request->attributes->get('currentOrganization');
+            if ($org) {
+                try {
+                    $temporaryUrl = \App\Services\StorageDiskResolver::getTemporaryUrl($org, $resolved['path'], 60);
+                    if ($request->query('action') === 'download') {
+                        $disposition = 'attachment; filename="' . $filename . '"';
+                        $temporaryUrl .= '&response-content-disposition=' . urlencode($disposition);
+                    }
+                    return redirect()->away($temporaryUrl);
+                } catch (\Throwable $e) {
+                    \Log::error('S3 redirect failed for deliverable attachment', ['path' => $resolved['path'], 'error' => $e->getMessage()]);
+                }
+            }
+        }
 
         if ($request->query('action') === 'download') {
             return Storage::disk($resolved['disk'])->download($resolved['path'], $filename);

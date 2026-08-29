@@ -1266,7 +1266,30 @@ class UserController extends Controller
 
         $filename = basename($cleanPath);
 
-        // Support both ?action=download and ?download=1 parameter patterns
+        // S3: redirect to pre-signed URL so the browser opens/downloads directly from S3
+        if ($disk === 's3' && $org) {
+            try {
+                $expirationMinutes = 60;
+                $temporaryUrl = \App\Services\StorageDiskResolver::getTemporaryUrl($org, $cleanPath, $expirationMinutes);
+
+                if ($request->query('action') === 'download' || $request->query('download')) {
+                    // For downloads, append Content-Disposition via S3 response-content-disposition
+                    $disposition = 'attachment; filename="' . $filename . '"';
+                    $temporaryUrl .= '&response-content-disposition=' . urlencode($disposition);
+                }
+
+                return redirect()->away($temporaryUrl);
+            } catch (\Throwable $e) {
+                \Log::error('S3 redirect failed for user document', [
+                    'path' => $cleanPath,
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+                // Fallback to serving through Laravel
+            }
+        }
+
+        // Local/public disk: serve through Laravel
         if ($request->query('action') === 'download' || $request->query('download')) {
             return Storage::disk($disk)->download($cleanPath, $filename);
         }
@@ -1727,6 +1750,30 @@ class UserController extends Controller
 
         $filename = basename($cleanPath);
 
+        // S3: redirect to pre-signed URL so the browser opens/downloads directly from S3
+        if ($disk === 's3' && $org) {
+            try {
+                $expirationMinutes = 60;
+                $temporaryUrl = \App\Services\StorageDiskResolver::getTemporaryUrl($org, $cleanPath, $expirationMinutes);
+
+                if ($request->query('action') === 'download' || $request->query('download')) {
+                    $disposition = 'attachment; filename="' . $filename . '"';
+                    $temporaryUrl .= '&response-content-disposition=' . urlencode($disposition);
+                }
+
+                return redirect()->away($temporaryUrl);
+            } catch (\Throwable $e) {
+                \Log::error('S3 redirect failed for my-document', [
+                    'path' => $cleanPath,
+                    'user_id' => $user->id,
+                    'document' => $document,
+                    'error' => $e->getMessage(),
+                ]);
+                // Fallback to serving through Laravel
+            }
+        }
+
+        // Local/public disk: serve through Laravel
         if ($request->query('action') === 'download' || $request->query('download')) {
             return $diskInstance->download($cleanPath, $filename);
         }

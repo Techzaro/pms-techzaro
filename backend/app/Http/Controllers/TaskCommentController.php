@@ -385,7 +385,18 @@ class TaskCommentController extends Controller
         }
 
         if ($org) {
-            return Storage::disk(StorageDiskResolver::getDisk($org))->download($comment->file_path, $comment->file_name);
+            $disk = StorageDiskResolver::getDisk($org);
+            if ($disk === 's3') {
+                try {
+                    $temporaryUrl = StorageDiskResolver::getTemporaryUrl($org, $comment->file_path, 60);
+                    $disposition = 'attachment; filename="' . $comment->file_name . '"';
+                    $temporaryUrl .= '&response-content-disposition=' . urlencode($disposition);
+                    return redirect()->away($temporaryUrl);
+                } catch (\Throwable $e) {
+                    \Log::error('S3 redirect failed for task comment file', ['file_path' => $comment->file_path, 'error' => $e->getMessage()]);
+                }
+            }
+            return Storage::disk($disk)->download($comment->file_path, $comment->file_name);
         }
         return Storage::disk('public')->download($comment->file_path, $comment->file_name);
     }

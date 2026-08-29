@@ -268,8 +268,25 @@ function CredentialRow({ credential, onDelete }) {
             </div>
           </div>
         )}
-      </div>
-    </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <h1 className="td-title">
+                    {task.title}
+                  </h1>
+                  {task.business_id && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 700, background: '#eff6ff', color: '#2563eb', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      {task.business_id}
+                      <button
+                        onClick={() => { navigator.clipboard.writeText(task.business_id); notify.success(t("Task ID copied!", { defaultValue: "Task ID copied!" })); }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
+                        title={t("Copy Task ID", { defaultValue: "Copy Task ID" })}
+                      >
+                        <Copy size={13} color="#2563eb" />
+                      </button>
+                    </span>
+                  )}
+                </div>
+              </div>
   );
 }
 
@@ -1335,23 +1352,6 @@ function TaskDetails() {
               ]} />
 
               <div className="td-title-row">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
-                  <h1 className="td-title">
-                    {task.title}
-                  </h1>
-                  {task.business_id && (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 700, background: '#eff6ff', color: '#2563eb', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                      {task.business_id}
-                      <button
-                        onClick={() => { navigator.clipboard.writeText(task.business_id); notify.success(t("Task ID copied!", { defaultValue: "Task ID copied!" })); }}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
-                        title={t("Copy Task ID", { defaultValue: "Copy Task ID" })}
-                      >
-                        <Copy size={13} color="#2563eb" />
-                      </button>
-                    </span>
-                  )}
-                </div>
                 <div className="td-title-actions">
                   <button className="td-nav-btn" onClick={() => goToTask(prevTaskId)} disabled={!prevTaskId}><ChevronLeft size={18} /></button>
                   <button className="td-nav-btn" onClick={() => goToTask(nextTaskId)} disabled={!nextTaskId}><ChevronRight size={18} /></button>
@@ -1524,6 +1524,23 @@ function TaskDetails() {
                         </button>
                       )}
                     </>
+                  )}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <h1 className="td-title">
+                    {task.title}
+                  </h1>
+                  {task.business_id && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 700, background: '#eff6ff', color: '#2563eb', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      {task.business_id}
+                      <button
+                        onClick={() => { navigator.clipboard.writeText(task.business_id); notify.success(t("Task ID copied!", { defaultValue: "Task ID copied!" })); }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
+                        title={t("Copy Task ID", { defaultValue: "Copy Task ID" })}
+                      >
+                        <Copy size={13} color="#2563eb" />
+                      </button>
+                    </span>
                   )}
                 </div>
               </div>

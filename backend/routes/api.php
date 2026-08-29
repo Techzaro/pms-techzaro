@@ -50,6 +50,10 @@ Route::get('/files/download', function (Illuminate\Http\Request $request) {
     if (! $path) {
         return response()->json(['success' => false, 'message' => 'File path required'], 400);
     }
+    // If the path is already a full S3 presigned URL, redirect directly
+    if (preg_match('#^https?://[^/]+\.s3[^/]*\.amazonaws\.com/#i', $path)) {
+        return redirect()->away($path);
+    }
     $resolved = \App\Services\FileStorageService::resolveFile($path);
     if (! $resolved) {
         return response()->json(['success' => false, 'message' => 'File not found'], 404);

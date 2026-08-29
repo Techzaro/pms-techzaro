@@ -27,6 +27,10 @@ class FileStorageService
 
         $path = urldecode($path);
         $path = str_replace('\\', '/', $path);
+
+        // Strip query string parameters (e.g. S3 presigned URL params)
+        $path = strtok($path, '?');
+
         $path = ltrim($path, '/');
 
         // Candidate paths to check
