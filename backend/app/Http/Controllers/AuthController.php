@@ -874,6 +874,12 @@ class AuthController extends Controller
 
         // Resolve disk: S3 if org has it configured, else local public
         $org = $request->attributes->get('currentOrganization');
+        if (!$org && $user->company_name) {
+            try {
+                $org = \App\Models\Master\Organization::on('mysql_master')->where('slug', $user->company_name)
+                    ->orWhere('name', $user->company_name)->first();
+            } catch (\Throwable $e) {}
+        }
         $disk = $org ? \App\Services\StorageDiskResolver::getDisk($org) : 'public';
         $diskInstance = \Storage::disk($disk);
         $category = 'user_documents/' . $user->id;

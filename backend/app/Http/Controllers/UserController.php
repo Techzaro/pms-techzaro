@@ -1245,7 +1245,7 @@ class UserController extends Controller
         // (happens when <a href> requests bypass tenant resolution)
         if (!$org && $user->company_name) {
             try {
-                $org = \App\Models\Master\Organization::where('slug', $user->company_name)
+                $org = \App\Models\Master\Organization::on('mysql_master')->where('slug', $user->company_name)
                     ->orWhere('name', $user->company_name)
                     ->first();
             } catch (\Throwable $e) {}
@@ -1338,6 +1338,16 @@ class UserController extends Controller
         }
 
         $org = $request->attributes->get('currentOrganization');
+
+        // Fallback: resolve org from user's company_name when middleware didn't set it
+        if (!$org && $user?->company_name) {
+            try {
+                $org = \App\Models\Master\Organization::on('mysql_master')->where('slug', $user->company_name)
+                    ->orWhere('name', $user->company_name)
+                    ->first();
+            } catch (\Throwable $e) {}
+        }
+
         $disk = $org ? \App\Services\StorageDiskResolver::getDisk($org) : 'public';
         $diskInstance = Storage::disk($disk);
 
@@ -1376,6 +1386,15 @@ class UserController extends Controller
     {
         $authUser = $request->user();
         $org = $request->attributes->get('currentOrganization');
+
+        // Fallback: resolve org from user's company_name when middleware didn't set it
+        if (!$org && $user->company_name) {
+            try {
+                $org = \App\Models\Master\Organization::on('mysql_master')->where('slug', $user->company_name)
+                    ->orWhere('name', $user->company_name)
+                    ->first();
+            } catch (\Throwable $e) {}
+        }
 
         // Resolve disk: S3 if org has it configured, else local public
         $disk = $org ? \App\Services\StorageDiskResolver::getDisk($org) : 'public';
@@ -1682,7 +1701,7 @@ class UserController extends Controller
         // Fallback: resolve org from user's company_name when middleware didn't set it
         if (!$org && $user->company_name) {
             try {
-                $org = \App\Models\Master\Organization::where('slug', $user->company_name)
+                $org = \App\Models\Master\Organization::on('mysql_master')->where('slug', $user->company_name)
                     ->orWhere('name', $user->company_name)
                     ->first();
             } catch (\Throwable $e) {}
@@ -1738,6 +1757,12 @@ class UserController extends Controller
 
         $singleFields = ['employment_contract', 'offer_letter', 'techxaro_regulations'];
         $org = $request->attributes->get('currentOrganization');
+        if (!$org && $user->company_name) {
+            try {
+                $org = \App\Models\Master\Organization::on('mysql_master')->where('slug', $user->company_name)
+                    ->orWhere('name', $user->company_name)->first();
+            } catch (\Throwable $e) {}
+        }
         $disk = $org ? \App\Services\StorageDiskResolver::getDisk($org) : 'public';
         $diskInstance = Storage::disk($disk);
 
@@ -1914,10 +1939,16 @@ class UserController extends Controller
         $index = $request->input('index');
 
         $org = $request->attributes->get('currentOrganization');
-        $disk = $org ? \App\Services\StorageDiskResolver::getDisk($org) : 'public';
-        $diskInstance = Storage::disk($disk);
+        if (!$org && $user->company_name) {
+            try {
+                $org = \App\Models\Master\Organization::on('mysql_master')->where('slug', $user->company_name)
+                    ->orWhere('name', $user->company_name)->first();
+            } catch (\Throwable $e) {}
+        }
 
         $singleFields = ['employment_contract', 'offer_letter', 'techxaro_regulations'];
+        $disk = $org ? \App\Services\StorageDiskResolver::getDisk($org) : 'public';
+        $diskInstance = Storage::disk($disk);
 
         if (in_array($type, $singleFields)) {
             if ($user->$type) {
@@ -2096,9 +2127,16 @@ class UserController extends Controller
 
         $singleFields = ['employment_contract', 'offer_letter', 'techxaro_regulations'];
         $org = $request->attributes->get('currentOrganization');
+        if (!$org && $user->company_name) {
+            try {
+                $org = \App\Models\Master\Organization::on('mysql_master')->where('slug', $user->company_name)
+                    ->orWhere('name', $user->company_name)->first();
+            } catch (\Throwable $e) {}
+        }
         $disk = $org ? \App\Services\StorageDiskResolver::getDisk($org) : 'public';
         $diskInstance = Storage::disk($disk);
-        $category = 'user_documents/' . $user->id;
+
+        $singleFields = ['employment_contract', 'offer_letter', 'techxaro_regulations'];
 
         if (in_array($type, $singleFields)) {
             // Delete old file if exists
