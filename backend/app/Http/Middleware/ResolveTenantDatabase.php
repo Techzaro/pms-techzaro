@@ -164,7 +164,9 @@ class ResolveTenantDatabase
      */
     private function resolveFromBearerToken(Request $request): ?Organization
     {
-        $token = $request->bearerToken();
+        // Check Authorization: Bearer header first, then ?token= query param
+        // (used by <a href> document view/download links)
+        $token = $request->bearerToken() ?: $request->query('token');
         if (!$token) {
             return null;
         }

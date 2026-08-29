@@ -336,8 +336,8 @@ function App() {
                     <Route path="settings/regional" element={<RegionalSettings />} />
                     <Route path="regional-settings" element={<RegionalSettings />} />
                     <Route path="audit-logs" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><AuditLogs /></RoleProtectedRoute>} />
-                    <Route path="feedback" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><FeedbackCenter /></RoleProtectedRoute>} />
-                    <Route path="feedback/:id" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><FeedbackDetail /></RoleProtectedRoute>} />
+                    <Route path="feedback" element={<FeedbackCenter />} />
+                    <Route path="feedback/:id" element={<FeedbackDetail />} />
                     <Route path="branding" element={<RoleProtectedRoute allowedRoles={["admin"]}><BrandingPage /></RoleProtectedRoute>} />
                     <Route path="subscription" element={<RoleProtectedRoute allowedRoles={["admin"]}><SubscriptionPage /></RoleProtectedRoute>} />
                     <Route path="organization-details" element={<RoleProtectedRoute allowedRoles={["admin"]}><OrganizationDetailsPage /></RoleProtectedRoute>} />
@@ -415,8 +415,8 @@ function App() {
                     <Route path="branding" element={<RoleProtectedRoute allowedRoles={["admin"]}><BrandingPage /></RoleProtectedRoute>} />
                     <Route path="subscription" element={<RoleProtectedRoute allowedRoles={["admin"]}><SubscriptionPage /></RoleProtectedRoute>} />
                     <Route path="organization-details" element={<RoleProtectedRoute allowedRoles={["admin"]}><OrganizationDetailsPage /></RoleProtectedRoute>} />
-                    <Route path="feedback" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><FeedbackCenter /></RoleProtectedRoute>} />
-                    <Route path="feedback/:id" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><FeedbackDetail /></RoleProtectedRoute>} />
+                    <Route path="feedback" element={<FeedbackCenter />} />
+                    <Route path="feedback/:id" element={<FeedbackDetail />} />
                     <Route path="settings/personalization" element={<Personalization />} />
                     <Route path="personalization" element={<Personalization />} />
                     <Route path="storage" element={<StoragePage />} />

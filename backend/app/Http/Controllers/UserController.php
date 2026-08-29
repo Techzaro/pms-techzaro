@@ -1240,6 +1240,17 @@ class UserController extends Controller
         }
 
         $org = $request->attributes->get('currentOrganization');
+
+        // Fallback: resolve org from user's company_name when middleware didn't set it
+        // (happens when <a href> requests bypass tenant resolution)
+        if (!$org && $user->company_name) {
+            try {
+                $org = \App\Models\Master\Organization::where('slug', $user->company_name)
+                    ->orWhere('name', $user->company_name)
+                    ->first();
+            } catch (\Throwable $e) {}
+        }
+
         $disk = $org ? \App\Services\StorageDiskResolver::getDisk($org) : 'public';
 
         if (!Storage::disk($disk)->exists($cleanPath)) {
@@ -1248,13 +1259,15 @@ class UserController extends Controller
                 'disk' => $disk,
                 'user_id' => $user->id,
                 'document' => $document,
+                'org_id' => $org?->id,
             ]);
             return response()->json(['success' => false, 'message' => 'File not found on disk.'], 404);
         }
 
         $filename = basename($cleanPath);
 
-        if ($request->query('action') === 'download') {
+        // Support both ?action=download and ?download=1 parameter patterns
+        if ($request->query('action') === 'download' || $request->query('download')) {
             return Storage::disk($disk)->download($cleanPath, $filename);
         }
 
@@ -1665,6 +1678,16 @@ class UserController extends Controller
         }
 
         $org = $request->attributes->get('currentOrganization');
+
+        // Fallback: resolve org from user's company_name when middleware didn't set it
+        if (!$org && $user->company_name) {
+            try {
+                $org = \App\Models\Master\Organization::where('slug', $user->company_name)
+                    ->orWhere('name', $user->company_name)
+                    ->first();
+            } catch (\Throwable $e) {}
+        }
+
         $disk = $org ? \App\Services\StorageDiskResolver::getDisk($org) : 'public';
         $diskInstance = Storage::disk($disk);
 
@@ -1685,7 +1708,7 @@ class UserController extends Controller
 
         $filename = basename($cleanPath);
 
-        if ($request->query('action') === 'download') {
+        if ($request->query('action') === 'download' || $request->query('download')) {
             return $diskInstance->download($cleanPath, $filename);
         }
 

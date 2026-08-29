@@ -3083,7 +3083,7 @@ class SuperAdminController extends Controller
     {
         $ticket = \App\Models\Master\OrganizationSupportTicket::on('mysql_master')
             ->where('source', 'feedback')
-            ->with('organization:id,name,slug')
+            ->with('organization:id,name,slug,storage_driver,storage_s3_prefix,storage_s3_bucket,storage_s3_region,storage_s3_access_key,storage_s3_secret_key,storage_s3_endpoint')
             ->with('user:id,name,email')
             ->with('messages.user:id,name,email')
             ->find($ticketId);
@@ -3161,7 +3161,7 @@ class SuperAdminController extends Controller
                 'category' => $ticket->category,
                 'source' => $ticket->source,
                 'feedback_reference_number' => $ticket->feedback_reference_number,
-                'feedback_metadata' => $ticket->feedback_metadata,
+                'feedback_metadata' => $metadata,
                 'organization' => $ticket->organization ? [
                     'id' => $ticket->organization->id,
                     'name' => $ticket->organization->name,

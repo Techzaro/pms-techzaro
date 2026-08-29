@@ -1649,11 +1649,14 @@ if (!editUser.employee_code.trim()) errors.employee_code = t("Employee Code is r
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <LoadingButton
+                  loading={submitting}
                   onClick={handleEditSubmit}
                   className="primary-button"
                   style={{ fontSize: 14 }}
                 >
-                  {t("Update User", { defaultValue: "Update User" })}
+                  {submitting
+                    ? t("Updating...", { defaultValue: "Updating..." })
+                    : t("Update User", { defaultValue: "Update User" })}
                 </LoadingButton>
                 <button className="user-modal-close" onClick={handleEditClose}>
                   &#10005;

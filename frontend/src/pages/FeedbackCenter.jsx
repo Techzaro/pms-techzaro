@@ -551,7 +551,7 @@ export default function FeedbackCenter() {
                       <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
                         {detailData.screenshot_path && (
                           <a
-                            href={`${API_URL}/storage/${detailData.screenshot_path}`}
+                            href={detailData.screenshot_url || `${API_URL}/storage/${detailData.screenshot_path}`}
                             target="_blank"
                             rel="noreferrer"
                             className="fb-btn-cancel"
@@ -562,7 +562,7 @@ export default function FeedbackCenter() {
                         )}
                         {detailData.recording_path && (
                           <a
-                            href={`${API_URL}/storage/${detailData.recording_path}`}
+                            href={detailData.recording_url || `${API_URL}/storage/${detailData.recording_path}`}
                             target="_blank"
                             rel="noreferrer"
                             className="fb-btn-cancel"
@@ -573,7 +573,7 @@ export default function FeedbackCenter() {
                         )}
                         {detailData.attachment_path && (
                           <a
-                            href={`${API_URL}/storage/${detailData.attachment_path}`}
+                            href={detailData.attachment_url || `${API_URL}/storage/${detailData.attachment_path}`}
                             target="_blank"
                             rel="noreferrer"
                             className="fb-btn-cancel"
