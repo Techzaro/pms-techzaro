@@ -6,7 +6,6 @@ import { authToken, rolePath, getUser } from "../utils/auth";
 import API_URL from "../config/api";
 import {
   MdArrowBack,
-  MdPerson,
   MdTimeline,
   MdDownload,
   MdSend,
@@ -166,8 +165,9 @@ export default function FeedbackDetail() {
               <MdArrowBack size={18} />
             </button>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <h3 style={{ margin: 0, color: "#0f172a" }}>
-                Feedback {detailData?.reference_number || `#${id}`}
+              <h3 style={{ margin: 0, color: "#0f172a", whiteSpace: "nowrap" }}>
+                <span style={{ fontSize: "1rem", fontWeight: 700 }}>Feedback</span>
+                <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "#64748b", marginLeft: 8 }}>{detailData?.reference_number || `#${id}`}</span>
               </h3>
               <span className={`fbc-badge ${getStatusClass(detailData?.status)}`}>
                 {detailData?.status}
@@ -207,48 +207,6 @@ export default function FeedbackDetail() {
                   dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(detailData.description || "") }}
                 />
 
-                <div className="fbc-section-title">
-                  <MdPerson /> Auto-Captured System Information
-                </div>
-                <div className="fbc-auto-info-grid">
-                  <div className="fbc-info-cell">
-                    <span>Submitted By</span>
-                    <strong>{detailData.user_name} ({detailData.user_role})</strong>
-                  </div>
-                  <div className="fbc-info-cell">
-                    <span>Organization</span>
-                    <strong>{detailData.organization_name}</strong>
-                  </div>
-                  <div className="fbc-info-cell">
-                    <span>Module</span>
-                    <strong>{detailData.module || "General"}</strong>
-                  </div>
-                  <div className="fbc-info-cell">
-                    <span>Current Page Route</span>
-                    <strong>{detailData.current_page}</strong>
-                  </div>
-                  <div className="fbc-info-cell">
-                    <span>Operating System</span>
-                    <strong>{detailData.operating_system}</strong>
-                  </div>
-                  <div className="fbc-info-cell">
-                    <span>Browser</span>
-                    <strong>{detailData.browser}</strong>
-                  </div>
-                  <div className="fbc-info-cell">
-                    <span>Device Type</span>
-                    <strong>{detailData.device_type}</strong>
-                  </div>
-                  <div className="fbc-info-cell">
-                    <span>IP Address</span>
-                    <strong>{detailData.ip_address || "Captured"}</strong>
-                  </div>
-                  <div className="fbc-info-cell">
-                    <span>App Version</span>
-                    <strong>{detailData.app_version}</strong>
-                  </div>
-                </div>
-
                 {(detailData.screenshot_path || detailData.recording_path || detailData.attachment_path) && (
                   <>
                     <div className="fbc-section-title">
@@ -256,17 +214,17 @@ export default function FeedbackDetail() {
                     </div>
                     <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
                       {detailData.screenshot_path && (
-                        <a href={`${API_URL}/storage/${detailData.screenshot_path}`} target="_blank" rel="noreferrer" className="fb-btn-cancel" style={{ textDecoration: "none", fontSize: "0.8rem" }}>
+                        <a href={detailData.screenshot_url || `/storage/${detailData.screenshot_path}`} target="_blank" rel="noreferrer" className="fb-btn-cancel" style={{ textDecoration: "none", fontSize: "0.8rem" }}>
                           View Screenshot
                         </a>
                       )}
                       {detailData.recording_path && (
-                        <a href={`${API_URL}/storage/${detailData.recording_path}`} target="_blank" rel="noreferrer" className="fb-btn-cancel" style={{ textDecoration: "none", fontSize: "0.8rem" }}>
+                        <a href={detailData.recording_url || `/storage/${detailData.recording_path}`} target="_blank" rel="noreferrer" className="fb-btn-cancel" style={{ textDecoration: "none", fontSize: "0.8rem" }}>
                           View Recording
                         </a>
                       )}
                       {detailData.attachment_path && (
-                        <a href={`${API_URL}/storage/${detailData.attachment_path}`} target="_blank" rel="noreferrer" className="fb-btn-cancel" style={{ textDecoration: "none", fontSize: "0.8rem" }}>
+                        <a href={detailData.attachment_url || `/storage/${detailData.attachment_path}`} target="_blank" rel="noreferrer" className="fb-btn-cancel" style={{ textDecoration: "none", fontSize: "0.8rem" }}>
                           View Attachment
                         </a>
                       )}

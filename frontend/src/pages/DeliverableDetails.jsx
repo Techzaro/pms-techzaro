@@ -321,9 +321,15 @@ if (res.ok) {
   setShowSubmitForm(false);
   setSubmitComment("");
   setSubmitFile(null);
-} else {
-  notify.error(data.message || t("Failed to submit", { defaultValue: "Failed to submit" }));
-}
+ } else {
+   notify.error(data.message || t("Failed to submit", { defaultValue: "Failed to submit" }));
+ }
+    } catch {
+      notify.error(t("Failed to submit", { defaultValue: "Failed to submit" }));
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const handleApprove = async () => {
     await runApprove(async () => {

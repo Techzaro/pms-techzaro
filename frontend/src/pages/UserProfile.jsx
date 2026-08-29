@@ -846,8 +846,8 @@ function UserProfile() {
     }
 if (!editUser.employee_code.trim()) errors.employee_code = t("Employee Code is required.", { defaultValue: "Employee Code is required." });
     if (!editUser.job_started_date) errors.job_started_date = t("Job Start Date is required.", { defaultValue: "Job Start Date is required." });
-    if (editUser.gross_salary && editUser.gross_salary.length > 100) {
-      errors.gross_salary = t("Gross Salary must be 300 characters or less.", { defaultValue: "Gross Salary must be 300 characters or less." });
+    if (editUser.gross_salary && editUser.gross_salary.length > 1000) {
+      errors.gross_salary = t("Gross Salary must be 1000 characters or less.", { defaultValue: "Gross Salary must be 1000 characters or less." });
     }
     if (editUser.bank_account_number.trim() && !/^[\d\s\-a-zA-Z]+$/.test(editUser.bank_account_number.trim())) {
       errors.bank_account_number = t("Bank Account Number must contain only digits, letters, spaces, or dashes.", { defaultValue: "Bank Account Number must contain only digits, letters, spaces, or dashes." });

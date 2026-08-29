@@ -7,11 +7,8 @@ import { LoadingState, ErrorState } from './components/LoadingState';
 import '../../components/AuditLogDetailModal.css';
 import { api } from './api/superAdminApi';
 
-export default function ActivityLogsPage() {
-  const { t } = useTranslation();
-}
-
 function SuperAdminLogsView() {
+  const { t } = useTranslation();
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -77,13 +74,6 @@ function SuperAdminLogsView() {
 
 return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold" style={s.textHeading}>{t('Activity Logs', { defaultValue: 'Activity Logs' })}</h1>
-          <p className="text-sm mt-1" style={s.textSecondary}>{t('Platform activity history', { defaultValue: 'Platform activity history' })}</p>
-        </div>
-      </div>
-
       <div className="rounded-xl p-4" style={s.card}>
         <div className="flex flex-wrap gap-3 mb-3">
           <div className="relative flex-1 min-w-[200px]">

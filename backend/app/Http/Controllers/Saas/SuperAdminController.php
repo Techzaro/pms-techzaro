@@ -3119,6 +3119,20 @@ class SuperAdminController extends Controller
         $metadata = $ticket->feedback_metadata ?? [];
         $feedbackDescription = $metadata['description'] ?? null;
 
+        // Resolve file URLs for attachments (S3 pre-signed or local /storage/ paths)
+        $org = $ticket->organization;
+        if ($org) {
+            if (!empty($metadata['screenshot_path'])) {
+                $metadata['screenshot_url'] = \App\Services\StorageDiskResolver::getUrl($org, $metadata['screenshot_path']);
+            }
+            if (!empty($metadata['recording_path'])) {
+                $metadata['recording_url'] = \App\Services\StorageDiskResolver::getUrl($org, $metadata['recording_path']);
+            }
+            if (!empty($metadata['attachment_path'])) {
+                $metadata['attachment_url'] = \App\Services\StorageDiskResolver::getUrl($org, $metadata['attachment_path']);
+            }
+        }
+
         if (!$feedbackDescription && $ticket->tenant_feedback_id && $ticket->organization) {
             try {
                 $pdo = $this->getTenantPdo($ticket->organization);

@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
+use App\Services\StorageDiskResolver;
 
 class FeedbackService
 {
@@ -22,24 +23,31 @@ class FeedbackService
     {
         $refNumber = $this->generateReferenceNumber();
 
+        // Resolve organization first (needed for storage disk resolution)
+        $organization = $request->attributes->get('currentOrganization');
+        $organizationId = $organization?->id ?? $data['organization_id'] ?? null;
+        $organizationName = $organization?->name ?? $data['organization_name'] ?? $user->company_name ?? 'TechXaro';
+
         $screenshotPath = null;
         $recordingPath = null;
         $attachmentPath = null;
 
+        // Store files using StorageDiskResolver (S3 or local, same pattern as Tasks/Deliverables)
         if ($request->hasFile('screenshot')) {
-            $screenshotPath = $request->file('screenshot')->store('feedback/screenshots', 'public');
+            $screenshotPath = $organization
+                ? StorageDiskResolver::store($organization, $request->file('screenshot'), 'feedback/screenshots')
+                : $request->file('screenshot')->store('feedback/screenshots', 'public');
         }
         if ($request->hasFile('recording')) {
-            $recordingPath = $request->file('recording')->store('feedback/recordings', 'public');
+            $recordingPath = $organization
+                ? StorageDiskResolver::store($organization, $request->file('recording'), 'feedback/recordings')
+                : $request->file('recording')->store('feedback/recordings', 'public');
         }
         if ($request->hasFile('attachment')) {
-            $attachmentPath = $request->file('attachment')->store('feedback/attachments', 'public');
+            $attachmentPath = $organization
+                ? StorageDiskResolver::store($organization, $request->file('attachment'), 'feedback/attachments')
+                : $request->file('attachment')->store('feedback/attachments', 'public');
         }
-
-        // Resolve organization from middleware context (not from $data which may be empty)
-        $organization = $request->attributes->get('currentOrganization');
-        $organizationId = $organization?->id ?? $data['organization_id'] ?? null;
-        $organizationName = $organization?->name ?? $data['organization_name'] ?? $user->company_name ?? 'TechXaro';
 
         $feedback = Feedback::create([
             'reference_number'  => $refNumber,

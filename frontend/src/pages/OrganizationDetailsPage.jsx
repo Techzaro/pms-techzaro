@@ -210,9 +210,14 @@ const { t } = useTranslation();
           </div>
           <p className="text-sm mt-0.5" style={sc.ts}>{o?.domain}</p>
         </div>
-        <div className="flex items-center gap-1 p-1 rounded-xl" style={{background:'var(--bg-hover)',border:'1px solid var(--border-light)'}}>
-{[{k:'details',l:t('Details', { defaultValue: 'Details' })},{k:'regional',l:t('Regional & Hours', { defaultValue: 'Regional & Hours' }),i:Globe},{k:'storage',l:t('Storage', { defaultValue: 'Storage' }),i:HardDrive},{k:'bill',l:t('Billing', { defaultValue: 'Billing' }),i:CreditCard},{k:'hist',l:t('History', { defaultValue: 'History' }),i:Clock}].map(t=>
-                <button key={t.k} onClick={()=>{setTab(t.k); setSearchParams({tab: t.k}, {replace: true});}} className={`px-4 py-2 rounded-lg text-[13px] font-semibold transition-all${tab===t.k?' flex items-center gap-1.5':''}`}>
+        <div className="flex items-center gap-1 p-1 rounded-xl flex-nowrap" style={{background:'var(--bg-hover)',border:'1px solid var(--border-light)'}}>
+{[{k:'details',l:t('Details', { defaultValue: 'Details' })},{k:'regional',l:t('Regional & Hours', { defaultValue: 'Regional & Hours' }),i:Globe},{k:'storage',l:t('Storage', { defaultValue: 'Storage' }),i:HardDrive},{k:'bill',l:t('Billing', { defaultValue: 'Billing' }),i:CreditCard},{k:'hist',l:t('History', { defaultValue: 'History' }),i:Clock}].map(tabItem=>
+                <button key={tabItem.k} onClick={()=>{setTab(tabItem.k); setSearchParams({tab: tabItem.k}, {replace: true});}}
+                  className={`px-4 py-2 rounded-lg text-[13px] font-semibold transition-all whitespace-nowrap flex items-center gap-1.5`}
+                  style={tab===tabItem.k ? {background:'var(--color-primary)',color:'#fff'} : {background:'transparent',color:'var(--text-secondary)'}}>
+                  {tabItem.i && <tabItem.i size={14} />}
+                  {tabItem.l}
+                </button>
           )}
         </div>
       </div>
@@ -286,7 +291,7 @@ const { t } = useTranslation();
             </div>
 
             <div className="grid grid-cols-3 gap-4 pt-3" style={{borderTop:'1px solid var(--border-light)'}}>
-{[{icon:Users,l:t('Users', { defaultValue: 'Users' }),v:plan.max_users===9999?t('Unlimited', { defaultValue: 'Unlimited' }):plan.max_users},{icon:FolderKanban,l:t('Projects', { defaultValue: 'Projects' }),v:plan.max_projects===9999?t('Unlimited', { defaultValue: 'Unlimited' }):plan.max_projects},{icon:HardDrive,l:t('Storage', { defaultValue: 'Storage' }),v:plan.max_storage===9999?t('Unlimited', { defaultValue: 'Unlimited' }):`${plan.max_storage} ${plan.storage_unit || 'GB'}`}]
+              {[{icon:Users,l:t('Users', { defaultValue: 'Users' }),v:plan.max_users===9999?t('Unlimited', { defaultValue: 'Unlimited' }):plan.max_users},{icon:FolderKanban,l:t('Projects', { defaultValue: 'Projects' }),v:plan.max_projects===9999?t('Unlimited', { defaultValue: 'Unlimited' }):plan.max_projects},{icon:HardDrive,l:t('Storage', { defaultValue: 'Storage' }),v:plan.max_storage===9999?t('Unlimited', { defaultValue: 'Unlimited' }):`${plan.max_storage} ${plan.storage_unit || 'GB'}`}].map((x) => (
                 <div key={x.l} className="p-3 rounded-lg" style={sc.infoBox}>
                   <div className="flex items-center gap-2 mb-1">
                     <x.icon className="w-4 h-4" style={{color:'var(--color-primary)'}}/>
@@ -294,7 +299,7 @@ const { t } = useTranslation();
                   </div>
                   <p className="text-lg font-semibold" style={sc.text}>{x.v}</p>
                 </div>
-              )}
+              ))}
             </div>
 
             {modules&&(modules.enabled?.length>0||modules.disabled?.length>0)&&
@@ -428,15 +433,15 @@ const { t } = useTranslation();
                 </div>
                 <div className="flex justify-between mt-1">
 <span className="text-xs" style={sc.tm}>{t('{{percent}}% used', { percent: stSum.summary.usage_percent, defaultValue: `${stSum.summary.usage_percent}% used` })}</span>
-                  <span className="text-xs" style={sc.tm}>{t('{{remaining}} GB remaining', { remaining: `${fmtBytesToUnit(stSum.summary.remaining_bytes, stSum.summary.storage_unit || 'GB')} ${stSum.summary.storage_unit || 'GB'}`, defaultValue: `${fmtBytesToUnit(stSum.summary.remaining_bytes, stSum.summary.storage_unit || 'GB')} ${stSum.summary.storage_unit || 'GB'} remaining` })}</span>
+                  <span className="text-xs" style={sc.tm}>{t('{{remaining}} remaining', { remaining: fmtBytesToUnit(stSum.summary.remaining_bytes, stSum.summary.storage_unit || 'GB'), defaultValue: `${fmtBytesToUnit(stSum.summary.remaining_bytes, stSum.summary.storage_unit || 'GB')} remaining` })}</span>
                 </div>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[
 {l:t('Total Files', { defaultValue: 'Total Files' }),v:stSum.summary.total_files,color:'var(--color-primary)'},
-                  {l:t('Used Space', { defaultValue: 'Used Space' }),v:`${fmtBytesToUnit(stSum.summary.total_bytes, stSum.summary.storage_unit || 'GB')} ${stSum.summary.storage_unit || 'GB'}`,color:'var(--color-primary)'},
+                  {l:t('Used Space', { defaultValue: 'Used Space' }),v:fmtBytesToUnit(stSum.summary.total_bytes, stSum.summary.storage_unit || 'GB'),color:'var(--color-primary)'},
                   {l:t('Storage Limit', { defaultValue: 'Storage Limit' }),v:`${stSum.summary.max_storage_gb} ${stSum.summary.storage_unit || 'GB'}`,color:'var(--color-success)'},
-                  {l:t('Remaining', { defaultValue: 'Remaining' }),v:`${fmtBytesToUnit(stSum.summary.remaining_bytes, stSum.summary.storage_unit || 'GB')} ${stSum.summary.storage_unit || 'GB'}`,color:stSum.summary.usage_percent>95?'var(--color-danger)':'var(--color-warning)'},
+                  {l:t('Remaining', { defaultValue: 'Remaining' }),v:fmtBytesToUnit(stSum.summary.remaining_bytes, stSum.summary.storage_unit || 'GB'),color:stSum.summary.usage_percent>95?'var(--color-danger)':'var(--color-warning)'},
                 ].map(x=>
                   <div key={x.l} className="p-3 rounded-lg" style={{background:'var(--bg-hover)',border:'1px solid var(--border-light)'}}>
                     <p className="text-xs" style={{color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'0.05em'}}>{x.l}</p>

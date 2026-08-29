@@ -56,7 +56,6 @@ export default function FeedbackCenter() {
   const [statusFilter, setStatusFilter] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("");
   const [moduleFilter, setModuleFilter] = useState("");
-  const [orgFilter, setOrgFilter] = useState("");
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
 
@@ -79,7 +78,6 @@ export default function FeedbackCenter() {
     if (statusFilter) params.append("status", statusFilter);
     if (priorityFilter) params.append("priority", priorityFilter);
     if (moduleFilter) params.append("module", moduleFilter);
-    if (orgFilter) params.append("organization", orgFilter);
     if (dateStart) params.append("date_start", dateStart);
     if (dateEnd) params.append("date_end", dateEnd);
 
@@ -102,7 +100,6 @@ export default function FeedbackCenter() {
     statusFilter,
     priorityFilter,
     moduleFilter,
-    orgFilter,
     dateStart,
     dateEnd,
   ]);
@@ -124,7 +121,7 @@ export default function FeedbackCenter() {
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        setDetailData(data?.feedback || null);
+        setDetailData(data?.data || data?.feedback || null);
         setHistoryData(data?.history || []);
         setUsersList(data?.users || []);
       })
@@ -286,17 +283,6 @@ export default function FeedbackCenter() {
             </div>
 
             <div className="fbc-filter-item">
-              <label>{t("Organization", { defaultValue: "Organization" })}</label>
-              <input
-                type="text"
-                className="fbc-input"
-                placeholder={t("Filter by Organization...", { defaultValue: "Filter by Organization..." })}
-                value={orgFilter}
-                onChange={(e) => setOrgFilter(e.target.value)}
-              />
-            </div>
-
-            <div className="fbc-filter-item">
               <label>{t("From Date", { defaultValue: "From Date" })}</label>
               <input
                 type="date"
@@ -401,7 +387,7 @@ export default function FeedbackCenter() {
                       <button
                         className="fb-btn-cancel"
                         style={{ padding: "4px 10px", fontSize: "0.78rem" }}
-                        onClick={() => openDetail(item.id)}
+                        onClick={() => navigate(rolePath(`feedback/${item.id}`))}
                       >
                         {t("View Detail", { defaultValue: "View Detail" })}
                       </button>

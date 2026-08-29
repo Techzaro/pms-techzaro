@@ -704,25 +704,20 @@ function ProjectDetails() {
       return;
     }
     if (res.ok) {
-      toast.success("Task deleted successfully");
+      setOrderedTasks((prev) => prev.filter((t) => String(t.id) !== String(taskId)));
+      toast.success(t("Task deleted successfully", { defaultValue: "Task deleted successfully" }));
       try {
-        setOrderedTasks((prev) => prev.filter((t) => String(t.id) !== String(taskId)));
-toast.success(t("Task deleted successfully", { defaultValue: "Task deleted successfully" }));
-        try {
-          loadProject().catch(() => {});
-          publish("task:deleted", { id: taskId });
-          publish("data:changed", { type: "task", action: "deleted" });
-        } catch (uiError) {
-          console.error("Post-delete project refresh failed", uiError);
-        }
-      } else {
-        const data = await res.json().catch(() => ({}));
-        toast.error(data.message || t("Failed to delete task.", { defaultValue: "Failed to delete task." }));
+        loadProject().catch(() => {});
+        publish("task:deleted", { id: taskId });
+        publish("data:changed", { type: "task", action: "deleted" });
+      } catch (uiError) {
+        console.error("Post-delete project refresh failed", uiError);
       }
-    } catch (err) {
-      console.error(err);
-      toast.error(t("Failed to delete task.", { defaultValue: "Failed to delete task." }));
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast.error(data.message || t("Failed to delete task.", { defaultValue: "Failed to delete task." }));
     }
+  };
 
   const handleTaskAcknowledge = async (e, taskId) => {
     if (e && e.stopPropagation) {

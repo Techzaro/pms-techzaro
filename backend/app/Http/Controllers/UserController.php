@@ -295,21 +295,32 @@ class UserController extends Controller
         }
 
         // Collect uploaded file paths for email attachments
+        $org = $request->attributes->get('currentOrganization');
+        $disk = $org ? \App\Services\StorageDiskResolver::getDisk($org) : 'public';
+        $diskInstance = Storage::disk($disk);
+
         $emailAttachments = [];
         foreach ($this->documentFields as $field) {
             if ($field === 'other_document') {
-                // other_document may contain multiple files as JSON
                 $docs = $this->parseOtherDocumentPaths($user->other_document);
                 foreach ($docs as $doc) {
                     $docPath = is_array($doc) ? $doc['path'] : $doc;
-                    if (Storage::disk('public')->exists($docPath)) {
-                        $fullPath = Storage::disk('public')->path($docPath);
-                        $emailAttachments[$fullPath] = 'other_document';
+                    if ($docPath) {
+                        $cleanPath = ltrim($docPath, '/');
+                        if (str_starts_with($cleanPath, 'storage/')) $cleanPath = substr($cleanPath, 8);
+                        if ($diskInstance->exists($cleanPath)) {
+                            $fullPath = $diskInstance->path($cleanPath);
+                            $emailAttachments[$fullPath] = 'other_document';
+                        }
                     }
                 }
-            } elseif ($user->$field && Storage::disk('public')->exists($user->$field)) {
-                $fullPath = Storage::disk('public')->path($user->$field);
-                $emailAttachments[$fullPath] = $field;
+            } elseif ($user->$field) {
+                $cleanPath = ltrim($user->$field, '/');
+                if (str_starts_with($cleanPath, 'storage/')) $cleanPath = substr($cleanPath, 8);
+                if ($diskInstance->exists($cleanPath)) {
+                    $fullPath = $diskInstance->path($cleanPath);
+                    $emailAttachments[$fullPath] = $field;
+                }
             }
         }
 
@@ -553,8 +564,12 @@ class UserController extends Controller
             $request->input('avatar_remove') === '1' ||
             $request->input('avatar_remove') === 1
         ) {
-            if ($user->avatar && Storage::disk('public')->exists($user->avatar)) {
-                Storage::disk('public')->delete($user->avatar);
+            if ($user->avatar) {
+                $org = $request->attributes->get('currentOrganization');
+                $disk = $org ? \App\Services\StorageDiskResolver::getDisk($org) : 'public';
+                $cleanPath = ltrim($user->avatar, '/');
+                if (str_starts_with($cleanPath, 'storage/')) $cleanPath = substr($cleanPath, 8);
+                try { if (Storage::disk($disk)->exists($cleanPath)) Storage::disk($disk)->delete($cleanPath); } catch (\Exception $e) {}
             }
             $user->avatar = null;
         }
@@ -697,14 +712,16 @@ class UserController extends Controller
      * @param  int  $id
      * @return \Illuminate\Http\JsonResponse
      */
-    public function removePhoto($id)
+    public function removePhoto(Request $request, $id)
     {
         $user = User::findOrFail($id);
 
         if ($user->avatar) {
-            if (Storage::disk('public')->exists($user->avatar)) {
-                Storage::disk('public')->delete($user->avatar);
-            }
+            $org = $request->attributes->get('currentOrganization');
+            $disk = $org ? \App\Services\StorageDiskResolver::getDisk($org) : 'public';
+            $cleanPath = ltrim($user->avatar, '/');
+            if (str_starts_with($cleanPath, 'storage/')) $cleanPath = substr($cleanPath, 8);
+            try { if (Storage::disk($disk)->exists($cleanPath)) Storage::disk($disk)->delete($cleanPath); } catch (\Exception $e) {}
             $user->update(['avatar' => null]);
             
             Cache::forget('all_users_list');
@@ -886,8 +903,12 @@ class UserController extends Controller
             return response()->json(['success' => false, 'message' => 'Selected user is not a guest account.'], 422);
         }
 
-        if ($user->avatar && Storage::disk('public')->exists($user->avatar)) {
-            Storage::disk('public')->delete($user->avatar);
+        if ($user->avatar) {
+            $org = $request->attributes->get('currentOrganization');
+            $disk = $org ? \App\Services\StorageDiskResolver::getDisk($org) : 'public';
+            $cleanPath = ltrim($user->avatar, '/');
+            if (str_starts_with($cleanPath, 'storage/')) $cleanPath = substr($cleanPath, 8);
+            try { if (Storage::disk($disk)->exists($cleanPath)) Storage::disk($disk)->delete($cleanPath); } catch (\Exception $e) {}
         }
 
         $user->delete();
@@ -1213,24 +1234,31 @@ class UserController extends Controller
             }
         }
 
-        if (!Storage::disk('public')->exists($path)) {
+        $cleanPath = ltrim($path, '/');
+        if (str_starts_with($cleanPath, 'storage/')) {
+            $cleanPath = substr($cleanPath, 8);
+        }
+
+        $org = $request->attributes->get('currentOrganization');
+        $disk = $org ? \App\Services\StorageDiskResolver::getDisk($org) : 'public';
+
+        if (!Storage::disk($disk)->exists($cleanPath)) {
             \Log::error('File not found on disk', [
-                'path' => $path,
-                'disk_root' => storage_path('app/public'),
-                'full_path' => storage_path('app/public') . '/' . $path,
+                'path' => $cleanPath,
+                'disk' => $disk,
                 'user_id' => $user->id,
                 'document' => $document,
             ]);
             return response()->json(['success' => false, 'message' => 'File not found on disk.'], 404);
         }
 
-        $filename = basename($path);
+        $filename = basename($cleanPath);
 
         if ($request->query('action') === 'download') {
-            return Storage::disk('public')->download($path, $filename);
+            return Storage::disk($disk)->download($cleanPath, $filename);
         }
 
-        return Storage::disk('public')->response($path);
+        return Storage::disk($disk)->response($cleanPath);
     }
 
     /**
@@ -1296,28 +1324,36 @@ class UserController extends Controller
             return $user?->avatar;
         }
 
-        $disk = Storage::disk('public');
+        $org = $request->attributes->get('currentOrganization');
+        $disk = $org ? \App\Services\StorageDiskResolver::getDisk($org) : 'public';
+        $diskInstance = Storage::disk($disk);
 
-        if ($user && $user->avatar && $disk->exists($user->avatar)) {
-            $disk->delete($user->avatar);
+        if ($user && $user->avatar) {
+            $cleanPath = ltrim($user->avatar, '/');
+            if (str_starts_with($cleanPath, 'storage/')) $cleanPath = substr($cleanPath, 8);
+            try { if ($diskInstance->exists($cleanPath)) $diskInstance->delete($cleanPath); } catch (\Exception $e) {}
         }
 
         $userId = $user ? $user->id : 'temp_' . time();
+        $category = 'avatars/' . $userId;
 
-        if (!$disk->exists('avatars/' . $userId)) {
-            $disk->makeDirectory('avatars/' . $userId);
+        if ($org) {
+            $filename = 'avatar_' . time() . '_' . mt_rand(10000, 99999) . '.' . $file->getClientOriginalExtension();
+            $path = \App\Services\StorageDiskResolver::store($org, $file, $category, $filename);
+        } else {
+            if (!$diskInstance->exists($category)) {
+                $diskInstance->makeDirectory($category);
+            }
+            $filename = 'avatar_' . time() . '_' . mt_rand(10000, 99999) . '.' . $file->getClientOriginalExtension();
+            $path = $file->storeAs($category, $filename, 'public');
         }
 
-        $filename = 'avatar_' . time() . '_' . mt_rand(10000, 99999) . '.' . $file->getClientOriginalExtension();
-        $path = $file->storeAs('avatars/' . $userId, $filename, 'public');
-
-        if ($path && $disk->exists($path)) {
+        if ($path) {
             return $path;
         }
 
-        Log::error('Avatar upload failed - file not found on disk after store', [
+        Log::error('Avatar upload failed - store returned null', [
             'user_id' => $user?->id,
-            'returned_path' => $path,
         ]);
 
         return $user?->avatar;
@@ -1326,13 +1362,14 @@ class UserController extends Controller
     private function handleFileUploads(Request $request, User $user): void
     {
         $authUser = $request->user();
+        $org = $request->attributes->get('currentOrganization');
 
-        $disk = Storage::disk('public');
-        $diskRoot = $disk->path('');
+        // Resolve disk: S3 if org has it configured, else local public
+        $disk = $org ? \App\Services\StorageDiskResolver::getDisk($org) : 'public';
+        $diskInstance = Storage::disk($disk);
+        $diskRoot = $diskInstance->path('');
 
-        if (!$disk->exists('user_documents/' . $user->id)) {
-            $disk->makeDirectory('user_documents/' . $user->id);
-        }
+        $category = 'user_documents/' . $user->id;
 
         $singleFields = [
             'employment_contract', 'offer_letter', 'techxaro_regulations',
@@ -1354,14 +1391,31 @@ class UserController extends Controller
                     continue;
                 }
 
-                if ($user->$field && $disk->exists($user->$field)) {
-                    $disk->delete($user->$field);
+                // Delete old file if exists
+                if ($user->$field) {
+                    $oldPath = ltrim($user->$field, '/');
+                    if (str_starts_with($oldPath, 'storage/')) {
+                        $oldPath = substr($oldPath, 8);
+                    }
+                    try {
+                        if ($diskInstance->exists($oldPath)) {
+                            $diskInstance->delete($oldPath);
+                        }
+                    } catch (\Exception $e) {
+                        Log::warning('Could not delete old document', ['path' => $user->$field, 'error' => $e->getMessage()]);
+                    }
                 }
 
-                $filename = $field . '_' . time() . '_' . $file->getClientOriginalName();
-                $path = $file->storeAs('user_documents/' . $user->id, $filename, 'public');
+                // Store file using StorageDiskResolver (S3 or local)
+                if ($org) {
+                    $filename = $field . '_' . time() . '_' . $file->getClientOriginalName();
+                    $path = \App\Services\StorageDiskResolver::store($org, $file, $category, $filename);
+                } else {
+                    $filename = $field . '_' . time() . '_' . $file->getClientOriginalName();
+                    $path = $file->storeAs($category, $filename, 'public');
+                }
 
-                if ($path && $disk->exists($path)) {
+                if ($path) {
                     $user->$field = $path;
 
                     \App\Models\UserChange::create([
@@ -1376,7 +1430,7 @@ class UserController extends Controller
                         'user_id' => $user->id,
                         'field' => $field,
                         'path' => $path,
-                        'disk_root' => $diskRoot,
+                        'disk' => $disk,
                         'file_size' => $file->getSize(),
                     ]);
                 } else {
@@ -1384,9 +1438,6 @@ class UserController extends Controller
                     Log::error('Document upload failed - file not found on disk after store', [
                         'user_id' => $user->id,
                         'field' => $field,
-                        'returned_path' => $path,
-                        'disk_root' => $diskRoot,
-                        'expected_path' => $diskRoot . '/' . $path,
                     ]);
                 }
             }
@@ -1402,10 +1453,16 @@ class UserController extends Controller
                 $newDocs = [];
                 foreach ($files as $index => $file) {
                     if ($file->isValid()) {
-                        $filename = 'other_document_' . time() . '_' . mt_rand(10000, 99999) . '_' . $file->getClientOriginalName();
-                        $path = $file->storeAs('user_documents/' . $user->id, $filename, 'public');
+                        // Store file using StorageDiskResolver (S3 or local)
+                        if ($org) {
+                            $filename = 'other_document_' . time() . '_' . mt_rand(10000, 99999) . '_' . $file->getClientOriginalName();
+                            $path = \App\Services\StorageDiskResolver::store($org, $file, $category, $filename);
+                        } else {
+                            $filename = 'other_document_' . time() . '_' . mt_rand(10000, 99999) . '_' . $file->getClientOriginalName();
+                            $path = $file->storeAs($category, $filename, 'public');
+                        }
 
-                        if ($path && $disk->exists($path)) {
+                        if ($path) {
                             $customName = isset($names[$index]) ? $names[$index] : $file->getClientOriginalName();
                             $customName = preg_replace('/\.[^.]+$/', '', $customName);
                             $newDocs[] = ['path' => $path, 'name' => $customName];
@@ -1417,18 +1474,9 @@ class UserController extends Controller
                             ]);
                         } else {
                             $uploadErrors['other_document_' . $index] = 'File could not be saved to storage.';
-                            Log::error('Other document upload failed - file not found on disk after store', [
-                                'user_id' => $user->id,
-                                'returned_path' => $path,
-                                'disk_root' => $diskRoot,
-                            ]);
                         }
                     } else {
                         $uploadErrors['other_document_' . $index] = 'File upload failed or file is invalid.';
-                        Log::warning('Other document upload invalid', [
-                            'user_id' => $user->id,
-                            'error' => $file->getError(),
-                        ]);
                     }
                 }
 
@@ -1460,8 +1508,18 @@ class UserController extends Controller
                 }, $updatedDocs);
                 $removedPaths = array_diff($oldPaths, $newPaths);
                 foreach ($removedPaths as $removedPath) {
-                    if ($removedPath && $disk->exists($removedPath)) {
-                        $disk->delete($removedPath);
+                    if ($removedPath) {
+                        $cleanPath = ltrim($removedPath, '/');
+                        if (str_starts_with($cleanPath, 'storage/')) {
+                            $cleanPath = substr($cleanPath, 8);
+                        }
+                        try {
+                            if ($diskInstance->exists($cleanPath)) {
+                                $diskInstance->delete($cleanPath);
+                            }
+                        } catch (\Exception $e) {
+                            Log::warning('Could not delete removed document', ['path' => $removedPath, 'error' => $e->getMessage()]);
+                        }
                     }
                 }
 
@@ -1522,17 +1580,34 @@ class UserController extends Controller
      */
     private function deleteAllFiles(User $user): void
     {
+        $disksToTry = ['public'];
+        try {
+            $org = $user->organization ?? $user->organizations()->first();
+            if ($org) {
+                $s3Disk = \App\Services\StorageDiskResolver::getDisk($org);
+                if ($s3Disk !== 'public') $disksToTry[] = $s3Disk;
+            }
+        } catch (\Exception $e) {}
+
         foreach ($this->documentFields as $field) {
             if ($field === 'other_document') {
                 $docs = $this->parseOtherDocumentPaths($user->other_document);
                 foreach ($docs as $doc) {
                     $path = is_array($doc) ? $doc['path'] : $doc;
-                    if (Storage::disk('public')->exists($path)) {
-                        Storage::disk('public')->delete($path);
+                    if ($path) {
+                        $cleanPath = ltrim($path, '/');
+                        if (str_starts_with($cleanPath, 'storage/')) $cleanPath = substr($cleanPath, 8);
+                        foreach ($disksToTry as $disk) {
+                            try { if (Storage::disk($disk)->exists($cleanPath)) Storage::disk($disk)->delete($cleanPath); } catch (\Exception $e) {}
+                        }
                     }
                 }
-            } elseif ($user->$field && Storage::disk('public')->exists($user->$field)) {
-                Storage::disk('public')->delete($user->$field);
+            } elseif ($user->$field) {
+                $cleanPath = ltrim($user->$field, '/');
+                if (str_starts_with($cleanPath, 'storage/')) $cleanPath = substr($cleanPath, 8);
+                foreach ($disksToTry as $disk) {
+                    try { if (Storage::disk($disk)->exists($cleanPath)) Storage::disk($disk)->delete($cleanPath); } catch (\Exception $e) {}
+                }
             }
         }
     }
@@ -1589,24 +1664,32 @@ class UserController extends Controller
             }
         }
 
-        if (!Storage::disk('public')->exists($path)) {
+        $org = $request->attributes->get('currentOrganization');
+        $disk = $org ? \App\Services\StorageDiskResolver::getDisk($org) : 'public';
+        $diskInstance = Storage::disk($disk);
+
+        $cleanPath = ltrim($path, '/');
+        if (str_starts_with($cleanPath, 'storage/')) {
+            $cleanPath = substr($cleanPath, 8);
+        }
+
+        if (!$diskInstance->exists($cleanPath)) {
             \Log::error('File not found on disk (my-documents)', [
-                'path' => $path,
-                'disk_root' => storage_path('app/public'),
-                'full_path' => storage_path('app/public') . '/' . $path,
+                'path' => $cleanPath,
+                'disk' => $disk,
                 'user_id' => $user->id ?? null,
                 'document' => $document,
             ]);
             return response()->json(['success' => false, 'message' => 'File not found on disk.'], 404);
         }
 
-        $filename = basename($path);
+        $filename = basename($cleanPath);
 
         if ($request->query('action') === 'download') {
-            return Storage::disk('public')->download($path, $filename);
+            return $diskInstance->download($cleanPath, $filename);
         }
 
-        return Storage::disk('public')->response($path);
+        return $diskInstance->response($cleanPath);
     }
 
     /**
@@ -1631,10 +1714,15 @@ class UserController extends Controller
         $index = $request->input('index');
 
         $singleFields = ['employment_contract', 'offer_letter', 'techxaro_regulations'];
+        $org = $request->attributes->get('currentOrganization');
+        $disk = $org ? \App\Services\StorageDiskResolver::getDisk($org) : 'public';
+        $diskInstance = Storage::disk($disk);
 
         if (in_array($type, $singleFields)) {
-            if ($user->$type && Storage::disk('public')->exists($user->$type)) {
-                Storage::disk('public')->delete($user->$type);
+            if ($user->$type) {
+                $cleanPath = ltrim($user->$type, '/');
+                if (str_starts_with($cleanPath, 'storage/')) $cleanPath = substr($cleanPath, 8);
+                try { if ($diskInstance->exists($cleanPath)) $diskInstance->delete($cleanPath); } catch (\Exception $e) {}
             }
             $user->$type = null;
             $user->save();
@@ -1660,8 +1748,10 @@ class UserController extends Controller
             $removedDoc = $docs[$index];
             $removedPath = is_array($removedDoc) ? ($removedDoc['path'] ?? null) : $removedDoc;
 
-            if ($removedPath && Storage::disk('public')->exists($removedPath)) {
-                Storage::disk('public')->delete($removedPath);
+            if ($removedPath) {
+                $cleanPath = ltrim($removedPath, '/');
+                if (str_starts_with($cleanPath, 'storage/')) $cleanPath = substr($cleanPath, 8);
+                try { if ($diskInstance->exists($cleanPath)) $diskInstance->delete($cleanPath); } catch (\Exception $e) {}
             }
 
             unset($docs[$index]);
@@ -1800,11 +1890,17 @@ class UserController extends Controller
         $type = $request->input('type');
         $index = $request->input('index');
 
+        $org = $request->attributes->get('currentOrganization');
+        $disk = $org ? \App\Services\StorageDiskResolver::getDisk($org) : 'public';
+        $diskInstance = Storage::disk($disk);
+
         $singleFields = ['employment_contract', 'offer_letter', 'techxaro_regulations'];
 
         if (in_array($type, $singleFields)) {
-            if ($user->$type && Storage::disk('public')->exists($user->$type)) {
-                Storage::disk('public')->delete($user->$type);
+            if ($user->$type) {
+                $cleanPath = ltrim($user->$type, '/');
+                if (str_starts_with($cleanPath, 'storage/')) $cleanPath = substr($cleanPath, 8);
+                try { if ($diskInstance->exists($cleanPath)) $diskInstance->delete($cleanPath); } catch (\Exception $e) {}
             }
             $oldValue = $user->$type;
             $user->$type = null;
@@ -1840,8 +1936,10 @@ class UserController extends Controller
             $removedDoc = $docs[$index];
             $removedPath = is_array($removedDoc) ? ($removedDoc['path'] ?? null) : $removedDoc;
 
-            if ($removedPath && Storage::disk('public')->exists($removedPath)) {
-                Storage::disk('public')->delete($removedPath);
+            if ($removedPath) {
+                $cleanPath = ltrim($removedPath, '/');
+                if (str_starts_with($cleanPath, 'storage/')) $cleanPath = substr($cleanPath, 8);
+                try { if ($diskInstance->exists($cleanPath)) $diskInstance->delete($cleanPath); } catch (\Exception $e) {}
             }
 
             unset($docs[$index]);
@@ -1974,15 +2072,27 @@ class UserController extends Controller
         }
 
         $singleFields = ['employment_contract', 'offer_letter', 'techxaro_regulations'];
+        $org = $request->attributes->get('currentOrganization');
+        $disk = $org ? \App\Services\StorageDiskResolver::getDisk($org) : 'public';
+        $diskInstance = Storage::disk($disk);
+        $category = 'user_documents/' . $user->id;
 
         if (in_array($type, $singleFields)) {
             // Delete old file if exists
-            if ($user->$type && Storage::disk('public')->exists($user->$type)) {
-                Storage::disk('public')->delete($user->$type);
+            if ($user->$type) {
+                $cleanPath = ltrim($user->$type, '/');
+                if (str_starts_with($cleanPath, 'storage/')) $cleanPath = substr($cleanPath, 8);
+                try { if ($diskInstance->exists($cleanPath)) $diskInstance->delete($cleanPath); } catch (\Exception $e) {}
             }
 
-            $filename = $type . '_' . time() . '_' . $file->getClientOriginalName();
-            $path = $file->storeAs('user_documents/' . $user->id, $filename, 'public');
+            // Store new file
+            if ($org) {
+                $filename = $type . '_' . time() . '_' . $file->getClientOriginalName();
+                $path = \App\Services\StorageDiskResolver::store($org, $file, $category, $filename);
+            } else {
+                $filename = $type . '_' . time() . '_' . $file->getClientOriginalName();
+                $path = $file->storeAs($category, $filename, 'public');
+            }
 
             $oldValue = $user->$type;
             $user->$type = $path;
@@ -2018,13 +2128,20 @@ class UserController extends Controller
             // Delete old file
             $oldDoc = $docs[$index];
             $oldPath = is_array($oldDoc) ? ($oldDoc['path'] ?? null) : $oldDoc;
-            if ($oldPath && Storage::disk('public')->exists($oldPath)) {
-                Storage::disk('public')->delete($oldPath);
+            if ($oldPath) {
+                $cleanPath = ltrim($oldPath, '/');
+                if (str_starts_with($cleanPath, 'storage/')) $cleanPath = substr($cleanPath, 8);
+                try { if ($diskInstance->exists($cleanPath)) $diskInstance->delete($cleanPath); } catch (\Exception $e) {}
             }
 
             // Upload new file
-            $filename = 'other_document_' . time() . '_' . mt_rand(10000, 99999) . '_' . $file->getClientOriginalName();
-            $newPath = $file->storeAs('user_documents/' . $user->id, $filename, 'public');
+            if ($org) {
+                $filename = 'other_document_' . time() . '_' . mt_rand(10000, 99999) . '_' . $file->getClientOriginalName();
+                $newPath = \App\Services\StorageDiskResolver::store($org, $file, $category, $filename);
+            } else {
+                $filename = 'other_document_' . time() . '_' . mt_rand(10000, 99999) . '_' . $file->getClientOriginalName();
+                $newPath = $file->storeAs($category, $filename, 'public');
+            }
             $customName = $name ?: preg_replace('/\.[^.]+$/', '', $file->getClientOriginalName());
 
             $docs[$index] = ['path' => $newPath, 'name' => $customName];
@@ -2085,14 +2202,25 @@ class UserController extends Controller
         }
 
         $singleFields = ['employment_contract', 'offer_letter', 'techxaro_regulations'];
+        $org = $request->attributes->get('currentOrganization');
+        $disk = $org ? \App\Services\StorageDiskResolver::getDisk($org) : 'public';
+        $diskInstance = Storage::disk($disk);
+        $category = 'user_documents/' . $user->id;
 
         if (in_array($type, $singleFields)) {
-            if ($user->$type && Storage::disk('public')->exists($user->$type)) {
-                Storage::disk('public')->delete($user->$type);
+            if ($user->$type) {
+                $cleanPath = ltrim($user->$type, '/');
+                if (str_starts_with($cleanPath, 'storage/')) $cleanPath = substr($cleanPath, 8);
+                try { if ($diskInstance->exists($cleanPath)) $diskInstance->delete($cleanPath); } catch (\Exception $e) {}
             }
 
-            $filename = $type . '_' . time() . '_' . $file->getClientOriginalName();
-            $path = $file->storeAs('user_documents/' . $user->id, $filename, 'public');
+            if ($org) {
+                $filename = $type . '_' . time() . '_' . $file->getClientOriginalName();
+                $path = \App\Services\StorageDiskResolver::store($org, $file, $category, $filename);
+            } else {
+                $filename = $type . '_' . time() . '_' . $file->getClientOriginalName();
+                $path = $file->storeAs($category, $filename, 'public');
+            }
 
             $user->$type = $path;
             $user->save();
@@ -2118,12 +2246,19 @@ class UserController extends Controller
 
             $oldDoc = $docs[$index];
             $oldPath = is_array($oldDoc) ? ($oldDoc['path'] ?? null) : $oldDoc;
-            if ($oldPath && Storage::disk('public')->exists($oldPath)) {
-                Storage::disk('public')->delete($oldPath);
+            if ($oldPath) {
+                $cleanPath = ltrim($oldPath, '/');
+                if (str_starts_with($cleanPath, 'storage/')) $cleanPath = substr($cleanPath, 8);
+                try { if ($diskInstance->exists($cleanPath)) $diskInstance->delete($cleanPath); } catch (\Exception $e) {}
             }
 
-            $filename = 'other_document_' . time() . '_' . mt_rand(10000, 99999) . '_' . $file->getClientOriginalName();
-            $newPath = $file->storeAs('user_documents/' . $user->id, $filename, 'public');
+            if ($org) {
+                $filename = 'other_document_' . time() . '_' . mt_rand(10000, 99999) . '_' . $file->getClientOriginalName();
+                $newPath = \App\Services\StorageDiskResolver::store($org, $file, $category, $filename);
+            } else {
+                $filename = 'other_document_' . time() . '_' . mt_rand(10000, 99999) . '_' . $file->getClientOriginalName();
+                $newPath = $file->storeAs($category, $filename, 'public');
+            }
             $customName = $name ?: preg_replace('/\.[^.]+$/', '', $file->getClientOriginalName());
 
             $docs[$index] = ['path' => $newPath, 'name' => $customName];
@@ -2295,8 +2430,12 @@ class UserController extends Controller
 
         // Handle avatar removal
         if ($request->input('avatar_remove') === '1') {
-            if ($user->avatar && Storage::disk('public')->exists($user->avatar)) {
-                Storage::disk('public')->delete($user->avatar);
+            if ($user->avatar) {
+                $org = $request->attributes->get('currentOrganization');
+                $disk = $org ? \App\Services\StorageDiskResolver::getDisk($org) : 'public';
+                $cleanPath = ltrim($user->avatar, '/');
+                if (str_starts_with($cleanPath, 'storage/')) $cleanPath = substr($cleanPath, 8);
+                try { if (Storage::disk($disk)->exists($cleanPath)) Storage::disk($disk)->delete($cleanPath); } catch (\Exception $e) {}
             }
             $user->avatar = null;
         }

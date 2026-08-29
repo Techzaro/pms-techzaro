@@ -96,6 +96,18 @@ class FeedbackController extends Controller
         $feedback = $this->feedbackService->getFeedbackDetail($id, $user);
         $history = $this->feedbackService->getFeedbackHistory($feedback);
 
+        // Resolve file URLs (S3 pre-signed or local /storage/ paths)
+        $org = $feedback->organization ?? $request->attributes->get('currentOrganization');
+        if ($org && $feedback->screenshot_path) {
+            $feedback->screenshot_url = \App\Services\StorageDiskResolver::getUrl($org, $feedback->screenshot_path);
+        }
+        if ($org && $feedback->recording_path) {
+            $feedback->recording_url = \App\Services\StorageDiskResolver::getUrl($org, $feedback->recording_path);
+        }
+        if ($org && $feedback->attachment_path) {
+            $feedback->attachment_url = \App\Services\StorageDiskResolver::getUrl($org, $feedback->attachment_path);
+        }
+
         return response()->json([
             'success'  => true,
             'data'     => $feedback,

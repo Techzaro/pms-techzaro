@@ -80,6 +80,8 @@ export default function Templates() {
     });
   };
 
+  const availableCategories = [...new Set(templates.map((t) => t.category).filter(Boolean))];
+
   const filteredTemplates = templates.filter((t) => {
     const matchesSearch =
       t.title.toLowerCase().includes(search.toLowerCase()) ||

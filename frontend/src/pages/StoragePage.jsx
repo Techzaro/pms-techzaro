@@ -351,6 +351,7 @@ export default function StoragePage() {
                     defaultValue: `of ${summary?.max_storage_gb || storage?.max_storage_gb || 0} ${summary?.storage_unit || storage?.storage_unit || 'GB'}`
                   })}
                 </span>
+                </span>
               </div>
               <div style={{ width: '100%', height: '14px', borderRadius: '7px', background: 'var(--bg-hover)', overflow: 'hidden' }}>
                 <div style={{

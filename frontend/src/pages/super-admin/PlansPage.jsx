@@ -261,22 +261,17 @@ function EditPlanModal({ plan, allModules, saving, onSave, onClose }) {
           )}
           <div className="grid grid-cols-3 gap-4">
             {[
-{
-  [
-    { labelKey: 'Max Users', defaultLabel: 'Max Users', value: maxUsers, set: setMaxUsers, ph: t('Unlimited', { defaultValue: 'Unlimited' }) },
-    { labelKey: 'Max Projects', defaultLabel: 'Max Projects', value: maxProjects, set: setMaxProjects, ph: t('Unlimited', { defaultValue: 'Unlimited' }) }
-  ].map((f) => (
-    <div key={f.labelKey}>
-      <label className="block text-xs font-medium mb-1.5" style={s.textMuted}>
-        {t(f.labelKey, { defaultValue: f.defaultLabel })}
-      </label>
-      <input type="number" min="1" value={f.value} onChange={e => f.set(e.target.value)} placeholder={f.ph} required style={inputStyle} />
-      <p className="text-[11px] mt-1" style={s.textMuted}>
-        {t('Leave empty = unlimited', { defaultValue: 'Leave empty = unlimited' })}
-      </p>
-    </div>
-  ))
-}
+              { labelKey: 'Max Users', defaultLabel: 'Max Users', value: maxUsers, set: setMaxUsers, ph: t('Unlimited', { defaultValue: 'Unlimited' }) },
+              { labelKey: 'Max Projects', defaultLabel: 'Max Projects', value: maxProjects, set: setMaxProjects, ph: t('Unlimited', { defaultValue: 'Unlimited' }) }
+            ].map((f) => (
+              <div key={f.labelKey}>
+                <label className="block text-xs font-medium mb-1.5" style={s.textMuted}>
+                  {t(f.labelKey, { defaultValue: f.defaultLabel })}
+                </label>
+                <input type="number" min="1" value={f.value} onChange={e => f.set(e.target.value)} placeholder={f.ph} required style={inputStyle} />
+                <p className="text-[11px] mt-1" style={s.textMuted}>
+                  {t('Leave empty = unlimited', { defaultValue: 'Leave empty = unlimited' })}
+                </p>
               </div>
             ))}
           </div>

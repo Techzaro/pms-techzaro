@@ -218,7 +218,6 @@ function Sidebar() {
 
     const isSettingsRoute =
       isActive("audit-logs") ||
-      isActive("feedback") ||
       isActive("settings/notifications") ||
       isActive("settings/personalization") ||
       isActive("branding") ||
@@ -437,7 +436,6 @@ function Sidebar() {
           </Link>
 
           {/* Calendar link */}
-          {hasModule("calendar-events") && (
           <Link
             to={rolePath("calendar")}
             className={`sidebar-link ${isActive("calendar") || isActive("calender") ? "active" : ""}`}
@@ -446,10 +444,8 @@ function Sidebar() {
             <MdCalendarToday />
             <span>{t("Calendar")}</span>
           </Link>
-          )}
 
           {/* Events link */}
-          {hasModule("calendar-events") && (
           <Link
             to={rolePath("events")}
             className={`sidebar-link ${isActive("events") ? "active" : ""}`}
@@ -458,7 +454,6 @@ function Sidebar() {
             <MdEvent />
             <span>{t("Events")}</span>
           </Link>
-          )}
 
           <hr />
 
@@ -559,7 +554,7 @@ function Sidebar() {
           )}
 
           {/* Settings dropdown – click to toggle like Tasks */}
-          <div className={`sidebar-dropdown-group ${settingsOpen || isActive("audit-logs") || isActive("feedback") || isActive("settings/notifications") || isActive("settings/regional") || isActive("regional-settings") || isActive("branding") || isActive("subscription") || isActive("organization-details") ? "open active" : ""}`}>
+          <div className={`sidebar-dropdown-group ${settingsOpen || isActive("audit-logs") || isActive("settings/notifications") || isActive("settings/regional") || isActive("regional-settings") || isActive("branding") || isActive("subscription") || isActive("organization-details") ? "open active" : ""}`}>
             <div
               className="sidebar-dropdown-header"
               onClick={() => setSettingsOpen((p) => !p)}
@@ -583,15 +578,6 @@ function Sidebar() {
                     onClick={(e) => e.stopPropagation()}
                   >
                     {t("Application Logs")}
-                  </Link>
-                )}
-                {(user.role === "admin" || user.role === "manager") && (
-                  <Link
-                    to={rolePath("feedback")}
-                    className={`sidebar-sub-link ${isActive("feedback") ? "active" : ""}`}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {t("User Feedback")}
                   </Link>
                 )}
                 <Link

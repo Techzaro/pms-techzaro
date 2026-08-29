@@ -5,6 +5,7 @@ import { MessageSquare, Building2, Circle, Clock, CheckCircle, X, Loader2, Send,
 import { MdPerson, MdTimeline } from 'react-icons/md';
 import { api } from './api/superAdminApi';
 import DOMPurify from 'dompurify';
+import '../../components/FeedbackModal.css';
 import '../FeedbackCenter.css';
 
 function parseMarkdown(text) {
@@ -376,8 +377,18 @@ export default function SuperSupportPage() {
                   </div>
                   <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
                     {metadata.screenshot_path && (
-                      <a href={`${metadata.screenshot_path}`} target="_blank" rel="noreferrer" className="fb-btn-cancel" style={{ textDecoration: "none", fontSize: "0.8rem" }}>
+                      <a href={metadata.screenshot_url || `/storage/${metadata.screenshot_path}`} target="_blank" rel="noreferrer" className="fb-btn-cancel" style={{ textDecoration: "none", fontSize: "0.8rem" }}>
                         {t('View Screenshot', { defaultValue: 'View Screenshot' })}
+                      </a>
+                    )}
+                    {metadata.recording_path && (
+                      <a href={metadata.recording_url || `/storage/${metadata.recording_path}`} target="_blank" rel="noreferrer" className="fb-btn-cancel" style={{ textDecoration: "none", fontSize: "0.8rem" }}>
+                        {t('View Recording', { defaultValue: 'View Recording' })}
+                      </a>
+                    )}
+                    {metadata.attachment_path && (
+                      <a href={metadata.attachment_url || `/storage/${metadata.attachment_path}`} target="_blank" rel="noreferrer" className="fb-btn-cancel" style={{ textDecoration: "none", fontSize: "0.8rem" }}>
+                        {t('View Attachment', { defaultValue: 'View Attachment' })}
                       </a>
                     )}
                   </div>
@@ -557,8 +568,6 @@ export default function SuperSupportPage() {
             </div>
           </div>
         )}
-          </div>
-        )}
       </div>
     );
   }
@@ -593,36 +602,16 @@ export default function SuperSupportPage() {
           >
             <List size={14} /> List
           </button>
-<div>
-            <h1 className="text-2xl font-bold" style={{ color: 'var(--text-heading)' }}>{selectedOrg.name} - {t('Support', { defaultValue: 'Support' })}</h1>
-            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-              {t('{{open}} open, {{pending}} pending', {
-                open: selectedOrg.support?.counts?.open || 0,
-                pending: selectedOrg.support?.counts?.pending || 0,
-                defaultValue: `${selectedOrg.support?.counts?.open || 0} open, ${selectedOrg.support?.counts?.pending || 0} pending`
-              })}
-            </p>
-          </div>
         </div>
       </div>
 
 {/* Cards View */}
       {viewMode === 'cards' && (
         <>
-          {ticketLoading ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--color-primary)' }} />
-            </div>
-          ) : tickets.length === 0 ? (
-            <div className="text-center py-12 rounded-xl" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-light)' }}>
-              <MessageSquare className="w-12 h-12 mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
-              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{t('No support tickets', { defaultValue: 'No support tickets' })}</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {orgs.map((org) => {
-                const oc = getOrgFeedbackCounts(org.id);
-                const isActive = selectedOrgId === org.id;
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {orgs.map((org) => {
+              const oc = getOrgFeedbackCounts(org.id);
+              const isActive = selectedOrgId === org.id;
               return (
                 <div
                   key={org.id}
@@ -638,7 +627,7 @@ export default function SuperSupportPage() {
                       <Building2 className="w-4 h-4" style={{ color: 'var(--color-primary)' }} />
                     </div>
                     <div>
-<p className="text-sm font-semibold" style={{ color: 'var(--text-heading)' }}>{org.name}</p>
+                      <p className="text-sm font-semibold" style={{ color: 'var(--text-heading)' }}>{org.name}</p>
                       <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
                         {oc.total} {t('tickets', { defaultValue: 'tickets' })}
                       </p>
@@ -675,6 +664,55 @@ export default function SuperSupportPage() {
               <h2 className="text-sm font-semibold" style={{ color: 'var(--text-heading)' }}>
                 {selectedOrg?.name} - {t('Feedback Tickets', { defaultValue: 'Feedback Tickets' })}
               </h2>
+
+              {/* Filters for Cards View (no Org filter) */}
+              <div className="fbc-filters-card">
+                <div className="fbc-filter-grid">
+                  <div className="fbc-filter-item">
+                    <label>{t('Search', { defaultValue: 'Search' })}</label>
+                    <input type="text" className="fbc-input" placeholder={t('Search ref #, subject, user...', { defaultValue: 'Search ref #, subject, user...' })} value={search} onChange={(e) => setSearch(e.target.value)} />
+                  </div>
+                  <div className="fbc-filter-item">
+                    <label>{t('Feedback Type', { defaultValue: 'Feedback Type' })}</label>
+                    <select className="fbc-select" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+                      <option value="">{t('All Types', { defaultValue: 'All Types' })}</option>
+                      <option value="Bug Report">{t('Bug Report', { defaultValue: 'Bug Report' })}</option>
+                      <option value="Feature Request">{t('Feature Request', { defaultValue: 'Feature Request' })}</option>
+                      <option value="General Suggestion">{t('General Suggestion', { defaultValue: 'General Suggestion' })}</option>
+                      <option value="Feature Rating">{t('Feature Rating', { defaultValue: 'Feature Rating' })}</option>
+                      <option value="General Feedback">{t('General Feedback', { defaultValue: 'General Feedback' })}</option>
+                    </select>
+                  </div>
+                  <div className="fbc-filter-item">
+                    <label>{t('Status', { defaultValue: 'Status' })}</label>
+                    <select className="fbc-select" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+                      <option value="">{t('All Statuses', { defaultValue: 'All Statuses' })}</option>
+                      {STATUS_OPTIONS.map((s) => (
+                        <option key={s} value={s}>{t(s, { defaultValue: s })}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="fbc-filter-item">
+                    <label>{t('Priority', { defaultValue: 'Priority' })}</label>
+                    <select className="fbc-select" value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}>
+                      <option value="">{t('All Priorities', { defaultValue: 'All Priorities' })}</option>
+                      <option value="Low">{t('Low', { defaultValue: 'Low' })}</option>
+                      <option value="Medium">{t('Medium', { defaultValue: 'Medium' })}</option>
+                      <option value="High">{t('High', { defaultValue: 'High' })}</option>
+                      <option value="Urgent">{t('Urgent', { defaultValue: 'Urgent' })}</option>
+                    </select>
+                  </div>
+                  <div className="fbc-filter-item">
+                    <label>{t('From Date', { defaultValue: 'From Date' })}</label>
+                    <input type="date" className="fbc-input" value={dateStart} max={dateEnd || undefined} onChange={(e) => setDateStart(e.target.value)} />
+                  </div>
+                  <div className="fbc-filter-item">
+                    <label>{t('To Date', { defaultValue: 'To Date' })}</label>
+                    <input type="date" className="fbc-input" value={dateEnd} min={dateStart || undefined} onChange={(e) => setDateEnd(e.target.value)} />
+                  </div>
+                </div>
+              </div>
+
               {ticketLoading ? (
                 <div className="flex justify-center py-8">
                   <Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--color-primary)' }} />
@@ -717,8 +755,8 @@ export default function SuperSupportPage() {
                               <div style={{ fontSize: '0.72rem', color: '#64748b' }}>{metadata.user_role || ''}</div>
                             </td>
                             <td>{metadata.module || '-'}</td>
-                            <td><span style={{ fontSize: '0.78rem', fontWeight: 700, color: prCfg.color }}>{t(prCfg.labelKey || prCfg.label, { defaultValue: prCfg.label })}</span></td>
-                            <td><span className={`fbc-badge fbc-status-${ticket.status.replace(/_/g, '-')}`}>{t(stCfg.labelKey || stCfg.label, { defaultValue: stCfg.label })}</span></td>
+                            <td><span style={{ fontSize: '0.78rem', fontWeight: 700, color: prCfg.color }}>{t(prCfg.labelKey, { defaultValue: prCfg.defaultLabel })}</span></td>
+                            <td><span className={`fbc-badge fbc-status-${ticket.status.replace(/_/g, '-')}`}>{t(stCfg.labelKey, { defaultValue: stCfg.defaultLabel })}</span></td>
                             <td style={{ fontSize: '0.8rem', color: '#64748b' }}>
                               <div>{new Date(ticket.created_at).toLocaleDateString()}</div>
                               <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{new Date(ticket.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</div>
@@ -848,8 +886,8 @@ export default function SuperSupportPage() {
                           </div>
                         </td>
                         <td>{metadata.module || '-'}</td>
-                        <td><span style={{ fontSize: '0.78rem', fontWeight: 700, color: prCfg.color }}>{prCfg.label}</span></td>
-                        <td><span className={`fbc-badge fbc-status-${ticket.status.replace(/_/g, '-')}`}>{stCfg.label}</span></td>
+                        <td><span style={{ fontSize: '0.78rem', fontWeight: 700, color: prCfg.color }}>{t(prCfg.labelKey, { defaultValue: prCfg.defaultLabel })}</span></td>
+                        <td><span className={`fbc-badge fbc-status-${ticket.status.replace(/_/g, '-')}`}>{t(stCfg.labelKey, { defaultValue: stCfg.defaultLabel })}</span></td>
                         <td style={{ fontSize: '0.8rem', color: '#64748b' }}>
                           <div>{new Date(ticket.created_at).toLocaleDateString()}</div>
                           <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{new Date(ticket.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</div>

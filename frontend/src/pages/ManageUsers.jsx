@@ -881,8 +881,8 @@ const { canCreateUser, maxUsers, currentUsers, usersRemaining, getLimitMessage, 
     }
 if (!newUser.employeeCode.trim()) errors.employeeCode = t("Employee Code is required.", { defaultValue: "Employee Code is required." });
     if (!newUser.jobStartedDate) errors.jobStartedDate = t("Job Start Date is required.", { defaultValue: "Job Start Date is required." });
-    if (newUser.grossSalary && newUser.grossSalary.length > 300) {
-      errors.grossSalary = t("Gross Salary must be 300 characters or less.", { defaultValue: "Gross Salary must be 300 characters or less." });
+    if (newUser.grossSalary && newUser.grossSalary.length > 1000) {
+      errors.grossSalary = t("Gross Salary must be 1000 characters or less.", { defaultValue: "Gross Salary must be 1000 characters or less." });
     }
     if (newUser.bankAccountNumber.trim() && !/^[\d\s\-a-zA-Z]+$/.test(newUser.bankAccountNumber.trim())) {
       errors.bankAccountNumber = t("Bank Account Number must contain only digits, letters, spaces, or dashes.", { defaultValue: "Bank Account Number must contain only digits, letters, spaces, or dashes." });

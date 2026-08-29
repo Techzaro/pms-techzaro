@@ -747,8 +747,8 @@ export default function OrganizationDetailPage() {
                   </div>
                   <div className="mb-3">
                     <div className="flex justify-between mb-1">
-<span className="text-sm font-semibold" style={s.text}>{t('{{total}} GB used', { total: fmtBytesToUnit(storageSummary.total_bytes, storageSummary.storage_unit || 'GB'), defaultValue: `${fmtBytesToUnit(storageSummary.total_bytes, storageSummary.storage_unit || 'GB')} used` })}</span>
-                  <span className="text-sm" style={s.textSecondary}>{t('of {{max}} GB', { max: `${storageSummary.max_storage_gb} ${storageSummary.storage_unit || 'GB'}`, defaultValue: `of ${storageSummary.max_storage_gb} ${storageSummary.storage_unit || 'GB'}` })}</span>
+<span className="text-sm font-semibold" style={s.text}>{t('{{total}} used', { total: fmtBytesToUnit(storageSummary.total_bytes, storageSummary.storage_unit || 'GB'), defaultValue: `${fmtBytesToUnit(storageSummary.total_bytes, storageSummary.storage_unit || 'GB')} used` })}</span>
+                  <span className="text-sm" style={s.textSecondary}>{t('of {{max}}', { max: `${storageSummary.max_storage_gb} ${storageSummary.storage_unit || 'GB'}`, defaultValue: `of ${storageSummary.max_storage_gb} ${storageSummary.storage_unit || 'GB'}` })}</span>
                     </div>
                     <div className="w-full h-3 rounded-full" style={{ background: 'var(--bg-hover)' }}>
                       <div className="h-3 rounded-full transition-all" style={{
@@ -758,15 +758,15 @@ export default function OrganizationDetailPage() {
                     </div>
                     <div className="flex justify-between mt-1">
 <span className="text-xs" style={s.textMuted}>{t('{{percent}}% used', { percent: storageSummary.usage_percent, defaultValue: `${storageSummary.usage_percent}% used` })}</span>
-                  <span className="text-xs" style={s.textMuted}>{t('{{remaining}} GB remaining', { remaining: `${fmtBytesToUnit(storageSummary.remaining_bytes, storageSummary.storage_unit || 'GB')} ${storageSummary.storage_unit || 'GB'}`, defaultValue: `${fmtBytesToUnit(storageSummary.remaining_bytes, storageSummary.storage_unit || 'GB')} ${storageSummary.storage_unit || 'GB'} remaining` })}</span>
+                  <span className="text-xs" style={s.textMuted}>{t('{{remaining}} remaining', { remaining: fmtBytesToUnit(storageSummary.remaining_bytes, storageSummary.storage_unit || 'GB'), defaultValue: `${fmtBytesToUnit(storageSummary.remaining_bytes, storageSummary.storage_unit || 'GB')} remaining` })}</span>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {[
 { labelKey: 'Total Files', defaultLabel: 'Total Files', value: storageSummary.total_files, color: 'var(--color-primary)' },
-                  { labelKey: 'Used Space', defaultLabel: 'Used Space', value: `${fmtBytesToUnit(storageSummary.total_bytes, storageSummary.storage_unit || 'GB')} ${storageSummary.storage_unit || 'GB'}`, color: 'var(--color-blue)' },
+                  { labelKey: 'Used Space', defaultLabel: 'Used Space', value: fmtBytesToUnit(storageSummary.total_bytes, storageSummary.storage_unit || 'GB'), color: 'var(--color-blue)' },
                   { labelKey: 'Storage Limit', defaultLabel: 'Storage Limit', value: `${storageSummary.max_storage_gb} ${storageSummary.storage_unit || 'GB'}`, color: 'var(--color-success)' },
-                  { labelKey: 'Remaining', defaultLabel: 'Remaining', value: `${fmtBytesToUnit(storageSummary.remaining_bytes, storageSummary.storage_unit || 'GB')} ${storageSummary.storage_unit || 'GB'}`, color: storageSummary.usage_percent > 95 ? 'var(--color-danger)' : 'var(--color-warning)' },
+                  { labelKey: 'Remaining', defaultLabel: 'Remaining', value: fmtBytesToUnit(storageSummary.remaining_bytes, storageSummary.storage_unit || 'GB'), color: storageSummary.usage_percent > 95 ? 'var(--color-danger)' : 'var(--color-warning)' },
                     ].map((item) => (
                       <div key={item.labelKey} className="p-3 rounded-lg" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-light)' }}>
                         <p className="text-xs" style={{ color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t(item.labelKey, { defaultValue: item.defaultLabel })}</p>

@@ -7,9 +7,15 @@ use Illuminate\Support\Facades\Storage;
 
 class CompanyDocumentController extends Controller
 {
-    private function findExistingFile(string $type): ?string
+    private function resolveDisk(Request $request): string
     {
-        $disk = config('company.disk', 'public');
+        $org = $request->attributes->get('currentOrganization');
+        return $org ? \App\Services\StorageDiskResolver::getDisk($org) : config('company.disk', 'public');
+    }
+
+    private function findExistingFile(string $type, ?string $disk = null): ?string
+    {
+        $disk = $disk ?? config('company.disk', 'public');
         $uploadDir = config('company.upload_dir', 'company_docs');
         $validExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];
 
@@ -54,20 +60,21 @@ class CompanyDocumentController extends Controller
         return $result;
     }
 
-    public function index()
+    public function index(Request $request)
     {
         $labels = config('company.document_labels', []);
         $singleTypes = ['company_logo', 'qr_code'];
+        $disk = $this->resolveDisk($request);
 
         $result = [];
         foreach ($singleTypes as $key) {
-            $path = $this->findExistingFile($key);
+            $path = $this->findExistingFile($key, $disk);
             $exists = $path !== null;
             $result[$key] = [
                 'label' => $labels[$key] ?? ucfirst(str_replace('_', ' ', $key)),
                 'path' => $path,
                 'exists' => $exists,
-                'url' => $exists ? Storage::disk('public')->url($path) : null,
+                'url' => $exists ? Storage::disk($disk)->url($path) : null,
             ];
         }
 
@@ -91,7 +98,7 @@ class CompanyDocumentController extends Controller
             'file' => 'required|file|mimes:pdf,jpg,jpeg,png,webp|max:10240',
         ]);
 
-        $disk = config('company.disk', 'public');
+        $disk = $this->resolveDisk($request);
         $uploadDir = config('company.upload_dir', 'company_docs');
         $type = $request->input('type');
         $file = $request->file('file');
@@ -137,7 +144,7 @@ class CompanyDocumentController extends Controller
 
     public function destroy(Request $request, string $type)
     {
-        $disk = config('company.disk', 'public');
+        $disk = $this->resolveDisk($request);
 
         if ($type === 'other_documents') {
             $filename = $request->query('filename');
@@ -168,9 +175,9 @@ class CompanyDocumentController extends Controller
             return response()->json(['success' => false, 'message' => 'Invalid document type'], 422);
         }
 
-        $existing = $this->findExistingFile($type);
+        $existing = $this->findExistingFile($type, $this->resolveDisk($request));
         if ($existing) {
-            Storage::disk('public')->delete($existing);
+            Storage::disk($this->resolveDisk($request))->delete($existing);
         }
 
         return response()->json([

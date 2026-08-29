@@ -799,21 +799,33 @@ class AuthController extends Controller
             $oldAvatar = $user->avatar;
             $file = $request->file('avatar');
             if ($file->isValid()) {
-                $disk = Storage::disk('public');
-                if ($oldAvatar && $disk->exists($oldAvatar)) {
-                    $disk->delete($oldAvatar);
+                $org = $request->attributes->get('currentOrganization');
+                $disk = $org ? \App\Services\StorageDiskResolver::getDisk($org) : 'public';
+                $diskInstance = Storage::disk($disk);
+
+                if ($oldAvatar) {
+                    $cleanPath = ltrim($oldAvatar, '/');
+                    if (str_starts_with($cleanPath, 'storage/')) $cleanPath = substr($cleanPath, 8);
+                    try { if ($diskInstance->exists($cleanPath)) $diskInstance->delete($cleanPath); } catch (\Exception $e) {}
                 }
-                if (!$disk->exists('avatars/' . $user->id)) {
-                    $disk->makeDirectory('avatars/' . $user->id);
+
+                $category = 'avatars/' . $user->id;
+                if ($org) {
+                    $filename = 'avatar_' . time() . '_' . mt_rand(10000, 99999) . '.' . $file->getClientOriginalExtension();
+                    $avatarPath = \App\Services\StorageDiskResolver::store($org, $file, $category, $filename);
+                } else {
+                    if (!$diskInstance->exists($category)) {
+                        $diskInstance->makeDirectory($category);
+                    }
+                    $filename = 'avatar_' . time() . '_' . mt_rand(10000, 99999) . '.' . $file->getClientOriginalExtension();
+                    $avatarPath = $file->storeAs($category, $filename, 'public');
                 }
-                $filename = 'avatar_' . time() . '_' . mt_rand(10000, 99999) . '.' . $file->getClientOriginalExtension();
-                $avatarPath = $file->storeAs('avatars/' . $user->id, $filename, 'public');
-                if ($avatarPath && $disk->exists($avatarPath)) {
+
+                if ($avatarPath) {
                     $user->avatar = $avatarPath;
                 } else {
                     \Log::error('Auth profile avatar upload failed', [
                         'user_id' => $user->id,
-                        'returned_path' => $avatarPath,
                     ]);
                 }
             }
@@ -860,10 +872,11 @@ class AuthController extends Controller
             'other_document',
         ];
 
-        $disk = \Storage::disk('public');
-        if (!$disk->exists('user_documents/' . $user->id)) {
-            $disk->makeDirectory('user_documents/' . $user->id);
-        }
+        // Resolve disk: S3 if org has it configured, else local public
+        $org = $request->attributes->get('currentOrganization');
+        $disk = $org ? \App\Services\StorageDiskResolver::getDisk($org) : 'public';
+        $diskInstance = \Storage::disk($disk);
+        $category = 'user_documents/' . $user->id;
 
         $hasFileUploads = false;
         foreach ($documentFields as $field) {
@@ -877,17 +890,21 @@ class AuthController extends Controller
                     $newDocs = [];
                     foreach ($files as $index => $file) {
                         if ($file->isValid()) {
-                            $filename = $field . '_' . time() . '_' . mt_rand(10000, 99999) . '_' . $file->getClientOriginalName();
-                            $path = $file->storeAs('user_documents/' . $user->id, $filename, 'public');
+                            if ($org) {
+                                $filename = $field . '_' . time() . '_' . mt_rand(10000, 99999) . '_' . $file->getClientOriginalName();
+                                $path = \App\Services\StorageDiskResolver::store($org, $file, $category, $filename);
+                            } else {
+                                $filename = $field . '_' . time() . '_' . mt_rand(10000, 99999) . '_' . $file->getClientOriginalName();
+                                $path = $file->storeAs($category, $filename, 'public');
+                            }
 
-                            if ($path && $disk->exists($path)) {
+                            if ($path) {
                                 $customName = isset($names[$index]) ? $names[$index] : $file->getClientOriginalName();
                                 $customName = preg_replace('/\.[^.]+$/', '', $customName);
                                 $newDocs[] = ['path' => $path, 'name' => $customName];
                             } else {
                                 \Log::error('Auth profile other_document upload failed', [
                                     'user_id' => $user->id,
-                                    'returned_path' => $path,
                                 ]);
                             }
                         }
@@ -916,14 +933,31 @@ class AuthController extends Controller
                     continue;
                 }
 
-                if ($user->$field && $disk->exists($user->$field)) {
-                    $disk->delete($user->$field);
+                // Delete old file if exists
+                if ($user->$field) {
+                    $oldPath = ltrim($user->$field, '/');
+                    if (str_starts_with($oldPath, 'storage/')) {
+                        $oldPath = substr($oldPath, 8);
+                    }
+                    try {
+                        if ($diskInstance->exists($oldPath)) {
+                            $diskInstance->delete($oldPath);
+                        }
+                    } catch (\Exception $e) {
+                        \Log::warning('Could not delete old profile document', ['path' => $user->$field, 'error' => $e->getMessage()]);
+                    }
                 }
 
-                $filename = $field.'_'.time().'_'.$file->getClientOriginalName();
-                $path = $file->storeAs('user_documents/'.$user->id, $filename, 'public');
+                // Store file using StorageDiskResolver (S3 or local)
+                if ($org) {
+                    $filename = $field . '_' . time() . '_' . $file->getClientOriginalName();
+                    $path = \App\Services\StorageDiskResolver::store($org, $file, $category, $filename);
+                } else {
+                    $filename = $field . '_' . time() . '_' . $file->getClientOriginalName();
+                    $path = $file->storeAs($category, $filename, 'public');
+                }
 
-                if ($path && $disk->exists($path)) {
+                if ($path) {
                     $user->$field = $path;
                     $hasFileUploads = true;
 
@@ -935,10 +969,9 @@ class AuthController extends Controller
                         'modified_by' => $user->id,
                     ]);
                 } else {
-                    \Log::error('Auth profile document upload failed - file not on disk', [
+                    \Log::error('Auth profile document upload failed', [
                         'user_id' => $user->id,
                         'field' => $field,
-                        'returned_path' => $path,
                     ]);
                 }
             }

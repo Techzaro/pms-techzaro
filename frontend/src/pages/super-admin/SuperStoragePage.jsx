@@ -88,7 +88,7 @@ export default function SuperStoragePage() {
                   <div className="mb-3">
                     <div className="flex justify-between mb-1">
                    <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
-  {formatBytes(s.total_bytes || 0)} / {s.max_storage_gb} {t(s.storage_unit || 'GB', { defaultValue: s.storage_unit || 'GB' })}
+   {formatBytes(s.total_bytes || 0)} / {s.max_storage_gb} {s.storage_unit || 'GB'}
 </span>                    </div>
                     <div className="w-full h-2 rounded-full" style={{ background: 'var(--bg-hover)' }}>
                       <div className="h-2 rounded-full" style={{

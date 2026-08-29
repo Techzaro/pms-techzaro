@@ -25,7 +25,6 @@ function AuditLogDetailModal({ log, onClose }) {
   const oldValues = log.old_values || log.old;
   const newValues = log.new_values || log.new;
   const statusLabel = t((log.status || "success").charAt(0).toUpperCase() + (log.status || "success").slice(1));
-  const statusLabel = (log.status || "success").charAt(0).toUpperCase() + (log.status || "success").slice(1);
 
   return createPortal(
     <div className="ald-overlay" onClick={onClose}>

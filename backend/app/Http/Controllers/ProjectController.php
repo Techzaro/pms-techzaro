@@ -761,16 +761,23 @@ class ProjectController extends Controller
         // Sync uploaded files if sent as multipart files
         $filesSkipped = false;
         $uploadedFileNames = [];
+        $org = $request->attributes->get('currentOrganization');
         if ($request->hasFile('files')) {
             foreach ($request->file('files') as $idx => $uploadedFile) {
                 $storageCheck = $this->checkStorageLimit($request, $uploadedFile);
                 if (! $storageCheck || $storageCheck['allowed']) {
-                    $path = $uploadedFile->store('project-files', 'public');
-                    $this->trackFileUpload($request, 'attachments', '/storage/'.$path, $uploadedFile->getClientOriginalName(), $uploadedFile->getMimeType(), $uploadedFile->getSize());
+                    if ($org) {
+                        $path = \App\Services\StorageDiskResolver::store($org, $uploadedFile, 'project-files');
+                        $fileUrl = \App\Services\StorageDiskResolver::isS3($org) ? $path : '/storage/'.$path;
+                    } else {
+                        $path = $uploadedFile->store('project-files', 'public');
+                        $fileUrl = '/storage/'.$path;
+                    }
+                    $this->trackFileUpload($request, 'attachments', $fileUrl, $uploadedFile->getClientOriginalName(), $uploadedFile->getMimeType(), $uploadedFile->getSize());
                     $customName = $request->input("file_names.{$idx}") ?: $uploadedFile->getClientOriginalName();
                     $project->files()->create([
                         'name' => $customName,
-                        'url' => '/storage/'.$path,
+                        'url' => $fileUrl,
                     ]);
                     $uploadedFileNames[] = $customName;
                 } else {
@@ -1270,8 +1277,14 @@ class ProjectController extends Controller
             $ext = pathinfo($fileName, PATHINFO_EXTENSION) ?: 'bin';
             $uniqueFilename = \Illuminate\Support\Str::random(40).'.'.$ext;
             $path = 'project-files/'.$uniqueFilename;
-            \Illuminate\Support\Facades\Storage::disk('public')->put($path, $decodedContent);
-            $fileUrl = '/storage/'.$path;
+            if ($org) {
+                $disk = \App\Services\StorageDiskResolver::getDisk($org);
+                \Illuminate\Support\Facades\Storage::disk($disk)->put($path, $decodedContent);
+                $fileUrl = \App\Services\StorageDiskResolver::isS3($org) ? \App\Services\StorageDiskResolver::getUrl($org, $path) : '/storage/'.$path;
+            } else {
+                \Illuminate\Support\Facades\Storage::disk('public')->put($path, $decodedContent);
+                $fileUrl = '/storage/'.$path;
+            }
             $this->trackFileUpload($request, 'attachments', $fileUrl, $fileName, $mime, strlen($decodedContent));
         } else {
             return response()->json(['success' => false, 'message' => 'No valid file was provided for upload.'], 422);
