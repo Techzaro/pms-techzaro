@@ -35,6 +35,11 @@ class FixTenantColumns extends Command
             ['name' => 'has_edited_submission',         'definition' => "TINYINT(1) DEFAULT 0 AFTER `status`"],
             ['name' => 'status',                        'definition' => "VARCHAR(64) DEFAULT 'Pending' AFTER `requirements`", 'skip_if_exists' => true],
             ['name' => 'states',                        'definition' => "JSON NULL AFTER `status`", 'skip_if_exists' => true],
+            ['name' => 'creator_id',                    'definition' => "BIGINT UNSIGNED NULL AFTER `assigned_by`"],
+            ['name' => 'current_submitter_id',          'definition' => "BIGINT UNSIGNED NULL AFTER `current_owner`"],
+            ['name' => 'current_reviewer_id',           'definition' => "BIGINT UNSIGNED NULL AFTER `current_submitter_id`"],
+            ['name' => 'submission_stage',              'definition' => "VARCHAR(64) NULL AFTER `current_reviewer_id`"],
+            ['name' => 'submission_forwarded_by',       'definition' => "JSON NULL AFTER `submission_stage`"],
         ],
         'deliverables' => [
             ['name' => 'has_edited_submission',         'definition' => "TINYINT(1) DEFAULT 0 AFTER `status`"],
