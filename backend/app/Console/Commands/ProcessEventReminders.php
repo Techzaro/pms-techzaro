@@ -151,6 +151,8 @@ class ProcessEventReminders extends Command
         return 0;
     }
 
+    private ?\Illuminate\Support\Collection $cachedActiveUsers = null;
+
     /**
      * Resolve users who should receive the reminder.
      *
@@ -164,7 +166,10 @@ class ProcessEventReminders extends Command
         }
 
         if ($event->is_global || $event->visibility_level === 'organization') {
-            return User::where('status', 'active')->orWhereNull('status')->get();
+            if ($this->cachedActiveUsers === null) {
+                $this->cachedActiveUsers = User::where('status', 'active')->orWhereNull('status')->get();
+            }
+            return $this->cachedActiveUsers;
         }
 
         $users = collect();

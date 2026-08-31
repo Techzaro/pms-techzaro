@@ -500,7 +500,7 @@ class NotificationService
                     'payload' => ['text' => $slackText],
                 ]);
                 try {
-                    $response = \Illuminate\Support\Facades\Http::withoutVerifying()->withHeaders([
+                    $response = \Illuminate\Support\Facades\Http::withoutVerifying()->timeout(2)->withHeaders([
                         'Content-Type' => 'application/json',
                         'Accept' => 'application/json',
                     ])->post($slackUrl, [
@@ -547,7 +547,7 @@ class NotificationService
                     'url' => $gchatUrl,
                 ]);
                 try {
-                    $response = \Illuminate\Support\Facades\Http::withoutVerifying()->withHeaders([
+                    $response = \Illuminate\Support\Facades\Http::withoutVerifying()->timeout(2)->withHeaders([
                         'Content-Type' => 'application/json',
                         'Accept' => 'application/json',
                     ])->post($gchatUrl, [
@@ -610,7 +610,7 @@ class NotificationService
                         ] : [],
                     ];
 
-                    $response = \Illuminate\Support\Facades\Http::withoutVerifying()->withHeaders([
+                    $response = \Illuminate\Support\Facades\Http::withoutVerifying()->timeout(2)->withHeaders([
                         'Content-Type' => 'application/json',
                         'Accept' => 'application/json',
                     ])->post($teamsUrl, $teamsPayload);
@@ -621,7 +621,7 @@ class NotificationService
                         if ($fullLink) {
                             $fallbackText .= "\n\n[View Details]({$fullLink})";
                         }
-                        $fallbackResponse = \Illuminate\Support\Facades\Http::withoutVerifying()->withHeaders([
+                        $fallbackResponse = \Illuminate\Support\Facades\Http::withoutVerifying()->timeout(2)->withHeaders([
                             'Content-Type' => 'application/json',
                             'Accept' => 'application/json',
                         ])->post($teamsUrl, [

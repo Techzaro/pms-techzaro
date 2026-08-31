@@ -45,6 +45,11 @@ class EventsE2ETestRunner
 
     public function run(): void
     {
+        ob_implicit_flush(true);
+        if (ob_get_level() > 0) {
+            ob_end_flush();
+        }
+
         echo "\n===============================================================\n";
         echo "  EVENTS & ANNOUNCEMENTS MODULE: E2E AUTOMATED VERIFICATION\n";
         echo "===============================================================\n\n";
@@ -78,10 +83,13 @@ class EventsE2ETestRunner
             echo "  [FAIL] {$name}\n";
             if ($details) echo "         -> ERROR: {$details}\n";
         }
+        flush();
     }
 
     private function setUpFixtures(): void
     {
+        \Illuminate\Support\Facades\Http::fake();
+
         // Find or create test users
         $this->adminUser = User::where('email', 'admin_e2e_events@test.com')->first();
         if (!$this->adminUser) {
@@ -101,7 +109,7 @@ class EventsE2ETestRunner
                 'name' => 'Attendee One',
                 'email' => 'attendee1_e2e_events@test.com',
                 'password' => bcrypt('password123'),
-                'role' => 'employee',
+                'role' => 'member',
                 'status' => 'active',
                 'timezone' => 'America/New_York',
             ]);
@@ -113,7 +121,7 @@ class EventsE2ETestRunner
                 'name' => 'Attendee Two',
                 'email' => 'attendee2_e2e_events@test.com',
                 'password' => bcrypt('password123'),
-                'role' => 'employee',
+                'role' => 'member',
                 'status' => 'active',
                 'timezone' => 'Europe/London',
             ]);
@@ -137,10 +145,11 @@ class EventsE2ETestRunner
             'end_time' => '15:00',
             'location' => 'Main Executive Auditorium',
             'meeting_link' => 'https://meet.google.com/xyz-test-event',
-            'visibility_level' => 'organization',
+            'visibility_level' => 'custom',
             'color' => '#2563eb',
             'assigned_user_ids' => [$this->testAttendee1->id, $this->testAttendee2->id],
             'participant_user_ids' => [$this->testAttendee1->id, $this->testAttendee2->id],
+            'user_ids' => [$this->testAttendee1->id, $this->testAttendee2->id],
             'reminders' => [
                 ['value' => 30, 'unit' => 'minutes'],
                 ['value' => 2, 'unit' => 'hours'],
@@ -275,7 +284,7 @@ class EventsE2ETestRunner
                 'name' => 'Attendee Three',
                 'email' => 'attendee3_e2e_events@test.com',
                 'password' => bcrypt('password123'),
-                'role' => 'employee',
+                'role' => 'member',
                 'status' => 'active',
             ]);
         }
@@ -409,7 +418,7 @@ class EventsE2ETestRunner
         $request = Request::create("/api/events/{$event->id}", 'DELETE');
         $request->setUserResolver(fn () => $this->adminUser);
 
-        $response = $controller->destroy($event);
+        $response = $controller->destroy($request, $event);
 
         $eventGone = !Event::where('id', $eventId)->exists();
         $remindersGone = !EventReminder::where('event_id', $eventId)->exists();

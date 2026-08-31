@@ -29,7 +29,7 @@ class ProcessEventRemindersTest extends TestCase
         ]);
 
         $this->attendee = User::factory()->create([
-            'role' => 'employee',
+            'role' => 'member',
             'status' => 'active',
             'timezone' => 'America/New_York',
         ]);

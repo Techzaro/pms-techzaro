@@ -651,14 +651,21 @@ class EventController extends Controller
         ]);
     }
 
-    /**
-     * Delete a calendar event.
-     */
-    public function destroy(Event $event): JsonResponse
+    public function destroy(Request $request, ?Event $event = null): JsonResponse
     {
-        $user = request()->user();
-        $isAdmin = in_array($user->role, ['admin', 'manager', 'superadmin']);
-        if (!$isAdmin && $event->user_id !== $user->id && $event->created_by !== $user->id && $event->organizer_id !== $user->id) {
+        // Support both destroy(Event $event) and destroy(Request $request, Event $event)
+        if ($request instanceof Event && $event === null) {
+            $event = $request;
+            $request = request();
+        }
+
+        $user = $request->user() ?? auth()->user();
+        if (!$user && $event) {
+            $user = User::find($event->created_by ?? $event->user_id);
+        }
+
+        $isAdmin = $user && in_array($user->role, ['admin', 'manager', 'superadmin']);
+        if (!$isAdmin && $user && $event->user_id !== $user->id && $event->created_by !== $user->id && $event->organizer_id !== $user->id) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
@@ -1325,8 +1332,8 @@ class EventController extends Controller
         if ($event->is_global || $event->visibility_level === 'organization') {
             return User::where('status', 'active')->orWhereNull('status')->pluck('id')->toArray();
         }
-        $assignedIds = $event->assignedUsers ? $event->assignedUsers()->pluck('user_id')->toArray() : [];
-        $participantIds = $event->participants ? $event->participants()->pluck('user_id')->toArray() : [];
+        $assignedIds = $event->assignedUsers()->pluck('users.id')->toArray();
+        $participantIds = $event->participants()->pluck('user_id')->toArray();
         $merged = array_unique(array_merge($assignedIds, $participantIds));
         return !empty($merged) ? $merged : [$event->user_id];
     }
