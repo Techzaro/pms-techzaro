@@ -8,6 +8,8 @@ import DOMPurify from "dompurify";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import CustomSelect from "../components/CustomSelect";
+import ConfirmModal from "../components/ConfirmModal";
+import ShareKnowledgeModal from "../components/ShareKnowledgeModal";
 import UnifiedActivityFeed from "../components/UnifiedActivityFeed";
 import API_URL from "../config/api";
 import { authToken, rolePath, getUser } from "../utils/auth";
@@ -45,6 +47,10 @@ import {
   Eye,
   Edit,
   BookOpen,
+  Star,
+  Copy,
+  Archive,
+  Share2,
 } from "lucide-react";
 
 // Register Font Whitelist for Quill
@@ -144,11 +150,60 @@ export default function KnowledgeBaseEditor() {
   // Category Creation Loading State
   const [savingNewCat, setSavingNewCat] = useState(false);
 
+  // Actions & Favorites State
+  const [isFavorited, setIsFavorited] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
+  const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+
   // Attachment State
   const [file, setFile] = useState(null);
   const [existingFilePath, setExistingFilePath] = useState(null);
   const [existingFileName, setExistingFileName] = useState(null);
   const [deleteExistingFile, setDeleteExistingFile] = useState(false);
+  const [downloadingAttachment, setDownloadingAttachment] = useState(false);
+
+  const handleDownloadAttachment = async () => {
+    if (!id && !existingFilePath) return;
+    try {
+      setDownloadingAttachment(true);
+      const token = authToken();
+      const endpoint = id
+        ? `${API_URL}/knowledge-base/${id}/download`
+        : `${API_URL}/storage/${existingFilePath}`;
+
+      const res = await fetch(endpoint, {
+        headers: {
+          Accept: "application/json, */*",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        skipLoader: true,
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        notify.error(err?.message || t("Failed to download attachment.", { defaultValue: "Failed to download attachment." }));
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = existingFileName || (existingFilePath ? existingFilePath.split("/").pop() : "document-attachment");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      notify.success(t("Download completed.", { defaultValue: "Download completed." }));
+    } catch (e) {
+      console.error("Download failed", e);
+      notify.error(t("Download failed.", { defaultValue: "Download failed." }));
+    } finally {
+      setDownloadingAttachment(false);
+    }
+  };
 
   // Dynamic Options (Always fetched from API, strictly initial [])
   const [categories, setCategories] = useState([]);
@@ -238,6 +293,7 @@ export default function KnowledgeBaseEditor() {
           setSelectedUserIds(Array.isArray(data.user_ids) ? data.user_ids : []);
           setStatus(data.status || "published");
           setIsPinned(Boolean(data.is_pinned));
+          setIsFavorited(Boolean(data.is_favorited));
           setTags(Array.isArray(data.tags) ? data.tags : typeof data.tags === "string" ? JSON.parse(data.tags || "[]") : []);
           setReferenceLink(data.reference_link || "");
           setExistingFilePath(data.file_path || null);
@@ -641,8 +697,107 @@ export default function KnowledgeBaseEditor() {
   // VIEW MODE: DEDICATED READ-ONLY VIEW WITH DETAILS | ACTIVITY TABS
   // ══════════════════════════════════════════════════════════════
   if (isViewMode) {
-    const canEdit = rawArticle?.created_by === user?.id || ["admin", "manager"].includes(user?.role);
+    const canEdit =
+      rawArticle?.user_permissions?.can_edit ??
+      (rawArticle?.created_by === user?.id || ["admin", "manager"].includes(user?.role));
+    const canArchive = rawArticle?.user_permissions?.can_archive ?? canEdit;
+    const canRestore = rawArticle?.user_permissions?.can_restore ?? canEdit;
+    const canDuplicate = rawArticle?.user_permissions?.can_duplicate ?? user?.role !== "guest";
+    const canShare = rawArticle?.user_permissions?.can_share ?? true;
     const categoryName = rawArticle?.categoryRelation?.name || rawArticle?.category || "";
+
+    const handleToggleFavoriteInView = async () => {
+      try {
+        const token = authToken();
+        setIsFavorited((prev) => !prev);
+        const res = await fetch(`${API_URL}/knowledge-base/${id}/favorite`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          notify.success(
+            data.is_favorited
+              ? t("Added to favorites!", { defaultValue: "Added to favorites!" })
+              : t("Removed from favorites.", { defaultValue: "Removed from favorites." })
+          );
+        } else {
+          setIsFavorited((prev) => !prev);
+          notify.error(data.message || t("Failed to update favorite status.", { defaultValue: "Failed to update favorite status." }));
+        }
+      } catch (err) {
+        setIsFavorited((prev) => !prev);
+        notify.error(t("Error updating favorite status.", { defaultValue: "Error updating favorite status." }));
+      }
+    };
+
+    const handleDuplicateInView = async () => {
+      setActionLoading(true);
+      try {
+        const token = authToken();
+        const res = await fetch(`${API_URL}/knowledge-base/${id}/duplicate`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        });
+        const data = await res.json();
+        if (res.ok && data.success && data.data?.id) {
+          notify.success(t("Article duplicated successfully as draft!", { defaultValue: "Article duplicated successfully as draft!" }));
+          navigate(rolePath(`knowledge-base/${data.data.id}`));
+        } else {
+          notify.error(data.message || t("Failed to duplicate article.", { defaultValue: "Failed to duplicate article." }));
+        }
+      } catch (err) {
+        notify.error(t("Error duplicating article.", { defaultValue: "Error duplicating article." }));
+      } finally {
+        setActionLoading(false);
+      }
+    };
+
+    const handleArchiveInView = async () => {
+      setActionLoading(true);
+      try {
+        const token = authToken();
+        const res = await fetch(`${API_URL}/knowledge-base/${id}/archive`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          notify.success(t("Article archived successfully.", { defaultValue: "Article archived successfully." }));
+          setStatus("archived");
+        } else {
+          notify.error(data.message || t("Failed to archive article.", { defaultValue: "Failed to archive article." }));
+        }
+      } catch (err) {
+        notify.error(t("Error archiving article.", { defaultValue: "Error archiving article." }));
+      } finally {
+        setActionLoading(false);
+        setArchiveConfirmOpen(false);
+      }
+    };
+
+    const handleRestoreInView = async () => {
+      setActionLoading(true);
+      try {
+        const token = authToken();
+        const res = await fetch(`${API_URL}/knowledge-base/${id}/restore`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          notify.success(t("Article restored successfully.", { defaultValue: "Article restored successfully." }));
+          setStatus("published");
+        } else {
+          notify.error(data.message || t("Failed to restore article.", { defaultValue: "Failed to restore article." }));
+        }
+      } catch (err) {
+        notify.error(t("Error restoring article.", { defaultValue: "Error restoring article." }));
+      } finally {
+        setActionLoading(false);
+        setRestoreConfirmOpen(false);
+      }
+    };
 
     return (
       <DashboardLayout>
@@ -656,7 +811,7 @@ export default function KnowledgeBaseEditor() {
         <div className="kb-editor-wrapper" style={{ paddingBottom: "60px" }}>
           {/* VIEW HEADER */}
           <div className="kb-editor-header">
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
               <button
                 type="button"
                 onClick={() => navigate(rolePath("knowledge-base"))}
@@ -669,9 +824,73 @@ export default function KnowledgeBaseEditor() {
                 {categoryName}
               </span>
               {isPinned && <span style={{ fontSize: "11px", fontWeight: 600, color: "#d97706", background: "#fef3c7", padding: "3px 10px", borderRadius: "6px", display: "inline-flex", alignItems: "center", gap: "4px" }}><Pin size={11} /> {t("Pinned", { defaultValue: "Pinned" })}</span>}
+              {status === "archived" && (
+                <span style={{ fontSize: "11px", fontWeight: 600, color: "#dc2626", background: "#fef2f2", padding: "3px 10px", borderRadius: "6px" }}>
+                  {t("Archived", { defaultValue: "Archived" })}
+                </span>
+              )}
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+              {/* FAVORITE STAR BUTTON */}
+              <button
+                type="button"
+                className={`kb-fav-star-btn ${isFavorited ? "active" : ""}`}
+                onClick={handleToggleFavoriteInView}
+                title={isFavorited ? t("Remove from favorites", { defaultValue: "Remove from favorites" }) : t("Add to favorites", { defaultValue: "Add to favorites" })}
+                style={{ padding: "6px" }}
+              >
+                <Star size={18} />
+              </button>
+
+              {/* DUPLICATE BUTTON */}
+              {canDuplicate && (
+                <button
+                  type="button"
+                  onClick={handleDuplicateInView}
+                  disabled={actionLoading}
+                  style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "7px 12px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-hover)", color: "var(--text-primary)", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                  title={t("Duplicate Article", { defaultValue: "Duplicate Article" })}
+                >
+                  <Copy size={14} color="#6366f1" /> {t("Duplicate", { defaultValue: "Duplicate" })}
+                </button>
+              )}
+
+              {/* SHARE BUTTON */}
+              {canShare && (
+                <button
+                  type="button"
+                  onClick={() => setShareModalOpen(true)}
+                  style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "7px 12px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-hover)", color: "var(--text-primary)", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                  title={t("Share Article Internally", { defaultValue: "Share Article Internally" })}
+                >
+                  <Share2 size={14} color="#2563eb" /> {t("Share", { defaultValue: "Share" })}
+                </button>
+              )}
+
+              {/* ARCHIVE / RESTORE BUTTON */}
+              {status !== "archived" && canArchive && (
+                <button
+                  type="button"
+                  onClick={() => setArchiveConfirmOpen(true)}
+                  style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "7px 12px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-hover)", color: "var(--text-primary)", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                  title={t("Archive Article", { defaultValue: "Archive Article" })}
+                >
+                  <Archive size={14} color="#d97706" /> {t("Archive", { defaultValue: "Archive" })}
+                </button>
+              )}
+              {status === "archived" && canRestore && (
+                <button
+                  type="button"
+                  onClick={() => setRestoreConfirmOpen(true)}
+                  style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "7px 12px", borderRadius: "6px", border: "1px solid #bbf7d0", background: "#f0fdf4", color: "#15803d", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                  title={t("Restore Article", { defaultValue: "Restore Article" })}
+                >
+                  <RotateCcw size={14} color="#16a34a" /> {t("Restore", { defaultValue: "Restore" })}
+                </button>
+              )}
+
+              {/* PRINT BUTTON */}
               <button
                 type="button"
                 onClick={handlePrint}
@@ -680,6 +899,7 @@ export default function KnowledgeBaseEditor() {
                 <Printer size={14} /> {t("Print", { defaultValue: "Print" })}
               </button>
 
+              {/* EDIT BUTTON */}
               {canEdit && (
                 <button
                   type="button"
@@ -691,6 +911,35 @@ export default function KnowledgeBaseEditor() {
               )}
             </div>
           </div>
+
+          {/* SHARE MODAL IN VIEW */}
+          <ShareKnowledgeModal
+            isOpen={shareModalOpen}
+            onClose={() => setShareModalOpen(false)}
+            article={rawArticle || { id, title, category: categoryName }}
+          />
+
+          {/* ARCHIVE CONFIRMATION MODAL IN VIEW */}
+          <ConfirmModal
+            isOpen={archiveConfirmOpen}
+            onClose={() => setArchiveConfirmOpen(false)}
+            onConfirm={handleArchiveInView}
+            title={t("Archive Knowledge Article", { defaultValue: "Archive Knowledge Article" })}
+            message={t("Are you sure you want to archive this article? It will be hidden from the active list.", { defaultValue: "Are you sure you want to archive this article? It will be hidden from the active list." })}
+            confirmText={t("Archive", { defaultValue: "Archive" })}
+            cancelText={t("Cancel", { defaultValue: "Cancel" })}
+          />
+
+          {/* RESTORE CONFIRMATION MODAL IN VIEW */}
+          <ConfirmModal
+            isOpen={restoreConfirmOpen}
+            onClose={() => setRestoreConfirmOpen(false)}
+            onConfirm={handleRestoreInView}
+            title={t("Restore Knowledge Article", { defaultValue: "Restore Knowledge Article" })}
+            message={t("Restore this article back to published status?", { defaultValue: "Restore this article back to published status?" })}
+            confirmText={t("Restore", { defaultValue: "Restore" })}
+            cancelText={t("Cancel", { defaultValue: "Cancel" })}
+          />
 
           {/* VIEW TABS (Details | Activity) */}
           <div style={{ display: "flex", gap: "4px", padding: "0 24px", borderBottom: "1px solid var(--border-color)", background: "var(--bg-card)" }}>
@@ -765,14 +1014,14 @@ export default function KnowledgeBaseEditor() {
                     <Paperclip color="#2563eb" size={18} />
                     <span style={{ fontWeight: 600 }}>{existingFileName || existingFilePath.split("/").pop()}</span>
                   </div>
-                  <a
-                    href={`${API_URL}/storage/${existingFilePath}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "7px 16px", borderRadius: "6px", background: "#2563eb", color: "#ffffff", fontSize: "12px", fontWeight: 600, textDecoration: "none" }}
+                  <button
+                    type="button"
+                    onClick={handleDownloadAttachment}
+                    disabled={downloadingAttachment}
+                    style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "7px 16px", borderRadius: "6px", background: "#2563eb", color: "#ffffff", fontSize: "12px", fontWeight: 600, border: "none", cursor: downloadingAttachment ? "not-allowed" : "pointer", opacity: downloadingAttachment ? 0.7 : 1 }}
                   >
-                    <Download size={14} /> {t("Download File", { defaultValue: "Download File" })}
-                  </a>
+                    <Download size={14} /> {downloadingAttachment ? t("Downloading...", { defaultValue: "Downloading..." }) : t("Download File", { defaultValue: "Download File" })}
+                  </button>
                 </div>
               )}
 

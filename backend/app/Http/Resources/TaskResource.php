@@ -30,6 +30,8 @@ class TaskResource extends JsonResource
             'requirements' => $this->requirements,
             'status' => $this->status,
             'priority' => $this->priority,
+            'kb_ids' => $this->kb_ids ?? [],
+            'event_ids' => $this->event_ids ?? [],
             'start_date' => $this->start_date?->format('Y-m-d\TH:i:s'),
             'end_date' => $this->end_date?->format('Y-m-d\TH:i:s'),
             'assigned_to' => $this->assigned_to,

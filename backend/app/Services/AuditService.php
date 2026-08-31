@@ -80,6 +80,9 @@ class AuditService
         if (!empty($filters['user_id'])) {
             $query->where('user_id', $filters['user_id']);
         }
+        if (!empty($filters['date'])) {
+            $query->date($filters['date']);
+        }
         if (!empty($filters['date_from']) || !empty($filters['date_to'])) {
             $query->dateRange($filters['date_from'] ?? null, $filters['date_to'] ?? null);
         }

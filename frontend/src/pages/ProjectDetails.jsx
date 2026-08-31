@@ -356,9 +356,11 @@ function ProjectDetails() {
   const [projectKbArticles, setProjectKbArticles] = useState([]);
   const [loadingKb, setLoadingKb] = useState(false);
   const [kbSearch, setKbSearch] = useState("");
+  const [kbArticles, setKbArticles] = useState([]);
   const [projectEvents, setProjectEvents] = useState([]);
   const [loadingProjectEvents, setLoadingProjectEvents] = useState(false);
   const [eventSearch, setEventSearch] = useState("");
+  const [eventsList, setEventsList] = useState([]);
   const [editFileItem, setEditFileItem] = useState(null);
   const [editFileName, setEditFileName] = useState("");
   const [editFileUrl, setEditFileUrl] = useState("");
@@ -429,13 +431,33 @@ function ProjectDetails() {
         .then((r) => r.json())
         .then((d) => {
           const list = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
-          const filtered = list.filter((a) => String(a.project_id) === String(pId));
+          const directKbId = project?.kb_id || project?.knowledge_base?.id || project?.knowledgeBase?.id;
+          const taskKbIds = Array.isArray(project?.tasks)
+            ? project.tasks.map((t) => t.kb_id).filter(Boolean)
+            : [];
+
+          let filtered = list.filter((a) =>
+            String(a.project_id) === String(pId) ||
+            (directKbId && String(a.id) === String(directKbId)) ||
+            taskKbIds.map(String).includes(String(a.id))
+          );
+
+          const linkedKbObj = project?.knowledge_base || project?.knowledgeBase;
+          if (linkedKbObj && linkedKbObj.id && !filtered.some((a) => String(a.id) === String(linkedKbObj.id))) {
+            filtered.unshift({
+              ...linkedKbObj,
+              isDirectLinked: true,
+            });
+          } else if (directKbId) {
+            filtered = filtered.map((a) => String(a.id) === String(directKbId) ? { ...a, isDirectLinked: true } : a);
+          }
+
           setProjectKbArticles(filtered);
         })
         .catch((err) => console.error("Error fetching project KB", err))
         .finally(() => setLoadingKb(false));
     }
-  }, [tab, project?.id, projectId]);
+  }, [tab, project?.id, project?.kb_id, project?.knowledge_base, project?.knowledgeBase, project?.tasks, projectId]);
 
   useEffect(() => {
     if (tab === "events" && (project?.id || projectId)) {
@@ -449,13 +471,60 @@ function ProjectDetails() {
         .then((r) => r.json())
         .then((d) => {
           const list = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
-          const filtered = list.filter((e) => String(e.project_id) === String(pId) || (e.visibility_level === "project_team" && String(e.project_id) === String(pId)));
+          const directEventId = project?.event_id || project?.event?.id;
+          const taskEventIds = Array.isArray(project?.tasks)
+            ? project.tasks.map((t) => t.event_id).filter(Boolean)
+            : [];
+
+          let filtered = list.filter((e) =>
+            String(e.project_id) === String(pId) ||
+            (e.visibility_level === "project_team" && String(e.project_id) === String(pId)) ||
+            (directEventId && String(e.id) === String(directEventId)) ||
+            taskEventIds.map(String).includes(String(e.id))
+          );
+
+          const linkedEventObj = project?.event;
+          if (linkedEventObj && linkedEventObj.id && !filtered.some((e) => String(e.id) === String(linkedEventObj.id))) {
+            filtered.unshift({
+              ...linkedEventObj,
+              isDirectLinked: true,
+            });
+          } else if (directEventId) {
+            filtered = filtered.map((e) => String(e.id) === String(directEventId) ? { ...e, isDirectLinked: true } : e);
+          }
+
           setProjectEvents(filtered);
         })
         .catch((err) => console.error("Error fetching project events", err))
         .finally(() => setLoadingProjectEvents(false));
     }
-  }, [tab, project?.id, projectId]);
+  }, [tab, project?.id, project?.event_id, project?.event, project?.tasks, projectId]);
+
+  useEffect(() => {
+    const token = authToken();
+    if (!token) return;
+    fetch(`${API_URL}/knowledge-base?all=1`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      skipLoader: true,
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => {
+        const list = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
+        setKbArticles(list);
+      })
+      .catch(() => {});
+
+    fetch(`${API_URL}/events?all=true`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      skipLoader: true,
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => {
+        const list = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
+        setEventsList(list);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const handleClickOutsideManager = (e) => {
@@ -1290,6 +1359,80 @@ function ProjectDetails() {
                 </div>
               </li>
             )}
+            {(() => {
+              const kbIds = Array.isArray(project?.kb_ids)
+                ? project.kb_ids
+                : project?.kb_id
+                ? [project.kb_id]
+                : [];
+              return (
+                <li>
+                  <span className="pd-meta-rows__ic">
+                    <BookOpen size={18} />
+                  </span>
+                  <div>
+                    <span className="pd-meta-rows__label">{t("Knowledge Base", { defaultValue: "Knowledge Base" })}</span>
+                    <span className="pd-meta-rows__value">
+                      {kbIds && kbIds.length > 0 ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                          {kbIds.map((kId) => {
+                            const foundKb = kbArticles.find((k) => String(k.id) === String(kId)) || projectKbArticles.find((k) => String(k.id) === String(kId));
+                            const kbTitle = foundKb?.title || `Article #${kId}`;
+                            return (
+                              <Link
+                                key={kId}
+                                to={rolePath ? rolePath(`knowledge-base/${kId}`) : `/knowledge-base/${kId}`}
+                                className="pd-meta-link"
+                              >
+                                <BookOpen size={14} style={{ flexShrink: 0 }} />
+                                <span>{kbTitle}</span>
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      ) : "—"}
+                    </span>
+                  </div>
+                </li>
+              );
+            })()}
+            {(() => {
+              const eventIds = Array.isArray(project?.event_ids)
+                ? project.event_ids
+                : project?.event_id
+                ? [project.event_id]
+                : [];
+              return (
+                <li>
+                  <span className="pd-meta-rows__ic">
+                    <CalendarDays size={18} />
+                  </span>
+                  <div>
+                    <span className="pd-meta-rows__label">{t("Event", { defaultValue: "Event" })}</span>
+                    <span className="pd-meta-rows__value">
+                      {eventIds && eventIds.length > 0 ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                          {eventIds.map((eId) => {
+                            const foundEv = eventsList.find((e) => String(e.id) === String(eId)) || projectEvents.find((e) => String(e.id) === String(eId));
+                            const eventTitle = foundEv?.title || `Event #${eId}`;
+                            return (
+                              <Link
+                                key={eId}
+                                to={rolePath ? rolePath(`events/${eId}`) : `/events/${eId}`}
+                                className="pd-meta-link"
+                              >
+                                <Calendar size={14} style={{ flexShrink: 0 }} />
+                                <span>{eventTitle}</span>
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      ) : "—"}
+                    </span>
+                  </div>
+                </li>
+              );
+            })()}
           </ul>
         </aside>
       </div>
@@ -1947,7 +2090,7 @@ function ProjectDetails() {
                               return (
                                 <div style={{ textAlign: "center", padding: "50px 20px", background: "var(--bg-card-subtle)", borderRadius: "10px", marginTop: "16px" }}>
                                   <BookOpen size={40} style={{ color: "#9ca3af", margin: "0 auto 10px" }} />
-                                  <h4 style={{ margin: "0 0 6px", fontSize: "15px", fontWeight: 600 }}>{t("No project documentation yet", { defaultValue: "No project documentation yet" })}</h4>
+                                  <h4 style={{ margin: "0 0 6px", fontSize: "15px", fontWeight: 600 }}>{t("No Knowledge Base linked to this project.", { defaultValue: "No Knowledge Base linked to this project." })}</h4>
                                   <p style={{ margin: "0 0 16px", fontSize: "13px", color: "var(--text-secondary)" }}>
                                     {t("Create and share SOPs, architectural guidelines, or deliverable checklists for this project.", { defaultValue: "Create and share SOPs, architectural guidelines, or deliverable checklists for this project." })}
                                   </p>
@@ -1964,49 +2107,66 @@ function ProjectDetails() {
 
                             return (
                               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "14px", marginTop: "18px" }}>
-                                {filteredKb.map((item) => (
-                                  <div
-                                    key={item.id}
-                                    style={{
-                                      padding: "16px",
-                                      borderRadius: "10px",
-                                      border: "1px solid var(--border-color)",
-                                      background: "var(--bg-card)",
-                                      display: "flex",
-                                      flexDirection: "column",
-                                      justifyContent: "space-between",
-                                      boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
-                                    }}
-                                  >
-                                    <div>
-                                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                                        <span style={{ fontSize: "11px", fontWeight: 600, color: "#2563eb", background: "#eff6ff", padding: "2px 8px", borderRadius: "4px" }}>
-                                          {item.categoryRelation?.name || item.category || t("General", { defaultValue: "General" })}
-                                        </span>
-                                        {item.views_count > 0 && (
-                                          <span style={{ fontSize: "11px", color: "var(--text-muted)", display: "inline-flex", alignItems: "center", gap: "3px" }}>
-                                            <Eye size={12} /> {item.views_count}
-                                          </span>
-                                        )}
+                                {filteredKb.map((item) => {
+                                  const isLinked = item.isDirectLinked || String(item.id) === String(project?.kb_id || project?.knowledge_base?.id || project?.knowledgeBase?.id);
+                                  return (
+                                    <div
+                                      key={item.id}
+                                      style={{
+                                        padding: "16px",
+                                        borderRadius: "10px",
+                                        border: isLinked ? "1px solid #93c5fd" : "1px solid var(--border-color)",
+                                        background: isLinked ? "var(--bg-card, #f8fafc)" : "var(--bg-card)",
+                                        display: "flex",
+                                        flexDirection: "column",
+                                        justifyContent: "space-between",
+                                        boxShadow: isLinked ? "0 2px 6px rgba(37,99,235,0.08)" : "0 1px 3px rgba(0,0,0,0.03)",
+                                      }}
+                                    >
+                                      <div>
+                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexWrap: "wrap", gap: "6px" }}>
+                                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                            <span style={{ fontSize: "11px", fontWeight: 600, color: "#2563eb", background: "#eff6ff", padding: "2px 8px", borderRadius: "4px" }}>
+                                              {item.categoryRelation?.name || item.category || t("General", { defaultValue: "General" })}
+                                            </span>
+                                            {isLinked && (
+                                              <span style={{ fontSize: "11px", fontWeight: 700, color: "#16a34a", background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "2px 8px", borderRadius: "4px" }}>
+                                                {t("Linked to Project", { defaultValue: "Linked to Project" })}
+                                              </span>
+                                            )}
+                                          </div>
+                                          {item.views_count > 0 && (
+                                            <span style={{ fontSize: "11px", color: "var(--text-muted)", display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                                              <Eye size={12} /> {item.views_count}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <h4 style={{ margin: "0 0 6px", fontSize: "15px", fontWeight: 600 }}>
+                                          <Link
+                                            to={rolePath ? rolePath(`knowledge-base/${item.id}`) : `/knowledge-base/${item.id}`}
+                                            style={{ color: "var(--text-primary, #111827)", textDecoration: "none" }}
+                                            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-primary, #2563eb)")}
+                                            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-primary, #111827)")}
+                                          >
+                                            {item.title}
+                                          </Link>
+                                        </h4>
+                                        <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "12px" }}>
+                                          {t("By {{author}} on {{date}}", { author: item.creator?.name || t("Team Member", { defaultValue: "Team Member" }), date: new Date(item.updated_at || item.created_at).toLocaleDateString(), defaultValue: `By ${item.creator?.name || "Team Member"} on ${new Date(item.updated_at || item.created_at).toLocaleDateString()}` })}
+                                        </div>
                                       </div>
-                                      <h4 style={{ margin: "0 0 6px", fontSize: "15px", fontWeight: 600, color: "var(--text-primary)" }}>
-                                        {item.title}
-                                      </h4>
-                                      <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "12px" }}>
-                                        {t("By {{author}} on {{date}}", { author: item.creator?.name || t("Team Member", { defaultValue: "Team Member" }), date: new Date(item.updated_at || item.created_at).toLocaleDateString(), defaultValue: `By ${item.creator?.name || "Team Member"} on ${new Date(item.updated_at || item.created_at).toLocaleDateString()}` })}
+                                      <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", borderTop: "1px solid var(--border-color)", paddingTop: "10px" }}>
+                                        <button
+                                          type="button"
+                                          onClick={() => navigate(rolePath(`knowledge-base/${item.id}`))}
+                                          style={{ padding: "5px 12px", borderRadius: "6px", background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                                        >
+                                          {t("View Article", { defaultValue: "View Article" })}
+                                        </button>
                                       </div>
                                     </div>
-                                    <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", borderTop: "1px solid var(--border-color)", paddingTop: "10px" }}>
-                                      <button
-                                        type="button"
-                                        onClick={() => navigate(rolePath(`knowledge-base/edit/${item.id}`))}
-                                        style={{ padding: "5px 12px", borderRadius: "6px", background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
-                                      >
-                                        {t("Edit / View", { defaultValue: "Edit / View" })}
-                                      </button>
-                                    </div>
-                                  </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             );
                           })()}
@@ -2065,7 +2225,7 @@ function ProjectDetails() {
                               return (
                                 <div style={{ textAlign: "center", padding: "50px 20px", background: "var(--bg-card-subtle)", borderRadius: "10px", marginTop: "16px" }}>
                                   <Calendar size={40} style={{ color: "#9ca3af", margin: "0 auto 10px" }} />
-                                  <h4 style={{ margin: "0 0 6px", fontSize: "15px", fontWeight: 600 }}>{t("No project events scheduled", { defaultValue: "No project events scheduled" })}</h4>
+                                  <h4 style={{ margin: "0 0 6px", fontSize: "15px", fontWeight: 600 }}>{t("No Events linked to this project.", { defaultValue: "No Events linked to this project." })}</h4>
                                   <p style={{ margin: "0 0 16px", fontSize: "13px", color: "var(--text-secondary)" }}>
                                     {t("Schedule sprint meetings, demo sessions, and release deadlines for this project.", { defaultValue: "Schedule sprint meetings, demo sessions, and release deadlines for this project." })}
                                   </p>
@@ -2085,6 +2245,7 @@ function ProjectDetails() {
                                 {filteredEv.map((ev) => {
                                   const dateStr = ev.start_date ? new Date(ev.start_date).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) : t("Scheduled", { defaultValue: "Scheduled" });
                                   const timeStr = ev.start_date && !ev.all_day ? new Date(ev.start_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : (ev.all_day ? t("All Day", { defaultValue: "All Day" }) : "");
+                                  const isLinked = ev.isDirectLinked || String(ev.id) === String(project?.event_id || project?.event?.id);
 
                                   return (
                                     <div
@@ -2092,25 +2253,39 @@ function ProjectDetails() {
                                       style={{
                                         padding: "16px",
                                         borderRadius: "10px",
-                                        border: "1px solid var(--border-color)",
-                                        background: "var(--bg-card)",
+                                        border: isLinked ? "1px solid #93c5fd" : "1px solid var(--border-color)",
+                                        background: isLinked ? "var(--bg-card, #f8fafc)" : "var(--bg-card)",
                                         display: "flex",
                                         flexDirection: "column",
                                         justifyContent: "space-between",
-                                        boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                                        boxShadow: isLinked ? "0 2px 6px rgba(37,99,235,0.08)" : "0 1px 3px rgba(0,0,0,0.03)",
                                       }}
                                     >
                                       <div>
-                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                                          <span style={{ fontSize: "11px", fontWeight: 600, color: ev.category?.color || "#2563eb", background: "#eff6ff", padding: "2px 8px", borderRadius: "4px" }}>
-                                            {ev.category?.name || ev.type || t("Event", { defaultValue: "Event" })}
-                                          </span>
+                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexWrap: "wrap", gap: "6px" }}>
+                                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                            <span style={{ fontSize: "11px", fontWeight: 600, color: ev.category?.color || "#2563eb", background: "#eff6ff", padding: "2px 8px", borderRadius: "4px" }}>
+                                              {ev.category?.name || ev.type || t("Event", { defaultValue: "Event" })}
+                                            </span>
+                                            {isLinked && (
+                                              <span style={{ fontSize: "11px", fontWeight: 700, color: "#16a34a", background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "2px 8px", borderRadius: "4px" }}>
+                                                {t("Linked to Project", { defaultValue: "Linked to Project" })}
+                                              </span>
+                                            )}
+                                          </div>
                                           <span style={{ fontSize: "11px", color: "var(--text-muted)", display: "inline-flex", alignItems: "center", gap: "4px" }}>
                                             <Clock size={12} /> {timeStr || dateStr}
                                           </span>
                                         </div>
-                                        <h4 style={{ margin: "0 0 6px", fontSize: "15px", fontWeight: 600, color: "var(--text-primary)" }}>
-                                          {ev.title}
+                                        <h4 style={{ margin: "0 0 6px", fontSize: "15px", fontWeight: 600 }}>
+                                          <Link
+                                            to={rolePath ? rolePath(`events/${ev.id}`) : `/events/${ev.id}`}
+                                            style={{ color: "var(--text-primary, #111827)", textDecoration: "none" }}
+                                            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-primary, #2563eb)")}
+                                            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-primary, #111827)")}
+                                          >
+                                            {ev.title}
+                                          </Link>
                                         </h4>
                                         <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "10px" }}>
                                           📅 {dateStr}
@@ -2124,10 +2299,10 @@ function ProjectDetails() {
                                       <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", borderTop: "1px solid var(--border-color)", paddingTop: "10px" }}>
                                         <button
                                           type="button"
-                                          onClick={() => navigate(rolePath(`events/edit/${ev.id}`))}
+                                          onClick={() => navigate(rolePath(`events/${ev.id}`))}
                                           style={{ padding: "5px 12px", borderRadius: "6px", background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
                                         >
-                                          {t("Edit / View", { defaultValue: "Edit / View" })}
+                                          {t("View Event", { defaultValue: "View Event" })}
                                         </button>
                                       </div>
                                     </div>

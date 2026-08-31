@@ -34,6 +34,8 @@ class ProjectResource extends JsonResource
             'guest_ids' => $this->guest_ids ?? [],
             'category' => $this->category,
             'budget' => $this->budget,
+            'kb_ids' => $this->kb_ids ?? [],
+            'event_ids' => $this->event_ids ?? [],
             'start_date' => $this->start_date?->format('Y-m-d\TH:i:s'),
             'end_date' => $this->end_date?->format('Y-m-d\TH:i:s'),
             'active_deadline' => $this->active_deadline?->format('Y-m-d\TH:i:s'),

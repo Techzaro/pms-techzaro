@@ -22,6 +22,7 @@ import {
   Info,
   Laptop,
   Activity,
+  Loader2,
 } from "lucide-react";
 import WorkingHoursScheduleEditor from "../components/WorkingHoursScheduleEditor";
 import {
@@ -177,19 +178,6 @@ export default function RegionalSettings() {
         // Invalidate query caches for instant UI updates across the entire app
         queryClient.invalidateQueries();
 
-        // Trigger activity logging for regional settings
-        const u = getUser();
-        try {
-          await api.post("/activity-logs", {
-            module: "regional_settings",
-            action: "Configuration Changed",
-            entity_type: "regional_settings",
-            entity_id: u?.id || null,
-            title: "Regional Settings Updated",
-            description: `<p>Updated timezone to <strong>${timezone}</strong>, language to <strong>${language}</strong>, date format to <strong>${dateFormat}</strong>, and time format to <strong>${timeFormat}</strong>.</p>`,
-          });
-        } catch (_) {}
-
         // Increment key so Activity tab updates immediately
         setActivityKey((k) => k + 1);
 
@@ -262,8 +250,9 @@ export default function RegionalSettings() {
         {tab === "settings" && (
           <>
             {loading ? (
-              <div className="rs-card" style={{ textAlign: "center", padding: "60px 20px" }}>
-                <p style={{ color: "var(--text-secondary)" }}>{t("Saving...", { defaultValue: "Saving..." })}</p>
+              <div className="rs-card" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 20px", gap: "12px", textAlign: "center" }}>
+                <Loader2 size={28} className="animate-spin" style={{ color: "#4f46e5" }} />
+                <p style={{ color: "var(--text-secondary)", fontSize: "14px", margin: 0 }}>{t("Loading settings...", { defaultValue: "Loading settings..." })}</p>
               </div>
             ) : (
               <form onSubmit={handleSave}>
@@ -440,7 +429,7 @@ export default function RegionalSettings() {
                     className="rs-btn-save"
                     disabled={saving}
                   >
-                    <Save size={16} />
+                    {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                     {saving ? t("Saving...", { defaultValue: "Saving..." }) : t("Save Regional Settings", { defaultValue: "Save Regional Settings" })}
                   </button>
                 </div>

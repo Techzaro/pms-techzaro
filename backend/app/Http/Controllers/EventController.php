@@ -4,22 +4,27 @@ namespace App\Http\Controllers;
 
 use App\Models\Deliverable;
 use App\Models\Event;
+use App\Models\EventAttachment;
 use App\Models\EventParticipant;
+use App\Models\EventReminder;
 use App\Models\EventVisibility;
 use App\Models\Notification;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\Team;
 use App\Models\User;
+use App\Notifications\EventNotification;
 use App\Services\ActivityService;
 use App\Services\AuditService;
 use App\Services\NotificationService;
+use App\Services\StorageDiskResolver;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class EventController extends Controller
 {
@@ -35,7 +40,7 @@ class EventController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
-        $isAdmin = in_array($user->role, ['admin', 'manager']);
+        $isAdmin = in_array($user->role, ['admin', 'manager', 'superadmin']);
 
         // User's teams
         $userTeamIds = Team::whereHas('members', fn ($q) => $q->where('users.id', $user->id))
@@ -52,31 +57,28 @@ class EventController extends Controller
             'participants.user:id,name,email,role,avatar',
             'visibilities.team:id,name',
             'visibilities.user:id,name',
+            'reminders',
+            'attachments',
         ])->latest('start_date');
 
         // Strictly apply tiered visibility rules
         if (!$isAdmin) {
             $query->where(function ($q) use ($user, $userTeamIds, $userDept) {
-                // Creator or Organizer
                 $q->where('user_id', $user->id)
+                    ->orWhere('created_by', $user->id)
                     ->orWhere('organizer_id', $user->id)
-                    // Global / Organization
                     ->orWhere('is_global', true)
                     ->orWhere('visibility_level', 'organization')
-                    // Department
                     ->orWhere(function ($dq) use ($userDept) {
                         $dq->where('visibility_level', 'department_team')
-        ->whereHas('visibilities', fn ($vq) => $vq->where('department', $userDept)->where('is_visible', true));
+                            ->whereHas('visibilities', fn ($vq) => $vq->where('department', $userDept)->where('is_visible', true));
                     })
-                    // Assigned or Participant
                     ->orWhereHas('assignedUsers', fn ($aq) => $aq->where('user_id', $user->id))
                     ->orWhereHas('participants', fn ($pq) => $pq->where('user_id', $user->id))
-                    // Team Visibility
                     ->orWhere(function ($tq) use ($userTeamIds) {
                         $tq->where('visibility_level', 'team')
                             ->whereHas('visibilities', fn ($vq) => $vq->whereIn('team_id', $userTeamIds)->where('is_visible', true));
                     })
-                    // Custom Granular Visibility
                     ->orWhere(function ($cq) use ($user, $userTeamIds, $userDept) {
                         $cq->where('visibility_level', 'custom')
                             ->whereHas('visibilities', function ($vq) use ($user, $userTeamIds, $userDept) {
@@ -103,6 +105,10 @@ class EventController extends Controller
             }
         }
 
+        if ($request->filled('status') && $request->input('status') !== 'all') {
+            $query->where('status', $request->input('status'));
+        }
+
         if ($request->filled('category_id') && $request->input('category_id') !== 'all') {
             $query->where('category_id', $request->input('category_id'));
         }
@@ -118,7 +124,6 @@ class EventController extends Controller
         }
 
         if ($request->filled('month')) {
-            // e.g. YYYY-MM
             $month = $request->input('month');
             $query->where('start_date', 'like', "{$month}%");
         }
@@ -143,7 +148,7 @@ class EventController extends Controller
     public function show(Event $event): JsonResponse
     {
         $user = request()->user();
-        $isAdmin = in_array($user->role, ['admin', 'manager']);
+        $isAdmin = in_array($user->role, ['admin', 'manager', 'superadmin']);
 
         $event->load([
             'category:id,name,slug,color,icon',
@@ -153,22 +158,26 @@ class EventController extends Controller
             'participants.user:id,name,email,role,avatar',
             'visibilities.team:id,name',
             'visibilities.user:id,name',
+            'reminders',
+            'attachments.user:id,name',
         ]);
 
         if (!$isAdmin) {
             $isAssigned = $event->assignedUsers->contains('id', $user->id);
             $isParticipant = $event->participants->contains('user_id', $user->id);
-            $isCreator = ($event->user_id === $user->id) || ($event->organizer_id === $user->id);
+            $isCreator = ($event->user_id === $user->id) || ($event->created_by === $user->id) || ($event->organizer_id === $user->id);
 
-            if (!$event->is_global && $event->visibility_level === 'private' && !$isCreator) {
+            if (!$event->is_global && $event->visibility_level === 'private' && !$isCreator && !$isAssigned && !$isParticipant) {
                 return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
             }
         }
 
+        $formatted = $this->formatEventResponse($event);
+
         return response()->json([
             'success' => true,
-            'event' => $this->formatEventResponse($event),
-            'data' => $this->formatEventResponse($event),
+            'event' => $formatted,
+            'data' => $formatted,
         ]);
     }
 
@@ -179,8 +188,8 @@ class EventController extends Controller
     {
         $user = $request->user();
 
-        // Support JSON string parsing for arrays if passed as form-data
-        foreach (['participant_user_ids', 'assigned_user_ids', 'attendee_ids', 'team_ids', 'user_ids'] as $f) {
+        // Support JSON string parsing for array inputs if passed as multipart form-data
+        foreach (['participant_user_ids', 'assigned_user_ids', 'attendee_ids', 'team_ids', 'user_ids', 'reminders'] as $f) {
             if (is_string($request->input($f))) {
                 $decoded = json_decode($request->input($f), true);
                 if (is_array($decoded)) {
@@ -197,6 +206,8 @@ class EventController extends Controller
             'color' => 'nullable|string|max:32',
             'start_date' => 'required|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
+            'start_time' => 'nullable|string',
+            'end_time' => 'nullable|string',
             'all_day' => 'nullable|boolean',
             'is_global' => 'nullable|boolean',
             'visibility_level' => 'nullable|string|max:32',
@@ -215,9 +226,15 @@ class EventController extends Controller
             'team_ids.*' => 'integer|exists:teams,id',
             'user_ids' => 'nullable|array',
             'user_ids.*' => 'integer|exists:users,id',
+            'reminders' => 'nullable|array',
+            'reminders.*.value' => 'required_with:reminders|integer|min:1',
+            'reminders.*.unit' => 'required_with:reminders|string|in:minutes,hours,days,minute,hour,day',
+            'reminders.*.user_id' => 'nullable|integer|exists:users,id',
+            'attachments' => 'nullable|array',
+            'attachments.*' => 'file|max:51200', // 50MB per file
         ]);
 
-        $event = DB::transaction(function () use ($user, $validated) {
+        $event = DB::transaction(function () use ($user, $validated, $request) {
             $type = $validated['type'] ?? 'Meeting';
             $isAnnouncement = in_array(strtolower($type), ['announcement', 'company announcement']);
             $visibilityLevel = $validated['visibility_level'] ?? 'organization';
@@ -225,6 +242,7 @@ class EventController extends Controller
 
             $createdEvent = Event::create([
                 'user_id' => $user->id,
+                'created_by' => $user->id,
                 'organizer_id' => $validated['organizer_id'] ?? $user->id,
                 'title' => $validated['title'],
                 'description' => $validated['description'] ?? null,
@@ -233,6 +251,8 @@ class EventController extends Controller
                 'color' => $validated['color'] ?? null,
                 'start_date' => $validated['start_date'],
                 'end_date' => $validated['end_date'] ?? $validated['start_date'],
+                'start_time' => $validated['start_time'] ?? null,
+                'end_time' => $validated['end_time'] ?? null,
                 'all_day' => $validated['all_day'] ?? false,
                 'is_global' => $isGlobal,
                 'visibility_level' => $visibilityLevel,
@@ -277,24 +297,75 @@ class EventController extends Controller
                 }
             }
 
+            // Sync dynamic reminders
+            if (!empty($validated['reminders'])) {
+                foreach ($validated['reminders'] as $rem) {
+                    $unit = strtolower(rtrim($rem['unit'] ?? 'minutes', 's')) . 's';
+                    if (!in_array($unit, ['minutes', 'hours', 'days'])) {
+                        $unit = 'minutes';
+                    }
+                    EventReminder::create([
+                        'event_id' => $createdEvent->id,
+                        'user_id' => $rem['user_id'] ?? null,
+                        'value' => (int) ($rem['value'] ?? 15),
+                        'unit' => $unit,
+                        'is_sent' => false,
+                    ]);
+                }
+            }
+
+            // Handle uploaded attachments if any
+            if ($request->hasFile('attachments')) {
+                $org = $request->attributes->get('currentOrganization');
+                foreach ($request->file('attachments') as $file) {
+                    if (!$file || !$file->isValid()) continue;
+
+                    $origName = $file->getClientOriginalName();
+                    $storedPath = $org
+                        ? StorageDiskResolver::store($org, $file, 'events', $origName)
+                        : $file->store('events/' . date('Y/m'), 'public');
+
+                    EventAttachment::create([
+                        'event_id' => $createdEvent->id,
+                        'user_id' => $user->id,
+                        'file_name' => $origName,
+                        'file_path' => $storedPath,
+                        'file_size' => $file->getSize() ?: 0,
+                        'mime_type' => $file->getClientMimeType(),
+                    ]);
+                }
+            }
+
             return $createdEvent;
         });
 
-        // Notifications & Audit Logging (Safe)
+        // Granular Logging & Notifications
         try {
-            $this->sendBulkEventNotification($event, $user, 'event_created', 'Event Assigned');
-            $this->activityService->log($user->id, 'event_created', "Created event '{$event->title}'", 'event', $event->id);
+            $this->activityService->log(
+                userId: $user->id,
+                activityType: 'event_created',
+                description: "Created event '{$event->title}'",
+                module: 'event',
+                relatedId: $event->id,
+                action: 'event_created',
+                entityName: $event->title,
+                relatedUserId: null,
+                metadata: ['type' => $event->type, 'start_date' => $event->start_date]
+            );
+
             $this->auditService->log(
                 module: 'event_management',
-                action: 'create',
+                action: 'event_created',
                 description: "Created event {$event->title}",
                 user: $user,
                 entityType: 'Event',
                 entityId: $event->id,
                 status: 'success'
             );
+
+            $this->sendBulkEventNotification($event, $user, 'event_created', 'New Event Scheduled');
         } catch (\Throwable $e) {
-            Log::error('Event post-create notification error: ' . $e->getMessage());
+            Log::error('Event post-create logging error: ' . $e->getMessage());
         }
 
         $formatted = $this->formatEventResponse($event->fresh([
@@ -304,6 +375,8 @@ class EventController extends Controller
             'assignedUsers',
             'participants.user',
             'visibilities',
+            'reminders',
+            'attachments.user',
         ]));
 
         return response()->json([
@@ -320,12 +393,12 @@ class EventController extends Controller
     public function update(Request $request, Event $event): JsonResponse
     {
         $user = $request->user();
-        $isAdmin = in_array($user->role, ['admin', 'manager']);
-        if (!$isAdmin && $event->user_id !== $user->id && $event->organizer_id !== $user->id) {
+        $isAdmin = in_array($user->role, ['admin', 'manager', 'superadmin']);
+        if (!$isAdmin && $event->user_id !== $user->id && $event->created_by !== $user->id && $event->organizer_id !== $user->id) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
-        foreach (['participant_user_ids', 'assigned_user_ids', 'attendee_ids', 'team_ids', 'user_ids'] as $f) {
+        foreach (['participant_user_ids', 'assigned_user_ids', 'attendee_ids', 'team_ids', 'user_ids', 'reminders'] as $f) {
             if (is_string($request->input($f))) {
                 $decoded = json_decode($request->input($f), true);
                 if (is_array($decoded)) {
@@ -342,6 +415,8 @@ class EventController extends Controller
             'color' => 'sometimes|nullable|string|max:32',
             'start_date' => 'sometimes|required|date',
             'end_date' => 'sometimes|nullable|date|after_or_equal:start_date',
+            'start_time' => 'sometimes|nullable|string',
+            'end_time' => 'sometimes|nullable|string',
             'all_day' => 'sometimes|nullable|boolean',
             'is_global' => 'sometimes|boolean',
             'visibility_level' => 'sometimes|nullable|string|max:32',
@@ -360,9 +435,15 @@ class EventController extends Controller
             'team_ids.*' => 'integer|exists:teams,id',
             'user_ids' => 'nullable|array',
             'user_ids.*' => 'integer|exists:users,id',
+            'reminders' => 'nullable|array',
+            'reminders.*.value' => 'required_with:reminders|integer|min:1',
+            'reminders.*.unit' => 'required_with:reminders|string|in:minutes,hours,days,minute,hour,day',
+            'reminders.*.user_id' => 'nullable|integer|exists:users,id',
+            'attachments' => 'nullable|array',
+            'attachments.*' => 'file|max:51200',
         ]);
 
-        DB::transaction(function () use ($event, $validated) {
+        DB::transaction(function () use ($event, $validated, $request, $user) {
             $event->update([
                 'title' => $validated['title'] ?? $event->title,
                 'description' => $validated['description'] ?? $event->description,
@@ -371,6 +452,8 @@ class EventController extends Controller
                 'color' => $validated['color'] ?? $event->color,
                 'start_date' => $validated['start_date'] ?? $event->start_date,
                 'end_date' => $validated['end_date'] ?? $event->end_date,
+                'start_time' => $validated['start_time'] ?? $event->start_time,
+                'end_time' => $validated['end_time'] ?? $event->end_time,
                 'all_day' => $validated['all_day'] ?? $event->all_day,
                 'is_global' => $validated['is_global'] ?? $event->is_global,
                 'visibility_level' => $validated['visibility_level'] ?? $event->visibility_level,
@@ -380,8 +463,8 @@ class EventController extends Controller
                 'organizer_id' => $validated['organizer_id'] ?? $event->organizer_id,
             ]);
 
-            // Sync participants if field provided
-            if (array_key_exists('participant_user_ids', $validated) || array_key_exists('assigned_user_ids', $validated) || array_key_exists('user_ids', $validated)) {
+            // Sync participants if provided
+            if (array_key_exists('participant_user_ids', $validated) || array_key_exists('assigned_user_ids', $validated) || array_key_exists('attendee_ids', $validated) || array_key_exists('user_ids', $validated)) {
                 $participantIds = $validated['attendee_ids'] ?? ($validated['participant_user_ids'] ?? ($validated['assigned_user_ids'] ?? ($validated['user_ids'] ?? [])));
                 if ($event->is_global) {
                     $event->assignedUsers()->detach();
@@ -422,11 +505,83 @@ class EventController extends Controller
                     }
                 }
             }
+
+            // Sync dynamic reminders if provided
+            if (array_key_exists('reminders', $validated)) {
+                EventReminder::where('event_id', $event->id)->delete();
+                if (!empty($validated['reminders'])) {
+                    foreach ($validated['reminders'] as $rem) {
+                        $unit = strtolower(rtrim($rem['unit'] ?? 'minutes', 's')) . 's';
+                        if (!in_array($unit, ['minutes', 'hours', 'days'])) {
+                            $unit = 'minutes';
+                        }
+                        EventReminder::create([
+                            'event_id' => $event->id,
+                            'user_id' => $rem['user_id'] ?? null,
+                            'value' => (int) ($rem['value'] ?? 15),
+                            'unit' => $unit,
+                            'is_sent' => false,
+                        ]);
+                    }
+                }
+            }
+
+            // Upload new attachments if any
+            if ($request->hasFile('attachments')) {
+                $org = $request->attributes->get('currentOrganization');
+                foreach ($request->file('attachments') as $file) {
+                    if (!$file || !$file->isValid()) continue;
+
+                    $origName = $file->getClientOriginalName();
+                    $storedPath = $org
+                        ? StorageDiskResolver::store($org, $file, 'events', $origName)
+                        : $file->store('events/' . date('Y/m'), 'public');
+
+                    EventAttachment::create([
+                        'event_id' => $event->id,
+                        'user_id' => $user->id,
+                        'file_name' => $origName,
+                        'file_path' => $storedPath,
+                        'file_size' => $file->getSize() ?: 0,
+                        'mime_type' => $file->getClientMimeType(),
+                    ]);
+
+                    $this->activityService->log(
+                        userId: $user->id,
+                        activityType: 'event_attachment_added',
+                        description: "Uploaded attachment '{$origName}' to event '{$event->title}'",
+                        module: 'event',
+                        relatedId: $event->id,
+                        action: 'event_attachment_added',
+                        entityName: $origName
+                    );
+                }
+            }
         });
 
+        // Granular Logging & Notifications
         try {
+            $this->activityService->log(
+                userId: $user->id,
+                activityType: 'event_updated',
+                description: "Updated event '{$event->title}'",
+                module: 'event',
+                relatedId: $event->id,
+                action: 'event_updated',
+                entityName: $event->title
+            );
+
+            $this->auditService->log(
+                module: 'event_management',
+                action: 'event_updated',
+                description: "Updated event {$event->title}",
+                user: $user,
+                entityType: 'Event',
+                entityId: $event->id,
+                status: 'success'
+            );
+
             $this->sendBulkEventNotification($event, $user, 'event_updated', 'Event Updated');
-            $this->activityService->log($user->id, 'event_updated', "You updated event '{$event->title}'", 'event', $event->id);
         } catch (\Throwable $e) {
             Log::error('Event post-update notification error: ' . $e->getMessage());
         }
@@ -438,6 +593,8 @@ class EventController extends Controller
             'assignedUsers',
             'participants.user',
             'visibilities',
+            'reminders',
+            'attachments.user',
         ]));
 
         return response()->json([
@@ -449,22 +606,97 @@ class EventController extends Controller
     }
 
     /**
-     * Delete a calendar event with DB transaction.
+     * Cancel an event.
+     */
+    public function cancel(Request $request, Event $event): JsonResponse
+    {
+        $user = $request->user();
+        $isAdmin = in_array($user->role, ['admin', 'manager', 'superadmin']);
+        if (!$isAdmin && $event->user_id !== $user->id && $event->created_by !== $user->id && $event->organizer_id !== $user->id) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $event->update(['status' => 'cancelled']);
+
+        try {
+            $this->activityService->log(
+                userId: $user->id,
+                activityType: 'event_cancelled',
+                description: "Cancelled event '{$event->title}'",
+                module: 'event',
+                relatedId: $event->id,
+                action: 'event_cancelled',
+                entityName: $event->title
+            );
+
+            $this->auditService->log(
+                module: 'event_management',
+                action: 'event_cancelled',
+                description: "Cancelled event {$event->title}",
+                user: $user,
+                entityType: 'Event',
+                entityId: $event->id,
+                status: 'success'
+            );
+
+            $this->sendBulkEventNotification($event, $user, 'event_cancelled', 'Event Cancelled');
+        } catch (\Throwable $e) {
+            Log::error('Event cancel logging error: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Event cancelled successfully',
+            'data' => $this->formatEventResponse($event->fresh()),
+        ]);
+    }
+
+    /**
+     * Delete a calendar event.
      */
     public function destroy(Event $event): JsonResponse
     {
         $user = request()->user();
-        $isAdmin = in_array($user->role, ['admin', 'manager']);
-        if (!$isAdmin && $event->user_id !== $user->id && $event->organizer_id !== $user->id) {
+        $isAdmin = in_array($user->role, ['admin', 'manager', 'superadmin']);
+        if (!$isAdmin && $event->user_id !== $user->id && $event->created_by !== $user->id && $event->organizer_id !== $user->id) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
+        $eventTitle = $event->title;
+        $eventId = $event->id;
+
         DB::transaction(function () use ($event) {
+            EventReminder::where('event_id', $event->id)->delete();
+            EventAttachment::where('event_id', $event->id)->delete();
             EventParticipant::where('event_id', $event->id)->delete();
             EventVisibility::where('event_id', $event->id)->delete();
             $event->assignedUsers()->detach();
             $event->delete();
         });
+
+        try {
+            $this->activityService->log(
+                userId: $user->id,
+                activityType: 'event_deleted',
+                description: "Deleted event '{$eventTitle}'",
+                module: 'event',
+                relatedId: $eventId,
+                action: 'event_deleted',
+                entityName: $eventTitle
+            );
+
+            $this->auditService->log(
+                module: 'event_management',
+                action: 'event_deleted',
+                description: "Deleted event {$eventTitle}",
+                user: $user,
+                entityType: 'Event',
+                entityId: $eventId,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            Log::error('Event delete logging error: ' . $e->getMessage());
+        }
 
         return response()->json([
             'success' => true,
@@ -473,11 +705,279 @@ class EventController extends Controller
     }
 
     /**
+     * Add participants to an event.
+     */
+    public function addParticipants(Request $request, Event $event): JsonResponse
+    {
+        $currentUser = $request->user();
+        $validated = $request->validate([
+            'user_ids' => 'required|array',
+            'user_ids.*' => 'integer|exists:users,id',
+        ]);
+
+        $addedUsers = [];
+        foreach ($validated['user_ids'] as $uId) {
+            $targetUser = User::find($uId);
+            if (!$targetUser) continue;
+
+            $event->assignedUsers()->syncWithoutDetaching([$uId]);
+            EventParticipant::firstOrCreate(
+                ['event_id' => $event->id, 'user_id' => $uId],
+                ['status' => 'invited', 'attended' => false]
+            );
+
+            $addedUsers[] = $targetUser;
+
+            // Granular log per participant added
+            $this->activityService->log(
+                userId: $currentUser->id,
+                activityType: 'event_participant_added',
+                description: "Added {$targetUser->name} to event '{$event->title}'",
+                module: 'event',
+                relatedId: $event->id,
+                action: 'event_participant_added',
+                entityName: $targetUser->name,
+                relatedUserId: $targetUser->id
+            );
+
+            // Notify added user
+            try {
+                Notification::create([
+                    'user_id' => $targetUser->id,
+                    'sender_user_id' => $currentUser->id,
+                    'type' => 'event_participant_added',
+                    'related_module' => 'event',
+                    'related_id' => $event->id,
+                    'title' => "Added to Event: {$event->title}",
+                    'message' => "You were added as a participant to '{$event->title}'.",
+                    'link' => "/events/{$event->id}",
+                ]);
+            } catch (\Throwable $e) {}
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Participants added successfully.',
+            'data' => $this->formatEventResponse($event->fresh([
+                'assignedUsers',
+                'participants.user',
+            ])),
+        ]);
+    }
+
+    /**
+     * Remove a participant from an event.
+     */
+    public function removeParticipant(Request $request, Event $event, User $user): JsonResponse
+    {
+        $currentUser = $request->user();
+
+        $event->assignedUsers()->detach($user->id);
+        EventParticipant::where('event_id', $event->id)->where('user_id', $user->id)->delete();
+
+        $this->activityService->log(
+            userId: $currentUser->id,
+            activityType: 'event_participant_removed',
+            description: "Removed {$user->name} from event '{$event->title}'",
+            module: 'event',
+            relatedId: $event->id,
+            action: 'event_participant_removed',
+            entityName: $user->name,
+            relatedUserId: $user->id
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => "Participant {$user->name} removed successfully.",
+            'data' => $this->formatEventResponse($event->fresh([
+                'assignedUsers',
+                'participants.user',
+            ])),
+        ]);
+    }
+
+    /**
+     * Upload an attachment to an event.
+     */
+    public function uploadAttachment(Request $request, Event $event): JsonResponse
+    {
+        $user = $request->user();
+        $request->validate([
+            'file' => 'required|file|max:51200', // 50MB max
+        ]);
+
+        $file = $request->file('file');
+        $origName = $file->getClientOriginalName();
+        $org = $request->attributes->get('currentOrganization');
+
+        $storedPath = $org
+            ? StorageDiskResolver::store($org, $file, 'events', $origName)
+            : $file->store('events/' . date('Y/m'), 'public');
+
+        $attachment = EventAttachment::create([
+            'event_id' => $event->id,
+            'user_id' => $user->id,
+            'file_name' => $origName,
+            'file_path' => $storedPath,
+            'file_size' => $file->getSize() ?: 0,
+            'mime_type' => $file->getClientMimeType(),
+        ]);
+
+        $this->activityService->log(
+            userId: $user->id,
+            activityType: 'event_attachment_added',
+            description: "Uploaded attachment '{$origName}' to event '{$event->title}'",
+            module: 'event',
+            relatedId: $event->id,
+            action: 'event_attachment_added',
+            entityName: $origName
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Attachment uploaded successfully.',
+            'data' => $attachment->load('user:id,name'),
+        ], 201);
+    }
+
+    /**
+     * Delete an attachment from an event.
+     */
+    public function deleteAttachment(Request $request, Event $event, EventAttachment $attachment): JsonResponse
+    {
+        $user = $request->user();
+
+        if ($attachment->event_id !== $event->id) {
+            return response()->json(['success' => false, 'message' => 'Attachment does not belong to this event.'], 400);
+        }
+
+        $fileName = $attachment->file_name;
+        $org = $request->attributes->get('currentOrganization');
+
+        if ($org) {
+            StorageDiskResolver::delete($org, $attachment->file_path);
+        } else {
+            Storage::disk('public')->delete(ltrim($attachment->file_path, '/'));
+        }
+
+        $attachment->delete();
+
+        $this->activityService->log(
+            userId: $user->id,
+            activityType: 'event_attachment_removed',
+            description: "Removed attachment '{$fileName}' from event '{$event->title}'",
+            module: 'event',
+            relatedId: $event->id,
+            action: 'event_attachment_removed',
+            entityName: $fileName
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Attachment deleted successfully.',
+        ]);
+    }
+
+    /**
+     * Download an attachment from an event.
+     */
+    public function downloadAttachment(Request $request, Event $event, EventAttachment $attachment)
+    {
+        if ($attachment->event_id !== $event->id) {
+            return response()->json(['success' => false, 'message' => 'Attachment does not belong to this event.'], 400);
+        }
+
+        $user = $request->user();
+        $org = $request->attributes->get('currentOrganization');
+
+        if ($user) {
+            $this->activityService->log(
+                userId: $user->id,
+                activityType: 'event_attachment_downloaded',
+                description: "Downloaded attachment '{$attachment->file_name}' from event '{$event->title}'",
+                module: 'event',
+                relatedId: $event->id,
+                action: 'event_attachment_downloaded',
+                entityName: $attachment->file_name
+            );
+        }
+
+        if ($org) {
+            return StorageDiskResolver::download($org, $attachment->file_path, $attachment->file_name);
+        }
+
+        $cleanPath = ltrim($attachment->file_path, '/');
+        if (str_starts_with($cleanPath, 'storage/')) {
+            $cleanPath = substr($cleanPath, 8);
+        }
+
+        if (Storage::disk('public')->exists($cleanPath)) {
+            return Storage::disk('public')->download($cleanPath, $attachment->file_name);
+        }
+
+        if (file_exists(storage_path('app/public/' . $cleanPath))) {
+            return response()->download(storage_path('app/public/' . $cleanPath), $attachment->file_name);
+        }
+
+        return response()->json(['success' => false, 'message' => 'Attachment file not found on disk.'], 404);
+    }
+
+    /**
+     * RSVP to an event or acknowledge an announcement.
+     */
+    public function rsvp(Request $request, Event $event): JsonResponse
+    {
+        $user = $request->user();
+        $validated = $request->validate([
+            'status' => 'required|string|in:accepted,declined,tentative,acknowledged,attended',
+            'response_notes' => 'nullable|string|max:1000',
+        ]);
+
+        $participant = EventParticipant::updateOrCreate(
+            ['event_id' => $event->id, 'user_id' => $user->id],
+            [
+                'status' => $validated['status'],
+                'response_notes' => $validated['response_notes'] ?? null,
+                'attended' => $validated['status'] === 'attended',
+            ]
+        );
+
+        $event->assignedUsers()->syncWithoutDetaching([$user->id]);
+
+        $this->activityService->log(
+            userId: $user->id,
+            activityType: 'rsvp',
+            description: "RSVP {$validated['status']} for event '{$event->title}'",
+            module: 'event',
+            relatedId: $event->id,
+            action: 'rsvp',
+            entityName: $event->title,
+            relatedUserId: null,
+            metadata: ['status' => $validated['status']]
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'RSVP recorded successfully.',
+            'data' => $participant->load('user:id,name,email,avatar'),
+        ]);
+    }
+
+    /**
      * Format an event model into a standardized, crash-proof API response array.
      */
     private function formatEventResponse(Event $event): array
     {
-        $event->loadMissing('category', 'user:id,name,email,avatar', 'organizer:id,name,email,avatar', 'assignedUsers:id,name,email,avatar', 'participants.user:id,name,email,avatar', 'visibilities.team:id,name');
+        $event->loadMissing([
+            'category',
+            'user:id,name,email,avatar',
+            'organizer:id,name,email,avatar',
+            'assignedUsers:id,name,email,avatar',
+            'participants.user:id,name,email,avatar',
+            'visibilities.team:id,name',
+            'reminders',
+            'attachments.user:id,name',
+        ]);
 
         $assignedArray = $event->assignedUsers ? $event->assignedUsers->map(fn ($u) => [
             'id' => $u->id,
@@ -493,6 +993,26 @@ class EventController extends Controller
             'email' => $p->user?->email,
             'status' => $p->status,
             'attended' => (bool) $p->attended,
+            'response_notes' => $p->response_notes,
+        ])->toArray() : [];
+
+        $remindersArray = $event->reminders ? $event->reminders->map(fn ($r) => [
+            'id' => $r->id,
+            'value' => (int) $r->value,
+            'unit' => $r->unit,
+            'is_sent' => (bool) $r->is_sent,
+            'sent_at' => $r->sent_at?->toIso8601String(),
+            'user_id' => $r->user_id,
+        ])->toArray() : [];
+
+        $attachmentsArray = $event->attachments ? $event->attachments->map(fn ($a) => [
+            'id' => $a->id,
+            'file_name' => $a->file_name,
+            'file_path' => $a->file_path,
+            'file_size' => (int) $a->file_size,
+            'mime_type' => $a->mime_type,
+            'uploaded_by' => $a->user?->name ?? 'User',
+            'created_at' => $a->created_at?->toIso8601String(),
         ])->toArray() : [];
 
         return [
@@ -505,6 +1025,8 @@ class EventController extends Controller
             'event_date' => $event->start_date?->format('Y-m-d'),
             'start_date' => $event->start_date?->format('Y-m-d\\TH:i:s'),
             'end_date' => $event->end_date?->format('Y-m-d\\TH:i:s'),
+            'start_time' => $event->start_time,
+            'end_time' => $event->end_time,
             'all_day' => (bool) $event->all_day,
             'color' => $event->color,
             'is_global' => (bool) $event->is_global,
@@ -514,6 +1036,7 @@ class EventController extends Controller
             'meeting_link' => $event->meeting_link,
             'status' => $event->status ?? 'scheduled',
             'user_id' => $event->user_id,
+            'created_by' => $event->created_by ?? $event->user_id,
             'organizer_id' => $event->organizer_id,
             'creator_name' => $event->user?->name ?? 'System',
             'organizer_name' => $event->organizer?->name ?? $event->user?->name,
@@ -527,6 +1050,8 @@ class EventController extends Controller
             ] : null,
             'assigned_users' => $assignedArray,
             'participants' => $participantsArray,
+            'reminders' => $remindersArray,
+            'attachments' => $attachmentsArray,
             'visibilities' => $event->visibilities ? $event->visibilities->map(fn ($v) => [
                 'team_id' => $v->team_id,
                 'team_name' => $v->team?->name,
@@ -617,7 +1142,7 @@ class EventController extends Controller
 
         // Manual Events
         $manualEventsQuery = Event::with(['category', 'user:id,name', 'assignedUsers:id']);
-        if (! in_array($user->role, ['admin', 'manager'])) {
+        if (! in_array($user->role, ['admin', 'manager', 'superadmin'])) {
             $manualEventsQuery->where(fn ($q) => $q->where('is_global', true)->orWhere('visibility_level', 'organization')->orWhereHas('assignedUsers', fn ($aq) => $aq->where('user_id', $user->id)));
         }
         if ($startDate && $endDate) {
@@ -686,7 +1211,7 @@ class EventController extends Controller
                 ->with(['project:id,title', 'assignee:id,name', 'creator:id,name'])->get();
 
             $manualEventsQuery = Event::with(['category', 'user:id,name', 'assignedUsers:id']);
-            if (! in_array($user->role, ['admin', 'manager'])) {
+            if (! in_array($user->role, ['admin', 'manager', 'superadmin'])) {
                 $manualEventsQuery->where(fn ($q) => $q->where('is_global', true)->orWhere('visibility_level', 'organization')->orWhereHas('assignedUsers', fn ($aq) => $aq->where('user_id', $user->id)));
             }
             $manualEvents = $manualEventsQuery->where(function ($q) use ($today) {
@@ -748,7 +1273,7 @@ class EventController extends Controller
             'type' => $event->type,
             'title' => $event->title,
             'user_id' => $event->user_id,
-            'created_by' => $event->user_id,
+            'created_by' => $event->created_by ?? $event->user_id,
             'description' => $event->description,
             'date' => $this->fmtDate($event->start_date),
             'start_date' => $this->fmtDate($event->start_date),
@@ -788,7 +1313,7 @@ class EventController extends Controller
                 'related_id' => $event->id,
                 'title' => $title,
                 'message' => "Event '{$event->title}' scheduled for " . ($event->start_date ? Carbon::parse($event->start_date)->format('d M Y') : 'upcoming date'),
-                'link' => '/events',
+                'link' => "/events/{$event->id}",
             ];
         }
 
@@ -798,10 +1323,12 @@ class EventController extends Controller
     private function getEventRecipientIds(Event $event): array
     {
         if ($event->is_global || $event->visibility_level === 'organization') {
-            return User::where('active', true)->pluck('id')->toArray();
+            return User::where('status', 'active')->orWhereNull('status')->pluck('id')->toArray();
         }
         $assignedIds = $event->assignedUsers ? $event->assignedUsers()->pluck('user_id')->toArray() : [];
-        return !empty($assignedIds) ? $assignedIds : [$event->user_id];
+        $participantIds = $event->participants ? $event->participants()->pluck('user_id')->toArray() : [];
+        $merged = array_unique(array_merge($assignedIds, $participantIds));
+        return !empty($merged) ? $merged : [$event->user_id];
     }
 
     private function fmtDate($date): ?string

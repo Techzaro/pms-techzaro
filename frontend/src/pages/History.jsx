@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { Eye } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import AuditLogDetailModal from "../components/AuditLogDetailModal";
@@ -339,7 +340,7 @@ function MyActivity() {
                           <td className="audit-cell-ip">{log.ip_address || "-"}</td>
                           <td>
                             <button className="audit-action-btn" onClick={() => setDetailLog(log)} title={t("View details", { defaultValue: "View details" })}>
-                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
+                              <Eye size={16} />
                             </button>
                           </td>
                         </tr>

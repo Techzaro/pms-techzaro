@@ -69,7 +69,10 @@ class ActivityController extends Controller
         $user = $request->user();
         $date = $request->input('date');
         $module = $request->input('module');
-        $action = $request->input('action');
+        $action = $request->input('action') ?: $request->input('type');
+        if ($action === 'all') {
+            $action = null;
+        }
         $dateFrom = $request->input('date_from') ?: $request->input('start_date');
         $dateTo = $request->input('date_to') ?: $request->input('end_date');
         $search = $request->input('search');

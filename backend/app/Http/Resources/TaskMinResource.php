@@ -28,6 +28,8 @@ class TaskMinResource extends JsonResource
             'title' => $this->title,
             'status' => $this->status,
             'priority' => $this->priority,
+            'kb_ids' => $this->kb_ids ?? [],
+            'event_ids' => $this->event_ids ?? [],
             'start_date' => $this->start_date?->format('Y-m-d\TH:i:s'),
             'end_date' => $this->end_date?->format('Y-m-d\TH:i:s'),
             'assignees' => \App\Http\Resources\UserMinResource::collection($this->whenLoaded('assignees')),

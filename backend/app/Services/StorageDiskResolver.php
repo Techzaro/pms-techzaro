@@ -195,6 +195,37 @@ class StorageDiskResolver
     }
 
     /**
+     * Download a file from the organization's storage.
+     */
+    public static function download(Organization $org, string $filePath, ?string $fileName = null)
+    {
+        $disk = self::getDisk($org);
+        $path = ltrim($filePath, '/');
+        if (str_starts_with($path, 'storage/')) {
+            $path = substr($path, 8);
+        }
+
+        $downloadName = $fileName ?: basename($path);
+
+        if ($disk === 's3') {
+            try {
+                $temporaryUrl = self::getTemporaryUrl($org, $filePath, 60);
+                $disposition = 'attachment; filename="' . $downloadName . '"';
+                $temporaryUrl .= (str_contains($temporaryUrl, '?') ? '&' : '?') . 'response-content-disposition=' . urlencode($disposition);
+                return redirect()->away($temporaryUrl);
+            } catch (\Throwable $e) {
+                Log::error('S3 download redirect failed: ' . $e->getMessage());
+            }
+        }
+
+        if (!Storage::disk($disk)->exists($path)) {
+            return response()->json(['success' => false, 'message' => 'Attachment file not found.'], 404);
+        }
+
+        return Storage::disk($disk)->download($path, $downloadName);
+    }
+
+    /**
      * Get the size of a file in bytes.
      */
     public static function size(Organization $org, string $filePath): int

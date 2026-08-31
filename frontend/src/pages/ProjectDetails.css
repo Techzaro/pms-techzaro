@@ -656,6 +656,21 @@
   word-break: break-word;
 }
 
+.pd-meta-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-primary, #2563eb);
+  text-decoration: none;
+  font-weight: 600;
+  transition: color 0.15s ease;
+}
+
+.pd-meta-link:hover {
+  text-decoration: underline;
+  color: #1d4ed8;
+}
+
 .pd-meta-rows__dept {
   display: inline-block;
   font-size: 11px;

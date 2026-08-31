@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useParams, useLocation, useNavigate, Link } from "react-router-dom";
-import { BarChart3, Calendar, Check, CheckCircle2, ChevronLeft, ChevronRight, Copy, Download, ExternalLink, FileText, FolderOpen, Lock, Pause, Pencil, Play, RefreshCw, Timer, Trash2, XCircle, Activity } from "lucide-react";
+import { BarChart3, Calendar, Check, CheckCircle2, ChevronLeft, ChevronRight, Copy, Download, ExternalLink, FileText, FolderOpen, Lock, Pause, Pencil, Play, RefreshCw, Timer, Trash2, XCircle, Activity, BookOpen } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import ConfirmModal from "../components/ConfirmModal";
@@ -192,6 +192,34 @@ function SubtaskDetails() {
   const [pendingNoteId, setPendingNoteId] = useState(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [files, setFiles] = useState([]);
+  const [kbArticles, setKbArticles] = useState([]);
+  const [eventsList, setEventsList] = useState([]);
+
+  useEffect(() => {
+    const token = authToken();
+    if (!token) return;
+    fetch(`${API_URL}/knowledge-base?all=1`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      skipLoader: true,
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => {
+        const list = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
+        setKbArticles(list);
+      })
+      .catch(() => {});
+
+    fetch(`${API_URL}/events?all=true`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      skipLoader: true,
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => {
+        const list = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
+        setEventsList(list);
+      })
+      .catch(() => {});
+  }, []);
 
   const fetchSubtask = useCallback(() => {
     setLoading(true);
@@ -986,6 +1014,78 @@ if (res.ok) {
                       <span className="td-info-val">{subtask.due_date ? formatDateTime(subtask.due_date) : "—"}</span>
                     </div>
                   </li>
+                  {(() => {
+                    const kbIds = Array.isArray(subtask?.kb_ids)
+                      ? subtask.kb_ids
+                      : subtask?.kb_id
+                      ? [subtask.kb_id]
+                      : [];
+                    return (
+                      <li>
+                        <span className="td-dot" style={{ background: "#6366f1" }} />
+                        <div>
+                          <span className="td-info-label">{t("Knowledge Base", { defaultValue: "Knowledge Base" })}</span>
+                          <span className="td-info-val">
+                            {kbIds && kbIds.length > 0 ? (
+                              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                                {kbIds.map((kId) => {
+                                  const foundKb = kbArticles.find((k) => String(k.id) === String(kId));
+                                  const kbTitle = foundKb?.title || `Article #${kId}`;
+                                  return (
+                                    <Link
+                                      key={kId}
+                                      to={rolePath ? rolePath(`knowledge-base/${kId}`) : `/knowledge-base/${kId}`}
+                                      className="td-project-link"
+                                      style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}
+                                    >
+                                      <BookOpen size={14} style={{ flexShrink: 0 }} />
+                                      <span>{kbTitle}</span>
+                                    </Link>
+                                  );
+                                })}
+                              </div>
+                            ) : "—"}
+                          </span>
+                        </div>
+                      </li>
+                    );
+                  })()}
+                  {(() => {
+                    const eventIds = Array.isArray(subtask?.event_ids)
+                      ? subtask.event_ids
+                      : subtask?.event_id
+                      ? [subtask.event_id]
+                      : [];
+                    return (
+                      <li>
+                        <span className="td-dot" style={{ background: "#0ea5e9" }} />
+                        <div>
+                          <span className="td-info-label">{t("Event", { defaultValue: "Event" })}</span>
+                          <span className="td-info-val">
+                            {eventIds && eventIds.length > 0 ? (
+                              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                                {eventIds.map((eId) => {
+                                  const foundEv = eventsList.find((e) => String(e.id) === String(eId));
+                                  const eventTitle = foundEv?.title || `Event #${eId}`;
+                                  return (
+                                    <Link
+                                      key={eId}
+                                      to={rolePath ? rolePath(`events/${eId}`) : `/events/${eId}`}
+                                      className="td-project-link"
+                                      style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}
+                                    >
+                                      <Calendar size={14} style={{ flexShrink: 0 }} />
+                                      <span>{eventTitle}</span>
+                                    </Link>
+                                  );
+                                })}
+                              </div>
+                            ) : "—"}
+                          </span>
+                        </div>
+                      </li>
+                    );
+                  })()}
                 </ul>
               </div>
 
