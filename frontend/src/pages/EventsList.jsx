@@ -165,11 +165,7 @@ export default function EventsList() {
         ev.category?.name?.toLowerCase().includes(q);
 
       // 2. Type
-      const isAnnounce =
-        ev.type === "announcement" ||
-        ev.type === "Company Announcement" ||
-        ev.is_announcement ||
-        ev.is_global;
+      const isAnnounce = ev.type === "announcement" || ev.type === "Company Announcement";
       let matchesType = true;
       if (typeFilter === "announcement") matchesType = isAnnounce;
       if (typeFilter === "event")        matchesType = !isAnnounce;
@@ -596,11 +592,7 @@ export default function EventsList() {
       ev.user_id === user?.id ||
       ev.organizer_id === user?.id ||
       ["admin", "manager"].includes(user?.role);
-    const isAnnounce =
-      ev.is_announcement ||
-      ev.type === "announcement" ||
-      ev.type === "Company Announcement" ||
-      ev.is_global;
+    const isAnnounce = ev.type === "announcement" || ev.type === "Company Announcement";
 
     const startDateObj = ev.start_date ? new Date(ev.start_date) : null;
     const monthStr     = startDateObj && !isNaN(startDateObj.getTime()) ? startDateObj.toLocaleString("default", { month: "short" }).toUpperCase() : "DATE";
@@ -623,11 +615,16 @@ export default function EventsList() {
             <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
               {isAnnounce ? (
                 <span style={{ fontSize: "11px", fontWeight: 700, color: "#d97706", background: "#fef3c7", padding: "2px 8px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                  <Megaphone size={12} /> {t("Announcement", { defaultValue: "Announcement" })}
+                  <Megaphone size={12} /> {t("Company Announcement", { defaultValue: "Company Announcement" })}
                 </span>
               ) : (
-                <span style={{ fontSize: "11px", fontWeight: 700, color: ev.category?.color || "#2563eb", background: "#eff6ff", padding: "2px 8px", borderRadius: "4px" }}>
-                  {ev.category?.name || t(ev.type || "Event", { defaultValue: ev.type || "Event" })}
+                <span style={{ fontSize: "11px", fontWeight: 700, color: ev.category?.color || "#2563eb", background: "#eff6ff", padding: "2px 8px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                  <Calendar size={12} /> {t("Event Invitation", { defaultValue: "Event Invitation" })}
+                </span>
+              )}
+              {ev.category?.name && (
+                <span style={{ fontSize: "11px", fontWeight: 600, color: ev.category?.color || "#475569", background: "var(--bg-hover)", padding: "2px 6px", borderRadius: "4px", border: "1px solid var(--border-color)" }}>
+                  {ev.category.name}
                 </span>
               )}
               {visibilityBadge(ev.visibility_level, ev.is_global)}

@@ -149,22 +149,28 @@ class ActivityService
             $query->where('user_id', $userId);
         }
 
-        if ($date) {
-            $formattedDate = self::parseQueryDate($date);
-            if ($formattedDate) {
-                $query->whereDate('created_at', $formattedDate);
+        if (!empty($date)) {
+            try {
+                $parsedDate = \Carbon\Carbon::parse($date)->toDateString();
+                $query->whereDate('created_at', $parsedDate);
+            } catch (\Throwable $e) {
+                $query->whereDate('created_at', $date);
             }
         }
-        if ($dateFrom) {
-            $formattedFrom = self::parseQueryDate($dateFrom);
-            if ($formattedFrom) {
-                $query->whereDate('created_at', '>=', $formattedFrom);
+        if (!empty($dateFrom)) {
+            try {
+                $parsedFrom = \Carbon\Carbon::parse($dateFrom)->toDateString();
+                $query->whereDate('created_at', '>=', $parsedFrom);
+            } catch (\Throwable $e) {
+                $query->whereDate('created_at', '>=', $dateFrom);
             }
         }
-        if ($dateTo) {
-            $formattedTo = self::parseQueryDate($dateTo);
-            if ($formattedTo) {
-                $query->whereDate('created_at', '<=', $formattedTo);
+        if (!empty($dateTo)) {
+            try {
+                $parsedTo = \Carbon\Carbon::parse($dateTo)->toDateString();
+                $query->whereDate('created_at', '<=', $parsedTo);
+            } catch (\Throwable $e) {
+                $query->whereDate('created_at', '<=', $dateTo);
             }
         }
         if ($module) {
@@ -262,6 +268,11 @@ class ActivityService
             });
         }
 
+        \Illuminate\Support\Facades\Log::info('Activity Filter Trace - Central', [
+            'sql' => $query->toSql(),
+            'bindings' => $query->getBindings(),
+        ]);
+
         return $query->latest()
             ->skip($offset)
             ->limit($limit)
@@ -285,22 +296,28 @@ class ActivityService
             $query->where('user_id', $userId);
         }
 
-        if ($date) {
-            $formattedDate = self::parseQueryDate($date);
-            if ($formattedDate) {
-                $query->whereDate('created_at', $formattedDate);
+        if (!empty($date)) {
+            try {
+                $parsedDate = \Carbon\Carbon::parse($date)->toDateString();
+                $query->whereDate('created_at', $parsedDate);
+            } catch (\Throwable $e) {
+                $query->whereDate('created_at', $date);
             }
         }
-        if ($dateFrom) {
-            $formattedFrom = self::parseQueryDate($dateFrom);
-            if ($formattedFrom) {
-                $query->whereDate('created_at', '>=', $formattedFrom);
+        if (!empty($dateFrom)) {
+            try {
+                $parsedFrom = \Carbon\Carbon::parse($dateFrom)->toDateString();
+                $query->whereDate('created_at', '>=', $parsedFrom);
+            } catch (\Throwable $e) {
+                $query->whereDate('created_at', '>=', $dateFrom);
             }
         }
-        if ($dateTo) {
-            $formattedTo = self::parseQueryDate($dateTo);
-            if ($formattedTo) {
-                $query->whereDate('created_at', '<=', $formattedTo);
+        if (!empty($dateTo)) {
+            try {
+                $parsedTo = \Carbon\Carbon::parse($dateTo)->toDateString();
+                $query->whereDate('created_at', '<=', $parsedTo);
+            } catch (\Throwable $e) {
+                $query->whereDate('created_at', '<=', $dateTo);
             }
         }
         if ($module) {

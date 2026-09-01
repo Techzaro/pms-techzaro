@@ -122,19 +122,54 @@ class ProjectController extends Controller
                 ->latest('id');
         }
 
-        if ($filter === 'active' || request()->query('status') === 'active') {
+        $rawStatuses = request()->query('status', request()->query('statuses'));
+        if ($filter === 'active' || $rawStatuses === 'active') {
             $projectsQuery->whereNotIn('status', $this->inactiveProjectStatuses());
-        } elseif (request()->filled('status')) {
-            $st = request()->query('status');
-            if ($st === 'due_today') {
-                $todayStr = now()->toDateString();
-                $projectsQuery->where(function ($q) use ($todayStr) {
-                    $q->whereDate('end_date', $todayStr)
-                      ->orWhereDate('start_date', $todayStr);
-                });
-            } else {
-                $projectsQuery->where('status', $st);
+        } elseif (! empty($rawStatuses)) {
+            if (is_string($rawStatuses) && str_contains($rawStatuses, ',')) {
+                $rawStatuses = explode(',', $rawStatuses);
             }
+            if (! is_array($rawStatuses)) {
+                $rawStatuses = [$rawStatuses];
+            }
+            $normalStatuses = [];
+            $hasDueToday = false;
+            $hasActive = false;
+            foreach ($rawStatuses as $st) {
+                $st = trim((string) $st);
+                if ($st === 'due_today') {
+                    $hasDueToday = true;
+                } elseif ($st === 'active') {
+                    $hasActive = true;
+                } elseif (! empty($st)) {
+                    $normalStatuses[] = $st;
+                }
+            }
+            $projectsQuery->where(function ($sq) use ($normalStatuses, $hasDueToday, $hasActive) {
+                $hasCondition = false;
+                if (! empty($normalStatuses)) {
+                    $sq->whereIn('status', $normalStatuses);
+                    $hasCondition = true;
+                }
+                if ($hasActive) {
+                    if ($hasCondition) {
+                        $sq->orWhere(fn ($aq) => $aq->whereNotIn('status', $this->inactiveProjectStatuses()));
+                    } else {
+                        $sq->whereNotIn('status', $this->inactiveProjectStatuses());
+                        $hasCondition = true;
+                    }
+                }
+                if ($hasDueToday) {
+                    $todayStr = now()->toDateString();
+                    if ($hasCondition) {
+                        $sq->orWhere(function ($dq) use ($todayStr) {
+                            $dq->whereDate('end_date', $todayStr)->orWhereDate('start_date', $todayStr);
+                        });
+                    } else {
+                        $sq->whereDate('end_date', $todayStr)->orWhereDate('start_date', $todayStr);
+                    }
+                }
+            });
         }
 
         if (request()->filled('search')) {
@@ -146,15 +181,22 @@ class ProjectController extends Controller
             });
         }
 
-        if (request()->filled('user_id')) {
-            $userId = (int) request()->query('user_id');
-            $projectsQuery->where(function ($q) use ($userId) {
-                $q->whereJsonContains('assigned_users', $userId)
-                  ->orWhere('created_by', $userId)
-                  ->orWhere('team_id', function ($sub) use ($userId) {
-                      $sub->select('team_id')->from('team_user')->where('user_id', $userId)->limit(1);
-                  });
-            });
+        if (request()->filled('user_id') || request()->filled('user_ids')) {
+            $rawUserIds = request()->query('user_id', request()->query('user_ids'));
+            if (is_string($rawUserIds) && str_contains($rawUserIds, ',')) {
+                $rawUserIds = explode(',', $rawUserIds);
+            }
+            if (! is_array($rawUserIds)) {
+                $rawUserIds = [$rawUserIds];
+            }
+            $userIds = array_values(array_filter(array_map('intval', $rawUserIds)));
+            if (! empty($userIds)) {
+                $projectsQuery->where(function ($q) use ($userIds) {
+                    foreach ($userIds as $uid) {
+                        $q->orWhereJsonContains('assigned_users', $uid);
+                    }
+                });
+            }
         }
 
         $days = request()->query('days') ?? request()->query('time_filter');
@@ -171,17 +213,19 @@ class ProjectController extends Controller
             $sDate = request()->query('start_date');
             $projectsQuery->where(function ($q) use ($sDate) {
                 $q->whereDate('start_date', '>=', $sDate)
-                  ->orWhereDate('created_at', '>=', $sDate)
-                  ->orWhereDate('end_date', '>=', $sDate);
+                  ->orWhere(function ($sq) use ($sDate) {
+                      $sq->whereNull('start_date')->whereDate('created_at', '>=', $sDate);
+                  });
             });
         }
 
         if (request()->filled('end_date')) {
             $eDate = request()->query('end_date');
             $projectsQuery->where(function ($q) use ($eDate) {
-                $q->whereDate('start_date', '<=', $eDate)
-                  ->orWhereDate('created_at', '<=', $eDate)
-                  ->orWhereDate('end_date', '<=', $eDate);
+                $q->whereDate('end_date', '<=', $eDate)
+                  ->orWhere(function ($sq) use ($eDate) {
+                      $sq->whereNull('end_date')->whereDate('created_at', '<=', $eDate);
+                  });
             });
         }
 
@@ -267,6 +311,10 @@ class ProjectController extends Controller
             'milestones.*.due_date' => 'nullable|date',
             'milestones.*.milestone_deadline' => 'nullable|date',
             'milestones.*.status' => 'nullable|string|max:32',
+            'kb_ids' => 'nullable|array',
+            'kb_ids.*' => 'nullable|integer',
+            'event_ids' => 'nullable|array',
+            'event_ids.*' => 'nullable|integer',
         ]);
 
         $milestones = $validated['milestones'] ?? null;
@@ -484,14 +532,12 @@ class ProjectController extends Controller
             }
         }
 
-        $memberIds = $project->assigned_users ?? [];
-        $members = ! empty($memberIds)
-            ? User::whereIn('id', $memberIds)->where('active', true)->orderByRaw('FIELD(id,' . implode(',', $memberIds) . ')')->get(['id', 'name', 'email', 'role', 'department'])
-            : collect();
+        $allMembers = $project->getMembers();
+        $allMemberIds = $allMembers->pluck('id')->toArray();
 
         $isCreator = (int) $project->created_by === (int) $user->id;
         $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
-        $isAssigned = in_array($user->id, $project->assigned_users ?? []);
+        $isAssigned = in_array($user->id, array_map('intval', $project->assigned_users ?? [])) || in_array($user->id, $allMemberIds);
 
         $approvalCacheKey = "project_approval_{$project->id}";
         $approvalStatus = Cache::remember($approvalCacheKey, 30, function () use ($project) {
@@ -505,7 +551,8 @@ class ProjectController extends Controller
         });
 
         $payload = (new ProjectResource($project))->resolve();
-        $payload['members'] = $members;
+        $payload['members'] = $allMembers;
+        $payload['members_count'] = $allMembers->count();
         $payload['teams'] = Team::with('leader:id,name,role', 'members:id,name,role')
             ->whereIn('id', $project->team_ids ?? [])->get();
         $payload['is_creator'] = $isCreator;
@@ -521,12 +568,20 @@ class ProjectController extends Controller
         $viewOnlyUserIds = $project->visibility()
             ->where('is_visible', true)
             ->pluck('user_id')
-            ->filter(fn ($id) => ! in_array((int) $id, array_map('intval', $memberIds)) && (int) $id !== (int) $project->created_by)
+            ->filter(fn ($id) => ! in_array((int) $id, array_map('intval', $allMemberIds)) && (int) $id !== (int) $project->created_by)
             ->values()
             ->toArray();
         $payload['view_only_users'] = ! empty($viewOnlyUserIds)
-            ? User::whereIn('id', $viewOnlyUserIds)->where('active', true)->get(['id', 'name', 'email', 'role'])
+            ? User::whereIn('id', $viewOnlyUserIds)->where('active', true)->get(['id', 'name', 'email', 'role', 'department'])
             : [];
+
+        $isViewOnly = in_array((int) $user->id, array_map('intval', $viewOnlyUserIds));
+        $payload['is_view_only'] = $isViewOnly;
+        if ($isViewOnly) {
+            $payload['can_edit'] = false;
+            $payload['can_review'] = false;
+            $payload['is_admin_or_manager'] = false;
+        }
 
         try {
             $payload['activity_max_id'] = (int) ProjectChange::where('project_id', $project->id)->max('id');
@@ -554,6 +609,19 @@ class ProjectController extends Controller
 
         if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $memberIds = $project->getMembers()->pluck('id')->toArray();
+        $isViewOnly = $project->visibility()
+            ->where('user_id', $user->id)
+            ->where('is_visible', true)
+            ->exists()
+            && ! in_array((int) $user->id, array_map('intval', $memberIds))
+            && (int) $user->id !== (int) $project->created_by
+            && ! in_array($user->role, ['admin', 'manager']);
+
+        if ($isViewOnly) {
+            return response()->json(['success' => false, 'message' => 'View-only users cannot edit this project.'], 403);
         }
 
         // Decode JSON-encoded array fields if passed as strings (e.g. from FormData or stringified payloads)
@@ -599,10 +667,10 @@ class ProjectController extends Controller
             'team_ids' => 'nullable|array',
             'team_ids.*' => 'exists:teams,id',
             'assigned_users' => 'nullable|array',
-            'view_only_users' => 'nullable|array',
-            'view_only_users.*' => 'exists:users,id',
             'followers' => 'nullable|array',
             'followers.*' => 'exists:users,id',
+            'view_only_users' => 'nullable|array',
+            'view_only_users.*' => 'exists:users,id',
             'created_by' => 'nullable|exists:users,id',
             'status' => 'sometimes|nullable|string|max:64',
             'start_date' => 'nullable|date',
@@ -616,12 +684,17 @@ class ProjectController extends Controller
             'existing_file_names' => 'nullable|array',
             'existing_file_names.*.id' => 'nullable',
             'existing_file_names.*.name' => 'nullable|string|max:255',
+            'existing_file_names.*.url' => 'nullable|string|max:2048',
             'links' => 'nullable|array',
             'links.*.url' => 'required_with:links|url|max:2048',
             'links.*.name' => 'nullable|string|max:255',
             'attachments' => 'nullable|array',
             'attachments.*.name' => 'required_with:attachments|string|max:255',
             'attachments.*.url' => 'nullable|string|max:2048',
+            'kb_ids' => 'nullable|array',
+            'kb_ids.*' => 'nullable|integer',
+            'event_ids' => 'nullable|array',
+            'event_ids.*' => 'nullable|integer',
         ]);
 
         $milestones = $validated['milestones'] ?? null;
@@ -658,12 +731,16 @@ class ProjectController extends Controller
             $project->followers()->sync($followers ?? []);
         }
 
-        // Rename existing files/links if provided
+        // Rename or update URL of existing files/links if provided
         if ($existingFileNames) {
             foreach ($existingFileNames as $item) {
+                $fileUpdate = ['name' => $item['name']];
+                if (isset($item['url']) && ! empty($item['url'])) {
+                    $fileUpdate['url'] = $item['url'];
+                }
                 \App\Models\ProjectFile::where('id', $item['id'])
                     ->where('project_id', $project->id)
-                    ->update(['name' => $item['name']]);
+                    ->update($fileUpdate);
             }
         }
 
@@ -686,6 +763,34 @@ class ProjectController extends Controller
                     'file_path' => $att['file_path'] ?? null,
                     'file_size' => $att['file_size'] ?? null,
                 ]);
+            }
+        }
+
+        // Sync uploaded files if sent as multipart files
+        $filesSkipped = false;
+        $uploadedFileNames = [];
+        $org = $request->attributes->get('currentOrganization');
+        if ($request->hasFile('files')) {
+            foreach ($request->file('files') as $idx => $uploadedFile) {
+                $storageCheck = $this->checkStorageLimit($request, $uploadedFile);
+                if (! $storageCheck || $storageCheck['allowed']) {
+                    if ($org) {
+                        $path = \App\Services\StorageDiskResolver::store($org, $uploadedFile, 'project-files');
+                        $fileUrl = \App\Services\StorageDiskResolver::isS3($org) ? $path : '/storage/'.$path;
+                    } else {
+                        $path = $uploadedFile->store('project-files', 'public');
+                        $fileUrl = '/storage/'.$path;
+                    }
+                    $this->trackFileUpload($request, 'attachments', $fileUrl, $uploadedFile->getClientOriginalName(), $uploadedFile->getMimeType(), $uploadedFile->getSize());
+                    $customName = $request->input("file_names.{$idx}") ?: $uploadedFile->getClientOriginalName();
+                    $project->files()->create([
+                        'name' => $customName,
+                        'url' => $fileUrl,
+                    ]);
+                    $uploadedFileNames[] = $customName;
+                } else {
+                    $filesSkipped = true;
+                }
             }
         }
 
@@ -787,6 +892,41 @@ class ProjectController extends Controller
             }
         }
 
+        // Log audit when files/links/attachments are added during project edit
+        if (!empty($uploadedFileNames) || !empty($newLinks) || !empty($newAttachments)) {
+            try {
+                $fileDescriptions = [];
+                if (!empty($uploadedFileNames)) {
+                    $fileDescriptions[] = count($uploadedFileNames) . ' file(s): ' . implode(', ', $uploadedFileNames);
+                }
+                if (!empty($newLinks)) {
+                    $linkNames = array_map(fn($l) => $l['name'] ?? $l['url'], $newLinks);
+                    $fileDescriptions[] = count($newLinks) . ' link(s): ' . implode(', ', $linkNames);
+                }
+                if (!empty($newAttachments)) {
+                    $attNames = array_column($newAttachments, 'name');
+                    $fileDescriptions[] = count($newAttachments) . ' attachment(s): ' . implode(', ', $attNames);
+                }
+                $desc = 'Added ' . implode(' and ', $fileDescriptions) . ' to project "' . $project->title . '"';
+                $this->auditService->log(
+                    module: 'project_management',
+                    action: 'create',
+                    description: $desc,
+                    user: $user,
+                    entityType: 'ProjectFile',
+                    entityId: $project->id,
+                    newValues: [
+                        'uploaded_files' => $uploadedFileNames,
+                        'new_links' => array_map(fn($l) => $l['url'] ?? null, $newLinks ?? []),
+                        'new_attachments' => array_column($newAttachments ?? [], 'name'),
+                    ],
+                    status: 'success'
+                );
+            } catch (\Throwable $e) {
+                \Log::error('Failed to log file upload audit', ['error' => $e->getMessage()]);
+            }
+        }
+
         $project->refresh();
         $project->load([
             'creator:id,name,role,email',
@@ -797,9 +937,15 @@ class ProjectController extends Controller
             'workflowEvents' => fn ($q) => $q->with('user:id,name'),
         ]);
 
+        $projectMessage = $changeCount > 0 ? 'Project updated — '.$changeCount.' change(s) made' : 'Project updated successfully';
+        if ($filesSkipped) {
+            $projectMessage = $this->buildFileSkippedMessage('project');
+        }
+
         return response()->json([
             'success' => true,
-            'message' => $changeCount > 0 ? 'Project updated — '.$changeCount.' change(s) made' : 'Project updated successfully',
+            'message' => $projectMessage,
+            'file_skipped' => $filesSkipped,
             'project' => $project,
             'changes_count' => $changeCount,
         ]);
@@ -1052,6 +1198,7 @@ class ProjectController extends Controller
      */
     public function uploadFile(Request $request, Project $project)
     {
+        // Support various file key aliases from client form data
         if (! $request->hasFile('file')) {
             if ($request->hasFile('files')) {
                 $f = $request->file('files');
@@ -1073,6 +1220,21 @@ class ProjectController extends Controller
             return response()->json(['message' => 'PHP Upload Error: ' . $request->file('file')->getErrorMessage()], 422);
         }
 
+        $user = $request->user();
+        $memberIds = $project->getMembers()->pluck('id')->toArray();
+        $isViewOnly = $project->visibility()
+            ->where('user_id', $user->id)
+            ->where('is_visible', true)
+            ->exists()
+            && ! in_array((int) $user->id, array_map('intval', $memberIds))
+            && (int) $user->id !== (int) $project->created_by
+            && ! in_array($user->role, ['admin', 'manager']);
+
+        if ($isViewOnly) {
+            return response()->json(['success' => false, 'message' => 'View-only users cannot upload files.'], 403);
+        }
+
+        // Sanitize string 'null'/'undefined' name values
         $nameInput = $request->input('name');
         if ($nameInput === 'null' || $nameInput === 'undefined' || trim((string) $nameInput) === '') {
             $request->merge(['name' => null]);
@@ -1089,7 +1251,13 @@ class ProjectController extends Controller
             $file = $request->file('file');
             $storageCheck = $this->checkStorageLimit($request, $file);
             if ($storageCheck && ! $storageCheck['allowed']) {
-                return response()->json(['success' => false, 'message' => $storageCheck['message']], 422);
+                return response()->json([
+                    'success' => true,
+                    'message' => $this->buildFileSkippedMessage('project'),
+                    'file' => null,
+                    'file_skipped' => true,
+                    'storage_warning' => $storageCheck['message'],
+                ], 200);
             }
 
             if ($org) {
@@ -1117,8 +1285,14 @@ class ProjectController extends Controller
             $ext = pathinfo($fileName, PATHINFO_EXTENSION) ?: 'bin';
             $uniqueFilename = \Illuminate\Support\Str::random(40).'.'.$ext;
             $path = 'project-files/'.$uniqueFilename;
-            \Illuminate\Support\Facades\Storage::disk('public')->put($path, $decodedContent);
-            $fileUrl = '/storage/'.$path;
+            if ($org) {
+                $disk = \App\Services\StorageDiskResolver::getDisk($org);
+                \Illuminate\Support\Facades\Storage::disk($disk)->put($path, $decodedContent);
+                $fileUrl = \App\Services\StorageDiskResolver::isS3($org) ? \App\Services\StorageDiskResolver::getUrl($org, $path) : '/storage/'.$path;
+            } else {
+                \Illuminate\Support\Facades\Storage::disk('public')->put($path, $decodedContent);
+                $fileUrl = '/storage/'.$path;
+            }
             $this->trackFileUpload($request, 'attachments', $fileUrl, $fileName, $mime, strlen($decodedContent));
         } else {
             return response()->json(['success' => false, 'message' => 'No valid file was provided for upload.'], 422);
@@ -1133,7 +1307,6 @@ class ProjectController extends Controller
             $attachment->url = StorageDiskResolver::resolveUrl($org, $attachment->url);
         }
 
-        $user = $request->user();
         ProjectChange::create([
             'project_id' => $project->id,
             'field_name' => 'file_uploaded',
@@ -1149,6 +1322,21 @@ class ProjectController extends Controller
             'comment' => 'File uploaded: '.$fileName,
         ]);
 
+        try {
+            $this->auditService->log(
+                module: 'project_management',
+                action: 'create',
+                description: "Uploaded file \"{$fileName}\" to project \"{$project->title}\"",
+                user: $user,
+                entityType: 'ProjectFile',
+                entityId: $attachment->id,
+                newValues: ['file_name' => $fileName, 'file_url' => $fileUrl],
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log file upload audit', ['error' => $e->getMessage()]);
+        }
+
         return response()->json(['success' => true, 'message' => 'File uploaded successfully', 'file' => $attachment], 201);
     }
 
@@ -1161,6 +1349,20 @@ class ProjectController extends Controller
      */
     public function addLink(Request $request, Project $project)
     {
+        $user = $request->user();
+        $memberIds = $project->getMembers()->pluck('id')->toArray();
+        $isViewOnly = $project->visibility()
+            ->where('user_id', $user->id)
+            ->where('is_visible', true)
+            ->exists()
+            && ! in_array((int) $user->id, array_map('intval', $memberIds))
+            && (int) $user->id !== (int) $project->created_by
+            && ! in_array($user->role, ['admin', 'manager']);
+
+        if ($isViewOnly) {
+            return response()->json(['success' => false, 'message' => 'View-only users cannot add links.'], 403);
+        }
+
         if (is_string($request->input('url'))) {
             $rawUrl = trim($request->input('url'));
             if ($rawUrl !== '' && ! preg_match('~^(?:f|ht)tps?://~i', $rawUrl)) {
@@ -1199,6 +1401,21 @@ class ProjectController extends Controller
             'action' => 'field_changed',
             'comment' => 'Link added: '.$linkName,
         ]);
+
+        try {
+            $this->auditService->log(
+                module: 'project_management',
+                action: 'create',
+                description: "Added link \"{$linkName}\" to project \"{$project->title}\"",
+                user: $user,
+                entityType: 'ProjectFile',
+                entityId: $attachment->id,
+                newValues: ['link_name' => $linkName, 'link_url' => $validated['url']],
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log link add audit', ['error' => $e->getMessage()]);
+        }
 
         return response()->json(['success' => true, 'message' => 'Link added successfully', 'file' => $attachment], 201);
     }
@@ -1420,6 +1637,14 @@ class ProjectController extends Controller
             'action' => 'field_changed',
             'comment' => 'File removed: '.$fileName,
         ]);
+
+        $this->auditService->log(
+            'project_management', 'delete',
+            "Deleted file \"{$fileName}\" from project \"{$project->name}\"",
+            $user, 'project_file', $file->id,
+            ['file_name' => $fileName, 'project_id' => $project->id, 'project_name' => $project->name],
+            null, 'success'
+        );
 
         return response()->json(['success' => true, 'message' => 'File deleted successfully']);
     }
@@ -1814,6 +2039,8 @@ class ProjectController extends Controller
      */
     public function unifiedActivity(Request $request, Project $project): JsonResponse
     {
+        $startDate = $request->query('start_date') ?: $request->query('date_from');
+        $endDate = $request->query('end_date') ?: $request->query('date_to');
         $dateFilter = $request->query('date');
         $userFilter = $request->query('user_id');
         $typeFilter = $request->query('type');
@@ -1883,9 +2110,35 @@ class ProjectController extends Controller
             ]);
         }
 
-        // Filter by Date
-        if ($dateFilter) {
-            $feed = $feed->filter(fn ($item) => substr($item['created_at'], 0, 10) === $dateFilter);
+        // Filter by Date Range or Single Date
+        if ($startDate) {
+            $formattedStart = ActivityService::parseQueryDate($startDate);
+            if ($formattedStart) {
+                $feed = $feed->filter(function ($item) use ($formattedStart) {
+                    $d = substr($item['created_at'], 0, 10);
+                    return $d >= $formattedStart;
+                });
+            }
+        }
+        if ($endDate) {
+            $formattedEnd = ActivityService::parseQueryDate($endDate);
+            if ($formattedEnd) {
+                $feed = $feed->filter(function ($item) use ($formattedEnd) {
+                    $d = substr($item['created_at'], 0, 10);
+                    return $d <= $formattedEnd;
+                });
+            }
+        }
+        if ($dateFilter && !$startDate && !$endDate) {
+            $targetDate = ActivityService::parseQueryDate($dateFilter);
+            if ($targetDate) {
+                $feed = $feed->filter(function ($item) use ($targetDate) {
+                    $d1 = substr($item['created_at'], 0, 10);
+                    if ($d1 === $targetDate) return true;
+                    $ts = strtotime($item['created_at']);
+                    return $ts !== false && date('Y-m-d', $ts) === $targetDate;
+                });
+            }
         }
 
         // Filter by User / Person

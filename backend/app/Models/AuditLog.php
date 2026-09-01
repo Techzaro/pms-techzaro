@@ -120,10 +120,12 @@ class AuditLog extends Model
 
     public function scopeDate($query, $date)
     {
-        if ($date) {
-            $formatted = \App\Services\ActivityService::parseQueryDate($date);
-            if ($formatted) {
+        if (!empty($date)) {
+            try {
+                $formatted = \Carbon\Carbon::parse($date)->toDateString();
                 $query->whereDate('created_at', $formatted);
+            } catch (\Throwable $e) {
+                $query->whereDate('created_at', $date);
             }
         }
         return $query;
@@ -131,13 +133,21 @@ class AuditLog extends Model
 
     public function scopeDateRange($query, $from, $to)
     {
-        if ($from) {
-            $f = \App\Services\ActivityService::parseQueryDate($from);
-            if ($f) $query->whereDate('created_at', '>=', $f);
+        if (!empty($from)) {
+            try {
+                $f = \Carbon\Carbon::parse($from)->toDateString();
+                $query->whereDate('created_at', '>=', $f);
+            } catch (\Throwable $e) {
+                $query->whereDate('created_at', '>=', $from);
+            }
         }
-        if ($to) {
-            $t = \App\Services\ActivityService::parseQueryDate($to);
-            if ($t) $query->whereDate('created_at', '<=', $t);
+        if (!empty($to)) {
+            try {
+                $t = \Carbon\Carbon::parse($to)->toDateString();
+                $query->whereDate('created_at', '<=', $t);
+            } catch (\Throwable $e) {
+                $query->whereDate('created_at', '<=', $to);
+            }
         }
         return $query;
     }

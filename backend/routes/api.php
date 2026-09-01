@@ -665,6 +665,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/events/{event}/attachments/{attachment}', [EventController::class, 'deleteAttachment'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Delete attachment
     Route::get('/events/{event}/attachments/{attachment}/download', [EventController::class, 'downloadAttachment']); // Download attachment
     Route::post('/events/{event}/rsvp', [EventController::class, 'rsvp']); // RSVP / Acknowledge event
+    Route::get('/events/{event}/activities', [EventController::class, 'activities']); // Event activity feed
 
     /*
     | Unified Calendar Routes

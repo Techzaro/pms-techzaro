@@ -16,7 +16,6 @@ class Event extends Model
 {
     protected $fillable = [
         'user_id',
-        'created_by',
         'organizer_id',
         'title',
         'description',
@@ -129,9 +128,7 @@ class Event extends Model
     /** The user who created this event. */
     public function creator(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'created_by')->withDefault(function ($user, $event) {
-            return $event->user;
-        });
+        return $this->belongsTo(User::class, 'user_id');
     }
 
     /** Reminders configured for this event. */

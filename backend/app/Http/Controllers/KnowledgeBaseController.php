@@ -1136,8 +1136,10 @@ class KnowledgeBaseController extends Controller
      */
     public function activities(Request $request, KnowledgeBase $knowledgeBase): JsonResponse
     {
-        $dateFilter = $request->query('date');
-        $userFilter = $request->query('user_id');
+        $startDate = $request->input('start_date') ?: $request->input('date_from');
+        $endDate = $request->input('end_date') ?: $request->input('date_to');
+        $dateFilter = $request->input('date');
+        $userFilter = $request->input('user_id');
         $typeFilter = $request->query('type') ?: $request->query('action');
 
         $query = \App\Models\Activity::with('user:id,name,email,avatar,role')
@@ -1151,13 +1153,33 @@ class KnowledgeBaseController extends Controller
                   ]);
             });
 
-        if ($dateFilter) {
-            $formattedDate = ActivityService::parseQueryDate($dateFilter);
-            if ($formattedDate) {
-                $query->whereDate('created_at', $formattedDate);
+        if (!empty($startDate)) {
+            try {
+                $parsedFrom = \Carbon\Carbon::parse($startDate)->toDateString();
+                $query->whereDate('created_at', '>=', $parsedFrom);
+            } catch (\Throwable $e) {
+                $query->whereDate('created_at', '>=', $startDate);
             }
         }
-        if ($userFilter) {
+
+        if (!empty($endDate)) {
+            try {
+                $parsedTo = \Carbon\Carbon::parse($endDate)->toDateString();
+                $query->whereDate('created_at', '<=', $parsedTo);
+            } catch (\Throwable $e) {
+                $query->whereDate('created_at', '<=', $endDate);
+            }
+        }
+
+        if (!empty($request->input('date')) && empty($startDate) && empty($endDate)) {
+            try {
+                $parsedDate = \Carbon\Carbon::parse($request->input('date'))->toDateString();
+                $query->whereDate('created_at', $parsedDate);
+            } catch (\Throwable $e) {
+                $query->whereDate('created_at', $request->input('date'));
+            }
+        }
+        if (!empty($userFilter)) {
             $query->where('user_id', $userFilter);
         }
         if ($typeFilter && $typeFilter !== 'all') {
@@ -1192,6 +1214,12 @@ class KnowledgeBaseController extends Controller
                 }
             });
         }
+
+        \Illuminate\Support\Facades\Log::info('Activity Filter Trace - KB', [
+            'request' => $request->all(),
+            'sql' => $query->toSql(),
+            'bindings' => $query->getBindings(),
+        ]);
 
         $activities = $query->latest()->get();
 

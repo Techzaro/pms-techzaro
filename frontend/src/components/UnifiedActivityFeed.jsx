@@ -34,32 +34,36 @@ export default function UnifiedActivityFeed({ module = "task", entityId, initial
   const [loading, setLoading] = useState(true);
 
   // Filter States
-  const [dateFilter, setDateFilter] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [userFilter, setUserFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
+
+  const formatISODate = (val) => {
+    if (!val) return "";
+    const clean = String(val).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) return clean;
+    const d = new Date(clean);
+    return isNaN(d.getTime()) ? clean : d.toISOString().split("T")[0];
+  };
 
   const fetchUnifiedActivity = React.useCallback(async () => {
     try {
       setLoading(true);
       const token = authToken();
       const params = new URLSearchParams();
-      if (dateFilter) {
-        let cleanDate = dateFilter.trim();
-        if (/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/.test(cleanDate)) {
-          const parts = cleanDate.split(/[\/\-]/);
-          const p1 = parseInt(parts[0], 10);
-          const p2 = parseInt(parts[1], 10);
-          const year = parts[2];
-          if (p1 > 12) {
-            cleanDate = `${year}-${String(p2).padStart(2, '0')}-${String(p1).padStart(2, '0')}`;
-          } else {
-            cleanDate = `${year}-${String(p1).padStart(2, '0')}-${String(p2).padStart(2, '0')}`;
-          }
-        }
-        params.append("date", cleanDate);
+      if (startDate && startDate.trim() !== "") {
+        const formattedStart = formatISODate(startDate);
+        params.append("start_date", formattedStart);
+        params.append("date_from", formattedStart);
       }
-      if (userFilter) params.append("user_id", userFilter);
-      if (typeFilter && typeFilter !== "all") params.append("type", typeFilter);
+      if (endDate && endDate.trim() !== "") {
+        const formattedEnd = formatISODate(endDate);
+        params.append("end_date", formattedEnd);
+        params.append("date_to", formattedEnd);
+      }
+      if (userFilter && userFilter !== "") params.append("user_id", userFilter);
+      if (typeFilter && typeFilter !== "all" && typeFilter !== "") params.append("type", typeFilter);
 
       let endpoint = "";
       if (module === "project" && entityId) {
@@ -76,34 +80,42 @@ export default function UnifiedActivityFeed({ module = "task", entityId, initial
         endpoint = `${API_URL}/activity-logs?module=${module}&${params.toString()}`;
       }
 
+      console.log("ACTUAL URL HIT:", endpoint, "PARAMS:", params.toString());
+
       let res = await fetch(endpoint, {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         skipLoader: true,
       });
 
-      // Fallback if specific module activity route doesn't exist
-      if (!res.ok && res.status === 404) {
-        const fallbackUrl = `${API_URL}/activity-logs?${params.toString()}${entityId ? `&entity_id=${entityId}` : ""}${module ? `&module=${module}` : ""}`;
-        res = await fetch(fallbackUrl, {
-          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-          skipLoader: true,
-        });
-      }
-
       if (res.ok) {
         const data = await res.json();
-        const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
-        setActivities(list);
+        console.log("UnifiedActivityFeed API response:", data);
+        let list = [];
+        if (Array.isArray(data?.data?.data)) {
+          list = data.data.data;
+        } else if (Array.isArray(data?.data)) {
+          list = data.data;
+        } else if (Array.isArray(data?.activities)) {
+          list = data.activities;
+        } else if (Array.isArray(data?.logs)) {
+          list = data.logs;
+        } else if (Array.isArray(data)) {
+          list = data;
+        }
+        setActivities([...list]);
         if (data.users && data.users.length > 0) {
           setUsers(data.users);
         }
+      } else {
+        setActivities([]);
       }
     } catch (err) {
       console.error("Failed to fetch unified activity feed:", err);
+      setActivities([]);
     } finally {
       setLoading(false);
     }
-  }, [module, entityId, dateFilter, userFilter, typeFilter]);
+  }, [module, entityId, startDate, endDate, userFilter, typeFilter]);
 
   // Fetch activity data when filters or entity changes
   useEffect(() => {
@@ -227,7 +239,8 @@ export default function UnifiedActivityFeed({ module = "task", entityId, initial
   }, [module, t]);
 
   const resetFilters = () => {
-    setDateFilter("");
+    setStartDate("");
+    setEndDate("");
     setUserFilter("");
     setTypeFilter("all");
   };
@@ -431,7 +444,7 @@ export default function UnifiedActivityFeed({ module = "task", entityId, initial
     return item?.entity_name || (item?.description ? item.description.replace(/<[^>]*>?/gm, "").slice(0, 40) : null) || t("Activity Event", { defaultValue: "Activity Event" });
   };
 
-  const isFiltered = Boolean(dateFilter || userFilter || (typeFilter && typeFilter !== "all"));
+  const isFiltered = Boolean(startDate || endDate || userFilter || (typeFilter && typeFilter !== "all"));
 
   return (
     <div
@@ -501,15 +514,39 @@ export default function UnifiedActivityFeed({ module = "task", entityId, initial
           borderRadius: "8px",
         }}
       >
-        {/* Date Filter */}
+        {/* From Date Filter */}
         <div style={{ flex: "1 1 120px", minWidth: 110 }}>
           <label style={{ fontSize: 10, fontWeight: 700, color: "#64748b", display: "block", marginBottom: 3, textTransform: "uppercase" }}>
-            {t("Date", { defaultValue: "Date" })}
+            {t("From Date", { defaultValue: "From Date" })}
           </label>
           <input
             type="date"
-            value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            style={{
+              width: "100%",
+              height: "32px",
+              padding: "2px 6px",
+              borderRadius: "6px",
+              border: "1px solid var(--border-color, #cbd5e1)",
+              background: "#ffffff",
+              color: "#0f172a",
+              fontSize: "11px",
+              outline: "none",
+              boxSizing: "border-box",
+            }}
+          />
+        </div>
+
+        {/* To Date Filter */}
+        <div style={{ flex: "1 1 120px", minWidth: 110 }}>
+          <label style={{ fontSize: 10, fontWeight: 700, color: "#64748b", display: "block", marginBottom: 3, textTransform: "uppercase" }}>
+            {t("To Date", { defaultValue: "To Date" })}
+          </label>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
             style={{
               width: "100%",
               height: "32px",

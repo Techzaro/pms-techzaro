@@ -65,7 +65,6 @@ class EventController extends Controller
         if (!$isAdmin) {
             $query->where(function ($q) use ($user, $userTeamIds, $userDept) {
                 $q->where('user_id', $user->id)
-                    ->orWhere('created_by', $user->id)
                     ->orWhere('organizer_id', $user->id)
                     ->orWhere('is_global', true)
                     ->orWhere('visibility_level', 'organization')
@@ -165,7 +164,7 @@ class EventController extends Controller
         if (!$isAdmin) {
             $isAssigned = $event->assignedUsers->contains('id', $user->id);
             $isParticipant = $event->participants->contains('user_id', $user->id);
-            $isCreator = ($event->user_id === $user->id) || ($event->created_by === $user->id) || ($event->organizer_id === $user->id);
+            $isCreator = ($event->user_id === $user->id) || ($event->organizer_id === $user->id);
 
             if (!$event->is_global && $event->visibility_level === 'private' && !$isCreator && !$isAssigned && !$isParticipant) {
                 return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
@@ -242,7 +241,6 @@ class EventController extends Controller
 
             $createdEvent = Event::create([
                 'user_id' => $user->id,
-                'created_by' => $user->id,
                 'organizer_id' => $validated['organizer_id'] ?? $user->id,
                 'title' => $validated['title'],
                 'description' => $validated['description'] ?? null,
@@ -394,7 +392,7 @@ class EventController extends Controller
     {
         $user = $request->user();
         $isAdmin = in_array($user->role, ['admin', 'manager', 'superadmin']);
-        if (!$isAdmin && $event->user_id !== $user->id && $event->created_by !== $user->id && $event->organizer_id !== $user->id) {
+        if (!$isAdmin && $event->user_id !== $user->id && $event->organizer_id !== $user->id) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
@@ -612,7 +610,7 @@ class EventController extends Controller
     {
         $user = $request->user();
         $isAdmin = in_array($user->role, ['admin', 'manager', 'superadmin']);
-        if (!$isAdmin && $event->user_id !== $user->id && $event->created_by !== $user->id && $event->organizer_id !== $user->id) {
+        if (!$isAdmin && $event->user_id !== $user->id && $event->organizer_id !== $user->id) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
@@ -661,11 +659,11 @@ class EventController extends Controller
 
         $user = $request->user() ?? auth()->user();
         if (!$user && $event) {
-            $user = User::find($event->created_by ?? $event->user_id);
+            $user = User::find($event->user_id);
         }
 
         $isAdmin = $user && in_array($user->role, ['admin', 'manager', 'superadmin']);
-        if (!$isAdmin && $user && $event->user_id !== $user->id && $event->created_by !== $user->id && $event->organizer_id !== $user->id) {
+        if (!$isAdmin && $user && $event->user_id !== $user->id && $event->organizer_id !== $user->id) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
@@ -971,6 +969,97 @@ class EventController extends Controller
     }
 
     /**
+     * Get unified activity feed for a single Event.
+     */
+    public function activities(Request $request, Event $event): JsonResponse
+    {
+        $startDate = $request->input('start_date') ?: $request->input('date_from');
+        $endDate = $request->input('end_date') ?: $request->input('date_to');
+        $dateFilter = $request->input('date');
+        $userFilter = $request->input('user_id');
+        $typeFilter = $request->query('type') ?: $request->query('action');
+
+        $query = \App\Models\Activity::with('user:id,name,email,avatar,role')
+            ->where('related_id', $event->id)
+            ->where(function ($q) {
+                $q->whereIn('related_module', ['event', 'events'])
+                  ->orWhereIn('activity_type', [
+                      'event', 'events', 'event_created', 'event_updated', 'event_deleted',
+                      'event_cancelled', 'rsvp', 'event_participant_added', 'event_participant_removed',
+                      'event_attachment_added', 'event_attachment_deleted'
+                  ]);
+            });
+
+        if (!empty($startDate)) {
+            try {
+                $parsedFrom = \Carbon\Carbon::parse($startDate)->toDateString();
+                $query->whereDate('created_at', '>=', $parsedFrom);
+            } catch (\Throwable $e) {
+                $query->whereDate('created_at', '>=', $startDate);
+            }
+        }
+
+        if (!empty($endDate)) {
+            try {
+                $parsedTo = \Carbon\Carbon::parse($endDate)->toDateString();
+                $query->whereDate('created_at', '<=', $parsedTo);
+            } catch (\Throwable $e) {
+                $query->whereDate('created_at', '<=', $endDate);
+            }
+        }
+
+        if (!empty($request->input('date')) && empty($startDate) && empty($endDate)) {
+            try {
+                $parsedDate = \Carbon\Carbon::parse($request->input('date'))->toDateString();
+                $query->whereDate('created_at', $parsedDate);
+            } catch (\Throwable $e) {
+                $query->whereDate('created_at', $request->input('date'));
+            }
+        }
+        if (!empty($userFilter)) {
+            $query->where('user_id', $userFilter);
+        }
+        if ($typeFilter && $typeFilter !== 'all') {
+            $query->where(function ($q) use ($typeFilter) {
+                $q->where('activity_type', $typeFilter)
+                  ->orWhere('action', $typeFilter);
+
+                if (in_array($typeFilter, ['event_created', 'created'])) {
+                    $q->orWhereIn('activity_type', ['event_created', 'created'])
+                      ->orWhereIn('action', ['created', 'create', 'event_created']);
+                } elseif (in_array($typeFilter, ['event_updated', 'updated', 'edited'])) {
+                    $q->orWhereIn('activity_type', ['event_updated', 'updated'])
+                      ->orWhereIn('action', ['updated', 'edited', 'update', 'event_updated']);
+                } elseif (in_array($typeFilter, ['event_cancelled', 'cancelled'])) {
+                    $q->orWhereIn('activity_type', ['event_cancelled', 'cancelled'])
+                      ->orWhereIn('action', ['cancelled', 'cancel', 'event_cancelled']);
+                } elseif (in_array($typeFilter, ['rsvp', 'acknowledged', 'accepted', 'declined', 'tentative'])) {
+                    $q->orWhereIn('activity_type', ['rsvp'])
+                      ->orWhereIn('action', ['rsvp', 'acknowledged', 'accepted', 'declined', 'tentative']);
+                }
+            });
+        }
+
+        \Illuminate\Support\Facades\Log::info('Activity Filter Trace - Event', [
+            'request' => $request->all(),
+            'sql' => $query->toSql(),
+            'bindings' => $query->getBindings(),
+        ]);
+
+        $activities = $query->orderBy('created_at', 'desc')->get();
+
+        // Distinct users who performed activities on this event
+        $userIds = $activities->pluck('user_id')->filter()->unique()->values();
+        $users = User::whereIn('id', $userIds)->select('id', 'name', 'email', 'avatar', 'role')->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $activities,
+            'users' => $users,
+        ]);
+    }
+
+    /**
      * Format an event model into a standardized, crash-proof API response array.
      */
     private function formatEventResponse(Event $event): array
@@ -1037,13 +1126,13 @@ class EventController extends Controller
             'all_day' => (bool) $event->all_day,
             'color' => $event->color,
             'is_global' => (bool) $event->is_global,
-            'is_announcement' => ($event->type === 'announcement' || $event->type === 'Company Announcement' || $event->is_global),
+            'is_announcement' => ($event->type === 'announcement' || $event->type === 'Company Announcement'),
             'visibility_level' => $event->visibility_level ?? ($event->is_global ? 'organization' : 'private'),
             'location' => $event->location,
             'meeting_link' => $event->meeting_link,
             'status' => $event->status ?? 'scheduled',
             'user_id' => $event->user_id,
-            'created_by' => $event->created_by ?? $event->user_id,
+            'created_by' => $event->user_id,
             'organizer_id' => $event->organizer_id,
             'creator_name' => $event->user?->name ?? 'System',
             'organizer_name' => $event->organizer?->name ?? $event->user?->name,
@@ -1280,7 +1369,7 @@ class EventController extends Controller
             'type' => $event->type,
             'title' => $event->title,
             'user_id' => $event->user_id,
-            'created_by' => $event->created_by ?? $event->user_id,
+            'created_by' => $event->user_id,
             'description' => $event->description,
             'date' => $this->fmtDate($event->start_date),
             'start_date' => $this->fmtDate($event->start_date),

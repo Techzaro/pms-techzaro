@@ -1,0 +1,1 @@
+import"./rolldown-runtime-QTnfLwEv.js";import{a as e,i as t}from"./useTranslation-kH6Pr41K.js";import n from"./EventsList-CDmRtkqm.js";e();var r=t();function i(){return(0,r.jsx)(n,{})}export{i as default};

@@ -674,10 +674,11 @@ export default function EventEditor() {
   // ── VIEW MODE: Read-only page with tabs, attachments, participants & actions ─────────────
   if (isViewMode && loadedEvent) {
     const ev = loadedEvent;
-    const isAnnounce = ev.is_announcement || ev.type === "announcement" || ev.type === "Company Announcement" || ev.is_global;
+    const isAnnounce = ev.type === "announcement" || ev.type === "Company Announcement";
     const isAssigned = Array.isArray(ev.assigned_users) && ev.assigned_users.some((u) => u?.id === user?.id);
     const isParticipant = Array.isArray(ev.participants) && ev.participants.some((p) => p?.user_id === user?.id);
-    const canEdit = ev.user_id === user?.id || ev.created_by === user?.id || ev.organizer_id === user?.id || ["admin", "manager", "superadmin"].includes(user?.role);
+    const isCreatorOrOrganizer = ev.user_id === user?.id || ev.organizer_id === user?.id || ev.created_by === user?.id;
+    const canEdit = isCreatorOrOrganizer || ["admin", "manager", "superadmin"].includes(user?.role);
     const isCancelled = ev.status === "cancelled";
     const startDateObj = ev.start_date ? new Date(ev.start_date) : null;
 
@@ -696,8 +697,8 @@ export default function EventEditor() {
             </button>
 
             <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-              {/* RSVP & Acknowledge Controls */}
-              {!isCancelled && (isAssigned || isParticipant || isAnnounce) && (
+              {/* RSVP & Acknowledge Controls - Hidden for Creator / Organizer */}
+              {!isCancelled && !isCreatorOrOrganizer && (isAssigned || isParticipant || isAnnounce) && (
                 <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                   {isAnnounce ? (
                     <button
@@ -841,7 +842,7 @@ export default function EventEditor() {
           <div style={{ display: "flex", gap: "4px", borderBottom: "2px solid var(--border-color)" }}>
             {[
               { id: "details", label: t("Details", { defaultValue: "Details" }), icon: <Calendar size={15} /> },
-              { id: "activity", label: t("Activity & Logs", { defaultValue: "Activity & Logs" }), icon: <Activity size={15} /> },
+              { id: "activity", label: t("Activity", { defaultValue: "Activity" }), icon: <Activity size={15} /> },
             ].map(({ id: tabId, label, icon }) => (
               <button
                 key={tabId}
@@ -878,8 +879,13 @@ export default function EventEditor() {
                     <Megaphone size={13} /> {t("Company Announcement", { defaultValue: "Company Announcement" })}
                   </span>
                 ) : (
-                  <span style={{ fontSize: "12px", fontWeight: 700, color: ev.category?.color || "#2563eb", background: "#eff6ff", padding: "3px 10px", borderRadius: "4px" }}>
-                    {ev.category?.name || t(ev.type || "Event", { defaultValue: ev.type || "Event" })}
+                  <span style={{ fontSize: "12px", fontWeight: 700, color: ev.category?.color || "#2563eb", background: "#eff6ff", padding: "3px 10px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                    <Calendar size={13} /> {t("Event Invitation", { defaultValue: "Event Invitation" })}
+                  </span>
+                )}
+                {ev.category?.name && (
+                  <span style={{ fontSize: "12px", fontWeight: 600, color: ev.category?.color || "#475569", background: "var(--bg-hover)", padding: "3px 8px", borderRadius: "4px", border: "1px solid var(--border-color)" }}>
+                    {ev.category.name}
                   </span>
                 )}
                 {ev.status && (
@@ -1242,7 +1248,7 @@ export default function EventEditor() {
                 }}
               >
                 <option value="event">{t("📅 Event Invitation", { defaultValue: "📅 Event Invitation" })}</option>
-                <option value="announcement">{t("📢 Event Announcement", { defaultValue: "📢 Event Announcement" })}</option>
+                <option value="announcement">{t("📢 Company Announcement", { defaultValue: "📢 Company Announcement" })}</option>
               </select>
             </div>
 
@@ -1648,7 +1654,7 @@ export default function EventEditor() {
               )}
 
               {/* SPECIFIC ATTENDEES LIST (MULTI-SELECT) */}
-              {(visibilityLevel === "custom" || visibilityLevel === "private" || visibilityLevel === "organization") && formType === "event" && (
+              {visibilityLevel === "custom" && formType === "event" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px", padding: "14px", background: "var(--bg-hover)", borderRadius: "10px", border: "1px solid var(--border-color)" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <label style={{ fontSize: "13px", fontWeight: 700 }}>

@@ -2039,6 +2039,8 @@ class ProjectController extends Controller
      */
     public function unifiedActivity(Request $request, Project $project): JsonResponse
     {
+        $startDate = $request->query('start_date') ?: $request->query('date_from');
+        $endDate = $request->query('end_date') ?: $request->query('date_to');
         $dateFilter = $request->query('date');
         $userFilter = $request->query('user_id');
         $typeFilter = $request->query('type');
@@ -2108,8 +2110,26 @@ class ProjectController extends Controller
             ]);
         }
 
-        // Filter by Date
-        if ($dateFilter) {
+        // Filter by Date Range or Single Date
+        if ($startDate) {
+            $formattedStart = ActivityService::parseQueryDate($startDate);
+            if ($formattedStart) {
+                $feed = $feed->filter(function ($item) use ($formattedStart) {
+                    $d = substr($item['created_at'], 0, 10);
+                    return $d >= $formattedStart;
+                });
+            }
+        }
+        if ($endDate) {
+            $formattedEnd = ActivityService::parseQueryDate($endDate);
+            if ($formattedEnd) {
+                $feed = $feed->filter(function ($item) use ($formattedEnd) {
+                    $d = substr($item['created_at'], 0, 10);
+                    return $d <= $formattedEnd;
+                });
+            }
+        }
+        if ($dateFilter && !$startDate && !$endDate) {
             $targetDate = ActivityService::parseQueryDate($dateFilter);
             if ($targetDate) {
                 $feed = $feed->filter(function ($item) use ($targetDate) {

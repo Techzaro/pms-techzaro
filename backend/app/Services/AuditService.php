@@ -89,10 +89,15 @@ class AuditService
         if (!empty($filters['search'])) {
             $query->search($filters['search']);
         }
-
         $sortField = $filters['sort_field'] ?? 'created_at';
         $sortOrder = $filters['sort_order'] ?? 'desc';
         $query->orderBy($sortField, $sortOrder);
+
+        \Illuminate\Support\Facades\Log::info('Activity Filter Trace - AuditLogs', [
+            'filters' => $filters,
+            'sql' => $query->toSql(),
+            'bindings' => $query->getBindings(),
+        ]);
 
         return $query->paginate($perPage);
     }

@@ -12,7 +12,8 @@ return new class extends Migration
             Schema::create('audit_logs', function (Blueprint $table) {
                 $table->id();
                 $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
-                $table->string('user_name', 255)->nullable()->after('user_id');
+                // Yahan se after() hata diya gaya hai
+                $table->string('user_name', 255)->nullable();
                 $table->string('module', 50);
                 $table->string('action', 50);
                 $table->string('entity_type', 100)->nullable();
