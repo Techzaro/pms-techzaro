@@ -37,6 +37,7 @@ import {
   MdMenuBook,
   MdChat,
   MdStorage,
+  MdShare,
 } from "react-icons/md";
 
 import "./Sidebar.css";
@@ -550,6 +551,18 @@ function Sidebar() {
             >
               <MdMenuBook />
               <span>{t("Knowledge Base")}</span>
+            </Link>
+          )}
+
+          {/* Sharing link – admin/manager only */}
+          {(user.role === "admin" || user.role === "manager") && (
+            <Link
+              to={rolePath("sharing")}
+              className={`sidebar-link ${isActiveOrStart("sharing") ? "active" : ""}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <MdShare />
+              <span>{t("Sharing")}</span>
             </Link>
           )}
 

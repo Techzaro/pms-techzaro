@@ -26,6 +26,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'tenant.resolve' => \App\Http\Middleware\ResolveTenantDatabase::class,
             'super.admin' => \App\Http\Middleware\SuperAdminAuth::class,
             'check.plan.limits' => \App\Http\Middleware\CheckPlanLimits::class,
+            'external-access' => \App\Http\Middleware\CheckExternalAccess::class,
         ]);
         $middleware->prependToPriorityList(
             \Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests::class,

@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Foundation\Validation\ValidatesRequests;
 use Illuminate\Routing\Controller as BaseController;
-use Illuminate\Support\Facades\Cache;
+use App\Services\Saas\Infrastructure\TenantCacheManager;
 
 /**
  * Base controller class for all controllers in the application.
@@ -23,9 +23,10 @@ abstract class Controller extends BaseController
      */
     protected function clearDashboardCache(int $userId): void
     {
-        Cache::forget("dashboard_{$userId}_my");
-        Cache::forget("dashboard_{$userId}_user");
-        Cache::forget("user_project_ids_{$userId}");
-        Cache::forget("dashboard_recent_activity_{$userId}");
+        $cache = app(TenantCacheManager::class);
+        $cache->forget("dashboard_{$userId}_my");
+        $cache->forget("dashboard_{$userId}_user");
+        $cache->forget("user_project_ids_{$userId}");
+        $cache->forget("dashboard_recent_activity_{$userId}");
     }
 }

@@ -92,6 +92,7 @@ function Projects() {
   const notify = useNotification();
   const [searchParams, setSearchParams] = useSearchParams();
   const [projects, setProjects] = useState([]);
+  const [sharedProjects, setSharedProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -141,8 +142,12 @@ function Projects() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
   useEffect(() => {
-    setOrderedProjects(projects);
-  }, [projects]);
+    const merged = [
+      ...projects,
+      ...sharedProjects.filter((sp) => !projects.some((p) => String(p.id) === String(sp.id))),
+    ];
+    setOrderedProjects(merged);
+  }, [projects, sharedProjects]);
 
   const handleProjectReorder = useCallback((reordered) => {
     setOrderedProjects(reordered);
@@ -222,8 +227,25 @@ function Projects() {
     }
   };
 
+  const fetchSharedProjects = async () => {
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/sharing/shared-resources?type=project`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSharedProjects(Array.isArray(data?.data) ? data.data : []);
+      }
+    } catch (err) {
+      console.error("Error fetching shared projects:", err);
+    }
+  };
+
   useEffect(() => {
     fetchProjects();
+    fetchSharedProjects();
   }, [timeFilter, startDate, endDate]);
 
   // Handle draft restoration from DraftCenter
@@ -235,8 +257,8 @@ function Projects() {
     setShowModal(true);
   }, [location.state]);
 
-  useAutoRefresh(fetchProjects, {
-    events: ['project:created', 'project:updated', 'project:deleted', 'data:changed'],
+  useAutoRefresh(() => { fetchProjects(); fetchSharedProjects(); }, {
+    events: ['project:created', 'project:updated', 'project:deleted', 'data:changed', 'sharing:changed'],
   });
 
   const handleDeleteProject = (project) => {
@@ -575,6 +597,12 @@ function Projects() {
                       {/* HEADER */}
                       <div className="project-card-header">
                         <h3>{project.title}</h3>
+                        {project.is_shared && (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#EEF2FF", color: "#4F46E5", padding: "2px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: 600, marginLeft: "8px", flexShrink: 0 }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                            {t("Shared", { defaultValue: "Shared" })}
+                          </span>
+                        )}
 
                         {/* OWNERSHIP INFO */}
                         <div className="ownership-info" style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "6px", marginBottom: "4px" }}>
@@ -689,7 +717,7 @@ function Projects() {
                             navigate(rolePath(`projects/project-details/${project.id}`));
                           }}
                         >
-                          {isAdminOrManager && (
+                          {isAdminOrManager && !project.is_shared && (
                             <button className="action-icon-btn action-edit" title={t("Edit Project", { defaultValue: "Edit Project" })} onClick={async () => {
                               try {
                                 const token = authToken();
@@ -710,7 +738,7 @@ function Projects() {
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                             </button>
                           )}
-                          {isAdminOrManager && (
+                          {isAdminOrManager && !project.is_shared && (
                             <button className="action-icon-btn action-delete" title={t("Delete Project", { defaultValue: "Delete Project" })} onClick={() => handleDeleteProject(project)}>
                               <Trash2 size={16} />
                             </button>
@@ -756,7 +784,15 @@ function Projects() {
                         <div className="project-name-drag-handle">
                         <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={project.id} businessId={project.business_id} />
                         </div>
-                        <div className="project-name-text">{project.title}</div>
+                        <div className="project-name-text">
+                          {project.title}
+                          {project.is_shared && (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", background: "#EEF2FF", color: "#4F46E5", padding: "1px 6px", borderRadius: "10px", fontSize: "10px", fontWeight: 600, marginLeft: "8px", verticalAlign: "middle" }}>
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                              {t("Shared", { defaultValue: "Shared" })}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                     <div className="col-status">
@@ -806,7 +842,7 @@ function Projects() {
                           navigate(rolePath(`projects/project-details/${project.id}`));
                         }}
                       >
-                        {isAdminOrManager && (
+                        {isAdminOrManager && !project.is_shared && (
                           <button className="action-icon-btn action-edit" title={t("Edit Project", { defaultValue: "Edit Project" })} onClick={async () => {
                             try {
                               const token = authToken();
@@ -827,7 +863,7 @@ function Projects() {
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                             </button>
                           )}
-                          {isAdminOrManager && (
+                          {isAdminOrManager && !project.is_shared && (
                             <button className="action-icon-btn action-delete" title={t("Delete Project", { defaultValue: "Delete Project" })} onClick={() => handleDeleteProject(project)}>
                               <Trash2 size={16} />
                             </button>

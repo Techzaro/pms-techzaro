@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Building2, Users, FolderKanban, Database, TrendingUp, Activity,
   ArrowUpRight, CheckCircle2, AlertTriangle, XCircle, Clock,
-  Puzzle, CreditCard, Shield,
+  Puzzle, CreditCard, Shield, Rocket, Star, Crown, Zap,
 } from 'lucide-react';
 import StatCard from './components/StatCard';
 import StatusBadge from './components/StatusBadge';
@@ -85,15 +85,17 @@ export default function DashboardPage() {
         <p className="text-sm mt-1" style={s.textSecondary}>{t('Overview of your SaaS platform', { defaultValue: 'Overview of your SaaS platform' })}</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        <StatCard title={t("Organizations", { defaultValue: "Organizations" })} value={stats?.total_organizations || 0} icon={Building2} color="blue" onClick={() => navigate('/super-admin/organizations')} />
-        <StatCard title={t("Active Orgs", { defaultValue: "Active Orgs" })} value={stats?.active_organizations || 0} icon={CheckCircle2} color="green" onClick={() => navigate('/super-admin/organizations')} />
-        <StatCard title={t("Trial Orgs", { defaultValue: "Trial Orgs" })} value={stats?.trial_organizations || 0} icon={Clock} color="purple" onClick={() => navigate('/super-admin/organizations')} />
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+        <StatCard title={t("Total Orgs", { defaultValue: "Total Orgs" })} value={stats?.total_organizations || 0} icon={Building2} color="blue" onClick={() => navigate('/super-admin/organizations')} />
+        <StatCard title={t("Active", { defaultValue: "Active" })} value={stats?.active_organizations || 0} icon={CheckCircle2} color="green" onClick={() => navigate('/super-admin/organizations')} />
         <StatCard title={t("Suspended", { defaultValue: "Suspended" })} value={stats?.suspended_organizations || 0} icon={AlertTriangle} color="red" onClick={() => navigate('/super-admin/organizations')} />
+        <StatCard title={t("Trial", { defaultValue: "Trial" })} value={stats?.trial_organizations || 0} icon={Clock} color="purple" onClick={() => navigate('/super-admin/organizations')} />
+        <StatCard title={t("Starter", { defaultValue: "Starter" })} value={stats?.starter_organizations || 0} icon={Zap} color="amber" onClick={() => navigate('/super-admin/organizations')} />
+        <StatCard title={t("Standard", { defaultValue: "Standard" })} value={stats?.standard_organizations || 0} icon={Star} color="cyan" onClick={() => navigate('/super-admin/organizations')} />
+        <StatCard title={t("Enterprise", { defaultValue: "Enterprise" })} value={stats?.enterprise_organizations || 0} icon={Crown} color="blue" onClick={() => navigate('/super-admin/organizations')} />
+        <StatCard title={t("Users", { defaultValue: "Users" })} value={stats?.total_users || 0} icon={Users} color="purple" onClick={() => navigate('/super-admin/organizations')} />
+        <StatCard title={t("Projects", { defaultValue: "Projects" })} value={stats?.total_projects || 0} icon={FolderKanban} color="cyan" onClick={() => navigate('/super-admin/organizations')} />
         <StatCard title={t("Modules", { defaultValue: "Modules" })} value={stats?.total_modules || 0} icon={Puzzle} color="amber" onClick={() => navigate('/super-admin/modules')} />
-        <StatCard title={t("Plans", { defaultValue: "Plans" })} value={stats?.total_plans || 0} icon={CreditCard} color="blue" onClick={() => navigate('/super-admin/plans')} />
-        <StatCard title={t("Total Users", { defaultValue: "Total Users" })} value={stats?.total_users || 0} icon={Users} color="purple" onClick={() => navigate('/super-admin/organizations')} />
-        <StatCard title={t("Total Projects", { defaultValue: "Total Projects" })} value={stats?.total_projects || 0} icon={FolderKanban} color="cyan" onClick={() => navigate('/super-admin/organizations')} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

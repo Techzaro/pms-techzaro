@@ -21,7 +21,7 @@ use App\Services\StorageDiskResolver;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
+use App\Services\Saas\Infrastructure\TenantCacheManager;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -1283,7 +1283,7 @@ class EventController extends Controller
 
         $cacheKey = "unified_summary_{$user->id}_{$today}";
 
-        return Cache::remember($cacheKey, 30, function () use ($user, $today) {
+        return app(TenantCacheManager::class)->remember($cacheKey, 30, function () use ($user, $today) {
             $events = collect();
 
             $tasks = Task::where(function ($q) use ($user) {

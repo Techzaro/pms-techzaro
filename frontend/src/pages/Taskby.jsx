@@ -88,6 +88,7 @@ const Taskby = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [items, setItems] = useState([]);
+  const [sharedTasks, setSharedTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -176,7 +177,8 @@ const Taskby = () => {
       { bg: "#EDE9FE", text: "#7C3AED" },
       { bg: "#FCE7F3", text: "#DB2777" },
     ];
-    return colors[(id || 0) % colors.length];
+    const num = typeof id === "string" ? parseInt(id.replace(/\D/g, ""), 10) || 0 : id || 0;
+    return colors[num % colors.length];
   }, []);
 
   useEffect(() => {
@@ -259,13 +261,34 @@ const Taskby = () => {
     fetchTasks();
   }, [fetchTasks, page]);
 
-  useAutoRefresh(fetchTasks, {
-    events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
-  });
+  const fetchSharedTasks = useCallback(async () => {
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/sharing/shared-resources?type=task`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setSharedTasks(Array.isArray(data?.data) ? data.data : []);
+    } catch (err) {
+      console.error("Failed to fetch shared tasks:", err);
+    }
+  }, []);
 
   useEffect(() => {
-    setOrderedItems(items);
-  }, [items]);
+    fetchSharedTasks();
+  }, [fetchSharedTasks]);
+
+  useEffect(() => {
+    const merged = [
+      ...items,
+      ...sharedTasks.filter((st) => !items.some((i) => String(i.id) === String(st.id))),
+    ];
+    setOrderedItems(merged);
+  }, [items, sharedTasks]);
+
+  useAutoRefresh(() => { fetchTasks(); fetchSharedTasks(); }, {
+    events: ['task:created', 'task:updated', 'task:deleted', 'data:changed', 'sharing:changed'],
+  });
 
   const baseItems = orderedItems.length ? orderedItems : items;
   const pendingStatuses = ["pending", "planned", "Planning", "Planned"];
@@ -556,12 +579,23 @@ const Taskby = () => {
                       <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                         {item.delegation_chain && item.delegation_chain.length > 0 && <ArrowUpRight size={14} style={{ color: "#6B7280", flexShrink: 0 }} />}
                         <div className="task-title">{item.title}</div>
+                        {item.is_shared && (
+                          <span style={{ fontSize: "10px", fontWeight: 700, color: "#4F46E5", background: "#EEF2FF", padding: "2px 8px", borderRadius: "12px", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: "3px", border: "1px solid #C7D2FE" }}>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                            {t("Shared", { defaultValue: "Shared" })}
+                          </span>
+                        )}
                         <TaskNotesPopover taskId={item.id} itemType="task" />
                       </div>
                       {item.project && (
                         <Link to={rolePath(`projects/project-details/${item.project.id}`)} onClick={(e) => e.stopPropagation()} style={{ fontSize: "11px", color: "#2563eb", textDecoration: "none", marginTop: "2px", display: "inline-block" }}>
                           {item.project.title}
                         </Link>
+                      )}
+                      {item.is_shared && item.shared_by_user && (
+                        <div style={{ fontSize: "11px", color: "#6B7280", marginTop: "2px" }}>
+                          {t("Shared by {{name}}", { name: item.shared_by_user.name, defaultValue: `Shared by ${item.shared_by_user.name}` })}
+                        </div>
                       )}
                     </div>
 

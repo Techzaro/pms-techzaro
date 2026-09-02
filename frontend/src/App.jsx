@@ -86,6 +86,7 @@ const SubscriptionPage = lazy(() => import("./pages/SubscriptionPage"));
 const StoragePage = lazy(() => import("./pages/StoragePage"));
 const OrganizationDetailsPage = lazy(() => import("./pages/OrganizationDetailsPage"));
 const RegionalSettings = lazy(() => import("./pages/RegionalSettings"));
+const Sharing = lazy(() => import("./pages/Sharing"));
 
 import TimezoneDetector from "./components/TimezoneDetector";
 import { authToken, superAdminAuthToken } from "./utils/auth";
@@ -350,6 +351,13 @@ function App() {
                     <Route path="chat/:conversationId" element={<Chat />} />
                     <Route path="org-chat" element={<OrgChat />} />
                     <Route path="org-chat/:conversationId" element={<OrgChat />} />
+
+                    {/* Sharing routes */}
+                    <Route path="sharing" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><Sharing /></RoleProtectedRoute>} />
+                    <Route path="sharing/connections" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><Sharing /></RoleProtectedRoute>} />
+                    <Route path="sharing/shared-by-us" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><Sharing /></RoleProtectedRoute>} />
+                    <Route path="sharing/shared-with-me" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><Sharing /></RoleProtectedRoute>} />
+                    <Route path="sharing/activities" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><Sharing /></RoleProtectedRoute>} />
                   </Route>
 
                   {/* Org catch-all */}
@@ -426,6 +434,13 @@ function App() {
                     <Route path="chat/:conversationId" element={<Chat />} />
                     <Route path="org-chat" element={<OrgChat />} />
                     <Route path="org-chat/:conversationId" element={<OrgChat />} />
+
+                    {/* Sharing routes */}
+                    <Route path="sharing" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><Sharing /></RoleProtectedRoute>} />
+                    <Route path="sharing/connections" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><Sharing /></RoleProtectedRoute>} />
+                    <Route path="sharing/shared-by-us" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><Sharing /></RoleProtectedRoute>} />
+                    <Route path="sharing/shared-with-me" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><Sharing /></RoleProtectedRoute>} />
+                    <Route path="sharing/activities" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><Sharing /></RoleProtectedRoute>} />
                   </Route>
 
                   {/* Super Admin auth routes (public) */}

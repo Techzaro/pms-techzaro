@@ -31,6 +31,7 @@ import {
   Play,
   Plus,
   Shield,
+  Share2,
   StickyNote,
   Tag,
   Trash2,
@@ -60,6 +61,7 @@ import AddAccessModal from "../components/AddAccessModal";
 import ConfirmModal from "../components/ConfirmModal";
 import SubmitTaskModal from "../components/SubmitTaskModal";
 import AddNoteModal from "../components/AddNoteModal";
+import ShareResourceModal from "../components/ShareResourceModal";
 import EditTaskModal from "../components/EditTaskModal";
 import PauseReasonModal from "../components/PauseReasonModal";
 import ActionPopover from "../components/ActionPopover";
@@ -334,6 +336,8 @@ function ProjectDetails() {
   const [tab, setTab] = useState("overview");
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [hasActiveConnections, setHasActiveConnections] = useState(false);
   const [deleteProjectConfirmOpen, setDeleteProjectConfirmOpen] = useState(false);
   const [deleteTaskConfirmOpen, setDeleteTaskConfirmOpen] = useState(false);
   const [deleteTaskId, setDeleteTaskId] = useState(null);
@@ -659,8 +663,40 @@ function ProjectDetails() {
   notifyRef.current = notify;
   const loadErrorRef = useRef(false);
 
+  const isShared = projectId && String(projectId).startsWith('shared_');
+  const sharedResourceId = isShared ? String(projectId).replace('shared_', '') : null;
+
   const loadProject = useCallback(async () => {
     const token = authToken();
+
+    if (isShared && sharedResourceId) {
+      const res = await fetch(`${API_URL}/sharing/resources/${sharedResourceId}`, {
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        _notifHandled: true,
+      });
+      if (!res.ok) {
+        const error = new Error("Failed to load shared project");
+        error.status = res.status;
+        throw error;
+      }
+      const data = await res.json();
+      const shared = data.data;
+      if (!shared || !shared.resource) throw new Error("Invalid response");
+      const p = shared.resource;
+      p.is_shared = true;
+      p.shared_permission = shared.permission;
+      p.shared_resource_id = shared.id;
+      p.shared_by_user = shared.shared_by_user;
+      p.shared_at = shared.shared_at;
+      setProject(p);
+      setLoadError(null);
+      loadErrorRef.current = false;
+      return p;
+    }
+
     const res = await fetch(`${API}/projects/${projectId}`, {
       headers: {
         Accept: "application/json",
@@ -680,7 +716,7 @@ function ProjectDetails() {
     setLoadError(null);
     loadErrorRef.current = false;
     return p;
-  }, [projectId]);
+  }, [projectId, isShared, sharedResourceId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -729,6 +765,21 @@ function ProjectDetails() {
   useEffect(() => {
     const handler = () => loadProject();
     window.addEventListener('project-file-refresh', handler);
+
+    const checkConnections = async () => {
+      try {
+        const token = authToken();
+        const res = await fetch(`${API_URL}/sharing/connections?status=active`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (data.success && data.data) {
+          setHasActiveConnections(data.data.length > 0);
+        }
+      } catch (err) { /* ignore */ }
+    };
+    checkConnections();
+
     return () => window.removeEventListener('project-file-refresh', handler);
   }, [loadProject]);
 
@@ -1010,7 +1061,7 @@ function ProjectDetails() {
   const isAdminOrManager = !!project?.is_admin_or_manager;
   const isViewOnlyUser = !!project?.is_view_only || (project?.view_only_users || []).some((u) => Number(u?.id || u) === Number(currentUser?.id));
 
-  const canEdit = !isViewOnlyUser && (project?.can_edit || isAdminOrManager);
+  const canEdit = !isShared && !isViewOnlyUser && (project?.can_edit || isAdminOrManager);
   const canManage = !isViewOnlyUser && isAdminOrManager;
   const canAddTask = !isViewOnlyUser && currentUser?.role !== "guest" && (isCreator || isAdminOrManager || isAssigned);
 
@@ -1483,6 +1534,12 @@ function ProjectDetails() {
                       <button type="button" className="pd-btn-tx pd-btn-tx--outline" onClick={() => setShowEditModal(true)}>
                         <Pencil size={16} />
                         {t("Edit Project", { defaultValue: "Edit Project" })}
+                      </button>
+                    )}
+                    {isAdminOrManager && hasActiveConnections && !isShared && (
+                      <button type="button" className="pd-btn-tx pd-btn-tx--outline" onClick={() => setShowShareModal(true)}>
+                        <Share2 size={16} />
+                        {t("Share", { defaultValue: "Share" })}
                       </button>
                     )}
                     {canEdit && (
@@ -2372,6 +2429,15 @@ function ProjectDetails() {
             setShowEditModal(false);
             if (refresh) loadProject();
           }}
+        />
+      )}
+      {showShareModal && project && (
+        <ShareResourceModal
+          resourceType="project"
+          resourceId={project.id}
+          resourceName={project.title}
+          onClose={() => setShowShareModal(false)}
+          onShared={() => loadProject()}
         />
       )}
 

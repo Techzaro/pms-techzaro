@@ -45,6 +45,7 @@ class Organization extends Model
     protected $fillable = [
         'name',
         'slug',
+        'organization_code',
         'admin_name',
         'admin_email',
         'founding_admin_id',
@@ -56,6 +57,10 @@ class Organization extends Model
         'database_password',
         'status',
         'timezone',
+        'country',
+        'website',
+        'description',
+        'industry',
         'default_timezone',
         'enforce_working_hours',
         'working_hours',
@@ -101,6 +106,23 @@ class Organization extends Model
         'storage_pin_threshold'      => 'integer',
         'custom_max_storage_gb'      => 'float',
     ];
+
+    /*
+    |------------------------------------------------------------------
+    | Boot
+    |------------------------------------------------------------------
+    */
+
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        static::creating(function (Organization $org) {
+            if (empty($org->organization_code)) {
+                $org->organization_code = Organization::generateOrganizationCode($org->name);
+            }
+        });
+    }
 
     /*
     |------------------------------------------------------------------
@@ -188,6 +210,31 @@ class Organization extends Model
     | Helpers
     |------------------------------------------------------------------
     */
+
+    /**
+     * Generate a unique org-specific connection code.
+     * Format: {NAME_PREFIX}-{RANDOM} e.g. GOO-B1F50 for "Googles"
+     * Name prefix = first 3 uppercase alpha chars from org name.
+     * Random part = 5 uppercase alphanumeric chars.
+     */
+    public static function generateOrganizationCode(?string $orgName = null): string
+    {
+        $prefix = 'ORG';
+        if ($orgName) {
+            $clean = preg_replace('/[^a-zA-Z]/', '', $orgName);
+            $prefix = strtoupper(substr($clean, 0, 3));
+            if (strlen($prefix) < 3) {
+                $prefix = str_pad($prefix, 3, 'X');
+            }
+        }
+
+        do {
+            $random = strtoupper(substr(bin2hex(random_bytes(4)), 0, 5));
+            $code = $prefix . '-' . $random;
+        } while (static::on('mysql_master')->where('organization_code', $code)->exists());
+
+        return $code;
+    }
 
     /** Check if the organization is currently active. */
     public function isActive(): bool

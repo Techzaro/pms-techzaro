@@ -20,7 +20,7 @@ use App\Services\StorageDiskResolver;
 use App\Traits\HasStorageEnforcement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
+use App\Services\Saas\Infrastructure\TenantCacheManager;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -540,7 +540,7 @@ class ProjectController extends Controller
         $isAssigned = in_array($user->id, array_map('intval', $project->assigned_users ?? [])) || in_array($user->id, $allMemberIds);
 
         $approvalCacheKey = "project_approval_{$project->id}";
-        $approvalStatus = Cache::remember($approvalCacheKey, 30, function () use ($project) {
+        $approvalStatus = app(TenantCacheManager::class)->remember($approvalCacheKey, 30, function () use ($project) {
             $unapprovedTasks = $project->tasks()->where('status', '!=', 'approved')->count();
             $unapprovedDeliverables = $project->deliverables()->where('status', '!=', 'approved')->count();
 
