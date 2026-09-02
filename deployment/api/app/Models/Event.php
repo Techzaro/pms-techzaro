@@ -26,15 +26,23 @@ class Event extends Model
         'color',
         'start_date',
         'end_date',
+        'start_time',
+        'end_time',
         'all_day',
         'is_global',
         'visibility_level',
         'status',
+        'event_timezone',
+        'event_date',
+        'event_start_time',
+        'event_end_time',
+        'project_id',
     ];
 
     protected $casts = [
         'start_date' => 'datetime:Y-m-d\TH:i:s',
         'end_date' => 'datetime:Y-m-d\TH:i:s',
+        'event_date' => 'date',
         'all_day' => 'boolean',
         'is_global' => 'boolean',
     ];
@@ -117,11 +125,21 @@ class Event extends Model
         return $this->hasMany(EventParticipant::class, 'event_id');
     }
 
-    /** Participant users many-to-many relationship. */
-    public function participantUsers(): BelongsToMany
+    /** The user who created this event. */
+    public function creator(): BelongsTo
     {
-        return $this->belongsToMany(User::class, 'event_participants')
-            ->withPivot(['status', 'response_notes', 'attended'])
-            ->withTimestamps();
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
+    /** Reminders configured for this event. */
+    public function reminders(): HasMany
+    {
+        return $this->hasMany(EventReminder::class, 'event_id');
+    }
+
+    /** Attachments uploaded for this event. */
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(EventAttachment::class, 'event_id');
     }
 }

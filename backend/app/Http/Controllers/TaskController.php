@@ -1011,6 +1011,10 @@ class TaskController extends Controller
             'allow_transfer' => 'nullable|boolean',
             'followers' => 'nullable|array',
             'followers.*' => 'exists:users,id',
+            'kb_ids' => 'nullable|array',
+            'kb_ids.*' => 'nullable|integer',
+            'event_ids' => 'nullable|array',
+            'event_ids.*' => 'nullable|integer',
         ]);
 
         if (! empty($validated['start_date']) && ! empty($validated['end_date'])) {
@@ -1144,6 +1148,8 @@ class TaskController extends Controller
                 'recurrence_start_date' => $validated['recurrence_start_date'] ?? $validated['start_date'] ?? null,
                 'recurrence_end_date' => $validated['recurrence_end_date'] ?? $validated['end_date'] ?? null,
                 'allow_transfer' => $validated['allow_transfer'] ?? true,
+                'kb_ids' => $validated['kb_ids'] ?? null,
+                'event_ids' => $validated['event_ids'] ?? null,
             ]);
             $task->assignees()->sync([$userId => ['due_date' => $dueDates[$userId] ?? null]]);
             if (! empty($validated['followers'])) {
@@ -1419,6 +1425,10 @@ class TaskController extends Controller
             'deliverable_templates.*.quantity' => 'nullable|integer|min:1|max:100',
             'deliverable_templates.*.combined' => 'nullable|boolean',
             'allow_transfer' => 'nullable|boolean',
+            'kb_ids' => 'nullable|array',
+            'kb_ids.*' => 'nullable|integer',
+            'event_ids' => 'nullable|array',
+            'event_ids.*' => 'nullable|integer',
         ]);
 
         if (($validated['task_type'] ?? 'standard') === 'recurring') {
@@ -1512,6 +1522,8 @@ class TaskController extends Controller
                 'recurrence_start_date' => $validated['recurrence_start_date'] ?? $validated['start_date'] ?? null,
                 'recurrence_end_date' => $validated['recurrence_end_date'] ?? $validated['end_date'] ?? null,
                 'allow_transfer' => $validated['allow_transfer'] ?? true,
+                'kb_ids' => $validated['kb_ids'] ?? null,
+                'event_ids' => $validated['event_ids'] ?? null,
             ]);
             $task->assignees()->sync([$userId => ['due_date' => $dueDates[$userId] ?? null]]);
 
@@ -1740,6 +1752,10 @@ class TaskController extends Controller
             'due_dates' => 'nullable|array',
             'due_dates.*' => 'nullable|date',
             'allow_transfer' => 'sometimes|boolean',
+            'kb_ids' => 'nullable|array',
+            'kb_ids.*' => 'nullable|integer',
+            'event_ids' => 'nullable|array',
+            'event_ids.*' => 'nullable|integer',
         ]);
 
         $assigneeIds = $validated['assigned_to'] ?? null;
@@ -5543,6 +5559,8 @@ class TaskController extends Controller
      */
     public function unifiedActivity(Request $request, Task $task): JsonResponse
     {
+        $startDate = $request->query('start_date') ?: $request->query('date_from');
+        $endDate = $request->query('end_date') ?: $request->query('date_to');
         $dateFilter = $request->query('date');
         $userFilter = $request->query('user_id');
         $typeFilter = $request->query('type');
@@ -5652,9 +5670,35 @@ class TaskController extends Controller
             ]);
         }
 
-        // Filter by Date
-        if ($dateFilter) {
-            $feed = $feed->filter(fn ($item) => substr($item['created_at'], 0, 10) === $dateFilter);
+        // Filter by Date Range or Single Date
+        if ($startDate) {
+            $formattedStart = ActivityService::parseQueryDate($startDate);
+            if ($formattedStart) {
+                $feed = $feed->filter(function ($item) use ($formattedStart) {
+                    $d = substr($item['created_at'], 0, 10);
+                    return $d >= $formattedStart;
+                });
+            }
+        }
+        if ($endDate) {
+            $formattedEnd = ActivityService::parseQueryDate($endDate);
+            if ($formattedEnd) {
+                $feed = $feed->filter(function ($item) use ($formattedEnd) {
+                    $d = substr($item['created_at'], 0, 10);
+                    return $d <= $formattedEnd;
+                });
+            }
+        }
+        if ($dateFilter && !$startDate && !$endDate) {
+            $targetDate = ActivityService::parseQueryDate($dateFilter);
+            if ($targetDate) {
+                $feed = $feed->filter(function ($item) use ($targetDate) {
+                    $d1 = substr($item['created_at'], 0, 10);
+                    if ($d1 === $targetDate) return true;
+                    $ts = strtotime($item['created_at']);
+                    return $ts !== false && date('Y-m-d', $ts) === $targetDate;
+                });
+            }
         }
 
         // Filter by User / Person

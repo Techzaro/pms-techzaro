@@ -16,6 +16,7 @@ import AutoSaveIndicator from "./AutoSaveIndicator";
 import draftService from "../services/draftService";
 import UserSelectDropdown from "./UserSelectDropdown";
 import CustomSelect from "./CustomSelect";
+import MultiSelectDropdown from "./MultiSelectDropdown";
 import LoadingButton from "./LoadingButton";
 import ConfirmModal from "./ConfirmModal";
 
@@ -34,6 +35,7 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
     draftSaveHandler: () => draftSaveRef.current?.(),
     hasDraftFeature: true,
   });
+
   useEscapeKey(true, handleClose);
 
   const userInteractedRef = useRef(false);
@@ -51,10 +53,15 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
   const [loading, setLoading] = useState(false);
   const { submitting, run } = useSubmit();
   const [formErrors, setFormErrors] = useState({});
+  const [loadingUsers, setLoadingUsers] = useState(true);
   const [teams, setTeams] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
   const [guests, setGuests] = useState([]);
   const [draftId, setDraftId] = useState(null);
+  const [kbIds, setKbIds] = useState([]);
+  const [eventIds, setEventIds] = useState([]);
+  const [kbArticles, setKbArticles] = useState([]);
+  const [eventsList, setEventsList] = useState([]);
 
   const [form, setForm] = useState({
     title: "",
@@ -118,11 +125,13 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
 
   const autoSaveData = useMemo(() => ({
     ...form,
+    kb_ids: kbIds,
+    event_ids: eventIds,
     categoriesList,
     milestones,
     pendingFiles: pendingFiles.map(f => f.name || f.customName),
     links,
-  }), [form, categoriesList, milestones, pendingFiles, links]);
+  }), [form, kbIds, eventIds, categoriesList, milestones, pendingFiles, links]);
 
   const { lastSaved, isSaving, draftId: autoSaveDraftId } = useAutoSave({
     draftId,
@@ -142,7 +151,7 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
       const payload = {
         module_type: "project",
         title: form.title || "Untitled Project Draft",
-        draft_data: { ...form, categoriesList, milestones, pendingFiles: pendingFiles.map(f => f.name || f.customName), links },
+        draft_data: { ...form, kb_ids: kbIds, event_ids: eventIds, categoriesList, milestones, pendingFiles: pendingFiles.map(f => f.name || f.customName), links },
         project_id: null,
       };
       if (draftId) {
@@ -266,6 +275,28 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
           setExistingCategories(filtered.sort());
         })
         .catch(() => {}),
+
+      fetch(`${API_URL}/knowledge-base?all=true`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
+      })
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => {
+          const items = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+          setKbArticles(items);
+        })
+        .catch(() => {}),
+
+      fetch(`${API_URL}/events?all=true`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
+      })
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => {
+          const items = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+          setEventsList(items);
+        })
+        .catch(() => {}),
     ]);
   }, []);
 
@@ -295,6 +326,10 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
         if (d.categoriesList) setCategoriesList(d.categoriesList);
         if (d.milestones) setMilestones(d.milestones);
         if (d.links) setLinks(d.links);
+        if (d.kb_ids) setKbIds(Array.isArray(d.kb_ids) ? d.kb_ids.map(Number) : [Number(d.kb_ids)]);
+        else if (d.kb_id || d.kbReferenceId) setKbIds([Number(d.kb_id || d.kbReferenceId)]);
+        if (d.event_ids) setEventIds(Array.isArray(d.event_ids) ? d.event_ids.map(Number) : [Number(d.event_ids)]);
+        else if (d.event_id || d.eventReferenceId) setEventIds([Number(d.event_id || d.eventReferenceId)]);
         setDraftId(restoreDraftId);
       } catch (err) {
         console.error("Failed to restore draft:", err);
@@ -577,6 +612,8 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
             status: m.status || "planned",
           })),
           team_roles: form.team_roles,
+          kb_ids: kbIds.length > 0 ? kbIds.map(Number) : [],
+          event_ids: eventIds.length > 0 ? eventIds.map(Number) : [],
         };
 
         const response = await fetch(`${API_URL}/projects`, {
@@ -956,6 +993,38 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
                   { value: "Pause", label: t("Pause", { defaultValue: "Pause" }) },
                   { value: "Completed", label: t("Completed") },
                 ]}
+              />
+            </div>
+
+            {/* REFERENCE KNOWLEDGE BASE */}
+            <div className="cp-field">
+              <label>{t("Reference Knowledge Base", { defaultValue: "Reference Knowledge Base" })}</label>
+              <MultiSelectDropdown
+                name="kb_ids"
+                value={kbIds}
+                onChange={(vals) => { markDirty(); setKbIds(vals.map(Number)); }}
+                placeholder={t("Select Knowledge Base", { defaultValue: "Select Knowledge Base" })}
+                searchPlaceholder={t("Search Knowledge Base...", { defaultValue: "Search Knowledge Base..." })}
+                options={(kbArticles || []).map((item) => ({
+                  value: Number(item?.id),
+                  label: item?.title || `Article #${item?.id}`,
+                }))}
+              />
+            </div>
+
+            {/* REFERENCE EVENT */}
+            <div className="cp-field">
+              <label>{t("Reference Event", { defaultValue: "Reference Event" })}</label>
+              <MultiSelectDropdown
+                name="event_ids"
+                value={eventIds}
+                onChange={(vals) => { markDirty(); setEventIds(vals.map(Number)); }}
+                placeholder={t("Select Event", { defaultValue: "Select Event" })}
+                searchPlaceholder={t("Search Events...", { defaultValue: "Search Events..." })}
+                options={(eventsList || []).map((item) => ({
+                  value: Number(item?.id),
+                  label: item?.title || `Event #${item?.id}`,
+                }))}
               />
             </div>
 

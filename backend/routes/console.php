@@ -16,6 +16,7 @@ use App\Console\Commands\SendEventReminders;
 
 // Send event reminders every minute
 Schedule::command('events:send-reminders')->everyMinute();
+Schedule::command('events:process-reminders')->everyMinute();
 
 // Send task reminders every 5 minutes
 Schedule::command('tasks:send-reminders')->everyFiveMinutes();

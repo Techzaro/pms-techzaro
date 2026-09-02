@@ -69,18 +69,21 @@ class ActivityController extends Controller
         $user = $request->user();
         $date = $request->input('date');
         $module = $request->input('module');
-        $action = $request->input('action');
-        $dateFrom = $request->input('date_from') ?: $request->input('start_date');
-        $dateTo = $request->input('date_to') ?: $request->input('end_date');
+        $action = $request->input('action') ?: $request->input('type');
+        if ($action === 'all') {
+            $action = null;
+        }
+        $dateFrom = $request->input('start_date') ?: $request->input('date_from');
+        $dateTo = $request->input('end_date') ?: $request->input('date_to');
         $search = $request->input('search');
 
         $perPage = (int) ($request->input('per_page') ?: $request->input('limit') ?: 50);
         $page = (int) ($request->input('page') ?: 1);
         $offset = (int) ($request->input('offset') ?: (($page - 1) * $perPage));
 
-        $userId = in_array($user->role, ['admin', 'manager']) && $request->has('user_id')
+        $userId = $request->filled('user_id')
             ? (int) $request->input('user_id')
-            : $user->id;
+            : (in_array($user->role, ['admin', 'manager']) || $module ? 0 : $user->id);
 
         $activities = $this->activityService->getActivities(
             $userId, $date, $perPage, $offset, $module, $action, $dateFrom, $dateTo, $search

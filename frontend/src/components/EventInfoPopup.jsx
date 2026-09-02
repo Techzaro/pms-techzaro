@@ -8,7 +8,7 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { formatLocalDate, formatLocalTime, formatReadableDateTime, convertToLocal, getUserTimezone } from "../utils/timezoneUtils";
-import { Globe, Clock } from "lucide-react";
+import { Globe, Clock, Megaphone, Calendar } from "lucide-react";
 
 /**
  * Popup displaying event details in a read-only format with Dual Timezone support (SRS Sec 12).
@@ -63,9 +63,27 @@ function EventInfoPopup({ event, onClose }) {
           display: "flex", justifyContent: "space-between", alignItems: "flex-start",
           padding: "24px 24px 0",
         }}>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text-heading)", wordBreak: "break-word", flex: 1 }}>
-            {event.title}
-          </h2>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", gap: "6px", alignItems: "center", marginBottom: "8px", flexWrap: "wrap" }}>
+              {event.type === "announcement" || event.type === "Company Announcement" ? (
+                <span style={{ fontSize: "11px", fontWeight: 700, color: "#d97706", background: "#fef3c7", padding: "2px 8px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                  <Megaphone size={12} /> {t("Company Announcement", { defaultValue: "Company Announcement" })}
+                </span>
+              ) : (
+                <span style={{ fontSize: "11px", fontWeight: 700, color: event.category?.color || "#2563eb", background: "#eff6ff", padding: "2px 8px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                  <Calendar size={12} /> {t("Event Invitation", { defaultValue: "Event Invitation" })}
+                </span>
+              )}
+              {event.category?.name && (
+                <span style={{ fontSize: "11px", fontWeight: 600, color: event.category?.color || "#475569", background: "var(--bg-hover)", padding: "2px 6px", borderRadius: "4px", border: "1px solid var(--border-color, #e2e8f0)" }}>
+                  {event.category.name}
+                </span>
+              )}
+            </div>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text-heading)", wordBreak: "break-word" }}>
+              {event.title}
+            </h2>
+          </div>
           <button
             onClick={onClose}
             style={{

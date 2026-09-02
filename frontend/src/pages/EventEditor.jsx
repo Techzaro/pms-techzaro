@@ -33,6 +33,17 @@ import {
   Activity,
   CheckCircle2,
   ExternalLink,
+  Bell,
+  Plus,
+  Trash2,
+  Paperclip,
+  UploadCloud,
+  Download,
+  FileText,
+  File,
+  XCircle,
+  UserPlus,
+  X,
   Share2,
 } from "lucide-react";
 import {
@@ -47,9 +58,7 @@ export default function EventEditor() {
   const { id } = useParams();
   const locationState = useLocation();
   const isEditMode = Boolean(id);
-  // View mode: route has an :id but the path does NOT contain '/edit'
   const isViewMode = Boolean(id) && !locationState.pathname.includes("/edit");
-  // Form mode: create (no id) OR edit route
   const isFormMode = !id || locationState.pathname.includes("/edit");
   const navigate = useNavigate();
   const notify = useNotification();
@@ -61,10 +70,17 @@ export default function EventEditor() {
   // Tab for view mode: "details" | "activity"
   const [viewTab, setViewTab] = useState("details");
 
-  // Acknowledge state (for view mode)
+  // Acknowledge & RSVP state (for view mode)
   const [loadedEvent, setLoadedEvent] = useState(null);
   const [acknowledging, setAcknowledging] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
+  const [rsvpStatus, setRsvpStatus] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  // Quick Add Participant modal in view mode
+  const [showAddParticipantModal, setShowAddParticipantModal] = useState(false);
+  const [newParticipantIds, setNewParticipantIds] = useState([]);
+  const [addingParticipants, setAddingParticipants] = useState(false);
 
   // Share state (for view mode)
   const [showShareModal, setShowShareModal] = useState(false);
@@ -76,11 +92,7 @@ export default function EventEditor() {
   // Core Form State
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  // Category: stored as a react-select option object { value, label } so
-  // CreatableSelect always reflects selection in the same render cycle —
-  // no string→option lookup that could miss a brand-new category.
   const [selectedCategoryOption, setSelectedCategoryOption] = useState(null);
-  // Keep categoryId as a derived convenience for the API payload
   const categoryId = selectedCategoryOption ? selectedCategoryOption.value : "";
   const [eventTimezone, setEventTimezone] = useState(user?.timezone || "UTC");
   const [timezonesList, setTimezonesList] = useState([]);
@@ -94,6 +106,16 @@ export default function EventEditor() {
   const [meetingLink, setMeetingLink] = useState("");
   const [color, setColor] = useState("#3b82f6");
 
+  // Dynamic Reminders State
+  const [reminders, setReminders] = useState([
+    { id: "rem-default-1", value: 15, unit: "minutes" },
+  ]);
+
+  // Attachments State
+  const [existingAttachments, setExistingAttachments] = useState([]);
+  const [newFiles, setNewFiles] = useState([]);
+  const fileInputRef = useRef(null);
+
   // Visibility & Audience State
   const [visibilityLevel, setVisibilityLevel] = useState("organization");
   const [projectId, setProjectId] = useState("");
@@ -101,7 +123,7 @@ export default function EventEditor() {
   const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [attendeeSearch, setAttendeeSearch] = useState("");
 
-  // Inline Category Creation State (used by CreatableSelect handler)
+  // Inline Category Creation State
   const [savingNewCat, setSavingNewCat] = useState(false);
   const colorInputRef = useRef(null);
 
@@ -139,7 +161,6 @@ export default function EventEditor() {
       .then((d) => setUsersList(Array.isArray(d) ? d : d?.data || d?.users || []))
       .catch(() => {});
 
-    // Fetch timezones list & Organization regional enforcement policy
     fetch(`${API_URL}/regional-settings/timezones`, { headers: { Authorization: `Bearer ${token}` }, skipLoader: true })
       .then((r) => r.json())
       .then((d) => {
@@ -163,7 +184,7 @@ export default function EventEditor() {
     }
   }, [isEditMode, locationState.state]);
 
-  // Load existing event if editing
+  // Load existing event if editing or viewing
   useEffect(() => {
     if (!isEditMode) return;
 
@@ -179,29 +200,30 @@ export default function EventEditor() {
         const ev = d?.data || d?.event;
         if (ev) {
           setLoadedEvent(ev);
-          // Detect if current user already acknowledged this event
-          if (Array.isArray(ev.acknowledged_by)) {
-            setAcknowledged(ev.acknowledged_by.includes(user?.id));
-          } else if (ev.user_acknowledged !== undefined) {
-            setAcknowledged(Boolean(ev.user_acknowledged));
+
+          // Detect user's RSVP status
+          const myParticipant = Array.isArray(ev.participants)
+            ? ev.participants.find((p) => p.user_id === user?.id)
+            : null;
+          if (myParticipant) {
+            setRsvpStatus(myParticipant.status);
+            setAcknowledged(myParticipant.status === "acknowledged" || myParticipant.status === "accepted");
           }
+
           setTitle(ev.title || "");
           setDescription(ev.description || "");
           const isAnnounce = ev.type === "announcement" || ev.type === "Company Announcement" || ev.is_announcement;
           setFormType(isAnnounce ? "announcement" : "event");
-          // Resolve category: if categories already loaded (fetched in parallel), build
-          // the option object directly; otherwise store the raw ID so the resolution
-          // useEffect below can pick it up once the categories list arrives.
+
           if (ev.category_id) {
             setCategories((prevCats) => {
               const match = prevCats.find((c) => String(c.id) === String(ev.category_id));
               if (match) {
                 setSelectedCategoryOption({ value: String(match.id), label: match.name });
               } else {
-                // Categories not yet loaded — store a stub; the effect below resolves it
                 setSelectedCategoryOption({ value: String(ev.category_id), label: t("Loading…", { defaultValue: "Loading…" }), __pending: true });
               }
-              return prevCats; // do NOT mutate the categories array itself
+              return prevCats;
             });
           }
           setVisibilityLevel(ev.visibility_level || "organization");
@@ -227,6 +249,14 @@ export default function EventEditor() {
           if (Array.isArray(ev.assigned_users)) {
             setSelectedUserIds(ev.assigned_users.map((u) => u.id));
           }
+
+          if (Array.isArray(ev.reminders) && ev.reminders.length > 0) {
+            setReminders(ev.reminders.map((r, idx) => ({ id: r.id || `rem-${idx}`, value: r.value, unit: r.unit })));
+          }
+
+          if (Array.isArray(ev.attachments)) {
+            setExistingAttachments(ev.attachments);
+          }
         } else {
           notify.error(t("Event not found.", { defaultValue: "Event not found." }));
           navigate(rolePath("events"));
@@ -238,9 +268,7 @@ export default function EventEditor() {
       .finally(() => setLoading(false));
   }, [id, isEditMode, t]);
 
-  // Resolve a pending category stub once the categories list has loaded.
-  // This handles the race condition in edit mode where the event API responds
-  // before the /event-categories API does.
+  // Resolve pending category once categories list arrives
   useEffect(() => {
     if (!selectedCategoryOption?.__pending || categories.length === 0) return;
     const match = categories.find((c) => String(c.id) === selectedCategoryOption.value);
@@ -249,6 +277,73 @@ export default function EventEditor() {
     }
   }, [categories, selectedCategoryOption]);
 
+  // Dynamic Reminders Handlers
+  const handleAddReminder = () => {
+    setReminders((prev) => [...prev, { id: `rem-${Date.now()}`, value: 15, unit: "minutes" }]);
+  };
+
+  const handleUpdateReminder = (index, field, val) => {
+    setReminders((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: val };
+      return updated;
+    });
+  };
+
+  const handleRemoveReminder = (index) => {
+    setReminders((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Attachments Handlers
+  const handleFileSelect = (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setNewFiles((prev) => [...prev, ...Array.from(e.target.files)]);
+    }
+  };
+
+  const handleRemoveNewFile = (index) => {
+    setNewFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleDeleteExistingAttachment = async (attachmentId) => {
+    if (!window.confirm(t("Are you sure you want to delete this attachment?", { defaultValue: "Are you sure you want to delete this attachment?" }))) return;
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/events/${id}/attachments/${attachmentId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        setExistingAttachments((prev) => prev.filter((a) => a.id !== attachmentId));
+        notify.success(t("Attachment deleted successfully.", { defaultValue: "Attachment deleted successfully." }));
+      }
+    } catch (err) {
+      notify.error(t("Failed to delete attachment.", { defaultValue: "Failed to delete attachment." }));
+    }
+  };
+
+  const handleDownloadAttachment = async (attachment) => {
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/events/${id || loadedEvent?.id}/attachments/${attachment.id}/download`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Download failed");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = attachment.file_name || "attachment";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      notify.error(t("Failed to download attachment.", { defaultValue: "Failed to download attachment." }));
+    }
+  };
+
+  // Category Creation handler
   // Check for active connections (for share button)
   useEffect(() => {
     if (!isViewMode) return;
@@ -288,72 +383,129 @@ export default function EventEditor() {
       const data = await res.json();
       if (res.ok && (data?.data?.id || data?.category?.id)) {
         const newCat = data.data || data.category;
-        // 1. Append to local categories list so it's available for future lookups
         setCategories((prev) => [...prev, newCat]);
-        // 2. Set the option object DIRECTLY — no string→lookup round-trip.
-        //    CreatableSelect uses the `value` prop object reference, so this
-        //    immediately shows the new category as selected without a second render.
         setSelectedCategoryOption({ value: String(newCat.id), label: newCat.name });
         notify.success(t("Event category created successfully", { defaultValue: "Event category created successfully" }));
       } else {
         notify.error(data?.message || t("Failed to create category", { defaultValue: "Failed to create category" }));
       }
     } catch (err) {
-      console.error("Create category error:", err);
       notify.error(t("Network error while creating category", { defaultValue: "Network error while creating category" }));
     } finally {
       setSavingNewCat(false);
     }
   };
 
-  // Acknowledge event (view mode — for assigned users)
-  const handleAcknowledge = async () => {
-    if (!id || acknowledging || acknowledged) return;
-    setAcknowledging(true);
+  // Cancel Event
+  const handleCancelEvent = async () => {
+    if (!window.confirm(t("Are you sure you want to cancel this event? All attendees will be notified.", { defaultValue: "Are you sure you want to cancel this event? All attendees will be notified." }))) return;
     try {
+      setActionLoading(true);
       const token = authToken();
-      const res = await fetch(`${API_URL}/events/${id}/acknowledge`, {
+      const res = await fetch(`${API_URL}/events/${id || loadedEvent?.id}/cancel`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      if (res.ok) {
-        setAcknowledged(true);
-
-        // Activity Logging: RSVP
-        fetch(`${API_URL}/activity-logs`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          body: JSON.stringify({
-            module: "event",
-            action: "RSVP",
-            entity_id: Number(id),
-            entity_type: "event",
-            title: `RSVP Acknowledged: ${title || "Event Invitation"}`,
-            description: `<p>Event acknowledged by <strong>${user?.name || "User"}</strong></p>`,
-          }),
-        }).catch(() => {});
-
-        notify.success(t("Event acknowledged successfully!", { defaultValue: "Event acknowledged successfully!" }));
+      if (res.ok && data.success) {
+        notify.success(t("Event cancelled successfully.", { defaultValue: "Event cancelled successfully." }));
+        setLoadedEvent((prev) => ({ ...prev, status: "cancelled" }));
       } else {
-        notify.error(data?.message || t("Failed to acknowledge event.", { defaultValue: "Failed to acknowledge event." }));
+        notify.error(data?.message || t("Failed to cancel event.", { defaultValue: "Failed to cancel event." }));
       }
-    } catch (e) {
-      notify.error(t("Network error while acknowledging event.", { defaultValue: "Network error while acknowledging event." }));
+    } catch (err) {
+      notify.error(t("Failed to cancel event.", { defaultValue: "Failed to cancel event." }));
     } finally {
-      setAcknowledging(false);
+      setActionLoading(false);
     }
   };
 
-  // Compute UTC strings and check Working Hours Compliance (SRS Sec 11, 13, 15, 16)
+  // RSVP / Acknowledge Action
+  const handleRsvp = async (status) => {
+    try {
+      setActionLoading(true);
+      const token = authToken();
+      const res = await fetch(`${API_URL}/events/${id || loadedEvent?.id}/rsvp`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setRsvpStatus(status);
+        setAcknowledged(true);
+        notify.success(t("RSVP response recorded: {{status}}", { status, defaultValue: `RSVP response recorded: ${status}` }));
+        if (loadedEvent) {
+          setLoadedEvent((prev) => ({
+            ...prev,
+            participants: prev.participants
+              ? prev.participants.map((p) => p.user_id === user?.id ? { ...p, status } : p)
+              : [{ user_id: user?.id, status, user }],
+          }));
+        }
+      } else {
+        notify.error(data?.message || t("Failed to record RSVP.", { defaultValue: "Failed to record RSVP." }));
+      }
+    } catch (err) {
+      notify.error(t("Network error while recording RSVP.", { defaultValue: "Network error while recording RSVP." }));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Add Participants Action (in view mode)
+  const handleAddParticipantsSubmit = async () => {
+    if (newParticipantIds.length === 0) return;
+    try {
+      setAddingParticipants(true);
+      const token = authToken();
+      const res = await fetch(`${API_URL}/events/${id || loadedEvent?.id}/participants`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ user_ids: newParticipantIds }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        notify.success(t("Participants added successfully!", { defaultValue: "Participants added successfully!" }));
+        setLoadedEvent(data.data);
+        setShowAddParticipantModal(false);
+        setNewParticipantIds([]);
+      } else {
+        notify.error(data?.message || t("Failed to add participants.", { defaultValue: "Failed to add participants." }));
+      }
+    } catch (err) {
+      notify.error(t("Failed to add participants.", { defaultValue: "Failed to add participants." }));
+    } finally {
+      setAddingParticipants(false);
+    }
+  };
+
+  // Remove Participant (in view mode)
+  const handleRemoveParticipant = async (participantUserId) => {
+    if (!window.confirm(t("Remove this participant from the event?", { defaultValue: "Remove this participant from the event?" }))) return;
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/events/${id || loadedEvent?.id}/participants/${participantUserId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        notify.success(t("Participant removed.", { defaultValue: "Participant removed." }));
+        setLoadedEvent(data.data);
+      }
+    } catch (err) {
+      notify.error(t("Failed to remove participant.", { defaultValue: "Failed to remove participant." }));
+    }
+  };
+
+  // Compute UTC strings and check Working Hours Compliance
   const startDateTimeUtc = React.useMemo(() => {
     if (!startDate) return null;
     return convertToUTC(allDay ? `${startDate} 00:00:00` : `${startDate} ${startTime}:00`, eventTimezone);
@@ -398,10 +550,12 @@ export default function EventEditor() {
       return;
     }
 
-    // If Organization policy strictly enforces working hours, block submission if outside hours
     if (enforceOrgHours && participantWarnings.length > 0) {
       notify.error(
-        t("Cannot schedule event: Organization strictly enforces working hours policy, and {{count}} participant(s) are outside their scheduled hours.", { count: participantWarnings.length, defaultValue: `Cannot schedule event: Organization strictly enforces working hours policy, and ${participantWarnings.length} participant(s) are outside their scheduled hours.` })
+        t("Cannot schedule event: Organization strictly enforces working hours policy, and {{count}} participant(s) are outside their scheduled hours.", {
+          count: participantWarnings.length,
+          defaultValue: `Cannot schedule event: Organization strictly enforces working hours policy, and ${participantWarnings.length} participant(s) are outside their scheduled hours.`,
+        })
       );
       return;
     }
@@ -414,66 +568,68 @@ export default function EventEditor() {
       const startDateTime = allDay || isAnnounce ? `${startDate} 00:00:00` : `${startDate} ${startTime}:00`;
       const endDateTime = isAnnounce ? startDateTime : (endDate ? (allDay ? `${endDate} 23:59:59` : `${endDate} ${endTime}:00`) : startDateTime);
 
-      const payload = {
-        title: title.trim(),
-        description: description && description.replace(/<[^>]*>/g, "").trim() ? description : null,
-        type: isAnnounce ? "announcement" : "event",
-        category_id: categoryId ? Number(categoryId) : null,
-        start_date: startDateTime,
-        end_date: endDateTime,
-        event_timezone: eventTimezone,
-        timezone: eventTimezone,
-        all_day: isAnnounce ? true : allDay,
-        is_global: isAnnounce || visibilityLevel === "organization",
-        visibility_level: visibilityLevel,
-        location: isAnnounce ? null : (location.trim() || null),
-        meeting_link: isAnnounce ? null : (meetingLink.trim() || null),
-        color: color,
-        participant_user_ids: isAnnounce ? [] : selectedUserIds,
-        assigned_user_ids: isAnnounce ? [] : selectedUserIds,
-        team_ids: selectedTeamIds,
-        user_ids: selectedUserIds,
-        project_id: visibilityLevel === "project_team" ? projectId : null,
-      };
+      // Clean formatted reminders array
+      const formattedReminders = reminders
+        .filter((r) => r.value > 0)
+        .map((r) => ({ value: Number(r.value), unit: r.unit }));
+
+      // Multipart FormData to support instant file uploads during event creation/editing
+      const formData = new FormData();
+      formData.append("title", title.trim());
+      if (description && description.replace(/<[^>]*>/g, "").trim()) {
+        formData.append("description", description);
+      }
+      formData.append("type", isAnnounce ? "announcement" : "event");
+      if (categoryId) formData.append("category_id", categoryId);
+      formData.append("start_date", startDateTime);
+      formData.append("end_date", endDateTime);
+      formData.append("start_time", startTime);
+      formData.append("end_time", endTime);
+      formData.append("event_timezone", eventTimezone);
+      formData.append("timezone", eventTimezone);
+      formData.append("all_day", allDay ? "1" : "0");
+      formData.append("is_global", isAnnounce || visibilityLevel === "organization" ? "1" : "0");
+      formData.append("visibility_level", visibilityLevel);
+      if (!isAnnounce && location.trim()) formData.append("location", location.trim());
+      if (!isAnnounce && meetingLink.trim()) formData.append("meeting_link", meetingLink.trim());
+      formData.append("color", color);
+      formData.append("status", "scheduled");
+
+      if (visibilityLevel === "project_team" && projectId) {
+        formData.append("project_id", projectId);
+      }
+
+      // Arrays as JSON strings for clean backend parsing
+      formData.append("assigned_user_ids", JSON.stringify(isAnnounce ? [] : selectedUserIds));
+      formData.append("participant_user_ids", JSON.stringify(isAnnounce ? [] : selectedUserIds));
+      formData.append("team_ids", JSON.stringify(selectedTeamIds));
+      formData.append("reminders", JSON.stringify(formattedReminders));
+
+      // Append new files
+      newFiles.forEach((file) => {
+        formData.append("attachments[]", file);
+      });
 
       const url = isEditMode ? `${API_URL}/events/${id}` : `${API_URL}/events`;
-      const method = isEditMode ? "PUT" : "POST";
 
       const res = await fetch(url, {
-        method,
+        method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
           Accept: "application/json",
         },
-        body: JSON.stringify(payload),
+        body: formData,
       });
 
       const data = await res.json();
       if (res.ok && data?.success) {
-        const createdEventId = data?.data?.id || data?.event?.id || id;
-        const actionType = isEditMode ? "Updated" : "Created";
-        const isAnnounce = formType === "announcement";
-
-        // Activity Logging: Event / Announcement action
-        fetch(`${API_URL}/activity-logs`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          body: JSON.stringify({
-            module: "event",
-            action: actionType,
-            entity_id: createdEventId ? Number(createdEventId) : null,
-            entity_type: "event",
-            title: isEditMode ? `Updated Event: ${title.trim()}` : `Created ${isAnnounce ? "Announcement" : "Event"}: ${title.trim()}`,
-            description: `<p><strong>${title.trim()}</strong> (${isAnnounce ? "Event Announcement" : "Event Invitation"})</p>`,
-          }),
-        }).catch(() => {});
-
-        notify.success(isEditMode ? t("Event updated successfully!", { defaultValue: "Event updated successfully!" }) : (isAnnounce ? t("Company Announcement published!", { defaultValue: "Company Announcement published!" }) : t("Event created successfully!", { defaultValue: "Event created successfully!" })));
+        notify.success(
+          isEditMode
+            ? t("Event updated successfully!", { defaultValue: "Event updated successfully!" })
+            : isAnnounce
+            ? t("Company Announcement published!", { defaultValue: "Company Announcement published!" })
+            : t("Event created successfully!", { defaultValue: "Event created successfully!" })
+        );
         navigate(rolePath("events"));
       } else {
         notify.error(data?.message || t("Failed to save event.", { defaultValue: "Failed to save event." }));
@@ -498,8 +654,6 @@ export default function EventEditor() {
     return u?.name?.toLowerCase().includes(q) || u?.email?.toLowerCase().includes(q);
   });
 
-  // react-select/creatable format: { value, label }
-  // Note: selectedCategoryOption is React STATE (declared at top), not derived here.
   const categoryOptions = categories.map((c) => ({
     value: String(c.id),
     label: c.name,
@@ -526,7 +680,7 @@ export default function EventEditor() {
       <DashboardLayout>
         <div style={{ textAlign: "center", padding: "100px 0", color: "var(--text-secondary)" }}>
           <Loader2 className="animate-spin" size={36} style={{ margin: "0 auto 12px", color: "#2563eb" }} />
-          {t("Loading event editor...", { defaultValue: "Loading event editor..." })}
+          {t("Loading event details...", { defaultValue: "Loading event details..." })}
         </div>
       </DashboardLayout>
     );
@@ -534,23 +688,32 @@ export default function EventEditor() {
 
   const breadcrumbs = [
     { label: t("Events & Announcements", { defaultValue: "Events & Announcements" }), path: rolePath("events") },
-    { label: isViewMode ? t("Event Details", { defaultValue: "Event Details" }) : isEditMode ? t("Edit Event", { defaultValue: "Edit Event" }) : t("Create Event / Announcement", { defaultValue: "Create Event / Announcement" }) },
+    {
+      label: isViewMode
+        ? t("Event Details", { defaultValue: "Event Details" })
+        : isEditMode
+        ? t("Edit Event", { defaultValue: "Edit Event" })
+        : t("Create Event / Announcement", { defaultValue: "Create Event / Announcement" }),
+    },
   ];
 
-  // ── VIEW MODE: Read-only page with tabs + Acknowledge ─────────────
+  // ── VIEW MODE: Read-only page with tabs, attachments, participants & actions ─────────────
   if (isViewMode && loadedEvent) {
     const ev = loadedEvent;
-    const isAnnounce = ev.is_announcement || ev.type === "announcement" || ev.type === "Company Announcement" || ev.is_global;
+    const isAnnounce = ev.type === "announcement" || ev.type === "Company Announcement";
     const isAssigned = Array.isArray(ev.assigned_users) && ev.assigned_users.some((u) => u?.id === user?.id);
-    const canEdit = ev.user_id === user?.id || ev.organizer_id === user?.id || ["admin", "manager"].includes(user?.role);
+    const isParticipant = Array.isArray(ev.participants) && ev.participants.some((p) => p?.user_id === user?.id);
+    const isCreatorOrOrganizer = ev.user_id === user?.id || ev.organizer_id === user?.id || ev.created_by === user?.id;
+    const canEdit = isCreatorOrOrganizer || ["admin", "manager", "superadmin"].includes(user?.role);
+    const isCancelled = ev.status === "cancelled";
     const startDateObj = ev.start_date ? new Date(ev.start_date) : null;
 
     return (
       <DashboardLayout>
         <Breadcrumb items={breadcrumbs} />
-        <div style={{ maxWidth: "840px", margin: "0 auto", padding: "0 8px" }}>
-          {/* Back + Edit bar */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+        <div style={{ maxWidth: "880px", margin: "0 auto", padding: "0 8px" }}>
+          {/* Top Bar */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "10px" }}>
             <button
               type="button"
               onClick={() => navigate(rolePath("events"))}
@@ -558,41 +721,142 @@ export default function EventEditor() {
             >
               <ArrowLeft size={16} /> {t("Back to Events", { defaultValue: "Back to Events" })}
             </button>
-            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-              {/* Acknowledge button for assigned users */}
-              {isAssigned && (
+
+            <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+              {/* RSVP & Acknowledge Controls - Hidden for Creator / Organizer */}
+              {!isCancelled && !isCreatorOrOrganizer && (isAssigned || isParticipant || isAnnounce) && (
+                <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                  {isAnnounce ? (
+                    <button
+                      type="button"
+                      onClick={() => handleRsvp("acknowledged")}
+                      disabled={actionLoading || acknowledged}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "8px 14px",
+                        borderRadius: "8px",
+                        border: "none",
+                        background: acknowledged ? "#10b981" : "#2563eb",
+                        color: "#fff",
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        cursor: acknowledged ? "default" : "pointer",
+                      }}
+                    >
+                      <CheckCircle2 size={14} />
+                      {acknowledged ? t("Acknowledged ✓", { defaultValue: "Acknowledged ✓" }) : t("Acknowledge", { defaultValue: "Acknowledge" })}
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleRsvp("accepted")}
+                        disabled={actionLoading}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          padding: "7px 12px",
+                          borderRadius: "6px",
+                          border: "1px solid #16a34a",
+                          background: rsvpStatus === "accepted" ? "#16a34a" : "#f0fdf4",
+                          color: rsvpStatus === "accepted" ? "#fff" : "#16a34a",
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        ✓ {t("Accept", { defaultValue: "Accept" })}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRsvp("tentative")}
+                        disabled={actionLoading}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          padding: "7px 12px",
+                          borderRadius: "6px",
+                          border: "1px solid #d97706",
+                          background: rsvpStatus === "tentative" ? "#d97706" : "#fef3c7",
+                          color: rsvpStatus === "tentative" ? "#fff" : "#d97706",
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        ? {t("Maybe", { defaultValue: "Maybe" })}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRsvp("declined")}
+                        disabled={actionLoading}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          padding: "7px 12px",
+                          borderRadius: "6px",
+                          border: "1px solid #dc2626",
+                          background: rsvpStatus === "declined" ? "#dc2626" : "#fef2f2",
+                          color: rsvpStatus === "declined" ? "#fff" : "#dc2626",
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        ✕ {t("Decline", { defaultValue: "Decline" })}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Cancel Event Action */}
+              {canEdit && !isCancelled && (
                 <button
                   type="button"
-                  onClick={handleAcknowledge}
-                  disabled={acknowledging || acknowledged}
+                  onClick={handleCancelEvent}
+                  disabled={actionLoading}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
                     gap: "6px",
-                    padding: "8px 16px",
+                    padding: "8px 12px",
                     borderRadius: "8px",
-                    border: "none",
-                    background: acknowledged ? "#10b981" : "#2563eb",
-                    color: "#fff",
+                    border: "1px solid #fca5a5",
+                    background: "#fef2f2",
+                    color: "#dc2626",
                     fontSize: "13px",
                     fontWeight: 600,
-                    cursor: acknowledging || acknowledged ? "not-allowed" : "pointer",
-                    opacity: acknowledging ? 0.75 : 1,
+                    cursor: "pointer",
                   }}
                 >
-                  <CheckCircle2 size={15} />
-                  {acknowledged
-                    ? t("Acknowledged ✓", { defaultValue: "Acknowledged ✓" })
-                    : acknowledging
-                    ? t("Acknowledging…", { defaultValue: "Acknowledging…" })
-                    : t("Acknowledge", { defaultValue: "Acknowledge" })}
+                  <XCircle size={15} /> {t("Cancel Event", { defaultValue: "Cancel Event" })}
                 </button>
               )}
-              {canEdit && (
+
+              {/* Edit Event Action */}
+              {canEdit && !isCancelled && (
                 <button
                   type="button"
                   onClick={() => navigate(rolePath(`events/edit/${id}`))}
-                  style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 14px", borderRadius: "8px", border: "1px solid #bfdbfe", background: "#eff6ff", color: "#1d4ed8", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "8px 14px",
+                    borderRadius: "8px",
+                    border: "1px solid #bfdbfe",
+                    background: "#eff6ff",
+                    color: "#1d4ed8",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
                 >
                   {t("Edit", { defaultValue: "Edit" })}
                 </button>
@@ -611,9 +875,9 @@ export default function EventEditor() {
           </div>
 
           {/* ── TAB BAR ─────────────────────────────────── */}
-          <div style={{ display: "flex", gap: "4px", marginBottom: "0", borderBottom: "2px solid var(--border-color)" }}>
+          <div style={{ display: "flex", gap: "4px", borderBottom: "2px solid var(--border-color)" }}>
             {[
-              { id: "details",  label: t("Details", { defaultValue: "Details" }),   icon: <Calendar size={15} /> },
+              { id: "details", label: t("Details", { defaultValue: "Details" }), icon: <Calendar size={15} /> },
               { id: "activity", label: t("Activity", { defaultValue: "Activity" }), icon: <Activity size={15} /> },
             ].map(({ id: tabId, label, icon }) => (
               <button
@@ -644,15 +908,35 @@ export default function EventEditor() {
           {/* ── DETAILS TAB ──────────────────────────────── */}
           {viewTab === "details" && (
             <div style={{ background: "var(--bg-card)", borderRadius: "0 0 14px 14px", border: "1px solid var(--border-color)", borderTop: "none", padding: "28px", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
-              {/* Type + Category badge */}
+              {/* Type + Category + Status badges */}
               <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "16px", flexWrap: "wrap" }}>
                 {isAnnounce ? (
                   <span style={{ fontSize: "12px", fontWeight: 700, color: "#d97706", background: "#fef3c7", padding: "3px 10px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
                     <Megaphone size={13} /> {t("Company Announcement", { defaultValue: "Company Announcement" })}
                   </span>
                 ) : (
-                  <span style={{ fontSize: "12px", fontWeight: 700, color: ev.category?.color || "#2563eb", background: "#eff6ff", padding: "3px 10px", borderRadius: "4px" }}>
-                    {ev.category?.name || t(ev.type || "Event", { defaultValue: ev.type || "Event" })}
+                  <span style={{ fontSize: "12px", fontWeight: 700, color: ev.category?.color || "#2563eb", background: "#eff6ff", padding: "3px 10px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                    <Calendar size={13} /> {t("Event Invitation", { defaultValue: "Event Invitation" })}
+                  </span>
+                )}
+                {ev.category?.name && (
+                  <span style={{ fontSize: "12px", fontWeight: 600, color: ev.category?.color || "#475569", background: "var(--bg-hover)", padding: "3px 8px", borderRadius: "4px", border: "1px solid var(--border-color)" }}>
+                    {ev.category.name}
+                  </span>
+                )}
+                {ev.status && (
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      padding: "3px 9px",
+                      borderRadius: "10px",
+                      background: isCancelled ? "#fee2e2" : "#f0fdf4",
+                      color: isCancelled ? "#dc2626" : "#16a34a",
+                    }}
+                  >
+                    {ev.status}
                   </span>
                 )}
                 {ev.visibility_level && (
@@ -663,12 +947,12 @@ export default function EventEditor() {
               </div>
 
               {/* Title */}
-              <h2 style={{ margin: "0 0 20px", fontSize: "24px", fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.3 }}>
+              <h2 style={{ margin: "0 0 20px", fontSize: "24px", fontWeight: 700, color: isCancelled ? "#94a3b8" : "var(--text-primary)", textDecoration: isCancelled ? "line-through" : "none", lineHeight: 1.3 }}>
                 {ev.title}
               </h2>
 
-              {/* Date / Time / Location info card */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px", padding: "14px 18px", background: "var(--bg-hover)", borderRadius: "10px", border: "1px solid var(--border-color)", marginBottom: "20px", fontSize: "13px" }}>
+              {/* Timing & Location Info */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px", padding: "16px", background: "var(--bg-hover)", borderRadius: "10px", border: "1px solid var(--border-color)", marginBottom: "20px", fontSize: "13px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--text-primary)" }}>
                   <Clock size={16} color="#2563eb" />
                   <span>
@@ -701,42 +985,172 @@ export default function EventEditor() {
                 )}
               </div>
 
-              {/* Description (safe HTML) */}
+              {/* Description */}
               {ev.description && (
                 <div
-                  style={{ fontSize: "14px", lineHeight: "1.7", color: "var(--text-primary)", marginBottom: "20px" }}
+                  style={{ fontSize: "14px", lineHeight: "1.7", color: "var(--text-primary)", marginBottom: "24px" }}
                   dangerouslySetInnerHTML={{
                     __html: DOMPurify.sanitize(ev.description, {
-                      ALLOWED_TAGS: ["p","br","strong","em","u","s","ul","ol","li","h1","h2","h3","blockquote","a","span","code"],
-                      ALLOWED_ATTR: ["href","target","rel","class","style"],
+                      ALLOWED_TAGS: ["p", "br", "strong", "em", "u", "s", "ul", "ol", "li", "h1", "h2", "h3", "blockquote", "a", "span", "code"],
+                      ALLOWED_ATTR: ["href", "target", "rel", "class", "style"],
                     }),
                   }}
                 />
               )}
 
-              {/* Attendees */}
-              {Array.isArray(ev.assigned_users) && ev.assigned_users.length > 0 && (
-                <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "14px", marginBottom: "16px" }}>
-                  <h4 style={{ margin: "0 0 10px", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)" }}>
-                    {t("Invited Attendees ({{count}})", { count: ev.assigned_users.length, defaultValue: `Invited Attendees (${ev.assigned_users.length})` })}
+              {/* Configured Dynamic Reminders */}
+              {Array.isArray(ev.reminders) && ev.reminders.length > 0 && (
+                <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "16px", marginBottom: "20px" }}>
+                  <h4 style={{ margin: "0 0 10px", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <Bell size={14} color="#f59e0b" />
+                    {t("Scheduled Reminders", { defaultValue: "Scheduled Reminders" })}
                   </h4>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                    {ev.assigned_users.map((u) => (
-                      <span key={u?.id} style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "12px", background: "var(--bg-hover)", padding: "5px 12px", borderRadius: "20px", border: "1px solid var(--border-color)" }}>
-                        <span style={{ width: "20px", height: "20px", borderRadius: "50%", background: "#2563eb", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "10px", fontWeight: 700 }}>
-                          {u?.name?.charAt(0).toUpperCase() || "U"}
-                        </span>
-                        {u?.name}
+                    {ev.reminders.map((r, idx) => (
+                      <span key={r.id || idx} style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "12px", background: "var(--bg-hover)", padding: "4px 10px", borderRadius: "16px", border: "1px solid var(--border-color)" }}>
+                        <Clock size={12} color="#64748b" />
+                        {r.value} {r.unit} {t("before start", { defaultValue: "before start" })}
+                        {r.is_sent && <span style={{ color: "#16a34a", fontWeight: 700, fontSize: "10px" }}>(Sent ✓)</span>}
                       </span>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Footer: organizer */}
-              <div style={{ fontSize: "12px", color: "var(--text-muted)", paddingTop: "12px", borderTop: "1px solid var(--border-color)" }}>
-                {t("Organized by", { defaultValue: "Organized by" })}{" "}
-                <strong>{ev.organizer_name || ev.creator_name || t("System", { defaultValue: "System" })}</strong>
+              {/* Event Attachments */}
+              {Array.isArray(ev.attachments) && ev.attachments.length > 0 && (
+                <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "16px", marginBottom: "20px" }}>
+                  <h4 style={{ margin: "0 0 10px", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <Paperclip size={14} color="#2563eb" />
+                    {t("Attachments ({{count}})", { count: ev.attachments.length, defaultValue: `Attachments (${ev.attachments.length})` })}
+                  </h4>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {ev.attachments.map((att) => (
+                      <div
+                        key={att.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "10px 14px",
+                          borderRadius: "8px",
+                          border: "1px solid var(--border-color)",
+                          background: "var(--bg-hover)",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
+                          <FileText size={18} color="#2563eb" />
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                              {att.file_name}
+                            </div>
+                            <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                              {att.file_size ? `${(att.file_size / 1024).toFixed(1)} KB` : ""}{" "}
+                              {att.uploaded_by ? `• Uploaded by ${att.uploaded_by}` : ""}
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadAttachment(att)}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            padding: "6px 12px",
+                            borderRadius: "6px",
+                            border: "1px solid #cbd5e1",
+                            background: "#ffffff",
+                            color: "#2563eb",
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                          }}
+                        >
+                          <Download size={13} /> {t("Download", { defaultValue: "Download" })}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Attendees & RSVP Status */}
+              {Array.isArray(ev.participants) && ev.participants.length > 0 && (
+                <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "16px", marginBottom: "16px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                    <h4 style={{ margin: 0, fontSize: "12px", fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <Users size={14} color="#6366f1" />
+                      {t("Participants & RSVP ({{count}})", { count: ev.participants.length, defaultValue: `Participants & RSVP (${ev.participants.length})` })}
+                    </h4>
+                    {canEdit && !isCancelled && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAddParticipantModal(true)}
+                        style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "12px", fontWeight: 600, color: "#2563eb", background: "none", border: "none", cursor: "pointer" }}
+                      >
+                        <UserPlus size={14} /> {t("Add Participants", { defaultValue: "Add Participants" })}
+                      </button>
+                    )}
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "8px" }}>
+                    {ev.participants.map((p) => {
+                      const statusColor = p.status === "accepted" ? "#16a34a" : p.status === "declined" ? "#dc2626" : p.status === "tentative" ? "#d97706" : "#64748b";
+                      const statusBg = p.status === "accepted" ? "#f0fdf4" : p.status === "declined" ? "#fef2f2" : p.status === "tentative" ? "#fef3c7" : "#f1f5f9";
+                      return (
+                        <div
+                          key={p.id || p.user_id}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "8px 10px",
+                            borderRadius: "8px",
+                            border: "1px solid var(--border-color)",
+                            background: "var(--bg-hover)",
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+                            <div style={{ width: "24px", height: "24px", borderRadius: "50%", background: "#2563eb", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 700, flexShrink: 0 }}>
+                              {(p.name || "U")[0].toUpperCase()}
+                            </div>
+                            <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                              {p.name}
+                            </span>
+                          </div>
+
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <span style={{ fontSize: "10px", fontWeight: 700, textTransform: "capitalize", padding: "2px 6px", borderRadius: "10px", background: statusBg, color: statusColor }}>
+                              {p.status || "invited"}
+                            </span>
+                            {canEdit && !isCancelled && (
+                              <button
+                                type="button"
+                                title={t("Remove attendee", { defaultValue: "Remove attendee" })}
+                                onClick={() => handleRemoveParticipant(p.user_id)}
+                                style={{ background: "none", border: "none", color: "#9ca3af", cursor: "pointer", padding: "2px" }}
+                              >
+                                <X size={12} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Footer Organizer Info */}
+              <div style={{ fontSize: "12px", color: "var(--text-muted)", paddingTop: "14px", borderTop: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
+                <span>
+                  {t("Organized by", { defaultValue: "Organized by" })}: <strong>{ev.organizer_name || ev.creator_name || "System"}</strong>
+                </span>
+                <span>
+                  {t("Created", { defaultValue: "Created" })}: {ev.created_at ? new Date(ev.created_at).toLocaleDateString() : ""}
+                </span>
               </div>
             </div>
           )}
@@ -748,15 +1162,89 @@ export default function EventEditor() {
             </div>
           )}
         </div>
+
+        {/* Add Participants Modal (View Mode) */}
+        {showAddParticipantModal && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: "16px" }}>
+            <div style={{ background: "var(--bg-card, #ffffff)", borderRadius: "12px", maxWidth: "480px", width: "100%", padding: "20px", boxShadow: "0 10px 25px rgba(0,0,0,0.2)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+                <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>
+                  {t("Add Event Participants", { defaultValue: "Add Event Participants" })}
+                </h3>
+                <button onClick={() => setShowAddParticipantModal(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b" }}>
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div style={{ maxHeight: "240px", overflowY: "auto", border: "1px solid var(--border-color)", borderRadius: "8px", padding: "6px", marginBottom: "16px" }}>
+                {usersList
+                  .filter((u) => !loadedEvent?.participants?.some((p) => p.user_id === u.id))
+                  .map((u) => {
+                    const isSelected = newParticipantIds.includes(u.id);
+                    return (
+                      <div
+                        key={u.id}
+                        onClick={() =>
+                          setNewParticipantIds((prev) =>
+                            prev.includes(u.id) ? prev.filter((x) => x !== u.id) : [...prev, u.id]
+                          )
+                        }
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "8px 10px",
+                          borderRadius: "6px",
+                          cursor: "pointer",
+                          background: isSelected ? "#eff6ff" : "transparent",
+                          margin: "2px 0",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <div style={{ width: 26, height: 26, borderRadius: "50%", background: "#2563eb", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 700 }}>
+                            {u.name[0].toUpperCase()}
+                          </div>
+                          <div>
+                            <div style={{ fontSize: "12px", fontWeight: 600 }}>{u.name}</div>
+                            <div style={{ fontSize: "10px", color: "var(--text-muted)" }}>{u.email}</div>
+                          </div>
+                        </div>
+                        <input type="checkbox" checked={isSelected} readOnly style={{ cursor: "pointer" }} />
+                      </div>
+                    );
+                  })}
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowAddParticipantModal(false)}
+                  style={{ padding: "8px 14px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "#fff", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                >
+                  {t("Cancel", { defaultValue: "Cancel" })}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddParticipantsSubmit}
+                  disabled={addingParticipants || newParticipantIds.length === 0}
+                  style={{ padding: "8px 16px", borderRadius: "6px", border: "none", background: "#2563eb", color: "#fff", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                >
+                  {addingParticipants ? t("Adding...", { defaultValue: "Adding..." }) : t("Add Selected", { defaultValue: "Add Selected" })}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </DashboardLayout>
     );
   }
 
+  // ── CREATE / EDIT FORM MODE ─────────────────────────────
   return (
     <DashboardLayout>
       <Breadcrumb items={breadcrumbs} />
 
-      <div style={{ maxWidth: "800px", margin: "0 auto", padding: "0 8px", paddingBottom: "80px" }}>
+      <div style={{ maxWidth: "840px", margin: "0 auto", padding: "0 8px", paddingBottom: "80px" }}>
         {/* HEADER BAR */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
           <button
@@ -773,8 +1261,8 @@ export default function EventEditor() {
 
         <div style={{ background: "var(--bg-card)", borderRadius: "14px", border: "1px solid var(--border-color)", padding: "28px", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
           <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
-            {/* MASTER TYPE DROPDOWN (Top of single unified form) */}
-            <div style={{ marginBottom: "4px" }}>
+            {/* TYPE DROPDOWN */}
+            <div>
               <label style={{ fontSize: "13px", fontWeight: 700, display: "block", marginBottom: "6px" }}>
                 {t("Type", { defaultValue: "Type" })} <span style={{ color: "#ef4444" }}>*</span>
               </label>
@@ -796,9 +1284,10 @@ export default function EventEditor() {
                 }}
               >
                 <option value="event">{t("📅 Event Invitation", { defaultValue: "📅 Event Invitation" })}</option>
-                <option value="announcement">{t("📢 Event Announcement", { defaultValue: "📢 Event Announcement" })}</option>
+                <option value="announcement">{t("📢 Company Announcement", { defaultValue: "📢 Company Announcement" })}</option>
               </select>
             </div>
+
             {/* TITLE */}
             <div>
               <label style={{ fontSize: "13px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
@@ -816,7 +1305,6 @@ export default function EventEditor() {
 
             {/* CATEGORY & THEME COLOR */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-              {/* ── Task 7: Creatable Categories ── */}
               <div>
                 <label style={{ fontSize: "13px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
                   {t("Category", { defaultValue: "Category" })} <span style={{ color: "#ef4444" }}>*</span>
@@ -841,30 +1329,11 @@ export default function EventEditor() {
                       background: "var(--bg-card, #ffffff)",
                       color: "var(--text-primary, #0f172a)",
                       fontSize: "13px",
-                      cursor: "text",
                     }),
-                    menu: (base) => ({
-                      ...base,
-                      borderRadius: "8px",
-                      border: "1px solid var(--border-color, #e2e8f0)",
-                      boxShadow: "0 4px 16px rgba(0,0,0,0.1)",
-                      zIndex: 9999,
-                    }),
-                    option: (base, state) => ({
-                      ...base,
-                      fontSize: "13px",
-                      background: state.isSelected ? "#2563eb" : state.isFocused ? "#eff6ff" : "transparent",
-                      color: state.isSelected ? "#fff" : "var(--text-primary, #0f172a)",
-                      cursor: "pointer",
-                    }),
-                    singleValue: (base) => ({ ...base, color: "var(--text-primary, #0f172a)", fontSize: "13px" }),
-                    placeholder: (base) => ({ ...base, color: "var(--text-muted, #94a3b8)", fontSize: "13px" }),
-                    input: (base) => ({ ...base, color: "var(--text-primary, #0f172a)" }),
                   }}
                 />
               </div>
 
-              {/* ── Task 1: Custom Color Picker ── */}
               <div>
                 <label style={{ fontSize: "13px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
                   {t("Theme Color", { defaultValue: "Theme Color" })}
@@ -882,16 +1351,11 @@ export default function EventEditor() {
                         borderRadius: "50%",
                         background: c,
                         border: color === c ? "3px solid #0f172a" : "2px solid transparent",
-                        outline: color === c ? "2px solid #fff" : "none",
-                        outlineOffset: "-4px",
                         cursor: "pointer",
                         flexShrink: 0,
-                        transition: "border 0.15s, outline 0.15s",
                       }}
                     />
                   ))}
-
-                  {/* Hidden native color input */}
                   <input
                     ref={colorInputRef}
                     type="color"
@@ -899,13 +1363,9 @@ export default function EventEditor() {
                     onChange={(e) => setColor(e.target.value)}
                     style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }}
                     tabIndex={-1}
-                    aria-hidden="true"
                   />
-
-                  {/* Custom color trigger button */}
                   <button
                     type="button"
-                    title={t("Pick custom color", { defaultValue: "Pick custom color" })}
                     onClick={() => colorInputRef.current?.click()}
                     style={{
                       display: "inline-flex",
@@ -919,8 +1379,6 @@ export default function EventEditor() {
                       fontSize: "11px",
                       fontWeight: 600,
                       cursor: "pointer",
-                      flexShrink: 0,
-                      transition: "all 0.15s",
                     }}
                   >
                     <Pipette size={12} />
@@ -941,7 +1399,7 @@ export default function EventEditor() {
                   required
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  style={{ width: "100%", height: "40px", padding: "8px 12px", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "13px", color: "var(--text-primary)", boxSizing: "border-box" }}
+                  style={{ width: "100%", height: "40px", padding: "8px 12px", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "13px", boxSizing: "border-box" }}
                 />
               </div>
             ) : (
@@ -960,7 +1418,7 @@ export default function EventEditor() {
                 </div>
 
                 <div style={{ display: "grid", gridTemplateColumns: allDay ? "1fr 1fr" : "1fr 1fr 1fr 1fr", gap: "10px" }}>
-                  <div style={{ gridColumn: allDay ? "span 1" : "span 1" }}>
+                  <div>
                     <label style={{ fontSize: "11px", fontWeight: 600, display: "block", marginBottom: "4px" }}>{t("Start Date *", { defaultValue: "Start Date *" })}</label>
                     <input
                       type="date"
@@ -983,7 +1441,7 @@ export default function EventEditor() {
                     </div>
                   )}
 
-                  <div style={{ gridColumn: allDay ? "span 1" : "span 1" }}>
+                  <div>
                     <label style={{ fontSize: "11px", fontWeight: 600, display: "block", marginBottom: "4px" }}>{t("End Date", { defaultValue: "End Date" })}</label>
                     <input
                       type="date"
@@ -1006,22 +1464,22 @@ export default function EventEditor() {
                   )}
                 </div>
 
-                {/* Event Timezone Selector (SRS Sec 11) */}
+                {/* Event Timezone Selector */}
                 <div style={{ marginTop: "4px", paddingTop: "10px", borderTop: "1px solid var(--border-light, #e2e8f0)" }}>
-                  <label style={{ fontSize: "11px", fontWeight: 600, display: "flex", alignItems: "center", gap: "4px", marginBottom: "4px", color: "var(--text-heading)" }}>
+                  <label style={{ fontSize: "11px", fontWeight: 600, display: "flex", alignItems: "center", gap: "4px", marginBottom: "4px" }}>
                     <Globe size={13} style={{ color: "var(--color-primary, #4f46e5)" }} /> {t("Event Timezone (IANA)", { defaultValue: "Event Timezone (IANA)" })}
                   </label>
                   <select
                     value={eventTimezone}
                     onChange={(e) => setEventTimezone(e.target.value)}
-                    style={{ width: "100%", height: "38px", padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "12px", color: "var(--text-primary)" }}
+                    style={{ width: "100%", height: "38px", padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "12px" }}
                   >
                     {timezonesList.length > 0 ? (
                       timezonesList.map((tz) => (
                         <option key={tz} value={tz}>{tz} {getTimezoneOffsetDisplay(tz)}</option>
                       ))
                     ) : (
-                      ['UTC', 'America/New_York', 'America/Chicago', 'America/Los_Angeles', 'Europe/London', 'Europe/Berlin', 'Asia/Dubai', 'Asia/Karachi', 'Asia/Kolkata', 'Asia/Tokyo'].map((tz) => (
+                      ["UTC", "America/New_York", "America/Chicago", "America/Los_Angeles", "Europe/London", "Europe/Paris", "Asia/Dubai", "Asia/Karachi", "Asia/Kolkata", "Asia/Singapore", "Asia/Tokyo"].map((tz) => (
                         <option key={tz} value={tz}>{tz} {getTimezoneOffsetDisplay(tz)}</option>
                       ))
                     )}
@@ -1039,7 +1497,7 @@ export default function EventEditor() {
                   </label>
                   <input
                     type="text"
-                    placeholder={t("e.g. Conference Room A or Main Hall", { defaultValue: "e.g. Conference Room A or Main Hall" })}
+                    placeholder={t("e.g. Conference Room A or Main Office", { defaultValue: "e.g. Conference Room A or Main Office" })}
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
                     style={{ width: "100%", height: "40px", padding: "8px 12px", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "13px", boxSizing: "border-box" }}
@@ -1061,20 +1519,149 @@ export default function EventEditor() {
               </div>
             )}
 
-            {/* DESCRIPTION — Task 2: Rich Text Editor */}
+            {/* DESCRIPTION */}
             <div>
               <label style={{ fontSize: "13px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
-                {formType === "announcement" ? t("Announcement Details & Message", { defaultValue: "Announcement Details & Message" }) : t("Event Description", { defaultValue: "Event Description" })}
+                {formType === "announcement" ? t("Announcement Message *", { defaultValue: "Announcement Message *" }) : t("Event Description", { defaultValue: "Event Description" })}
               </label>
               <RichTextEditor
                 value={description}
                 onChange={(html) => setDescription(html)}
-                placeholder={t("Provide detailed description, agenda, or important notes...", { defaultValue: "Provide detailed description, agenda, or important notes..." })}
+                placeholder={t("Provide detailed agenda, discussion points, or announcement notes...", { defaultValue: "Provide detailed agenda, discussion points, or announcement notes..." })}
                 style={{ borderRadius: "8px", fontSize: "13px" }}
               />
             </div>
 
-            {/* AUDIENCE / VISIBILITY LEVEL */}
+            {/* DYNAMIC REMINDERS (PHASE 4) */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px", background: "var(--bg-hover)", padding: "16px", borderRadius: "10px", border: "1px solid var(--border-color)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <Bell size={16} color="#f59e0b" />
+                  <span style={{ fontSize: "13px", fontWeight: 700 }}>{t("Dynamic Event Reminders", { defaultValue: "Dynamic Event Reminders" })}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAddReminder}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    padding: "4px 10px",
+                    borderRadius: "6px",
+                    border: "1px solid #bfdbfe",
+                    background: "#eff6ff",
+                    color: "#2563eb",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  <Plus size={13} /> {t("Add Reminder", { defaultValue: "Add Reminder" })}
+                </button>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {reminders.map((rem, index) => (
+                  <div key={rem.id || index} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <span style={{ fontSize: "12px", color: "var(--text-muted)", width: "65px" }}>{t("Remind", { defaultValue: "Remind" })}:</span>
+                    <input
+                      type="number"
+                      min="1"
+                      value={rem.value}
+                      onChange={(e) => handleUpdateReminder(index, "value", Math.max(1, parseInt(e.target.value) || 1))}
+                      style={{ width: "80px", height: "36px", padding: "4px 8px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "13px" }}
+                    />
+                    <select
+                      value={rem.unit}
+                      onChange={(e) => handleUpdateReminder(index, "unit", e.target.value)}
+                      style={{ width: "130px", height: "36px", padding: "4px 8px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "13px" }}
+                    >
+                      <option value="minutes">{t("Minutes before", { defaultValue: "Minutes before" })}</option>
+                      <option value="hours">{t("Hours before", { defaultValue: "Hours before" })}</option>
+                      <option value="days">{t("Days before", { defaultValue: "Days before" })}</option>
+                    </select>
+
+                    <button
+                      type="button"
+                      title={t("Remove reminder", { defaultValue: "Remove reminder" })}
+                      onClick={() => handleRemoveReminder(index)}
+                      style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", padding: "6px" }}
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* ATTACHMENTS DROPZONE (PHASE 4) */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px", background: "var(--bg-hover)", padding: "16px", borderRadius: "10px", border: "1px solid var(--border-color)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <Paperclip size={16} color="#2563eb" />
+                <span style={{ fontSize: "13px", fontWeight: 700 }}>{t("Event Attachments & Resources", { defaultValue: "Event Attachments & Resources" })}</span>
+              </div>
+
+              {/* Existing Attachments */}
+              {existingAttachments.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "8px" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)" }}>{t("Existing Attachments:", { defaultValue: "Existing Attachments:" })}</span>
+                  {existingAttachments.map((att) => (
+                    <div key={att.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", borderRadius: "6px", background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
+                      <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)" }}>{att.file_name}</span>
+                      <button type="button" onClick={() => handleDeleteExistingAttachment(att.id)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer" }}>
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Upload Drop Area */}
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  border: "2px dashed var(--border-color, #cbd5e1)",
+                  borderRadius: "8px",
+                  padding: "18px",
+                  textAlign: "center",
+                  cursor: "pointer",
+                  background: "var(--bg-card, #ffffff)",
+                  transition: "border-color 0.15s ease",
+                }}
+              >
+                <UploadCloud size={24} color="#64748b" style={{ margin: "0 auto 6px" }} />
+                <p style={{ margin: "0 0 2px", fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
+                  {t("Click or drag files here to attach to this event", { defaultValue: "Click or drag files here to attach to this event" })}
+                </p>
+                <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                  {t("Supports PDFs, documents, images, and presentations up to 50MB", { defaultValue: "Supports PDFs, documents, images, and presentations up to 50MB" })}
+                </span>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  onChange={handleFileSelect}
+                  style={{ display: "none" }}
+                />
+              </div>
+
+              {/* Queued New Files */}
+              {newFiles.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "6px" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: "#2563eb" }}>{t("Files ready to upload:", { defaultValue: "Files ready to upload:" })}</span>
+                  {newFiles.map((file, idx) => (
+                    <div key={idx} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", borderRadius: "6px", background: "#eff6ff", border: "1px solid #bfdbfe" }}>
+                      <span style={{ fontSize: "12px", color: "#1d4ed8" }}>{file.name} ({(file.size / 1024).toFixed(1)} KB)</span>
+                      <button type="button" onClick={() => handleRemoveNewFile(idx)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer" }}>
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* AUDIENCE / VISIBILITY LEVEL & PARTICIPANTS */}
             <div style={{ display: "flex", flexDirection: "column", gap: "12px", borderTop: "1px solid var(--border-color)", paddingTop: "18px" }}>
               <div>
                 <label style={{ fontSize: "13px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
@@ -1088,7 +1675,6 @@ export default function EventEditor() {
                 />
               </div>
 
-              {/* DYNAMIC TARGET PROJECT */}
               {visibilityLevel === "project_team" && (
                 <div>
                   <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>
@@ -1103,211 +1689,73 @@ export default function EventEditor() {
                 </div>
               )}
 
-              {/* DYNAMIC TARGET TEAM */}
-              {visibilityLevel === "team" && (
-                <div>
-                  <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>
-                    {t("Target Team *", { defaultValue: "Target Team *" })}
-                  </label>
-                  <select
-                    value={selectedTeamIds[0] || ""}
-                    onChange={(e) => setSelectedTeamIds(e.target.value ? [Number(e.target.value)] : [])}
-                    style={{ width: "100%", height: "40px", padding: "8px 12px", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "13px" }}
-                  >
-                    <option value="">{t("Select Team...", { defaultValue: "Select Team..." })}</option>
-                    {teams.map((tItem) => (
-                      <option key={tItem.id} value={tItem.id}>{tItem.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* DYNAMIC CUSTOM VISIBILITY: TEAMS & USERS */}
-              {visibilityLevel === "custom" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "14px", padding: "14px", background: "var(--bg-hover)", borderRadius: "10px", border: "1px solid var(--border-color)" }}>
-                  {/* Select Specific Teams */}
-                  <div>
-                    <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>
-                      {t("Select Specific Teams", { defaultValue: "Select Specific Teams" })}
+              {/* SPECIFIC ATTENDEES LIST (MULTI-SELECT) */}
+              {visibilityLevel === "custom" && formType === "event" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px", padding: "14px", background: "var(--bg-hover)", borderRadius: "10px", border: "1px solid var(--border-color)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <label style={{ fontSize: "13px", fontWeight: 700 }}>
+                      {t("Invited Participants / Attendees", { defaultValue: "Invited Participants / Attendees" })}
                     </label>
-                    <select
-                      multiple
-                      value={selectedTeamIds.map(String)}
-                      onChange={(e) => {
-                        const vals = Array.from(e.target.selectedOptions, (op) => Number(op.value));
-                        setSelectedTeamIds(vals);
-                      }}
-                      style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "12px", height: "80px", color: "var(--text-primary)" }}
-                    >
-                      {teams.map((tItem) => (
-                        <option key={tItem.id} value={tItem.id}>{tItem.name}</option>
-                      ))}
-                    </select>
+                    <span style={{ fontSize: "12px", color: "#2563eb", fontWeight: 700 }}>
+                      {t("{{count}} selected", { count: selectedUserIds.length, defaultValue: `${selectedUserIds.length} selected` })}
+                    </span>
                   </div>
 
-                  {/* Select Specific Users */}
-                  <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                      <label style={{ fontSize: "13px", fontWeight: 600 }}>
-                        {t("Specific Users / Attendees", { defaultValue: "Specific Users / Attendees" })}
-                      </label>
-                      <span style={{ fontSize: "12px", color: "#2563eb", fontWeight: 600 }}>
-                        {t("{{count}} selected", { count: selectedUserIds.length, defaultValue: `${selectedUserIds.length} selected` })}
-                      </span>
-                    </div>
+                  <input
+                    type="text"
+                    placeholder={t("Search by name, email, or department...", { defaultValue: "Search by name, email, or department..." })}
+                    value={attendeeSearch}
+                    onChange={(e) => setAttendeeSearch(e.target.value)}
+                    style={{ width: "100%", height: "36px", padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "12px", boxSizing: "border-box" }}
+                  />
 
-                    <input
-                      type="text"
-                      placeholder={t("Search by name, email, or designation...", { defaultValue: "Search by name, email, or designation..." })}
-                      value={attendeeSearch}
-                      onChange={(e) => setAttendeeSearch(e.target.value)}
-                      style={{ width: "100%", height: "36px", padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "12px", marginBottom: "6px", boxSizing: "border-box" }}
-                    />
-
-                    <div style={{ maxHeight: "210px", overflowY: "auto", border: "1px solid var(--border-color)", borderRadius: "8px", padding: "6px", background: "var(--bg-card)" }}>
-                      {filteredUsers.length === 0 ? (
-                        <div style={{ fontSize: "12px", color: "var(--text-muted)", textAlign: "center", padding: "20px 0" }}>
-                          {t("No users found", { defaultValue: "No users found" })}
-                        </div>
-                      ) : (
-                        filteredUsers.map((u) => {
-                          if (!u?.id) return null;
-                          const isSelected = selectedUserIds.includes(u.id);
-                          const designation = u.designation || u.job_title || u.position || u.role || null;
-                          return (
-                            <div
-                              key={u.id}
-                              onClick={() => toggleUserSelection(u.id)}
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "space-between",
-                                padding: "8px 10px",
-                                borderRadius: "8px",
-                                cursor: "pointer",
-                                background: isSelected ? "#eff6ff" : "transparent",
-                                border: isSelected ? "1px solid #bfdbfe" : "1px solid transparent",
-                                margin: "3px 0",
-                                transition: "background 0.12s, border-color 0.12s",
-                              }}
-                            >
-                              <div style={{
-                                width: 36,
-                                height: 36,
-                                borderRadius: "50%",
-                                background: isSelected ? "#2563eb" : "var(--bg-hover, #f1f5f9)",
-                                color: isSelected ? "#fff" : "var(--text-secondary, #64748b)",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                fontWeight: 700,
-                                fontSize: "13px",
-                                flexShrink: 0,
-                                marginRight: "10px",
-                              }}>
-                                {(u.name || "?")[0].toUpperCase()}
+                  <div style={{ maxHeight: "200px", overflowY: "auto", border: "1px solid var(--border-color)", borderRadius: "8px", padding: "6px", background: "var(--bg-card)" }}>
+                    {filteredUsers.length === 0 ? (
+                      <div style={{ fontSize: "12px", color: "var(--text-muted)", textAlign: "center", padding: "16px 0" }}>
+                        {t("No users found", { defaultValue: "No users found" })}
+                      </div>
+                    ) : (
+                      filteredUsers.map((u) => {
+                        const isSelected = selectedUserIds.includes(u.id);
+                        return (
+                          <div
+                            key={u.id}
+                            onClick={() => toggleUserSelection(u.id)}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              padding: "6px 10px",
+                              borderRadius: "6px",
+                              cursor: "pointer",
+                              background: isSelected ? "#eff6ff" : "transparent",
+                              border: isSelected ? "1px solid #bfdbfe" : "1px solid transparent",
+                              margin: "2px 0",
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                              <div style={{ width: 28, height: 28, borderRadius: "50%", background: isSelected ? "#2563eb" : "#cbd5e1", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 700 }}>
+                                {(u.name || "U")[0].toUpperCase()}
                               </div>
-
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontWeight: 600, fontSize: "13px", color: isSelected ? "#1d4ed8" : "var(--text-primary, #0f172a)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                  {u.name || t("User", { defaultValue: "User" })}
-                                </div>
-                                {u.email && (
-                                  <div style={{ fontSize: "11px", color: "var(--text-secondary, #64748b)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                    ✉ {u.email}
-                                  </div>
-                                )}
-                                {designation && (
-                                  <div style={{ marginTop: "2px" }}>
-                                    <span style={{
-                                      display: "inline-block",
-                                      fontSize: "10px",
-                                      fontWeight: 600,
-                                      padding: "1px 7px",
-                                      borderRadius: "10px",
-                                      background: isSelected ? "rgba(37,99,235,0.12)" : "var(--bg-hover, #f1f5f9)",
-                                      color: isSelected ? "#1d4ed8" : "var(--text-secondary, #64748b)",
-                                      textTransform: "capitalize",
-                                    }}>
-                                      {designation}
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-
-                              <div style={{
-                                width: 22,
-                                height: 22,
-                                borderRadius: "6px",
-                                border: isSelected ? "2px solid #2563eb" : "2px solid #cbd5e1",
-                                background: isSelected ? "#2563eb" : "transparent",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                color: "#fff",
-                                flexShrink: 0,
-                                marginLeft: "8px",
-                              }}>
-                                {isSelected && <Check size={13} strokeWidth={3} />}
+                              <div>
+                                <div style={{ fontSize: "12px", fontWeight: 600, color: isSelected ? "#1d4ed8" : "var(--text-primary)" }}>{u.name}</div>
+                                <div style={{ fontSize: "10px", color: "var(--text-muted)" }}>{u.email}</div>
                               </div>
                             </div>
-                          );
-                        })
-                      )}
-                    </div>
+                            {isSelected && <Check size={14} color="#2563eb" strokeWidth={3} />}
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
-
-                  {/* Selected Attendees Working Hours & Localized Event Time (SRS Sec 13 & 15) */}
-                  {selectedUserIds.length > 0 && startDateTimeUtc && (
-                    <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "6px" }}>
-                      <label style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "var(--text-secondary)" }}>
-                        {t("Participant Local Event Times & Availability", { defaultValue: "Participant Local Event Times & Availability" })}
-                      </label>
-                      {usersList
-                        .filter((u) => selectedUserIds.includes(u.id))
-                        .map((u) => {
-                          const uTz = u.timezone || "UTC";
-                          const comp = checkWorkingHoursCompliance(startDateTimeUtc, endDateTimeUtc, u.working_hours, uTz);
-                          return (
-                            <div
-                              key={u.id}
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "space-between",
-                                padding: "6px 10px",
-                                borderRadius: "6px",
-                                background: comp.isCompliant ? "var(--bg-hover, #f8fafc)" : "rgba(239, 68, 68, 0.08)",
-                                border: `1px solid ${comp.isCompliant ? "var(--border-light, #e2e8f0)" : "rgba(239, 68, 68, 0.3)"}`,
-                                fontSize: "12px",
-                                flexWrap: "wrap",
-                                gap: "6px",
-                              }}
-                            >
-                              <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{u.name}</span>
-                              <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
-                                <span style={{ color: "var(--text-secondary)" }}>
-                                  {t("Local: {{time}} ({{tz}})", { time: comp.localTimeFormatted, tz: uTz, defaultValue: `Local: ${comp.localTimeFormatted} (${uTz})` })}
-                                </span>
-                                <span style={{ color: comp.isCompliant ? "var(--color-success, #10b981)" : "var(--color-danger, #ef4444)", fontWeight: 600 }}>
-                                  {comp.isCompliant ? `✓ ${t("Hours: {{schedule}}", { schedule: comp.scheduleText, defaultValue: `Hours: ${comp.scheduleText}` })}` : `⚠ ${t("Outside Hours ({{schedule}})", { schedule: comp.scheduleText, defaultValue: `Outside Hours (${comp.scheduleText})` })}`}
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        })}
-                    </div>
-                  )}
                 </div>
               )}
             </div>
 
-
-            {/* WORKING HOURS WARNING BANNER (SRS Sec 15 & 16) */}
+            {/* WORKING HOURS WARNING */}
             {participantWarnings.length > 0 && (
               <div
                 style={{
-                  marginTop: "16px",
                   padding: "12px 16px",
                   borderRadius: "10px",
                   background: enforceOrgHours ? "rgba(239, 68, 68, 0.1)" : "rgba(245, 158, 11, 0.1)",
@@ -1321,32 +1769,21 @@ export default function EventEditor() {
                     ? t("Strict Organization Policy: Cannot Schedule Outside Working Hours", { defaultValue: "Strict Organization Policy: Cannot Schedule Outside Working Hours" })
                     : t("Working Hours Warning (Non-Blocking)", { defaultValue: "Working Hours Warning (Non-Blocking)" })}
                 </div>
-                <p style={{ fontSize: "12px", margin: "0 0 6px 0", lineHeight: 1.4 }}>
+                <p style={{ fontSize: "12px", margin: "0 0 6px 0" }}>
                   {t("The proposed event time falls outside regular working availability for {{count}} participant(s):", { count: participantWarnings.length, defaultValue: `The proposed event time falls outside regular working availability for ${participantWarnings.length} participant(s):` })}
                 </p>
-                <ul style={{ margin: 0, paddingLeft: "18px", fontSize: "12px", display: "flex", flexDirection: "column", gap: "3px" }}>
+                <ul style={{ margin: 0, paddingLeft: "18px", fontSize: "12px" }}>
                   {participantWarnings.map((w, idx) => (
                     <li key={idx}>
-                      {t("<strong>{{name}}</strong>'s local time will be <strong>{{time}}</strong> ({{day}}), outside their working hours of <em>{{schedule}}</em>.", {
-                        name: w.user.name,
-                        time: w.localTime,
-                        day: w.localDay,
-                        schedule: w.scheduleText,
-                        defaultValue: `<strong>${w.user.name}</strong>'s local time will be <strong>${w.localTime}</strong> (${w.localDay}), outside their working hours of <em>${w.scheduleText}</em>.`
-                      })}
+                      <strong>{w.user.name}</strong> ({w.localTime}, {w.localDay} - schedule: <em>{w.scheduleText}</em>)
                     </li>
                   ))}
                 </ul>
-                {enforceOrgHours && (
-                  <p style={{ margin: "8px 0 0 0", fontSize: "11px", fontWeight: 600 }}>
-                    {t("⛔ Organization settings enforce working hours. You must select a time that fits all participants.", { defaultValue: "⛔ Organization settings enforce working hours. You must select a time that fits all participants." })}
-                  </p>
-                )}
               </div>
             )}
 
             {/* SUBMIT BUTTONS */}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "12px", borderTop: "1px solid var(--border-color)", paddingTop: "18px" }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", borderTop: "1px solid var(--border-color)", paddingTop: "18px" }}>
               <button
                 type="button"
                 onClick={() => navigate(rolePath("events"))}
@@ -1369,10 +1806,9 @@ export default function EventEditor() {
                   fontSize: "13px",
                   fontWeight: 600,
                   cursor: submitting ? "not-allowed" : "pointer",
-                  boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
                 }}
               >
-                <Save size={15} />
+                {submitting ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
                 {submitting
                   ? t("Saving...", { defaultValue: "Saving..." })
                   : isEditMode
@@ -1407,4 +1843,3 @@ export default function EventEditor() {
     </DashboardLayout>
   );
 }
-

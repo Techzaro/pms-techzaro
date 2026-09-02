@@ -491,6 +491,10 @@ class DeliverableController extends Controller
             'dependencies' => 'nullable|array', 'dependencies.*' => 'exists:deliverables,id',
             'assignees' => 'nullable|array', 'assignees.*' => 'exists:users,id',
             'allow_transfer' => 'nullable|boolean',
+            'kb_ids' => 'nullable|array',
+            'kb_ids.*' => 'nullable|integer',
+            'event_ids' => 'nullable|array',
+            'event_ids.*' => 'nullable|integer',
         ]);
 
         if (empty($request->input('assignees')) && empty($request->input('assigned_to'))) {
@@ -560,6 +564,8 @@ class DeliverableController extends Controller
             'tags' => $validated['tags'] ?? null,
             'followers' => $request->input('followers') ?? null,
             'dependencies' => $request->input('dependencies') ?? null,
+            'kb_ids' => $validated['kb_ids'] ?? null,
+            'event_ids' => $validated['event_ids'] ?? null,
         ]);
 
         // Sync multi-assignees
@@ -672,6 +678,10 @@ class DeliverableController extends Controller
             'dependencies' => 'nullable|array', 'dependencies.*' => 'exists:deliverables,id',
             'assignees' => 'nullable|array', 'assignees.*' => 'exists:users,id',
             'allow_transfer' => 'nullable|boolean',
+            'kb_ids' => 'nullable|array',
+            'kb_ids.*' => 'nullable|integer',
+            'event_ids' => 'nullable|array',
+            'event_ids.*' => 'nullable|integer',
         ]);
 
         if (empty($request->input('assignees')) && empty($request->input('assigned_to'))) {
@@ -736,6 +746,8 @@ class DeliverableController extends Controller
             'followers' => $request->input('followers') ?? null,
             'dependencies' => $request->input('dependencies') ?? null,
             'allow_transfer' => $validated['allow_transfer'] ?? true,
+            'kb_ids' => $validated['kb_ids'] ?? null,
+            'event_ids' => $validated['event_ids'] ?? null,
         ];
 
         $deliverable = $project
@@ -832,6 +844,10 @@ class DeliverableController extends Controller
             'dependencies' => 'sometimes|nullable|array', 'dependencies.*' => 'exists:deliverables,id',
             'assignees' => 'sometimes|nullable|array', 'assignees.*' => 'exists:users,id',
             'allow_transfer' => 'sometimes|boolean',
+            'kb_ids' => 'sometimes|nullable|array',
+            'kb_ids.*' => 'nullable|integer',
+            'event_ids' => 'sometimes|nullable|array',
+            'event_ids.*' => 'nullable|integer',
         ]);
 
         if ($request->has('assigned_to') || $request->has('assignees')) {

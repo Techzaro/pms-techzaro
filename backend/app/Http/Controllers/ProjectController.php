@@ -311,6 +311,10 @@ class ProjectController extends Controller
             'milestones.*.due_date' => 'nullable|date',
             'milestones.*.milestone_deadline' => 'nullable|date',
             'milestones.*.status' => 'nullable|string|max:32',
+            'kb_ids' => 'nullable|array',
+            'kb_ids.*' => 'nullable|integer',
+            'event_ids' => 'nullable|array',
+            'event_ids.*' => 'nullable|integer',
         ]);
 
         $milestones = $validated['milestones'] ?? null;
@@ -687,6 +691,10 @@ class ProjectController extends Controller
             'attachments' => 'nullable|array',
             'attachments.*.name' => 'required_with:attachments|string|max:255',
             'attachments.*.url' => 'nullable|string|max:2048',
+            'kb_ids' => 'nullable|array',
+            'kb_ids.*' => 'nullable|integer',
+            'event_ids' => 'nullable|array',
+            'event_ids.*' => 'nullable|integer',
         ]);
 
         $milestones = $validated['milestones'] ?? null;
@@ -2031,6 +2039,8 @@ class ProjectController extends Controller
      */
     public function unifiedActivity(Request $request, Project $project): JsonResponse
     {
+        $startDate = $request->query('start_date') ?: $request->query('date_from');
+        $endDate = $request->query('end_date') ?: $request->query('date_to');
         $dateFilter = $request->query('date');
         $userFilter = $request->query('user_id');
         $typeFilter = $request->query('type');
@@ -2100,9 +2110,35 @@ class ProjectController extends Controller
             ]);
         }
 
-        // Filter by Date
-        if ($dateFilter) {
-            $feed = $feed->filter(fn ($item) => substr($item['created_at'], 0, 10) === $dateFilter);
+        // Filter by Date Range or Single Date
+        if ($startDate) {
+            $formattedStart = ActivityService::parseQueryDate($startDate);
+            if ($formattedStart) {
+                $feed = $feed->filter(function ($item) use ($formattedStart) {
+                    $d = substr($item['created_at'], 0, 10);
+                    return $d >= $formattedStart;
+                });
+            }
+        }
+        if ($endDate) {
+            $formattedEnd = ActivityService::parseQueryDate($endDate);
+            if ($formattedEnd) {
+                $feed = $feed->filter(function ($item) use ($formattedEnd) {
+                    $d = substr($item['created_at'], 0, 10);
+                    return $d <= $formattedEnd;
+                });
+            }
+        }
+        if ($dateFilter && !$startDate && !$endDate) {
+            $targetDate = ActivityService::parseQueryDate($dateFilter);
+            if ($targetDate) {
+                $feed = $feed->filter(function ($item) use ($targetDate) {
+                    $d1 = substr($item['created_at'], 0, 10);
+                    if ($d1 === $targetDate) return true;
+                    $ts = strtotime($item['created_at']);
+                    return $ts !== false && date('Y-m-d', $ts) === $targetDate;
+                });
+            }
         }
 
         // Filter by User / Person

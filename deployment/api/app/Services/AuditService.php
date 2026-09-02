@@ -68,11 +68,20 @@ class AuditService
         if (!empty($filters['action'])) {
             $query->action($filters['action']);
         }
+        if (!empty($filters['entity_id'])) {
+            $query->where('entity_id', $filters['entity_id']);
+        }
+        if (!empty($filters['entity_type'])) {
+            $query->where('entity_type', $filters['entity_type']);
+        }
         if (!empty($filters['status'])) {
             $query->status($filters['status']);
         }
         if (!empty($filters['user_id'])) {
             $query->where('user_id', $filters['user_id']);
+        }
+        if (!empty($filters['date'])) {
+            $query->date($filters['date']);
         }
         if (!empty($filters['date_from']) || !empty($filters['date_to'])) {
             $query->dateRange($filters['date_from'] ?? null, $filters['date_to'] ?? null);
@@ -80,10 +89,15 @@ class AuditService
         if (!empty($filters['search'])) {
             $query->search($filters['search']);
         }
-
         $sortField = $filters['sort_field'] ?? 'created_at';
         $sortOrder = $filters['sort_order'] ?? 'desc';
         $query->orderBy($sortField, $sortOrder);
+
+        \Illuminate\Support\Facades\Log::info('Activity Filter Trace - AuditLogs', [
+            'filters' => $filters,
+            'sql' => $query->toSql(),
+            'bindings' => $query->getBindings(),
+        ]);
 
         return $query->paginate($perPage);
     }

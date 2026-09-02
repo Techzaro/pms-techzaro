@@ -80,16 +80,24 @@ class AuditService
         if (!empty($filters['user_id'])) {
             $query->where('user_id', $filters['user_id']);
         }
+        if (!empty($filters['date'])) {
+            $query->date($filters['date']);
+        }
         if (!empty($filters['date_from']) || !empty($filters['date_to'])) {
             $query->dateRange($filters['date_from'] ?? null, $filters['date_to'] ?? null);
         }
         if (!empty($filters['search'])) {
             $query->search($filters['search']);
         }
-
         $sortField = $filters['sort_field'] ?? 'created_at';
         $sortOrder = $filters['sort_order'] ?? 'desc';
         $query->orderBy($sortField, $sortOrder);
+
+        \Illuminate\Support\Facades\Log::info('Activity Filter Trace - AuditLogs', [
+            'filters' => $filters,
+            'sql' => $query->toSql(),
+            'bindings' => $query->getBindings(),
+        ]);
 
         return $query->paginate($perPage);
     }

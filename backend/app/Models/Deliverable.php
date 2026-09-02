@@ -22,6 +22,8 @@ class Deliverable extends Model
         'task_id',
         'title',
         'description',
+        'kb_ids',
+        'event_ids',
         'status',
         'priority',
         'start_date',
@@ -152,6 +154,8 @@ class Deliverable extends Model
     }
 
     protected $casts = [
+        'kb_ids' => 'array',
+        'event_ids' => 'array',
         'start_date' => 'datetime:Y-m-d\TH:i:s',
         'due_date' => 'datetime:Y-m-d\TH:i:s',
         'submitted_at' => 'datetime:Y-m-d\TH:i:s',

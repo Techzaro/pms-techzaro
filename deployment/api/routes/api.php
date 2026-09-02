@@ -29,6 +29,7 @@ use App\Http\Controllers\NotificationSettingController;
 use App\Http\Controllers\FeedbackController;
 use App\Http\Controllers\OrganizationSettingsController;
 use App\Http\Controllers\OrganizationOrgController;
+use App\Http\Controllers\RegionalSettingsController;
 
 /*
 | Public Routes
@@ -48,6 +49,10 @@ Route::get('/files/download', function (Illuminate\Http\Request $request) {
     $name = $request->query('name') ?: basename($path);
     if (! $path) {
         return response()->json(['success' => false, 'message' => 'File path required'], 400);
+    }
+    // If the path is already a full S3 presigned URL, redirect directly
+    if (preg_match('#^https?://[^/]+\.s3[^/]*\.amazonaws\.com/#i', $path)) {
+        return redirect()->away($path);
     }
     $resolved = \App\Services\FileStorageService::resolveFile($path);
     if (! $resolved) {
@@ -76,7 +81,14 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Get current authenticated user
     Route::get('/user', function (Request $request) {
-        return $request->user();
+        $user = $request->user();
+        if ($user) {
+            $user->language = $user->language ?? 'English';
+            $user->timezone = $user->timezone ?? 'UTC';
+            $user->date_format = $user->date_format ?? 'DD/MM/YYYY';
+            $user->time_format = $user->time_format ?? '12-hour';
+        }
+        return response()->json($user);
     });
 
     // View own profile
@@ -90,7 +102,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/notification-settings', [NotificationSettingController::class, 'update']);
     Route::post('/notification-settings/test-webhook', [NotificationSettingController::class, 'testWebhook']);
 
-    // Organization settings (branding, subscription, email policy)
+    // User Regional Settings (Timezone, Language, Working Hours, Date & Time Formats)
+    Route::get('/regional-settings', [RegionalSettingsController::class, 'getSettings']);
+    Route::put('/regional-settings', [RegionalSettingsController::class, 'updateSettings']);
+    Route::post('/regional-settings', [RegionalSettingsController::class, 'updateSettings']);
+    Route::get('/regional-settings/timezones', [RegionalSettingsController::class, 'getTimezones']);
+    Route::get('/user/regional-settings', [RegionalSettingsController::class, 'getSettings']);
+    Route::put('/user/regional-settings', [RegionalSettingsController::class, 'updateSettings']);
+
+    // Organization settings (branding, subscription, email policy, regional & working hours)
     Route::get('/organization-settings/email-policy', [OrganizationSettingsController::class, 'getEmailPolicy']);
     Route::put('/organization-settings/email-policy', [OrganizationSettingsController::class, 'updateEmailPolicy']);
     Route::get('/organization-settings/branding', [OrganizationSettingsController::class, 'getBranding']);
@@ -100,6 +120,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/organization-settings/details', [OrganizationSettingsController::class, 'getOrganizationDetails']);
     Route::get('/organization-settings/billing-history', [OrganizationSettingsController::class, 'getBillingHistory']);
     Route::put('/organization-settings/timezone', [OrganizationSettingsController::class, 'updateTimezone']);
+    Route::get('/organization-settings/regional', [OrganizationSettingsController::class, 'getRegionalSettings']);
+    Route::put('/organization-settings/regional', [OrganizationSettingsController::class, 'updateRegionalSettings']);
+    Route::get('/organization-settings/working-hours', [OrganizationSettingsController::class, 'getRegionalSettings']);
+    Route::put('/organization-settings/working-hours', [OrganizationSettingsController::class, 'updateRegionalSettings']);
 
     // Organization Storage Management
     Route::get('/organization/storage', [OrganizationOrgController::class, 'getStorageUsage']);
@@ -263,6 +287,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/feedback/{id}', [FeedbackController::class, 'show']);
     Route::patch('/feedback/{id}', [FeedbackController::class, 'update']);
     Route::post('/feedback/{id}/notes', [FeedbackController::class, 'addNote']);
+    Route::get('/feedback/{id}/messages', [FeedbackController::class, 'getMessages']);
+    Route::post('/feedback/{id}/messages', [FeedbackController::class, 'sendMessage']);
 
     /*
     | Team Management Routes
@@ -286,6 +312,11 @@ Route::middleware('auth:sanctum')->group(function () {
         // Delete team
         Route::delete('/teams/{team}', [TeamController::class, 'destroy']);
     });
+
+    // Team Working Hours (Accessible to Admin, Manager, and Team Leads)
+    Route::get('/teams/{team}/working-hours', [TeamController::class, 'getWorkingHours']);
+    Route::put('/teams/{team}/working-hours', [TeamController::class, 'updateWorkingHours'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
+    Route::post('/teams/{team}/working-hours', [TeamController::class, 'updateWorkingHours'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
 
     /*
     | Project Management Routes (Read)
@@ -380,6 +411,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/tasks/{task}/assigner-pause', [TaskController::class, 'assignerPause']); // Assigner pauses task (locks assignee)
     Route::post('/tasks/{task}/assigner-resume', [TaskController::class, 'assignerResume']); // Assigner resumes task (unlocks assignee)
     Route::post('/tasks/{task}/submit', [TaskController::class, 'submit']); // Submit task for review
+    Route::post('/tasks/{task}/submit-to-next', [TaskController::class, 'submitToNext'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
     Route::get('/tasks/{task}/timer', [TaskController::class, 'timer']); // Get live timer state
     Route::get('/tasks/{task}/timer-sessions', [TaskController::class, 'timerSessions']); // Get pause session history
     Route::get('/tasks/{task}/latest-submission', [TaskController::class, 'latestSubmission']); // Get latest submission
@@ -588,10 +620,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/projects/{project}/unified-activity', [ProjectController::class, 'unifiedActivity']);
 
     /*
-    | My Activity (all authenticated users)
-    | Personal audit log entries for the current user.
+    | My Activity & Activity Logging (all authenticated users)
+    | Personal audit log entries and direct activity event logging.
     */
     Route::get('/my-activity', [AuditLogController::class, 'myActivity']);
+    Route::post('/activity-logs', [AuditLogController::class, 'store']);
+    Route::post('/audit-logs', [AuditLogController::class, 'store']);
+    Route::get('/activity-logs', [AuditLogController::class, 'index']);
+    Route::get('/activity-logs/modules', [AuditLogController::class, 'modules']);
 
     /*
     | Audit Log Routes
@@ -622,6 +658,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/events', [EventController::class, 'store'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Create new event
     Route::match(['put', 'post'], '/events/{event}', [EventController::class, 'update'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Update event
     Route::delete('/events/{event}', [EventController::class, 'destroy'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Delete event
+    Route::post('/events/{event}/cancel', [EventController::class, 'cancel'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Cancel event
+    Route::post('/events/{event}/participants', [EventController::class, 'addParticipants'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Add participants
+    Route::delete('/events/{event}/participants/{user}', [EventController::class, 'removeParticipant'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Remove participant
+    Route::post('/events/{event}/attachments', [EventController::class, 'uploadAttachment'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Upload attachment
+    Route::delete('/events/{event}/attachments/{attachment}', [EventController::class, 'deleteAttachment'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Delete attachment
+    Route::get('/events/{event}/attachments/{attachment}/download', [EventController::class, 'downloadAttachment']); // Download attachment
+    Route::post('/events/{event}/rsvp', [EventController::class, 'rsvp']); // RSVP / Acknowledge event
+    Route::get('/events/{event}/activities', [EventController::class, 'activities']); // Event activity feed
 
     /*
     | Unified Calendar Routes
@@ -672,8 +716,15 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/knowledge-base', [\App\Http\Controllers\KnowledgeBaseController::class, 'index']); // List visible knowledge base items
     Route::get('/knowledge-base/{knowledgeBase}', [\App\Http\Controllers\KnowledgeBaseController::class, 'show']); // View article details
+    Route::get('/knowledge-base/{knowledgeBase}/activities', [\App\Http\Controllers\KnowledgeBaseController::class, 'activities']); // View article activity feed
+    Route::get('/knowledge-base/{knowledgeBase}/download', [\App\Http\Controllers\KnowledgeBaseController::class, 'downloadAttachment']); // Download attachment
     Route::get('/knowledge-base/{knowledgeBase}/versions', [\App\Http\Controllers\KnowledgeBaseController::class, 'getVersions']); // View article versions
     Route::post('/knowledge-base/{knowledgeBase}/versions/{versionId}/restore', [\App\Http\Controllers\KnowledgeBaseController::class, 'restoreVersion'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Restore version
+    Route::post('/knowledge-base/{knowledgeBase}/duplicate', [\App\Http\Controllers\KnowledgeBaseController::class, 'duplicate'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Duplicate article
+    Route::post('/knowledge-base/{knowledgeBase}/archive', [\App\Http\Controllers\KnowledgeBaseController::class, 'archive'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Archive article
+    Route::post('/knowledge-base/{knowledgeBase}/restore', [\App\Http\Controllers\KnowledgeBaseController::class, 'restore'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Restore archived article
+    Route::post('/knowledge-base/{knowledgeBase}/favorite', [\App\Http\Controllers\KnowledgeBaseController::class, 'toggleFavorite'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Toggle favorite
+    Route::post('/knowledge-base/{knowledgeBase}/share', [\App\Http\Controllers\KnowledgeBaseController::class, 'shareInternally'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Share internally
     Route::post('/knowledge-base', [\App\Http\Controllers\KnowledgeBaseController::class, 'store'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Create article
     Route::match(['put', 'post'], '/knowledge-base/{knowledgeBase}', [\App\Http\Controllers\KnowledgeBaseController::class, 'update'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Update article
     Route::delete('/knowledge-base/{knowledgeBase}', [\App\Http\Controllers\KnowledgeBaseController::class, 'destroy'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Delete article

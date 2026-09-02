@@ -735,28 +735,42 @@ class OrganizationSettingsController extends Controller
         ];
 
         $updateData = [];
+        $changedParts = [];
 
         if (array_key_exists('default_timezone', $validated) || array_key_exists('timezone', $validated)) {
             $tz = $validated['default_timezone'] ?? $validated['timezone'] ?? 'UTC';
             $updateData['default_timezone'] = $tz;
             $updateData['timezone'] = $tz;
+            if ($tz !== $oldValues['default_timezone']) {
+                $changedParts[] = "Default timezone: {$tz}";
+            }
         }
 
         if (array_key_exists('enforce_working_hours', $validated)) {
             $updateData['enforce_working_hours'] = (bool) $validated['enforce_working_hours'];
+            if ((bool) $validated['enforce_working_hours'] !== $oldValues['enforce_working_hours']) {
+                $changedParts[] = "Enforce working hours: " . ($validated['enforce_working_hours'] ? 'Enabled' : 'Disabled');
+            }
         }
 
         if (array_key_exists('working_hours', $validated)) {
             $updateData['working_hours'] = $validated['working_hours'];
+            if (json_encode($validated['working_hours']) !== json_encode($oldValues['working_hours'])) {
+                $changedParts[] = "Working hours schedule";
+            }
         }
 
         $org->update($updateData);
+
+        $description = !empty($changedParts)
+            ? "Updated organization regional settings (" . implode(', ', $changedParts) . ")"
+            : "Updated organization regional settings and working hours";
 
         try {
             $this->auditService->log(
                 module: 'organization_settings',
                 action: 'update_regional_settings',
-                description: "Updated organization regional settings and working hours",
+                description: $description,
                 user: $request->user(),
                 entityType: 'Organization',
                 entityId: $org->id,

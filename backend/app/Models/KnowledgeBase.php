@@ -67,4 +67,9 @@ class KnowledgeBase extends Model
     {
         return $this->belongsTo(User::class, 'updated_by');
     }
+
+    public function favorites(): HasMany
+    {
+        return $this->hasMany(KbFavorite::class, 'knowledge_base_id');
+    }
 }

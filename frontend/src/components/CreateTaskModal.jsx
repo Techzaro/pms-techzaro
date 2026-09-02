@@ -159,6 +159,18 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
   const [displayUsers, setDisplayUsers] = useState([]);
   const [projectEndDate, setProjectEndDate] = useState(null);
   const [draftId, setDraftId] = useState(null);
+  const [kbIds, setKbIds] = useState(() => {
+    if (prefillData?.kb_ids && Array.isArray(prefillData.kb_ids)) return prefillData.kb_ids.map(Number);
+    if (prefillData?.kb_id || prefillData?.kbReferenceId) return [Number(prefillData.kb_id || prefillData.kbReferenceId)];
+    return [];
+  });
+  const [eventIds, setEventIds] = useState(() => {
+    if (prefillData?.event_ids && Array.isArray(prefillData.event_ids)) return prefillData.event_ids.map(Number);
+    if (prefillData?.event_id || prefillData?.eventReferenceId) return [Number(prefillData.event_id || prefillData.eventReferenceId)];
+    return [];
+  });
+  const [kbArticles, setKbArticles] = useState([]);
+  const [eventsList, setEventsList] = useState([]);
 
   const [form, setForm] = useState(() => {
     const user = getUser();
@@ -214,11 +226,13 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
 
   const autoSaveData = useMemo(() => ({
     ...form,
+    kb_ids: kbIds,
+    event_ids: eventIds,
     deliverables: subtasks,
     recurringTemplates,
     requirementsList,
     links: links.map(l => ({ url: l.url, name: l.name || l.customName })),
-  }), [form, subtasks, recurringTemplates, requirementsList, links]);
+  }), [form, kbIds, eventIds, subtasks, recurringTemplates, requirementsList, links]);
 
   const { lastSaved, isSaving, draftId: autoSaveDraftId } = useAutoSave({
     draftId,
@@ -245,6 +259,16 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
       task_type: prefillData.task_type || prev.task_type,
       project_id: prefillData.project_id || prev.project_id,
     }));
+    if (prefillData.kb_ids) {
+      setKbIds(Array.isArray(prefillData.kb_ids) ? prefillData.kb_ids.map(Number) : [Number(prefillData.kb_ids)]);
+    } else if (prefillData.kb_id || prefillData.kbReferenceId) {
+      setKbIds([Number(prefillData.kb_id || prefillData.kbReferenceId)]);
+    }
+    if (prefillData.event_ids) {
+      setEventIds(Array.isArray(prefillData.event_ids) ? prefillData.event_ids.map(Number) : [Number(prefillData.event_ids)]);
+    } else if (prefillData.event_id || prefillData.eventReferenceId) {
+      setEventIds([Number(prefillData.event_id || prefillData.eventReferenceId)]);
+    }
     if (prefillData.subtasks && Array.isArray(prefillData.subtasks)) {
       setSubtasks(prefillData.subtasks.map((s) => ({ title: typeof s === "string" ? s : s.title, start_date: null, due_date: null, assigned_to: null })));
     }
@@ -280,6 +304,10 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
         if (d.deliverables) setSubtasks(d.deliverables);
         if (d.recurringTemplates) setRecurringTemplates(d.recurringTemplates);
         if (d.links) setLinks(d.links.map(l => ({ url: l.url, name: l.name || "", renaming: false })));
+        if (d.kb_ids) setKbIds(Array.isArray(d.kb_ids) ? d.kb_ids.map(Number) : [Number(d.kb_ids)]);
+        else if (d.kb_id || d.kbReferenceId) setKbIds([Number(d.kb_id || d.kbReferenceId)]);
+        if (d.event_ids) setEventIds(Array.isArray(d.event_ids) ? d.event_ids.map(Number) : [Number(d.event_ids)]);
+        else if (d.event_id || d.eventReferenceId) setEventIds([Number(d.event_id || d.eventReferenceId)]);
         setDraftId(restoreDraftId);
       } catch (err) {
         console.error("Failed to restore draft:", err);
@@ -294,7 +322,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
       const payload = {
         module_type: "task",
         title: form.title || "Untitled Task Draft",
-        draft_data: { ...form, deliverables: subtasks, recurringTemplates: recurringTemplates, requirementsList, links: links.map(l => ({ url: l.url, name: l.name || l.customName })) },
+        draft_data: { ...form, kb_ids: kbIds, event_ids: eventIds, deliverables: subtasks, recurringTemplates: recurringTemplates, requirementsList, links: links.map(l => ({ url: l.url, name: l.name || l.customName })) },
         project_id: form.project_id?.[0] || projectId,
       };
       if (draftId) {
@@ -359,6 +387,10 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
           .then((r) => (r.ok ? r.json() : [])).then((d) => { setDisplayUsers(ensureCurrentUser(Array.isArray(d) ? d : [])); }).catch(() => {}),
         fetch(`${API_URL}/projects/${projectId}`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
           .then((r) => (r.ok ? r.json() : null)).then((data) => { if (data?.project?.end_date) setProjectEndDate(data.project.end_date); }).catch(() => {}),
+        fetch(`${API_URL}/knowledge-base?all=true`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+          .then((r) => (r.ok ? r.json() : [])).then((d) => { const items = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : []; setKbArticles(items); }).catch(() => {}),
+        fetch(`${API_URL}/events?all=true`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+          .then((r) => (r.ok ? r.json() : [])).then((d) => { const items = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : []; setEventsList(items); }).catch(() => {}),
       ]);
     } else {
       Promise.all([
@@ -366,6 +398,10 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
           .then((r) => (r.ok ? r.json() : [])).then((d) => { const l = d?.data || d; setProjects(Array.isArray(l) ? l : []); }).catch(() => {}),
         fetch(`${API_URL}/team-users`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
           .then((r) => (r.ok ? r.json() : { users: [] })).then((d) => { const u = ensureCurrentUser(Array.isArray(d) ? d : (d.users || [])); setAllUsers(u); setDisplayUsers(u); }).catch(() => {}),
+        fetch(`${API_URL}/knowledge-base?all=true`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+          .then((r) => (r.ok ? r.json() : [])).then((d) => { const items = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : []; setKbArticles(items); }).catch(() => {}),
+        fetch(`${API_URL}/events?all=true`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+          .then((r) => (r.ok ? r.json() : [])).then((d) => { const items = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : []; setEventsList(items); }).catch(() => {}),
       ]);
     }
   }, [projectId]);
@@ -620,6 +656,8 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
           deliverables: subtasks.length > 0 ? subtasks.map((d) => ({ title: d.title, start_date: d.start_date || null, due_date: d.due_date || null, assigned_to: d.assigned_to || null })) : undefined,
           allow_transfer: form.allow_transfer === "allow",
           followers: form.followers || [],
+          kb_ids: kbIds.length > 0 ? kbIds.map(Number) : [],
+          event_ids: eventIds.length > 0 ? eventIds.map(Number) : [],
         };
 
         const projectIds = projectId ? [projectId] : form.project_id;
@@ -896,6 +934,38 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                     { value: "Low", label: t("Low") },
                     { value: "High", label: t("High") },
                   ]} />
+              </div>
+
+              {/* REFERENCE KNOWLEDGE BASE */}
+              <div className="task-field">
+                <label>{t("Reference Knowledge Base", { defaultValue: "Reference Knowledge Base" })}</label>
+                <MultiSelectDropdown
+                  name="kb_ids"
+                  value={kbIds}
+                  onChange={(vals) => { setKbIds(vals.map(Number)); markDirty(); }}
+                  placeholder={t("Select Knowledge Base", { defaultValue: "Select Knowledge Base" })}
+                  searchPlaceholder={t("Search Knowledge Base...", { defaultValue: "Search Knowledge Base..." })}
+                  options={(kbArticles || []).map((item) => ({
+                    value: Number(item?.id),
+                    label: item?.title || `Article #${item?.id}`,
+                  }))}
+                />
+              </div>
+
+              {/* REFERENCE EVENT */}
+              <div className="task-field">
+                <label>{t("Reference Event", { defaultValue: "Reference Event" })}</label>
+                <MultiSelectDropdown
+                  name="event_ids"
+                  value={eventIds}
+                  onChange={(vals) => { setEventIds(vals.map(Number)); markDirty(); }}
+                  placeholder={t("Select Event", { defaultValue: "Select Event" })}
+                  searchPlaceholder={t("Search Events...", { defaultValue: "Search Events..." })}
+                  options={(eventsList || []).map((item) => ({
+                    value: Number(item?.id),
+                    label: item?.title || `Event #${item?.id}`,
+                  }))}
+                />
               </div>
 
               <div className="task-field">

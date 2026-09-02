@@ -24,6 +24,8 @@ class Task extends Model
         'project_id',
         'title',
         'description',
+        'kb_ids',
+        'event_ids',
         'requirements',
         'status',
         'states',
@@ -201,6 +203,8 @@ class Task extends Model
     protected $casts = [
         'requirements' => 'array',
         'states' => 'array',
+        'kb_ids' => 'array',
+        'event_ids' => 'array',
         'start_date' => 'datetime:Y-m-d\TH:i:s',
         'end_date' => 'datetime:Y-m-d\TH:i:s',
         'submitted_at' => 'datetime:Y-m-d\TH:i:s',

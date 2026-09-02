@@ -102,6 +102,35 @@ class ActivityService
     }
 
     /**
+     * Parse and format any incoming date string strictly to YYYY-MM-DD for whereDate query matching.
+     */
+    public static function parseQueryDate(?string $date): ?string
+    {
+        if (empty($date)) {
+            return null;
+        }
+        $clean = trim($date);
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $clean)) {
+            return $clean;
+        }
+        if (preg_match('/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/', $clean, $m)) {
+            $p1 = (int) $m[1];
+            $p2 = (int) $m[2];
+            $year = $m[3];
+            if ($p1 > 12) {
+                return sprintf('%04d-%02d-%02d', $year, $p2, $p1);
+            } else {
+                return sprintf('%04d-%02d-%02d', $year, $p1, $p2);
+            }
+        }
+        try {
+            return Carbon::parse($clean)->format('Y-m-d');
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
      * Retrieve activities for a user with optional date, module, action, search filters and pagination.
      */
     public function getActivities(
@@ -120,21 +149,36 @@ class ActivityService
             $query->where('user_id', $userId);
         }
 
-        if ($date) {
-            $query->whereDate('created_at', $date);
+        if (!empty($date)) {
+            try {
+                $parsedDate = \Carbon\Carbon::parse($date)->toDateString();
+                $query->whereDate('created_at', $parsedDate);
+            } catch (\Throwable $e) {
+                $query->whereDate('created_at', $date);
+            }
         }
-        if ($dateFrom) {
-            $query->whereDate('created_at', '>=', $dateFrom);
+        if (!empty($dateFrom)) {
+            try {
+                $parsedFrom = \Carbon\Carbon::parse($dateFrom)->toDateString();
+                $query->whereDate('created_at', '>=', $parsedFrom);
+            } catch (\Throwable $e) {
+                $query->whereDate('created_at', '>=', $dateFrom);
+            }
         }
-        if ($dateTo) {
-            $query->whereDate('created_at', '<=', $dateTo);
+        if (!empty($dateTo)) {
+            try {
+                $parsedTo = \Carbon\Carbon::parse($dateTo)->toDateString();
+                $query->whereDate('created_at', '<=', $parsedTo);
+            } catch (\Throwable $e) {
+                $query->whereDate('created_at', '<=', $dateTo);
+            }
         }
         if ($module) {
             $cleanModule = strtolower(trim($module));
             $moduleVariants = [
-                'user' => ['user', 'User', 'users', 'Users', 'user_management'],
-                'users' => ['user', 'User', 'users', 'Users', 'user_management'],
-                'user_management' => ['user', 'User', 'users', 'Users', 'user_management'],
+                'user' => ['user', 'User', 'users', 'Users', 'user_management', 'user_settings'],
+                'users' => ['user', 'User', 'users', 'Users', 'user_management', 'user_settings'],
+                'user_management' => ['user', 'User', 'users', 'Users', 'user_management', 'user_settings'],
                 'auth' => ['auth', 'Auth', 'authentication'],
                 'task' => ['task', 'Task', 'tasks', 'Tasks', 'task_management'],
                 'tasks' => ['task', 'Task', 'tasks', 'Tasks', 'task_management'],
@@ -148,8 +192,13 @@ class ActivityService
                 'deliverable_management' => ['deliverable', 'Deliverable', 'deliverables', 'subtask', 'deliverable_management'],
                 'team' => ['team', 'Team', 'teams', 'team_management'],
                 'teams' => ['team', 'Team', 'teams', 'team_management'],
-                'event' => ['event', 'Event', 'events'],
-                'events' => ['event', 'Event', 'events'],
+                'event' => ['event', 'Event', 'events', 'event_created', 'event_updated', 'rsvp', 'rescheduled'],
+                'events' => ['event', 'Event', 'events', 'event_created', 'event_updated', 'rsvp', 'rescheduled'],
+                'knowledge_base' => ['knowledge_base', 'KnowledgeBase', 'kb', 'knowledge-base', 'knowledge_bases', 'kb_created', 'kb_updated', 'kb_deleted', 'kb_duplicated', 'kb_archived', 'kb_restored', 'kb_favorited', 'kb_unfavorited', 'kb_shared', 'kb_downloaded', 'kb_version_restored'],
+                'kb' => ['knowledge_base', 'KnowledgeBase', 'kb', 'knowledge-base', 'knowledge_bases', 'kb_created', 'kb_updated', 'kb_deleted', 'kb_duplicated', 'kb_archived', 'kb_restored', 'kb_favorited', 'kb_unfavorited', 'kb_shared', 'kb_downloaded', 'kb_version_restored'],
+                'regional_settings' => ['regional_settings', 'regional-settings', 'regional', 'user_settings', 'organization_settings', 'configuration_changed', 'timezone_updated', 'language_updated', 'date_format_updated', 'time_format_updated', 'working_hours_updated'],
+                'user_settings' => ['user_settings', 'regional_settings', 'configuration_changed', 'timezone_updated', 'language_updated', 'date_format_updated', 'time_format_updated', 'working_hours_updated'],
+                'organization_settings' => ['organization_settings', 'regional_settings', 'configuration_changed', 'timezone_updated', 'language_updated', 'date_format_updated', 'time_format_updated', 'working_hours_updated'],
             ];
             $allowedModules = $moduleVariants[$cleanModule] ?? [$module, strtolower($module), ucfirst($module)];
 
@@ -162,12 +211,36 @@ class ActivityService
         if ($action) {
             $cleanAction = strtolower(trim($action));
             $actionVariants = [
-                'create' => ['create', 'Create', 'created', 'Created', 'deliverable_created', 'task_created'],
-                'created' => ['create', 'Create', 'created', 'Created', 'deliverable_created', 'task_created'],
-                'update' => ['update', 'Update', 'updated', 'Updated', 'status_change', 'status'],
-                'updated' => ['update', 'Update', 'updated', 'Updated', 'status_change', 'status'],
-                'delete' => ['delete', 'Delete', 'deleted', 'Deleted'],
-                'deleted' => ['delete', 'Delete', 'deleted', 'Deleted'],
+                'create' => ['create', 'Create', 'created', 'Created', 'deliverable_created', 'task_created', 'kb_created', 'event_created'],
+                'created' => ['create', 'Create', 'created', 'Created', 'deliverable_created', 'task_created', 'kb_created', 'event_created'],
+                'update' => ['update', 'Update', 'updated', 'Updated', 'status_change', 'status', 'kb_updated', 'event_updated', 'update_regional_settings', 'configuration_changed', 'timezone_updated', 'language_updated', 'date_format_updated', 'time_format_updated', 'working_hours_updated'],
+                'updated' => ['update', 'Update', 'updated', 'Updated', 'status_change', 'status', 'kb_updated', 'event_updated', 'update_regional_settings', 'configuration_changed', 'timezone_updated', 'language_updated', 'date_format_updated', 'time_format_updated', 'working_hours_updated'],
+                'delete' => ['delete', 'Delete', 'deleted', 'Deleted', 'kb_deleted'],
+                'deleted' => ['delete', 'Delete', 'deleted', 'Deleted', 'kb_deleted'],
+                'duplicate' => ['duplicate', 'Duplicate', 'duplicated', 'kb_duplicated'],
+                'duplicated' => ['duplicate', 'Duplicate', 'duplicated', 'kb_duplicated'],
+                'archive' => ['archive', 'Archive', 'archived', 'kb_archived'],
+                'archived' => ['archive', 'Archive', 'archived', 'kb_archived'],
+                'restore' => ['restore', 'Restore', 'restored', 'kb_restored', 'kb_version_restored'],
+                'restored' => ['restore', 'Restore', 'restored', 'kb_restored', 'kb_version_restored'],
+                'favorite' => ['favorite', 'Favorite', 'favorited', 'kb_favorited', 'unfavorite', 'unfavorited', 'kb_unfavorited'],
+                'favorited' => ['favorite', 'Favorite', 'favorited', 'kb_favorited', 'unfavorite', 'unfavorited', 'kb_unfavorited'],
+                'share' => ['share', 'Share', 'shared', 'kb_shared'],
+                'shared' => ['share', 'Share', 'shared', 'kb_shared'],
+                'download' => ['download', 'Download', 'downloaded', 'kb_downloaded'],
+                'downloaded' => ['download', 'Download', 'downloaded', 'kb_downloaded'],
+                'timezone_updated' => ['timezone_updated', 'timezone', 'update_regional_settings', 'configuration_changed'],
+                'timezone' => ['timezone_updated', 'timezone', 'update_regional_settings', 'configuration_changed'],
+                'language_updated' => ['language_updated', 'language', 'update_regional_settings', 'configuration_changed'],
+                'language' => ['language_updated', 'language', 'update_regional_settings', 'configuration_changed'],
+                'date_format_updated' => ['date_format_updated', 'date_format', 'update_regional_settings', 'configuration_changed'],
+                'date_format' => ['date_format_updated', 'date_format', 'update_regional_settings', 'configuration_changed'],
+                'time_format_updated' => ['time_format_updated', 'time_format', 'update_regional_settings', 'configuration_changed'],
+                'time_format' => ['time_format_updated', 'time_format', 'update_regional_settings', 'configuration_changed'],
+                'working_hours_updated' => ['working_hours_updated', 'working_hours', 'update_regional_settings', 'configuration_changed'],
+                'working_hours' => ['working_hours_updated', 'working_hours', 'update_regional_settings', 'configuration_changed'],
+                'configuration_changed' => ['configuration_changed', 'update_regional_settings', 'update_settings', 'update', 'timezone_updated', 'language_updated', 'date_format_updated', 'time_format_updated', 'working_hours_updated'],
+                'update_regional_settings' => ['update_regional_settings', 'configuration_changed', 'update_settings', 'update', 'timezone_updated', 'language_updated', 'date_format_updated', 'time_format_updated', 'working_hours_updated'],
                 'approve' => ['approve', 'Approve', 'approved', 'Approved'],
                 'approved' => ['approve', 'Approve', 'approved', 'Approved'],
                 'reject' => ['reject', 'Reject', 'rejected', 'Rejected', 'declined', 'Declined'],
@@ -195,6 +268,11 @@ class ActivityService
             });
         }
 
+        \Illuminate\Support\Facades\Log::info('Activity Filter Trace - Central', [
+            'sql' => $query->toSql(),
+            'bindings' => $query->getBindings(),
+        ]);
+
         return $query->latest()
             ->skip($offset)
             ->limit($limit)
@@ -218,21 +296,36 @@ class ActivityService
             $query->where('user_id', $userId);
         }
 
-        if ($date) {
-            $query->whereDate('created_at', $date);
+        if (!empty($date)) {
+            try {
+                $parsedDate = \Carbon\Carbon::parse($date)->toDateString();
+                $query->whereDate('created_at', $parsedDate);
+            } catch (\Throwable $e) {
+                $query->whereDate('created_at', $date);
+            }
         }
-        if ($dateFrom) {
-            $query->whereDate('created_at', '>=', $dateFrom);
+        if (!empty($dateFrom)) {
+            try {
+                $parsedFrom = \Carbon\Carbon::parse($dateFrom)->toDateString();
+                $query->whereDate('created_at', '>=', $parsedFrom);
+            } catch (\Throwable $e) {
+                $query->whereDate('created_at', '>=', $dateFrom);
+            }
         }
-        if ($dateTo) {
-            $query->whereDate('created_at', '<=', $dateTo);
+        if (!empty($dateTo)) {
+            try {
+                $parsedTo = \Carbon\Carbon::parse($dateTo)->toDateString();
+                $query->whereDate('created_at', '<=', $parsedTo);
+            } catch (\Throwable $e) {
+                $query->whereDate('created_at', '<=', $dateTo);
+            }
         }
         if ($module) {
             $cleanModule = strtolower(trim($module));
             $moduleVariants = [
-                'user' => ['user', 'User', 'users', 'Users', 'user_management'],
-                'users' => ['user', 'User', 'users', 'Users', 'user_management'],
-                'user_management' => ['user', 'User', 'users', 'Users', 'user_management'],
+                'user' => ['user', 'User', 'users', 'Users', 'user_management', 'user_settings'],
+                'users' => ['user', 'User', 'users', 'Users', 'user_management', 'user_settings'],
+                'user_management' => ['user', 'User', 'users', 'Users', 'user_management', 'user_settings'],
                 'auth' => ['auth', 'Auth', 'authentication'],
                 'task' => ['task', 'Task', 'tasks', 'Tasks', 'task_management'],
                 'tasks' => ['task', 'Task', 'tasks', 'Tasks', 'task_management'],
@@ -246,8 +339,13 @@ class ActivityService
                 'deliverable_management' => ['deliverable', 'Deliverable', 'deliverables', 'subtask', 'deliverable_management'],
                 'team' => ['team', 'Team', 'teams', 'team_management'],
                 'teams' => ['team', 'Team', 'teams', 'team_management'],
-                'event' => ['event', 'Event', 'events'],
-                'events' => ['event', 'Event', 'events'],
+                'event' => ['event', 'Event', 'events', 'event_created', 'event_updated', 'rsvp', 'rescheduled'],
+                'events' => ['event', 'Event', 'events', 'event_created', 'event_updated', 'rsvp', 'rescheduled'],
+                'knowledge_base' => ['knowledge_base', 'KnowledgeBase', 'kb', 'knowledge-base', 'knowledge_bases', 'kb_created', 'kb_updated', 'kb_deleted', 'kb_duplicated', 'kb_archived', 'kb_restored', 'kb_favorited', 'kb_unfavorited', 'kb_shared', 'kb_downloaded', 'kb_version_restored'],
+                'kb' => ['knowledge_base', 'KnowledgeBase', 'kb', 'knowledge-base', 'knowledge_bases', 'kb_created', 'kb_updated', 'kb_deleted', 'kb_duplicated', 'kb_archived', 'kb_restored', 'kb_favorited', 'kb_unfavorited', 'kb_shared', 'kb_downloaded', 'kb_version_restored'],
+                'regional_settings' => ['regional_settings', 'regional-settings', 'regional', 'user_settings', 'organization_settings', 'configuration_changed', 'timezone_updated', 'language_updated', 'date_format_updated', 'time_format_updated', 'working_hours_updated'],
+                'user_settings' => ['user_settings', 'regional_settings', 'configuration_changed', 'timezone_updated', 'language_updated', 'date_format_updated', 'time_format_updated', 'working_hours_updated'],
+                'organization_settings' => ['organization_settings', 'regional_settings', 'configuration_changed', 'timezone_updated', 'language_updated', 'date_format_updated', 'time_format_updated', 'working_hours_updated'],
             ];
             $allowedModules = $moduleVariants[$cleanModule] ?? [$module, strtolower($module), ucfirst($module)];
 
@@ -260,12 +358,36 @@ class ActivityService
         if ($action) {
             $cleanAction = strtolower(trim($action));
             $actionVariants = [
-                'create' => ['create', 'Create', 'created', 'Created', 'deliverable_created', 'task_created'],
-                'created' => ['create', 'Create', 'created', 'Created', 'deliverable_created', 'task_created'],
-                'update' => ['update', 'Update', 'updated', 'Updated', 'status_change', 'status'],
-                'updated' => ['update', 'Update', 'updated', 'Updated', 'status_change', 'status'],
-                'delete' => ['delete', 'Delete', 'deleted', 'Deleted'],
-                'deleted' => ['delete', 'Delete', 'deleted', 'Deleted'],
+                'create' => ['create', 'Create', 'created', 'Created', 'deliverable_created', 'task_created', 'kb_created', 'event_created'],
+                'created' => ['create', 'Create', 'created', 'Created', 'deliverable_created', 'task_created', 'kb_created', 'event_created'],
+                'update' => ['update', 'Update', 'updated', 'Updated', 'status_change', 'status', 'kb_updated', 'event_updated', 'update_regional_settings', 'configuration_changed', 'timezone_updated', 'language_updated', 'date_format_updated', 'time_format_updated', 'working_hours_updated'],
+                'updated' => ['update', 'Update', 'updated', 'Updated', 'status_change', 'status', 'kb_updated', 'event_updated', 'update_regional_settings', 'configuration_changed', 'timezone_updated', 'language_updated', 'date_format_updated', 'time_format_updated', 'working_hours_updated'],
+                'delete' => ['delete', 'Delete', 'deleted', 'Deleted', 'kb_deleted'],
+                'deleted' => ['delete', 'Delete', 'deleted', 'Deleted', 'kb_deleted'],
+                'duplicate' => ['duplicate', 'Duplicate', 'duplicated', 'kb_duplicated'],
+                'duplicated' => ['duplicate', 'Duplicate', 'duplicated', 'kb_duplicated'],
+                'archive' => ['archive', 'Archive', 'archived', 'kb_archived'],
+                'archived' => ['archive', 'Archive', 'archived', 'kb_archived'],
+                'restore' => ['restore', 'Restore', 'restored', 'kb_restored', 'kb_version_restored'],
+                'restored' => ['restore', 'Restore', 'restored', 'kb_restored', 'kb_version_restored'],
+                'favorite' => ['favorite', 'Favorite', 'favorited', 'kb_favorited', 'unfavorite', 'unfavorited', 'kb_unfavorited'],
+                'favorited' => ['favorite', 'Favorite', 'favorited', 'kb_favorited', 'unfavorite', 'unfavorited', 'kb_unfavorited'],
+                'share' => ['share', 'Share', 'shared', 'kb_shared'],
+                'shared' => ['share', 'Share', 'shared', 'kb_shared'],
+                'download' => ['download', 'Download', 'downloaded', 'kb_downloaded'],
+                'downloaded' => ['download', 'Download', 'downloaded', 'kb_downloaded'],
+                'timezone_updated' => ['timezone_updated', 'timezone', 'update_regional_settings', 'configuration_changed'],
+                'timezone' => ['timezone_updated', 'timezone', 'update_regional_settings', 'configuration_changed'],
+                'language_updated' => ['language_updated', 'language', 'update_regional_settings', 'configuration_changed'],
+                'language' => ['language_updated', 'language', 'update_regional_settings', 'configuration_changed'],
+                'date_format_updated' => ['date_format_updated', 'date_format', 'update_regional_settings', 'configuration_changed'],
+                'date_format' => ['date_format_updated', 'date_format', 'update_regional_settings', 'configuration_changed'],
+                'time_format_updated' => ['time_format_updated', 'time_format', 'update_regional_settings', 'configuration_changed'],
+                'time_format' => ['time_format_updated', 'time_format', 'update_regional_settings', 'configuration_changed'],
+                'working_hours_updated' => ['working_hours_updated', 'working_hours', 'update_regional_settings', 'configuration_changed'],
+                'working_hours' => ['working_hours_updated', 'working_hours', 'update_regional_settings', 'configuration_changed'],
+                'configuration_changed' => ['configuration_changed', 'update_regional_settings', 'update_settings', 'update', 'timezone_updated', 'language_updated', 'date_format_updated', 'time_format_updated', 'working_hours_updated'],
+                'update_regional_settings' => ['update_regional_settings', 'configuration_changed', 'update_settings', 'update', 'timezone_updated', 'language_updated', 'date_format_updated', 'time_format_updated', 'working_hours_updated'],
                 'approve' => ['approve', 'Approve', 'approved', 'Approved'],
                 'approved' => ['approve', 'Approve', 'approved', 'Approved'],
                 'reject' => ['reject', 'Reject', 'rejected', 'Rejected', 'declined', 'Declined'],

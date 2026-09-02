@@ -154,7 +154,7 @@ export function EventsWidget() {
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
           {events.map((ev) => {
             if (!ev) return null;
-            const isAnnounce = ev.type === "announcement" || ev.type === "Company Announcement" || ev.is_announcement || ev.is_global;
+            const isAnnounce = ev.type === "announcement" || ev.type === "Company Announcement";
             const dateStr = ev.start_date ? new Date(ev.start_date).toLocaleDateString([], { month: "short", day: "numeric" }) : t("Upcoming", { defaultValue: "Upcoming" });
 
             return (
@@ -172,9 +172,9 @@ export function EventsWidget() {
                     <div style={{ fontSize: "11px", color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: "6px" }}>
                       <span><Clock size={11} style={{ display: "inline", verticalAlign: "-1px" }} /> {dateStr}</span>
                       {isAnnounce ? (
-                        <span style={{ color: "#d97706", fontWeight: 600 }}>{t("Announcement", { defaultValue: "Announcement" })}</span>
+                        <span style={{ color: "#d97706", fontWeight: 600 }}>{t("Company Announcement", { defaultValue: "Company Announcement" })}</span>
                       ) : (
-                        <span>{t(ev.category?.name || ev.type || "Event")}</span>
+                        <span>{t(ev.category?.name || "Event Invitation", { defaultValue: ev.category?.name || "Event Invitation" })}</span>
                       )}
                     </div>
                   </div>

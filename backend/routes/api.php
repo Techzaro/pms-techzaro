@@ -666,6 +666,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/events', [EventController::class, 'store'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Create new event
     Route::match(['put', 'post'], '/events/{event}', [EventController::class, 'update'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Update event
     Route::delete('/events/{event}', [EventController::class, 'destroy'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Delete event
+    Route::post('/events/{event}/cancel', [EventController::class, 'cancel'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Cancel event
+    Route::post('/events/{event}/participants', [EventController::class, 'addParticipants'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Add participants
+    Route::delete('/events/{event}/participants/{user}', [EventController::class, 'removeParticipant'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Remove participant
+    Route::post('/events/{event}/attachments', [EventController::class, 'uploadAttachment'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Upload attachment
+    Route::delete('/events/{event}/attachments/{attachment}', [EventController::class, 'deleteAttachment'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Delete attachment
+    Route::get('/events/{event}/attachments/{attachment}/download', [EventController::class, 'downloadAttachment']); // Download attachment
+    Route::post('/events/{event}/rsvp', [EventController::class, 'rsvp']); // RSVP / Acknowledge event
+    Route::get('/events/{event}/activities', [EventController::class, 'activities']); // Event activity feed
 
     /*
     | Unified Calendar Routes
@@ -716,8 +724,15 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/knowledge-base', [\App\Http\Controllers\KnowledgeBaseController::class, 'index']); // List visible knowledge base items
     Route::get('/knowledge-base/{knowledgeBase}', [\App\Http\Controllers\KnowledgeBaseController::class, 'show']); // View article details
+    Route::get('/knowledge-base/{knowledgeBase}/activities', [\App\Http\Controllers\KnowledgeBaseController::class, 'activities']); // View article activity feed
+    Route::get('/knowledge-base/{knowledgeBase}/download', [\App\Http\Controllers\KnowledgeBaseController::class, 'downloadAttachment']); // Download attachment
     Route::get('/knowledge-base/{knowledgeBase}/versions', [\App\Http\Controllers\KnowledgeBaseController::class, 'getVersions']); // View article versions
     Route::post('/knowledge-base/{knowledgeBase}/versions/{versionId}/restore', [\App\Http\Controllers\KnowledgeBaseController::class, 'restoreVersion'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Restore version
+    Route::post('/knowledge-base/{knowledgeBase}/duplicate', [\App\Http\Controllers\KnowledgeBaseController::class, 'duplicate'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Duplicate article
+    Route::post('/knowledge-base/{knowledgeBase}/archive', [\App\Http\Controllers\KnowledgeBaseController::class, 'archive'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Archive article
+    Route::post('/knowledge-base/{knowledgeBase}/restore', [\App\Http\Controllers\KnowledgeBaseController::class, 'restore'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Restore archived article
+    Route::post('/knowledge-base/{knowledgeBase}/favorite', [\App\Http\Controllers\KnowledgeBaseController::class, 'toggleFavorite'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Toggle favorite
+    Route::post('/knowledge-base/{knowledgeBase}/share', [\App\Http\Controllers\KnowledgeBaseController::class, 'shareInternally'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Share internally
     Route::post('/knowledge-base', [\App\Http\Controllers\KnowledgeBaseController::class, 'store'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Create article
     Route::match(['put', 'post'], '/knowledge-base/{knowledgeBase}', [\App\Http\Controllers\KnowledgeBaseController::class, 'update'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Update article
     Route::delete('/knowledge-base/{knowledgeBase}', [\App\Http\Controllers\KnowledgeBaseController::class, 'destroy'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Delete article

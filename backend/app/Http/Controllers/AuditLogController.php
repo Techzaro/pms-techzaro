@@ -21,17 +21,32 @@ class AuditLogController extends Controller
         $filters = $request->validate([
             'module' => 'nullable|string|max:50',
             'action' => 'nullable|string|max:50',
+            'type' => 'nullable|string|max:50',
             'entity_id' => 'nullable|integer',
             'entity_type' => 'nullable|string|max:100',
             'status' => 'nullable|string|in:success,failed',
             'user_id' => 'nullable|integer|exists:users,id',
-            'date_from' => 'nullable|date',
-            'date_to' => 'nullable|date',
+            'date' => 'nullable|string',
+            'date_from' => 'nullable|string',
+            'date_to' => 'nullable|string',
+            'start_date' => 'nullable|string',
+            'end_date' => 'nullable|string',
             'search' => 'nullable|string|max:200',
             'sort_field' => 'nullable|string|in:created_at,module,action,status',
             'sort_order' => 'nullable|string|in:asc,desc',
             'per_page' => 'nullable|integer|min:5|max:10000',
         ]);
+
+        if (empty($filters['date_from']) && !empty($filters['start_date'])) {
+            $filters['date_from'] = $filters['start_date'];
+        }
+        if (empty($filters['date_to']) && !empty($filters['end_date'])) {
+            $filters['date_to'] = $filters['end_date'];
+        }
+
+        if (!empty($filters['type']) && empty($filters['action']) && $filters['type'] !== 'all') {
+            $filters['action'] = $filters['type'];
+        }
 
         $perPage = $request->input('per_page', 50);
         $logs = $this->auditService->getLogs($filters, $perPage);
@@ -76,13 +91,28 @@ class AuditLogController extends Controller
         $filters = $request->validate([
             'module' => 'nullable|string|max:50',
             'action' => 'nullable|string|max:50',
-            'date_from' => 'nullable|date',
-            'date_to' => 'nullable|date',
+            'type' => 'nullable|string|max:50',
+            'date' => 'nullable|string',
+            'date_from' => 'nullable|string',
+            'date_to' => 'nullable|string',
+            'start_date' => 'nullable|string',
+            'end_date' => 'nullable|string',
             'search' => 'nullable|string|max:200',
             'sort_field' => 'nullable|string|in:created_at,module,action',
             'sort_order' => 'nullable|string|in:asc,desc',
             'per_page' => 'nullable|integer|min:5|max:200',
         ]);
+
+        if (empty($filters['date_from']) && !empty($filters['start_date'])) {
+            $filters['date_from'] = $filters['start_date'];
+        }
+        if (empty($filters['date_to']) && !empty($filters['end_date'])) {
+            $filters['date_to'] = $filters['end_date'];
+        }
+
+        if (!empty($filters['type']) && empty($filters['action']) && $filters['type'] !== 'all') {
+            $filters['action'] = $filters['type'];
+        }
 
         $filters['user_id'] = $request->user()->id;
         $perPage = $request->input('per_page', 25);

@@ -83,7 +83,13 @@ class AuditLog extends Model
             'created' => ['create', 'Create', 'created', 'Created'],
             'update' => ['update', 'Update', 'updated', 'Updated', 'status_change', 'Status Change', 'status'],
             'updated' => ['update', 'Update', 'updated', 'Updated', 'status_change', 'Status Change', 'status'],
-            'configuration_changed' => ['configuration_changed', 'Configuration Changed', 'Configuration changed', 'config_change', 'configuration changed'],
+            'timezone_updated' => ['timezone_updated', 'timezone', 'update_regional_settings', 'configuration_changed'],
+            'language_updated' => ['language_updated', 'language', 'update_regional_settings', 'configuration_changed'],
+            'date_format_updated' => ['date_format_updated', 'date_format', 'update_regional_settings', 'configuration_changed'],
+            'time_format_updated' => ['time_format_updated', 'time_format', 'update_regional_settings', 'configuration_changed'],
+            'working_hours_updated' => ['working_hours_updated', 'working_hours', 'update_regional_settings', 'configuration_changed'],
+            'update_regional_settings' => ['update_regional_settings', 'configuration_changed', 'timezone_updated', 'language_updated', 'date_format_updated', 'time_format_updated', 'working_hours_updated'],
+            'configuration_changed' => ['configuration_changed', 'update_regional_settings', 'Configuration Changed', 'Configuration changed', 'config_change', 'configuration changed', 'timezone_updated', 'language_updated', 'date_format_updated', 'time_format_updated', 'working_hours_updated'],
             'published' => ['published', 'Published', 'publish', 'Publish'],
             'edited' => ['edited', 'Edited', 'edit', 'Edit'],
             'archived' => ['archived', 'Archived', 'archive', 'Archive'],
@@ -112,13 +118,36 @@ class AuditLog extends Model
         return $query->where('status', $status);
     }
 
+    public function scopeDate($query, $date)
+    {
+        if (!empty($date)) {
+            try {
+                $formatted = \Carbon\Carbon::parse($date)->toDateString();
+                $query->whereDate('created_at', $formatted);
+            } catch (\Throwable $e) {
+                $query->whereDate('created_at', $date);
+            }
+        }
+        return $query;
+    }
+
     public function scopeDateRange($query, $from, $to)
     {
-        if ($from) {
-            $query->whereDate('created_at', '>=', $from);
+        if (!empty($from)) {
+            try {
+                $f = \Carbon\Carbon::parse($from)->toDateString();
+                $query->whereDate('created_at', '>=', $f);
+            } catch (\Throwable $e) {
+                $query->whereDate('created_at', '>=', $from);
+            }
         }
-        if ($to) {
-            $query->whereDate('created_at', '<=', $to);
+        if (!empty($to)) {
+            try {
+                $t = \Carbon\Carbon::parse($to)->toDateString();
+                $query->whereDate('created_at', '<=', $t);
+            } catch (\Throwable $e) {
+                $query->whereDate('created_at', '<=', $to);
+            }
         }
         return $query;
     }

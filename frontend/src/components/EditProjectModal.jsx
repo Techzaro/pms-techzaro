@@ -13,6 +13,7 @@ import { useEscapeKey } from "../hooks/useEscapeKey";
 import draftService from "../services/draftService";
 import UserSelectDropdown from "./UserSelectDropdown";
 import CustomSelect from "./CustomSelect";
+import MultiSelectDropdown from "./MultiSelectDropdown";
 import LoadingButton from "./LoadingButton";
 import ConfirmModal from "./ConfirmModal";
 import { formatDateTime, toDatetimeLocal, toUTCIso, getNowDatetimeLocal } from "../utils/formatDateTime";
@@ -33,7 +34,7 @@ function isExternalLink(url) {
   return true;
 }
 
-const EditProjectModal = ({ project, onClose }) => {
+const EditProjectModal = ({ project, onClose, onProjectUpdated }) => {
   const { t } = useTranslation();
   const draftSaveRef = useRef(null);
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useDraftGuard(onClose, {
@@ -61,6 +62,18 @@ const EditProjectModal = ({ project, onClose }) => {
   const [allUsers, setAllUsers] = useState([]);
   const [guests, setGuests] = useState([]);
   const [draftId, setDraftId] = useState(null);
+  const [kbIds, setKbIds] = useState(() => {
+    if (project?.kb_ids && Array.isArray(project.kb_ids)) return project.kb_ids.map(Number);
+    if (project?.kb_id) return [Number(project.kb_id)];
+    return [];
+  });
+  const [eventIds, setEventIds] = useState(() => {
+    if (project?.event_ids && Array.isArray(project.event_ids)) return project.event_ids.map(Number);
+    if (project?.event_id) return [Number(project.event_id)];
+    return [];
+  });
+  const [kbArticles, setKbArticles] = useState([]);
+  const [eventsList, setEventsList] = useState([]);
 
   const [form, setForm] = useState({
     title: project?.title || "",
@@ -284,8 +297,45 @@ const EditProjectModal = ({ project, onClose }) => {
           setExistingCategories([...cats].sort());
         })
         .catch(() => {}),
+
+      fetch(`${API_URL}/knowledge-base?all=true`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
+      })
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => {
+          const items = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+          setKbArticles(items);
+        })
+        .catch(() => {}),
+
+      fetch(`${API_URL}/events?all=true`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
+      })
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => {
+          const items = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+          setEventsList(items);
+        })
+        .catch(() => {}),
     ]);
   }, []);
+
+  useEffect(() => {
+    if (project) {
+      if (project.kb_ids) {
+        setKbIds(Array.isArray(project.kb_ids) ? project.kb_ids.map(Number) : [Number(project.kb_ids)]);
+      } else if (project.kb_id !== undefined || project.kbReferenceId !== undefined) {
+        setKbIds(project.kb_id || project.kbReferenceId ? [Number(project.kb_id || project.kbReferenceId)] : []);
+      }
+      if (project.event_ids) {
+        setEventIds(Array.isArray(project.event_ids) ? project.event_ids.map(Number) : [Number(project.event_ids)]);
+      } else if (project.event_id !== undefined || project.eventReferenceId !== undefined) {
+        setEventIds(project.event_id || project.eventReferenceId ? [Number(project.event_id || project.eventReferenceId)] : []);
+      }
+    }
+  }, [project]);
 
   const displayUsers = (() => {
     if (form.team_id) {
@@ -614,6 +664,8 @@ const EditProjectModal = ({ project, onClose }) => {
               name: f.customName || f.name || "",
               url: f.url || null,
             })),
+          kb_ids: kbIds.length > 0 ? kbIds.map(Number) : [],
+          event_ids: eventIds.length > 0 ? eventIds.map(Number) : [],
         };
 
         const response = await fetch(`${API_URL}/projects/${project.id}`, {
@@ -1069,6 +1121,38 @@ const EditProjectModal = ({ project, onClose }) => {
                   { value: "Pause", label: t("Pause", { defaultValue: "Pause" }) },
                   { value: "Completed", label: t("Completed") },
                 ]}
+              />
+            </div>
+
+            {/* REFERENCE KNOWLEDGE BASE */}
+            <div className="cp-field">
+              <label>{t("Reference Knowledge Base", { defaultValue: "Reference Knowledge Base" })}</label>
+              <MultiSelectDropdown
+                name="kb_ids"
+                value={kbIds}
+                onChange={(vals) => { markDirty(); setKbIds(vals.map(Number)); }}
+                placeholder={t("Select Knowledge Base", { defaultValue: "Select Knowledge Base" })}
+                searchPlaceholder={t("Search Knowledge Base...", { defaultValue: "Search Knowledge Base..." })}
+                options={(kbArticles || []).map((item) => ({
+                  value: Number(item?.id),
+                  label: item?.title || `Article #${item?.id}`,
+                }))}
+              />
+            </div>
+
+            {/* REFERENCE EVENT */}
+            <div className="cp-field">
+              <label>{t("Reference Event", { defaultValue: "Reference Event" })}</label>
+              <MultiSelectDropdown
+                name="event_ids"
+                value={eventIds}
+                onChange={(vals) => { markDirty(); setEventIds(vals.map(Number)); }}
+                placeholder={t("Select Event", { defaultValue: "Select Event" })}
+                searchPlaceholder={t("Search Events...", { defaultValue: "Search Events..." })}
+                options={(eventsList || []).map((item) => ({
+                  value: Number(item?.id),
+                  label: item?.title || `Event #${item?.id}`,
+                }))}
               />
             </div>
 

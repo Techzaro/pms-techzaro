@@ -76,6 +76,14 @@ class TaskController extends Controller
             ->where(function ($q) use ($user) {
                 $q->where('assigned_by', '!=', $user->id)
                     ->orWhere('current_owner', $user->id);
+            })
+            // Once this user transfers a task onward, it belongs in Assigned By
+            // You for them. Keep it out of Assigned To You until that handoff is
+            // rejected or revoked. Deliverable-only delegations do not move the task.
+            ->whereDoesntHave('delegations', function ($q) use ($user) {
+                $q->whereNull('deliverable_id')
+                    ->where('delegated_by', $user->id)
+                    ->whereIn('status', ['pending', 'accepted']);
             });
 
         $tasksQuery->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role', 'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role', 'currentOwner:id,name']);
@@ -142,7 +150,7 @@ class TaskController extends Controller
             return $task;
         });
 
-        $allItems = $tasks->sortBy('sort_order')->values();
+        $allItems = $tasks->values();
 
         return response()->json([
             'data' => $allItems,
@@ -180,17 +188,9 @@ class TaskController extends Controller
                 $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
                     ->orWhere('assigned_to', $user->id);
             })
-            ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q, $user->id))
-            ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
-            ->when($isInProgressFilter, fn ($q) => $q->whereIn('status', $this->inProgressTaskStatuses()))
-            ->when($isPausedFilter, fn ($q) => $q->whereIn('status', $this->pausedTaskStatuses()))
-            ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role', 'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role', 'currentOwner:id,name'])
-            ->orderBy('sort_order')->orderBy('created_at', 'desc')->orderBy('id', 'desc')
-            ->filter($filters);
+            ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role', 'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role', 'currentOwner:id,name']);
 
-        if ($request->filled('per_page') || $request->filled('limit')) {
-            $tasksQuery->limit((int) ($request->input('per_page') ?: $request->input('limit')));
-        }
+        $tasksQuery = $this->applyQueryFiltersSortingPagination($request, $tasksQuery);
         $tasks = $tasksQuery->get();
 
         if ($user->role === 'guest') {
@@ -198,7 +198,7 @@ class TaskController extends Controller
                 ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q, $user->id))
                 ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
                 ->with(['project:id,title,team_id', 'assigners:id,name,email,role', 'assigner:id,name,email,role', 'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role'])
-                ->orderBy('sort_order')->orderBy('created_at', 'desc')->orderBy('id', 'desc')
+                ->orderBy('created_at', 'desc')->orderBy('id', 'desc')
                 ->filter($filters);
 
             if ($request->filled('per_page') || $request->filled('limit')) {
@@ -280,7 +280,7 @@ class TaskController extends Controller
             return $task;
         });
 
-        $allItems = $tasks->sortBy('sort_order')->values();
+        $allItems = $tasks->values();
 
         return response()->json([
             'data' => $allItems,
@@ -398,11 +398,12 @@ class TaskController extends Controller
             $clone->total_deliverables = $total;
             $clone->completed_deliverables = $completed;
             $clone->pending_deliverables_count = $pending;
-            $clone->deliverables_progress = $total > 0 ? (int) round(($completed / $total) * 100) : 0;
+            $isTerminal = in_array(strtolower($task->status ?? ''), ['completed', 'approved', 'submitted', 'submitted_late', 'done']);
+            $clone->deliverables_progress = $isTerminal ? 100 : ($total > 0 ? (int) round(($completed / $total) * 100) : 0);
             $expandedTasks->push($clone);
         }
 
-        $allItems = $expandedTasks->sortBy('sort_order')->values();
+        $allItems = $expandedTasks->values();
 
         return response()->json(['success' => true, 'data' => $allItems, 'total' => $allItems->count()]);
     }
@@ -435,10 +436,19 @@ class TaskController extends Controller
         if ($user->role === 'guest') {
             $tasksQuery->whereHas('project', fn ($q) => $q->whereJsonContains('guest_ids', $user->id));
         } else {
-            $tasksQuery->where('assigned_by', $userId)
-                ->where(function ($q) {
-                    $q->whereColumn('assigned_by', '!=', 'assigned_to')->orWhereNull('assigned_to');
+            $tasksQuery->where(function ($query) use ($userId) {
+                $query->where(function ($createdQuery) use ($userId) {
+                    $createdQuery->where('assigned_by', $userId)
+                        ->where(function ($assigneeQuery) {
+                            $assigneeQuery->whereColumn('assigned_by', '!=', 'assigned_to')
+                                ->orWhereNull('assigned_to');
+                        });
+                })->orWhereHas('delegations', function ($delegationQuery) use ($userId) {
+                    $delegationQuery->whereNull('deliverable_id')
+                        ->where('delegated_by', $userId)
+                        ->whereIn('status', ['pending', 'accepted']);
                 });
+            });
         }
 
         $tasksQuery = $this->applyQueryFiltersSortingPagination($request, $tasksQuery);
@@ -457,12 +467,13 @@ class TaskController extends Controller
         $expandedTasks = collect();
         foreach ($tasks as $task) {
             $stats = $dlvStats->get($task->id);
+            $isTerminal = in_array(strtolower($task->status ?? ''), ['completed', 'approved', 'submitted', 'submitted_late', 'done']);
             $progress = $stats ? [
                 'total' => (int) $stats->total,
                 'completed' => (int) $stats->completed,
                 'pending' => (int) $stats->pending,
-                'progress' => ($stats->total ?? 0) > 0 ? (int) round((($stats->completed ?? 0) / $stats->total) * 100) : 0,
-            ] : ['total' => 0, 'completed' => 0, 'pending' => 0, 'progress' => 0];
+                'progress' => $isTerminal ? 100 : (($stats->total ?? 0) > 0 ? (int) round((($stats->completed ?? 0) / $stats->total) * 100) : 0),
+            ] : ['total' => 0, 'completed' => 0, 'pending' => 0, 'progress' => $isTerminal ? 100 : 0];
 
             // Check delegation chain for OA visibility
             $delegationChain = $task->delegation_chain ?? [];
@@ -470,11 +481,25 @@ class TaskController extends Controller
             if (! empty($delegationChain)) {
                 $latestDelegation = end($delegationChain);
             }
-            $hasActiveDelegation = $latestDelegation && in_array($latestDelegation['status'], ['pending', 'accepted']);
-            $delegationReturnToTransferor = $hasActiveDelegation ? ($latestDelegation['return_to_transferor'] ?? true) : true;
 
-            $delegationTransfereeId = $hasActiveDelegation ? (int) $latestDelegation['delegated_to'] : null;
-            $delegationTransferorId = $hasActiveDelegation ? (int) $latestDelegation['delegated_by'] : null;
+            // For "Assigned By You", a transferor must see the assignment they made,
+            // not whichever transfer happened latest farther down the chain.
+            $viewerDelegation = null;
+            foreach (array_reverse($delegationChain) as $entry) {
+                if ((int) ($entry['delegated_by'] ?? 0) === (int) $userId
+                    && in_array(strtolower((string) ($entry['status'] ?? '')), ['pending', 'accepted'], true)) {
+                    $viewerDelegation = $entry;
+                    break;
+                }
+            }
+            $isViewerTransferor = $viewerDelegation !== null;
+            $visibleDelegation = $viewerDelegation ?? $latestDelegation;
+            $hasActiveDelegation = $visibleDelegation
+                && in_array(strtolower((string) ($visibleDelegation['status'] ?? '')), ['pending', 'accepted'], true);
+            $delegationReturnToTransferor = $hasActiveDelegation ? ($visibleDelegation['return_to_transferor'] ?? true) : true;
+
+            $delegationTransfereeId = $hasActiveDelegation ? (int) $visibleDelegation['delegated_to'] : null;
+            $delegationTransferorId = $hasActiveDelegation ? (int) $visibleDelegation['delegated_by'] : null;
 
             $assignees = $task->assignees->isEmpty() ? collect([null]) : $task->assignees;
             $rowCreated = false;
@@ -493,7 +518,12 @@ class TaskController extends Controller
                 }
                 // When delegation exists, show only the relevant assignee's row
                 if ($delegationTransfereeId && $assignee) {
-                    if ($delegationReturnToTransferor) {
+                    if ($isViewerTransferor) {
+                        // This page represents the current user's outgoing assignment.
+                        if ((int) $assignee->id !== $delegationTransfereeId) {
+                            continue;
+                        }
+                    } elseif ($delegationReturnToTransferor) {
                         // return_to_transferor=true → show the transferor
                         if ((int) $assignee->id !== $delegationTransferorId) {
                             continue;
@@ -552,7 +582,7 @@ class TaskController extends Controller
                 $clone->is_transferee = false;
                 if ($hasActiveDelegation && ! $delegationReturnToTransferor) {
                     $clone->has_direct_to_oa_delegation = true;
-                    $clone->delegator_name = $latestDelegation['delegated_by_name'] ?? null;
+                    $clone->delegator_name = $visibleDelegation['delegated_by_name'] ?? null;
                     $clone->is_transferee = true;
                 }
                 $clone->current_owner_id = $task->current_owner;
@@ -562,7 +592,7 @@ class TaskController extends Controller
             }
 
             // If no row was created for Direct to OA delegation, create a virtual transferee row
-            if (! $rowCreated && $hasActiveDelegation && ! $delegationReturnToTransferor) {
+            if (! $rowCreated && $hasActiveDelegation && ($isViewerTransferor || ! $delegationReturnToTransferor)) {
                 $clone = clone $task;
                 $clone->setRelation('assignees', collect());
                 $clone->item_type = 'task';
@@ -575,15 +605,15 @@ class TaskController extends Controller
                 $clone->transferor_has_approved = false;
                 $clone->transferred_by_name = null;
                 $clone->has_direct_to_oa_delegation = true;
-                $clone->delegator_name = $latestDelegation['delegated_by_name'] ?? null;
+                $clone->delegator_name = $visibleDelegation['delegated_by_name'] ?? null;
                 $clone->is_transferee = true;
-                $clone->current_owner_id = (int) $latestDelegation['delegated_to'];
-                $clone->current_owner_name = $latestDelegation['delegated_to_name'] ?? null;
+                $clone->current_owner_id = (int) $visibleDelegation['delegated_to'];
+                $clone->current_owner_name = $visibleDelegation['delegated_to_name'] ?? null;
                 $expandedTasks->push($clone);
             }
         }
 
-        $allItems = $expandedTasks->sortBy('sort_order')->values();
+        $allItems = $expandedTasks->values();
 
         return response()->json(['success' => true, 'data' => $allItems, 'total' => $allItems->count()]);
     }
@@ -621,6 +651,8 @@ class TaskController extends Controller
             'pausedBy:id,name',
             'assignerPausedBy:id,name',
             'currentOwner:id,name,email,role',
+            'currentReviewer:id,name,email,role',
+            'currentSubmitter:id,name,email,role',
             'originalAssigner:id,name,email,role',
             'delegations' => fn ($q) => $q->with(['delegatedBy:id,name,email,role', 'delegatedTo:id,name,email,role'])->latest(),
             'unviewedChanges' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
@@ -711,6 +743,11 @@ class TaskController extends Controller
         ]);
 
         $payload = $task->toArray();
+        $payload = array_merge($payload, $this->delegationService->routingPayload($task, $user));
+        $nextRouteUserId = $payload['next_route_user_id'] ?? null;
+        $nextRouteUser = $nextRouteUserId ? User::select('id', 'name', 'role')->find($nextRouteUserId) : null;
+        $payload['next_route_user'] = $nextRouteUser;
+        $payload['submit_to_next_label'] = 'Submit';
 
         // When return_to_transferor=true, only the transferor should see the transferee's submissions
         // The OA and other viewers should NOT see them until the transferor submits
@@ -754,6 +791,16 @@ class TaskController extends Controller
             }
         }
 
+        // A creator above an unfinished checkpoint must not see the downstream submission yet.
+        if ($task->submission_stage === 'awaiting_checkpoint'
+            && (int) $user->id !== (int) $task->current_reviewer_id
+            && (int) $user->id !== (int) $task->current_submitter_id
+            && (int) $user->id === (int) $this->delegationService->creatorId($task)) {
+            $payload['submissions'] = [];
+            $payload['latest_submission'] = null;
+            $payload['latestSubmission'] = null;
+        }
+
         $payload['deliverables'] = $deliverables;
         $isTerminalStatus = in_array(strtolower($task->status ?? ''), ['completed', 'approved', 'submitted', 'submitted_late', 'done']);
         $payload['deliverables_progress'] = $isTerminalStatus ? 100 : ((int) $dlvStats->total > 0 ? (int) round(((int) $dlvStats->completed / max((int) $dlvStats->total, 1)) * 100) : 0);
@@ -768,7 +815,7 @@ class TaskController extends Controller
         $payload['assigner_paused_at'] = $task->assigner_paused_at;
         $payload['can_edit'] = $isCreator && ! $isApproved;
         $userPivot = $isAssignee ? $task->assignees()->where('users.id', $user->id)->first()?->pivot : null;
-        $payload['my_status'] = $userPivot?->status ?? 'pending';
+        $payload['my_status'] = $routing['display_status'] ?? ($userPivot?->status ?? 'pending');
         $payload['my_submitted_at'] = $userPivot?->submitted_at;
         $isCurrentOwner = $this->delegationService->isCurrentOwner($task, $user);
         $payload['is_current_owner'] = $isCurrentOwner;
@@ -832,7 +879,12 @@ class TaskController extends Controller
         $payload['can_revoke_delegation'] = $activeOutgoingDelegation && $activeOutgoingDelegation->status === 'pending';
 
         // Transferors: can_submit is false until they approve; after approval they can submit to OA
-        $payload['can_submit'] = ($isAssignee || $isCurrentOwner) && in_array($task->status, ['in_progress', 'reopened', 'paused']) && $allDeliverablesSubmitted
+        $isAlreadySubmittedOrClosed = in_array($task->status, ['submitted', 'submitted_late', 'approved', 'abandoned']);
+        $isReturnedRevision = $task->submission_stage === 'declined'
+            && in_array($task->status, ['reopened', 'rejected'], true);
+        $canActOnReturnedRevision = ! $isReturnedRevision
+            || ($isCurrentOwner && (int) $user->id === (int) ($task->current_submitter_id ?: $task->current_owner));
+        $payload['can_submit'] = ! $isAlreadySubmittedOrClosed && $canActOnReturnedRevision && ($isAssignee || $isCurrentOwner) && in_array($task->status, ['in_progress', 'reopened', 'paused', 'rejected']) && $allDeliverablesSubmitted
             && ($userPivot?->status !== 'submitted');
         if ($isTransferor && ! $transferorHasApproved) {
             // Transferor hasn't approved yet — block submit
@@ -842,7 +894,7 @@ class TaskController extends Controller
             }
         }
         // Transferor has approved — force allow submit so they can forward to OA
-        if ($isTransferor && $transferorHasApproved && $transferorReturnToSelf) {
+        if ($isTransferor && $transferorHasApproved && $transferorReturnToSelf && ! $isAlreadySubmittedOrClosed && $canActOnReturnedRevision) {
             $payload['can_submit'] = true;
             $payload['is_assignee'] = true;
             $payload['is_current_owner'] = true;
@@ -887,6 +939,16 @@ class TaskController extends Controller
             'last_timer_event_at' => $task->last_timer_event_at?->format('Y-m-d\TH:i:s'),
         ];
 
+        $routing = $this->delegationService->routingPayload($task, $user);
+        $nextUser = ! empty($routing['next_route_user_id'])
+            ? User::select('id', 'name', 'role')->find($routing['next_route_user_id'])
+            : null;
+
+        $payload = array_merge($payload, $routing, [
+            'next_route_user' => $nextUser,
+            'submit_to_next_label' => 'Submit',
+        ]);
+
         return response()->json(['success' => true, 'task' => $payload]);
     }
 
@@ -904,11 +966,12 @@ class TaskController extends Controller
     {
         $user = $request->user();
 
+        $memberIds = $project->getMembers()->pluck('id')->toArray();
         $isViewOnly = $project->visibility()
             ->where('user_id', $user->id)
             ->where('is_visible', true)
             ->exists()
-            && ! in_array((int) $user->id, array_map('intval', $project->assigned_users ?? []))
+            && ! in_array((int) $user->id, array_map('intval', $memberIds))
             && (int) $user->id !== (int) $project->created_by
             && ! in_array($user->role, ['admin', 'manager']);
 
@@ -948,6 +1011,10 @@ class TaskController extends Controller
             'allow_transfer' => 'nullable|boolean',
             'followers' => 'nullable|array',
             'followers.*' => 'exists:users,id',
+            'kb_ids' => 'nullable|array',
+            'kb_ids.*' => 'nullable|integer',
+            'event_ids' => 'nullable|array',
+            'event_ids.*' => 'nullable|integer',
         ]);
 
         if (! empty($validated['start_date']) && ! empty($validated['end_date'])) {
@@ -992,6 +1059,22 @@ class TaskController extends Controller
                         'combined' => false,
                     ],
                 ];
+            }
+        }
+
+        // Normalize ISO datetime strings to MySQL datetime format
+        foreach (['start_date', 'end_date', 'recurrence_start_date', 'recurrence_end_date'] as $dateField) {
+            if (! empty($validated[$dateField]) && is_string($validated[$dateField])) {
+                $validated[$dateField] = \Carbon\Carbon::parse($validated[$dateField])->format('Y-m-d H:i:s');
+            }
+        }
+        if (! empty($validated['deliverables']) && is_array($validated['deliverables'])) {
+            foreach ($validated['deliverables'] as &$del) {
+                foreach (['start_date', 'due_date'] as $df) {
+                    if (! empty($del[$df]) && is_string($del[$df])) {
+                        $del[$df] = \Carbon\Carbon::parse($del[$df])->format('Y-m-d H:i:s');
+                    }
+                }
             }
         }
 
@@ -1056,6 +1139,7 @@ class TaskController extends Controller
                 'end_date' => $validated['end_date'] ?? null,
                 'assigned_to' => $userId,
                 'assigned_by' => $user->id,
+                'creator_id' => $user->id,
                 'updated_by' => $user->id,
                 'priority' => $validated['priority'],
                 'status' => 'pending',
@@ -1064,6 +1148,8 @@ class TaskController extends Controller
                 'recurrence_start_date' => $validated['recurrence_start_date'] ?? $validated['start_date'] ?? null,
                 'recurrence_end_date' => $validated['recurrence_end_date'] ?? $validated['end_date'] ?? null,
                 'allow_transfer' => $validated['allow_transfer'] ?? true,
+                'kb_ids' => $validated['kb_ids'] ?? null,
+                'event_ids' => $validated['event_ids'] ?? null,
             ]);
             $task->assignees()->sync([$userId => ['due_date' => $dueDates[$userId] ?? null]]);
             if (! empty($validated['followers'])) {
@@ -1339,6 +1425,10 @@ class TaskController extends Controller
             'deliverable_templates.*.quantity' => 'nullable|integer|min:1|max:100',
             'deliverable_templates.*.combined' => 'nullable|boolean',
             'allow_transfer' => 'nullable|boolean',
+            'kb_ids' => 'nullable|array',
+            'kb_ids.*' => 'nullable|integer',
+            'event_ids' => 'nullable|array',
+            'event_ids.*' => 'nullable|integer',
         ]);
 
         if (($validated['task_type'] ?? 'standard') === 'recurring') {
@@ -1377,6 +1467,22 @@ class TaskController extends Controller
             }
         }
 
+        // Normalize ISO datetime strings to MySQL datetime format
+        foreach (['start_date', 'end_date', 'recurrence_start_date', 'recurrence_end_date'] as $dateField) {
+            if (! empty($validated[$dateField]) && is_string($validated[$dateField])) {
+                $validated[$dateField] = \Carbon\Carbon::parse($validated[$dateField])->format('Y-m-d H:i:s');
+            }
+        }
+        if (! empty($validated['deliverables']) && is_array($validated['deliverables'])) {
+            foreach ($validated['deliverables'] as &$del) {
+                foreach (['start_date', 'due_date'] as $df) {
+                    if (! empty($del[$df]) && is_string($del[$df])) {
+                        $del[$df] = \Carbon\Carbon::parse($del[$df])->format('Y-m-d H:i:s');
+                    }
+                }
+            }
+        }
+
         // Validate deliverable due_date does not exceed task end_date
         if (! empty($validated['end_date']) && ! empty($validated['deliverables'])) {
             $endDateTime = Carbon::parse($validated['end_date']);
@@ -1407,6 +1513,7 @@ class TaskController extends Controller
                 'end_date' => $validated['end_date'] ?? null,
                 'assigned_to' => $userId,
                 'assigned_by' => $user->id,
+                'creator_id' => $user->id,
                 'priority' => $validated['priority'],
                 'status' => 'pending',
                 'project_id' => null,
@@ -1415,6 +1522,8 @@ class TaskController extends Controller
                 'recurrence_start_date' => $validated['recurrence_start_date'] ?? $validated['start_date'] ?? null,
                 'recurrence_end_date' => $validated['recurrence_end_date'] ?? $validated['end_date'] ?? null,
                 'allow_transfer' => $validated['allow_transfer'] ?? true,
+                'kb_ids' => $validated['kb_ids'] ?? null,
+                'event_ids' => $validated['event_ids'] ?? null,
             ]);
             $task->assignees()->sync([$userId => ['due_date' => $dueDates[$userId] ?? null]]);
 
@@ -1637,12 +1746,16 @@ class TaskController extends Controller
             'deliverables.*.due_date' => 'nullable|date',
             'deliverables.*.assigned_to' => 'nullable|exists:users,id',
             'existing_file_names' => 'nullable|array',
-            'existing_file_names.*.id' => 'required_with:existing_file_names|exists:task_files,id',
+            'existing_file_names.*.id' => 'nullable',
             'existing_file_names.*.name' => 'nullable|string|max:255',
             'existing_file_names.*.url' => 'nullable|string|max:2048',
             'due_dates' => 'nullable|array',
             'due_dates.*' => 'nullable|date',
             'allow_transfer' => 'sometimes|boolean',
+            'kb_ids' => 'nullable|array',
+            'kb_ids.*' => 'nullable|integer',
+            'event_ids' => 'nullable|array',
+            'event_ids.*' => 'nullable|integer',
         ]);
 
         $assigneeIds = $validated['assigned_to'] ?? null;
@@ -1658,6 +1771,13 @@ class TaskController extends Controller
         unset($validated['due_dates']);
         $existingFileNames = $validated['existing_file_names'] ?? null;
         unset($validated['existing_file_names']);
+
+        // Normalize ISO datetime strings to MySQL datetime format
+        foreach (['start_date', 'end_date'] as $dateField) {
+            if (! empty($validated[$dateField]) && is_string($validated[$dateField])) {
+                $validated[$dateField] = \Carbon\Carbon::parse($validated[$dateField])->format('Y-m-d H:i:s');
+            }
+        }
 
         // Validate start_date is not later than end_date
         $startDateVal = $validated['start_date'] ?? $task->start_date;
@@ -2155,11 +2275,11 @@ class TaskController extends Controller
 
             if ($task->assigned_by && (int) $task->assigned_by !== (int) $user->id) {
                 $this->notificationService->notify(
-                    $task->assigned_by,
-                    $user->id,
+                    (int) $task->assigned_by,
+                    (int) $user->id,
                     'task_completed',
                     'task',
-                    $task->id,
+                    (int) $task->id,
                     'Task Completed',
                     $user->name.' has completed the task "'.$task->title.'" and submitted it for review.',
                     '/tasks/task-details/'.$task->id.'?from=taskby'
@@ -2280,87 +2400,161 @@ class TaskController extends Controller
 
     public function acknowledge(Request $request, Task $task)
     {
-        $user = $request->user();
-        $isAssignee = $task->assignees()->where('users.id', $user->id)->exists()
-            || (int) $task->assigned_to === (int) $user->id
-            || in_array($user->role, ['admin', 'manager']);
+        try {
+            $user = $request->user();
+            $isAssignee = $task->assignees()->where('users.id', $user->id)->exists()
+                || (int) $task->assigned_to === (int) $user->id
+                || in_array($user->role, ['admin', 'manager']);
 
-        if (! $isAssignee) {
-            return response()->json(['success' => false, 'message' => 'Only assignees can acknowledge this task'], 403);
-        }
+            if (! $isAssignee) {
+                return response()->json(['success' => false, 'message' => 'Only assignees can acknowledge this task'], 403);
+            }
 
-        if ($task->assigner_paused) {
-            return response()->json(['success' => false, 'message' => 'This task is paused by the assigner and cannot be acknowledged'], 422);
-        }
+            if ($task->assigner_paused) {
+                return response()->json(['success' => false, 'message' => 'This task is paused by the assigner and cannot be acknowledged'], 422);
+            }
 
-        $currentStatus = strtolower((string) $task->status);
+            // List views use the common acknowledge action. When this task reached the
+            // user through a transfer, acknowledging must accept that pending delegation
+            // so the chain, ownership and timer are updated together.
+            $pendingDelegation = TaskDelegation::where('task_id', $task->id)
+                ->where('delegated_to', $user->id)
+                ->where('status', 'pending')
+                ->latest()
+                ->first();
 
-        if ($currentStatus === 'in_progress') {
+            if ($pendingDelegation) {
+                $this->delegationService->acceptDelegation($pendingDelegation, $user);
+                $freshTask = $task->fresh();
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Task acknowledged successfully',
+                    'task' => $this->taskPayloadFor($freshTask, $user),
+                ]);
+            }
+
+            $currentStatus = strtolower((string) $task->status);
+
+            if ($currentStatus === 'in_progress') {
+                $freshTask = $task->fresh();
+                $taskArray = $freshTask ? $freshTask->load(['assignees:id,name,email,role', 'acknowledgedBy:id,name'])->toArray() : $task->toArray();
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Task is already in progress',
+                    'task' => $this->taskWithTimer($taskArray),
+                ]);
+            }
+
+            if (! in_array($currentStatus, ['pending', 'not_started', 'assigned', 'reopened', 'planned', 'planning'])) {
+                return response()->json(['success' => false, 'message' => "This task cannot be acknowledged in its current status ({$task->status})"], 422);
+            }
+
+            $task->update([
+                'status' => 'in_progress',
+                'acknowledged_at' => now(),
+                'acknowledged_by' => $user->id,
+                'updated_by' => $user->id,
+            ]);
+
+            try {
+                $task->startTimer();
+            } catch (\Throwable $e) {
+                Log::warning('Task startTimer warning during acknowledge: ' . $e->getMessage());
+            }
+
+            try {
+                if ($task->assignees()->where('users.id', $user->id)->exists()) {
+                    $task->assignees()->updateExistingPivot($user->id, [
+                        'status' => 'in_progress',
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Task assignees pivot update warning during acknowledge: ' . $e->getMessage());
+            }
+
+            try {
+                TaskWorkflowEvent::create([
+                    'task_id' => $task->id,
+                    'user_id' => $user->id,
+                    'action' => 'acknowledged',
+                    'comment' => $user->name.' acknowledged this task',
+                ]);
+            } catch (\Throwable $e) {
+                Log::warning('TaskWorkflowEvent acknowledged create warning: ' . $e->getMessage());
+            }
+
+            try {
+                TaskWorkflowEvent::create([
+                    'task_id' => $task->id,
+                    'user_id' => $user->id,
+                    'action' => 'timer_started',
+                    'comment' => 'Work timer started',
+                ]);
+            } catch (\Throwable $e) {
+                Log::warning('TaskWorkflowEvent timer_started create warning: ' . $e->getMessage());
+            }
+
+            try {
+                if (isset($this->activityService)) {
+                    $this->activityService->log($user->id, 'task_acknowledged', 'Acknowledged task "'.$task->title.'"', 'task', $task->id);
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Activity log warning during acknowledge: ' . $e->getMessage());
+            }
+
+            try {
+                $task->load('project:id,title');
+                // Notify the task creator (Excluding self-notification)
+                if (isset($this->notificationService)) {
+                    if ($task->assigned_by && (int) $task->assigned_by !== (int) $user->id) {
+                        $this->notificationService->notify(
+                            (int) $task->assigned_by,
+                            (int) $user->id,
+                            'task_acknowledged',
+                            'task',
+                            (int) $task->id,
+                            'Task Acknowledged & Work Started',
+                            $user->name.' acknowledged task "'.$task->title.'" and started working.',
+                            '/tasks/task-details/'.$task->id.'?from=taskby'
+                        );
+                    }
+                    $this->notificationService->confirmAction($user, 'Acknowledged', 'task', $task->title);
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Notification warning during acknowledge: ' . $e->getMessage());
+            }
+
+            try {
+                $this->clearDashboardCache($user->id);
+                if ($task->assigned_by) {
+                    $this->clearDashboardCache((int) $task->assigned_by);
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Clear cache warning during acknowledge: ' . $e->getMessage());
+            }
+
+            $freshTask = $task->fresh();
+            $taskArray = $freshTask ? $freshTask->load(['assignees:id,name,email,role', 'acknowledgedBy:id,name'])->toArray() : $task->toArray();
+
             return response()->json([
                 'success' => true,
-                'message' => 'Task is already in progress',
-                'task' => $task,
+                'message' => 'Task acknowledged successfully',
+                'task' => $this->taskWithTimer($taskArray),
             ]);
+        } catch (\Throwable $e) {
+            Log::error('Error acknowledging task: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'task_id' => $task->id ?? null,
+                'user_id' => $request->user()?->id ?? null,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage() ?: 'An error occurred while acknowledging the task.',
+                'error' => $e->getMessage() ?: 'An error occurred while acknowledging the task.',
+            ], 500);
         }
-
-        if (! in_array($currentStatus, ['pending', 'not_started', 'assigned', 'reopened'])) {
-            return response()->json(['success' => false, 'message' => "This task cannot be acknowledged in its current status ({$task->status})"], 422);
-        }
-
-        $task->update([
-            'status' => 'in_progress',
-            'acknowledged_at' => now(),
-            'acknowledged_by' => $user->id,
-        ]);
-
-        $task->startTimer();
-
-        $task->assignees()->updateExistingPivot($user->id, [
-            'status' => 'in_progress',
-        ]);
-
-        TaskWorkflowEvent::create([
-            'task_id' => $task->id,
-            'user_id' => $user->id,
-            'action' => 'acknowledged',
-            'comment' => $user->name.' acknowledged this task',
-        ]);
-
-        TaskWorkflowEvent::create([
-            'task_id' => $task->id,
-            'user_id' => $user->id,
-            'action' => 'timer_started',
-            'comment' => 'Work timer started',
-        ]);
-
-        $task->load('project:id,title');
-
-        // Notify the task creator (Excluding self-notification)
-        if ($task->assigned_by && (int) $task->assigned_by !== (int) $user->id) {
-            $this->notificationService->notify(
-                $task->assigned_by,
-                $user->id,
-                'task_acknowledged',
-                'task',
-                $task->id,
-                'Task Acknowledged & Work Started',
-                $user->name.' acknowledged task "'.$task->title.'" and started working.',
-                '/tasks/task-details/'.$task->id.'?from=taskby'
-            );
-        }
-
-        $this->notificationService->confirmAction($user, 'Acknowledged', 'task', $task->title);
-        $this->clearDashboardCache($user->id);
-
-        if ($task->assigned_by) {
-            $this->clearDashboardCache((int) $task->assigned_by);
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Task acknowledged successfully',
-            'task' => $this->taskWithTimer($task->fresh()->load(['assignees:id,name,email,role', 'acknowledgedBy:id,name'])->toArray()),
-        ]);
     }
 
     /**
@@ -2424,11 +2618,11 @@ class TaskController extends Controller
 
         if ($task->assigned_by && (int) $task->assigned_by !== (int) $user->id) {
             $this->notificationService->notify(
-                $task->assigned_by,
-                $user->id,
+                (int) $task->assigned_by,
+                (int) $user->id,
                 'task_paused',
                 'task',
-                $task->id,
+                (int) $task->id,
                 'Task Paused',
                 $user->name.' paused task "'.$task->title.'" — Reason: '.$reasonLabel,
                 '/tasks/task-details/'.$task->id.'?from=taskby'
@@ -2499,11 +2693,11 @@ class TaskController extends Controller
         // Notify the task creator (Excluding self-notification)
         if ($task->assigned_by && (int) $task->assigned_by !== (int) $user->id) {
             $this->notificationService->notify(
-                $task->assigned_by,
-                $user->id,
+                (int) $task->assigned_by,
+                (int) $user->id,
                 'task_continued',
                 'task',
-                $task->id,
+                (int) $task->id,
                 'Task Continued',
                 $user->name.' continued task "'.$task->title.'".',
                 '/tasks/task-details/'.$task->id.'?from=taskby'
@@ -2527,7 +2721,7 @@ class TaskController extends Controller
     /**
      * Pause a task as the assigner (task creator).
      *
-     * Puts the task on hold so the assignee cannot perform any workflow actions.
+     * Pauses the task so the assignee cannot perform any workflow actions.
      * Only the task creator can use this. The task status is NOT changed;
      * an assigner_paused flag is set instead.
      */
@@ -2573,7 +2767,7 @@ class TaskController extends Controller
                 'task_id' => $task->id,
                 'user_id' => $user->id,
                 'reason' => 'other',
-                'reason_detail' => 'On Hold: '.$validated['reason'],
+                'reason_detail' => 'Paused: '.$validated['reason'],
                 'paused_at' => now(),
                 'is_auto_paused' => false,
             ]);
@@ -2629,7 +2823,7 @@ class TaskController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Task successfully put on hold.',
+            'message' => 'Task paused by assigner',
             'task' => $this->taskWithTimer($task->fresh()->load(['assignees:id,name,email,role', 'assignerPausedBy:id,name'])->toArray()),
         ]);
     }
@@ -2683,7 +2877,7 @@ class TaskController extends Controller
             'task_id' => $task->id,
             'user_id' => $user->id,
             'action' => 'assigner_resumed',
-            'comment' => $user->name.' resumed this task from hold'.($timerResumed ? ' — timer resumed' : ' — task remains paused'),
+            'comment' => $user->name.' resumed this task'.($timerResumed ? ' — timer resumed' : ' — task remains paused'),
         ]);
 
         $task->load('project:id,title');
@@ -2754,9 +2948,19 @@ class TaskController extends Controller
             return response()->json(['success' => false, 'message' => 'Only the assignee or current owner can submit this task'], 403);
         }
 
-        // Transferors cannot submit unless they've approved (return_to_transferor flow)
+        // Visibility of a reopened route does not grant mutation rights. Only the
+        // submitter the review was returned to may correct and resubmit it.
+        if ($task->submission_stage === 'declined') {
+            $returnedSubmitterId = (int) ($task->current_submitter_id ?: $task->current_owner ?: 0);
+            if ((int) $user->id !== $returnedSubmitterId || ! $isCurrentOwner) {
+                return response()->json(['success' => false, 'message' => 'This reopened task is waiting for the returned submitter to resubmit it'], 403);
+            }
+        }
+
+        // Legacy transferors cannot submit unless approved. A declined submission is
+        // explicitly returned to its actual submitter and may be resubmitted.
         $chain = $task->delegation_chain ?? [];
-        foreach ($chain as $entry) {
+        foreach ($task->submission_stage === 'declined' ? [] : $chain as $entry) {
             if ((int) $entry['delegated_by'] === (int) $user->id && $entry['status'] === 'accepted') {
                 $approvalChain = $task->approval_chain ?? [];
                 $transferorApproved = false;
@@ -2777,8 +2981,32 @@ class TaskController extends Controller
             return response()->json(['success' => false, 'message' => 'This task is paused by the assigner and cannot be submitted'], 422);
         }
 
-        if (! in_array($task->status, ['pending', 'in_progress', 'reopened', 'paused'])) {
-            return response()->json(['success' => false, 'message' => 'This task cannot be submitted in its current status'], 422);
+        $currentStatus = strtolower(trim((string) $task->status));
+
+        if (in_array($currentStatus, ['submitted', 'submitted_late'])) {
+            $freshTask = $task->fresh();
+            $taskArray = $freshTask ? $freshTask->load(['assignees:id,name,email,role', 'acknowledgedBy:id,name', 'currentOwner:id,name'])->toArray() : $task->toArray();
+            return response()->json([
+                'success' => true,
+                'message' => 'Task is already submitted',
+                'task' => $this->taskWithTimer($taskArray),
+            ], 200);
+        }
+
+        $allowedSubmitStatuses = [
+            'pending', 'not_started', 'assigned', 'planned', 'planning',
+            'in_progress', 'in-progress', 'acknowledged',
+            'reopened',
+            'paused',
+            'rejected', 'declined',
+            'abandon_requested',
+        ];
+
+        if (! in_array($currentStatus, $allowedSubmitStatuses)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This task cannot be submitted in its current status (' . $task->status . ')',
+            ], 422);
         }
 
         $pendingDeliverables = $task->deliverables()->where('status', 'pending')->count();
@@ -2794,14 +3022,33 @@ class TaskController extends Controller
         ]);
 
         $filePath = $fileName = null;
+        $fileSkipped = false;
         $org = $request->attributes->get('currentOrganization');
         if ($request->hasFile('file')) {
             $file = $request->file('file');
-            $fileName = $file->getClientOriginalName();
-            if ($org) {
-                $filePath = StorageDiskResolver::store($org, $file, 'task-submissions/'.$task->id);
+            $storageCheck = $this->checkStorageLimit($request, $file);
+            if ($storageCheck && !$storageCheck['allowed']) {
+                $fileSkipped = true;
             } else {
-                $filePath = $file->store('task-submissions/'.$task->id, 'public');
+                $fileName = $file->getClientOriginalName();
+                if ($org) {
+                    $filePath = StorageDiskResolver::store($org, $file, 'task-submissions/'.$task->id);
+                } else {
+                    $filePath = $file->store('task-submissions/'.$task->id, 'public');
+                }
+            }
+        }
+
+        $filesSkipped = false;
+        if ($request->hasFile('files')) {
+            $storedFiles = [];
+            foreach ($request->file('files') as $f) {
+                $sc = $this->checkStorageLimit($request, $f);
+                if ($sc && !$sc['allowed']) {
+                    $filesSkipped = true;
+                } else {
+                    $storedFiles[] = $f;
+                }
             }
         }
 
@@ -2812,9 +3059,9 @@ class TaskController extends Controller
             'status' => 'pending',
         ]);
 
-        if ($request->hasFile('files')) {
+        if (!empty($storedFiles)) {
             $submission->attachments()->createMany(
-                collect($request->file('files'))->map(fn ($file) => [
+                collect($storedFiles)->map(fn ($file) => [
                     'submission_type' => 'task',
                     'file_name' => basename($path = $org
                         ? StorageDiskResolver::store($org, $file, 'task-submissions/'.$task->id)
@@ -2896,60 +3143,27 @@ class TaskController extends Controller
 
         $task->load('project:id,title');
 
-        // Determine who to notify about the submission
-        $notifyUserId = null;
-        $chain = $task->delegation_chain ?? [];
-        $isTransferor = false;
-
-        // Check if this user is the transferor (delegated_by in an accepted delegation)
-        foreach ($chain as $entry) {
-            if ((int) $entry['delegated_by'] === (int) $user->id && $entry['status'] === 'accepted') {
-                $isTransferor = true;
-                break;
-            }
-        }
-
-        if ($isTransferor) {
-            // Transferor is submitting → notify original assigner
-            if ($task->assigned_by && (int) $task->assigned_by !== (int) $user->id) {
-                $notifyUserId = $task->assigned_by;
-            }
-        } elseif (! empty($chain)) {
-            // Transferee is submitting → find the transferor (delegated_by of last accepted entry)
-            $lastAccepted = null;
-            foreach ($chain as $entry) {
-                if ($entry['status'] === 'accepted') {
-                    $lastAccepted = $entry;
-                }
-            }
-            if ($lastAccepted) {
-                $returnToTransferor = $lastAccepted['return_to_transferor'] ?? true;
-                if ($returnToTransferor) {
-                    // Notify the transferor only
-                    $notifyUserId = (int) $lastAccepted['delegated_by'];
-                } else {
-                    // No return_to_transferor → notify original assigner
-                    $notifyUserId = $task->assigned_by;
-                }
-            }
-        } else {
-            // No delegation chain → notify original assigner
-            if ($task->assigned_by && (int) $task->assigned_by !== (int) $user->id) {
-                $notifyUserId = $task->assigned_by;
-            }
-        }
-
-        if ($notifyUserId) {
-            $task->update(['current_owner' => $notifyUserId]);
-        }
+        // Route the submission to the nearest required checkpoint, otherwise the creator.
+        $notifyUserId = $this->delegationService->nextSubmissionReviewer($task, (int) $user->id);
+        $creatorId = $this->delegationService->creatorId($task);
+        $task->update([
+            'creator_id' => $task->creator_id ?: $creatorId,
+            'current_submitter_id' => $user->id,
+            'current_reviewer_id' => $notifyUserId,
+            'current_owner' => $notifyUserId,
+            'submission_stage' => $notifyUserId && (int) $notifyUserId === (int) $creatorId
+                ? 'awaiting_creator'
+                : 'awaiting_checkpoint',
+            'submission_forwarded_by' => [],
+        ]);
 
         if ($notifyUserId && (int) $notifyUserId !== (int) $user->id) {
             $this->notificationService->notify(
-                $notifyUserId,
-                $user->id,
+                (int) $notifyUserId,
+                (int) $user->id,
                 'task_submitted',
                 'task',
-                $task->id,
+                (int) $task->id,
                 'Task Submitted',
                 $user->name.' has completed task '.$task->business_id.' ("'.$task->title.'") and submitted it for review.',
                 '/tasks/task-details/'.$task->id.'?from=taskby'
@@ -2983,9 +3197,15 @@ class TaskController extends Controller
             \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
         }
 
+        $responseMessage = 'Task submitted successfully';
+        if ($fileSkipped || $filesSkipped) {
+            $responseMessage = $this->buildFileSkippedMessage('task');
+        }
+
         return response()->json([
             'success' => true,
-            'message' => 'Task submitted successfully',
+            'message' => $responseMessage,
+            'file_skipped' => $fileSkipped || $filesSkipped,
             'task' => $this->taskWithTimer($task->fresh()->load([
                 'assignees:id,name,email,role', 'assigner:id,name',
                 'submissions' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments'])->latest(),
@@ -2994,6 +3214,86 @@ class TaskController extends Controller
                 'approvedBy:id,name', 'rejectedBy:id,name', 'reopenedBy:id,name',
             ])->toArray()),
         ]);
+    }
+
+    /** Forward the current submission to the next required checkpoint or creator. */
+    public function submitToNext(Request $request, Task $task): JsonResponse
+    {
+        $user = $request->user();
+        $validated = $request->validate(['comment' => 'nullable|string|max:2000']);
+
+        try {
+            $result = DB::transaction(function () use ($task, $user, $validated) {
+                $locked = Task::query()->lockForUpdate()->findOrFail($task->id);
+                if ((int) $locked->current_reviewer_id !== (int) $user->id || $locked->submission_stage !== 'awaiting_checkpoint') {
+                    throw ValidationException::withMessages(['task' => 'This submission is not waiting for your action.']);
+                }
+
+                $forwarded = array_values(array_unique(array_map('intval', array_merge(
+                    $locked->submission_forwarded_by ?? [],
+                    [$user->id]
+                ))));
+                $nextUserId = $this->delegationService->nextSubmissionReviewer(
+                    $locked,
+                    (int) $locked->current_submitter_id,
+                    $forwarded
+                );
+                if (! $nextUserId) {
+                    throw ValidationException::withMessages(['task' => 'No next reviewer is available.']);
+                }
+
+                $creatorId = $this->delegationService->creatorId($locked);
+                $targetStatus = in_array($locked->status, ['submitted', 'submitted_late'], true) ? $locked->status : 'submitted';
+                $locked->update([
+                    'status' => $targetStatus,
+                    'current_reviewer_id' => $nextUserId,
+                    'current_owner' => $nextUserId,
+                    'submission_stage' => (int) $nextUserId === (int) $creatorId ? 'awaiting_creator' : 'awaiting_checkpoint',
+                    'submission_forwarded_by' => $forwarded,
+                    'updated_by' => $user->id,
+                ]);
+
+                if ($locked->assignees()->where('users.id', $user->id)->exists()) {
+                    $locked->assignees()->updateExistingPivot($user->id, [
+                        'status' => 'submitted',
+                        'submitted_at' => now(),
+                    ]);
+                }
+
+                TaskWorkflowEvent::create([
+                    'task_id' => $locked->id,
+                    'user_id' => $user->id,
+                    'action' => 'submitted_to_next',
+                    'comment' => $validated['comment'] ?? null,
+                ]);
+
+                return [$locked->fresh(), $nextUserId];
+            });
+
+            [$updatedTask, $nextUserId] = $result;
+            $nextUser = User::find($nextUserId);
+            $this->notificationService->notify(
+                $nextUserId,
+                $user->id,
+                'task_submitted',
+                'task',
+                $updatedTask->id,
+                'Task Submitted',
+                $user->name.' submitted task '.$updatedTask->business_id.' to you.',
+                '/tasks/task-details/'.$updatedTask->id.'?from=taskby'
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Task submitted to '.($nextUser?->name ?? 'the next reviewer'),
+                'task' => $this->taskPayloadFor($updatedTask, $user),
+            ]);
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            Log::error('Submit to next failed', ['task_id' => $task->id, 'error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'Unable to submit to the next reviewer.'], 500);
+        }
     }
 
     /**
@@ -3046,6 +3346,9 @@ class TaskController extends Controller
         $submission->save();
 
         if ($request->hasFile('files')) {
+            if (!isset($org)) {
+                $org = $request->attributes->get('currentOrganization');
+            }
             $submission->attachments()->createMany(
                 collect($request->file('files'))->map(fn ($file) => [
                     'submission_type' => 'task',
@@ -3106,9 +3409,17 @@ class TaskController extends Controller
     public function approve(Request $request, Task $task)
     {
         $user = $request->user();
+        $hasRoutingStage = in_array($task->submission_stage, ['awaiting_checkpoint', 'awaiting_creator'], true);
+        $isRoutingFinalReviewer = $task->submission_stage === 'awaiting_creator'
+            && (int) $task->current_reviewer_id === (int) $user->id
+            && (int) $this->delegationService->creatorId($task) === (int) $user->id;
         $isAssignee = (int) $task->assigned_to === (int) $user->id || $task->assignees()->where('users.id', $user->id)->exists();
-        if ($isAssignee) {
+        if ($isAssignee && ! $isRoutingFinalReviewer) {
             return response()->json(['success' => false, 'message' => 'An assignee cannot approve their own submitted task.'], 403);
+        }
+
+        if ($hasRoutingStage && ! $isRoutingFinalReviewer) {
+            return response()->json(['success' => false, 'message' => 'This submission has not reached you for final approval.'], 403);
         }
 
         $isCreator = (int) $task->assigned_by === (int) $user->id;
@@ -3206,7 +3517,14 @@ class TaskController extends Controller
             ]);
         }
 
-        $task->update(['status' => 'approved', 'approved_at' => now(), 'approved_by' => $user->id, 'updated_by' => $user->id]);
+        $task->update([
+            'status' => 'approved',
+            'approved_at' => now(),
+            'approved_by' => $user->id,
+            'updated_by' => $user->id,
+            'submission_stage' => 'approved',
+            'current_reviewer_id' => null,
+        ]);
 
         // Mark the latest submission as approved
         $latestSubmission = TaskSubmission::where('task_id', $task->id)->latest()->first();
@@ -3277,15 +3595,20 @@ class TaskController extends Controller
     public function reject(Request $request, Task $task)
     {
         $user = $request->user();
+        $isRoutingReviewer = (int) ($task->current_reviewer_id ?? 0) === (int) $user->id
+            && in_array($task->submission_stage, ['awaiting_checkpoint', 'awaiting_creator'], true);
+        if (in_array($task->submission_stage, ['awaiting_checkpoint', 'awaiting_creator'], true) && ! $isRoutingReviewer) {
+            return response()->json(['success' => false, 'message' => 'This submission is not waiting for your action.'], 403);
+        }
         $isAssignee = (int) $task->assigned_to === (int) $user->id || $task->assignees()->where('users.id', $user->id)->exists();
-        if ($isAssignee) {
+        if ($isAssignee && ! $isRoutingReviewer) {
             return response()->json(['success' => false, 'message' => 'An assignee cannot decline their own task.'], 403);
         }
 
         $isCreator = (int) $task->assigned_by === (int) $user->id;
         $isSuperAdmin = in_array($user->role, ['admin', 'super_admin']);
 
-        if (! $isCreator && ! $isSuperAdmin) {
+        if (! $isCreator && ! $isSuperAdmin && ! $isRoutingReviewer) {
             return response()->json(['success' => false, 'message' => 'Unauthorized: Only the assigner or Super Admin can decline this task.'], 403);
         }
         if ($task->status !== 'submitted') {
@@ -3294,11 +3617,26 @@ class TaskController extends Controller
 
         $validated = $request->validate(['comment' => 'nullable|string|max:2000']);
 
-        $task->update(['status' => 'rejected', 'rejected_at' => now(), 'rejected_by' => $user->id, 'rejection_comment' => $validated['comment'] ?? null, 'updated_by' => $user->id]);
+        $returnUserId = $isRoutingReviewer ? (int) $task->current_submitter_id : null;
+        $task->update([
+            'status' => 'rejected',
+            'rejected_at' => now(),
+            'rejected_by' => $user->id,
+            'rejection_comment' => $validated['comment'] ?? null,
+            'updated_by' => $user->id,
+            'current_owner' => $returnUserId ?: $task->current_owner,
+            'current_reviewer_id' => null,
+            'submission_stage' => $returnUserId ? 'declined' : $task->submission_stage,
+            'submission_forwarded_by' => $returnUserId ? [] : ($task->submission_forwarded_by ?? []),
+        ]);
+
+        if ($returnUserId && $task->assignees()->where('users.id', $returnUserId)->exists()) {
+            $task->assignees()->updateExistingPivot($returnUserId, ['status' => 'pending', 'submitted_at' => null]);
+        }
 
         TaskWorkflowEvent::create(['task_id' => $task->id, 'user_id' => $user->id, 'action' => 'rejected', 'comment' => $validated['comment'] ?? null]);
 
-        $assigneeIds = $task->assignees()->pluck('users.id')->toArray();
+        $assigneeIds = $returnUserId ? [$returnUserId] : $task->assignees()->pluck('users.id')->toArray();
         $assigneeIds = array_values(array_filter($assigneeIds, fn ($id) => (int) $id !== (int) $user->id));
         $rejectMsg = 'Your task '.$task->business_id.' ("'.$task->title.'") has been rejected. Please make the required changes.';
         if (! empty($validated['comment'])) {
@@ -3362,19 +3700,21 @@ class TaskController extends Controller
     public function reopen(Request $request, Task $task)
     {
         $user = $request->user();
+        $isRoutingReviewer = (int) ($task->current_reviewer_id ?? 0) === (int) $user->id
+            && in_array($task->submission_stage, ['awaiting_checkpoint', 'awaiting_creator'], true);
         $isAssignee = (int) $task->assigned_to === (int) $user->id || $task->assignees()->where('users.id', $user->id)->exists();
-        if ($isAssignee) {
+        if ($isAssignee && ! $isRoutingReviewer) {
             return response()->json(['success' => false, 'message' => 'An assignee cannot reopen their own task.'], 403);
         }
 
-        $isCreator = (int) $task->assigned_by === (int) $user->id;
+        $isCreator = (int) $task->assigned_by === (int) $user->id || (int) ($task->creator_id ?? 0) === (int) $user->id;
         $isSuperAdmin = in_array($user->role, ['admin', 'super_admin']);
 
-        if (! $isCreator && ! $isSuperAdmin) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized: Only the assigner or Super Admin can reopen this task.'], 403);
+        if (! $isCreator && ! $isSuperAdmin && ! $isRoutingReviewer) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized: Only the assigner, reviewer, or Super Admin can reopen this task.'], 403);
         }
-        if (! in_array($task->status, ['submitted', 'approved'])) {
-            return response()->json(['success' => false, 'message' => 'Can only reopen submitted or approved tasks'], 422);
+        if (! in_array($task->status, ['submitted', 'approved', 'abandoned'])) {
+            return response()->json(['success' => false, 'message' => 'Can only reopen submitted, approved, or abandoned tasks'], 422);
         }
 
         $validated = $request->validate([
@@ -3391,6 +3731,7 @@ class TaskController extends Controller
         $filePaths = [];
         $fileNames = [];
         $uploadedFiles = [];
+        $fileSkipped = false;
         $org = $request->attributes->get('currentOrganization');
         if ($request->hasFile('files')) {
             $uploadedFiles = $request->file('files');
@@ -3400,6 +3741,11 @@ class TaskController extends Controller
 
         foreach ($uploadedFiles as $uploadedFile) {
             if ($uploadedFile && $uploadedFile->isValid()) {
+                $storageCheck = $this->checkStorageLimit($request, $uploadedFile);
+                if ($storageCheck && !$storageCheck['allowed']) {
+                    $fileSkipped = true;
+                    continue;
+                }
                 $fileNames[] = $uploadedFile->getClientOriginalName();
                 if ($org) {
                     $filePaths[] = StorageDiskResolver::store($org, $uploadedFile, 'task-reopen/'.$task->id);
@@ -3421,14 +3767,27 @@ class TaskController extends Controller
             $reopenComment .= ': '.$validated['reopen_reason_detail'];
         }
 
+        $returnUserId = $isRoutingReviewer ? (int) $task->current_submitter_id : null;
         $updateData = [
-            'status' => 'reopened', 'reopened_at' => now(), 'reopened_by' => $user->id,
+            'status' => 'reopened',
+            'reopened_at' => now(),
+            'reopened_by' => $user->id,
             'reopen_comment' => $reopenComment,
             'reopen_reason' => $validated['reopen_reason'],
             'reopen_instructions' => $validated['instructions'] ?? null,
             'states' => array_values(array_unique(array_merge(is_array($task->states) ? $task->states : [], ['Reopened']))),
             'reopen_link' => $validated['link'] ?? null,
+            'abandoned_at' => null,
+            'abandoned_by' => null,
+            'abandon_reason' => null,
+            'abandon_requested_at' => null,
+            'abandon_requested_by' => null,
+            'abandon_request_reason' => null,
             'updated_by' => $user->id,
+            'current_owner' => $returnUserId ?: $task->current_owner,
+            'current_reviewer_id' => null,
+            'submission_stage' => $returnUserId ? 'declined' : $task->submission_stage,
+            'submission_forwarded_by' => $returnUserId ? [] : ($task->submission_forwarded_by ?? []),
         ];
         if (! empty($validated['new_deadline'])) {
             $updateData['reopen_new_deadline'] = $validated['new_deadline'];
@@ -3440,6 +3799,20 @@ class TaskController extends Controller
         }
 
         $task->update($updateData);
+
+        // Only the returned submitter has actionable reopened work. Other route
+        // participants see Reopened through routingPayload while retaining their
+        // completed checkpoint state.
+        try {
+            if ($returnUserId && $task->assignees()->where('users.id', $returnUserId)->exists()) {
+                $task->assignees()->updateExistingPivot($returnUserId, [
+                    'status' => 'reopened',
+                    'submitted_at' => null,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('Task assignees pivot update on reopen warning: '.$e->getMessage());
+        }
 
         // Increment reopen count
         $task->increment('reopen_count');
@@ -3468,7 +3841,9 @@ class TaskController extends Controller
             $reopenReasonText .= ': '.$validated['reopen_reason_detail'];
         }
 
-        $assigneeIds = $task->assignees()->pluck('users.id')->toArray();
+        $assigneeIds = $returnUserId
+            ? [$returnUserId]
+            : $task->assignees()->pluck('users.id')->toArray();
         $assigneeIds = array_values(array_filter($assigneeIds, fn ($id) => (int) $id !== (int) $user->id));
         $reopenMsg = 'Your task '.$task->business_id.' ("'.$task->title.'") has been reopened. Reason: '.$reopenReasonText;
         if (! empty($validated['instructions'])) {
@@ -3513,9 +3888,15 @@ class TaskController extends Controller
             \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
         }
 
+        $reopenMessage = 'Task reopened successfully';
+        if ($fileSkipped) {
+            $reopenMessage = $this->buildFileSkippedMessage('task');
+        }
+
         return response()->json([
             'success' => true,
-            'message' => 'Task reopened successfully',
+            'message' => $reopenMessage,
+            'file_skipped' => $fileSkipped,
             'task' => $this->taskWithTimer($task->fresh()->load(['assignees:id,name,email,role', 'assigner:id,name', 'reopenedBy:id,name',
                 'submissions' => fn ($q) => $q->with(['submittedBy:id,name,email', 'approvedBy:id,name', 'reopenedBy:id,name'])->latest(),
                 'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
@@ -3575,6 +3956,20 @@ class TaskController extends Controller
 
         $fileName = $submission->file_name ?: basename($resolved['path']);
 
+        if ($resolved['disk'] === 's3') {
+            $org = $request->attributes->get('currentOrganization');
+            if ($org) {
+                try {
+                    $temporaryUrl = \App\Services\StorageDiskResolver::getTemporaryUrl($org, $resolved['path'], 60);
+                    $disposition = 'attachment; filename="' . $fileName . '"';
+                    $temporaryUrl .= '&response-content-disposition=' . urlencode($disposition);
+                    return redirect()->away($temporaryUrl);
+                } catch (\Throwable $e) {
+                    \Log::error('S3 redirect failed for task submission', ['path' => $resolved['path'], 'error' => $e->getMessage()]);
+                }
+            }
+        }
+
         return Storage::disk($resolved['disk'])->download($resolved['path'], $fileName);
     }
 
@@ -3601,38 +3996,88 @@ class TaskController extends Controller
     public function destroy(Task $task)
     {
         $user = request()->user();
-        $isCreator = (int) ($task->assigned_by ?? 0) === (int) $user->id || (int) ($task->created_by ?? 0) === (int) $user->id;
+        $isCreator = (int) ($task->assigned_by ?? 0) === (int) $user->id
+            || (int) ($task->created_by ?? 0) === (int) $user->id
+            || (int) ($task->original_assigner ?? 0) === (int) $user->id;
         $isAdminOrManager = in_array($user->role, ['admin', 'manager', 'super_admin']);
 
         if (! $isCreator && ! $isAdminOrManager) {
             return response()->json(['success' => false, 'message' => 'Unauthorized — only the task creator or admin/manager can delete'], 403);
         }
 
-        $org = request()->attributes->get('currentOrganization');
-        if ($org) {
-            $this->cleanupTaskFiles($task, $org);
-        }
-
-        $task->assignees()->detach();
-        $task->deliverables()->delete();
-        $task->files()->delete();
-        $task->delete();
-
         try {
-            $this->auditService->log(
-                module: 'task_management',
-                action: 'delete',
-                description: "Deleted task {$task->title}",
-                user: $user,
-                entityType: 'Task',
-                entityId: $task->id,
-                status: 'success'
-            );
-        } catch (\Throwable $e) {
-            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
-        }
+            DB::transaction(function () use ($task) {
+                $org = request()->attributes->get('currentOrganization');
+                if ($org) {
+                    try {
+                        $this->cleanupTaskFiles($task, $org);
+                    } catch (\Throwable $e) {
+                        Log::error('Task file cleanup failed', ['error' => $e->getMessage()]);
+                    }
+                }
 
-        return response()->json(['success' => true, 'message' => 'Task deleted successfully']);
+                // Detach task pivots
+                try { $task->assignees()->detach(); } catch (\Throwable $e) {}
+                try { $task->followers()->detach(); } catch (\Throwable $e) {}
+
+                // Delete deliverable children & pivots
+                foreach ($task->deliverables as $del) {
+                    try { $del->assignees()->detach(); } catch (\Throwable $e) {}
+                    try { $del->files()->delete(); } catch (\Throwable $e) {}
+                    try {
+                        foreach ($del->submissions as $sub) {
+                            try { $sub->attachments()->delete(); } catch (\Throwable $e) {}
+                        }
+                        $del->submissions()->delete();
+                    } catch (\Throwable $e) {}
+                    try { $del->delegations()->delete(); } catch (\Throwable $e) {}
+                    try { $del->workflowEvents()->delete(); } catch (\Throwable $e) {}
+                    try { $del->changes()->delete(); } catch (\Throwable $e) {}
+                    try { $del->comments()->delete(); } catch (\Throwable $e) {}
+                    try { $del->userNotes()->delete(); } catch (\Throwable $e) {}
+                    try { $del->pauseSessions()->delete(); } catch (\Throwable $e) {}
+                }
+                try { $task->deliverables()->delete(); } catch (\Throwable $e) {}
+
+                // Delete task submissions & attachments
+                foreach ($task->submissions as $sub) {
+                    try { $sub->attachments()->delete(); } catch (\Throwable $e) {}
+                }
+                try { $task->submissions()->delete(); } catch (\Throwable $e) {}
+
+                // Delete task direct child records
+                try { $task->delegations()->delete(); } catch (\Throwable $e) {}
+                try { $task->workflowEvents()->delete(); } catch (\Throwable $e) {}
+                try { $task->changes()->delete(); } catch (\Throwable $e) {}
+                try { $task->comments()->delete(); } catch (\Throwable $e) {}
+                try { $task->accessCredentials()->delete(); } catch (\Throwable $e) {}
+                try { $task->pauseSessions()->delete(); } catch (\Throwable $e) {}
+                try { $task->deliverableTemplates()->delete(); } catch (\Throwable $e) {}
+                try { $task->files()->delete(); } catch (\Throwable $e) {}
+
+                // Delete task
+                $task->delete();
+            });
+
+            try {
+                $this->auditService->log(
+                    module: 'task_management',
+                    action: 'delete',
+                    description: "Deleted task {$task->title}",
+                    user: $user,
+                    entityType: 'Task',
+                    entityId: $task->id,
+                    status: 'success'
+                );
+            } catch (\Throwable $e) {
+                Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+            }
+
+            return response()->json(['success' => true, 'message' => 'Task deleted successfully']);
+        } catch (\Throwable $e) {
+            Log::error('Failed to delete task', ['task_id' => $task->id, 'error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+            return response()->json(['success' => false, 'message' => 'Unable to delete task due to a server error.'], 500);
+        }
     }
 
     private function cleanupTaskFiles(Task $task, $org): void
@@ -3701,7 +4146,13 @@ class TaskController extends Controller
 
         $storageCheck = $this->checkStorageLimit($request, $file);
         if ($storageCheck && !$storageCheck['allowed']) {
-            return response()->json(['success' => false, 'message' => $storageCheck['message']], 422);
+            return response()->json([
+                'success' => true,
+                'message' => $this->buildFileSkippedMessage('task'),
+                'file' => null,
+                'file_skipped' => true,
+                'storage_warning' => $storageCheck['message'],
+            ], 200);
         }
 
         $org = $request->attributes->get('currentOrganization');
@@ -3736,6 +4187,21 @@ class TaskController extends Controller
             'action' => 'field_changed',
             'comment' => 'File uploaded: '.$file->getClientOriginalName(),
         ]);
+
+        try {
+            $this->auditService->log(
+                module: 'project_management',
+                action: 'create',
+                description: "Uploaded file \"{$customName}\" to task \"{$task->title}\"",
+                user: $user,
+                entityType: 'TaskFile',
+                entityId: $fileRecord->id,
+                newValues: ['file_name' => $customName, 'file_url' => $fileUrl],
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log task file upload audit', ['error' => $e->getMessage()]);
+        }
 
         return response()->json(['success' => true, 'message' => 'File uploaded successfully', 'file' => $fileRecord], 201);
     }
@@ -3780,6 +4246,21 @@ class TaskController extends Controller
             'action' => 'field_changed',
             'comment' => 'Link added: '.$linkName,
         ]);
+
+        try {
+            $this->auditService->log(
+                module: 'project_management',
+                action: 'create',
+                description: "Added link \"{$linkName}\" to task \"{$task->title}\"",
+                user: $user,
+                entityType: 'TaskFile',
+                entityId: $fileRecord->id,
+                newValues: ['link_name' => $linkName, 'link_url' => $validated['url']],
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log task link add audit', ['error' => $e->getMessage()]);
+        }
 
         return response()->json(['success' => true, 'message' => 'Link added successfully', 'file' => $fileRecord], 201);
     }
@@ -3829,6 +4310,14 @@ class TaskController extends Controller
             'action' => 'field_changed',
             'comment' => 'File removed: '.$fileName,
         ]);
+
+        $this->auditService->log(
+            'task_management', 'delete',
+            "Deleted file \"{$fileName}\" from task \"{$task->title}\"",
+            $user, 'task_file', $file->id,
+            ['file_name' => $fileName, 'task_id' => $task->id, 'task_title' => $task->title],
+            null, 'success'
+        );
 
         return response()->json(['success' => true, 'message' => 'File deleted successfully']);
     }
@@ -4199,166 +4688,6 @@ class TaskController extends Controller
                 break;
         }
 
-        // ── Apply filters ──
-        $userIds = $request->input('user_id', $request->input('user_ids', $request->input('assigned_to', [])));
-        if (is_string($userIds) && str_contains($userIds, ',')) {
-            $userIds = explode(',', $userIds);
-        }
-        if (! is_array($userIds) && ! empty($userIds)) {
-            $userIds = [$userIds];
-        }
-        if (! empty($userIds) && is_array($userIds)) {
-            $userIds = array_values(array_filter(array_map('intval', $userIds)));
-            if (! empty($userIds)) {
-                $tasksQuery->where(function ($q) use ($userIds) {
-                    $q->whereIn('tasks.assigned_to', $userIds)
-                        ->orWhereIn('tasks.assigned_by', $userIds)
-                        ->orWhereHas('assignees', fn ($aq) => $aq->whereIn('users.id', $userIds));
-                });
-            }
-        }
-
-        $projectIds = $request->input('project_id', $request->input('project_ids', []));
-        if (is_string($projectIds) && str_contains($projectIds, ',')) {
-            $projectIds = explode(',', $projectIds);
-        }
-        if (! is_array($projectIds) && ! empty($projectIds)) {
-            $projectIds = [$projectIds];
-        }
-        if (! empty($projectIds) && is_array($projectIds)) {
-            $projectIds = array_values(array_filter(array_map('intval', $projectIds)));
-            if (! empty($projectIds)) {
-                $tasksQuery->whereIn('tasks.project_id', $projectIds);
-            }
-        }
-
-        $rawStatuses = $request->input('status', $request->input('statuses', []));
-        if (is_string($rawStatuses) && str_contains($rawStatuses, ',')) {
-            $rawStatuses = explode(',', $rawStatuses);
-        }
-        if (! is_array($rawStatuses) && ! empty($rawStatuses)) {
-            $rawStatuses = [$rawStatuses];
-        }
-        if (is_array($rawStatuses) && ! empty($rawStatuses)) {
-            $expandedStatuses = [];
-            $hasDueToday = false;
-            $hasTransferred = false;
-            foreach ($rawStatuses as $st) {
-                $st = trim((string) $st);
-                if ($st === 'due_today') {
-                    $hasDueToday = true;
-                } elseif ($st === 'transferred') {
-                    $hasTransferred = true;
-                } elseif ($st === 'pending') {
-                    $expandedStatuses = array_merge($expandedStatuses, $this->pendingTaskStatuses());
-                } elseif ($st === 'in_progress') {
-                    $expandedStatuses = array_merge($expandedStatuses, $this->inProgressTaskStatuses());
-                } elseif ($st === 'paused') {
-                    $expandedStatuses = array_merge($expandedStatuses, $this->pausedTaskStatuses());
-                } elseif ($st === 'rejected' || $st === 'declined') {
-                    $expandedStatuses[] = 'rejected';
-                    $expandedStatuses[] = 'declined';
-                } elseif ($st === 'abandoned') {
-                    $expandedStatuses[] = 'abandoned';
-                    $expandedStatuses[] = 'abandon_requested';
-                } elseif ($st === 'approved') {
-                    $expandedStatuses[] = 'approved';
-                    $expandedStatuses[] = 'completed';
-                } elseif (! empty($st)) {
-                    $expandedStatuses[] = $st;
-                }
-            }
-            $expandedStatuses = array_values(array_unique($expandedStatuses));
-            $tasksQuery->where(function ($sq) use ($expandedStatuses, $hasDueToday, $hasTransferred, $user) {
-                $hasCondition = false;
-                if (! empty($expandedStatuses)) {
-                    $sq->whereIn('tasks.status', $expandedStatuses);
-                    $hasCondition = true;
-                }
-                if ($hasDueToday) {
-                    if ($hasCondition) {
-                        $sq->orWhere(function ($dq) use ($user) {
-                            $this->applyDueTodayFilter($dq, $user->id);
-                        });
-                    } else {
-                        $this->applyDueTodayFilter($sq, $user->id);
-                        $hasCondition = true;
-                    }
-                }
-                if ($hasTransferred) {
-                    if ($hasCondition) {
-                        $sq->orWhere(function ($tq) {
-                            $tq->whereNotNull('tasks.delegation_chain')->where('tasks.delegation_chain', '!=', '[]');
-                        });
-                    } else {
-                        $sq->whereNotNull('tasks.delegation_chain')->where('tasks.delegation_chain', '!=', '[]');
-                    }
-                }
-            });
-        } elseif (is_string($rawStatuses) && ! empty($rawStatuses)) {
-            if ($rawStatuses === 'due_today') {
-                $this->applyDueTodayFilter($tasksQuery, $user->id);
-            } elseif ($rawStatuses === 'transferred') {
-                $tasksQuery->whereNotNull('tasks.delegation_chain')->where('tasks.delegation_chain', '!=', '[]');
-            } elseif ($rawStatuses === 'pending') {
-                $tasksQuery->whereIn('tasks.status', $this->pendingTaskStatuses());
-            } elseif ($rawStatuses === 'in_progress') {
-                $tasksQuery->whereIn('tasks.status', $this->inProgressTaskStatuses());
-            } elseif ($rawStatuses === 'paused') {
-                $tasksQuery->whereIn('tasks.status', $this->pausedTaskStatuses());
-            } elseif ($rawStatuses === 'rejected' || $rawStatuses === 'declined') {
-                $tasksQuery->whereIn('tasks.status', ['rejected', 'declined']);
-            } elseif ($rawStatuses === 'abandoned') {
-                $tasksQuery->whereIn('tasks.status', ['abandoned', 'abandon_requested']);
-            } elseif ($rawStatuses === 'approved') {
-                $tasksQuery->whereIn('tasks.status', ['approved', 'completed']);
-            } else {
-                $tasksQuery->where('tasks.status', $rawStatuses);
-            }
-        }
-
-        if ($search) {
-            $tasksQuery->where(function ($sq) use ($search) {
-                $sq->where('tasks.title', 'like', '%'.$search.'%')
-                    ->orWhere('tasks.status', 'like', '%'.$search.'%')
-                    ->orWhere('tasks.priority', 'like', '%'.$search.'%')
-                    ->orWhere('tasks.business_id', 'like', '%'.$search.'%')
-                    ->orWhereHas('assignees', fn ($aq) => $aq->where('users.name', 'like', '%'.$search.'%'))
-                    ->orWhereHas('assigner', fn ($aq) => $aq->where('users.name', 'like', '%'.$search.'%'))
-                    ->orWhereHas('project', fn ($pq) => $pq->where('projects.title', 'like', '%'.$search.'%'));
-            });
-        }
-
-        $rawTimeFilter = $request->input('time_filter') ?: $request->input('period');
-        $timeFilter = strtolower(trim((string) $rawTimeFilter));
-        $startDate = $request->input('start_date') ?: $request->input('startDate');
-        $endDate = $request->input('end_date') ?: $request->input('endDate');
-
-        if ($timeFilter === 'custom' || ($startDate && $endDate)) {
-            if ($startDate && $endDate) {
-                $tasksQuery->whereBetween('tasks.created_at', [
-                    \Carbon\Carbon::parse($startDate)->startOfDay(),
-                    \Carbon\Carbon::parse($endDate)->endOfDay(),
-                ]);
-            } elseif ($startDate) {
-                $tasksQuery->where('tasks.created_at', '>=', \Carbon\Carbon::parse($startDate)->startOfDay());
-            } elseif ($endDate) {
-                $tasksQuery->where('tasks.created_at', '<=', \Carbon\Carbon::parse($endDate)->endOfDay());
-            }
-        } elseif ($timeFilter && $timeFilter !== 'all') {
-            match ($timeFilter) {
-                'today' => $tasksQuery->whereDate('tasks.created_at', today()),
-                '7', 'week', '7days' => $tasksQuery->where('tasks.created_at', '>=', \Carbon\Carbon::now()->subDays(7)),
-                '30', 'month', '30days' => $tasksQuery->where('tasks.created_at', '>=', \Carbon\Carbon::now()->subDays(30)),
-                '90', '3months', '90days' => $tasksQuery->where('tasks.created_at', '>=', \Carbon\Carbon::now()->subMonths(3)),
-                '180', '6months', '180days' => $tasksQuery->where('tasks.created_at', '>=', \Carbon\Carbon::now()->subMonths(6)),
-                'year', '365' => $tasksQuery->where('tasks.created_at', '>=', \Carbon\Carbon::now()->subYears(1)),
-                default => is_numeric($timeFilter) && (int) $timeFilter > 0
-                    ? $tasksQuery->where('tasks.created_at', '>=', \Carbon\Carbon::now()->subDays((int) $timeFilter))
-                    : null,
-            };
-        }
-
         $tasksQuery->with([
             'project:id,title,team_id',
             'assignees:id,name,email,role',
@@ -4367,15 +4696,10 @@ class TaskController extends Controller
             'rejectedBy:id,name,role',
             'reopenedBy:id,name,role',
             'updatedBy:id,name,role',
-        ])
-            ->orderBy('sort_order')
-            ->orderBy('created_at', 'desc')
-            ->orderBy('id', 'desc');
+            'currentOwner:id,name',
+        ]);
 
-        if ($request->filled('per_page') || $request->filled('limit')) {
-            $tasksQuery->limit((int) ($request->input('per_page') ?: $request->input('limit')));
-        }
-
+        $tasksQuery = $this->applyQueryFiltersSortingPagination($request, $tasksQuery);
         $tasks = $tasksQuery->get();
 
         // ── Bulk load deliverable counts ──
@@ -4397,7 +4721,8 @@ class TaskController extends Controller
             $task->total_deliverables = $total;
             $task->completed_deliverables = $completed;
             $task->pending_deliverables_count = $pending;
-            $task->deliverables_progress = $total > 0 ? (int) round(($completed / $total) * 100) : 0;
+            $isTerminal = in_array(strtolower($task->status ?? ''), ['completed', 'approved', 'submitted', 'submitted_late', 'done']);
+            $task->deliverables_progress = $isTerminal ? 100 : ($total > 0 ? (int) round(($completed / $total) * 100) : 0);
 
             // Transferor flag for list views
             $isTransferor = false;
@@ -4436,7 +4761,7 @@ class TaskController extends Controller
             return $task;
         });
 
-        $allItems = $tasks->sortBy('sort_order')->values();
+        $allItems = $tasks->values();
 
         return response()->json([
             'data' => $allItems,
@@ -4535,7 +4860,6 @@ class TaskController extends Controller
             if (! empty($userIds)) {
                 $query->where(function ($q) use ($userIds) {
                     $q->whereIn('tasks.assigned_to', $userIds)
-                        ->orWhereIn('tasks.assigned_by', $userIds)
                         ->orWhereHas('assignees', fn ($aq) => $aq->whereIn('users.id', $userIds));
                 });
             }
@@ -4555,7 +4879,8 @@ class TaskController extends Controller
             }
         }
 
-        $rawStatuses = $request->input('status', $request->input('statuses', []));
+        // ── 1. STATUSES FILTER (OR within statuses) ──
+        $rawStatuses = $request->input('statuses', $request->input('status', []));
         if (is_string($rawStatuses) && str_contains($rawStatuses, ',')) {
             $rawStatuses = explode(',', $rawStatuses);
         }
@@ -4566,97 +4891,260 @@ class TaskController extends Controller
             $expandedStatuses = [];
             $hasDueToday = false;
             $hasTransferred = false;
+            $hasReopened = false;
+
             foreach ($rawStatuses as $st) {
                 $st = trim((string) $st);
-                if ($st === 'due_today') {
+                $stLower = strtolower($st);
+
+                if ($stLower === 'due_today') {
                     $hasDueToday = true;
-                } elseif ($st === 'transferred') {
+                } elseif ($stLower === 'transferred') {
                     $hasTransferred = true;
-                } elseif ($st === 'pending') {
-                    $expandedStatuses = array_merge($expandedStatuses, $this->pendingTaskStatuses());
-                } elseif ($st === 'in_progress') {
-                    $expandedStatuses = array_merge($expandedStatuses, $this->inProgressTaskStatuses());
-                } elseif ($st === 'paused') {
-                    $expandedStatuses = array_merge($expandedStatuses, $this->pausedTaskStatuses());
-                } elseif ($st === 'rejected' || $st === 'declined') {
-                    $expandedStatuses[] = 'rejected';
-                    $expandedStatuses[] = 'declined';
-                } elseif ($st === 'abandoned') {
-                    $expandedStatuses[] = 'abandoned';
-                    $expandedStatuses[] = 'abandon_requested';
-                } elseif ($st === 'approved') {
-                    $expandedStatuses[] = 'approved';
-                    $expandedStatuses[] = 'completed';
+                } elseif ($stLower === 'reopened') {
+                    $hasReopened = true;
+                } elseif (in_array($stLower, ['pending', 'planned', 'planning'])) {
+                    $expandedStatuses = array_merge($expandedStatuses, ['Pending', 'pending', 'planned', 'Planning', 'Planned']);
+                } elseif (in_array($stLower, ['in_progress', 'in progress', 'in-progress', 'doing'])) {
+                    $expandedStatuses = array_merge($expandedStatuses, ['In Progress', 'in_progress', 'in-progress', 'doing']);
+                } elseif (in_array($stLower, ['submitted', 'review', 'in_review'])) {
+                    $expandedStatuses = array_merge($expandedStatuses, ['Submitted', 'submitted', 'review', 'in_review']);
+                } elseif (in_array($stLower, ['approved', 'completed', 'done'])) {
+                    $expandedStatuses = array_merge($expandedStatuses, ['Approved', 'approved', 'completed', 'done']);
+                } elseif (in_array($stLower, ['paused', 'pause'])) {
+                    $expandedStatuses = array_merge($expandedStatuses, ['Paused', 'paused', 'pause']);
+                } elseif (in_array($stLower, ['declined', 'rejected', 'failed'])) {
+                    $expandedStatuses = array_merge($expandedStatuses, ['Declined', 'declined', 'rejected', 'failed']);
+                } elseif (in_array($stLower, ['abandoned', 'abandon_requested'])) {
+                    $expandedStatuses = array_merge($expandedStatuses, ['Abandoned', 'abandoned', 'abandon_requested']);
                 } elseif (! empty($st)) {
                     $expandedStatuses[] = $st;
                 }
             }
+
             $expandedStatuses = array_values(array_unique($expandedStatuses));
-            $query->where(function ($sq) use ($expandedStatuses, $hasDueToday, $hasTransferred) {
-                $hasCondition = false;
-                if (! empty($expandedStatuses)) {
-                    $sq->whereIn('tasks.status', $expandedStatuses);
-                    $hasCondition = true;
-                }
-                if ($hasDueToday) {
-                    if ($hasCondition) {
-                        $sq->orWhere(function ($dq) {
-                            $this->applyDueTodayFilter($dq);
-                        });
-                    } else {
-                        $this->applyDueTodayFilter($sq);
+            if (! empty($expandedStatuses) || $hasDueToday || $hasTransferred || $hasReopened) {
+                $query->where(function ($sq) use ($expandedStatuses, $hasDueToday, $hasTransferred, $hasReopened) {
+                    $hasCondition = false;
+                    if (! empty($expandedStatuses)) {
+                        $sq->whereIn('tasks.status', $expandedStatuses);
                         $hasCondition = true;
                     }
-                }
-                if ($hasTransferred) {
-                    if ($hasCondition) {
-                        $sq->orWhere(function ($tq) {
-                            $tq->whereNotNull('tasks.delegation_chain')->where('tasks.delegation_chain', '!=', '[]');
-                        });
-                    } else {
-                        $sq->whereNotNull('tasks.delegation_chain')->where('tasks.delegation_chain', '!=', '[]');
+                    if ($hasDueToday) {
+                        if ($hasCondition) {
+                            $sq->orWhere(function ($dq) {
+                                $this->applyDueTodayFilter($dq);
+                            });
+                        } else {
+                            $this->applyDueTodayFilter($sq);
+                            $hasCondition = true;
+                        }
                     }
-                }
-            });
-        } elseif (is_string($rawStatuses) && ! empty($rawStatuses)) {
-            if ($rawStatuses === 'due_today') {
-                $this->applyDueTodayFilter($query);
-            } elseif ($rawStatuses === 'transferred') {
-                $query->whereNotNull('tasks.delegation_chain')->where('tasks.delegation_chain', '!=', '[]');
-            } elseif ($rawStatuses === 'pending') {
-                $query->whereIn('tasks.status', $this->pendingTaskStatuses());
-            } elseif ($rawStatuses === 'in_progress') {
-                $query->whereIn('tasks.status', $this->inProgressTaskStatuses());
-            } elseif ($rawStatuses === 'paused') {
-                $query->whereIn('tasks.status', $this->pausedTaskStatuses());
-            } elseif ($rawStatuses === 'rejected' || $rawStatuses === 'declined') {
-                $query->whereIn('tasks.status', ['rejected', 'declined']);
-            } elseif ($rawStatuses === 'abandoned') {
-                $query->whereIn('tasks.status', ['abandoned', 'abandon_requested']);
-            } elseif ($rawStatuses === 'approved') {
-                $query->whereIn('tasks.status', ['approved', 'completed']);
-            } else {
-                $query->where('tasks.status', $rawStatuses);
+                    if ($hasTransferred) {
+                        $transferCondition = function ($tq) {
+                            $tq->whereJsonContains('tasks.states', 'Transferred')->orWhereJsonContains('tasks.states', 'transferred')
+                               ->orWhere(function ($dtq) {
+                                   $dtq->whereNotNull('tasks.delegation_chain')->where('tasks.delegation_chain', '!=', '[]');
+                               });
+                        };
+                        if ($hasCondition) {
+                            $sq->orWhere($transferCondition);
+                        } else {
+                            $sq->where($transferCondition);
+                            $hasCondition = true;
+                        }
+                    }
+                    if ($hasReopened) {
+                        $reopenCondition = function ($rq) {
+                            $rq->whereJsonContains('tasks.states', 'Reopened')->orWhereJsonContains('tasks.states', 'reopened')
+                               ->orWhere('tasks.status', 'reopened')
+                               ->orWhere('tasks.reopen_count', '>', 0)
+                               ->orWhereNotNull('tasks.reopened_at');
+                        };
+                        if ($hasCondition) {
+                            $sq->orWhere($reopenCondition);
+                        } else {
+                            $sq->where($reopenCondition);
+                            $hasCondition = true;
+                        }
+                    }
+                });
             }
         }
 
-        if ($request->filled('start_date')) {
-            $query->whereDate('tasks.start_date', '>=', $request->input('start_date'));
+        // ── 2. STATES FILTER (OR within states, AND with other filters) ──
+        $rawStates = $request->input('states', $request->input('state', []));
+        if (is_string($rawStates) && str_contains($rawStates, ',')) {
+            $rawStates = explode(',', $rawStates);
+        }
+        if (! is_array($rawStates) && ! empty($rawStates)) {
+            $rawStates = [$rawStates];
+        }
+        if (is_array($rawStates) && ! empty($rawStates)) {
+            $rawStates = array_values(array_filter(array_map('trim', $rawStates)));
+            if (! empty($rawStates)) {
+                $query->where(function ($stateQuery) use ($rawStates) {
+                    foreach ($rawStates as $idx => $stateItem) {
+                        $stateItemLower = strtolower($stateItem);
+                        $clause = function ($sq) use ($stateItem, $stateItemLower) {
+                            if ($stateItemLower === 'reopened') {
+                                $sq->whereJsonContains('tasks.states', 'Reopened')->orWhereJsonContains('tasks.states', 'reopened')
+                                   ->orWhere('tasks.status', 'reopened')
+                                   ->orWhere('tasks.reopen_count', '>', 0)
+                                   ->orWhereNotNull('tasks.reopened_at');
+                            } elseif ($stateItemLower === 'transferred') {
+                                $sq->whereJsonContains('tasks.states', 'Transferred')->orWhereJsonContains('tasks.states', 'transferred')
+                                   ->orWhere(function ($dtq) {
+                                       $dtq->whereNotNull('tasks.delegation_chain')->where('tasks.delegation_chain', '!=', '[]');
+                                   });
+                            } else {
+                                $escaped = json_encode($stateItem);
+                                $sq->whereJsonContains('tasks.states', $stateItem);
+                            }
+                        };
+
+                        if ($idx === 0) {
+                            $stateQuery->where($clause);
+                        } else {
+                            $stateQuery->orWhere($clause);
+                        }
+                    }
+                });
+            }
         }
 
-        if ($request->filled('end_date')) {
-            $query->whereDate('tasks.end_date', '<=', $request->input('end_date'));
+        // ── 3. DUE STATES FILTER (OR within due states, AND with other filters) ──
+        $rawDueStates = $request->input('due_states', $request->input('due_state', $request->input('dueStates', [])));
+        if (is_string($rawDueStates) && str_contains($rawDueStates, ',')) {
+            $rawDueStates = explode(',', $rawDueStates);
+        }
+        if (! is_array($rawDueStates) && ! empty($rawDueStates)) {
+            $rawDueStates = [$rawDueStates];
+        }
+        if (is_array($rawDueStates) && ! empty($rawDueStates)) {
+            $rawDueStates = array_values(array_filter(array_map('trim', $rawDueStates)));
+            if (! empty($rawDueStates)) {
+                $query->where(function ($dueQuery) use ($rawDueStates) {
+                    $now = \Carbon\Carbon::now();
+                    $todayStart = $now->copy()->startOfDay();
+                    $todayEnd = $now->copy()->endOfDay();
+                    $weekStart = $now->copy()->startOfWeek()->startOfDay();
+                    $weekEnd = $now->copy()->endOfWeek()->endOfDay();
+                    $monthStart = $now->copy()->startOfMonth()->startOfDay();
+                    $monthEnd = $now->copy()->endOfMonth()->endOfDay();
+
+                    foreach ($rawDueStates as $idx => $dueItem) {
+                        $dueItemLower = strtolower($dueItem);
+                        $clause = function ($dq) use ($dueItemLower, $todayStart, $todayEnd, $weekStart, $weekEnd, $monthStart, $monthEnd) {
+                            if (in_array($dueItemLower, ['overdue', 'over_due', 'past_due'])) {
+                                $dq->whereNotNull('tasks.end_date')
+                                   ->where('tasks.end_date', '<', $todayStart);
+                            } elseif (in_array($dueItemLower, ['due today', 'due_today', 'today'])) {
+                                $dq->whereNotNull('tasks.end_date')
+                                   ->whereBetween('tasks.end_date', [$todayStart, $todayEnd]);
+                            } elseif (in_array($dueItemLower, ['due this week', 'due_this_week', 'this_week', 'week'])) {
+                                $dq->whereNotNull('tasks.end_date')
+                                   ->whereBetween('tasks.end_date', [$weekStart, $weekEnd]);
+                            } elseif (in_array($dueItemLower, ['due this month', 'due_this_month', 'this_month', 'month'])) {
+                                $dq->whereNotNull('tasks.end_date')
+                                   ->whereBetween('tasks.end_date', [$monthStart, $monthEnd]);
+                            } elseif (in_array($dueItemLower, ['upcoming', 'future'])) {
+                                $dq->whereNotNull('tasks.end_date')
+                                   ->where('tasks.end_date', '>', $monthEnd);
+                            } elseif (in_array($dueItemLower, ['no due date', 'no_due_date', 'none', 'null'])) {
+                                $dq->whereNull('tasks.end_date');
+                            }
+                        };
+
+                        if ($idx === 0) {
+                            $dueQuery->where($clause);
+                        } else {
+                            $dueQuery->orWhere($clause);
+                        }
+                    }
+                });
+            }
+        }
+
+        $rawTimeFilter = $request->input('time_filter') ?: $request->input('period');
+        $timeFilter = strtolower(trim((string) $rawTimeFilter));
+        $startDate = $request->input('start_date') ?: $request->input('startDate');
+        $endDate = $request->input('end_date') ?: $request->input('endDate');
+
+        if ($timeFilter === 'custom' || ($startDate && $endDate)) {
+            if ($startDate && $endDate) {
+                $query->whereBetween('tasks.created_at', [
+                    \Carbon\Carbon::parse($startDate)->startOfDay(),
+                    \Carbon\Carbon::parse($endDate)->endOfDay(),
+                ]);
+            } elseif ($startDate) {
+                $query->where('tasks.created_at', '>=', \Carbon\Carbon::parse($startDate)->startOfDay());
+            } elseif ($endDate) {
+                $query->where('tasks.created_at', '<=', \Carbon\Carbon::parse($endDate)->endOfDay());
+            }
+        } elseif ($timeFilter && $timeFilter !== 'all') {
+            match ($timeFilter) {
+                'today' => $query->whereDate('tasks.created_at', today()),
+                '7', 'week', '7days' => $query->where('tasks.created_at', '>=', \Carbon\Carbon::now()->subDays(7)),
+                '30', 'month', '30days' => $query->where('tasks.created_at', '>=', \Carbon\Carbon::now()->subDays(30)),
+                '90', '3months', '90days' => $query->where('tasks.created_at', '>=', \Carbon\Carbon::now()->subMonths(3)),
+                '180', '6months', '180days' => $query->where('tasks.created_at', '>=', \Carbon\Carbon::now()->subMonths(6)),
+                'year', '365' => $query->where('tasks.created_at', '>=', \Carbon\Carbon::now()->subYears(1)),
+                default => is_numeric($timeFilter) && (int) $timeFilter > 0
+                    ? $query->where('tasks.created_at', '>=', \Carbon\Carbon::now()->subDays((int) $timeFilter))
+                    : null,
+            };
+        }
+
+        if ($startDate && $endDate) {
+            $query->whereDate('tasks.start_date', '>=', $startDate)
+                ->whereDate('tasks.end_date', '<=', $endDate);
+        } elseif ($startDate) {
+            $query->whereDate('tasks.start_date', '>=', $startDate);
+        } elseif ($endDate) {
+            $query->whereDate('tasks.end_date', '<=', $endDate);
         }
 
         // 2. ORDER BY
         $sortBy = $request->input('sort_by') ?: $request->input('sort_field');
-        $sortDir = strtolower($request->input('sort_dir') ?: $request->input('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $sortDir = strtolower($request->input('sort_direction') ?: $request->input('sort_dir') ?: $request->input('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
 
-        if ($sortBy && in_array($sortBy, ['created_at', 'due_date', 'start_date', 'end_date', 'title', 'status', 'updated_at'])) {
-            $field = $sortBy === 'due_date' ? 'tasks.end_date' : 'tasks.'.$sortBy;
-            $query->orderBy($field, $sortDir);
+        if ($sortBy) {
+            $sortByClean = strtolower(trim((string) $sortBy));
+            if ($sortByClean === 'due_date' || $sortByClean === 'end_date') {
+                $query->orderBy('tasks.end_date', $sortDir)->orderBy('tasks.id', $sortDir);
+            } elseif ($sortByClean === 'start_date') {
+                $query->orderBy('tasks.start_date', $sortDir)->orderBy('tasks.id', $sortDir);
+            } elseif ($sortByClean === 'priority') {
+                $prioritySql = "CASE LOWER(tasks.priority)
+                    WHEN 'urgent' THEN 1
+                    WHEN 'high' THEN 2
+                    WHEN 'medium' THEN 3
+                    WHEN 'low' THEN 4
+                    WHEN 'none' THEN 5
+                    ELSE 6 END";
+                $query->orderByRaw("{$prioritySql} {$sortDir}")->orderBy('tasks.id', 'desc');
+            } elseif ($sortByClean === 'status') {
+                $query->orderBy('tasks.status', $sortDir)->orderBy('tasks.id', 'desc');
+            } elseif ($sortByClean === 'title' || $sortByClean === 'task_name' || $sortByClean === 'name') {
+                $query->orderBy('tasks.title', $sortDir)->orderBy('tasks.id', 'desc');
+            } elseif ($sortByClean === 'created_at' || $sortByClean === 'updated_at') {
+                $query->orderBy('tasks.'.$sortByClean, $sortDir)->orderBy('tasks.id', $sortDir);
+            } elseif ($sortByClean === 'sort_order') {
+                $query->orderBy('tasks.sort_order', $sortDir)->orderBy('tasks.created_at', 'desc')->orderBy('tasks.id', 'desc');
+            } elseif ($sortByClean === 'assigned_by') {
+                $query->leftJoin('users as assigner_users', 'tasks.assigned_by', '=', 'assigner_users.id')
+                    ->orderBy('assigner_users.name', $sortDir)
+                    ->select('tasks.*');
+            } elseif ($sortByClean === 'assigned_to') {
+                $query->leftJoin('users as assigned_users', 'tasks.assigned_to', '=', 'assigned_users.id')
+                    ->orderBy('assigned_users.name', $sortDir)
+                    ->select('tasks.*');
+            } else {
+                $query->orderBy('tasks.created_at', 'desc')->orderBy('tasks.id', 'desc');
+            }
         } else {
-            $query->orderBy('tasks.sort_order', 'asc')->orderBy('tasks.created_at', 'desc')->orderBy('tasks.id', 'desc');
+            $query->orderBy('tasks.created_at', 'desc')->orderBy('tasks.id', 'desc');
         }
 
         // 3. LIMIT / OFFSET
@@ -4719,6 +5207,10 @@ class TaskController extends Controller
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
         $isCurrentOwner = $this->delegationService->isCurrentOwner($task, $user);
 
+        if (! empty($task->delegation_chain) && ! $isCurrentOwner) {
+            return response()->json(['success' => false, 'message' => 'Only the current task owner can transfer this task'], 403);
+        }
+
         if (! $isCreator && ! $isAssignee && ! $isCurrentOwner && ! in_array($user->role, ['admin', 'manager'])) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
@@ -4736,6 +5228,10 @@ class TaskController extends Controller
             return response()->json(['success' => false, 'message' => 'You must acknowledge this task first before transferring it'], 422);
         }
 
+        if ($task->pendingDelegations()->exists()) {
+            return response()->json(['success' => false, 'message' => 'This task already has a pending transfer'], 422);
+        }
+
         $validated = $request->validate([
             'delegated_to' => 'required|exists:users,id',
             'reason' => 'required|string|max:500',
@@ -4749,6 +5245,13 @@ class TaskController extends Controller
         }
 
         $delegatedTo = User::find($validated['delegated_to']);
+        if (! $delegatedTo || $delegatedTo->active === false || $delegatedTo->status === 'resigned') {
+            return response()->json(['success' => false, 'message' => 'The selected user is not active'], 422);
+        }
+
+        if ($task->project && ! $task->project->getMembers()->contains('id', $delegatedTo->id)) {
+            return response()->json(['success' => false, 'message' => 'The selected user is not a member of this project'], 422);
+        }
 
         try {
             $delegation = $this->delegationService->delegateTask(
@@ -4805,7 +5308,7 @@ class TaskController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Delegation accepted',
+                'message' => 'Task acknowledged successfully',
                 'delegation' => $delegation->load(['delegatedBy:id,name,email,role', 'delegatedTo:id,name,email,role']),
             ]);
         } catch (\Throwable $e) {
@@ -5056,6 +5559,8 @@ class TaskController extends Controller
      */
     public function unifiedActivity(Request $request, Task $task): JsonResponse
     {
+        $startDate = $request->query('start_date') ?: $request->query('date_from');
+        $endDate = $request->query('end_date') ?: $request->query('date_to');
         $dateFilter = $request->query('date');
         $userFilter = $request->query('user_id');
         $typeFilter = $request->query('type');
@@ -5165,9 +5670,35 @@ class TaskController extends Controller
             ]);
         }
 
-        // Filter by Date
-        if ($dateFilter) {
-            $feed = $feed->filter(fn ($item) => substr($item['created_at'], 0, 10) === $dateFilter);
+        // Filter by Date Range or Single Date
+        if ($startDate) {
+            $formattedStart = ActivityService::parseQueryDate($startDate);
+            if ($formattedStart) {
+                $feed = $feed->filter(function ($item) use ($formattedStart) {
+                    $d = substr($item['created_at'], 0, 10);
+                    return $d >= $formattedStart;
+                });
+            }
+        }
+        if ($endDate) {
+            $formattedEnd = ActivityService::parseQueryDate($endDate);
+            if ($formattedEnd) {
+                $feed = $feed->filter(function ($item) use ($formattedEnd) {
+                    $d = substr($item['created_at'], 0, 10);
+                    return $d <= $formattedEnd;
+                });
+            }
+        }
+        if ($dateFilter && !$startDate && !$endDate) {
+            $targetDate = ActivityService::parseQueryDate($dateFilter);
+            if ($targetDate) {
+                $feed = $feed->filter(function ($item) use ($targetDate) {
+                    $d1 = substr($item['created_at'], 0, 10);
+                    if ($d1 === $targetDate) return true;
+                    $ts = strtotime($item['created_at']);
+                    return $ts !== false && date('Y-m-d', $ts) === $targetDate;
+                });
+            }
         }
 
         // Filter by User / Person
@@ -5190,6 +5721,28 @@ class TaskController extends Controller
             'success' => true,
             'data' => $sorted,
             'users' => $users,
+        ]);
+    }
+
+    private function taskPayloadFor(Task $task, User $viewer): array
+    {
+        $task->loadMissing([
+            'assignees:id,name,email,role',
+            'assigner:id,name,email,role',
+            'currentReviewer:id,name,email,role',
+            'currentSubmitter:id,name,email,role',
+            'submissions' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments'])->latest(),
+            'latestSubmission' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments']),
+        ]);
+        $payload = $this->taskWithTimer($task->toArray());
+        $routing = $this->delegationService->routingPayload($task, $viewer);
+        $next = ! empty($routing['next_route_user_id'])
+            ? User::select('id', 'name', 'role')->find($routing['next_route_user_id'])
+            : null;
+
+        return array_merge($payload, $routing, [
+            'next_route_user' => $next,
+            'submit_to_next_label' => 'Submit',
         ]);
     }
 }

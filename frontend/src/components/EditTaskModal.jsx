@@ -202,6 +202,18 @@ export default function EditTaskModal({ task, onClose }) {
   }, [form.task_type, form.start_date, form.end_date, recurrenceSettings, recurringTemplates]);
   const [allUsers, setAllUsers] = useState([]);
   const [displayUsers, setDisplayUsers] = useState([]);
+  const [kbIds, setKbIds] = useState(() => {
+    if (task?.kb_ids && Array.isArray(task.kb_ids)) return task.kb_ids.map(Number);
+    if (task?.kb_id || task?.kbReferenceId) return [Number(task.kb_id || task.kbReferenceId)];
+    return [];
+  });
+  const [eventIds, setEventIds] = useState(() => {
+    if (task?.event_ids && Array.isArray(task.event_ids)) return task.event_ids.map(Number);
+    if (task?.event_id || task?.eventReferenceId) return [Number(task.event_id || task.eventReferenceId)];
+    return [];
+  });
+  const [kbArticles, setKbArticles] = useState([]);
+  const [eventsList, setEventsList] = useState([]);
   const [selectedAssigneeIds, setSelectedAssigneeIds] = useState(
     task.assignees?.map((a) => a.id) || []
   );
@@ -288,7 +300,44 @@ export default function EditTaskModal({ task, onClose }) {
         setProjects(Array.isArray(list) ? list : []);
       })
       .catch(() => {});
+
+    fetch(`${API_URL}/knowledge-base?all=true`, {
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      skipLoader: true,
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        const items = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+        setKbArticles(items);
+      })
+      .catch(() => {});
+
+    fetch(`${API_URL}/events?all=true`, {
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      skipLoader: true,
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        const items = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+        setEventsList(items);
+      })
+      .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (task) {
+      if (task.kb_ids) {
+        setKbIds(Array.isArray(task.kb_ids) ? task.kb_ids.map(Number) : [Number(task.kb_ids)]);
+      } else if (task.kb_id !== undefined || task.kbReferenceId !== undefined) {
+        setKbIds(task.kb_id || task.kbReferenceId ? [Number(task.kb_id || task.kbReferenceId)] : []);
+      }
+      if (task.event_ids) {
+        setEventIds(Array.isArray(task.event_ids) ? task.event_ids.map(Number) : [Number(task.event_ids)]);
+      } else if (task.event_id !== undefined || task.eventReferenceId !== undefined) {
+        setEventIds(task.event_id || task.eventReferenceId ? [Number(task.event_id || task.eventReferenceId)] : []);
+      }
+    }
+  }, [task]);
 
   useEffect(() => {
     const token = authToken();
@@ -666,6 +715,8 @@ export default function EditTaskModal({ task, onClose }) {
               }
               return acc;
             }, []),
+            kb_ids: kbIds.length > 0 ? kbIds.map(Number) : [],
+            event_ids: eventIds.length > 0 ? eventIds.map(Number) : [],
           };
           if (subtasks.length > 0) {
             body.deliverables = subtasks.map((d) => ({ id: d.id || null, title: d.title, start_date: d.start_date || null, due_date: d.due_date || null, assigned_to: d.assigned_to || null }));
@@ -1044,6 +1095,38 @@ export default function EditTaskModal({ task, onClose }) {
                   { value: "Low", label: t("Low") },
                   { value: "High", label: t("High") },
                 ]}
+              />
+            </div>
+
+            {/* REFERENCE KNOWLEDGE BASE */}
+            <div className="task-field">
+              <label>{t("Reference Knowledge Base", { defaultValue: "Reference Knowledge Base" })}</label>
+              <MultiSelectDropdown
+                name="kb_ids"
+                value={kbIds}
+                onChange={(vals) => { setKbIds(vals.map(Number)); markDirty(); }}
+                placeholder={t("Select Knowledge Base", { defaultValue: "Select Knowledge Base" })}
+                searchPlaceholder={t("Search Knowledge Base...", { defaultValue: "Search Knowledge Base..." })}
+                options={(kbArticles || []).map((item) => ({
+                  value: Number(item?.id),
+                  label: item?.title || `Article #${item?.id}`,
+                }))}
+              />
+            </div>
+
+            {/* REFERENCE EVENT */}
+            <div className="task-field">
+              <label>{t("Reference Event", { defaultValue: "Reference Event" })}</label>
+              <MultiSelectDropdown
+                name="event_ids"
+                value={eventIds}
+                onChange={(vals) => { setEventIds(vals.map(Number)); markDirty(); }}
+                placeholder={t("Select Event", { defaultValue: "Select Event" })}
+                searchPlaceholder={t("Search Events...", { defaultValue: "Search Events..." })}
+                options={(eventsList || []).map((item) => ({
+                  value: Number(item?.id),
+                  label: item?.title || `Event #${item?.id}`,
+                }))}
               />
             </div>
 

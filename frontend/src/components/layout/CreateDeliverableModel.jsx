@@ -21,6 +21,7 @@ import { getNowDatetimeLocal } from "../../utils/formatDateTime";
 import API_URL from "../../config/api";
 import useProjectContext from "../../hooks/useProjectContext";
 import CustomSelect from "../CustomSelect";
+import MultiSelectDropdown from "../MultiSelectDropdown";
 import UserSelectDropdown from "../UserSelectDropdown";
 import RichTextEditor from "../RichTextEditor";
 import LoadingButton from "../LoadingButton";
@@ -40,8 +41,10 @@ const CreateSubtaskModal = ({
   restoreDraftId = null,
   editMode = false,
   editData = null,
+  onUpdated = null,
 }) => {
   const { t } = useTranslation();
+  const token = authToken();
   const draftSaveRef = useRef(null);
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useDraftGuard(onClose, {
     draftSaveHandler: () => draftSaveRef.current?.(),
@@ -62,7 +65,6 @@ const CreateSubtaskModal = ({
   }, []);
   const markDirty = useCallback(() => { if (userInteractedRef.current) setIsDirty(true); }, [setIsDirty]);
 
-  const token = authToken();
   const dropRef = useRef(null);
   const fileInputRef = useRef(null);
   const [draftId, setDraftId] = useState(null);
@@ -93,11 +95,25 @@ const CreateSubtaskModal = ({
   const [linkTitleInput, setLinkTitleInput] = useState("");
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
   const [pendingRemoveItem, setPendingRemoveItem] = useState({ type: "", index: -1 });
+  const [kbIds, setKbIds] = useState(() => {
+    if (editData?.kb_ids && Array.isArray(editData.kb_ids)) return editData.kb_ids.map(Number);
+    if (editData?.kb_id || editData?.kbReferenceId) return [Number(editData.kb_id || editData.kbReferenceId)];
+    return [];
+  });
+  const [eventIds, setEventIds] = useState(() => {
+    if (editData?.event_ids && Array.isArray(editData.event_ids)) return editData.event_ids.map(Number);
+    if (editData?.event_id || editData?.eventReferenceId) return [Number(editData.event_id || editData.eventReferenceId)];
+    return [];
+  });
+  const [kbArticles, setKbArticles] = useState([]);
+  const [eventsList, setEventsList] = useState([]);
 
   const autoSaveData = useMemo(() => ({
     ...form,
+    kb_ids: kbIds,
+    event_ids: eventIds,
     links: links.map(l => ({ url: l.url, name: l.customName || l.name })),
-  }), [form, links]);
+  }), [form, kbIds, eventIds, links]);
 
   const { lastSaved, isSaving, draftId: autoSaveDraftId, clearTimer } = useAutoSave({
     draftId,
@@ -151,6 +167,10 @@ const CreateSubtaskModal = ({
           allow_transfer: d.allow_transfer ?? "allow",
         });
         if (d.links) setLinks(d.links.map(l => ({ url: l.url, customName: l.name || "", name: l.name || "" })));
+        if (d.kb_ids) setKbIds(Array.isArray(d.kb_ids) ? d.kb_ids.map(Number) : [Number(d.kb_ids)]);
+        else if (d.kb_id || d.kbReferenceId) setKbIds([Number(d.kb_id || d.kbReferenceId)]);
+        if (d.event_ids) setEventIds(Array.isArray(d.event_ids) ? d.event_ids.map(Number) : [Number(d.event_ids)]);
+        else if (d.event_id || d.eventReferenceId) setEventIds([Number(d.event_id || d.eventReferenceId)]);
         setDraftId(restoreDraftId);
       } catch (err) {
         console.error("Failed to restore draft:", err);
@@ -158,6 +178,40 @@ const CreateSubtaskModal = ({
     };
     loadDraft();
   }, [restoreDraftId]);
+
+  useEffect(() => {
+    if (editData) {
+      if (editData.kb_ids) {
+        setKbIds(Array.isArray(editData.kb_ids) ? editData.kb_ids.map(Number) : [Number(editData.kb_ids)]);
+      } else if (editData.kb_id !== undefined || editData.kbReferenceId !== undefined) {
+        setKbIds(editData.kb_id || editData.kbReferenceId ? [Number(editData.kb_id || editData.kbReferenceId)] : []);
+      }
+      if (editData.event_ids) {
+        setEventIds(Array.isArray(editData.event_ids) ? editData.event_ids.map(Number) : [Number(editData.event_ids)]);
+      } else if (editData.event_id !== undefined || editData.eventReferenceId !== undefined) {
+        setEventIds(editData.event_id || editData.eventReferenceId ? [Number(editData.event_id || editData.eventReferenceId)] : []);
+      }
+    }
+  }, [editData]);
+
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${API_URL}/knowledge-base?all=true`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      skipLoader: true,
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => { const items = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : []; setKbArticles(items); })
+      .catch(() => {});
+
+    fetch(`${API_URL}/events?all=true`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      skipLoader: true,
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => { const items = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : []; setEventsList(items); })
+      .catch(() => {});
+  }, [token]);
 
   // When no project selected, fetch all tasks for the parent task dropdown
   useEffect(() => {
@@ -199,7 +253,7 @@ const CreateSubtaskModal = ({
       const payload = {
         module_type: "deliverable",
         title: form.title || "Untitled Subtask Draft",
-        draft_data: { ...form, links: links.map(l => ({ url: l.url, name: l.customName || l.name })) },
+        draft_data: { ...form, kb_ids: kbIds, event_ids: eventIds, links: links.map(l => ({ url: l.url, name: l.customName || l.name })) },
         project_id: form.project_id || initialProjectId,
         parent_id: form.task_id || initialTaskId,
       };
@@ -256,7 +310,9 @@ const CreateSubtaskModal = ({
     assigned_to: form.assigned_to.length > 0 ? form.assigned_to[0] : null,
     followers: form.followers || [],
     allow_transfer: form.allow_transfer === "allow",
-  }), [form]);
+    kb_ids: kbIds.length > 0 ? kbIds.map(Number) : [],
+    event_ids: eventIds.length > 0 ? eventIds.map(Number) : [],
+  }), [form, kbIds, eventIds]);
 
   const uploadAttachments = useCallback(async (deliverableId) => {
     if (pendingFiles.length === 0 && links.length === 0) return;
@@ -557,6 +613,38 @@ const CreateSubtaskModal = ({
                   { value: "Medium", label: t("Medium") },
                   { value: "High", label: t("High") },
                 ]}
+              />
+            </div>
+
+            {/* Reference Knowledge Base */}
+            <div className="task-card">
+              <div className="task-card-top"><span>{t("Reference Knowledge Base", { defaultValue: "Reference Knowledge Base" })}</span></div>
+              <MultiSelectDropdown
+                name="kb_ids"
+                value={kbIds}
+                onChange={(vals) => { setKbIds(vals.map(Number)); markDirty(); }}
+                placeholder={t("Select Knowledge Base", { defaultValue: "Select Knowledge Base" })}
+                searchPlaceholder={t("Search Knowledge Base...", { defaultValue: "Search Knowledge Base..." })}
+                options={(kbArticles || []).map((item) => ({
+                  value: Number(item?.id),
+                  label: item?.title || `Article #${item?.id}`,
+                }))}
+              />
+            </div>
+
+            {/* Reference Event */}
+            <div className="task-card">
+              <div className="task-card-top"><span>{t("Reference Event", { defaultValue: "Reference Event" })}</span></div>
+              <MultiSelectDropdown
+                name="event_ids"
+                value={eventIds}
+                onChange={(vals) => { setEventIds(vals.map(Number)); markDirty(); }}
+                placeholder={t("Select Event", { defaultValue: "Select Event" })}
+                searchPlaceholder={t("Search Events...", { defaultValue: "Search Events..." })}
+                options={(eventsList || []).map((item) => ({
+                  value: Number(item?.id),
+                  label: item?.title || `Event #${item?.id}`,
+                }))}
               />
             </div>
 
