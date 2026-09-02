@@ -1,1 +1,0 @@
-import{i as e}from"./useTranslation-kH6Pr41K.js";import t from"./Admin-BGc6PSRR.js";var n=e();function r(){return(0,n.jsx)(t,{})}export{r as default};
