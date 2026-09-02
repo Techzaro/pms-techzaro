@@ -30,6 +30,7 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
+  Share2,
   Shield,
   Timer,
   Trash2,
@@ -67,6 +68,7 @@ import AbandonModal from "../components/AbandonModal";
 import CreateDeliverableModel from "../components/layout/CreateDeliverableModel";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
+import ShareResourceModal from "../components/ShareResourceModal";
 
 const API_BASE = API_URL.replace(/\/api\/?$/, "");
 
@@ -311,6 +313,8 @@ function TaskDetails() {
   const [task, setTask] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [hasActiveConnections, setHasActiveConnections] = useState(false);
   const [deleteTaskConfirmOpen, setDeleteTaskConfirmOpen] = useState(false);
   const [tab, setTab] = useState("overview");
   const [showCreateSubtaskModal, setShowCreateSubtaskModal] = useState(false);
@@ -354,7 +358,11 @@ function TaskDetails() {
   } = useActivityHighlight("task", task?.id, task?.activity_max_id || 0, taskChangesForHighlight);
 
   const source = sourcePages[location.state?.from] || null;
-  const readOnly = location.state?.readOnly === true;
+  const isSharedTask = taskId && String(taskId).startsWith("shared_");
+  const sharedResourceId = isSharedTask ? String(taskId).replace("shared_", "") : null;
+  const [sharedPermission, setSharedPermission] = useState(null);
+
+  const readOnly = location.state?.readOnly === true || (isSharedTask && sharedPermission === "view");
 
   const fetchTask = useCallback(async (refresh = false) => {
     if (!taskId || isDeletingRef.current) return;
@@ -362,16 +370,38 @@ function TaskDetails() {
     try {
       setLoading(true);
       const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}`, {
-        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-        skipLoader: true,
-        _notifHandled: true,
-      });
+
+      let res;
+      if (isSharedTask && sharedResourceId) {
+        res = await fetch(`${API_URL}/sharing/resources/${sharedResourceId}`, {
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          skipLoader: true,
+          _notifHandled: true,
+        });
+      } else {
+        res = await fetch(`${API_URL}/tasks/${taskId}`, {
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          skipLoader: true,
+          _notifHandled: true,
+        });
+      }
+
       if (res.ok) {
         const data = await res.json();
-        setTask(data.task);
-        if (data.task?.followers) {
-          setFollowers(data.task.followers);
+        let taskData;
+        if (isSharedTask && data.data?.resource) {
+          taskData = data.data.resource;
+          taskData.shared_permission = data.data.permission;
+          taskData.shared_resource_id = data.data.id;
+          taskData.shared_by_user = data.data.shared_by_user;
+          taskData.shared_at = data.data.shared_at;
+          setSharedPermission(data.data.permission);
+        } else {
+          taskData = data.task;
+        }
+        setTask(taskData);
+        if (taskData?.followers) {
+          setFollowers(taskData.followers);
         }
       } else if (res.status === 404) {
         setTask(null);
@@ -394,7 +424,7 @@ function TaskDetails() {
     } finally {
       setLoading(false);
     }
-  }, [taskId, navigate, t, notify]);
+  }, [taskId, navigate, t, notify, isSharedTask, sharedResourceId]);
 
   useEffect(() => {
     if (task?.followers) {
@@ -513,6 +543,20 @@ function TaskDetails() {
 
   useEffect(() => {
     if (taskId) fetchTask(true);
+
+    const checkConnections = async () => {
+      try {
+        const token = authToken();
+        const res = await fetch(`${API_URL}/sharing/connections?status=active`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (data.success && data.data) {
+          setHasActiveConnections(data.data.length > 0);
+        }
+      } catch (err) { /* ignore */ }
+    };
+    checkConnections();
   }, [taskId, fetchTask]);
 
   useAutoRefresh(() => fetchTask(false), {
@@ -1359,6 +1403,12 @@ function TaskDetails() {
                     <button className="td-btn-outline" onClick={() => setShowEditModal(true)}>
                       <Pencil size={15} strokeWidth={2.5} />
                       {t("Edit", { defaultValue: "Edit" })}
+                    </button>
+                  )}
+                  {isAdminOrManager && hasActiveConnections && !isSharedTask && (
+                    <button className="td-btn-outline" onClick={() => setShowShareModal(true)}>
+                      <Share2 size={15} />
+                      {t("Share", { defaultValue: "Share" })}
                     </button>
                   )}
                   {canDelete && (
@@ -2262,6 +2312,16 @@ function TaskDetails() {
           <EditTaskModal
             task={task}
             onClose={(refresh) => { setShowEditModal(false); if (refresh) fetchTask(false); }}
+          />
+        )}
+
+        {showShareModal && task && (
+          <ShareResourceModal
+            resourceType="task"
+            resourceId={task.id}
+            resourceName={task.title}
+            onClose={() => setShowShareModal(false)}
+            onShared={() => fetchTask(false)}
           />
         )}
 

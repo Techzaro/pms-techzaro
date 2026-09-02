@@ -7,6 +7,7 @@ import CustomSelect from "../components/CustomSelect";
 import RichTextEditor from "../components/RichTextEditor";
 import CreatableSelect from "react-select/creatable";
 import UnifiedActivityFeed from "../components/UnifiedActivityFeed";
+import ShareResourceModal from "../components/ShareResourceModal";
 import DOMPurify from "dompurify";
 import API_URL from "../config/api";
 import { authToken, rolePath, getUser } from "../utils/auth";
@@ -32,6 +33,7 @@ import {
   Activity,
   CheckCircle2,
   ExternalLink,
+  Share2,
 } from "lucide-react";
 import {
   convertToLocal,
@@ -63,6 +65,10 @@ export default function EventEditor() {
   const [loadedEvent, setLoadedEvent] = useState(null);
   const [acknowledging, setAcknowledging] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
+
+  // Share state (for view mode)
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [hasActiveConnections, setHasActiveConnections] = useState(false);
 
   // Form Mode: 'event' vs 'announcement'
   const [formType, setFormType] = useState("event");
@@ -242,6 +248,25 @@ export default function EventEditor() {
       setSelectedCategoryOption({ value: String(match.id), label: match.name });
     }
   }, [categories, selectedCategoryOption]);
+
+  // Check for active connections (for share button)
+  useEffect(() => {
+    if (!isViewMode) return;
+    const checkConnections = async () => {
+      try {
+        const token = authToken();
+        const res = await fetch(`${API_URL}/sharing/connections?status=active`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (data.success && data.data) {
+          const active = data.data.filter(c => c.status === "active");
+          setHasActiveConnections(active.length > 0);
+        }
+      } catch (err) { /* ignore */ }
+    };
+    checkConnections();
+  }, [isViewMode]);
 
   // Category Creation — called by CreatableSelect's onCreateOption
   const handleCreateCategory = async (inputValue) => {
@@ -570,6 +595,16 @@ export default function EventEditor() {
                   style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 14px", borderRadius: "8px", border: "1px solid #bfdbfe", background: "#eff6ff", color: "#1d4ed8", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
                 >
                   {t("Edit", { defaultValue: "Edit" })}
+                </button>
+              )}
+              {canEdit && hasActiveConnections && (
+                <button
+                  type="button"
+                  onClick={() => setShowShareModal(true)}
+                  style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 14px", borderRadius: "8px", border: "1px solid #bfdbfe", background: "#eff6ff", color: "#1d4ed8", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
+                >
+                  <Share2 size={15} />
+                  {t("Share", { defaultValue: "Share" })}
                 </button>
               )}
             </div>
@@ -1350,6 +1385,25 @@ export default function EventEditor() {
           </form>
         </div>
       </div>
+      {showShareModal && loadedEvent && (
+        <ShareResourceModal
+          resourceType="event"
+          resourceId={loadedEvent.id}
+          resourceName={loadedEvent.title}
+          onClose={() => setShowShareModal(false)}
+          onShared={() => {
+            setShowShareModal(false);
+            // Reload event
+            const token = authToken();
+            fetch(`${API_URL}/events/${id}`, {
+              headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+            }).then(r => r.json()).then(d => {
+              const ev = d?.data || d?.event;
+              if (ev) setLoadedEvent(ev);
+            }).catch(() => {});
+          }}
+        />
+      )}
     </DashboardLayout>
   );
 }

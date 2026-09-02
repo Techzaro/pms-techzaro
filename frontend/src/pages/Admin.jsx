@@ -18,7 +18,7 @@ import { useTranslation } from "react-i18next";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import "../components/layout/DashboardLayout.css";
-import { getUser, getCurrentRole, rolePath, normalizeRole, authToken } from "../utils/auth";
+import { getUser, getCurrentRole, rolePath, normalizeRole, authToken, getTenantSlug } from "../utils/auth";
 import { getActivityDestination, getActivityFrom } from "../utils/navigation";
 import API_URL from "../config/api";
 import { timeAgo, formatDateTime } from "../utils/formatDateTime";
@@ -447,8 +447,9 @@ function Admin() {
   const queryClient = useQueryClient();
 
   // Fetch dashboard summary data (active projects, tasks due today, etc.)
+  const tenantSlug = getTenantSlug();
   const { data: dashboard, isLoading, refetch: refetchDashboard } = useApiQuery(
-    ["dashboard", apiMode],
+    ["dashboard", tenantSlug, apiMode],
     "/dashboard",
     { mode: apiMode },
     { staleTime: 120000, refetchOnMount: false, refetchOnWindowFocus: false, refetchInterval: false }

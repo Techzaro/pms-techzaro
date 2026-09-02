@@ -38,6 +38,7 @@ export default function EventsList() {
   const navigate = useNavigate();
 
   const [events, setEvents] = useState([]);
+  const [sharedEvents, setSharedEvents] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -104,9 +105,26 @@ export default function EventsList() {
     }
   };
 
+  const fetchSharedEvents = async () => {
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/sharing/shared-resources?type=event`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSharedEvents(Array.isArray(data?.data) ? data.data : []);
+      }
+    } catch (err) {
+      console.error("Error fetching shared events:", err);
+    }
+  };
+
   useEffect(() => {
     fetchCategories();
     fetchEvents();
+    fetchSharedEvents();
   }, []);
 
   // Delete handler
@@ -132,10 +150,17 @@ export default function EventsList() {
   };
 
   // ── Unique organizers from events for Person filter ───
+  const allEvents = useMemo(() => {
+    return [
+      ...events,
+      ...sharedEvents.filter((se) => !events.some((e) => String(e.id) === String(se.id))),
+    ];
+  }, [events, sharedEvents]);
+
   const organizerOptions = useMemo(() => {
     const seen = new Set();
     const opts = [];
-    events.forEach((ev) => {
+    allEvents.forEach((ev) => {
       const name = ev.organizer_name || ev.creator_name;
       const id   = ev.organizer_id  || ev.user_id;
       if (id && name && !seen.has(id)) {
@@ -144,15 +169,15 @@ export default function EventsList() {
       }
     });
     return opts;
-  }, [events]);
+  }, [allEvents]);
 
   // ── Filtered Events (Task 7: all 8 filter dimensions) ─
   const filteredEvents = useMemo(() => {
-    if (!Array.isArray(events)) return [];
+    if (!Array.isArray(allEvents)) return [];
 
     const now = new Date();
 
-    return events.filter((ev) => {
+    return allEvents.filter((ev) => {
       if (!ev) return false;
 
       // 1. Name / search
@@ -242,7 +267,7 @@ export default function EventsList() {
         matchesCustom
       );
     });
-  }, [events, search, typeFilter, categoryFilter, timeFilter, dayFilter, personFilter, locationFilter, customFrom, customTo]);
+  }, [allEvents, search, typeFilter, categoryFilter, timeFilter, dayFilter, personFilter, locationFilter, customFrom, customTo]);
 
   // Group by month
   const groupedEventsByMonth = useMemo(() => {
@@ -522,11 +547,11 @@ export default function EventsList() {
           )}
 
           {/* Active filter summary */}
-          {filteredEvents.length !== events.length && (
+          {filteredEvents.length !== allEvents.length && (
             <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
               {t("Showing {{shown}} of {{total}} events", {
                 shown: filteredEvents.length,
-                total: events.length,
+                total: allEvents.length,
                 defaultValue: `Showing ${filteredEvents.length} of ${events.length} events`,
               })}
             </div>
@@ -621,6 +646,12 @@ export default function EventsList() {
           {/* Header row */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px", gap: "8px" }}>
             <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
+              {ev.is_shared && (
+                <span style={{ fontSize: "11px", fontWeight: 700, color: "#4F46E5", background: "#EEF2FF", padding: "2px 8px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                  {t("Shared", { defaultValue: "Shared" })}
+                </span>
+              )}
               {isAnnounce ? (
                 <span style={{ fontSize: "11px", fontWeight: 700, color: "#d97706", background: "#fef3c7", padding: "2px 8px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
                   <Megaphone size={12} /> {t("Announcement", { defaultValue: "Announcement" })}
@@ -633,7 +664,7 @@ export default function EventsList() {
               {visibilityBadge(ev.visibility_level, ev.is_global)}
             </div>
 
-            {canEditDelete && (
+            {canEditDelete && !ev.is_shared && (
               <div style={{ display: "flex", gap: "4px" }}>
                 <button
                   onClick={() => navigate(rolePath(`events/edit/${ev.id}`))}

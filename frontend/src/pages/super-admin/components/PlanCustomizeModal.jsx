@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Loader2, DollarSign, Users, FolderKanban, HardDrive, RotateCcw } from 'lucide-react';
 
@@ -15,6 +15,32 @@ export default function PlanCustomizeModal({ plan, billingPeriod = 'monthly', in
   const [storageUnit, setStorageUnit] = useState(initialData?.custom_storage_unit ?? plan.storage_unit ?? 'GB');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+
+  const baseline = useMemo(() => ({
+    priceMonthly: initialData?.custom_price_monthly ?? plan.price_monthly ?? 0,
+    priceYearly: initialData?.custom_price_yearly ?? plan.price_yearly ?? 0,
+    maxUsers: initialData?.custom_max_users ?? plan.max_users ?? 5,
+    maxProjects: initialData?.custom_max_projects ?? plan.max_projects ?? 5,
+    maxStorage: initialData?.custom_max_storage_gb ?? plan.max_storage_gb ?? 5,
+    storageUnit: initialData?.custom_storage_unit ?? plan.storage_unit ?? 'GB',
+  }), [initialData, plan]);
+
+  const current = useMemo(() => ({
+    priceMonthly, priceYearly, maxUsers, maxProjects, maxStorage, storageUnit,
+  }), [priceMonthly, priceYearly, maxUsers, maxProjects, maxStorage, storageUnit]);
+
+  const isDirty = useMemo(() => {
+    const norm = (v) => v === undefined || v === null ? '' : (typeof v === 'string' ? v.trim() : v);
+    return Object.keys(baseline).some(key => norm(baseline[key]) !== norm(current[key]));
+  }, [baseline, current]);
+
+  const handleCloseClick = () => {
+    if (isDirty) {
+      setShowCloseConfirm(true);
+    } else {
+      onClose();
+    }
+  };
 
   const handleSave = (e) => {
     e.preventDefault();
@@ -75,7 +101,7 @@ export default function PlanCustomizeModal({ plan, billingPeriod = 'monthly', in
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center gap-2">
               {t('Save', { defaultValue: 'Save' })}
             </button>
-            <button onClick={() => setShowCloseConfirm(true)} className="p-1.5 rounded-lg transition-colors"
+            <button onClick={handleCloseClick} className="p-1.5 rounded-lg transition-colors"
               style={{ color: 'var(--text-muted)' }}
               onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
@@ -123,7 +149,6 @@ export default function PlanCustomizeModal({ plan, billingPeriod = 'monthly', in
             {[
               { icon: Users, labelKey: 'User Limit', defaultLabel: 'User Limit', value: maxUsers, set: setMaxUsers, unlimitedValue: 9999 },
               { icon: FolderKanban, labelKey: 'Project Limit', defaultLabel: 'Project Limit', value: maxProjects, set: setMaxProjects, unlimitedValue: 9999 },
-              { icon: HardDrive, labelKey: 'Storage (GB)', defaultLabel: 'Storage (GB)', value: maxStorage, set: setMaxStorage, unlimitedValue: null },
             ].map((f) => (
               <div key={f.labelKey}>
                 <label className="block text-xs font-medium mb-1.5" style={s.textMuted}>

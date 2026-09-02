@@ -230,11 +230,36 @@ class OrganizationService
     {
         $activeQuery = Organization::where('status', '!=', 'deleted');
 
+        $total = (clone $activeQuery)->count();
+        $suspended = (clone $activeQuery)->where('status', 'suspended')->count();
+        $active = $total - $suspended;
+
+        $latestSubscriptions = DB::connection('mysql_master')
+            ->table('organization_subscriptions')
+            ->join('organizations', 'organization_subscriptions.organization_id', '=', 'organizations.id')
+            ->where('organizations.status', '!=', 'deleted')
+            ->whereNull('organizations.deleted_at')
+            ->selectRaw('organization_subscriptions.organization_id, MAX(organization_subscriptions.id) as max_id')
+            ->groupBy('organization_subscriptions.organization_id')
+            ->pluck('max_id');
+
+        $planCounts = DB::connection('mysql_master')
+            ->table('organization_subscriptions')
+            ->whereIn('organization_subscriptions.id', $latestSubscriptions)
+            ->join('organization_plans', 'organization_subscriptions.plan_id', '=', 'organization_plans.id')
+            ->selectRaw('organization_plans.slug as plan_slug, COUNT(*) as cnt')
+            ->groupBy('organization_plans.slug')
+            ->pluck('cnt', 'plan_slug')
+            ->toArray();
+
         return [
-            'total_organizations'     => (clone $activeQuery)->count(),
-            'active_organizations'    => (clone $activeQuery)->where('status', 'active')->count(),
-            'trial_organizations'     => (clone $activeQuery)->where('status', 'trial')->count(),
-            'suspended_organizations' => (clone $activeQuery)->where('status', 'suspended')->count(),
+            'total_organizations'     => $total,
+            'active_organizations'    => $active,
+            'suspended_organizations' => $suspended,
+            'trial_organizations'     => $planCounts['trial'] ?? 0,
+            'starter_organizations'   => $planCounts['starter'] ?? 0,
+            'standard_organizations'  => $planCounts['standard'] ?? 0,
+            'enterprise_organizations'=> $planCounts['enterprise'] ?? 0,
         ];
     }
 }

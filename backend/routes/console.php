@@ -32,6 +32,9 @@ Schedule::job(new \App\Jobs\CleanupDraftsJob)->dailyAt('03:00');
 // Renew expired subscriptions and create pending billing invoices daily at 1:00 AM
 Schedule::command('subscriptions:renew')->dailyAt('01:00')->withoutOverlapping();
 
+// Expire shared resources that have passed their expiration date - run hourly
+Schedule::command('sharing:expire-resources')->hourly();
+
 /*
 | Artisan Commands
 | Custom Artisan commands for the application.

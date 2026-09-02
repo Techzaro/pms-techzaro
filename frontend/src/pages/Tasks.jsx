@@ -116,6 +116,7 @@ function Tasks() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [items, setItems] = useState([]);
+  const [sharedTasks, setSharedTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -171,6 +172,21 @@ function Tasks() {
     setItems(newItems);
   };
 
+  const handleTaskListReorder = useCallback((reordered) => {
+    setOrderedItems(reordered);
+    setItems(reordered);
+    if (reordered.length) {
+      const payload = reordered.map((item, idx) => ({ id: item.id, sort_order: idx }));
+      const token = authToken();
+      fetch(`${API_URL}/tasks/reorder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ items: payload }),
+        _notifHandled: true,
+      }).catch(() => {});
+    }
+  }, []);
+
   const selectStatusFilter = (status) => {
     setStatusFilter(status);
     setPage(1);
@@ -195,7 +211,8 @@ function Tasks() {
       { bg: "#EDE9FE", text: "#7C3AED" },
       { bg: "#FCE7F3", text: "#DB2777" },
     ];
-    return colors[(id || 0) % colors.length];
+    const num = typeof id === "string" ? parseInt(id.replace(/\D/g, ""), 10) || 0 : id || 0;
+    return colors[num % colors.length];
   }, []);
 
   useEffect(() => {
@@ -274,17 +291,38 @@ function Tasks() {
     }
   }, [timeFilter, debouncedSearch, statusFilter, advancedFilters, sortBy, sortDirection]);
 
+  const fetchSharedTasks = async () => {
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/sharing/shared-resources?type=task`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSharedTasks(Array.isArray(data?.data) ? data.data : []);
+      }
+    } catch (err) {
+      console.error("Error fetching shared tasks:", err);
+    }
+  };
+
   useEffect(() => {
     fetchTasks();
+    fetchSharedTasks();
   }, [fetchTasks, page]);
 
-  useAutoRefresh(fetchTasks, {
-    events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
+  useAutoRefresh(() => { fetchTasks(); fetchSharedTasks(); }, {
+    events: ['task:created', 'task:updated', 'task:deleted', 'data:changed', 'sharing:changed'],
   });
 
   useEffect(() => {
-    setOrderedItems(items);
-  }, [items]);
+    const merged = [
+      ...items,
+      ...sharedTasks.filter((st) => !items.some((i) => String(i.id) === String(st.id))),
+    ];
+    setOrderedItems(merged);
+  }, [items, sharedTasks]);
 
   const baseItems = orderedItems.length ? orderedItems : items;
   const pendingStatuses = ["pending", "planned", "Planning", "Planned"];
@@ -633,8 +671,8 @@ function Tasks() {
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                       <div className="avatar" style={{ background: colors.bg, color: colors.text }}>{getInitials(displayName)}</div>
                       <div style={{ minWidth: 0 }}>
-                        <div className="user-name">{displayName}</div>
-                        <div className="user-role">{displayRole}</div>
+                        <div className="user-name">{item.is_shared ? (item.shared_by_user?.name || displayName) : displayName}</div>
+                        <div className="user-role">{item.is_shared ? t("Shared", { defaultValue: "Shared" }) : displayRole}</div>
                       </div>
                     </div>
                   </div>
@@ -643,6 +681,12 @@ function Tasks() {
                     <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                       {hasChain && <ArrowUpRight size={14} style={{ color: "#6B7280", flexShrink: 0 }} />}
                       <div className="task-title">{item.title}</div>
+                      {item.is_shared && (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", background: "#EEF2FF", color: "#4F46E5", padding: "1px 6px", borderRadius: "10px", fontSize: "10px", fontWeight: 600, flexShrink: 0 }}>
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                          {t("Shared", { defaultValue: "Shared" })}
+                        </span>
+                      )}
                       <TaskNotesPopover taskId={item.id} itemType="task" />
                     </div>
                     {item.project && (
@@ -711,6 +755,7 @@ function Tasks() {
                         <Pin size={14} style={{ color: isTaskPinned(item.id) ? "#4f46e5" : "var(--text-secondary)", fill: isTaskPinned(item.id) ? "#4f46e5" : "none" }} />
                       </button>
                       {(() => {
+                        if (item.is_shared) return null;
                         const isUserAdminOrManager = ["admin", "manager"].includes(currentUser?.role);
                         const canUserApprove = isUserAdminOrManager || item.created_by === currentUser?.id || item.is_next_approver;
                         return (
@@ -759,6 +804,7 @@ function Tasks() {
                         );
                       })()}
                       {(() => {
+                        if (item.is_shared) return null;
                         if (item.is_transferor) {
                           return (
                             <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "6px", backgroundColor: "#EFF6FF", color: "#1D4ED8", fontSize: "11px", fontWeight: 600 }}>
@@ -814,6 +860,7 @@ function Tasks() {
                         return null;
                       })()}
                       {(() => {
+                        if (item.is_shared) return null;
                         const canDelete = ["admin", "manager", "super_admin"].includes(currentUser?.role) || (item.created_by && Number(item.created_by) === Number(currentUser?.id)) || (item.assigned_by && Number(item.assigned_by) === Number(currentUser?.id));
                         if (!canDelete) return null;
                         return (

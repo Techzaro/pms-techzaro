@@ -1995,6 +1995,7 @@ class DeliverableController extends Controller
         if (! $user) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
         }
+
         if ($attachment->attachment_type === 'link') {
             return redirect($attachment->url);
         }

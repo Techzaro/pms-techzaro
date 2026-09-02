@@ -14,7 +14,7 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
+use App\Services\Saas\Infrastructure\TenantCacheManager;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -47,7 +47,7 @@ class DashboardController extends Controller
         $mode = $request->query('mode', in_array($user->role, ['admin', 'manager']) ? 'user' : 'my');
         $cacheKey = "dashboard_{$user->id}_{$mode}";
 
-        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($user, $mode) {
+        return app(TenantCacheManager::class)->remember($cacheKey, self::CACHE_TTL, function () use ($user, $mode) {
             $role = $user->role;
             $projectIds = $this->getUserProjectIds($user);
 
@@ -73,7 +73,7 @@ class DashboardController extends Controller
      */
     private function getAdminManagerIds(): array
     {
-        return Cache::remember(self::ADMIN_MANAGER_CACHE_KEY, 300, fn () => User::whereIn('role', ['admin', 'manager'])->pluck('id')->toArray()
+        return app(TenantCacheManager::class)->remember(self::ADMIN_MANAGER_CACHE_KEY, 300, fn () => User::whereIn('role', ['admin', 'manager'])->pluck('id')->toArray()
         );
     }
 
@@ -452,7 +452,7 @@ class DashboardController extends Controller
     {
         $cacheKey = "dashboard_recent_activity_{$user->id}";
 
-        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($role, $projectIds) {
+        return app(TenantCacheManager::class)->remember($cacheKey, self::CACHE_TTL, function () use ($role, $projectIds) {
             $query = Activity::join('users', 'activities.user_id', '=', 'users.id')
                 ->where('users.active', true)
                 ->select('activities.description as summary', 'activities.created_at', 'users.name as user_name')
@@ -1168,7 +1168,7 @@ class DashboardController extends Controller
     public function getUserProjectIds(User $user): array
     {
         $cacheKey = "user_project_ids_{$user->id}";
-        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($user) {
+        return app(TenantCacheManager::class)->remember($cacheKey, self::CACHE_TTL, function () use ($user) {
             if (in_array($user->role, ['admin', 'manager'])) {
                 return Project::pluck('id')->toArray();
             }

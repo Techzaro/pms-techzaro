@@ -9,7 +9,7 @@ use App\Services\AuditService;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
+use App\Services\Saas\Infrastructure\TenantCacheManager;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
@@ -201,8 +201,8 @@ class CredentialController extends Controller
             }
 
             // Clear user cache
-            Cache::forget("user_profile_{$user->id}");
-            Cache::forget('all_users_list');
+            app(TenantCacheManager::class)->forget("user_profile_{$user->id}");
+            app(TenantCacheManager::class)->forget('all_users_list');
 
             return response()->json([
                 'success' => true,
@@ -304,8 +304,8 @@ class CredentialController extends Controller
             }
 
             // Clear cache
-            Cache::forget("user_profile_{$user->id}");
-            Cache::forget('all_users_list');
+            app(TenantCacheManager::class)->forget("user_profile_{$user->id}");
+            app(TenantCacheManager::class)->forget('all_users_list');
 
             return response()->json([
                 'success' => true,

@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Cache;
+use App\Services\Saas\Infrastructure\TenantCacheManager;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -74,7 +74,7 @@ class ReportController extends Controller
         $timezone = $this->resolveReportTimezone($request);
         $cacheKey = "report_team_perf_{$user->id}_{$timeFilter}_{$startDate}_{$endDate}_{$timezone}";
 
-        return Cache::remember($cacheKey, 300, function () use ($user, $timeFilter, $startDate, $endDate, $timezone) {
+        return app(TenantCacheManager::class)->remember($cacheKey, 300, function () use ($user, $timeFilter, $startDate, $endDate, $timezone) {
             $isTeamLead = $user->role === 'team_lead' || $user->role === 'teamlead';
 
             $query = User::select('id', 'name', 'email', 'role')
@@ -439,7 +439,7 @@ class ReportController extends Controller
         $timezone = $this->resolveReportTimezone($request);
         $cacheKey = "report_project_{$project->id}_{$timezone}";
 
-        return Cache::remember($cacheKey, 300, function () use ($project, $timezone) {
+        return app(TenantCacheManager::class)->remember($cacheKey, 300, function () use ($project, $timezone) {
             $tasks = $project->tasks()->with('assignees:id,name,email,role')->get();
 
             $total = $tasks->count();
@@ -488,7 +488,7 @@ class ReportController extends Controller
     public function summaryReport(Request $request)
     {
         $timezone = $this->resolveReportTimezone($request);
-        return Cache::remember("report_summary_{$timezone}", 300, function () use ($timezone) {
+        return app(TenantCacheManager::class)->remember("report_summary_{$timezone}", 300, function () use ($timezone) {
             $totalTeams = Team::count();
 
             $projectStats = Project::selectRaw("
@@ -547,7 +547,7 @@ class ReportController extends Controller
     public function detailedReport(Request $request)
     {
         $timezone = $this->resolveReportTimezone($request);
-        return Cache::remember("report_detailed_{$timezone}", 300, function () use ($timezone) {
+        return app(TenantCacheManager::class)->remember("report_detailed_{$timezone}", 300, function () use ($timezone) {
             $totalTeams = Team::count();
 
             $taskStats = Task::selectRaw("
@@ -602,7 +602,7 @@ class ReportController extends Controller
     public function performanceReport(Request $request)
     {
         $timezone = $this->resolveReportTimezone($request);
-        return Cache::remember("report_performance_{$timezone}", 300, function () use ($timezone) {
+        return app(TenantCacheManager::class)->remember("report_performance_{$timezone}", 300, function () use ($timezone) {
             $taskStats = Task::selectRaw("
                 COUNT(*) as total,
                 SUM(CASE WHEN status IN ('completed','done') THEN 1 ELSE 0 END) as completed
@@ -661,7 +661,7 @@ class ReportController extends Controller
     public function progressReport(Request $request)
     {
         $timezone = $this->resolveReportTimezone($request);
-        return Cache::remember("report_progress_{$timezone}", 300, function () use ($timezone) {
+        return app(TenantCacheManager::class)->remember("report_progress_{$timezone}", 300, function () use ($timezone) {
             $taskStats = Task::selectRaw("
                 COUNT(*) as total,
                 SUM(CASE WHEN status IN ('completed','done') THEN 1 ELSE 0 END) as completed
@@ -919,7 +919,7 @@ class ReportController extends Controller
         $timezone = $this->resolveReportTimezone($request);
         $cacheKey = "report_company_employees_{$timeFilter}_{$startDate}_{$endDate}_{$timezone}";
 
-        $data = Cache::remember($cacheKey, 300, function () use ($timeFilter, $startDate, $endDate, $timezone) {
+        $data = app(TenantCacheManager::class)->remember($cacheKey, 300, function () use ($timeFilter, $startDate, $endDate, $timezone) {
         $allUsers = User::where('active', true)->select('id', 'name', 'role')->orderBy('name')->get();
         $totalEmployees = $allUsers->count();
 

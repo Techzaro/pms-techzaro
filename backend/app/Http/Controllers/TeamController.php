@@ -21,7 +21,7 @@ use App\Services\AuditService;
 use App\Services\NotificationService;
 use App\Services\ActivityService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
+use App\Services\Saas\Infrastructure\TenantCacheManager;
 
 class TeamController extends Controller
 {
@@ -127,7 +127,7 @@ class TeamController extends Controller
         }
 
         $team->load(['leader:id,name', 'members:id,name,role']);
-        Cache::forget('all_teams_list');
+        app(TenantCacheManager::class)->forget('all_teams_list');
 
         $memberNames = $team->members->pluck('name')->toArray();
         $leaderName = $team->leader?->name ?? 'Not assigned';
@@ -268,7 +268,7 @@ class TeamController extends Controller
         }
 
         $team->load(['leader:id,name', 'members:id,name,role']);
-        Cache::forget('all_teams_list');
+        app(TenantCacheManager::class)->forget('all_teams_list');
 
         $leaderName = $team->leader?->name ?? 'Not assigned';
         $memberNames = $team->members->pluck('name')->toArray();
@@ -436,7 +436,7 @@ class TeamController extends Controller
         $team->leader_id = $validated['leader_id'];
         $team->save();
         $team->load(['leader:id,name', 'members:id,name,role']);
-        Cache::forget('all_teams_list');
+        app(TenantCacheManager::class)->forget('all_teams_list');
 
         $teamLink = '/manage-team?selectedTeam=' . $team->id;
 
@@ -566,7 +566,7 @@ class TeamController extends Controller
         $authUser = $request->user();
         $team->members()->attach($newIds);
         $team->load(['leader:id,name', 'members:id,name,role']);
-        Cache::forget('all_teams_list');
+        app(TenantCacheManager::class)->forget('all_teams_list');
 
         $leaderName = $team->leader?->name ?? 'Not assigned';
         $memberNames = $team->members->pluck('name')->toArray();
@@ -684,7 +684,7 @@ class TeamController extends Controller
         $remainingMemberIds = $team->members()->where('users.id', '!=', $user->id)->pluck('users.id')->toArray();
         $team->members()->detach($user->id);
         $team->load(['leader:id,name', 'members:id,name,role']);
-        Cache::forget('all_teams_list');
+        app(TenantCacheManager::class)->forget('all_teams_list');
 
         $teamLink = '/manage-team?selectedTeam=' . $team->id;
         $remainingMemberNames = $team->members->pluck('name')->toArray();
@@ -847,7 +847,7 @@ class TeamController extends Controller
         }
 
         $team->delete();
-        Cache::forget('all_teams_list');
+        app(TenantCacheManager::class)->forget('all_teams_list');
 
         return response()->json(['message' => 'Team deleted successfully']);
     }

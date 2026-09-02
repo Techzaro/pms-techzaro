@@ -9,7 +9,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Models\Task;
 use App\Services\ActivityService;
-use Illuminate\Support\Facades\Cache;
+use App\Services\Saas\Infrastructure\TenantCacheManager;
 use Illuminate\Support\Facades\DB;
 use App\Models\Project;
 use App\Models\Team;
@@ -324,8 +324,8 @@ class UserController extends Controller
             }
         }
 
-        Cache::forget('all_users_list');
-        Cache::forget('admin_manager_ids');
+        app(TenantCacheManager::class)->forget('all_users_list');
+        app(TenantCacheManager::class)->forget('admin_manager_ids');
 
         $this->activityService->log(
             $authUser->id,
@@ -657,10 +657,10 @@ class UserController extends Controller
         // Handle file uploads
         $this->handleFileUploads($request, $user);
 
-        Cache::forget('all_users_list');
-        Cache::forget("user_profile_{$user->id}");
+        app(TenantCacheManager::class)->forget('all_users_list');
+        app(TenantCacheManager::class)->forget("user_profile_{$user->id}");
         if (in_array($user->role, ['admin', 'manager']) || isset($oldValues['role'])) {
-            Cache::forget('admin_manager_ids');
+            app(TenantCacheManager::class)->forget('admin_manager_ids');
         }
 
         if (!empty($changes)) {
@@ -724,8 +724,8 @@ class UserController extends Controller
             try { if (Storage::disk($disk)->exists($cleanPath)) Storage::disk($disk)->delete($cleanPath); } catch (\Exception $e) {}
             $user->update(['avatar' => null]);
             
-            Cache::forget('all_users_list');
-            Cache::forget("user_profile_{$user->id}");
+            app(TenantCacheManager::class)->forget('all_users_list');
+            app(TenantCacheManager::class)->forget("user_profile_{$user->id}");
         }
 
         return response()->json([
@@ -754,7 +754,7 @@ class UserController extends Controller
             $ph = implode(',', array_fill(0, count($ids), '?'));
             DB::statement("UPDATE users SET sort_order = CASE id " . implode(' ', array_fill(0, count($ids), 'WHEN ? THEN ?')) . " END WHERE id IN ($ph)", [...$bindings, ...$ids]);
         }
-        Cache::forget('all_users_list');
+        app(TenantCacheManager::class)->forget('all_users_list');
         return response()->json(['success' => true, 'message' => 'Users reordered successfully']);
     }
 
@@ -809,8 +809,8 @@ class UserController extends Controller
 
         $user->delete();
 
-        Cache::forget('all_users_list');
-        Cache::forget('admin_manager_ids');
+        app(TenantCacheManager::class)->forget('all_users_list');
+        app(TenantCacheManager::class)->forget('admin_manager_ids');
 
         try {
             $this->auditService->log(
@@ -856,7 +856,7 @@ class UserController extends Controller
         }
         $user->save();
 
-        Cache::forget('all_users_list');
+        app(TenantCacheManager::class)->forget('all_users_list');
 
         $this->activityService->log(
             $authUser->id,
@@ -913,7 +913,7 @@ class UserController extends Controller
 
         $user->delete();
 
-        Cache::forget('all_users_list');
+        app(TenantCacheManager::class)->forget('all_users_list');
 
         return response()->json([
             'success' => true,
@@ -1086,7 +1086,7 @@ class UserController extends Controller
     public function profile($id)
     {
         $cacheKey = "user_profile_{$id}";
-        $data = Cache::remember($cacheKey, 300, function () use ($id) {
+        $data = app(TenantCacheManager::class)->remember($cacheKey, 300, function () use ($id) {
             $user = User::findOrFail($id);
 
             $taskStats = Task::where('assigned_to', $user->id)
@@ -1821,7 +1821,7 @@ class UserController extends Controller
             }
             $user->$type = null;
             $user->save();
-            Cache::forget("user_profile_{$user->id}");
+            app(TenantCacheManager::class)->forget("user_profile_{$user->id}");
 
             return response()->json([
                 'success' => true,
@@ -1854,7 +1854,7 @@ class UserController extends Controller
 
             $user->other_document = !empty($docs) ? json_encode($docs) : null;
             $user->save();
-            Cache::forget("user_profile_{$user->id}");
+            app(TenantCacheManager::class)->forget("user_profile_{$user->id}");
 
             return response()->json([
                 'success' => true,
@@ -1911,7 +1911,7 @@ class UserController extends Controller
             $docs[$index]['name'] = $name;
             $user->other_document = json_encode($docs);
             $user->save();
-            Cache::forget("user_profile_{$user->id}");
+            app(TenantCacheManager::class)->forget("user_profile_{$user->id}");
 
             return response()->json([
                 'success' => true,
@@ -2006,7 +2006,7 @@ class UserController extends Controller
             $oldValue = $user->$type;
             $user->$type = null;
             $user->save();
-            Cache::forget("user_profile_{$user->id}");
+            app(TenantCacheManager::class)->forget("user_profile_{$user->id}");
 
             \App\Models\UserChange::create([
                 'user_id' => $user->id,
@@ -2048,7 +2048,7 @@ class UserController extends Controller
 
             $user->other_document = !empty($docs) ? json_encode($docs) : null;
             $user->save();
-            Cache::forget("user_profile_{$user->id}");
+            app(TenantCacheManager::class)->forget("user_profile_{$user->id}");
 
             \App\Models\UserChange::create([
                 'user_id' => $user->id,
@@ -2116,7 +2116,7 @@ class UserController extends Controller
 
             $user->other_document = json_encode($docs);
             $user->save();
-            Cache::forget("user_profile_{$user->id}");
+            app(TenantCacheManager::class)->forget("user_profile_{$user->id}");
 
             \App\Models\UserChange::create([
                 'user_id' => $user->id,
@@ -2205,7 +2205,7 @@ class UserController extends Controller
             $oldValue = $user->$type;
             $user->$type = $path;
             $user->save();
-            Cache::forget("user_profile_{$user->id}");
+            app(TenantCacheManager::class)->forget("user_profile_{$user->id}");
 
             \App\Models\UserChange::create([
                 'user_id' => $user->id,
@@ -2256,7 +2256,7 @@ class UserController extends Controller
 
             $user->other_document = json_encode($docs);
             $user->save();
-            Cache::forget("user_profile_{$user->id}");
+            app(TenantCacheManager::class)->forget("user_profile_{$user->id}");
 
             \App\Models\UserChange::create([
                 'user_id' => $user->id,
@@ -2332,7 +2332,7 @@ class UserController extends Controller
 
             $user->$type = $path;
             $user->save();
-            Cache::forget("user_profile_{$user->id}");
+            app(TenantCacheManager::class)->forget("user_profile_{$user->id}");
 
             return response()->json([
                 'success' => true,
@@ -2373,7 +2373,7 @@ class UserController extends Controller
 
             $user->other_document = json_encode($docs);
             $user->save();
-            Cache::forget("user_profile_{$user->id}");
+            app(TenantCacheManager::class)->forget("user_profile_{$user->id}");
 
             return response()->json([
                 'success' => true,
@@ -2452,7 +2452,7 @@ class UserController extends Controller
             $user->save();
         }
 
-        Cache::forget('all_users_list');
+        app(TenantCacheManager::class)->forget('all_users_list');
 
         $this->activityService->log(
             $authUser->id,
@@ -2555,8 +2555,8 @@ class UserController extends Controller
 
         $user->save();
 
-        Cache::forget('all_users_list');
-        Cache::forget("user_profile_{$user->id}");
+        app(TenantCacheManager::class)->forget('all_users_list');
+        app(TenantCacheManager::class)->forget("user_profile_{$user->id}");
 
         $this->activityService->log(
             $authUser->id,
@@ -2592,7 +2592,7 @@ class UserController extends Controller
         $user->active = true;
         $user->save();
 
-        Cache::forget('all_users_list');
+        app(TenantCacheManager::class)->forget('all_users_list');
 
         $loginUrl = config('app.frontend_url');
         $emailSent = false;
@@ -2638,7 +2638,7 @@ class UserController extends Controller
         $user->must_change_password = true;
         $user->save();
 
-        Cache::forget('all_users_list');
+        app(TenantCacheManager::class)->forget('all_users_list');
 
         $loginUrl = config('app.frontend_url');
         $emailSent = false;
@@ -2710,7 +2710,7 @@ class UserController extends Controller
         $user->must_change_password = false;
         $user->save();
 
-        Cache::forget('all_users_list');
+        app(TenantCacheManager::class)->forget('all_users_list');
 
         $this->activityService->log(
             $authUser->id,
@@ -2754,7 +2754,7 @@ class UserController extends Controller
         $user->active = !$user->active;
         $user->save();
 
-        Cache::forget('all_users_list');
+        app(TenantCacheManager::class)->forget('all_users_list');
 
         $status = $user->active ? 'activated' : 'deactivated';
 

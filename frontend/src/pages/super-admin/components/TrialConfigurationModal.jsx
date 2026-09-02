@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Loader2, Clock, Users, FolderKanban, HardDrive, RotateCcw } from 'lucide-react';
 import { api } from '../api/superAdminApi';
@@ -21,6 +21,32 @@ export default function TrialConfigurationModal({ mode = 'global', orgId, localO
   const [error, setError] = useState('');
 
   const isOrgMode = mode === 'organization';
+
+  const baseline = useMemo(() => ({
+    trialDuration: initialData?.trial_duration || 14,
+    trialUnit: initialData?.trial_duration_unit || 'days',
+    maxUsers: initialData?.max_users || 5,
+    maxProjects: initialData?.max_projects || 5,
+    maxStorage: initialData?.max_storage_gb || 5,
+    storageUnit: initialData?.storage_unit || 'GB',
+  }), [initialData]);
+
+  const current = useMemo(() => ({
+    trialDuration, trialUnit, maxUsers, maxProjects, maxStorage, storageUnit,
+  }), [trialDuration, trialUnit, maxUsers, maxProjects, maxStorage, storageUnit]);
+
+  const isDirty = useMemo(() => {
+    const norm = (v) => v === undefined || v === null ? '' : (typeof v === 'string' ? v.trim() : v);
+    return Object.keys(baseline).some(key => norm(baseline[key]) !== norm(current[key]));
+  }, [baseline, current]);
+
+  const handleCloseClick = () => {
+    if (isDirty) {
+      setShowCloseConfirm(true);
+    } else {
+      onClose();
+    }
+  };
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -107,7 +133,7 @@ export default function TrialConfigurationModal({ mode = 'global', orgId, localO
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50">
               {saving && <Loader2 className="w-4 h-4 animate-spin" />} {saving ? t('Saving...', { defaultValue: 'Saving...' }) : t('Save', { defaultValue: 'Save' })}
             </button>
-            <button onClick={() => setShowCloseConfirm(true)} className="p-1.5 rounded-lg transition-colors"
+            <button onClick={handleCloseClick} className="p-1.5 rounded-lg transition-colors"
               style={{ color: 'var(--text-muted)' }}
               onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
