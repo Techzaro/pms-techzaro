@@ -135,11 +135,11 @@ class DelegationService
             }
             $reopenedParticipants = array_values(array_unique(array_filter(array_map('intval', $reopenedParticipants))));
 
-            // Reopen is visible to the user who reopened it and accepted transfer
-            // participants below that point. The creator above the current reviewer
-            // remains In Progress until the corrected submission reaches them.
-            if (! $subId || in_array($viewerId, $reopenedParticipants, true)) {
-                $displayStatus = in_array($rawStatus, ['reopened', 'rejected', 'declined'], true) ? $rawStatus : 'declined';
+            // If task is reopened or pending, its core workflow status is pending
+            if ($task->is_reopened || $rawStatus === 'pending' || $rawStatus === 'reopened') {
+                $displayStatus = 'pending';
+            } elseif (! $subId || in_array($viewerId, $reopenedParticipants, true)) {
+                $displayStatus = in_array($rawStatus, ['rejected', 'declined'], true) ? $rawStatus : 'declined';
             } else {
                 $displayStatus = 'in_progress';
             }
@@ -217,6 +217,7 @@ class DelegationService
             'approval_chain' => $approvalChain,
             'delegation_count' => $level,
             'status' => 'pending',
+            'is_transferred' => true,
             'states' => array_values(array_unique(array_merge(is_array($task->states) ? $task->states : [], ['Transferred']))),
         ]);
         $task->stopTimer();
@@ -334,8 +335,9 @@ class DelegationService
             'delegation_chain' => $existingChain,
             'approval_chain' => $approvalChain,
             'delegation_count' => $level,
-            'status' => 'paused',
-            'states' => array_values(array_unique(array_merge(is_array($task->states) ? $task->states : [], ['Transferred']))),
+            'status' => 'pending',
+            'is_transferred' => true,
+            'states' => array_values(array_unique(array_merge(is_array($deliverable->states) ? $deliverable->states : [], ['Transferred']))),
         ]);
 
         if (empty($deliverable->original_assigner)) {
@@ -419,7 +421,6 @@ class DelegationService
                 'acknowledged_by' => $acceptor->id,
             ]);
 
-            $model->startTimer();
             $model->assignees()->updateExistingPivot($acceptor->id, [
                 'status' => 'in_progress',
             ]);
@@ -436,12 +437,6 @@ class DelegationService
                 'user_id' => $acceptor->id,
                 'action' => 'acknowledged',
                 'comment' => "{$acceptor->name} acknowledged this {$entityType}",
-            ]);
-            TaskWorkflowEvent::create([
-                'task_id' => $taskId,
-                'user_id' => $acceptor->id,
-                'action' => 'timer_started',
-                'comment' => 'Work timer started',
             ]);
         });
 

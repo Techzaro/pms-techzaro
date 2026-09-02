@@ -127,11 +127,11 @@ const CreateSubtaskModal = ({
   // Centralized project context: cached members, tasks, allUsers
   const { projects, allUsers, projectMembers, projectTasks } = useProjectContext(form.project_id || null);
 
-  // Determine which users to show: project members when project selected, else all users
+  // Determine which users to show: project members when project selected, else empty
   const displayUsers = useMemo(() => {
-    if (!form.project_id) return allUsers;
-    return projectMembers.length ? projectMembers : allUsers;
-  }, [form.project_id, projectMembers, allUsers]);
+    if (!form.project_id) return [];
+    return projectMembers.length ? projectMembers : [];
+  }, [form.project_id, projectMembers]);
 
   // Determine which tasks to show: project tasks when project selected, else all tasks (fetched globally)
   const [allTasks, setAllTasks] = useState([]);
@@ -585,7 +585,8 @@ const CreateSubtaskModal = ({
                 users={displayUsers}
                 selectedIds={form.assigned_to}
                 onChange={(ids) => updateForm("assigned_to", ids)}
-                placeholder={t("Click to select members", { defaultValue: "Click to select members" })}
+                disabled={!form.project_id}
+                placeholder={!form.project_id ? t("Select a project first", { defaultValue: "Select a project first" }) : t("Click to select members", { defaultValue: "Click to select members" })}
                 error={!!formErrors.assigned_to}
               />
               {formErrors.assigned_to && <span className="field-error-text" style={{ color: "#EF4444", fontSize: "12px", marginTop: "4px", display: "block" }}>{formErrors.assigned_to}</span>}
@@ -598,7 +599,8 @@ const CreateSubtaskModal = ({
                 users={displayUsers.filter(u => !form.assigned_to.includes(u.id))}
                 selectedIds={form.followers || []}
                 onChange={(ids) => updateForm("followers", ids)}
-                placeholder={t("Select followers (optional)", { defaultValue: "Select followers (optional)" })}
+                disabled={!form.project_id}
+                placeholder={!form.project_id ? t("Select a project first", { defaultValue: "Select a project first" }) : t("Select followers (optional)", { defaultValue: "Select followers (optional)" })}
               />
             </div>
 

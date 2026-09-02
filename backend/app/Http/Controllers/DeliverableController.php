@@ -288,6 +288,7 @@ class DeliverableController extends Controller
     public function show(Request $request, $id)
     {
         $deliverable = Deliverable::findOrFail($id);
+        $this->authorize('view', $deliverable);
         $user = request()->user();
         $isCreator = (int) $deliverable->created_by === (int) $user->id;
         $isAssignee = (int) $deliverable->assigned_to === (int) $user->id;
@@ -477,6 +478,7 @@ class DeliverableController extends Controller
      */
     public function store(Request $request, Project $project)
     {
+        $this->authorize('create', [Deliverable::class, $project]);
         $validated = $request->validate([
             'title' => 'required|string|max:255', 'description' => 'nullable|string',
             'status' => 'nullable|string|max:64', 'priority' => 'nullable|string|max:32',
@@ -663,6 +665,7 @@ class DeliverableController extends Controller
      */
     public function storeStandalone(Request $request)
     {
+        $this->authorize('create', Deliverable::class);
         $validated = $request->validate([
             'title' => 'required|string|max:255', 'description' => 'nullable|string',
             'status' => 'nullable|string|max:64', 'priority' => 'nullable|string|max:32',
@@ -823,6 +826,7 @@ class DeliverableController extends Controller
      */
     public function update(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('update', $deliverable);
         $user = $request->user();
         $isCreator = (int) $deliverable->created_by === (int) $user->id;
         if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
@@ -981,6 +985,7 @@ class DeliverableController extends Controller
      */
     public function destroy(Deliverable $deliverable)
     {
+        $this->authorize('delete', $deliverable);
         $user = request()->user();
         $isCreator = (int) $deliverable->created_by === (int) $user->id;
         if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
@@ -1046,6 +1051,7 @@ class DeliverableController extends Controller
      */
     public function submit(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('submit', $deliverable);
         $user = $request->user();
         $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
         $isCurrentOwner = $this->delegationService->isCurrentOwnerDeliverable($deliverable, $user);
@@ -1284,6 +1290,7 @@ class DeliverableController extends Controller
      */
     public function approve(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('approve', $deliverable);
         $user = $request->user();
         $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
         $isDelegationChain = $this->delegationService->isInDeliverableDelegationChain($deliverable, $user);
@@ -1428,6 +1435,7 @@ class DeliverableController extends Controller
      */
     public function reject(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('reject', $deliverable);
         $user = $request->user();
         $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
         $isDelegationChain = $this->delegationService->isInDeliverableDelegationChain($deliverable, $user);
@@ -1443,9 +1451,13 @@ class DeliverableController extends Controller
         $validated = $request->validate(['comment' => 'nullable|string|max:2000']);
 
         $deliverable->update([
-            'status' => 'rejected', 'rejected_at' => now(), 'rejected_by' => $user->id,
+            'status' => 'pending',
+            'is_reopened' => true,
+            'rejected_at' => now(),
+            'rejected_by' => $user->id,
             'rejection_comment' => $validated['comment'] ?? null,
             'updated_by' => $user->id,
+            'states' => array_values(array_unique(array_merge(is_array($deliverable->states) ? $deliverable->states : [], ['Reopened']))),
         ]);
 
         DeliverableWorkflowEvent::create(['deliverable_id' => $deliverable->id, 'event_type' => 'rejected', 'user_id' => $user->id, 'comment' => $validated['comment'] ?? null]);
@@ -1513,6 +1525,7 @@ class DeliverableController extends Controller
      */
     public function reopen(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('reopen', $deliverable);
         $user = $request->user();
         $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
         $isDelegationChain = $this->delegationService->isInDeliverableDelegationChain($deliverable, $user);
@@ -1574,7 +1587,10 @@ class DeliverableController extends Controller
         }
 
         $updateData = [
-            'status' => 'reopened', 'reopened_at' => now(), 'reopened_by' => $user->id,
+            'status' => 'pending',
+            'is_reopened' => true,
+            'reopened_at' => now(),
+            'reopened_by' => $user->id,
             'reopen_comment' => $reopenComment,
             'reopen_reason' => $validated['reopen_reason'],
             'reopen_instructions' => $validated['instructions'] ?? null,
@@ -1687,6 +1703,7 @@ class DeliverableController extends Controller
      */
     public function selfApprove(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('approve', $deliverable);
         $user = $request->user();
         if ((int) $deliverable->created_by !== (int) $user->id || (int) $deliverable->assigned_to !== (int) $user->id) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
@@ -1728,6 +1745,7 @@ class DeliverableController extends Controller
      */
     public function selfRework(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('reopen', $deliverable);
         $user = $request->user();
         if ((int) $deliverable->created_by !== (int) $user->id || (int) $deliverable->assigned_to !== (int) $user->id) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
@@ -1865,6 +1883,7 @@ class DeliverableController extends Controller
      */
     public function latestSubmission(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('view', $deliverable);
         $submission = DeliverableSubmission::where('deliverable_id', $deliverable->id)
             ->with(['submittedBy:id,name,email', 'attachments'])->latest()->first();
 
@@ -2052,7 +2071,7 @@ class DeliverableController extends Controller
     }
 
     /**
-     * Reorder deliverables by updating their sort_order values in bulk.
+     * Reorder deliverables by updating sort_order values in bulk.
      *
      * @param  Request  $request  Input: items[] with id and sort_order.
      * @return JsonResponse JSON response confirming reorder.
@@ -2061,17 +2080,15 @@ class DeliverableController extends Controller
     {
         $request->validate(['items' => 'required|array', 'items.*.id' => 'required|integer|exists:deliverables,id', 'items.*.sort_order' => 'required|integer|min:0']);
         $ids = [];
-        $cases = [];
         $bindings = [];
-        foreach ($request->items as $i => $item) {
-            $ids[] = $item['id'];
-            $cases[] = 'WHEN ? THEN ?';
-            $bindings[] = $item['id'];
-            $bindings[] = $item['sort_order'];
+        foreach ($request->items as $item) {
+            $ids[] = (int) $item['id'];
+            $bindings[] = (int) $item['id'];
+            $bindings[] = (int) $item['sort_order'];
         }
         if (! empty($ids)) {
-            $placeholders = implode(', ', array_fill(0, count($ids), '?'));
-            DB::statement('UPDATE deliverables SET sort_order = CASE id '.implode(' ', $cases)." END WHERE id IN ($placeholders)", [...$bindings, ...$ids]);
+            $ph = implode(',', array_fill(0, count($ids), '?'));
+            DB::statement('UPDATE deliverables SET sort_order = CASE id '.implode(' ', array_fill(0, count($ids), 'WHEN ? THEN ?'))." END WHERE id IN ($ph)", [...$bindings, ...$ids]);
         }
 
         return response()->json(['success' => true, 'message' => 'Deliverables reordered successfully']);
@@ -2084,6 +2101,7 @@ class DeliverableController extends Controller
      */
     public function acknowledge(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('acknowledge', $deliverable);
         $user = $request->user();
         $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
         $isAuthorizedRole = in_array($user->role, ['admin', 'manager', 'team_lead']);
@@ -2101,13 +2119,11 @@ class DeliverableController extends Controller
             'updated_by' => $user->id,
         ]);
 
-        $deliverable->startTimer();
-
         DeliverableWorkflowEvent::create([
             'deliverable_id' => $deliverable->id,
             'event_type' => 'acknowledged',
             'user_id' => $user->id,
-            'comment' => 'Acknowledged and started working',
+            'comment' => 'Acknowledged deliverable',
         ]);
 
         $this->activityService->log($user->id, 'deliverable_acknowledged', 'You acknowledged deliverable "'.$deliverable->title.'"', 'deliverable', $deliverable->id);
@@ -2122,10 +2138,65 @@ class DeliverableController extends Controller
     // ─── Timer ─────────────────────────────────────────────────
 
     /**
+     * Start the deliverable timer explicitly.
+     */
+    public function startTimer(Request $request, Deliverable $deliverable)
+    {
+        $this->authorize('startTimer', $deliverable);
+        $user = $request->user();
+        $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
+        $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
+        $isAdminOrManager = in_array($user->role, ['admin', 'manager', 'super_admin']);
+        if (! $isAssignee && ! $isCreator && ! $isAdminOrManager) {
+            return response()->json(['success' => false, 'message' => 'You do not have permission to start this subtask timer.'], 403);
+        }
+
+        if (! in_array($deliverable->status, ['in_progress', 'paused', 'reopened'])) {
+            return response()->json(['success' => false, 'message' => 'Subtask must be in progress to start timer. Please acknowledge it first.'], 422);
+        }
+
+        if ($deliverable->timer_state === 'running') {
+            return response()->json([
+                'success' => true,
+                'message' => 'Timer is already running',
+                'deliverable' => $deliverable->fresh(),
+            ]);
+        }
+
+        if ($deliverable->timer_state === 'paused' || $deliverable->status === 'paused') {
+            $deliverable->resumeTimer($user->id);
+            $deliverable->update(['status' => 'in_progress', 'paused_by' => null, 'paused_at' => null, 'updated_by' => $user->id]);
+
+            DeliverableWorkflowEvent::create([
+                'deliverable_id' => $deliverable->id,
+                'event_type' => 'resumed',
+                'user_id' => $user->id,
+                'comment' => 'Timer resumed',
+            ]);
+        } else {
+            $deliverable->startTimer();
+
+            DeliverableWorkflowEvent::create([
+                'deliverable_id' => $deliverable->id,
+                'event_type' => 'timer_started',
+                'user_id' => $user->id,
+                'comment' => 'Work timer started',
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Timer started',
+            'deliverable' => $deliverable->fresh(),
+        ]);
+    }
+
+    /**
      * Pause the deliverable timer.
      */
     public function pause(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('pause', $deliverable);
         $user = $request->user();
         $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
         $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
@@ -2162,6 +2233,7 @@ class DeliverableController extends Controller
      */
     public function continueTimer(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('continue', $deliverable);
         $user = $request->user();
         $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
         $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
@@ -2196,6 +2268,7 @@ class DeliverableController extends Controller
      */
     public function assignerPause(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('assignerPause', $deliverable);
         $user = $request->user();
         $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
         if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
@@ -2237,6 +2310,7 @@ class DeliverableController extends Controller
      */
     public function assignerResume(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('assignerResume', $deliverable);
         $user = $request->user();
         $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
         if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
@@ -2273,11 +2347,14 @@ class DeliverableController extends Controller
      */
     public function timer(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('view', $deliverable);
         return response()->json([
             'success' => true,
             'timer' => [
                 'state' => $deliverable->timer_state,
-                'work_started_at' => $deliverable->work_started_at?->format('Y-m-d\TH:i:s'),
+                'work_started_at' => $deliverable->work_started_at?->toIso8601String(),
+                'last_timer_event_at' => $deliverable->last_timer_event_at?->toIso8601String(),
+                'work_completed_at' => $deliverable->work_completed_at?->toIso8601String(),
                 'total_work_seconds' => $deliverable->getCurrentWorkSeconds(),
                 'elapsed_seconds' => $deliverable->getCurrentElapsedSeconds(),
                 'pause_count' => $deliverable->pause_count ?? 0,
@@ -2292,6 +2369,7 @@ class DeliverableController extends Controller
      */
     public function timerSessions(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('view', $deliverable);
         $sessions = $deliverable->pauseSessions()
             ->with(['user:id,name', 'resumedByUser:id,name'])
             ->get()
@@ -2300,8 +2378,8 @@ class DeliverableController extends Controller
                 'reason' => $s->reason,
                 'reason_label' => $s->reason_label,
                 'reason_detail' => $s->reason_detail,
-                'paused_at' => $s->paused_at?->format('Y-m-d\TH:i:s'),
-                'resumed_at' => $s->resumed_at?->format('Y-m-d\TH:i:s'),
+                'paused_at' => $s->paused_at?->toIso8601String(),
+                'resumed_at' => $s->resumed_at?->toIso8601String(),
                 'duration_seconds' => $s->duration_seconds,
                 'formatted_duration' => $s->formatted_duration,
                 'user' => $s->user ? ['id' => $s->user->id, 'name' => $s->user->name] : null,
@@ -2319,6 +2397,7 @@ class DeliverableController extends Controller
      */
     public function uploadFile(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('manageFiles', $deliverable);
         $user = $request->user();
         $isCreator = (int) $deliverable->created_by === (int) $user->id;
         $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
@@ -2394,6 +2473,7 @@ class DeliverableController extends Controller
      */
     public function addLink(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('manageFiles', $deliverable);
         $user = $request->user();
         $isCreator = (int) $deliverable->created_by === (int) $user->id;
         $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
@@ -2441,6 +2521,7 @@ class DeliverableController extends Controller
      */
     public function renameFile(Request $request, Deliverable $deliverable, DeliverableFile $file)
     {
+        $this->authorize('manageFiles', $deliverable);
         $user = $request->user();
         $isCreator = (int) $deliverable->created_by === (int) $user->id;
         if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
@@ -2458,6 +2539,7 @@ class DeliverableController extends Controller
      */
     public function deleteFile(Request $request, Deliverable $deliverable, DeliverableFile $file)
     {
+        $this->authorize('manageFiles', $deliverable);
         $user = $request->user();
         $isCreator = (int) $deliverable->created_by === (int) $user->id;
         if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
@@ -2491,6 +2573,7 @@ class DeliverableController extends Controller
      */
     public function reorderFiles(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('manageFiles', $deliverable);
         $request->validate([
             'items' => 'required|array',
             'items.*.id' => 'required|integer|exists:deliverable_files,id',
@@ -2512,6 +2595,7 @@ class DeliverableController extends Controller
      */
     public function myNote(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('manageNotes', $deliverable);
         $note = DeliverableUserNote::where('deliverable_id', $deliverable->id)
             ->where('user_id', $request->user()->id)
             ->first();
@@ -2528,6 +2612,7 @@ class DeliverableController extends Controller
      */
     public function storeNote(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('manageNotes', $deliverable);
         $validated = $request->validate(['note' => 'nullable|string|max:5000']);
 
         $note = DeliverableUserNote::updateOrCreate(
@@ -2543,6 +2628,7 @@ class DeliverableController extends Controller
      */
     public function destroyNote(Request $request, Deliverable $deliverable, DeliverableUserNote $note)
     {
+        $this->authorize('manageNotes', $deliverable);
         if ((int) $note->user_id !== (int) $request->user()->id) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
@@ -2920,6 +3006,7 @@ class DeliverableController extends Controller
      */
     public function delegate(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('delegate', $deliverable);
         $user = $request->user();
         $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
         $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
@@ -2993,6 +3080,7 @@ class DeliverableController extends Controller
      */
     public function acceptDelegation(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('delegate', $deliverable);
         $user = $request->user();
 
         $delegation = TaskDelegation::where('deliverable_id', $deliverable->id)
@@ -3026,6 +3114,7 @@ class DeliverableController extends Controller
      */
     public function rejectDelegation(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('delegate', $deliverable);
         $user = $request->user();
 
         $validated = $request->validate([
@@ -3063,6 +3152,7 @@ class DeliverableController extends Controller
      */
     public function revokeDelegation(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('delegate', $deliverable);
         $user = $request->user();
 
         $validated = $request->validate([
@@ -3096,6 +3186,7 @@ class DeliverableController extends Controller
      */
     public function delegationChain(Deliverable $deliverable)
     {
+        $this->authorize('view', $deliverable);
         $chain = $this->delegationService->getDeliverableChainDetails($deliverable);
 
         return response()->json([
@@ -3110,6 +3201,7 @@ class DeliverableController extends Controller
      */
     public function requestAbandon(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('submit', $deliverable);
         $user = $request->user();
         if ($deliverable->status === 'abandoned') {
             return response()->json(['success' => false, 'message' => 'Subtask is already abandoned'], 422);
@@ -3142,6 +3234,7 @@ class DeliverableController extends Controller
      */
     public function approveAbandon(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('approve', $deliverable);
         $user = $request->user();
         if (! in_array($user->role, ['admin', 'manager'])) {
             return response()->json(['success' => false, 'message' => 'Unauthorized: Only Admins and Managers can approve abandon requests'], 403);
@@ -3168,6 +3261,7 @@ class DeliverableController extends Controller
      */
     public function declineAbandon(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('approve', $deliverable);
         $user = $request->user();
         if (! in_array($user->role, ['admin', 'manager'])) {
             return response()->json(['success' => false, 'message' => 'Unauthorized: Only Admins and Managers can decline abandon requests'], 403);
@@ -3201,6 +3295,7 @@ class DeliverableController extends Controller
      */
     public function abandon(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('delete', $deliverable);
         $user = $request->user();
         if (! in_array($user->role, ['admin', 'manager'])) {
             return response()->json(['success' => false, 'message' => 'Unauthorized: Only Admins and Managers can directly abandon subtasks'], 403);

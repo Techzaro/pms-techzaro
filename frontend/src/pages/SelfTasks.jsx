@@ -210,6 +210,38 @@ const SelfTasks = () => {
     }
   };
 
+  const handleStartTimer = async (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/start-timer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === taskId ? { ...item, status: "in_progress", ...(data.task || {}) } : item
+          )
+        );
+        publish('task:updated', { id: taskId, status: 'in_progress' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage(t("Task", { defaultValue: "Task" }), t("timer started", { defaultValue: "timer started" }));
+      } else {
+        const errorMsg = data?.message || data?.error || (data?.errors ? Object.values(data.errors).flat().join(", ") : null) || t("Failed to start task timer.", { defaultValue: "Failed to start task timer." });
+        notify.error(errorMsg);
+      }
+    } catch (err) {
+      const errorMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || t("Failed to start task timer.", { defaultValue: "Failed to start task timer." });
+      notify.error(errorMsg);
+    }
+  };
+
   const handleContinue = async (e, taskId) => {
     if (e && e.stopPropagation) {
       e.stopPropagation();
@@ -489,7 +521,7 @@ const SelfTasks = () => {
           { id: "pending", label: t("Pending", { defaultValue: "Pending" }), count: pendingCount, className: "Pending" },
           { id: "in_progress", label: t("In Progress", { defaultValue: "In Progress" }), count: inProgressCount, className: "InProgress" },
           { id: "submitted", label: t("Submitted", { defaultValue: "Submitted" }), count: submittedCount, className: "Submitted" },
-          { id: "approved", label: t("Approved", { defaultValue: "Approved" }), count: approvedCount, className: "Approved" },
+          { id: "approved", label: t("Completed", { defaultValue: "Completed" }), count: approvedCount, className: "Approved" },
           { id: "paused", label: t("Paused", { defaultValue: "Paused" }), count: pausedCount, className: "Paused" },
           { id: "rejected", label: t("Declined", { defaultValue: "Declined" }), count: rejectedCount, className: "Rejected" },
           { id: "abandoned", label: t("Abandoned", { defaultValue: "Abandoned" }), count: abandonedCount, className: "Abandoned", dotColor: "#DC2626" },
@@ -667,17 +699,24 @@ const SelfTasks = () => {
                             </button>
                           );
                         }
-                        if (item.status === "paused") {
+                        if (item.status === "in_progress" && (!item.timer || item.timer?.state === "idle" || !item.timer?.state)) {
                           return (
-                            <button className="action-icon-btn action-submit" title={t("Continue Task", { defaultValue: "Continue Task" })} onClick={(e) => handleContinue(e, item.id)}>
+                            <button className="action-icon-btn action-submit" title={t("Start Timer", { defaultValue: "Start Timer" })} onClick={(e) => handleStartTimer(e, item.id)} style={{ color: "#2563eb" }}>
                               <Play size={16} />
                             </button>
                           );
                         }
-                        if (["in_progress", "submitted"].includes(item.status?.toLowerCase()) && !item.assigner_paused) {
+                        if (["in_progress", "submitted"].includes(item.status?.toLowerCase()) && item.timer?.state === "running" && !item.assigner_paused) {
                           return (
                             <button className="action-icon-btn action-submit" title={t("Pause Task", { defaultValue: "Pause Task" })} onClick={(e) => handlePause(e, item.id)} style={{ color: "#D97706" }}>
                               <Pause size={16} />
+                            </button>
+                          );
+                        }
+                        if (item.status === "paused" || item.timer?.state === "paused") {
+                          return (
+                            <button className="action-icon-btn action-submit" title={t("Continue Task", { defaultValue: "Continue Task" })} onClick={(e) => handleContinue(e, item.id)}>
+                              <Play size={16} />
                             </button>
                           );
                         }

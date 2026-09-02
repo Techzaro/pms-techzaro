@@ -45,13 +45,13 @@ import { showSuccessMessage } from "../utils/notify";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { useSubmit } from "../hooks/useSubmit";
 import { useWorkTimer } from "../hooks/useWorkTimer";
-import { formatDateTimeShort, formatDateTime } from "../utils/formatDateTime";
+import { formatDateTimeShort, formatDateTime, parseUtcToEpochMs } from "../utils/formatDateTime";
 import "./TaskDetails.css";
 import "./SubtaskDetails.css";
 
 function timeAgo(iso, t) {
   if (!iso) return "";
-  const then = new Date(iso).getTime();
+  const then = parseUtcToEpochMs(iso) || new Date(iso).getTime();
   const sec = Math.max(0, Math.floor((Date.now() - then) / 1000));
   if (sec < 60) return t ? t("just now", { defaultValue: "just now" }) : "just now";
   if (sec < 3600) return t ? t("{{count}} min ago", { count: Math.floor(sec / 60), defaultValue: `${Math.floor(sec / 60)} min ago` }) : `${Math.floor(sec / 60)} min ago`;
@@ -62,13 +62,13 @@ function timeAgo(iso, t) {
 function statusLabel(status, t) {
   const s = (status || "").toLowerCase();
   let label = "Pending";
-  if (s === "pending") label = "Pending";
+  if (s === "pending" || s === "reopened") label = "Pending";
   else if (s === "in_progress" || s === "acknowledged") label = "In Progress";
   else if (s === "paused") label = "Paused";
   else if (s === "submitted") label = "Submitted";
-  else if (s === "reopened") label = "Reopened";
-  else if (s === "approved") label = "Approved";
-  else if (s === "rejected") label = "Declined";
+  else if (s === "approved" || s === "completed") label = "Completed";
+  else if (s === "rejected" || s === "declined") label = "Declined";
+  else if (s === "abandoned") label = "Abandoned";
   else label = status || "Pending";
   return t ? t(label, { defaultValue: label }) : label;
 }
@@ -175,6 +175,7 @@ function SubtaskDetails() {
   const { submitting: approving, run: runApprove } = useSubmit();
   const { submitting: declining, run: runDecline } = useSubmit();
   const { submitting: acknowledging, run: runAcknowledge } = useSubmit();
+  const { submitting: startingTimer, run: runStartTimer } = useSubmit();
   const { submitting: pausing, run: runPause } = useSubmit();
   const { submitting: resuming, run: runResume } = useSubmit();
   const [assignerPauseModalOpen, setAssignerPauseModalOpen] = useState(false);
@@ -406,6 +407,18 @@ if (res.ok) {
     });
   };
 
+  const handleStartTimer = async () => {
+    await runStartTimer(async () => {
+      try {
+        const token = authToken();
+        const res = await fetch(`${API_URL}/deliverables/${subtaskId}/start-timer`, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` }, _notifHandled: true });
+        const data = await res.json();
+        if (res.ok) { publish('deliverable:updated', data.deliverable || data); publish('data:changed', { type: 'deliverable', action: 'updated' }); showSuccessMessage("Subtask", "timer started"); fetchSubtask(); }
+        else { notify.error(data.message || t("Failed to start timer", { defaultValue: "Failed to start timer" })); }
+      } catch { notify.error(t("An error occurred", { defaultValue: "An error occurred" })); }
+    });
+  };
+
   const handlePause = async () => {
     await runPause(async () => {
       try {
@@ -576,8 +589,9 @@ if (res.ok) {
   const timerRunning = timerState === "running";
   const timerPaused = timerState === "paused";
   const isAdminOrManager = currentUser && ["admin", "manager"].includes(currentUser.role);
-  const canPauseSubtask = !readOnly && (isAssignee || isAdminOrManager) && ["in_progress", "submitted"].includes(subtask.status) && !isAssignerLocked && (!isTransferor || transferorHasApproved) && !subtask?.active_outgoing_delegation;
-  const canResumeSubtask = !readOnly && (isAssignee || isAdminOrManager) && subtask.status === "paused" && !isAssignerLocked && (!isTransferor || transferorHasApproved) && !subtask?.active_outgoing_delegation && !hasPendingDelegation;
+  const canStartSubtaskTimer = !readOnly && (isAssignee || isAdminOrManager) && ["in_progress", "reopened"].includes(subtask.status) && (!timerState || timerState === "idle") && !isAssignerLocked && (!isTransferor || transferorHasApproved) && !subtask?.active_outgoing_delegation && !hasPendingDelegation;
+  const canPauseSubtask = !readOnly && (isAssignee || isAdminOrManager) && ["in_progress", "submitted"].includes(subtask.status) && timerRunning && !isAssignerLocked && (!isTransferor || transferorHasApproved) && !subtask?.active_outgoing_delegation;
+  const canResumeSubtask = !readOnly && (isAssignee || isAdminOrManager) && (subtask.status === "paused" || timerPaused) && !isAssignerLocked && (!isTransferor || transferorHasApproved) && !subtask?.active_outgoing_delegation && !hasPendingDelegation;
 
   return (
     <>
@@ -683,6 +697,12 @@ if (res.ok) {
                       {acknowledging ? t("Acknowledging...", { defaultValue: "Acknowledging..." }) : t("Acknowledge", { defaultValue: "Acknowledge" })}
                     </button>
                   )}
+                  {canStartSubtaskTimer && (
+                    <button className="td-btn-primary" onClick={handleStartTimer} disabled={startingTimer} style={{ backgroundColor: startingTimer ? "#9CA3AF" : "var(--color-primary)" }}>
+                      <Play size={15} />
+                      {startingTimer ? t("Starting...", { defaultValue: "Starting..." }) : t("Start", { defaultValue: "Start" })}
+                    </button>
+                  )}
                   {canPauseSubtask && (
                     <button className="td-btn-primary" onClick={handlePause} disabled={pausing} style={{ backgroundColor: pausing ? "#9CA3AF" : "#D97706" }}><Pause size={15} />{pausing ? t("Pausing...", { defaultValue: "Pausing..." }) : t("Pause", { defaultValue: "Pause" })}</button>
                   )}
@@ -728,6 +748,18 @@ if (res.ok) {
                   <span className="td-badge-dot" style={{ background: statusColor(subtask.status) }} />
                   {statusLabel(subtask.status, t)}
                 </span>
+                {(subtask.is_reopened || (Array.isArray(subtask?.states) && subtask.states.some((s) => String(s).toLowerCase() === "reopened")) || subtask?.reopened_at || (subtask?.reopen_count && subtask.reopen_count > 0)) && (
+                  <span className="td-badge" style={{ background: "#EDE9FE", color: "#6D28D9", border: "1px solid #DDD6FE" }}>
+                    <span className="td-badge-dot" style={{ background: "#6D28D9" }} />
+                    {t("Reopened", { defaultValue: "Reopened" })}
+                  </span>
+                )}
+                {(subtask.is_transferred || (Array.isArray(subtask?.states) && subtask.states.some((s) => String(s).toLowerCase() === "transferred")) || (Array.isArray(subtask?.delegation_chain) && subtask.delegation_chain.length > 0)) && (
+                  <span className="td-badge" style={{ background: "#E0E7FF", color: "#4338CA", border: "1px solid #C7D2FE" }}>
+                    <span className="td-badge-dot" style={{ background: "#4338CA" }} />
+                    {t("Transferred", { defaultValue: "Transferred" })}
+                  </span>
+                )}
                 <span className="td-badge" style={{ background: priorityBgColor(subtask.priority), color: priorityColor(subtask.priority) }}>
                   <span className="td-badge-dot" style={{ background: priorityColor(subtask.priority) }} />
                   {t("{{priority}} Priority", { priority: t(subtask.priority || "Medium", { defaultValue: subtask.priority || "Medium" }), defaultValue: `${subtask.priority || "Medium"} Priority` })}

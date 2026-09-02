@@ -275,6 +275,33 @@ function Deliveries() {
     }
   };
 
+  const handleStartTimer = async (itemId) => {
+    setActingId(itemId);
+    setActingType("start-timer");
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/deliverables/${itemId}/start-timer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSubtasks((prev) => prev.map((d) => d.id === itemId ? { ...d, status: "in_progress", ...data.deliverable } : d));
+        publish('deliverable:updated', { id: itemId, status: 'in_progress' });
+        publish('data:changed', { type: 'deliverable', action: 'updated' });
+        showSuccessMessage("Subtask", "timer started");
+      } else {
+        notify.error(data.message || t("Failed to start timer.", { defaultValue: "Failed to start timer." }));
+      }
+    } catch {
+      notify.error(t("Failed to start timer.", { defaultValue: "Failed to start timer." }));
+    } finally {
+      setActingId(null);
+      setActingType(null);
+    }
+  };
+
   const handlePause = async (itemId) => {
     setActingId(itemId);
     setActingType("pause");
@@ -526,7 +553,7 @@ function Deliveries() {
             { id: "submitted", label: t("Submitted", { defaultValue: "Submitted" }), count: submittedCount, className: "Submitted" },
             { id: "reopened", label: t("Reopened", { defaultValue: "Reopened" }), count: reopenedCount, className: "Reopened" },
             { id: "transferred", label: t("Transferred", { defaultValue: "Transferred" }), count: transferredCount, className: "Transferred" },
-            { id: "approved", label: t("Approved", { defaultValue: "Approved" }), count: approvedCount, className: "Approved" },
+            { id: "approved", label: t("Completed", { defaultValue: "Completed" }), count: approvedCount, className: "Approved" },
             { id: "rejected", label: t("Declined", { defaultValue: "Declined" }), count: rejectedCount, className: "Rejected" },
             { id: "abandoned", label: t("Abandoned", { defaultValue: "Abandoned" }), count: abandonedCount, className: "Abandoned", dotColor: "#DC2626" },
             { id: "", label: t("All", { defaultValue: "All" }), count: allCount, className: "All" },
@@ -629,12 +656,17 @@ function Deliveries() {
                             <CheckCircle2 size={16} />
                           </button>
                         )}
-                        {["in_progress", "submitted"].includes(item.status) && !item.assigner_paused && canUserPauseResume(item, currentUser) && (
+                        {["in_progress", "reopened"].includes(item.status) && (!item.timer_state || item.timer_state === "idle") && !item.assigner_paused && canUserPauseResume(item, currentUser) && (
+                          <button className="action-icon-btn action-submit" title={t("Start Timer", { defaultValue: "Start Timer" })} disabled={actingId === item.id} onClick={() => handleStartTimer(item.id)} style={{ color: "#2563eb" }}>
+                            <Play size={16} />
+                          </button>
+                        )}
+                        {["in_progress", "submitted"].includes(item.status) && item.timer_state === "running" && !item.assigner_paused && canUserPauseResume(item, currentUser) && (
                           <button className="action-icon-btn action-submit" title={t("Pause", { defaultValue: "Pause" })} disabled={actingId === item.id} onClick={() => handlePause(item.id)} style={{ color: "#D97706" }}>
                             <Pause size={16} />
                           </button>
                         )}
-                        {item.status === "paused" && !item.assigner_paused && canUserPauseResume(item, currentUser) && (
+                        {(item.status === "paused" || item.timer_state === "paused") && !item.assigner_paused && canUserPauseResume(item, currentUser) && (
                           <button className="action-icon-btn action-submit" title={t("Resume", { defaultValue: "Resume" })} disabled={actingId === item.id} onClick={() => handleResume(item.id)} style={{ color: "#059669" }}>
                             <Play size={16} />
                           </button>

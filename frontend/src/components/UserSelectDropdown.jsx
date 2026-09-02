@@ -98,10 +98,12 @@ const UserSelectDropdown = ({
   };
 
   const handleInputFocus = () => {
+    if (disabled || viewOnly) return;
     setOpen(true);
   };
 
   const handleTriggerClick = () => {
+    if (disabled || viewOnly) return;
     if (!open) {
       setOpen(true);
       setTimeout(() => inputRef.current?.focus(), 0);
@@ -110,6 +112,7 @@ const UserSelectDropdown = ({
 
   const handleArrowClick = (e) => {
     e.stopPropagation();
+    if (disabled || viewOnly) return;
     if (open) {
       setOpen(false);
       setSearch("");

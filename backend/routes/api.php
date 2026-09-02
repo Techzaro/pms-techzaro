@@ -414,6 +414,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Task submission workflow (submit for review, approve, reject, reopen)
     Route::post('/tasks/{task}/acknowledge', [TaskController::class, 'acknowledge']); // Acknowledge task assignment
+    Route::post('/tasks/{task}/start-timer', [TaskController::class, 'startTimer']); // Start task timer explicitly
+    Route::post('/tasks/{task}/start', [TaskController::class, 'startTimer']); // Alias for start task timer
     Route::post('/tasks/{task}/pause', [TaskController::class, 'pause']); // Pause an in-progress task
     Route::post('/tasks/{task}/continue', [TaskController::class, 'continueTask']); // Continue a paused task
     Route::post('/tasks/{task}/assigner-pause', [TaskController::class, 'assignerPause']); // Assigner pauses task (locks assignee)
@@ -560,6 +562,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/deliverables/{deliverable}/acknowledge', [DeliverableController::class, 'acknowledge']); // Acknowledge deliverable assignment
 
     // Deliverable timer
+    Route::post('/deliverables/{deliverable}/start-timer', [DeliverableController::class, 'startTimer']); // Start deliverable timer explicitly
+    Route::post('/deliverables/{deliverable}/start', [DeliverableController::class, 'startTimer']); // Alias for start deliverable timer
     Route::post('/deliverables/{deliverable}/pause', [DeliverableController::class, 'pause']); // Pause deliverable timer
     Route::post('/deliverables/{deliverable}/continue', [DeliverableController::class, 'continueTimer']); // Resume deliverable timer
     Route::post('/deliverables/{deliverable}/assigner-pause', [DeliverableController::class, 'assignerPause']); // Assigner pauses deliverable

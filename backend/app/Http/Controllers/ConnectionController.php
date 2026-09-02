@@ -31,6 +31,9 @@ class ConnectionController extends Controller
     public function index(Request $request): JsonResponse
     {
         $organization = $request->attributes->get('currentOrganization');
+        if (!$organization) {
+            return response()->json(['success' => true, 'data' => []]);
+        }
         $status = $request->query('status');
 
         $connections = $this->connectionService->getConnections($organization, $status);
@@ -68,6 +71,9 @@ class ConnectionController extends Controller
     public function stats(Request $request): JsonResponse
     {
         $organization = $request->attributes->get('currentOrganization');
+        if (!$organization) {
+            return response()->json(['success' => true, 'data' => ['total' => 0, 'active' => 0, 'pending' => 0, 'rejected' => 0, 'revoked' => 0]]);
+        }
         $stats = $this->connectionService->getStats($organization);
 
         return response()->json([
@@ -249,6 +255,10 @@ class ConnectionController extends Controller
     public function generateInvitation(Request $request): JsonResponse
     {
         $currentOrg = $request->attributes->get('currentOrganization');
+
+        if (!$currentOrg) {
+            return response()->json(['success' => false, 'message' => 'Organization context not found.'], 404);
+        }
 
         try {
             $invitation = $this->connectionService->generateInvitation($currentOrg);

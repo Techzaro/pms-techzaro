@@ -629,6 +629,7 @@ class TaskController extends Controller
      */
     public function show(Task $task)
     {
+        $this->authorize('view', $task);
         $user = request()->user();
         $task->load([
             'project:id,title,team_id,created_by,client_name,category,budget,priority,sidebar_notes,sheets_documents,website_link,website_name,status,start_date,end_date,guest_ids',
@@ -934,9 +935,9 @@ class TaskController extends Controller
             'total_pause_seconds' => (int) ($task->total_pause_seconds ?? 0),
             'total_pause_formatted' => Task::formatDuration((int) ($task->total_pause_seconds ?? 0)),
             'resume_count' => (int) ($task->resume_count ?? 0),
-            'work_started_at' => $task->work_started_at?->format('Y-m-d\TH:i:s'),
-            'work_completed_at' => $task->work_completed_at?->format('Y-m-d\TH:i:s'),
-            'last_timer_event_at' => $task->last_timer_event_at?->format('Y-m-d\TH:i:s'),
+            'work_started_at' => $task->work_started_at?->toIso8601String(),
+            'work_completed_at' => $task->work_completed_at?->toIso8601String(),
+            'last_timer_event_at' => $task->last_timer_event_at?->toIso8601String(),
         ];
 
         $routing = $this->delegationService->routingPayload($task, $user);
@@ -964,6 +965,7 @@ class TaskController extends Controller
      */
     public function store(Request $request, Project $project)
     {
+        $this->authorize('create', [Task::class, $project]);
         $user = $request->user();
 
         $memberIds = $project->getMembers()->pluck('id')->toArray();
@@ -1121,6 +1123,28 @@ class TaskController extends Controller
             throw ValidationException::withMessages([
                 'assigned_to' => 'One or more selected users are not members of this project. Please select only project members.',
             ]);
+        }
+
+        if (! empty($validated['followers'])) {
+            $invalidFollowers = array_diff(
+                array_map('intval', $validated['followers']),
+                $projectMemberIds
+            );
+            if (! empty($invalidFollowers)) {
+                throw ValidationException::withMessages([
+                    'followers' => 'One or more selected followers are not members of this project.',
+                ]);
+            }
+        }
+
+        if (! empty($validated['deliverables'])) {
+            foreach ($validated['deliverables'] as $index => $del) {
+                if (! empty($del['assigned_to']) && ! in_array((int) $del['assigned_to'], $projectMemberIds)) {
+                    throw ValidationException::withMessages([
+                        "deliverables.{$index}.assigned_to" => 'Deliverable assignee must be a member of this project.',
+                    ]);
+                }
+            }
         }
 
         $createdTasks = [];
@@ -1393,6 +1417,7 @@ class TaskController extends Controller
      */
     public function storeStandalone(Request $request)
     {
+        $this->authorize('create', Task::class);
         $user = $request->user();
 
         $validated = $request->validate([
@@ -1706,6 +1731,7 @@ class TaskController extends Controller
      */
     public function update(Request $request, Task $task)
     {
+        $this->authorize('update', $task);
         $user = $request->user();
         if ((int) $task->assigned_by !== (int) $user->id) {
             return response()->json(['success' => false, 'message' => 'Unauthorized — only the task creator can edit'], 403);
@@ -1767,6 +1793,54 @@ class TaskController extends Controller
         unset($validated['assigned_to']);
         $followers = $validated['followers'] ?? null;
         unset($validated['followers']);
+
+        $targetProject = isset($validated['project_id'])
+            ? Project::find($validated['project_id'])
+            : $task->project;
+
+        if ($targetProject) {
+            $projectMemberIds = collect(app(ProjectController::class)
+                ->getMembers($targetProject)
+                ->getData())
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->toArray();
+
+            if ($assigneeIds !== null) {
+                $invalidAssignees = array_diff(
+                    array_map('intval', $assigneeIds),
+                    $projectMemberIds
+                );
+
+                if (! empty($invalidAssignees)) {
+                    throw ValidationException::withMessages([
+                        'assigned_to' => 'One or more selected users are not members of this project. Please select only project members.',
+                    ]);
+                }
+            }
+
+            if ($followers !== null) {
+                $invalidFollowers = array_diff(
+                    array_map('intval', $followers),
+                    $projectMemberIds
+                );
+                if (! empty($invalidFollowers)) {
+                    throw ValidationException::withMessages([
+                        'followers' => 'One or more selected followers are not members of this project.',
+                    ]);
+                }
+            }
+
+            if (! empty($validated['deliverables'])) {
+                foreach ($validated['deliverables'] as $index => $del) {
+                    if (! empty($del['assigned_to']) && ! in_array((int) $del['assigned_to'], $projectMemberIds)) {
+                        throw ValidationException::withMessages([
+                            "deliverables.{$index}.assigned_to" => 'Deliverable assignee must be a member of this project.',
+                        ]);
+                    }
+                }
+            }
+        }
         $dueDates = $validated['due_dates'] ?? null;
         unset($validated['due_dates']);
         $existingFileNames = $validated['existing_file_names'] ?? null;
@@ -1992,6 +2066,7 @@ class TaskController extends Controller
      */
     public function updateRecurring(Request $request, Task $task, RecurringService $recurringService): JsonResponse
     {
+        $this->authorize('update', $task);
         $user = $request->user();
         if ((int) $task->assigned_by !== (int) $user->id) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
@@ -2138,20 +2213,29 @@ class TaskController extends Controller
             'recurrence_end_date' => null,
             'recurrence_status' => 'cancelled',
         ]);
+        try {
+            DB::transaction(function () use ($task) {
+                // Delete uncompleted future deliverables associated with this task
+                Deliverable::where('task_id', $task->id)
+                    ->whereNotIn('status', ['approved', 'completed'])
+                    ->where('is_recurring_instance', true)
+                    ->delete();
 
-        TaskWorkflowEvent::create([
-            'task_id' => $task->id,
-            'user_id' => $user->id,
-            'action' => 'recurrence_deleted',
-            'comment' => 'Recurrence series deleted. ' . $deletedCount . ' pending future deliverable(s) removed.',
-        ]);
+                // Terminate recurrence on the task
+                $task->update([
+                    'task_type' => 'standard',
+                    'recurrence_settings' => null,
+                    'recurrence_end_date' => now()->toDateTimeString(),
+                ]);
+            });
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Recurrence rule deleted successfully.',
-            'deleted_pending_count' => $deletedCount,
-            'task' => $task->fresh(),
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Recurring schedule deleted successfully. Future uncompleted deliverables removed.',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Failed to delete recurring schedule: '.$e->getMessage()], 500);
+        }
     }
 
     /**
@@ -2163,6 +2247,7 @@ class TaskController extends Controller
      */
     public function updateStatus(Request $request, Task $task)
     {
+        $this->authorize('updateStatus', $task);
         $user = $request->user();
         $isCreator = (int) $task->assigned_by === (int) $user->id;
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
@@ -2185,7 +2270,7 @@ class TaskController extends Controller
             'submitted' => 'Submitted',
             'review' => 'Submitted',
             'approved' => 'Approved',
-            'completed' => 'Approved',
+            'completed' => 'Completed',
             'done' => 'Approved',
             'paused' => 'Paused',
             'declined' => 'Declined',
@@ -2193,56 +2278,32 @@ class TaskController extends Controller
             'failed' => 'Declined',
             'abandoned' => 'Abandoned',
         ];
-        $targetStatus = $normalizedMap[strtolower($rawStatus)] ?? $rawStatus;
-        $validated['status'] = $targetStatus;
+        $newStatus = $normalizedMap[strtolower($rawStatus)] ?? $rawStatus;
+
         $oldStatus = $task->status;
-        $task->update(['status' => $validated['status']]);
+        $task->update(['status' => $newStatus]);
+
+        // If status changed to Completed/Approved, also mark all subtasks/deliverables as approved
+        if (in_array(strtolower($newStatus), ['approved', 'completed'])) {
+            $task->deliverables()->where('status', '!=', 'approved')->update(['status' => 'approved']);
+        }
 
         TaskWorkflowEvent::create([
-            'task_id' => $task->id, 'user_id' => $user->id,
+            'task_id' => $task->id,
+            'user_id' => $user->id,
             'action' => 'status_updated',
-            'comment' => $oldStatus.' → '.$validated['status'],
+            'details' => json_encode(['old' => $oldStatus, 'new' => $newStatus]),
         ]);
 
-        $task->load('assignees:id,name,role');
-        $assigneeIds = $task->assignees->pluck('id')->toArray();
-
-        $notifications = [];
-        foreach (array_filter($assigneeIds, fn ($id) => (int) $id !== (int) $user->id) as $assigneeId) {
-            $notifications[] = [
-                'user_id' => $assigneeId,
-                'sender_user_id' => $user->id,
-                'type' => 'task_status_updated',
-                'related_module' => 'task',
-                'related_id' => $task->id,
-                'title' => 'Task Status Updated',
-                'message' => $user->name.' changed status of task "'.$task->title.'" from '.$oldStatus.' to '.$validated['status'].'.',
-                'link' => '/tasks/task-details/'.$task->id.'?from=tasks',
-            ];
-        }
-        $this->notificationService->createBulk($notifications);
-
-        $this->notificationService->confirmAction($user, 'Updated status of', 'task', $task->title, [
-            'Previous Status' => $oldStatus,
-            'New Status' => $validated['status'],
+        return response()->json([
+            'success' => true,
+            'message' => 'Task status updated',
+            'task' => $task->fresh()->load('assignees:id,name,email,role', 'project:id,title'),
         ]);
-
-        $this->clearDashboardCache($user->id);
-
-        // Clear cache for all assignees
-        foreach ($assigneeIds as $assigneeId) {
-            if ((int) $assigneeId !== (int) $user->id) {
-                $this->clearDashboardCache((int) $assigneeId);
-            }
-        }
-
-        return response()->json(['success' => true, 'message' => 'Task status updated', 'task' => $task->fresh()->load('assignees:id,name,email,role')]);
     }
 
     /**
-     * Mark a task as completed and create a deliverable from it.
-     *
-     * Notifies the task creator that the task is ready for review.
+     * Mark a task as complete, create a corresponding deliverable, and notify the creator.
      *
      * @param  Request  $request  The incoming HTTP request.
      * @param  Task  $task  The task to complete.
@@ -2250,6 +2311,7 @@ class TaskController extends Controller
      */
     public function completeTask(Request $request, Task $task)
     {
+        $this->authorize('completeTask', $task);
         try {
             $user = $request->user();
             $isCreator = intval($task->assigned_by) === intval($user->id);
@@ -2341,6 +2403,7 @@ class TaskController extends Controller
      */
     public function timer(Request $request, Task $task)
     {
+        $this->authorize('view', $task);
         $user = $request->user();
         $isCreator = (int) $task->assigned_by === (int) $user->id;
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
@@ -2361,15 +2424,16 @@ class TaskController extends Controller
                 'total_pause_seconds' => (int) ($task->total_pause_seconds ?? 0),
                 'total_pause_formatted' => Task::formatDuration((int) ($task->total_pause_seconds ?? 0)),
                 'resume_count' => (int) ($task->resume_count ?? 0),
-                'work_started_at' => $task->work_started_at?->format('Y-m-d\TH:i:s'),
-                'work_completed_at' => $task->work_completed_at?->format('Y-m-d\TH:i:s'),
-                'last_timer_event_at' => $task->last_timer_event_at?->format('Y-m-d\TH:i:s'),
+                'work_started_at' => $task->work_started_at?->toIso8601String(),
+                'work_completed_at' => $task->work_completed_at?->toIso8601String(),
+                'last_timer_event_at' => $task->last_timer_event_at?->toIso8601String(),
             ],
         ]);
     }
 
     public function timerSessions(Request $request, Task $task)
     {
+        $this->authorize('view', $task);
         $user = $request->user();
         $isCreator = (int) $task->assigned_by === (int) $user->id;
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
@@ -2388,8 +2452,8 @@ class TaskController extends Controller
                 'reason' => $s->reason,
                 'reason_detail' => $s->reason_detail,
                 'reason_label' => $s->reason_label,
-                'paused_at' => $s->paused_at?->format('Y-m-d\TH:i:s'),
-                'resumed_at' => $s->resumed_at?->format('Y-m-d\TH:i:s'),
+                'paused_at' => $s->paused_at?->toIso8601String(),
+                'resumed_at' => $s->resumed_at?->toIso8601String(),
                 'duration_seconds' => $s->duration_seconds ?? 0,
                 'duration_formatted' => $s->formatted_duration,
                 'is_auto_paused' => (bool) $s->is_auto_paused,
@@ -2400,6 +2464,7 @@ class TaskController extends Controller
 
     public function acknowledge(Request $request, Task $task)
     {
+        $this->authorize('acknowledge', $task);
         try {
             $user = $request->user();
             $isAssignee = $task->assignees()->where('users.id', $user->id)->exists()
@@ -2458,12 +2523,6 @@ class TaskController extends Controller
             ]);
 
             try {
-                $task->startTimer();
-            } catch (\Throwable $e) {
-                Log::warning('Task startTimer warning during acknowledge: ' . $e->getMessage());
-            }
-
-            try {
                 if ($task->assignees()->where('users.id', $user->id)->exists()) {
                     $task->assignees()->updateExistingPivot($user->id, [
                         'status' => 'in_progress',
@@ -2485,17 +2544,6 @@ class TaskController extends Controller
             }
 
             try {
-                TaskWorkflowEvent::create([
-                    'task_id' => $task->id,
-                    'user_id' => $user->id,
-                    'action' => 'timer_started',
-                    'comment' => 'Work timer started',
-                ]);
-            } catch (\Throwable $e) {
-                Log::warning('TaskWorkflowEvent timer_started create warning: ' . $e->getMessage());
-            }
-
-            try {
                 if (isset($this->activityService)) {
                     $this->activityService->log($user->id, 'task_acknowledged', 'Acknowledged task "'.$task->title.'"', 'task', $task->id);
                 }
@@ -2514,8 +2562,8 @@ class TaskController extends Controller
                             'task_acknowledged',
                             'task',
                             (int) $task->id,
-                            'Task Acknowledged & Work Started',
-                            $user->name.' acknowledged task "'.$task->title.'" and started working.',
+                            'Task Acknowledged',
+                            $user->name.' acknowledged task "'.$task->title.'".',
                             '/tasks/task-details/'.$task->id.'?from=taskby'
                         );
                     }
@@ -2558,6 +2606,147 @@ class TaskController extends Controller
     }
 
     /**
+     * Start the work timer on an in-progress task.
+     *
+     * Only assignees or authorized users can start the timer.
+     */
+    public function startTimer(Request $request, Task $task)
+    {
+        $this->authorize('startTimer', $task);
+        try {
+            $user = $request->user();
+            $isAssignee = $task->assignees()->where('users.id', $user->id)->exists()
+                || (int) $task->assigned_to === (int) $user->id
+                || in_array($user->role, ['admin', 'manager', 'super_admin']);
+
+            if (! $isAssignee) {
+                return response()->json(['success' => false, 'message' => 'Only assignees can start the timer for this task'], 403);
+            }
+
+            if ($task->assigner_paused) {
+                return response()->json(['success' => false, 'message' => 'This task is paused by the assigner and timer cannot be started'], 422);
+            }
+
+            $currentStatus = strtolower((string) $task->status);
+            if (! in_array($currentStatus, ['in_progress', 'in-progress', 'paused'])) {
+                return response()->json(['success' => false, 'message' => 'Task must be in progress to start timer. Please acknowledge it first.'], 422);
+            }
+
+            if ($task->timer_state === 'running') {
+                $freshTask = $task->fresh();
+                $taskArray = $freshTask ? $freshTask->load(['assignees:id,name,email,role', 'acknowledgedBy:id,name'])->toArray() : $task->toArray();
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Timer is already running',
+                    'task' => $this->taskWithTimer($taskArray),
+                ]);
+            }
+
+            if ($task->timer_state === 'paused' || $currentStatus === 'paused') {
+                $task->update([
+                    'status' => 'in_progress',
+                    'paused_at' => null,
+                    'paused_by' => null,
+                ]);
+                $task->resumeTimer($user->id);
+
+                try {
+                    if ($task->assignees()->where('users.id', $user->id)->exists()) {
+                        $task->assignees()->updateExistingPivot($user->id, [
+                            'status' => 'in_progress',
+                        ]);
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('Task assignees pivot update warning during startTimer/resume: ' . $e->getMessage());
+                }
+
+                try {
+                    TaskWorkflowEvent::create([
+                        'task_id' => $task->id,
+                        'user_id' => $user->id,
+                        'action' => 'continued',
+                        'comment' => $user->name.' resumed this task',
+                    ]);
+                } catch (\Throwable $e) {
+                    Log::warning('TaskWorkflowEvent continued create warning: ' . $e->getMessage());
+                }
+            } else {
+                $task->startTimer();
+
+                try {
+                    TaskWorkflowEvent::create([
+                        'task_id' => $task->id,
+                        'user_id' => $user->id,
+                        'action' => 'timer_started',
+                        'comment' => $user->name.' started work timer',
+                    ]);
+                } catch (\Throwable $e) {
+                    Log::warning('TaskWorkflowEvent timer_started create warning: ' . $e->getMessage());
+                }
+            }
+
+            try {
+                if (isset($this->activityService)) {
+                    $this->activityService->log($user->id, 'task_timer_started', 'Started timer for task "'.$task->title.'"', 'task', $task->id);
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Activity log warning during startTimer: ' . $e->getMessage());
+            }
+
+            try {
+                $task->load('project:id,title');
+                if (isset($this->notificationService)) {
+                    if ($task->assigned_by && (int) $task->assigned_by !== (int) $user->id) {
+                        $this->notificationService->notify(
+                            (int) $task->assigned_by,
+                            (int) $user->id,
+                            'task_timer_started',
+                            'task',
+                            (int) $task->id,
+                            'Task Timer Started',
+                            $user->name.' started working on task "'.$task->title.'".',
+                            '/tasks/task-details/'.$task->id.'?from=taskby'
+                        );
+                    }
+                    $this->notificationService->confirmAction($user, 'Timer Started', 'task', $task->title);
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Notification warning during startTimer: ' . $e->getMessage());
+            }
+
+            try {
+                $this->clearDashboardCache($user->id);
+                if ($task->assigned_by) {
+                    $this->clearDashboardCache((int) $task->assigned_by);
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Clear cache warning during startTimer: ' . $e->getMessage());
+            }
+
+            $freshTask = $task->fresh();
+            $taskArray = $freshTask ? $freshTask->load(['assignees:id,name,email,role', 'acknowledgedBy:id,name'])->toArray() : $task->toArray();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Timer started successfully',
+                'task' => $this->taskWithTimer($taskArray),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error starting task timer: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'task_id' => $task->id ?? null,
+                'user_id' => $request->user()?->id ?? null,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage() ?: 'An error occurred while starting the timer.',
+                'error' => $e->getMessage() ?: 'An error occurred while starting the timer.',
+            ], 500);
+        }
+    }
+
+    /**
      * Pause an in-progress task.
      *
      * Only assignees can pause. Changes status from in_progress to paused
@@ -2565,6 +2754,7 @@ class TaskController extends Controller
      */
     public function pause(Request $request, Task $task)
     {
+        $this->authorize('pause', $task);
         $user = $request->user();
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists() || (int) $task->assigned_to === (int) $user->id;
         $isCreator = (int) ($task->assigned_by ?? 0) === (int) $user->id || (int) ($task->created_by ?? 0) === (int) $user->id;
@@ -2651,6 +2841,7 @@ class TaskController extends Controller
      */
     public function continueTask(Request $request, Task $task)
     {
+        $this->authorize('continue', $task);
         $user = $request->user();
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists() || (int) $task->assigned_to === (int) $user->id;
         $isAuthorized = $isAssignee || in_array($user->role, ['admin', 'manager']);
@@ -2727,6 +2918,7 @@ class TaskController extends Controller
      */
     public function assignerPause(Request $request, Task $task)
     {
+        $this->authorize('assignerPause', $task);
         $user = $request->user();
         $isCreator = (int) ($task->assigned_by ?? 0) === (int) $user->id || (int) ($task->created_by ?? 0) === (int) $user->id;
         $isAdminOrManager = in_array($user->role, ['admin', 'manager', 'super_admin']);
@@ -2836,6 +3028,7 @@ class TaskController extends Controller
      */
     public function assignerResume(Request $request, Task $task)
     {
+        $this->authorize('assignerResume', $task);
         $user = $request->user();
         $isCreator = (int) ($task->assigned_by ?? 0) === (int) $user->id || (int) ($task->created_by ?? 0) === (int) $user->id;
         $isAdminOrManager = in_array($user->role, ['admin', 'manager', 'super_admin']);
@@ -2940,6 +3133,7 @@ class TaskController extends Controller
      */
     public function submit(Request $request, Task $task)
     {
+        $this->authorize('submit', $task);
         $user = $request->user();
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
         $isCurrentOwner = $this->delegationService->isCurrentOwner($task, $user);
@@ -3219,6 +3413,7 @@ class TaskController extends Controller
     /** Forward the current submission to the next required checkpoint or creator. */
     public function submitToNext(Request $request, Task $task): JsonResponse
     {
+        $this->authorize('submitToNext', $task);
         $user = $request->user();
         $validated = $request->validate(['comment' => 'nullable|string|max:2000']);
 
@@ -3408,6 +3603,7 @@ class TaskController extends Controller
      */
     public function approve(Request $request, Task $task)
     {
+        $this->authorize('approve', $task);
         $user = $request->user();
         $hasRoutingStage = in_array($task->submission_stage, ['awaiting_checkpoint', 'awaiting_creator'], true);
         $isRoutingFinalReviewer = $task->submission_stage === 'awaiting_creator'
@@ -3594,6 +3790,7 @@ class TaskController extends Controller
      */
     public function reject(Request $request, Task $task)
     {
+        $this->authorize('reject', $task);
         $user = $request->user();
         $isRoutingReviewer = (int) ($task->current_reviewer_id ?? 0) === (int) $user->id
             && in_array($task->submission_stage, ['awaiting_checkpoint', 'awaiting_creator'], true);
@@ -3619,7 +3816,8 @@ class TaskController extends Controller
 
         $returnUserId = $isRoutingReviewer ? (int) $task->current_submitter_id : null;
         $task->update([
-            'status' => 'rejected',
+            'status' => 'pending',
+            'is_reopened' => true,
             'rejected_at' => now(),
             'rejected_by' => $user->id,
             'rejection_comment' => $validated['comment'] ?? null,
@@ -3628,10 +3826,16 @@ class TaskController extends Controller
             'current_reviewer_id' => null,
             'submission_stage' => $returnUserId ? 'declined' : $task->submission_stage,
             'submission_forwarded_by' => $returnUserId ? [] : ($task->submission_forwarded_by ?? []),
+            'states' => array_values(array_unique(array_merge(is_array($task->states) ? $task->states : [], ['Reopened']))),
         ]);
 
         if ($returnUserId && $task->assignees()->where('users.id', $returnUserId)->exists()) {
             $task->assignees()->updateExistingPivot($returnUserId, ['status' => 'pending', 'submitted_at' => null]);
+        } else {
+            $assigneeIds = $task->assignees()->pluck('users.id')->toArray();
+            if (! empty($assigneeIds)) {
+                $task->assignees()->updateExistingPivot($assigneeIds, ['status' => 'pending', 'submitted_at' => null]);
+            }
         }
 
         TaskWorkflowEvent::create(['task_id' => $task->id, 'user_id' => $user->id, 'action' => 'rejected', 'comment' => $validated['comment'] ?? null]);
@@ -3699,6 +3903,7 @@ class TaskController extends Controller
      */
     public function reopen(Request $request, Task $task)
     {
+        $this->authorize('reopen', $task);
         $user = $request->user();
         $isRoutingReviewer = (int) ($task->current_reviewer_id ?? 0) === (int) $user->id
             && in_array($task->submission_stage, ['awaiting_checkpoint', 'awaiting_creator'], true);
@@ -3769,7 +3974,8 @@ class TaskController extends Controller
 
         $returnUserId = $isRoutingReviewer ? (int) $task->current_submitter_id : null;
         $updateData = [
-            'status' => 'reopened',
+            'status' => 'pending',
+            'is_reopened' => true,
             'reopened_at' => now(),
             'reopened_by' => $user->id,
             'reopen_comment' => $reopenComment,
@@ -3800,15 +4006,21 @@ class TaskController extends Controller
 
         $task->update($updateData);
 
-        // Only the returned submitter has actionable reopened work. Other route
-        // participants see Reopened through routingPayload while retaining their
-        // completed checkpoint state.
+        // Reset assignee pivot status to pending so assignee is required to acknowledge
         try {
             if ($returnUserId && $task->assignees()->where('users.id', $returnUserId)->exists()) {
                 $task->assignees()->updateExistingPivot($returnUserId, [
-                    'status' => 'reopened',
+                    'status' => 'pending',
                     'submitted_at' => null,
                 ]);
+            } else {
+                $assigneeIds = $task->assignees()->pluck('users.id')->toArray();
+                if (! empty($assigneeIds)) {
+                    $task->assignees()->updateExistingPivot($assigneeIds, [
+                        'status' => 'pending',
+                        'submitted_at' => null,
+                    ]);
+                }
             }
         } catch (\Throwable $e) {
             \Log::warning('Task assignees pivot update on reopen warning: '.$e->getMessage());
@@ -3818,7 +4030,7 @@ class TaskController extends Controller
         $task->increment('reopen_count');
 
         // Update latest submission if reopening from approved
-        if ($task->status === 'reopened' && $task->submitted_at) {
+        if ($task->submitted_at) {
             $latestSubmission = TaskSubmission::where('task_id', $task->id)->latest()->first();
             if ($latestSubmission && $latestSubmission->status !== 'reopened') {
                 $latestSubmission->update([
@@ -3913,6 +4125,7 @@ class TaskController extends Controller
      */
     public function latestSubmission(Request $request, Task $task)
     {
+        $this->authorize('view', $task);
         $user = $request->user();
         $isCreator = (int) $task->assigned_by === (int) $user->id;
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
@@ -3981,6 +4194,7 @@ class TaskController extends Controller
      */
     public function markChangesRead(Task $task)
     {
+        $this->authorize('view', $task);
         $task->changes()->where('is_viewed', false)->update(['is_viewed' => true]);
 
         return response()->json(['success' => true, 'message' => 'Changes marked as read']);
@@ -3995,6 +4209,7 @@ class TaskController extends Controller
      */
     public function destroy(Task $task)
     {
+        $this->authorize('delete', $task);
         $user = request()->user();
         $isCreator = (int) ($task->assigned_by ?? 0) === (int) $user->id
             || (int) ($task->created_by ?? 0) === (int) $user->id
@@ -4129,6 +4344,7 @@ class TaskController extends Controller
      */
     public function uploadFile(Request $request, Task $task)
     {
+        $this->authorize('manageFiles', $task);
         $user = $request->user();
         $isCreator = (int) $task->assigned_by === (int) $user->id;
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
@@ -4215,6 +4431,7 @@ class TaskController extends Controller
      */
     public function addLink(Request $request, Task $task)
     {
+        $this->authorize('manageFiles', $task);
         $user = $request->user();
         $isCreator = (int) $task->assigned_by === (int) $user->id;
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
@@ -4274,6 +4491,7 @@ class TaskController extends Controller
      */
     public function deleteFile(Task $task, TaskFile $file)
     {
+        $this->authorize('manageFiles', $task);
         $user = request()->user();
         $isCreator = (int) $task->assigned_by === (int) $user->id;
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
@@ -4332,6 +4550,7 @@ class TaskController extends Controller
      */
     public function renameFile(Request $request, Task $task, TaskFile $file)
     {
+        $this->authorize('manageFiles', $task);
         $user = request()->user();
         $isCreator = (int) $task->assigned_by === (int) $user->id;
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
@@ -4383,6 +4602,7 @@ class TaskController extends Controller
      */
     public function reorderFiles(Request $request, Task $task)
     {
+        $this->authorize('manageFiles', $task);
         $request->validate([
             'items' => 'required|array',
             'items.*.id' => 'required|integer|exists:task_files,id',
@@ -4476,6 +4696,7 @@ class TaskController extends Controller
      */
     public function getAccessCredentials(Task $task)
     {
+        $this->authorize('view', $task);
         $user = request()->user();
         $isCreator = (int) $task->assigned_by === (int) $user->id;
         $isAssignee = $task->assignees->contains('id', $user->id);
@@ -4519,6 +4740,7 @@ class TaskController extends Controller
      */
     public function storeAccessCredential(Request $request, Task $task)
     {
+        $this->authorize('manageCredentials', $task);
         $request->validate([
             'website_name' => 'nullable|string|max:255',
             'username' => 'required|string|max:255',
@@ -4555,6 +4777,7 @@ class TaskController extends Controller
      */
     public function updateAccessCredential(Request $request, Task $task, TaskAccessCredential $credential)
     {
+        $this->authorize('manageCredentials', $task);
         if ($credential->task_id !== $task->id) {
             return response()->json(['success' => false, 'message' => 'Credential does not belong to this task'], 404);
         }
@@ -4596,6 +4819,7 @@ class TaskController extends Controller
      */
     public function deleteAccessCredential(Task $task, TaskAccessCredential $credential)
     {
+        $this->authorize('manageCredentials', $task);
         if ($credential->task_id !== $task->id) {
             return response()->json(['success' => false, 'message' => 'Credential does not belong to this task'], 404);
         }
@@ -4942,7 +5166,8 @@ class TaskController extends Controller
                     }
                     if ($hasTransferred) {
                         $transferCondition = function ($tq) {
-                            $tq->whereJsonContains('tasks.states', 'Transferred')->orWhereJsonContains('tasks.states', 'transferred')
+                            $tq->where('tasks.is_transferred', true)
+                               ->orWhereJsonContains('tasks.states', 'Transferred')->orWhereJsonContains('tasks.states', 'transferred')
                                ->orWhere(function ($dtq) {
                                    $dtq->whereNotNull('tasks.delegation_chain')->where('tasks.delegation_chain', '!=', '[]');
                                });
@@ -4956,7 +5181,8 @@ class TaskController extends Controller
                     }
                     if ($hasReopened) {
                         $reopenCondition = function ($rq) {
-                            $rq->whereJsonContains('tasks.states', 'Reopened')->orWhereJsonContains('tasks.states', 'reopened')
+                            $rq->where('tasks.is_reopened', true)
+                               ->orWhereJsonContains('tasks.states', 'Reopened')->orWhereJsonContains('tasks.states', 'reopened')
                                ->orWhere('tasks.status', 'reopened')
                                ->orWhere('tasks.reopen_count', '>', 0)
                                ->orWhereNotNull('tasks.reopened_at');
@@ -4988,17 +5214,18 @@ class TaskController extends Controller
                         $stateItemLower = strtolower($stateItem);
                         $clause = function ($sq) use ($stateItem, $stateItemLower) {
                             if ($stateItemLower === 'reopened') {
-                                $sq->whereJsonContains('tasks.states', 'Reopened')->orWhereJsonContains('tasks.states', 'reopened')
+                                $sq->where('tasks.is_reopened', true)
+                                   ->orWhereJsonContains('tasks.states', 'Reopened')->orWhereJsonContains('tasks.states', 'reopened')
                                    ->orWhere('tasks.status', 'reopened')
                                    ->orWhere('tasks.reopen_count', '>', 0)
                                    ->orWhereNotNull('tasks.reopened_at');
                             } elseif ($stateItemLower === 'transferred') {
-                                $sq->whereJsonContains('tasks.states', 'Transferred')->orWhereJsonContains('tasks.states', 'transferred')
+                                $sq->where('tasks.is_transferred', true)
+                                   ->orWhereJsonContains('tasks.states', 'Transferred')->orWhereJsonContains('tasks.states', 'transferred')
                                    ->orWhere(function ($dtq) {
                                        $dtq->whereNotNull('tasks.delegation_chain')->where('tasks.delegation_chain', '!=', '[]');
                                    });
                             } else {
-                                $escaped = json_encode($stateItem);
                                 $sq->whereJsonContains('tasks.states', $stateItem);
                             }
                         };
@@ -5185,9 +5412,9 @@ class TaskController extends Controller
             'total_pause_seconds' => (int) ($task->total_pause_seconds ?? 0),
             'total_pause_formatted' => Task::formatDuration((int) ($task->total_pause_seconds ?? 0)),
             'resume_count' => (int) ($task->resume_count ?? 0),
-            'work_started_at' => $task->work_started_at?->format('Y-m-d\TH:i:s'),
-            'work_completed_at' => $task->work_completed_at?->format('Y-m-d\TH:i:s'),
-            'last_timer_event_at' => $task->last_timer_event_at?->format('Y-m-d\TH:i:s'),
+            'work_started_at' => $task->work_started_at?->toIso8601String(),
+            'work_completed_at' => $task->work_completed_at?->toIso8601String(),
+            'last_timer_event_at' => $task->last_timer_event_at?->toIso8601String(),
         ];
 
         return $payload;
@@ -5202,6 +5429,7 @@ class TaskController extends Controller
      */
     public function delegate(Request $request, Task $task)
     {
+        $this->authorize('delegate', $task);
         $user = $request->user();
         $isCreator = (int) $task->assigned_by === (int) $user->id;
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
@@ -5291,6 +5519,7 @@ class TaskController extends Controller
      */
     public function acceptDelegation(Request $request, Task $task)
     {
+        $this->authorize('acceptDelegation', $task);
         $user = $request->user();
 
         $delegation = TaskDelegation::where('task_id', $task->id)
@@ -5324,6 +5553,7 @@ class TaskController extends Controller
      */
     public function rejectDelegation(Request $request, Task $task)
     {
+        $this->authorize('rejectDelegation', $task);
         $user = $request->user();
 
         $validated = $request->validate([
@@ -5361,6 +5591,7 @@ class TaskController extends Controller
      */
     public function revokeDelegation(Request $request, Task $task)
     {
+        $this->authorize('revokeDelegation', $task);
         $user = $request->user();
 
         $validated = $request->validate([
@@ -5394,6 +5625,7 @@ class TaskController extends Controller
      */
     public function delegationChain(Task $task)
     {
+        $this->authorize('view', $task);
         $chain = $this->delegationService->getChainDetails($task);
 
         return response()->json([
@@ -5408,6 +5640,7 @@ class TaskController extends Controller
      */
     public function requestAbandon(Request $request, Task $task)
     {
+        $this->authorize('requestAbandon', $task);
         $user = $request->user();
         if ($task->status === 'abandoned') {
             return response()->json(['success' => false, 'message' => 'Task is already abandoned'], 422);
@@ -5441,6 +5674,7 @@ class TaskController extends Controller
      */
     public function approveAbandon(Request $request, Task $task)
     {
+        $this->authorize('approveAbandon', $task);
         $user = $request->user();
         $isAssignee = (int) $task->assigned_to === (int) $user->id || $task->assignees()->where('users.id', $user->id)->exists();
         if ($isAssignee) {
@@ -5476,6 +5710,7 @@ class TaskController extends Controller
      */
     public function declineAbandon(Request $request, Task $task)
     {
+        $this->authorize('declineAbandon', $task);
         $user = $request->user();
         $isAssignee = (int) $task->assigned_to === (int) $user->id || $task->assignees()->where('users.id', $user->id)->exists();
         if ($isAssignee) {

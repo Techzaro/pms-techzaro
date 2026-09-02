@@ -12,7 +12,10 @@ import {
   formatRelativeTime,
   toLocalDatetimeInput,
   convertToUTC,
+  parseUtcToEpochMs,
 } from "./timezoneUtils";
+
+export { parseUtcToEpochMs };
 
 /**
  * Formats a date string to multiline date and time.

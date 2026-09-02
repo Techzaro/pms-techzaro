@@ -82,7 +82,7 @@ function fileUrl(url) {
 import { publish } from "../utils/eventBus";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { useSubmit } from "../hooks/useSubmit";
-import { formatDateTimeShort, formatDateTime } from "../utils/formatDateTime";
+import { formatDateTimeShort, formatDateTime, parseUtcToEpochMs } from "../utils/formatDateTime";
 import { useActivityHighlight } from "../hooks/useActivityHighlight";
 import { useWorkTimer } from "../hooks/useWorkTimer";
 import FileUploadSection from "../components/FileUploadSection";
@@ -93,7 +93,7 @@ import "./Deliveries.css";
 /** Convert an ISO timestamp to a human-friendly "X time ago" string. */
 function timeAgo(iso, t) {
   if (!iso) return "";
-  const then = new Date(iso).getTime();
+  const then = parseUtcToEpochMs(iso) || new Date(iso).getTime();
   const sec = Math.max(0, Math.floor((Date.now() - then) / 1000));
   if (sec < 60) return t ? t("just now", { defaultValue: "just now" }) : "just now";
   if (sec < 3600) return `${Math.floor(sec / 60)} min ago`;
@@ -110,9 +110,11 @@ function statusLabel(status, t) {
     acknowledged: "In Progress",
     paused: "Paused",
     submitted: "Submitted",
-    reopened: "Reopened",
-    approved: "Approved",
+    reopened: "Pending",
+    approved: "Completed",
+    completed: "Completed",
     rejected: "Declined",
+    declined: "Declined",
     abandoned: "Abandoned",
   };
   const label = map[s] || status || "Pending";
@@ -630,10 +632,11 @@ function TaskDetails() {
   const isTerminalOrSubmitted = ["submitted", "submitted_late", "approved", "abandoned"].includes(taskStatus);
   const canEdit = (readOnly || isOnlyFollower) ? false : (task?.can_edit ?? (task && currentUser && isCreator && !["approved", "submitted", "submitted_late", "abandoned"].includes(taskStatus)));
   const canDelete = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isCreator || isAdminOrManager));
-  const canSubmitTask = !readOnly && !isTerminalOrSubmitted && !isOnlyFollower && task?.can_submit === true;
-  const canAcknowledge = (readOnly || isOnlyFollower || task?.submission_stage === "declined") ? false : (task && currentUser && isAssignee && ["pending", "reopened"].includes(task?.status));
-  const canPause = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isAdminOrManager) && ["in_progress", "submitted"].includes(task?.status) && !task?.assigner_paused);
-  const canContinue = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isAdminOrManager) && task?.status === "paused" && !task?.assigner_paused);
+  const canSubmitTask = !readOnly && !isTerminalOrSubmitted && !isOnlyFollower && (task?.can_submit === true || (isAssignee && ["in_progress", "reopened", "paused"].includes(taskStatus)));
+  const canAcknowledge = (readOnly || isOnlyFollower) ? false : (task && currentUser && isAssignee && ["pending", "reopened"].includes(task?.status));
+  const canStartTimer = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isAdminOrManager) && ["in_progress", "in-progress"].includes(task?.status) && (!task?.timer || task?.timer?.state === "idle" || !task?.timer?.state) && !task?.assigner_paused);
+  const canPause = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isAdminOrManager) && ["in_progress", "submitted"].includes(task?.status) && task?.timer?.state === "running" && !task?.assigner_paused);
+  const canContinue = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isAdminOrManager) && (task?.status === "paused" || task?.timer?.state === "paused") && !task?.assigner_paused);
   const isAssignerLocked = !!task?.assigner_paused;
   const canAssignerPause = (readOnly || isOnlyFollower) ? false : (task && currentUser && isCreator && !task?.assigner_paused && ["pending", "in_progress", "reopened", "paused", "submitted"].includes(task?.status));
   const canAssignerResume = (readOnly || isOnlyFollower) ? false : (task && currentUser && isCreator && task?.assigner_paused);
@@ -647,6 +650,7 @@ function TaskDetails() {
   const canApprove = (readOnly || isOnlyFollower) ? false : (!isAssignee && (isCreator || isSuperAdmin));
 
   const { submitting: acknowledging, run: runAcknowledge } = useSubmit();
+  const { submitting: startingTimer, run: runStartTimer } = useSubmit();
   const { submitting: pausing, run: runPause } = useSubmit();
   const { submitting: continuing, run: runContinue } = useSubmit();
   const { submitting: deleting, run: runDelete } = useSubmit();
@@ -844,6 +848,29 @@ function TaskDetails() {
       }
     } catch {
       notify.error(t("Failed to acknowledge subtask.", { defaultValue: "Failed to acknowledge subtask." }));
+    }
+    setActingSubtaskId(null);
+  };
+
+  const handleSubtaskStartTimer = async (subtaskId) => {
+    setActingSubtaskId(subtaskId);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/deliverables/${subtaskId}/start-timer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const updated = data.deliverable || data.subtask || data;
+        handleSubtaskActionSuccess(updated);
+        showSuccessMessage("Subtask", "timer started");
+      } else {
+        notify.error(data.message || t("Failed to start timer.", { defaultValue: "Failed to start timer." }));
+      }
+    } catch {
+      notify.error(t("Failed to start timer.", { defaultValue: "Failed to start timer." }));
     }
     setActingSubtaskId(null);
   };
@@ -1103,6 +1130,30 @@ function TaskDetails() {
         }
       } catch {
         notify.error(t("Failed to acknowledge task.", { defaultValue: "Failed to acknowledge task." }));
+      }
+    });
+  };
+
+  const handleStartTimer = async () => {
+    await runStartTimer(async () => {
+      try {
+        const token = authToken();
+        const res = await fetch(`${API_URL}/tasks/${taskId}/start-timer`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+          _notifHandled: true,
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setTask(data.task);
+          publish('task:updated', { id: taskId, status: 'in_progress' });
+          publish('data:changed', { type: 'task', action: 'updated' });
+          showSuccessMessage("Task", "timer started");
+        } else {
+          notify.error(data.message || t("Failed to start task timer.", { defaultValue: "Failed to start task timer." }));
+        }
+      } catch {
+        notify.error(t("Failed to start task timer.", { defaultValue: "Failed to start task timer." }));
       }
     });
   };
@@ -1468,6 +1519,12 @@ function TaskDetails() {
                       {acknowledging ? t("Acknowledging...", { defaultValue: "Acknowledging..." }) : t("Acknowledge", { defaultValue: "Acknowledge" })}
                     </button>
                   )}
+                  {canStartTimer && (!isTransferor || transferorHasApproved) && !task?.active_outgoing_delegation && !hasPendingDelegation && (
+                    <button className="td-btn-primary" onClick={handleStartTimer} disabled={startingTimer || isAssignerLocked} style={{ backgroundColor: startingTimer || isAssignerLocked ? "var(--text-muted)" : "var(--color-primary)", borderColor: startingTimer || isAssignerLocked ? "var(--text-muted)" : "var(--color-primary)", opacity: startingTimer || isAssignerLocked ? 0.6 : 1, cursor: startingTimer || isAssignerLocked ? "not-allowed" : "pointer" }}>
+                      <Play size={15} />
+                      {startingTimer ? t("Starting...", { defaultValue: "Starting..." }) : t("Start", { defaultValue: "Start" })}
+                    </button>
+                  )}
                   {canPause && (!isTransferor || transferorHasApproved) && !task?.active_outgoing_delegation && (
                     <button className="td-btn-primary" onClick={() => setPauseModalOpen(true)} disabled={pausing} style={{ backgroundColor: pausing ? "var(--text-muted)" : "var(--color-warning)", borderColor: pausing ? "var(--text-muted)" : "var(--color-warning)", opacity: pausing ? 0.7 : 1, cursor: pausing ? "not-allowed" : "pointer" }}>
                       <Pause size={15} />
@@ -1625,11 +1682,23 @@ function TaskDetails() {
               </div>
 
               <div className="td-badges">
-                <span className="td-badge" style={{ background: statusBgColor(task?.display_status || task?.my_status || task?.status), color: statusColor(task?.display_status || task?.my_status || task?.status) }}>
-                  <span className="td-badge-dot" style={{ background: statusColor(task?.display_status || task?.my_status || task?.status) }} />
-                  {statusLabel(task?.display_status || task?.my_status || task?.status || "Pending", t)}
+                <span className="td-badge" style={{ background: statusBgColor(task?.status), color: statusColor(task?.status) }}>
+                  <span className="td-badge-dot" style={{ background: statusColor(task?.status) }} />
+                  {statusLabel(task?.status || "Pending", t)}
                 </span>
-                {Array.isArray(task?.states) && task.states.map((st, idx) => (
+                {(task?.is_reopened || (Array.isArray(task?.states) && task.states.some((s) => String(s).toLowerCase() === "reopened")) || task?.reopened_at || (task?.reopen_count && task.reopen_count > 0)) && (
+                  <span className="td-badge" style={{ background: "#EDE9FE", color: "#6D28D9", border: "1px solid #DDD6FE" }}>
+                    <span className="td-badge-dot" style={{ background: "#6D28D9" }} />
+                    {t("Reopened", { defaultValue: "Reopened" })}
+                  </span>
+                )}
+                {(task?.is_transferred || (Array.isArray(task?.states) && task.states.some((s) => String(s).toLowerCase() === "transferred")) || (Array.isArray(task?.delegation_chain) && task.delegation_chain.length > 0)) && (
+                  <span className="td-badge" style={{ background: "#E0E7FF", color: "#4338CA", border: "1px solid #C7D2FE" }}>
+                    <span className="td-badge-dot" style={{ background: "#4338CA" }} />
+                    {t("Transferred", { defaultValue: "Transferred" })}
+                  </span>
+                )}
+                {Array.isArray(task?.states) && task.states.filter((st) => !["reopened", "transferred"].includes(String(st).toLowerCase())).map((st, idx) => (
                   <span key={idx} className="td-badge" style={{ background: "#EDE9FE", color: "#6D28D9", border: "1px solid #DDD6FE" }}>
                     <span className="td-badge-dot" style={{ background: "#6D28D9" }} />
                     {t(st, { defaultValue: st })}
@@ -1823,10 +1892,24 @@ function TaskDetails() {
                                   <div className="user-role" style={{ fontSize: 11, color: "#6b7280" }}>{isCreator ? (d.assignee?.role ? d.assignee.role.replace("_", " ") : "") : (d.creator?.role ? d.creator.role.replace("_", " ") : "")}</div>
                                 </div>
                                 <div>
-                                  <span className="badge" style={{ background: statusBgColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), color: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), fontSize: 12, padding: "4px 10px", borderRadius: 999 }}>
-                                    <span className="dot" style={{ background: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) }} />
-                                    {statusLabel(d.status, t)}
-                                  </span>
+                                  <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", alignItems: "center" }}>
+                                    <span className="badge" style={{ background: statusBgColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'in_progress' : d.status), color: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'in_progress' : d.status), fontSize: 12, padding: "4px 10px", borderRadius: 999 }}>
+                                      <span className="dot" style={{ background: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'in_progress' : d.status) }} />
+                                      {statusLabel(d.status, t)}
+                                    </span>
+                                    {(d.is_reopened || (Array.isArray(d?.states) && d.states.some((s) => String(s).toLowerCase() === "reopened")) || d?.reopened_at || (d?.reopen_count && d.reopen_count > 0)) && (
+                                      <span className="badge" style={{ background: "#EDE9FE", color: "#6D28D9", border: "1px solid #DDD6FE", fontSize: 10, padding: "2px 6px", borderRadius: 4 }}>
+                                        <span className="dot" style={{ background: "#6D28D9", width: 5, height: 5 }} />
+                                        {t("Reopened", { defaultValue: "Reopened" })}
+                                      </span>
+                                    )}
+                                    {(d.is_transferred || (Array.isArray(d?.states) && d.states.some((s) => String(s).toLowerCase() === "transferred")) || (Array.isArray(d?.delegation_chain) && d.delegation_chain.length > 0)) && (
+                                      <span className="badge" style={{ background: "#E0E7FF", color: "#4338CA", border: "1px solid #C7D2FE", fontSize: 10, padding: "2px 6px", borderRadius: 4 }}>
+                                        <span className="dot" style={{ background: "#4338CA", width: 5, height: 5 }} />
+                                        {t("Transferred", { defaultValue: "Transferred" })}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                                  <div>
                                    {renderDynamicDates(d, currentUser)}
@@ -1909,16 +1992,21 @@ function TaskDetails() {
                                             <CheckCircle2 size={16} />
                                           </button>
                                         )}
-                                        {!d.assigner_paused && ["in_progress", "submitted"].includes(d.status) && (
-                                          <button className="action-icon-btn action-submit" title={t("Pause", { defaultValue: "Pause" })} disabled={actingSubtaskId === d.id} onClick={() => handleSubtaskPause(d.id)} style={{ color: "#D97706" }}>
-                                            <Pause size={16} />
-                                          </button>
-                                        )}
-                                        {!d.assigner_paused && d.status === "paused" && (
-                                          <button className="action-icon-btn action-submit" title={t("Resume", { defaultValue: "Resume" })} disabled={actingSubtaskId === d.id} onClick={() => handleSubtaskResume(d.id)} style={{ color: "#059669" }}>
-                                            <Play size={16} />
-                                          </button>
-                                        )}
+                                        {!d.assigner_paused && ["in_progress", "reopened"].includes(d.status) && (!d.timer_state || d.timer_state === "idle") && (
+                                           <button className="action-icon-btn action-submit" title={t("Start Timer", { defaultValue: "Start Timer" })} disabled={actingSubtaskId === d.id} onClick={() => handleSubtaskStartTimer(d.id)} style={{ color: "#2563eb" }}>
+                                             <Play size={16} />
+                                           </button>
+                                         )}
+                                         {!d.assigner_paused && ["in_progress", "submitted"].includes(d.status) && d.timer_state === "running" && (
+                                           <button className="action-icon-btn action-submit" title={t("Pause", { defaultValue: "Pause" })} disabled={actingSubtaskId === d.id} onClick={() => handleSubtaskPause(d.id)} style={{ color: "#D97706" }}>
+                                             <Pause size={16} />
+                                           </button>
+                                         )}
+                                         {!d.assigner_paused && (d.status === "paused" || d.timer_state === "paused") && (
+                                           <button className="action-icon-btn action-submit" title={t("Resume", { defaultValue: "Resume" })} disabled={actingSubtaskId === d.id} onClick={() => handleSubtaskResume(d.id)} style={{ color: "#059669" }}>
+                                             <Play size={16} />
+                                           </button>
+                                         )}
                                         {(d.status === "pending" || d.status === "rejected" || d.status === "reopened") && (
                                           <button
                                             className="action-icon-btn action-submit"
