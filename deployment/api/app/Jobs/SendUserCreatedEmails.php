@@ -21,7 +21,7 @@ class SendUserCreatedEmails
     public function __construct(
         public User $user,
         public string $plainPassword,
-        public string $profEmail,
+        public string $profEmail = '',
         public string $profPassword,
         public string $loginUrl,
         public array $emailAttachments,

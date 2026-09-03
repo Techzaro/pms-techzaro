@@ -21,36 +21,28 @@ class SendUserCreatedEmails
     public function __construct(
         public User $user,
         public string $plainPassword,
-        public string $profEmail,
+        public string $profEmail = '',
         public string $profPassword,
         public string $loginUrl,
         public array $emailAttachments,
         public ?string $personalEmail = null,
         public ?string $adderEmail = null,
         public string $adderName = 'PMS Techxaro',
+        public string $emailMode = 'single',
     ) {}
 
     public function handle(): void
     {
-        if ($this->personalEmail) {
+        // Send welcome email only to the new user (not to admin — admin already knows they created the user)
+        $recipientEmail = $this->personalEmail ?: $this->profEmail;
+        if ($recipientEmail) {
             try {
-                Mail::to($this->personalEmail)->send(
-                    new UserCreated($this->user, $this->plainPassword, $this->profEmail, $this->profPassword, $this->loginUrl, $this->emailAttachments, false, '', $this->adderEmail, $this->adderName)
+                Mail::to($recipientEmail)->send(
+                    new UserCreated($this->user, $this->plainPassword, $this->profEmail, $this->profPassword, $this->loginUrl, $this->emailAttachments, false, '', $this->adderEmail, $this->adderName, $this->emailMode)
                 );
-                Log::info("Welcome email sent to personal email {$this->personalEmail} for user ID {$this->user->id}");
+                Log::info("Welcome email sent to {$recipientEmail} for user ID {$this->user->id}");
             } catch (\Throwable $e) {
-                Log::error("Failed to send welcome email to personal email {$this->personalEmail}: " . $e->getMessage());
-            }
-        }
-
-        if ($this->adderEmail) {
-            try {
-                Mail::to($this->adderEmail)->send(
-                    new UserCreated($this->user, $this->plainPassword, $this->profEmail, $this->profPassword, $this->loginUrl, $this->emailAttachments, true, $this->adderName, $this->adderEmail, $this->adderName)
-                );
-                Log::info("Confirmation email sent to {$this->adderEmail} for user ID {$this->user->id}");
-            } catch (\Throwable $e) {
-                Log::error("Failed to send confirmation email to {$this->adderEmail}: " . $e->getMessage());
+                Log::error("Failed to send welcome email to {$recipientEmail}: " . $e->getMessage());
             }
         }
     }

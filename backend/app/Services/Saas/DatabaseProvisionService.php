@@ -2,9 +2,12 @@
 
 namespace App\Services\Saas;
 
+use App\Console\Commands\FixTenantColumns;
 use App\Models\Master\Organization;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * DatabaseProvisionService.
@@ -61,30 +64,59 @@ class DatabaseProvisionService
 
     /**
      * Run all tenant migrations on a specific database.
+     *
+     * Creates a dedicated tenant_runner connection, runs all migration files,
+     * then applies FixTenantColumns for any legacy/missed columns.
      */
-    public function runMigrations(string $databaseName): void
+    public function runMigrations(string $databaseName): bool
     {
-        $masterConfig = config("database.connections.{$this->masterConnection}");
+        try {
+            $masterConfig = config("database.connections.{$this->masterConnection}");
 
-        config()->set('database.connections.tenant', [
-            'driver'    => 'mysql',
-            'host'      => $masterConfig['host'],
-            'port'      => $masterConfig['port'],
-            'database'  => $databaseName,
-            'username'  => $masterConfig['username'],
-            'password'  => $masterConfig['password'] ?? '',
-            'charset'   => 'utf8mb4',
-            'collation' => 'utf8mb4_unicode_ci',
-            'prefix'    => '',
-            'prefix_indexes' => true,
-            'strict'    => true,
-            'engine'    => null,
-        ]);
+            Config::set('database.connections.tenant_runner', [
+                'driver'    => 'mysql',
+                'host'      => $masterConfig['host'],
+                'port'      => $masterConfig['port'],
+                'database'  => $databaseName,
+                'username'  => $masterConfig['username'],
+                'password'  => $masterConfig['password'] ?? '',
+                'charset'   => 'utf8mb4',
+                'collation' => 'utf8mb4_unicode_ci',
+                'prefix'    => '',
+                'prefix_indexes' => true,
+                'strict'    => true,
+                'engine'    => null,
+            ]);
 
-        Artisan::call('migrate', [
-            '--database' => 'tenant',
-            '--force'    => true,
-        ]);
+            DB::purge('tenant_runner');
+            DB::reconnect('tenant_runner');
+
+            $migrationPath = file_exists(database_path('migrations/tenant'))
+                ? 'database/migrations/tenant'
+                : 'database/migrations';
+
+            Artisan::call('migrate', [
+                '--database' => 'tenant_runner',
+                '--path'     => $migrationPath,
+                '--force'    => true,
+            ]);
+
+            Log::info("Migrations completed on tenant DB {$databaseName}", [
+                'output' => Artisan::output(),
+            ]);
+
+            FixTenantColumns::fixDatabaseProgrammatic($databaseName);
+
+            DB::purge('tenant_runner');
+
+            return true;
+        } catch (\Throwable $e) {
+            Log::error("Failed to run migrations on tenant DB {$databaseName}: " . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            throw $e;
+        }
     }
 
     /**

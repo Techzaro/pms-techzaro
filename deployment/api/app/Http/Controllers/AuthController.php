@@ -13,7 +13,7 @@ use App\Services\AuditService;
 use App\Services\Saas\SubscriptionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
+use App\Services\Saas\Infrastructure\TenantCacheManager;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
@@ -71,6 +71,7 @@ class AuthController extends Controller
 
             // Look up user by email — guests use personal_email, employees use professional_email
             $dbNotFound = false;
+            $crossTenantResult = null;
             try {
                 $user = User::where('professional_email', $request->email)
                     ->orWhere('email', $request->email)
@@ -108,6 +109,7 @@ class AuthController extends Controller
                 }
                 $defaultDb = config('database.connections.mysql.database');
                 $result = $this->findUserAcrossTenants($request->email, $defaultDb, $request->password);
+                $crossTenantResult = $result;
                 if (! $result) {
                     // Also check soft-deleted orgs — their DB may have been dropped
                     $deletedOrgWithUser = $this->findUserInDeletedOrgs($request->email);
@@ -130,6 +132,12 @@ class AuthController extends Controller
             $organization = $request->attributes->get('currentOrganization');
             $tenantSlug = $organization?->slug;
 
+            // If we already found the user via cross-tenant search, use that slug
+            if (!$tenantSlug && $crossTenantResult) {
+                $tenantSlug = $crossTenantResult['slug'] ?? null;
+                $organization = $crossTenantResult['organization'] ?? null;
+            }
+
             // Step 1: Look up in current tenant DB (default or resolved tenant)
             try {
                 $tenantUser = User::where('professional_email', $email)
@@ -146,6 +154,15 @@ class AuthController extends Controller
 
             if ($tenantUser) {
                 $user = $tenantUser;
+                // If still no slug from cross-tenant, do a targeted search
+                if (!$tenantSlug) {
+                    $defaultDb = config('database.connections.mysql.database');
+                    $result = $this->findUserAcrossTenants($email, $defaultDb, $request->password);
+                    if ($result) {
+                        $tenantSlug = $result['slug'];
+                        $organization = $result['organization'];
+                    }
+                }
             } else {
                 // Step 2: Verify password — if user not found or password wrong, search across all tenant DBs
                 $defaultDb = config('database.connections.mysql.database');
@@ -225,6 +242,23 @@ class AuthController extends Controller
             // Track last login
             $user->update(['last_login_at' => now()]);
 
+            // Log activity
+            $this->activityService->log($user->id, 'auth_login', 'Logged in to system', 'auth', $user->id, 'login');
+
+            try {
+                $this->auditService->log(
+                    module: 'auth',
+                    action: 'login',
+                    description: 'User logged in successfully',
+                    user: $user,
+                    entityType: 'User',
+                    entityId: $user->id,
+                    status: 'success'
+                );
+            } catch (\Throwable $e) {
+                \Log::error('Failed to log audit on login', ['error' => $e->getMessage()]);
+            }
+
             // Normalize role (teamlead → team_lead)
             $role = $user->role === 'teamlead' ? 'team_lead' : $user->role;
 
@@ -261,6 +295,11 @@ class AuthController extends Controller
                     'role' => $role,
                     'active' => (bool) $user->active,
                     'must_change_password' => (bool) $user->must_change_password,
+                    'language' => $user->language ?? 'English',
+                    'timezone' => $user->timezone ?? 'UTC',
+                    'date_format' => $user->date_format ?? 'DD/MM/YYYY',
+                    'time_format' => $user->time_format ?? '12-hour',
+                    'working_hours' => $user->working_hours,
                 ],
             ];
 
@@ -287,6 +326,7 @@ class AuthController extends Controller
         // Also remove the token mapping from saas_master
         try {
             $token = $request->bearerToken();
+            \Log::info('firstTimeChangePassword called', ['has_bearer' => $token ? true : false]);
             if ($token) {
                 $tokenHash = hash('sha256', $token);
                 DB::connection('mysql_master')->table('personal_access_tokens')
@@ -345,8 +385,7 @@ class AuthController extends Controller
                 return response()->json(['success' => false, 'message' => 'Unauthorized.'], 401);
             }
 
-            $tokenValue = str_contains($token, '|') ? substr($token, strpos($token, '|') + 1) : $token;
-            $hashedToken = hash('sha256', $tokenValue);
+            $hashedToken = hash('sha256', $token);
 
             $organization = $request->attributes->get('currentOrganization');
             $user = null;
@@ -369,11 +408,21 @@ class AuthController extends Controller
                     \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_OBJ,
                 ]);
 
-                $stmt = $pdo->prepare('SELECT tokenable_id FROM `personal_access_tokens` WHERE token = ? LIMIT 1');
-                $stmt->execute([$hashedToken]);
-                $tokenRow = $stmt->fetch();
+                // Try full token hash first (current format), then stripped prefix (old format)
+                $candidateHashes = [$hashedToken];
+                if (str_contains($token, '|')) {
+                    $candidateHashes[] = hash('sha256', substr($token, strpos($token, '|') + 1));
+                }
+                $tokenRow = null;
+                foreach ($candidateHashes as $ch) {
+                    $stmt = $pdo->prepare('SELECT tokenable_id FROM `personal_access_tokens` WHERE token = ? LIMIT 1');
+                    $stmt->execute([$ch]);
+                    $tokenRow = $stmt->fetch();
+                    if ($tokenRow) break;
+                }
 
                 if ($tokenRow) {
+                    \Log::info('firstTimeChangePassword: token row found in tenant DB', ['tokenable_id' => $tokenRow->tokenable_id]);
                     config()->set('database.connections.first_time_tenant', [
                         'driver'   => 'mysql',
                         'host'     => $organization->database_host,
@@ -405,11 +454,20 @@ class AuthController extends Controller
                     ]
                 );
 
-                $stmt = $pdo->prepare('SELECT tokenable_id FROM `personal_access_tokens` WHERE token = ? LIMIT 1');
-                $stmt->execute([$hashedToken]);
-                $tokenRow = $stmt->fetch();
+                $candidateHashes = [$hashedToken];
+                if (str_contains($token, '|')) {
+                    $candidateHashes[] = hash('sha256', substr($token, strpos($token, '|') + 1));
+                }
+                $tokenRow = null;
+                foreach ($candidateHashes as $ch) {
+                    $stmt = $pdo->prepare('SELECT tokenable_id FROM `personal_access_tokens` WHERE token = ? LIMIT 1');
+                    $stmt->execute([$ch]);
+                    $tokenRow = $stmt->fetch();
+                    if ($tokenRow) break;
+                }
 
                 if ($tokenRow) {
+                    \Log::info('firstTimeChangePassword: token row found in default DB', ['tokenable_id' => $tokenRow->tokenable_id]);
                     $user = User::on('mysql')->where('id', $tokenRow->tokenable_id)->first();
                 }
 
@@ -430,41 +488,47 @@ class AuthController extends Controller
             $user->password = bcrypt($request->new_password);
             $user->must_change_password = false;
             $user->active = true;
+            $user->status = 'Active';
             $user->password_changed_by = $user->id;
             $user->password_changed_at = now();
             $user->save();
 
-            // Revoke the token
-            if ($dsn) {
-                $revokePdo = new \PDO($dsn, $dbUsername, $dbPassword, [
-                    \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
-                ]);
-                $revokeStmt = $revokePdo->prepare('DELETE FROM `personal_access_tokens` WHERE token = ?');
-                $revokeStmt->execute([$hashedToken]);
-                $revokePdo = null;
+            // Revoke the temporary token used for this request so user must re-login.
+            // Do NOT issue a new token — force the user to log in again with their new password.
+            try {
+                $oldTokenRaw = $request->bearerToken() ?: '';
+                $candidateHashes = [];
+                if ($oldTokenRaw !== '') {
+                    $candidateHashes[] = hash('sha256', $oldTokenRaw);
+                    $tokenValue = str_contains($oldTokenRaw, '|') ? substr($oldTokenRaw, strpos($oldTokenRaw, '|') + 1) : $oldTokenRaw;
+                    $candidateHashes[] = hash('sha256', $tokenValue);
+                }
 
-                $cleanupPdo = new \PDO($dsn, $dbUsername, $dbPassword, [
-                    \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
-                ]);
-                $cleanupStmt = $cleanupPdo->prepare('DELETE FROM `personal_access_tokens` WHERE tokenable_id = ?');
-                $cleanupStmt->execute([$user->id]);
-                $cleanupPdo = null;
-            } else {
-                $pdo = new \PDO(
-                    'mysql:host=' . config('database.connections.mysql.host')
-                        . ';port=' . config('database.connections.mysql.port')
-                        . ';dbname=' . config('database.connections.mysql.database')
-                        . ';charset=utf8mb4',
-                    config('database.connections.mysql.username'),
-                    config('database.connections.mysql.password') ?? '',
-                    [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
-                );
-                $revokeStmt = $pdo->prepare('DELETE FROM `personal_access_tokens` WHERE token = ?');
-                $revokeStmt->execute([$hashedToken]);
-
-                $cleanupStmt = $pdo->prepare('DELETE FROM `personal_access_tokens` WHERE tokenable_id = ?');
-                $cleanupStmt->execute([$user->id]);
-                $pdo = null;
+                if (! empty($candidateHashes)) {
+                    if ($dsn) {
+                        $revokePdo = new \PDO($dsn, $dbUsername, $dbPassword, [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
+                        $placeholders = rtrim(str_repeat('?,', count($candidateHashes)), ',');
+                        $revokeStmt = $revokePdo->prepare("DELETE FROM `personal_access_tokens` WHERE token IN ($placeholders)");
+                        $revokeStmt->execute($candidateHashes);
+                        $revokePdo = null;
+                    } else {
+                        $pdo = new \PDO(
+                            'mysql:host=' . config('database.connections.mysql.host')
+                                . ';port=' . config('database.connections.mysql.port')
+                                . ';dbname=' . config('database.connections.mysql.database')
+                                . ';charset=utf8mb4',
+                            config('database.connections.mysql.username'),
+                            config('database.connections.mysql.password') ?? '',
+                            [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
+                        );
+                        $placeholders = rtrim(str_repeat('?,', count($candidateHashes)), ',');
+                        $revokeStmt = $pdo->prepare("DELETE FROM `personal_access_tokens` WHERE token IN ($placeholders)");
+                        $revokeStmt->execute($candidateHashes);
+                        $pdo = null;
+                    }
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('Failed to revoke token after first-time password change', ['error' => $e->getMessage()]);
             }
 
             try {
@@ -481,7 +545,7 @@ class AuthController extends Controller
 
             $responseData = [
                 'success' => true,
-                'message' => 'Password changed successfully. Please login with your new password.',
+                'message' => 'Password changed successfully.',
             ];
             if ($organization) {
                 $responseData['tenant_slug'] = $organization->slug;
@@ -592,6 +656,11 @@ class AuthController extends Controller
                 'created_at' => $user->created_at->toDateTimeString(),
                 'updated_at' => $user->updated_at->toDateTimeString(),
                 'must_change_password' => $user->must_change_password,
+                'language' => $user->language ?? 'English',
+                'timezone' => $user->timezone ?? 'UTC',
+                'date_format' => $user->date_format ?? 'DD/MM/YYYY',
+                'time_format' => $user->time_format ?? '12-hour',
+                'working_hours' => $user->working_hours,
             ],
             'stats' => [
                 'total_assigned_tasks' => (int) $taskStats->total_assigned,
@@ -603,7 +672,7 @@ class AuthController extends Controller
             'account' => [
                 'account_age' => $user->created_at->diffForHumans(),
                 'days_since_creation' => $user->created_at->diffInDays(now()),
-                'status' => ! $user->active ? 'Resigned' : ($user->must_change_password ? 'Inactive' : 'Active'),
+                'status' => $user->status ?: ($user->active ? 'Active' : 'Inactive'),
                 'last_login' => $user->last_login_at?->toDateTimeString() ?? 'Never logged in',
             ],
             'activity_max_id' => (int) UserChange::where('user_id', $user->id)->max('id'),
@@ -662,7 +731,7 @@ class AuthController extends Controller
             'employee_code' => 'nullable|string|max:64',
             'job_started_date' => 'nullable|date',
             'job_ended_date' => 'nullable|date',
-            'gross_salary' => 'nullable|string|max:255',
+            'gross_salary' => 'nullable|string|max:1000',
             'applied_via' => 'nullable|string|max:255',
             'bank_name' => 'nullable|string|max:255',
             'bank_account_number' => 'nullable|string|max:64',
@@ -727,21 +796,33 @@ class AuthController extends Controller
             $oldAvatar = $user->avatar;
             $file = $request->file('avatar');
             if ($file->isValid()) {
-                $disk = Storage::disk('public');
-                if ($oldAvatar && $disk->exists($oldAvatar)) {
-                    $disk->delete($oldAvatar);
+                $org = $request->attributes->get('currentOrganization');
+                $disk = $org ? \App\Services\StorageDiskResolver::getDisk($org) : 'public';
+                $diskInstance = Storage::disk($disk);
+
+                if ($oldAvatar) {
+                    $cleanPath = ltrim($oldAvatar, '/');
+                    if (str_starts_with($cleanPath, 'storage/')) $cleanPath = substr($cleanPath, 8);
+                    try { if ($diskInstance->exists($cleanPath)) $diskInstance->delete($cleanPath); } catch (\Exception $e) {}
                 }
-                if (!$disk->exists('avatars/' . $user->id)) {
-                    $disk->makeDirectory('avatars/' . $user->id);
+
+                $category = 'avatars/' . $user->id;
+                if ($org) {
+                    $filename = 'avatar_' . time() . '_' . mt_rand(10000, 99999) . '.' . $file->getClientOriginalExtension();
+                    $avatarPath = \App\Services\StorageDiskResolver::store($org, $file, $category, $filename);
+                } else {
+                    if (!$diskInstance->exists($category)) {
+                        $diskInstance->makeDirectory($category);
+                    }
+                    $filename = 'avatar_' . time() . '_' . mt_rand(10000, 99999) . '.' . $file->getClientOriginalExtension();
+                    $avatarPath = $file->storeAs($category, $filename, 'public');
                 }
-                $filename = 'avatar_' . time() . '_' . mt_rand(10000, 99999) . '.' . $file->getClientOriginalExtension();
-                $avatarPath = $file->storeAs('avatars/' . $user->id, $filename, 'public');
-                if ($avatarPath && $disk->exists($avatarPath)) {
+
+                if ($avatarPath) {
                     $user->avatar = $avatarPath;
                 } else {
                     \Log::error('Auth profile avatar upload failed', [
                         'user_id' => $user->id,
-                        'returned_path' => $avatarPath,
                     ]);
                 }
             }
@@ -788,10 +869,17 @@ class AuthController extends Controller
             'other_document',
         ];
 
-        $disk = \Storage::disk('public');
-        if (!$disk->exists('user_documents/' . $user->id)) {
-            $disk->makeDirectory('user_documents/' . $user->id);
+        // Resolve disk: S3 if org has it configured, else local public
+        $org = $request->attributes->get('currentOrganization');
+        if (!$org && $user->company_name) {
+            try {
+                $org = \App\Models\Master\Organization::on('mysql_master')->where('slug', $user->company_name)
+                    ->orWhere('name', $user->company_name)->first();
+            } catch (\Throwable $e) {}
         }
+        $disk = $org ? \App\Services\StorageDiskResolver::getDisk($org) : 'public';
+        $diskInstance = \Storage::disk($disk);
+        $category = 'user_documents/' . $user->id;
 
         $hasFileUploads = false;
         foreach ($documentFields as $field) {
@@ -805,17 +893,21 @@ class AuthController extends Controller
                     $newDocs = [];
                     foreach ($files as $index => $file) {
                         if ($file->isValid()) {
-                            $filename = $field . '_' . time() . '_' . mt_rand(10000, 99999) . '_' . $file->getClientOriginalName();
-                            $path = $file->storeAs('user_documents/' . $user->id, $filename, 'public');
+                            if ($org) {
+                                $filename = $field . '_' . time() . '_' . mt_rand(10000, 99999) . '_' . $file->getClientOriginalName();
+                                $path = \App\Services\StorageDiskResolver::store($org, $file, $category, $filename);
+                            } else {
+                                $filename = $field . '_' . time() . '_' . mt_rand(10000, 99999) . '_' . $file->getClientOriginalName();
+                                $path = $file->storeAs($category, $filename, 'public');
+                            }
 
-                            if ($path && $disk->exists($path)) {
+                            if ($path) {
                                 $customName = isset($names[$index]) ? $names[$index] : $file->getClientOriginalName();
                                 $customName = preg_replace('/\.[^.]+$/', '', $customName);
                                 $newDocs[] = ['path' => $path, 'name' => $customName];
                             } else {
                                 \Log::error('Auth profile other_document upload failed', [
                                     'user_id' => $user->id,
-                                    'returned_path' => $path,
                                 ]);
                             }
                         }
@@ -844,14 +936,31 @@ class AuthController extends Controller
                     continue;
                 }
 
-                if ($user->$field && $disk->exists($user->$field)) {
-                    $disk->delete($user->$field);
+                // Delete old file if exists
+                if ($user->$field) {
+                    $oldPath = ltrim($user->$field, '/');
+                    if (str_starts_with($oldPath, 'storage/')) {
+                        $oldPath = substr($oldPath, 8);
+                    }
+                    try {
+                        if ($diskInstance->exists($oldPath)) {
+                            $diskInstance->delete($oldPath);
+                        }
+                    } catch (\Exception $e) {
+                        \Log::warning('Could not delete old profile document', ['path' => $user->$field, 'error' => $e->getMessage()]);
+                    }
                 }
 
-                $filename = $field.'_'.time().'_'.$file->getClientOriginalName();
-                $path = $file->storeAs('user_documents/'.$user->id, $filename, 'public');
+                // Store file using StorageDiskResolver (S3 or local)
+                if ($org) {
+                    $filename = $field . '_' . time() . '_' . $file->getClientOriginalName();
+                    $path = \App\Services\StorageDiskResolver::store($org, $file, $category, $filename);
+                } else {
+                    $filename = $field . '_' . time() . '_' . $file->getClientOriginalName();
+                    $path = $file->storeAs($category, $filename, 'public');
+                }
 
-                if ($path && $disk->exists($path)) {
+                if ($path) {
                     $user->$field = $path;
                     $hasFileUploads = true;
 
@@ -863,10 +972,9 @@ class AuthController extends Controller
                         'modified_by' => $user->id,
                     ]);
                 } else {
-                    \Log::error('Auth profile document upload failed - file not on disk', [
+                    \Log::error('Auth profile document upload failed', [
                         'user_id' => $user->id,
                         'field' => $field,
-                        'returned_path' => $path,
                     ]);
                 }
             }
@@ -893,8 +1001,8 @@ class AuthController extends Controller
             \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
         }
 
-        Cache::forget("user_profile_{$user->id}");
-        Cache::forget('all_users_list');
+        app(TenantCacheManager::class)->forget("user_profile_{$user->id}");
+        app(TenantCacheManager::class)->forget('all_users_list');
 
         return response()->json([
             'success' => true,
@@ -1050,6 +1158,44 @@ class AuthController extends Controller
 
         // Legacy single file path
         return [['path' => $value, 'name' => null]];
+    }
+
+    /**
+     * AUTH_025: Check if an email address belongs to a public personal email provider.
+     */
+    private function isPersonalEmail(string $email): bool
+    {
+        $parts = explode('@', strtolower(trim($email)));
+        if (count($parts) < 2) {
+            return false;
+        }
+        $domain = end($parts);
+
+        $personalDomains = [
+            'gmail.com', 'googlemail.com',
+            'yahoo.com', 'yahoo.co.in', 'yahoo.co.uk', 'yahoo.ca', 'ymail.com', 'rocketmail.com',
+            'hotmail.com', 'hotmail.co.uk', 'hotmail.fr', 'hotmail.de', 'live.com', 'live.co.uk', 'msn.com',
+            'outlook.com', 'outlook.co.uk',
+            'icloud.com', 'me.com', 'mac.com',
+            'aol.com', 'aim.com',
+            'protonmail.com', 'proton.me', 'pm.me',
+            'zoho.com', 'zohomail.com',
+            'yandex.com', 'yandex.ru',
+            'mail.com', 'email.com',
+            'gmx.com', 'gmx.net',
+            'rediffmail.com', 'inbox.com', 'fastmail.com', 'hushmail.com'
+        ];
+
+        if (in_array($domain, $personalDomains, true)) {
+            return true;
+        }
+
+        // Regex check for common personal domain patterns (e.g. yahoo.*, hotmail.*, gmx.*)
+        if (preg_match('/^(gmail|yahoo|hotmail|outlook|live|icloud|aol|protonmail|proton|yandex|mail|gmx|rediffmail)\./i', $domain)) {
+            return true;
+        }
+
+        return false;
     }
 
     /**

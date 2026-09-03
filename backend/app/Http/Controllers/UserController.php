@@ -13,6 +13,12 @@ use App\Services\Saas\Infrastructure\TenantCacheManager;
 use Illuminate\Support\Facades\DB;
 use App\Models\Project;
 use App\Models\Team;
+use App\Models\Deliverable;
+use App\Models\Event;
+use App\Models\ProjectMilestone;
+use App\Models\KnowledgeBase;
+use App\Models\Template;
+use App\Models\TaskComment;
 use App\Jobs\SendUserCreatedEmails;
 use App\Mail\GuestInvitation;
 use App\Mail\UserCreated;
@@ -145,16 +151,15 @@ class UserController extends Controller
         $isDraft = strtolower($request->input('status', '')) === 'draft' || $request->boolean('is_draft');
 
         try {
-            // Check org email policy — standard policy makes professional_email optional
-            $org = $request->attributes->get('currentOrganization');
-            $emailPolicy = $org->email_policy ?? 'standard';
-            $isCompanyRequired = $emailPolicy === 'company_required';
+            // Per-user email mode: single or two_emails
+            $emailMode = $request->input('email_mode');
 
             $request->validate([
                 'name' => 'required|string|max:255',
+                'email_mode' => 'nullable|string|in:single,two_emails',
                 'email' => $isDraft ? 'nullable|string|email|max:255|unique:users,email' : 'required|string|email|max:255|unique:users,email',
                 'personal_email' => 'nullable|email|max:255',
-                'professional_email' => ($isDraft || !$isCompanyRequired) ? 'nullable|string|email|max:255' : 'required|string|email|max:255',
+                'professional_email' => 'nullable|string|email|max:255',
                 'professional_email_password' => 'nullable|string|max:255',
                 'role' => [$isDraft ? 'nullable' : 'required', Rule::in(['admin', 'manager', 'team_lead', 'teamlead', 'member', 'guest'])],
                 'father_name' => 'nullable|string|max:255',
@@ -192,16 +197,109 @@ class UserController extends Controller
                 'project_ids' => 'nullable|array',
                 'project_ids.*' => 'integer|exists:projects,id',
             ]);
+
+            // Validate email_mode specific requirements
+            if ($emailMode === 'two_emails') {
+                if (!$isDraft) {
+                    if (!$request->filled('personal_email')) {
+                        throw \Illuminate\Validation\ValidationException::withMessages([
+                            'personal_email' => 'Personal Email Address is required when using two-email mode.',
+                        ]);
+                    }
+                    if (!$request->filled('professional_email')) {
+                        throw \Illuminate\Validation\ValidationException::withMessages([
+                            'professional_email' => 'Professional Email Address is required when using two-email mode.',
+                        ]);
+                    }
+                }
+                // Validate emails are different
+                $personalEmail = strtolower(trim($request->input('personal_email', '')));
+                $professionalEmail = strtolower(trim($request->input('professional_email', '')));
+                if ($personalEmail && $professionalEmail && $personalEmail === $professionalEmail) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'professional_email' => 'Personal and Professional email addresses must be different.',
+                    ]);
+                }
+            }
+
+            // Validate email domains have valid MX records (prevent fake/dummy emails)
+            $emailsToValidate = [];
+            if ($request->filled('email')) $emailsToValidate['email'] = $request->input('email');
+            if ($request->filled('personal_email')) $emailsToValidate['personal_email'] = $request->input('personal_email');
+            if ($request->filled('professional_email')) $emailsToValidate['professional_email'] = $request->input('professional_email');
+
+            foreach ($emailsToValidate as $field => $emailToCheck) {
+                $domain = strtolower(trim(substr(strrchr($emailToCheck, '@'), 1)));
+                if ($domain && !self::isValidEmailDomain($domain)) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        $field => "The email domain '{$domain}' is not valid or does not exist.",
+                    ]);
+                }
+            }
+
+            // Validate global email uniqueness for all provided emails
+            $emailsToCheck = [];
+            if ($request->filled('email')) $emailsToCheck[] = $request->input('email');
+            if ($request->filled('personal_email')) $emailsToCheck[] = $request->input('personal_email');
+            if ($request->filled('professional_email')) $emailsToCheck[] = $request->input('professional_email');
+
+            foreach ($emailsToCheck as $checkEmail) {
+                // Check current tenant
+                if (!\App\Models\EmailIdentity::isEmailGloballyUnique($checkEmail)) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'email' => "The email address '{$checkEmail}' is already registered in the system.",
+                    ]);
+                }
+                // Cross-tenant check: use mysql_master connection (not tenant-scoped 'mysql')
+                $normalizedEmail = strtolower(trim($checkEmail));
+                $existingOrgs = \App\Models\Master\Organization::where('status', '!=', 'deleted')->get();
+                foreach ($existingOrgs as $org) {
+                    try {
+                        $dbName = $org->database_name;
+                        if (!$dbName) continue;
+                        $result = DB::connection('mysql_master')->select(
+                            "SELECT id FROM `{$dbName}`.`users` WHERE LOWER(email) = ? OR LOWER(personal_email) = ? OR LOWER(professional_email) = ? LIMIT 1",
+                            [$normalizedEmail, $normalizedEmail, $normalizedEmail]
+                        );
+                        if (!empty($result)) {
+                            throw \Illuminate\Validation\ValidationException::withMessages([
+                                'email' => "The email address '{$checkEmail}' is already registered in another organization.",
+                            ]);
+                        }
+                        // Also check email_identities table
+                        try {
+                            $identityResult = DB::connection('mysql_master')->select(
+                                "SELECT id FROM `{$dbName}`.`email_identities` WHERE normalized_email = ? LIMIT 1",
+                                [$normalizedEmail]
+                            );
+                            if (!empty($identityResult)) {
+                                throw \Illuminate\Validation\ValidationException::withMessages([
+                                    'email' => "The email address '{$checkEmail}' is already registered in another organization.",
+                                ]);
+                            }
+                        } catch (\Illuminate\Validation\ValidationException $ve) {
+                            throw $ve;
+                        } catch (\Throwable $e) {
+                            // email_identities table may not exist in older tenants
+                        }
+                    } catch (\Illuminate\Validation\ValidationException $ve) {
+                        throw $ve;
+                    } catch (\Throwable $e) {
+                        continue;
+                    }
+                }
+            }
         } catch (\Illuminate\Validation\ValidationException $e) {
             Log::error('User create validation failed', ['errors' => $e->errors()]);
             throw $e;
         }
 
         $passwordType = $request->input('password_type', 'auto');
-        if ($passwordType === 'manual' && $request->filled('password')) {
-            $plainPassword = $request->input('password');
-        } else {
+        $isAutoPassword = $passwordType !== 'manual';
+        if ($isAutoPassword) {
             $plainPassword = Str::random(10);
+        } else {
+            $plainPassword = $request->input('password');
         }
         $role = $request->input('role') === 'teamlead' ? 'team_lead' : ($request->input('role') ?: 'member');
 
@@ -214,14 +312,18 @@ class UserController extends Controller
             ], 403);
         }
 
+        $emailMode = $request->input('email_mode');
+
         $user = User::create([
             'name' => $request->input('name'),
             'email' => $request->input('email') ?: ($isDraft ? 'draft_' . Str::random(8) . '@draft.local' : null),
+            'email_mode' => $emailMode,
             'password' => Hash::make($plainPassword),
             'role' => $role,
-            'status' => $isDraft ? 'Draft' : 'Inactive',
-            'active' => $isDraft ? false : false,
-            'must_change_password' => true,
+            'status' => $isDraft ? 'Draft' : (($isAutoPassword || $emailMode === 'single') ? 'Inactive' : 'Active'),
+            'active' => $isDraft ? false : (!$isAutoPassword && $emailMode !== 'single'),
+            'must_change_password' => $isAutoPassword || $emailMode === 'single',
+            'email_verification_exempt' => $isAutoPassword && $emailMode === 'single',
 
             // Contact
             'contact_no' => $request->input('phone_number') ?? $request->input('contact_no'),
@@ -240,8 +342,8 @@ class UserController extends Controller
             'emergency_contact_phone' => $request->input('emergency_contact_phone'),
 
             // Emails
-            'personal_email' => $request->input('personal_email'),
-            'professional_email' => $request->input('professional_email') ?: $request->input('personal_email'),
+            'personal_email' => $emailMode === 'two_emails' ? $request->input('personal_email') : null,
+            'professional_email' => $emailMode === 'two_emails' ? $request->input('professional_email') : null,
             'professional_email_password' => $request->input('professional_email_password') ?: null,
             'recovery_email' => $request->input('recovery_email'),
 
@@ -260,6 +362,47 @@ class UserController extends Controller
             'bank_account_number' => $request->input('bank_account_number'),
             'bank_account_title' => $request->input('bank_account_title'),
         ]);
+
+        // Register email identities for global uniqueness tracking
+        if (!$isDraft && $user->email) {
+            try {
+                $identityType = $emailMode === 'two_emails' ? 'primary' : 'primary';
+                \App\Models\EmailIdentity::registerEmail(
+                    $user->id,
+                    $user->email,
+                    $identityType,
+                    false
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Failed to register email identity', ['user_id' => $user->id, 'error' => $e->getMessage()]);
+            }
+        }
+        if (!$isDraft && $emailMode === 'two_emails') {
+            if ($request->filled('personal_email') && $request->input('personal_email') !== $user->email) {
+                try {
+                    \App\Models\EmailIdentity::registerEmail(
+                        $user->id,
+                        $request->input('personal_email'),
+                        'personal',
+                        false
+                    );
+                } catch (\Throwable $e) {
+                    Log::warning('Failed to register personal email identity', ['user_id' => $user->id, 'error' => $e->getMessage()]);
+                }
+            }
+            if ($request->filled('professional_email') && $request->input('professional_email') !== $user->email) {
+                try {
+                    \App\Models\EmailIdentity::registerEmail(
+                        $user->id,
+                        $request->input('professional_email'),
+                        'professional',
+                        false
+                    );
+                } catch (\Throwable $e) {
+                    Log::warning('Failed to register professional email identity', ['user_id' => $user->id, 'error' => $e->getMessage()]);
+                }
+            }
+        }
 
         // Attach user to selected projects immediately upon creation
         $projectIds = $request->input('project_ids', $request->input('projects', []));
@@ -359,7 +502,7 @@ class UserController extends Controller
         $emailSent = false;
         $emailError = null;
 
-        $profEmail = $request->input('professional_email') ?: $user->professional_email;
+        $profEmail = $request->input('professional_email') ?: $user->professional_email ?: '';
         $profPassword = $request->input('professional_email_password') ?: '';
         $personalEmail = $request->input('personal_email');
         $adderEmail = $authUser->professional_email ?: $authUser->personal_email ?: $authUser->email;
@@ -370,13 +513,23 @@ class UserController extends Controller
                 ? 'User created successfully. Welcome email will be sent to ' . $personalEmail
                 : 'User created successfully.');
 
-        // Send emails synchronously to ensure delivery (skip for drafts)
+        // Send welcome email to new user
         if (! $isDraft) {
             try {
-                SendUserCreatedEmails::dispatchSync(
-                    $user, $plainPassword, $profEmail, $profPassword, $loginUrl, $emailAttachments,
-                    $personalEmail, $adderEmail, $authUser->name
-                );
+                if ($passwordType === 'auto' || ($passwordType === 'manual' && $emailMode === 'two_emails')) {
+                    // Auto password OR manual+two_emails: send full email with credentials
+                    SendUserCreatedEmails::dispatchSync(
+                        $user, $plainPassword, $profEmail, $profPassword, $loginUrl, $emailAttachments,
+                        $personalEmail, $adderEmail, $authUser->name, $emailMode
+                    );
+                } else {
+                    // Manual password + single email: send simple welcome email (no password details)
+                    $recipientEmail = $personalEmail ?: $user->email;
+                    if ($recipientEmail) {
+                        $orgName = $org->name ?? 'Our Organization';
+                        Mail::to($recipientEmail)->send(new \App\Mail\SimpleWelcomeMail($user, $loginUrl, $orgName));
+                    }
+                }
             } catch (\Throwable $e) {
                 Log::error('Failed to send user created emails', [
                     'user_id' => $user->id,
@@ -411,6 +564,7 @@ class UserController extends Controller
         $request->validate([
             'name' => 'sometimes|required|string|max:255',
             'email' => ['sometimes', 'required', 'string', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
+            'email_mode' => 'nullable|string|in:single,two_emails',
             'role' => ['sometimes', 'required', Rule::in(['admin', 'manager', 'team_lead', 'teamlead', 'member'])],
             'active' => ['sometimes', 'boolean'],
             'company_name' => 'nullable|string|max:255',
@@ -425,7 +579,7 @@ class UserController extends Controller
             'emergency_contact_relation' => 'nullable|string|max:255',
             'emergency_contact_phone' => 'nullable|string|max:32',
             'personal_email' => 'nullable|email|max:255',
-            'professional_email' => ['sometimes', 'required', 'string', 'email', 'max:255', Rule::unique('users', 'professional_email')->ignore($user->id)],
+            'professional_email' => ['sometimes', 'nullable', 'string', 'email', 'max:255'],
             'professional_email_password' => 'nullable|string|max:255',
             'status' => ['sometimes', 'nullable', 'string', Rule::in(['Active', 'Inactive', 'Resigned', 'active', 'inactive', 'resigned'])],
             'recovery_email' => 'nullable|email|max:255',
@@ -451,6 +605,66 @@ class UserController extends Controller
             'avatar' => 'nullable|image|mimes:jpeg,jpg,png,webp|max:5120',
             'avatar_remove' => 'nullable|in:1',
         ]);
+
+        // Validate email_mode specific requirements on update
+        $emailMode = $request->input('email_mode', $user->email_mode);
+        if ($emailMode === 'two_emails') {
+            if ($request->filled('personal_email') && !$request->filled('professional_email') && !$user->professional_email) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'professional_email' => 'Professional Email Address is required when using two-email mode.',
+                ]);
+            }
+            // Validate emails are different
+            $personalEmail = strtolower(trim($request->input('personal_email', $user->personal_email ?? '')));
+            $professionalEmail = strtolower(trim($request->input('professional_email', $user->professional_email ?? '')));
+            if ($personalEmail && $professionalEmail && $personalEmail === $professionalEmail) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'professional_email' => 'Personal and Professional email addresses must be different.',
+                ]);
+            }
+        }
+
+        // Validate global email uniqueness for changed emails
+        $emailsToCheck = [];
+        if ($request->filled('email') && $request->input('email') !== $user->email) {
+            $emailsToCheck['email'] = $request->input('email');
+        }
+        if ($request->filled('personal_email') && $request->input('personal_email') !== $user->personal_email) {
+            $emailsToCheck['personal_email'] = $request->input('personal_email');
+        }
+        if ($request->filled('professional_email') && $request->input('professional_email') !== $user->professional_email) {
+            $emailsToCheck['professional_email'] = $request->input('professional_email');
+        }
+
+        foreach ($emailsToCheck as $field => $checkEmail) {
+            if (!\App\Models\EmailIdentity::isEmailGloballyUnique($checkEmail, $user->id)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    $field => "The email address '{$checkEmail}' is already registered in the system.",
+                ]);
+            }
+            // Cross-tenant check: use mysql_master connection
+            $normalizedEmail = strtolower(trim($checkEmail));
+            $existingOrgs = \App\Models\Master\Organization::where('status', '!=', 'deleted')->get();
+            foreach ($existingOrgs as $org) {
+                try {
+                    $dbName = $org->database_name;
+                    if (!$dbName) continue;
+                    $result = DB::connection('mysql_master')->select(
+                        "SELECT id FROM `{$dbName}`.`users` WHERE (LOWER(email) = ? OR LOWER(personal_email) = ? OR LOWER(professional_email) = ?) AND id != ? LIMIT 1",
+                        [$normalizedEmail, $normalizedEmail, $normalizedEmail, $user->id]
+                    );
+                    if (!empty($result)) {
+                        throw \Illuminate\Validation\ValidationException::withMessages([
+                            $field => "The email address '{$checkEmail}' is already registered in another organization.",
+                        ]);
+                    }
+                } catch (\Illuminate\Validation\ValidationException $ve) {
+                    throw $ve;
+                } catch (\Throwable $e) {
+                    continue;
+                }
+            }
+        }
 
         $authUser = $request->user();
 
@@ -483,7 +697,7 @@ class UserController extends Controller
         }
 
         $fields = [
-            'name', 'email', 'role', 'active',
+            'name', 'email', 'email_mode', 'role', 'active',
             'father_name', 'id_card_number', 'phone_number',
             'present_address', 'permanent_address',
             'emergency_contact_name', 'emergency_contact_relation', 'emergency_contact_phone',
@@ -581,6 +795,44 @@ class UserController extends Controller
         }
 
         $user->save();
+
+        // Register email identities for newly added/changed emails
+        if ($request->filled('email') && $request->input('email') !== ($oldValues['email'] ?? null)) {
+            try {
+                \App\Models\EmailIdentity::registerEmail(
+                    $user->id,
+                    $request->input('email'),
+                    'primary',
+                    (bool) $user->email_verified_at
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Failed to register email identity on update', ['user_id' => $user->id, 'error' => $e->getMessage()]);
+            }
+        }
+        if ($request->filled('personal_email') && $request->input('personal_email') !== ($oldValues['personal_email'] ?? null)) {
+            try {
+                \App\Models\EmailIdentity::registerEmail(
+                    $user->id,
+                    $request->input('personal_email'),
+                    'personal',
+                    (bool) $user->personal_email_verified_at
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Failed to register personal email identity on update', ['user_id' => $user->id, 'error' => $e->getMessage()]);
+            }
+        }
+        if ($request->filled('professional_email') && $request->input('professional_email') !== ($oldValues['professional_email'] ?? null)) {
+            try {
+                \App\Models\EmailIdentity::registerEmail(
+                    $user->id,
+                    $request->input('professional_email'),
+                    'professional',
+                    (bool) $user->professional_email_verified_at
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Failed to register professional email identity on update', ['user_id' => $user->id, 'error' => $e->getMessage()]);
+            }
+        }
 
         $changes = [];
 
@@ -805,6 +1057,9 @@ class UserController extends Controller
             }
         }
 
+        // Clean up all references to this user across JSON columns before deletion
+        $this->cleanUpUserReferences($user);
+
         // Delete associated files
         $this->deleteAllFiles($user);
 
@@ -830,6 +1085,64 @@ class UserController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'User deleted successfully',
+        ]);
+    }
+
+    /**
+     * Check if a user is involved in any projects (created, assigned, or guest).
+     */
+    public function projectInvolvement(Request $request, User $user)
+    {
+        $userId = $user->id;
+
+        $createdProjects = \App\Models\Project::where('created_by', $userId)->pluck('id', 'title')->toArray();
+        $assignedProjects = \App\Models\Project::whereJsonContains('assigned_users', $userId)->pluck('id', 'title')->toArray();
+        $guestProjects = \App\Models\Project::whereJsonContains('guest_ids', $userId)->pluck('id', 'title')->toArray();
+
+        return response()->json([
+            'created' => $createdProjects,
+            'assigned' => $assignedProjects,
+            'guest' => $guestProjects,
+            'has_involvement' => !empty($createdProjects) || !empty($assignedProjects) || !empty($guestProjects),
+        ]);
+    }
+
+    /**
+     * Reassign all projects from one user to another.
+     */
+    public function reassignProjects(Request $request, User $user)
+    {
+        $request->validate([
+            'new_user_id' => 'required|exists:users,id',
+        ]);
+
+        $oldUserId = $user->id;
+        $newUserId = $request->input('new_user_id');
+
+        // Projects created by old user -> reassign to new user
+        \App\Models\Project::where('created_by', $oldUserId)->update(['created_by' => $newUserId]);
+
+        // Projects where old user is assigned -> swap ID
+        $assignedProjects = \App\Models\Project::whereJsonContains('assigned_users', $oldUserId)->get();
+        foreach ($assignedProjects as $project) {
+            $users = $project->assigned_users ?? [];
+            $users = array_map(fn($id) => (int) $id === (int) $oldUserId ? (int) $newUserId : (int) $id, $users);
+            $project->assigned_users = array_values(array_unique($users));
+            $project->saveQuietly();
+        }
+
+        // Projects where old user is guest -> swap ID
+        $guestProjects = \App\Models\Project::whereJsonContains('guest_ids', $oldUserId)->get();
+        foreach ($guestProjects as $project) {
+            $guests = $project->guest_ids ?? [];
+            $guests = array_map(fn($id) => (int) $id === (int) $oldUserId ? (int) $newUserId : (int) $id, $guests);
+            $project->guest_ids = array_values(array_unique($guests));
+            $project->saveQuietly();
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Projects reassigned successfully',
         ]);
     }
 
@@ -1304,6 +1617,51 @@ class UserController extends Controller
      * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
      * @return \App\Models\User|null  The authenticated user or null if not found.
      */
+
+    /**
+     * Validate that an email domain has valid MX records and is not a known throwaway/fake domain.
+     * Prevents registration with fake/dummy email addresses.
+     */
+    private static function isValidEmailDomain(string $domain): bool
+    {
+        // Allow common dev/test domains
+        $allowedDomains = ['localhost', 'test.com', 'example.com', 'mailinator.com'];
+        if (in_array($domain, $allowedDomains)) {
+            return true;
+        }
+        // Allow draft emails
+        if (str_ends_with($domain, 'draft.local')) {
+            return true;
+        }
+
+        // Block known fake/throwaway/temporary email domains
+        $blockedDomains = [
+            'mailinator.com', 'guerrillamail.com', 'guerrillamail.net', 'guerrillamail.org',
+            'tempmail.com', 'throwaway.email', 'temp-mail.org', 'fakeinbox.com',
+            'sharklasers.com', 'guerrillamailblock.com', 'grr.la', 'dispostable.com',
+            'yopmail.com', 'yopmail.fr', 'maildrop.cc', 'trashmail.com',
+            'mailnator.com', 'tempr.email', 'discard.email', 'discardmail.com',
+            '10minutemail.com', 'getnada.com', 'mohmal.com',
+            'test.com', 'example.com', 'localhost',
+        ];
+        if (in_array($domain, $blockedDomains)) {
+            return false;
+        }
+
+        // Check MX/A records using dns_get_record (works on Windows + Linux)
+        $records = dns_get_record($domain, DNS_MX);
+        if (!empty($records)) {
+            // Extra check: block domains with suspicious MX records (like root "." only)
+            if (count($records) === 1 && trim($records[0]['target'], '.') === '') {
+                return false;
+            }
+            return true;
+        }
+        // Fallback: check A record
+        $aRecords = dns_get_record($domain, DNS_A);
+        return !empty($aRecords);
+    }
+
     private function resolveAuth(Request $request): ?User
     {
         if ($request->user()) {
@@ -1629,7 +1987,131 @@ class UserController extends Controller
     }
 
     /**
-     * Delete all document files associated with a user from storage.
+     * Remove user from all JSON columns and references before hard deletion.
+     * Prevents stale/invalid IDs when editing projects, tasks, etc.
+     */
+    private function cleanUpUserReferences(User $user): void
+    {
+        $userId = $user->id;
+
+        // Projects: remove from assigned_users, guest_ids, updated_by; nullify created_by
+        $projects = \App\Models\Project::query()
+            ->whereJsonContains('assigned_users', $userId)
+            ->orWhereJsonContains('guest_ids', $userId)
+            ->orWhere('created_by', $userId)
+            ->orWhere('updated_by', $userId)
+            ->get();
+
+        foreach ($projects as $project) {
+            $changes = [];
+
+            // Remove from assigned_users JSON
+            if (is_array($project->assigned_users) && in_array($userId, $project->assigned_users)) {
+                $project->assigned_users = array_values(array_filter($project->assigned_users, fn($id) => (int) $id !== (int) $userId));
+                $changes['assigned_users'] = $project->assigned_users;
+            }
+
+            // Remove from guest_ids JSON
+            if (is_array($project->guest_ids) && in_array($userId, $project->guest_ids)) {
+                $project->guest_ids = array_values(array_filter($project->guest_ids, fn($id) => (int) $id !== (int) $userId));
+                $changes['guest_ids'] = $project->guest_ids;
+            }
+
+            // Nullify created_by if this user created the project
+            if ((int) $project->created_by === (int) $userId) {
+                $project->created_by = null;
+                $changes['created_by'] = null;
+            }
+
+            // Nullify updated_by if this user last updated
+            if ($project->updated_by && (int) $project->updated_by === (int) $userId) {
+                $project->updated_by = null;
+                $changes['updated_by'] = null;
+            }
+
+            if (!empty($changes)) {
+                $project->saveQuietly();
+            }
+        }
+
+        // Tasks: nullify assigned_to, assigned_by, creator_id, updated_by
+        try {
+            \App\Models\Task::query()->where('assigned_to', $userId)->update(['assigned_to' => null]);
+            \App\Models\Task::query()->where('assigned_by', $userId)->update(['assigned_by' => null]);
+            \App\Models\Task::query()->where('creator_id', $userId)->update(['creator_id' => null]);
+            \App\Models\Task::query()->where('updated_by', $userId)->update(['updated_by' => null]);
+        } catch (\Throwable $e) {
+            \Log::warning("Failed to cleanup tasks for user {$userId}: " . $e->getMessage());
+        }
+
+        // Deliverables: nullify assigned_to, created_by, updated_by
+        try {
+            \App\Models\Deliverable::query()->where('assigned_to', $userId)->update(['assigned_to' => null]);
+            \App\Models\Deliverable::query()->where('created_by', $userId)->update(['created_by' => null]);
+            \App\Models\Deliverable::query()->where('updated_by', $userId)->update(['updated_by' => null]);
+        } catch (\Throwable $e) {
+            \Log::warning("Failed to cleanup deliverables for user {$userId}: " . $e->getMessage());
+        }
+
+        // Events: nullify user_id (organizer)
+        try {
+            \App\Models\Event::query()->where('user_id', $userId)->update(['user_id' => null]);
+        } catch (\Throwable $e) {
+            \Log::warning("Failed to cleanup events for user {$userId}: " . $e->getMessage());
+        }
+
+        // Teams: nullify created_by
+        try {
+            \App\Models\Team::query()->where('created_by', $userId)->update(['created_by' => null]);
+        } catch (\Throwable $e) {
+            \Log::warning("Failed to cleanup teams for user {$userId}: " . $e->getMessage());
+        }
+
+        // Project milestones: nullify assigned_to, owner_id
+        try {
+            \App\Models\ProjectMilestone::query()->where('assigned_to', $userId)->update(['assigned_to' => null]);
+            \App\Models\ProjectMilestone::query()->where('owner_id', $userId)->update(['owner_id' => null]);
+        } catch (\Throwable $e) {
+            \Log::warning("Failed to cleanup project milestones for user {$userId}: " . $e->getMessage());
+        }
+
+        // Knowledge bases: nullify created_by, updated_by
+        try {
+            \App\Models\KnowledgeBase::query()->where('created_by', $userId)->update(['created_by' => null]);
+            \App\Models\KnowledgeBase::query()->where('updated_by', $userId)->update(['updated_by' => null]);
+        } catch (\Throwable $e) {
+            \Log::warning("Failed to cleanup knowledge bases for user {$userId}: " . $e->getMessage());
+        }
+
+        // Templates: nullify created_by, updated_by
+        try {
+            \App\Models\Template::query()->where('created_by', $userId)->update(['created_by' => null]);
+            \App\Models\Template::query()->where('updated_by', $userId)->update(['updated_by' => null]);
+        } catch (\Throwable $e) {
+            \Log::warning("Failed to cleanup templates for user {$userId}: " . $e->getMessage());
+        }
+
+        // Task comments: nullify user_id
+        try {
+            \App\Models\TaskComment::query()->where('user_id', $userId)->update(['user_id' => null]);
+        } catch (\Throwable $e) {
+            \Log::warning("Failed to cleanup task comments for user {$userId}: " . $e->getMessage());
+        }
+
+        // Pivot tables
+        try {
+            DB::table('project_followers')->where('user_id', $userId)->delete();
+            DB::table('task_followers')->where('user_id', $userId)->delete();
+            DB::table('event_participants')->where('user_id', $userId)->delete();
+            DB::table('task_user')->where('user_id', $userId)->delete();
+            DB::table('deliverable_assignees')->where('user_id', $userId)->delete();
+        } catch (\Throwable $e) {
+            \Log::warning("Failed to cleanup pivot tables for user {$userId}: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Delete all file attachments belonging to the given user.
      *
      * @param  \App\Models\User  $user  The user whose files to delete.
      * @return void
@@ -2773,6 +3255,59 @@ class UserController extends Controller
         return response()->json([
             'success' => true,
             'message' => "Guest {$status} successfully.",
+            'user' => $user,
+        ]);
+    }
+
+    /**
+     * Reactivate a user deactivated due to expired email verification skip.
+     * Sets a new 7-day skip window and reactivates the account.
+     */
+    public function reactivateForVerification(Request $request, User $user)
+    {
+        $authUser = $request->user();
+
+        if (!in_array($authUser->role, ['admin', 'manager'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only admin or manager can reactivate users.',
+            ], 403);
+        }
+
+        if ($user->active) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User is already active.',
+            ], 422);
+        }
+
+        if (!is_null($user->email_verified_at)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User email is already verified. Just activate the account normally.',
+            ], 422);
+        }
+
+        $user->update([
+            'active' => true,
+            'status' => 'Active',
+            'email_skip_until' => now()->addDays(7),
+        ]);
+
+        app(TenantCacheManager::class)->forget('all_users_list');
+
+        $this->activityService->log(
+            $authUser->id,
+            'user_reactivated',
+            "You reactivated {$user->name} with 7-day email verification window",
+            'user',
+            $user->id,
+            $user->name,
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => "User {$user->name} reactivated. Email verification skip extended by 7 days.",
             'user' => $user,
         ]);
     }

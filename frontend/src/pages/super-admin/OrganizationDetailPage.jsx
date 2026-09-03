@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Building2, Users, FolderKanban, Database, Globe, Calendar,
-  Shield, Loader2, Mail, User, Phone, MailCheck, CreditCard, HardDrive, Check, Pencil, X, ArrowRight, Clock, RotateCcw, Sliders,
+  Shield, Loader2, User, Phone, MailCheck, CreditCard, HardDrive, Check, Pencil, X, ArrowRight, Clock, RotateCcw, Sliders,
   HardDrive as StorageIcon, FileText, Image, Archive, FolderOpen, AlertTriangle, Trash2, Info, DollarSign, Receipt, TrendingUp,
   CheckCircle, XCircle, Eye, EyeOff, Download, Bell, Settings, AlertCircle, Lock,
 } from 'lucide-react';
@@ -56,7 +56,6 @@ export default function OrganizationDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
-  const [emailPolicyLoading, setEmailPolicyLoading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmConfig, setConfirmConfig] = useState({ action: null, title: '', message: '', confirmText: '', danger: true });
   const [editOpen, setEditOpen] = useState(false);
@@ -74,7 +73,7 @@ export default function OrganizationDetailPage() {
   const [storagePinned, setStoragePinned] = useState([]);
   const [storageFileDeleteConfirm, setStorageFileDeleteConfirm] = useState({ open: false, id: null });
   const [storagePreferences, setStoragePreferences] = useState(null);
-  const [pendingEmailPolicy, setPendingEmailPolicy] = useState(null);
+  
   const [prefLoading, setPrefLoading] = useState(false);
   const [prefSaving, setPrefSaving] = useState(false);
   const [testingS3, setTestingS3] = useState(false);
@@ -366,14 +365,6 @@ export default function OrganizationDetailPage() {
         navigate('/super-admin/organizations');
         return;
       }
-      else if (action === 'email_policy') {
-        setEmailPolicyLoading(true);
-        await api.updateOrganization(id, { email_policy: pendingEmailPolicy });
-        setOrg((prev) => ({ ...prev, email_policy: pendingEmailPolicy }));
-        setEmailPolicyLoading(false);
-        setPendingEmailPolicy(null);
-        return;
-      }
       await fetchOrg();
     } catch (e) { alert(e.message); }
     finally { setActionLoading(null); }
@@ -399,16 +390,6 @@ export default function OrganizationDetailPage() {
         confirmText: t('Activate', { defaultValue: 'Activate' }), danger: false,
       });
     }
-    setConfirmOpen(true);
-  };
-
-  const handleEmailPolicyChange = async (newPolicy) => {
-    setPendingEmailPolicy(newPolicy);
-    setConfirmConfig({
-      action: 'email_policy', title: 'Change Email Policy',
-      message: `Are you sure you want to change the email policy to "${newPolicy === 'standard' ? 'Standard' : 'Company Required'}"?`,
-      confirmText: 'Yes, Change', danger: false,
-    });
     setConfirmOpen(true);
   };
 
@@ -673,37 +654,6 @@ export default function OrganizationDetailPage() {
             </div>
           ) : (
             <p className="text-sm" style={s.textSecondary}>{t('No subscription plan assigned', { defaultValue: 'No subscription plan assigned' })}</p>
-          )}
-        </div>
-
-        <div className="rounded-xl p-5 shadow-sm" style={s.card}>
-          <h3 className="text-lg font-semibold mb-4" style={s.textHeading}>{t('Email Policy', { defaultValue: 'Email Policy' })}</h3>
-          <p className="text-sm mb-4" style={s.textSecondary}>{t('Controls how user emails are managed in this organization.', { defaultValue: 'Controls how user emails are managed in this organization.' })}</p>
-          <div className="flex flex-col sm:flex-row gap-3">
-            {[
-              { value: 'standard', icon: Mail, title: t('Standard', { defaultValue: 'Standard' }), desc: t('Single email for login and notifications', { defaultValue: 'Single email for login and notifications' }) },
-              { value: 'company_required', icon: Building2, title: t('Company Required', { defaultValue: 'Company Required' }), desc: t('Separate personal and company email', { defaultValue: 'Separate personal and company email' }) },
-            ].map((opt) => (
-              <button key={opt.value} onClick={() => handleEmailPolicyChange(opt.value)}
-                disabled={emailPolicyLoading || org.email_policy === opt.value}
-                className="px-4 py-3 rounded-lg text-sm font-medium transition-colors border-2 text-left"
-                style={{
-                  borderColor: org.email_policy === opt.value ? 'var(--color-primary)' : 'var(--border-light)',
-                  background: org.email_policy === opt.value ? 'var(--color-primary-bg)' : 'var(--bg-card)',
-                  color: org.email_policy === opt.value ? 'var(--color-primary)' : 'var(--text-secondary)',
-                }}>
-                <div className="flex items-center gap-2">
-                  <opt.icon className="w-4 h-4" />
-                  <span className="font-semibold">{opt.title}</span>
-                </div>
-                <p className="text-xs mt-1" style={s.textSecondary}>{opt.desc}</p>
-              </button>
-            ))}
-          </div>
-          {emailPolicyLoading && (
-            <div className="flex items-center gap-2 mt-3 text-sm" style={s.textSecondary}>
-              <Loader2 className="w-4 h-4 animate-spin" /> {t('Updating...', { defaultValue: 'Updating...' })}
-            </div>
           )}
         </div>
 

@@ -17,12 +17,7 @@ function LoggedOut() {
     <div className="login-page">
       <div className="login-left">
         <div className="overlay">
-          <img
-            src="https://cdn-icons-png.flaticon.com/512/5968/5968705.png"
-            alt="TechXaro Logo"
-            className="logo"
-          />
-          <h1>{t("TECHXARO PMS", { defaultValue: "TECHXARO PMS" })}</h1>
+          <h1>{t("TECHXARO ONE", { defaultValue: "TECHXARO ONE" })}</h1>
           <p>{t("Manage Projects, Teams & Tasks Professionally", { defaultValue: "Manage Projects, Teams & Tasks Professionally" })}</p>
         </div>
       </div>

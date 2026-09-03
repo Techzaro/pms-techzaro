@@ -27,7 +27,6 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string|null $database_password
  * @property string $status
  * @property string $timezone
- * @property string $email_policy
  * @property string|null $logo_path
  * @property array|null  $settings
  * @property \Carbon\Carbon|null $trial_ends_at
@@ -64,7 +63,6 @@ class Organization extends Model
         'default_timezone',
         'enforce_working_hours',
         'working_hours',
-        'email_policy',
         'logo_path',
         'settings',
         'trial_ends_at',
@@ -260,18 +258,6 @@ class Organization extends Model
     public function isSuspended(): bool
     {
         return $this->status === 'suspended';
-    }
-
-    /** Check if the organization uses company_required email policy. */
-    public function isCompanyEmailRequired(): bool
-    {
-        return $this->email_policy === 'company_required';
-    }
-
-    /** Get the email policy with fallback to standard. */
-    public function getEmailPolicy(): string
-    {
-        return $this->email_policy ?? 'standard';
     }
 
     /** Get the full database connection config for this organization. */

@@ -341,6 +341,7 @@ export function clearAllSessions() {
   sessionStorage.removeItem("sessionId");
   sessionStorage.removeItem("currentRole");
   sessionStorage.removeItem("tenant_slug");
+  sessionStorage.removeItem("vb_dismissed");
 
   // Clear legacy keys
   localStorage.removeItem("token");

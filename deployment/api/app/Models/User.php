@@ -19,6 +19,13 @@ class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
 
+    protected $attributes = [
+        'language' => 'English',
+        'timezone' => 'UTC',
+        'date_format' => 'DD/MM/YYYY',
+        'time_format' => '12-hour',
+    ];
+
     protected $fillable = [
         'name',
         'avatar',
@@ -26,6 +33,9 @@ class User extends Authenticatable
         'password',
         'role',
         'active',
+        'status',
+        'deletion_requested',
+        'deletion_requested_by',
         'must_change_password',
         'credentials_managed_by_admin',
         'password_reset_locked',
@@ -61,6 +71,7 @@ class User extends Authenticatable
         'emergency_contact_phone',
 
         // Emails
+        'email_mode',
         'personal_email',
         'professional_email',
         'professional_email_password',
@@ -77,6 +88,13 @@ class User extends Authenticatable
         'bank_name',
         'bank_account_number',
         'bank_account_title',
+
+        // Regional & Working Hours
+        'timezone',
+        'language',
+        'date_format',
+        'time_format',
+        'working_hours',
 
         // Documents
         'employment_contract',
@@ -95,7 +113,9 @@ class User extends Authenticatable
     ];
 
     protected $casts = [
-        // 'email_verified_at' => 'datetime',
+        'email_verified_at' => 'datetime',
+        'personal_email_verified_at' => 'datetime',
+        'professional_email_verified_at' => 'datetime',
         'password' => 'hashed',
         'active' => 'boolean',
         'must_change_password' => 'boolean',
@@ -104,6 +124,7 @@ class User extends Authenticatable
         'password_changed_at' => 'datetime',
         'last_login_at' => 'datetime',
         'notification_preferences' => 'array',
+        'working_hours' => 'array',
     ];
 
     /**
@@ -214,5 +235,103 @@ class User extends Authenticatable
     public function followedProjects(): BelongsToMany
     {
         return $this->belongsToMany(Project::class, 'project_followers')->withTimestamps();
+    }
+
+    /** Email identities registered for this user (global uniqueness tracking). */
+    public function emailIdentities(): HasMany
+    {
+        return $this->hasMany(\App\Models\EmailIdentity::class);
+    }
+
+    /*
+    |------------------------------------------------------------------
+    | Email Helper Methods
+    |------------------------------------------------------------------
+    */
+
+    /** Check if this user uses two-email mode. */
+    public function usesTwoEmails(): bool
+    {
+        return $this->email_mode === 'two_emails';
+    }
+
+    /** Check if this user uses single email mode. */
+    public function usesSingleEmail(): bool
+    {
+        return $this->email_mode !== 'two_emails';
+    }
+
+    /**
+     * Get the authentication email for this user.
+     * In single mode, this is the primary email.
+     * In two-email mode, this is the professional email.
+     */
+    public function getAuthenticationEmailAttribute(): ?string
+    {
+        if ($this->usesTwoEmails() && $this->professional_email) {
+            return $this->professional_email;
+        }
+        return $this->email;
+    }
+
+    /**
+     * Get the contact/information email for this user.
+     * In single mode, this is the primary email.
+     * In two-email mode, this is the personal email.
+     */
+    public function getContactEmailAttribute(): ?string
+    {
+        if ($this->usesTwoEmails() && $this->personal_email) {
+            return $this->personal_email;
+        }
+        return $this->email;
+    }
+
+    /** Check if the authentication email is verified. */
+    public function isAuthenticationEmailVerified(): bool
+    {
+        if ($this->usesTwoEmails()) {
+            return $this->professional_email_verified_at !== null;
+        }
+        return $this->email_verified_at !== null;
+    }
+
+    /** Check if the personal email is verified. */
+    public function isPersonalEmailVerified(): bool
+    {
+        return $this->personal_email_verified_at !== null;
+    }
+
+    /** Check if the professional email is verified. */
+    public function isProfessionalEmailVerified(): bool
+    {
+        return $this->professional_email_verified_at !== null;
+    }
+
+    /**
+     * Normalize an email for uniqueness comparison.
+     * Trims whitespace and lowercases the address.
+     */
+    public static function normalizeEmail(string $email): string
+    {
+        return strtolower(trim($email));
+    }
+
+    /**
+     * Get all email addresses associated with this user as an array.
+     */
+    public function getAllEmails(): array
+    {
+        $emails = [];
+        if ($this->email) {
+            $emails[] = $this->email;
+        }
+        if ($this->personal_email && $this->personal_email !== $this->email) {
+            $emails[] = $this->personal_email;
+        }
+        if ($this->professional_email && $this->professional_email !== $this->email) {
+            $emails[] = $this->professional_email;
+        }
+        return array_unique($emails);
     }
 }

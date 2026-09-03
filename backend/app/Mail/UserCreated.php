@@ -26,6 +26,7 @@ class UserCreated extends Mailable
     public string $createdBy;
     public string $senderEmail;
     public string $senderName;
+    public string $emailMode;
 
     /** @var array Standard company documents (logo, QR, contract, offer, regulations) */
     private array $standardAttachments = [];
@@ -36,7 +37,7 @@ class UserCreated extends Mailable
     /** @var array User-uploaded docs (Employment Contract, Offer Letter, Regulations) for personal email */
     private array $userDocAttachments = [];
 
-    public function __construct(User $user, string $password, string $professionalEmail, string $professionalPassword, string $loginUrl, array $attachments = [], bool $isAdminConfirmation = false, string $createdBy = '', string $senderEmail = '', string $senderName = 'PMS Techxaro')
+    public function __construct(User $user, string $password, string $professionalEmail, string $professionalPassword, string $loginUrl, array $attachments = [], bool $isAdminConfirmation = false, string $createdBy = '', string $senderEmail = '', string $senderName = 'PMS Techxaro', string $emailMode = 'single')
     {
         $this->user = $user;
         $this->password = $password;
@@ -48,6 +49,7 @@ class UserCreated extends Mailable
         $this->createdBy = $createdBy;
         $this->senderEmail = $senderEmail ?: config('mail.from.address');
         $this->senderName = $senderName ?: config('mail.from.name');
+        $this->emailMode = $emailMode;
     }
 
     /**
@@ -229,7 +231,12 @@ class UserCreated extends Mailable
 
     private function buildCredentialsHtml(string $loginUrl, string $profEmail, string $password, string $profPassword): string
     {
-        return <<<HTML
+        // For single email mode, use the user's single email for PMS box
+        $pmsEmail = $this->emailMode === 'single'
+            ? e($this->user->email ?? $profEmail)
+            : e($profEmail);
+
+        $html = <<<HTML
             <!-- PMS Login Credentials Box -->
             <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#eff6ff;border:2px solid #3b82f6;border-radius:12px;margin-bottom:20px;">
                 <tr>
@@ -246,7 +253,7 @@ class UserCreated extends Mailable
                             </tr>
                             <tr>
                                 <td style="padding:5px 0;color:#6b7280;font-size:13px;font-weight:600;">Email:</td>
-                                <td style="padding:5px 0;color:#111827;font-size:14px;font-weight:600;">{$profEmail}</td>
+                                <td style="padding:5px 0;color:#111827;font-size:14px;font-weight:600;">{$pmsEmail}</td>
                             </tr>
                             <tr>
                                 <td style="padding:5px 0;color:#6b7280;font-size:13px;font-weight:600;">Password:</td>
@@ -256,7 +263,11 @@ class UserCreated extends Mailable
                     </td>
                 </tr>
             </table>
+        HTML;
 
+        // Show Outlook box only for two-email mode
+        if ($this->emailMode === 'two_emails') {
+            $html .= <<<HTML
             <!-- Outlook Login Credentials Box -->
             <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f0fdf4;border:2px solid #22c55e;border-radius:12px;margin-bottom:24px;">
                 <tr>
@@ -279,7 +290,13 @@ class UserCreated extends Mailable
                     </td>
                 </tr>
             </table>
-        HTML;
+            HTML;
+        } else {
+            // Single email mode: add margin after PMS box
+            $html = str_replace('margin-bottom:20px;">', 'margin-bottom:24px;">', $html);
+        }
+
+        return $html;
     }
 
     private function buildStepsHtml(string $profEmail, string $employeeCode, bool $isWelcome = false): string
@@ -313,6 +330,9 @@ class UserCreated extends Mailable
         $department = e($this->user->department ?? 'N/A');
         $createdBy = e($this->createdBy ?: 'N/A');
         $dateTime = e(now()->format('d M Y, h:i A'));
+        $adminOutlookNote = $this->emailMode === 'two_emails'
+            ? "\n                                                    <li><strong>Outlook Password</strong> is for accessing the official email on Outlook/Office 365.</li>"
+            : '';
 
         return <<<HTML
         <!DOCTYPE html>
@@ -411,8 +431,7 @@ class UserCreated extends Mailable
                                             <td style="padding:18px 24px;">
                                                 <p style="color:#92400e;font-size:14px;font-weight:700;margin:0 0 8px;">&#9888; Important Notes:</p>
                                                 <ul style="color:#92400e;font-size:14px;line-height:1.8;margin:0;padding-left:20px;">
-                                                    <li><strong>PMS Password</strong> is for logging into the PMS platform only.</li>
-                                                    <li><strong>Outlook Password</strong> is for accessing the official email on Outlook/Office 365.</li>
+                                                    <li><strong>PMS Password</strong> is for logging into the PMS platform only.</li>{$adminOutlookNote}
                                                     <li>The user will be required to change their password on first login.</li>
                                                 </ul>
                                             </td>
@@ -473,6 +492,11 @@ class UserCreated extends Mailable
 
     private function buildUserWelcomeHtml(string $name, string $profEmail, string $password, string $loginUrl, string $designation, string $employeeCode, string $sharedCredentials, string $sharedSteps, string $sharedAttachments): string
     {
+        $outlookNote = $this->emailMode === 'two_emails'
+            ? '<li><strong>Outlook Password</strong> is for accessing your official email on Outlook/Office 365.</li>'
+            : '';
+        $outlookNote = $outlookNote ? "\n                                                    {$outlookNote}" : '';
+
         return <<<HTML
         <!DOCTYPE html>
         <html>
@@ -517,9 +541,7 @@ class UserCreated extends Mailable
                                             <td style="padding:18px 24px;">
                                                 <p style="color:#92400e;font-size:14px;font-weight:700;margin:0 0 8px;">&#9888; Note:</p>
                                                 <ul style="color:#92400e;font-size:14px;line-height:1.8;margin:0;padding-left:20px;">
-                                                    <li>Please do not share your credentials with anyone and change your password.</li>
-                                                    <li><strong>PMS Password</strong> is for logging into the PMS platform only.</li>
-                                                    <li><strong>Outlook Password</strong> is for accessing your official email on Outlook/Office 365.</li>
+                                                    <li>Please do not share your credentials with anyone and change your password.</li>{$outlookNote}
                                                 </ul>
                                             </td>
                                         </tr>

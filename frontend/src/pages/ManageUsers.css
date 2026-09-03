@@ -881,8 +881,18 @@
   color: var(--text-primary);
 }
 
+.email-password-side-by-side {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 8px;
+}
+
 @media (max-width: 992px) {
   .user-form .user-form-grid {
+    grid-template-columns: 1fr;
+  }
+  .email-password-side-by-side {
     grid-template-columns: 1fr;
   }
   .bar {

@@ -88,6 +88,7 @@ const OrganizationDetailsPage = lazy(() => import("./pages/OrganizationDetailsPa
 const RegionalSettings = lazy(() => import("./pages/RegionalSettings"));
 const Sharing = lazy(() => import("./pages/Sharing"));
 
+
 import TimezoneDetector from "./components/TimezoneDetector";
 import { authToken, superAdminAuthToken } from "./utils/auth";
 import { isAdminDomain, isOrgDomain } from "./utils/domain";
@@ -284,6 +285,7 @@ function App() {
                   <Route path="/org/:slug" element={<ProtectedRoute><DashboardLayoutWrapper /></ProtectedRoute>}>
                     <Route index element={<Navigate to="dashboard" replace />} />
                     <Route path="dashboard" element={<Admin />} />
+
 
                     {/* Task routes */}
                     <Route path="tasks" element={<Tasks />} />

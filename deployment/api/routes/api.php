@@ -30,11 +30,19 @@ use App\Http\Controllers\FeedbackController;
 use App\Http\Controllers\OrganizationSettingsController;
 use App\Http\Controllers\OrganizationOrgController;
 use App\Http\Controllers\RegionalSettingsController;
+use App\Http\Controllers\ConnectionController;
+use App\Http\Controllers\SharingController;
+use App\Http\Controllers\SharingNotificationController;
+use App\Http\Controllers\SharingActivityController;
+use App\Http\Controllers\QrCodeController;
 
 /*
 | Public Routes
 | These routes are accessible without authentication.
 */
+
+// QR Code generation (public - no auth needed for images)
+Route::get('/qr-code', [QrCodeController::class, 'generate']);
 
 // User login (no auth required)
 Route::post('/login', [AuthController::class, 'login']);
@@ -110,9 +118,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user/regional-settings', [RegionalSettingsController::class, 'getSettings']);
     Route::put('/user/regional-settings', [RegionalSettingsController::class, 'updateSettings']);
 
-    // Organization settings (branding, subscription, email policy, regional & working hours)
-    Route::get('/organization-settings/email-policy', [OrganizationSettingsController::class, 'getEmailPolicy']);
-    Route::put('/organization-settings/email-policy', [OrganizationSettingsController::class, 'updateEmailPolicy']);
+    // Organization settings (branding, subscription, regional & working hours)
     Route::get('/organization-settings/branding', [OrganizationSettingsController::class, 'getBranding']);
     Route::put('/organization-settings/branding', [OrganizationSettingsController::class, 'updateBranding']);
     Route::get('/organization-settings/subscription', [OrganizationSettingsController::class, 'getSubscription']);
@@ -762,7 +768,59 @@ Route::middleware('auth:sanctum')->group(function () {
         });
     });
 
+    /*
+    | Organization Sharing Routes
+    | Connection management, resource sharing, shared resources.
+    */
+    Route::prefix('sharing')->group(function () {
+        // Connections - Get Access & Give Access
+        Route::get('/all-stats', [ConnectionController::class, 'allStats']);
+        Route::get('/connections', [ConnectionController::class, 'index']);
+        Route::get('/connections/stats', [ConnectionController::class, 'stats']);
+        Route::get('/connections/{id}', [ConnectionController::class, 'show']);
+        Route::post('/get-access', [ConnectionController::class, 'findOrganization']);
+        Route::post('/get-access/request', [ConnectionController::class, 'requestConnection']);
+        Route::post('/give-access/generate', [ConnectionController::class, 'generateInvitation']);
+        Route::post('/connections/{id}/approve', [ConnectionController::class, 'approve']);
+        Route::post('/connections/{id}/reject', [ConnectionController::class, 'reject']);
+        Route::post('/connections/{id}/revoke', [ConnectionController::class, 'revoke']);
+        Route::post('/connections/{id}/suspend', [ConnectionController::class, 'suspend']);
+        Route::post('/connections/{id}/restore', [ConnectionController::class, 'restore']);
+        Route::delete('/connections/{id}/force-delete', [ConnectionController::class, 'forceDelete']);
+        Route::delete('/connections/{id}', [ConnectionController::class, 'disconnect']);
+
+        // Resource Sharing
+        Route::post('/share', [SharingController::class, 'share']);
+        Route::get('/shared-by-us', [SharingController::class, 'sharedByUs']);
+        Route::get('/shared-with-me', [SharingController::class, 'sharedWithMe']);
+        Route::get('/shared-resources', [SharingController::class, 'sharedResources']);
+        Route::get('/stats', [SharingController::class, 'stats']);
+        Route::get('/resources/{id}', [SharingController::class, 'showSharedResource']);
+        Route::put('/resources/{id}/permission', [SharingController::class, 'updatePermission']);
+        Route::delete('/resources/{id}', [SharingController::class, 'revokeAccess']);
+        Route::post('/resources/{id}/users', [SharingController::class, 'addUsers']);
+        Route::delete('/resources/{id}/users/{userId}', [SharingController::class, 'removeUser']);
+        Route::get('/check-access', [SharingController::class, 'checkAccess']);
+
+        // Sharing Notifications
+        Route::get('/notifications', [SharingNotificationController::class, 'index']);
+        Route::get('/notifications/unread-count', [SharingNotificationController::class, 'unreadCount']);
+        Route::put('/notifications/{id}/read', [SharingNotificationController::class, 'markAsRead']);
+        Route::put('/notifications/read-all', [SharingNotificationController::class, 'markAllAsRead']);
+
+        // Sharing Activity Logs
+        Route::get('/activities', [SharingActivityController::class, 'index']);
+    });
+
+    // Email verification routes
+    Route::get('/email/verify/{token}', [\App\Http\Controllers\EmailVerificationController::class, 'verify']);
+    Route::post('/email/resend-verification', [\App\Http\Controllers\EmailVerificationController::class, 'resend']);
+    Route::post('/email/check-availability', [\App\Http\Controllers\EmailVerificationController::class, 'checkAvailability']);
+
 });
+
+// Public email verification route (no auth required)
+Route::get('/email/verify-public/{token}', [\App\Http\Controllers\EmailVerificationController::class, 'verifyPublic']);
 
 /*
 | Document Download Routes

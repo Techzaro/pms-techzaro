@@ -97,6 +97,7 @@ export const api = {
     return request(`/organizations${qs ? '?' + qs : ''}`);
   },
   getOrganization: (id) => request(`/organizations/${id}`),
+  checkEmailAvailability: (email) => request('/check-email', { method: 'POST', body: JSON.stringify({ email }) }),
   createOrganization: (data) => request('/organizations', { method: 'POST', body: JSON.stringify(data) }),
   updateOrganization: (id, data) => request(`/organizations/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteOrganization: (id) => request(`/organizations/${id}`, { method: 'DELETE' }),

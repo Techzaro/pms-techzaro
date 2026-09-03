@@ -324,6 +324,13 @@ class ProjectController extends Controller
         $existingFileNames = $validated['existing_file_names'] ?? null;
         unset($validated['existing_file_names']);
 
+        // Strip fields that may not exist as columns in older tenant databases
+        foreach (['kb_ids', 'event_ids', 'guest_ids', 'team_ids'] as $field) {
+            if (array_key_exists($field, $validated) && !\Illuminate\Support\Facades\Schema::hasColumn('projects', $field)) {
+                unset($validated[$field]);
+            }
+        }
+
         if ($request->has('project_deadline') && ! $request->has('end_date')) {
             $validated['end_date'] = $request->input('project_deadline') ? date('Y-m-d H:i:s', strtotime($request->input('project_deadline'))) : null;
         }
@@ -707,6 +714,13 @@ class ProjectController extends Controller
         unset($validated['links']);
         $newAttachments = $validated['attachments'] ?? null;
         unset($validated['attachments']);
+
+        // Strip fields that may not exist as columns in older tenant databases
+        foreach (['kb_ids', 'event_ids', 'guest_ids', 'team_ids'] as $field) {
+            if (array_key_exists($field, $validated) && !\Illuminate\Support\Facades\Schema::hasColumn('projects', $field)) {
+                unset($validated[$field]);
+            }
+        }
 
         if ($request->has('project_deadline')) {
             $validated['end_date'] = $request->input('project_deadline') ? date('Y-m-d H:i:s', strtotime($request->input('project_deadline'))) : null;

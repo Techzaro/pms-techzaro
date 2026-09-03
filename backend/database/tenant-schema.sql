@@ -1654,8 +1654,15 @@ CREATE TABLE IF NOT EXISTS `users` (
   `emergency_contact_name` varchar(255) DEFAULT NULL,
   `emergency_contact_relation` varchar(255) DEFAULT NULL,
   `emergency_contact_phone` varchar(255) DEFAULT NULL,
+  `email_mode` varchar(20) DEFAULT 'single',
+  `email_verification_code` varchar(6) DEFAULT NULL,
+  `email_verification_expires_at` timestamp NULL DEFAULT NULL,
+  `email_skip_until` timestamp NULL DEFAULT NULL,
+  `email_verified_at` timestamp NULL DEFAULT NULL,
   `personal_email` varchar(255) DEFAULT NULL,
+  `personal_email_verified_at` timestamp NULL DEFAULT NULL,
   `professional_email` varchar(255) DEFAULT NULL,
+  `professional_email_verified_at` timestamp NULL DEFAULT NULL,
   `professional_email_password` varchar(255) DEFAULT NULL,
   `recovery_email` varchar(255) DEFAULT NULL,
   `hired_for` varchar(255) DEFAULT NULL,
@@ -1699,4 +1706,23 @@ CREATE TABLE IF NOT EXISTS `users` (
   CONSTRAINT `users_password_changed_by_foreign` FOREIGN KEY (`password_changed_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `users_resigned_by_foreign` FOREIGN KEY (`resigned_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
--- Dump completed on 2026-08-25 12:00:57
+
+CREATE TABLE `email_identities` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `normalized_email` varchar(255) NOT NULL,
+  `original_email` varchar(255) NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `type` varchar(20) DEFAULT 'primary',
+  `verified` tinyint(1) DEFAULT 0,
+  `verified_at` timestamp NULL DEFAULT NULL,
+  `verification_token` varchar(255) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `email_identities_normalized_email_unique` (`normalized_email`),
+  KEY `email_identities_user_id_index` (`user_id`),
+  KEY `email_identities_type_index` (`type`),
+  CONSTRAINT `email_identities_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Dump completed on 2026-09-02 12:00:00

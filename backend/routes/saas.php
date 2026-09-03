@@ -43,6 +43,7 @@ Route::middleware('super.admin')->group(function () use ($ctrl, $authCtrl) {
     Route::match(['get', 'post'], '/my-profile', [$ctrl, 'myProfile']);
 
     // ─── Organizations CRUD ────────────────────────────────────
+    Route::post('/check-email', [$ctrl, 'checkEmailAvailability']);
     Route::get('/organizations', [$ctrl, 'organizations']);
     Route::get('/organizations/{id}', [$ctrl, 'organization']);
     Route::post('/organizations', [$ctrl, 'storeOrganization']);

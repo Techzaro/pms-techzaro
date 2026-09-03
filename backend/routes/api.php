@@ -118,9 +118,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user/regional-settings', [RegionalSettingsController::class, 'getSettings']);
     Route::put('/user/regional-settings', [RegionalSettingsController::class, 'updateSettings']);
 
-    // Organization settings (branding, subscription, email policy, regional & working hours)
-    Route::get('/organization-settings/email-policy', [OrganizationSettingsController::class, 'getEmailPolicy']);
-    Route::put('/organization-settings/email-policy', [OrganizationSettingsController::class, 'updateEmailPolicy']);
+    // Organization settings (branding, subscription, regional & working hours)
     Route::get('/organization-settings/branding', [OrganizationSettingsController::class, 'getBranding']);
     Route::put('/organization-settings/branding', [OrganizationSettingsController::class, 'updateBranding']);
     Route::get('/organization-settings/subscription', [OrganizationSettingsController::class, 'getSubscription']);
@@ -233,6 +231,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/users/{id}/changes', [UserController::class, 'changes']);
         // Rename a user document (single docs label or other_document name)
         Route::put('/users/{user}/document/rename', [UserController::class, 'renameDocument']);
+        // Reactivate user with 7-day email verification window
+        Route::post('/users/{user}/reactivate-verification', [UserController::class, 'reactivateForVerification']);
         // Replace a user document file (and optionally rename)
         Route::post('/users/{user}/document/replace', [UserController::class, 'replaceDocument']);
         // Remove a user document
@@ -244,6 +244,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Request user deletion (for Manager role)
         Route::post('/users/{user}/request-deletion', [UserController::class, 'requestDeletion']);
+
+        // Check user project involvement before deletion
+        Route::get('/users/{user}/project-involvement', [UserController::class, 'projectInvolvement']);
+        // Reassign projects from one user to another
+        Route::post('/users/{user}/reassign-projects', [UserController::class, 'reassignProjects']);
 
         // Guest (Client Portal) management
         Route::post('/guests', [UserController::class, 'storeGuest'])->middleware(\App\Http\Middleware\CheckPlanLimits::class . ':users');
@@ -814,7 +819,19 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/activities', [SharingActivityController::class, 'index']);
     });
 
+    // Email verification routes
+    Route::get('/email/verify/{token}', [\App\Http\Controllers\EmailVerificationController::class, 'verify']);
+    Route::post('/email/resend-verification', [\App\Http\Controllers\EmailVerificationController::class, 'resend']);
+    Route::post('/email/check-availability', [\App\Http\Controllers\EmailVerificationController::class, 'checkAvailability']);
+    Route::post('/email/send-code', [\App\Http\Controllers\EmailVerificationController::class, 'sendCode']);
+    Route::post('/email/verify-code', [\App\Http\Controllers\EmailVerificationController::class, 'verifyCode']);
+    Route::post('/email/skip-verification', [\App\Http\Controllers\EmailVerificationController::class, 'skipVerification']);
+    Route::get('/email/verification-status', [\App\Http\Controllers\EmailVerificationController::class, 'status']);
+
 });
+
+// Public email verification route (no auth required)
+Route::get('/email/verify-public/{token}', [\App\Http\Controllers\EmailVerificationController::class, 'verifyPublic']);
 
 /*
 | Document Download Routes

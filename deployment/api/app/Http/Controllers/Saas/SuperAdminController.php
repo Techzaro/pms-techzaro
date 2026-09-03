@@ -37,6 +37,7 @@ class SuperAdminController extends Controller
         protected SubscriptionHistoryService $historyService,
         protected TrialResolverService $trialResolver,
         protected HealthCheckService $healthCheck,
+        protected DatabaseProvisionService $dbService,
     ) {
         // Wire up history service to subscription service
         $this->subscriptionService->setHistoryService($this->historyService);
@@ -92,6 +93,107 @@ class SuperAdminController extends Controller
         }
 
         return response()->json(['success' => false, 'message' => 'User not found'], 404);
+    }
+
+    public function changeOrgAdminPassword(Request $request, int $id): JsonResponse
+    {
+        $org = Organization::find($id);
+        if (!$org) {
+            return response()->json(['success' => false, 'message' => 'Organization not found'], 404);
+        }
+
+        $validated = $request->validate([
+            'new_password' => [
+                'required', 'string', 'min:8',
+                'regex:/[A-Z]/', 'regex:/[a-z]/', 'regex:/[0-9]/', 'regex:/[@$!%*?&#]/',
+            ],
+            'force_logout'    => 'sometimes|boolean',
+            'disable_recovery' => 'sometimes|boolean',
+        ]);
+
+        $forceLogout = $request->boolean('force_logout', true);
+        $disableRecovery = $request->boolean('disable_recovery', true);
+
+        try {
+            $dbName = $org->database_name;
+            $host = $org->database_host ?: config('database.connections.mysql_master.host', '127.0.0.1');
+            $port = (int) ($org->database_port ?: config('database.connections.mysql_master.port', 3306));
+            $username = $org->database_username ?: config('database.connections.mysql_master.username', 'root');
+            $dbPassword = $org->database_password ?? config('database.connections.mysql_master.password', '');
+
+            $dsn = sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4', $host, $port, $dbName);
+            $pdo = new \PDO($dsn, $username, $dbPassword, [
+                \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+                \PDO::ATTR_TIMEOUT => 5,
+            ]);
+
+            $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
+
+            // Find admin user
+            $stmt = $pdo->prepare("SELECT id, name, email FROM `users` WHERE `role` = 'admin' LIMIT 1");
+            $stmt->execute();
+            $adminUser = $stmt->fetch(\PDO::FETCH_OBJ);
+
+            if (!$adminUser) {
+                return response()->json(['success' => false, 'message' => 'Admin user not found in this organization'], 404);
+            }
+
+            // Update password
+            $newHash = Hash::make($validated['new_password']);
+            $sets = ['`password` = ?', '`updated_at` = NOW()'];
+            $bindings = [$newHash];
+
+            if ($disableRecovery) {
+                $sets[] = '`password_reset_locked` = ?';
+                $bindings[] = 1;
+            }
+
+            $sets[] = '`credentials_managed_by_admin` = ?';
+            $bindings[] = 1;
+
+            $sets[] = '`password_changed_by` = NULL';
+
+            $sets[] = '`password_changed_at` = ?';
+            $bindings[] = now()->toDateTimeString();
+
+            $stmt = $pdo->prepare("UPDATE `users` SET " . implode(', ', $sets) . " WHERE `id` = ?");
+            $bindings[] = $adminUser->id;
+            $stmt->execute($bindings);
+
+            // Force logout: revoke all tokens if using Sanctum tokens table in tenant DB
+            if ($forceLogout) {
+                try {
+                    $pdo->exec("DELETE FROM `personal_access_tokens` WHERE `tokenable_type` = 'App\\\\Models\\\\User' AND `tokenable_id` = {$adminUser['id']}");
+                } catch (\Throwable $e) {
+                    // Token table may not exist or be named differently — ignore
+                }
+                try {
+                    $stmt = $pdo->prepare("UPDATE `users` SET `remember_token` = NULL WHERE `id` = ?");
+                    $stmt->execute([$adminUser['id']]);
+                } catch (\Throwable $e) {
+                    // ignore
+                }
+            }
+
+            // Activity log
+            ActivityLog::create([
+                'user'   => $request->header('X-Admin-Name', 'Super Admin'),
+                'action' => 'Changed admin password for organization',
+                'target' => $org->name,
+                'ip'     => $request->ip(),
+                'status' => 'success',
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Password updated successfully for {$adminUser->name}.",
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to change admin password: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     public function myProfile(Request $request): JsonResponse
@@ -160,6 +262,65 @@ class SuperAdminController extends Controller
 
     // ─── Public Organization Registration ───────────────────────────
 
+    /**
+     * Check if an email is available globally across all tenant databases.
+     * Used by the Create Organization form to validate before proceeding.
+     */
+    public function checkEmailAvailability(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'email' => 'required|email',
+        ]);
+
+        $normalizedEmail = strtolower(trim($validated['email']));
+
+        // Validate email domain has valid MX records (prevent fake/dummy emails)
+        $domain = strtolower(trim(substr(strrchr($normalizedEmail, '@'), 1)));
+        if ($domain && !self::isValidEmailDomain($domain)) {
+            return response()->json([
+                'available' => false,
+                'message' => "The email domain '{$domain}' is not valid or does not exist.",
+            ]);
+        }
+
+        $existingOrgs = Organization::where('status', '!=', 'deleted')->get();
+
+        foreach ($existingOrgs as $org) {
+            try {
+                $dbName = $org->database_name;
+                if (!$dbName) continue;
+                $result = DB::connection('mysql_master')->select(
+                    "SELECT id FROM `{$dbName}`.`users` WHERE LOWER(email) = ? OR LOWER(personal_email) = ? OR LOWER(professional_email) = ? LIMIT 1",
+                    [$normalizedEmail, $normalizedEmail, $normalizedEmail]
+                );
+                if (!empty($result)) {
+                    return response()->json([
+                        'available' => false,
+                        'message' => 'This email is already registered in organization "' . $org->name . '".',
+                    ]);
+                }
+                try {
+                    $identityResult = DB::connection('mysql_master')->select(
+                        "SELECT id FROM `{$dbName}`.`email_identities` WHERE normalized_email = ? LIMIT 1",
+                        [$normalizedEmail]
+                    );
+                    if (!empty($identityResult)) {
+                        return response()->json([
+                            'available' => false,
+                            'message' => 'This email is already registered in organization "' . $org->name . '".',
+                        ]);
+                    }
+                } catch (\Throwable $e) {
+                    // email_identities table may not exist in older tenants
+                }
+            } catch (\Throwable $e) {
+                continue;
+            }
+        }
+
+        return response()->json(['available' => true]);
+    }
+
     public function register(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -167,27 +328,41 @@ class SuperAdminController extends Controller
             'name'         => 'required|string|max:255',
             'email'        => 'required|email',
             'phone'        => 'nullable|string|max:50',
-            'email_policy' => 'nullable|string|in:standard,company_required',
         ]);
 
-        // Check if email already exists as admin in any tenant DB
+        // Check if email already exists in ANY tenant DB (email, personal_email, or professional_email)
         $email = $validated['email'];
+        $normalizedEmail = strtolower(trim($email));
         $existingOrgs = Organization::where('status', '!=', 'deleted')->get();
         foreach ($existingOrgs as $org) {
             try {
                 $dbName = $org->database_name;
-                $exists = DB::connection('mysql')->select("SHOW TABLES LIKE ?", [$dbName . '.users']);
-                if (!empty($exists)) {
-                    $result = DB::connection('mysql')->select(
-                        "SELECT id FROM `{$dbName}`.`users` WHERE email = ? LIMIT 1",
-                        [$email]
+                if (!$dbName) continue;
+                // Check users table directly (cross-database query via mysql_master)
+                $result = DB::connection('mysql_master')->select(
+                    "SELECT id FROM `{$dbName}`.`users` WHERE LOWER(email) = ? OR LOWER(personal_email) = ? OR LOWER(professional_email) = ? LIMIT 1",
+                    [$normalizedEmail, $normalizedEmail, $normalizedEmail]
+                );
+                if (!empty($result)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'This email is already registered. Please use a different email or contact support.',
+                    ], 422);
+                }
+                // Also check email_identities table for global uniqueness
+                try {
+                    $identityResult = DB::connection('mysql_master')->select(
+                        "SELECT id FROM `{$dbName}`.`email_identities` WHERE normalized_email = ? LIMIT 1",
+                        [$normalizedEmail]
                     );
-                    if (!empty($result)) {
+                    if (!empty($identityResult)) {
                         return response()->json([
                             'success' => false,
                             'message' => 'This email is already registered. Please use a different email or contact support.',
                         ], 422);
                     }
+                } catch (\Throwable $e) {
+                    // email_identities table may not exist in older tenants
                 }
             } catch (\Throwable $e) {
                 continue;
@@ -211,13 +386,18 @@ class SuperAdminController extends Controller
 
         try {
             // Step 1: Drop + Create database (clean slate)
-            $pdo = DB::connection('mysql_master')->getPdo();
-            $escaped = str_replace('`', '``', $dbName);
-            $pdo->exec("DROP DATABASE IF EXISTS `{$escaped}`");
-            $pdo->exec("CREATE DATABASE `{$escaped}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+            $this->dbService->dropDatabase($dbName);
+            $this->dbService->createDatabase($dbName);
 
             // Step 2: Import tenant schema (fast — bypasses 134 individual migrations)
             $this->importTenantSchema($dbName);
+
+            // Step 2b: Fix any missing columns/tables that schema import might have missed
+            try {
+                \App\Console\Commands\FixTenantColumns::fixDatabaseProgrammatic($dbName);
+            } catch (\Throwable $e) {
+                \Log::warning('FixTenantColumns failed during register', ['db' => $dbName, 'error' => $e->getMessage()]);
+            }
 
             // Step 3: Create organization record
             $masterConfig = config('database.connections.mysql_master');
@@ -227,6 +407,8 @@ class SuperAdminController extends Controller
             $org = Organization::create([
                 'name'            => $validated['name'],
                 'slug'            => $slug,
+                'admin_name'      => $validated['name'],
+                'admin_email'     => $email,
                 'database_name'   => $dbName,
                 'database_host'   => $masterConfig['host'],
                 'database_port'   => $masterConfig['port'],
@@ -235,8 +417,6 @@ class SuperAdminController extends Controller
                 'type'            => 'standard',
                 'status'          => 'trial',
                 'timezone'        => 'Asia/Karachi',
-                'email_policy'    => $validated['email_policy'] ?? 'standard',
-                'admin_email'     => $email,
                 'trial_ends_at'   => now()->addMinutes($trialMinutes),
             ]);
 
@@ -255,10 +435,15 @@ class SuperAdminController extends Controller
             // Step 6: Create admin user in tenant DB (active, must_change_password)
             $phone = $validated['phone'] ?? null;
             $hashedPassword = Hash::make($plainPassword);
+            $escaped = str_replace('`', '``', $dbName);
             $pdo = DB::connection('mysql_master')->getPdo();
             $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
             $stmt = $pdo->prepare("INSERT INTO `{$escaped}`.`users` (name, email, personal_email, professional_email, phone_number, contact_no, password, role, active, must_change_password, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'admin', 1, 1, NOW(), NOW())");
             $stmt->execute([$validated['name'], $email, $email, $email, $phone, $phone, $hashedPassword]);
+            $foundingAdminId = $pdo->lastInsertId();
+
+            // Save founding admin ID to org record
+            $org->update(['founding_admin_id' => $foundingAdminId]);
 
             // Step 7: Send welcome email with credentials (non-blocking via queue)
             $loginUrl = \App\Helpers\UrlHelper::getLoginUrl();
@@ -382,6 +567,22 @@ class SuperAdminController extends Controller
             if ($org->subscription) {
                 $org->effective_plan = $org->subscription->getEffectivePlanDetails();
             }
+            if (!$org->admin_name && !$org->admin_email) {
+                try {
+                    $escaped = str_replace('`', '``', $org->database_name);
+                    $pdo = DB::connection('mysql_master')->getPdo();
+                    $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
+                    $stmt = $pdo->prepare("SELECT name, email FROM `{$escaped}`.`users` WHERE role = 'admin' ORDER BY id ASC LIMIT 1");
+                    $stmt->execute();
+                    $admin = $stmt->fetch(\PDO::FETCH_OBJ);
+                    if ($admin) {
+                        $org->admin_name = $admin->name;
+                        $org->admin_email = $admin->email;
+                    }
+                } catch (\Throwable $e) {
+                    // silent fallback
+                }
+            }
             return $org;
         });
 
@@ -435,7 +636,6 @@ class SuperAdminController extends Controller
             'admin_email'    => 'required|email',
             'admin_name'     => 'required|string|max:255',
             'admin_phone'    => 'nullable|string|max:50',
-            'email_policy'   => 'nullable|string|in:standard,company_required',
             'plan_id'        => 'required|integer|exists:mysql_master.organization_plans,id',
             'billing_period' => 'nullable|string|in:monthly,yearly',
             'customize_trial' => 'nullable|boolean',
@@ -443,17 +643,58 @@ class SuperAdminController extends Controller
             'trial_duration_unit'  => 'nullable|string|in:minutes,hours,days',
             'trial_max_users'      => 'nullable|integer|min:1',
             'trial_max_projects'   => 'nullable|integer|min:1',
-            'trial_max_storage_gb' => 'nullable|integer|min:1',
+            'trial_max_storage_gb' => 'nullable|numeric|min:0.001',
+            'trial_storage_unit'   => 'nullable|string|in:KB,MB,GB',
             'is_custom'            => 'nullable|boolean',
             'custom_price_monthly' => 'nullable|numeric|min:0',
             'custom_price_yearly'  => 'nullable|numeric|min:0',
             'custom_max_users'     => 'nullable|integer|min:1',
             'custom_max_projects'  => 'nullable|integer|min:1',
-            'custom_max_storage_gb'=> 'nullable|integer|min:1',
+            'custom_max_storage_gb'=> 'nullable|numeric|min:0.001',
+            'custom_storage_unit'  => 'nullable|string|in:KB,MB,GB',
+            'password_type'        => 'nullable|string|in:auto,manual',
+            'password'             => 'nullable|string|min:6|max:255',
         ]);
 
         // Use custom slug or auto-generate from name
         $slug = !empty($validated['slug']) ? Str::slug($validated['slug']) : Str::slug($validated['name']);
+
+        // Global email uniqueness check: admin_email cannot be used in ANY tenant
+        $normalizedEmail = strtolower(trim($validated['admin_email']));
+        $existingOrgs = Organization::where('status', '!=', 'deleted')->get();
+        foreach ($existingOrgs as $org) {
+            try {
+                $chkDb = $org->database_name;
+                if (!$chkDb) continue;
+                $result = DB::connection('mysql_master')->select(
+                    "SELECT id FROM `{$chkDb}`.`users` WHERE LOWER(email) = ? OR LOWER(personal_email) = ? OR LOWER(professional_email) = ? LIMIT 1",
+                    [$normalizedEmail, $normalizedEmail, $normalizedEmail]
+                );
+                if (!empty($result)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'This email is already registered. Please use a different email or contact support.',
+                    ], 422);
+                }
+                try {
+                    $identityResult = DB::connection('mysql_master')->select(
+                        "SELECT id FROM `{$chkDb}`.`email_identities` WHERE normalized_email = ? LIMIT 1",
+                        [$normalizedEmail]
+                    );
+                    if (!empty($identityResult)) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'This email is already registered. Please use a different email or contact support.',
+                        ], 422);
+                    }
+                } catch (\Throwable $e) {
+                    // email_identities table may not exist in older tenants
+                }
+            } catch (\Throwable $e) {
+                continue;
+            }
+        }
+
         $originalSlug = $slug;
         $counter = 1;
         while (Organization::withTrashed()->where('slug', $slug)->exists()) {
@@ -466,13 +707,18 @@ class SuperAdminController extends Controller
 
         try {
             // Step 1: Drop + Create database (clean slate)
-            $pdo = DB::connection('mysql_master')->getPdo();
-            $escaped = str_replace('`', '``', $dbName);
-            $pdo->exec("DROP DATABASE IF EXISTS `{$escaped}`");
-            $pdo->exec("CREATE DATABASE `{$escaped}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+            $this->dbService->dropDatabase($dbName);
+            $this->dbService->createDatabase($dbName);
 
             // Step 2: Import tenant schema (fast — bypasses 134 individual migrations)
             $this->importTenantSchema($dbName);
+
+            // Step 2b: Fix any missing columns/tables that schema import might have missed
+            try {
+                \App\Console\Commands\FixTenantColumns::fixDatabaseProgrammatic($dbName);
+            } catch (\Throwable $e) {
+                \Log::warning('FixTenantColumns failed during storeOrganization', ['db' => $dbName, 'error' => $e->getMessage()]);
+            }
 
             // Step 3: Create organization record
             $masterConfig = config('database.connections.mysql_master');
@@ -491,6 +737,8 @@ class SuperAdminController extends Controller
             $org = Organization::create([
                 'name'            => $validated['name'],
                 'slug'            => $slug,
+                'admin_name'      => $validated['admin_name'],
+                'admin_email'     => $validated['admin_email'],
                 'database_name'   => $dbName,
                 'database_host'   => $masterConfig['host'],
                 'database_port'   => $masterConfig['port'],
@@ -499,7 +747,6 @@ class SuperAdminController extends Controller
                 'type'            => 'standard',
                 'status'          => 'trial',
                 'timezone'        => 'Asia/Karachi',
-                'email_policy'    => $validated['email_policy'] ?? 'standard',
                 'trial_ends_at'   => now()->addMinutes($trialMinutes),
             ]);
 
@@ -516,7 +763,12 @@ class SuperAdminController extends Controller
             $this->createTenantCompanyDocsDirectory($slug);
 
             // Step 6: Create admin user in tenant DB (active, must_change_password)
-            $plainPassword = Str::random(10) . '@' . Str::random(2);
+            $passwordType = $validated['password_type'] ?? 'auto';
+            if ($passwordType === 'manual' && !empty($validated['password'])) {
+                $plainPassword = $validated['password'];
+            } else {
+                $plainPassword = Str::random(10) . '@' . Str::random(2);
+            }
             $adminPhone = $validated['admin_phone'] ?? null;
             $hashedPassword = Hash::make($plainPassword);
 
@@ -526,6 +778,10 @@ class SuperAdminController extends Controller
             $escaped = str_replace('`', '``', $dbName);
             $stmt = $pdo->prepare("INSERT INTO `{$escaped}`.`users` (name, email, personal_email, professional_email, phone_number, contact_no, password, role, active, must_change_password, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'admin', 1, 1, NOW(), NOW())");
             $stmt->execute([$validated['admin_name'], $validated['admin_email'], $validated['admin_email'], $validated['admin_email'], $adminPhone, $adminPhone, $hashedPassword]);
+            $foundingAdminId = $pdo->lastInsertId();
+
+            // Save founding admin ID to org record
+            $org->update(['founding_admin_id' => $foundingAdminId]);
 
             // Step 7: Assign selected plan to organization
             $plan = OrganizationPlan::find($validated['plan_id']);
@@ -541,6 +797,7 @@ class SuperAdminController extends Controller
                     'custom_max_users'      => $validated['custom_max_users'] ?? $plan->max_users,
                     'custom_max_projects'   => $validated['custom_max_projects'] ?? $plan->max_projects,
                     'custom_max_storage_gb' => $validated['custom_max_storage_gb'] ?? $plan->max_storage_gb,
+                    'storage_unit'          => $validated['custom_storage_unit'] ?? $plan->storage_unit ?? 'GB',
                 ];
             }
 
@@ -562,6 +819,7 @@ class SuperAdminController extends Controller
                 'custom_max_users'      => $customOverrides['custom_max_users'] ?? null,
                 'custom_max_projects'   => $customOverrides['custom_max_projects'] ?? null,
                 'custom_max_storage_gb' => $customOverrides['custom_max_storage_gb'] ?? null,
+                'storage_unit'          => $customOverrides['storage_unit'] ?? null,
                 'starts_at'             => now(),
                 'ends_at'               => $isTrial ? now()->addMinutes($trialMinutes) : ($billingPeriod === 'yearly' ? now()->addYear() : now()->addMonth()),
                 'trial_ends_at'         => $isTrial ? now()->addMinutes($trialMinutes) : null,
@@ -591,6 +849,7 @@ class SuperAdminController extends Controller
                     'max_users'           => $validated['trial_max_users'] ?? $plan->max_users,
                     'max_projects'        => $validated['trial_max_projects'] ?? $plan->max_projects,
                     'max_storage_gb'      => $validated['trial_max_storage_gb'] ?? $plan->max_storage_gb,
+                    'storage_unit'        => $validated['trial_storage_unit'] ?? $plan->storage_unit ?? 'GB',
                 ]);
             }
 
@@ -637,7 +896,6 @@ class SuperAdminController extends Controller
         $validated = $request->validate([
             'name'            => 'sometimes|string|max:255',
             'slug'            => 'sometimes|string|max:255|unique:mysql_master.organizations,slug,' . $id,
-            'email_policy'    => 'sometimes|string|in:standard,company_required',
             'timezone'        => 'sometimes|string|max:50',
             'type'            => 'sometimes|string|in:standard',
             'plan_id'         => 'sometimes|integer|exists:mysql_master.organization_plans,id',
@@ -650,32 +908,42 @@ class SuperAdminController extends Controller
             'custom_price_yearly'  => 'nullable|numeric|min:0',
             'custom_max_users'     => 'nullable|integer|min:1',
             'custom_max_projects'  => 'nullable|integer|min:1',
-            'custom_max_storage_gb'=> 'nullable|integer|min:1',
+            'custom_max_storage_gb'=> 'nullable|numeric|min:0.001',
+            'custom_storage_unit'  => 'nullable|string|in:KB,MB,GB',
             'customize_trial'      => 'nullable|boolean',
             'trial_duration'       => 'nullable|integer|min:1',
             'trial_duration_unit'  => 'nullable|string|in:minutes,hours,days',
             'trial_max_users'      => 'nullable|integer|min:1',
             'trial_max_projects'   => 'nullable|integer|min:1',
-            'trial_max_storage_gb' => 'nullable|integer|min:1',
+            'trial_max_storage_gb' => 'nullable|numeric|min:0.001',
+            'trial_storage_unit'   => 'nullable|string|in:KB,MB,GB',
+            'password_type'        => 'nullable|string|in:auto,manual',
+            'password'             => 'nullable|string|min:6|max:255',
         ]);
 
         $planId = $validated['plan_id'] ?? null;
         $billingPeriod = $validated['billing_period'] ?? null;
         $adminName = $validated['admin_name'] ?? null;
         $adminPhone = $validated['admin_phone'] ?? null;
-        unset($validated['plan_id'], $validated['billing_period'], $validated['admin_name'], $validated['admin_phone']);
+        $passwordType = $validated['password_type'] ?? null;
+        $newPassword = $validated['password'] ?? null;
+        unset($validated['plan_id'], $validated['billing_period'], $validated['admin_name'], $validated['admin_phone'], $validated['password_type'], $validated['password']);
 
         if (!empty($validated)) {
             $org->update($validated);
         }
 
-        if ($adminName || $adminPhone) {
+        if ($adminName || $adminPhone || ($passwordType === 'manual' && $newPassword)) {
             try {
                 $dbName = $org->database_name;
                 $sets = [];
                 $bindings = [];
                 if ($adminName) { $sets[] = '`name` = ?'; $bindings[] = $adminName; }
                 if ($adminPhone !== null) { $sets[] = '`phone_number` = ?'; $bindings[] = $adminPhone; }
+                if ($passwordType === 'manual' && $newPassword) {
+                    $sets[] = '`password` = ?'; $bindings[] = \Hash::make($newPassword);
+                    $sets[] = '`must_change_password` = ?'; $bindings[] = 1;
+                }
                 if (!empty($sets)) {
                     $escaped = str_replace('`', '``', $dbName);
                     $pdo = DB::connection('mysql_master')->getPdo();
@@ -706,6 +974,7 @@ class SuperAdminController extends Controller
                         'custom_max_users'      => $validated['custom_max_users'] ?? $plan->max_users,
                         'custom_max_projects'   => $validated['custom_max_projects'] ?? $plan->max_projects,
                         'custom_max_storage_gb' => $validated['custom_max_storage_gb'] ?? $plan->max_storage_gb,
+                        'storage_unit'          => $validated['custom_storage_unit'] ?? $plan->storage_unit ?? 'GB',
                     ];
                 }
 
@@ -738,6 +1007,7 @@ class SuperAdminController extends Controller
                     'custom_max_users'      => $customOverrides['custom_max_users'] ?? null,
                     'custom_max_projects'   => $customOverrides['custom_max_projects'] ?? null,
                     'custom_max_storage_gb' => $customOverrides['custom_max_storage_gb'] ?? null,
+                    'storage_unit'          => $customOverrides['storage_unit'] ?? null,
                     'starts_at'             => now(),
                     'ends_at'               => $isTrial ? now()->addMinutes($trialMinutes) : ($bp === 'yearly' ? now()->addYear() : now()->addMonth()),
                     'trial_ends_at'         => $isTrial ? now()->addMinutes($trialMinutes) : null,
@@ -752,6 +1022,7 @@ class SuperAdminController extends Controller
                             'max_users'           => $validated['trial_max_users'] ?? $plan->max_users,
                             'max_projects'        => $validated['trial_max_projects'] ?? $plan->max_projects,
                             'max_storage_gb'      => $validated['trial_max_storage_gb'] ?? $plan->max_storage_gb,
+                            'storage_unit'        => $validated['trial_storage_unit'] ?? $plan->storage_unit ?? 'GB',
                         ]);
                     }
                 }
@@ -880,7 +1151,8 @@ class SuperAdminController extends Controller
             'price_yearly'         => ['sometimes', 'numeric', 'min:0'],
             'max_users'            => ['sometimes', 'integer', 'min:1'],
             'max_projects'         => ['sometimes', 'integer', 'min:1'],
-            'max_storage_gb'       => ['sometimes', 'integer', 'min:1'],
+            'max_storage_gb'       => ['sometimes', 'numeric', 'min:0.001'],
+            'storage_unit'         => ['sometimes', 'string', 'in:KB,MB,GB'],
             'trial_duration'       => ['sometimes', 'integer', 'min:1'],
             'trial_duration_unit'  => ['sometimes', 'string', 'in:minutes,hours,days'],
             'is_active'            => ['sometimes', 'boolean'],
@@ -958,10 +1230,169 @@ class SuperAdminController extends Controller
             $query->where('status', $status);
         }
 
+        if ($action = $request->input('action')) {
+            $query->where('action', 'like', "%{$action}%");
+        }
+
+        if ($target = $request->input('target')) {
+            $query->where('target', 'like', "%{$target}%");
+        }
+
+        $dateFrom = $request->input('date_from');
+        $dateTo = $request->input('date_to');
+        if ($dateFrom || $dateTo) {
+            $query->dateRange($dateFrom, $dateTo);
+        }
+
         $logs = $query->orderBy('created_at', 'desc')
             ->paginate($request->input('per_page', 20));
 
         return response()->json(['success' => true, 'data' => $logs]);
+    }
+
+    public function activityLogActions(): JsonResponse
+    {
+        $actions = ActivityLog::select('action')->distinct()->orderBy('action')->pluck('action')->toArray();
+        return response()->json(['data' => $actions]);
+    }
+
+    public function allOrgAuditLogs(Request $request): JsonResponse
+    {
+        try {
+            $orgs = Organization::on('mysql_master')->where('status', '!=', 'deleted')->get();
+            $allLogs = [];
+
+            foreach ($orgs as $org) {
+                try {
+                    $pdo = $this->getTenantPdo($org);
+                    $this->ensureAuditLogUserNameColumn($pdo);
+
+                    $where = [];
+                    $bindings = [];
+
+                    if ($request->filled('search')) {
+                        $where[] = '(al.description LIKE ? OR al.module LIKE ? OR al.action LIKE ? OR al.ip_address LIKE ? OR COALESCE(u.name, al.user_name) LIKE ?)';
+                        $search = '%' . $request->input('search') . '%';
+                        $bindings[] = $search;
+                        $bindings[] = $search;
+                        $bindings[] = $search;
+                        $bindings[] = $search;
+                        $bindings[] = $search;
+                    }
+                    if ($request->filled('module')) {
+                        $where[] = 'al.module = ?';
+                        $bindings[] = $request->input('module');
+                    }
+                    if ($request->filled('action')) {
+                        $where[] = 'al.action = ?';
+                        $bindings[] = $request->input('action');
+                    }
+                    if ($request->filled('status')) {
+                        $where[] = 'al.status = ?';
+                        $bindings[] = $request->input('status');
+                    }
+                    if ($request->filled('date_from')) {
+                        $where[] = 'al.created_at >= ?';
+                        $bindings[] = $request->input('date_from') . ' 00:00:00';
+                    }
+                    if ($request->filled('date_to')) {
+                        $where[] = 'al.created_at <= ?';
+                        $bindings[] = $request->input('date_to') . ' 23:59:59';
+                    }
+
+                    $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+
+                    $sql = "SELECT al.*, COALESCE(u.name, al.user_name) AS user_name, u.email AS user_email, u.role AS user_role
+                            FROM audit_logs al
+                            LEFT JOIN users u ON al.user_id = u.id
+                            {$whereClause}
+                            ORDER BY al.created_at DESC
+                            LIMIT 500";
+                    $stmt = $pdo->prepare($sql);
+                    $stmt->execute($bindings);
+                    $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+                    foreach ($rows as $row) {
+                        $allLogs[] = [
+                            'id' => (int) $row['id'],
+                            'org_id' => $org->id,
+                            'org_name' => $org->name,
+                            'org_slug' => $org->slug,
+                            'user_name' => $row['user_name'] ?? 'System',
+                            'user_email' => $row['user_email'] ?? null,
+                            'user_role' => $row['user_role'] ?? null,
+                            'module' => $row['module'],
+                            'action' => $row['action'],
+                            'description' => $row['description'],
+                            'status' => $row['status'],
+                            'ip_address' => $row['ip_address'],
+                            'browser' => $row['browser'],
+                            'os' => $row['os'],
+                            'device' => $row['device'],
+                            'created_at' => $row['created_at'],
+                        ];
+                    }
+
+                    $pdo = null;
+                } catch (\Throwable $e) {
+                    \Log::warning("Failed to fetch audit logs for org {$org->id}: " . $e->getMessage());
+                    continue;
+                }
+            }
+
+            // Sort all logs by created_at descending
+            usort($allLogs, function ($a, $b) {
+                return strtotime($b['created_at']) - strtotime($a['created_at']);
+            });
+
+            // Paginate manually
+            $perPage = (int) $request->input('per_page', 25);
+            $page = (int) $request->input('page', 1);
+            $total = count($allLogs);
+            $lastPage = max(1, (int) ceil($total / $perPage));
+            $offset = ($page - 1) * $perPage;
+            $paginatedLogs = array_slice($allLogs, $offset, $perPage);
+
+            return response()->json([
+                'success' => true,
+                'data' => $paginatedLogs,
+                'meta' => [
+                    'current_page' => $page,
+                    'last_page' => $lastPage,
+                    'per_page' => $perPage,
+                    'total' => $total,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch application logs: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function allOrgAuditLogModules(): JsonResponse
+    {
+        try {
+            $orgs = Organization::on('mysql_master')->where('status', '!=', 'deleted')->get();
+            $allModules = [];
+
+            foreach ($orgs as $org) {
+                try {
+                    $pdo = $this->getTenantPdo($org);
+                    $stmt = $pdo->query("SELECT DISTINCT module FROM audit_logs ORDER BY module");
+                    $modules = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+                    $allModules = array_merge($allModules, $modules);
+                    $pdo = null;
+                } catch (\Throwable $e) {
+                    continue;
+                }
+            }
+
+            return response()->json(['data' => array_values(array_unique($allModules))]);
+        } catch (\Throwable $e) {
+            return response()->json(['data' => []]);
+        }
     }
 
     // ─── System Health ──────────────────────────────────────────────
@@ -1027,7 +1458,7 @@ class SuperAdminController extends Controller
     {
         try {
             $dbName = $org->database_name;
-            $result = DB::connection('mysql')->select("SELECT COUNT(*) as c FROM `{$dbName}`.`users`");
+            $result = DB::connection('mysql')->select("SELECT COUNT(*) as c FROM `{$dbName}`.`users` WHERE `active` = 1");
             return $result[0]->c ?? 0;
         } catch (\Throwable $e) {
             return 0;
@@ -1098,8 +1529,11 @@ class SuperAdminController extends Controller
         // Strip ALL MySQL dump conditional comment lines (/*!...*/) that cause issues
         $sql = preg_replace('/\/\*!\d+\s+.*?\*\//', '', $sql);
 
+        // Strip -- comment lines (MariaDB dump header comments)
+        $sql = preg_replace('/^--.*$/m', '', $sql);
+
         // Execute in large batches (much faster than line-by-line)
-        $statements = array_filter(array_map('trim', explode(';', $sql)), fn($s) => $s !== '' && !str_starts_with($s, '--'));
+        $statements = array_filter(array_map('trim', explode(';', $sql)), fn($s) => $s !== '' && $s !== '--');
         $batch = '';
         $batchSize = 0;
         foreach ($statements as $statement) {
@@ -1213,7 +1647,8 @@ class SuperAdminController extends Controller
             'trial_duration_unit' => 'required|string|in:minutes,hours,days',
             'max_users'           => 'required|integer|min:1',
             'max_projects'        => 'required|integer|min:1',
-            'max_storage_gb'      => 'required|integer|min:1',
+            'max_storage_gb'      => 'required|numeric|min:0.001',
+            'storage_unit'        => 'required|string|in:KB,MB,GB',
         ]);
 
         $setting = $this->trialResolver->setOverride($org, $validated);
@@ -1682,7 +2117,14 @@ class SuperAdminController extends Controller
             ->latest()
             ->first();
 
-        $maxStorageGb = $subscription?->getEffectiveMaxStorageGb() ?? 10;
+        $maxStorageGb = $subscription?->getEffectiveMaxStorageValue() ?? 10;
+        $storageUnit = $subscription?->getEffectiveStorageUnit() ?? 'GB';
+
+        // Org-level storage override (highest priority)
+        if ($org->custom_max_storage_gb !== null) {
+            $maxStorageGb = $org->custom_max_storage_gb;
+            $storageUnit = $org->storage_unit ?? $storageUnit;
+        }
 
         $storageFiles = \App\Models\Master\OrganizationStorageUsage::on('mysql_master')
             ->where('organization_id', $org->id)
@@ -1691,6 +2133,10 @@ class SuperAdminController extends Controller
         $totalBytes = $storageFiles->sum('file_size_bytes');
         $totalMb = round($totalBytes / (1024 * 1024), 2);
         $totalGb = round($totalBytes / (1024 * 1024 * 1024), 4);
+
+        $maxBytes = \App\Models\Master\OrganizationSubscription::convertToBytes($maxStorageGb, $storageUnit);
+        $remainingBytes = max(0, $maxBytes - $totalBytes);
+        $remainingGb = round($remainingBytes / (1024 * 1024 * 1024), 4);
 
         $byCategory = $storageFiles->groupBy('category')->map(function ($files, $category) {
             $bytes = $files->sum('file_size_bytes');
@@ -1728,8 +2174,10 @@ class SuperAdminController extends Controller
                 'total_mb'         => $totalMb,
                 'total_gb'         => $totalGb,
                 'max_storage_gb'   => $maxStorageGb,
-                'usage_percent'    => $maxStorageGb > 0 ? round(($totalGb / $maxStorageGb) * 100, 1) : 0,
-                'remaining_gb'     => max(0, round($maxStorageGb - $totalGb, 4)),
+                'storage_unit'     => $storageUnit,
+                'usage_percent'    => $maxBytes > 0 ? round(($totalBytes / $maxBytes) * 100, 1) : 0,
+                'remaining_bytes'  => $remainingBytes,
+                'remaining_gb'     => $remainingGb,
                 'by_category'      => $byCategory,
                 'recent_files'     => $recentFiles,
                 'total_files'      => $storageFiles->count(),
@@ -1739,16 +2187,52 @@ class SuperAdminController extends Controller
 
     public function deleteOrgStorageRecord(Request $request, string $orgId, string $recordId): JsonResponse
     {
+        \Log::info("deleteOrgStorageRecord called", ['orgId' => $orgId, 'recordId' => $recordId]);
+
         $org = Organization::on('mysql_master')->find($orgId);
         if (!$org) {
             return response()->json(['success' => false, 'message' => 'Organization not found.'], 404);
         }
 
+        // Fetch file details before deletion for audit log
+        $fileRecord = \App\Models\Master\OrganizationStorageUsage::on('mysql_master')
+            ->where('organization_id', $org->id)
+            ->where('id', $recordId)
+            ->first();
+
+        $fileName = $fileRecord?->file_name ?? 'Unknown';
+        $fileSizeMb = $fileRecord?->file_size_bytes ? round($fileRecord->file_size_bytes / (1024 * 1024), 2) : 0;
+        $fileCategory = $fileRecord?->category ?? 'Unknown';
+
         $result = \App\Services\StorageFileService::deleteFile($org, (int) $recordId);
+        \Log::info("deleteFile result", ['result' => $result, 'orgId' => $orgId, 'recordId' => $recordId]);
 
         if (!$result) {
             return response()->json(['success' => false, 'message' => 'Record not found.'], 404);
         }
+
+        // Write audit log to tenant DB
+        $this->writeTenantAuditLog($org, [
+            'module'     => 'storage',
+            'action'     => 'delete',
+            'description'=> "Deleted file \"{$fileName}\" ({$fileSizeMb} MB) from {$fileCategory}",
+            'entity_type'=> 'storage_file',
+            'entity_id'  => (int) $recordId,
+            'old_values' => json_encode(['file_name' => $fileName, 'file_size_mb' => $fileSizeMb, 'category' => $fileCategory]),
+            'new_values' => null,
+            'status'     => 'success',
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
+
+        // Also log to super admin activity logs
+        ActivityLog::create([
+            'user'   => $request->header('X-Admin-Name', 'Super Admin'),
+            'action' => "Deleted file \"{$fileName}\" ({$fileSizeMb} MB) from organization",
+            'target' => $org->name,
+            'ip'     => $request->ip(),
+            'status' => 'success',
+        ]);
 
         return response()->json(['success' => true, 'message' => 'File deleted from storage and database.']);
     }
@@ -1766,6 +2250,30 @@ class SuperAdminController extends Controller
 
         if ($type === 'old' && $months) {
             $result = \App\Services\StorageFileService::deleteOldFiles($org, (int) $months);
+
+            if ($result['deleted_count'] > 0) {
+                $this->writeTenantAuditLog($org, [
+                    'module'     => 'storage',
+                    'action'     => 'bulk_delete',
+                    'description'=> "Bulk deleted {$result['deleted_count']} files older than {$months} months (freed {$result['freed_mb']} MB)",
+                    'entity_type'=> 'storage_bulk',
+                    'entity_id'  => null,
+                    'old_values' => json_encode(['type' => 'old', 'months' => $months, 'deleted_count' => $result['deleted_count'], 'freed_mb' => $result['freed_mb']]),
+                    'new_values' => null,
+                    'status'     => 'success',
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
+                ]);
+
+                ActivityLog::create([
+                    'user'   => $request->header('X-Admin-Name', 'Super Admin'),
+                    'action' => "Bulk deleted {$result['deleted_count']} old files ({$months}+ months) from organization",
+                    'target' => $org->name,
+                    'ip'     => $request->ip(),
+                    'status' => 'success',
+                ]);
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => "{$result['deleted_count']} old files deleted from storage.",
@@ -1776,6 +2284,30 @@ class SuperAdminController extends Controller
 
         if ($type === 'large' && $minSizeGb) {
             $result = \App\Services\StorageFileService::deleteLargeFiles($org, (float) $minSizeGb);
+
+            if ($result['deleted_count'] > 0) {
+                $this->writeTenantAuditLog($org, [
+                    'module'     => 'storage',
+                    'action'     => 'bulk_delete',
+                    'description'=> "Bulk deleted {$result['deleted_count']} files larger than {$minSizeGb} GB (freed {$result['freed_mb']} MB)",
+                    'entity_type'=> 'storage_bulk',
+                    'entity_id'  => null,
+                    'old_values' => json_encode(['type' => 'large', 'min_size_gb' => $minSizeGb, 'deleted_count' => $result['deleted_count'], 'freed_mb' => $result['freed_mb']]),
+                    'new_values' => null,
+                    'status'     => 'success',
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
+                ]);
+
+                ActivityLog::create([
+                    'user'   => $request->header('X-Admin-Name', 'Super Admin'),
+                    'action' => "Bulk deleted {$result['deleted_count']} large files (> {$minSizeGb} GB) from organization",
+                    'target' => $org->name,
+                    'ip'     => $request->ip(),
+                    'status' => 'success',
+                ]);
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => "{$result['deleted_count']} large files deleted from storage.",
@@ -1800,7 +2332,14 @@ class SuperAdminController extends Controller
             ->latest()
             ->first();
 
-        $maxStorageGb = $subscription?->getEffectiveMaxStorageGb() ?? 10;
+        $maxStorageGb = $subscription?->getEffectiveMaxStorageValue() ?? 10;
+        $storageUnit = $subscription?->getEffectiveStorageUnit() ?? 'GB';
+
+        // Org-level storage override (highest priority)
+        if ($org->custom_max_storage_gb !== null) {
+            $maxStorageGb = $org->custom_max_storage_gb;
+            $storageUnit = $org->storage_unit ?? $storageUnit;
+        }
 
         $storageFiles = \App\Models\Master\OrganizationStorageUsage::on('mysql_master')
             ->where('organization_id', $org->id)
@@ -1808,7 +2347,11 @@ class SuperAdminController extends Controller
 
         $totalBytes = $storageFiles->sum('file_size_bytes');
         $totalGb = round($totalBytes / (1024 * 1024 * 1024), 4);
-        $usagePercent = $maxStorageGb > 0 ? round(($totalGb / $maxStorageGb) * 100, 1) : 0;
+
+        $maxBytes = \App\Models\Master\OrganizationSubscription::convertToBytes($maxStorageGb, $storageUnit);
+        $remainingBytes = max(0, $maxBytes - $totalBytes);
+        $remainingGb = round($remainingBytes / (1024 * 1024 * 1024), 4);
+        $usagePercent = $maxBytes > 0 ? round(($totalBytes / $maxBytes) * 100, 1) : 0;
 
         $old3 = \App\Models\Master\OrganizationStorageUsage::on('mysql_master')->where('organization_id', $org->id)->where('created_at', '<', now()->subMonths(3))->count();
         $old3Size = \App\Models\Master\OrganizationStorageUsage::on('mysql_master')->where('organization_id', $org->id)->where('created_at', '<', now()->subMonths(3))->sum('file_size_bytes');
@@ -1829,8 +2372,10 @@ class SuperAdminController extends Controller
                 'total_bytes' => $totalBytes,
                 'total_gb' => $totalGb,
                 'max_storage_gb' => $maxStorageGb,
+                'storage_unit' => $storageUnit,
                 'usage_percent' => $usagePercent,
-                'remaining_gb' => max(0, round($maxStorageGb - $totalGb, 4)),
+                'remaining_bytes'=> $remainingBytes,
+                'remaining_gb' => $remainingGb,
                 'total_files' => $storageFiles->count(),
                 'old_files' => [
                     '3_months' => ['count' => $old3, 'size_mb' => round($old3Size / (1024*1024), 2)],
@@ -1921,8 +2466,9 @@ class SuperAdminController extends Controller
                 's3_bucket'                   => $org->storage_s3_bucket ?? '',
                 's3_region'                   => $org->storage_s3_region ?? 'us-east-1',
                 's3_prefix'                   => $org->storage_s3_prefix ?? "org-{$org->id}",
-                's3_access_key'               => $org->storage_s3_access_key ? true : false,
-                's3_secret_key'               => $org->storage_s3_secret_key ? true : false,
+                's3_access_key'               => $org->storage_s3_access_key ?? '',
+                's3_secret_key'               => $org->storage_s3_secret_key ?? '',
+                's3_endpoint'                 => $org->storage_s3_endpoint ?? '',
                 'cleanup_months'              => $org->storage_cleanup_months ?? 6,
                 'large_file_threshold_mb'     => $org->storage_large_file_threshold_mb ?? 500,
                 'auto_cleanup_enabled'        => $org->storage_auto_cleanup ?? true,
@@ -1930,6 +2476,7 @@ class SuperAdminController extends Controller
                 'critical_threshold_percent'  => $org->storage_critical_threshold ?? 95,
                 'auto_delete_enabled'         => $org->storage_auto_delete ?? false,
                 'custom_max_storage_gb'       => $org->custom_max_storage_gb ?? null,
+                'storage_unit'                => $org->storage_unit ?? 'GB',
             ],
         ]);
     }
@@ -1939,17 +2486,19 @@ class SuperAdminController extends Controller
         $request->validate([
             'storage_driver'             => 'nullable|string|in:local,s3',
             's3_bucket'                  => 'nullable|string|max:255',
-            's3_region'                  => ['nullable','string','max:50', Rule::in(['us-east-1','us-east-2','us-west-1','us-west-2','eu-north-1','eu-west-1','eu-west-2','eu-central-1','ap-south-1','ap-southeast-1','ap-northeast-1','sa-east-1'])],
+            's3_region'                  => ['nullable','string','max:50'],
             's3_prefix'                  => 'nullable|string|max:100',
             's3_access_key'              => 'nullable|string|max:255',
             's3_secret_key'              => 'nullable|string|max:255',
+            's3_endpoint'                => 'nullable|string|max:500',
             'cleanup_months'             => 'nullable|integer|min:1|max:60',
             'large_file_threshold_mb'    => 'nullable|integer|min:10|max:50000',
             'auto_cleanup_enabled'       => 'nullable|boolean',
             'warning_threshold_percent'  => 'nullable|integer|min:50|max:95',
             'critical_threshold_percent' => 'nullable|integer|min:60|max:100',
             'auto_delete_enabled'        => 'nullable|boolean',
-            'custom_max_storage_gb'      => 'nullable|integer|min:1|max:9999',
+            'custom_max_storage_gb'      => 'nullable|numeric|min:0.001|max:9999',
+            'custom_storage_unit'        => 'nullable|string|in:KB,MB,GB',
         ]);
 
         $org = Organization::on('mysql_master')->find($id);
@@ -1964,6 +2513,7 @@ class SuperAdminController extends Controller
             'storage_s3_prefix'              => $request->input('s3_prefix'),
             'storage_s3_access_key'          => $request->input('s3_access_key') !== '••••••••' ? $request->input('s3_access_key') : null,
             'storage_s3_secret_key'          => $request->input('s3_secret_key') !== '••••••••' ? $request->input('s3_secret_key') : null,
+            'storage_s3_endpoint'            => $request->input('s3_endpoint') !== '••••••••' ? $request->input('s3_endpoint') : null,
             'storage_cleanup_months'         => $request->input('cleanup_months'),
             'storage_large_file_threshold_mb'=> $request->input('large_file_threshold_mb'),
             'storage_auto_cleanup'           => $request->boolean('auto_cleanup_enabled'),
@@ -1971,9 +2521,18 @@ class SuperAdminController extends Controller
             'storage_critical_threshold'     => $request->input('critical_threshold_percent'),
             'storage_auto_delete'            => $request->boolean('auto_delete_enabled'),
             'custom_max_storage_gb'          => $request->input('custom_max_storage_gb'),
+            'storage_unit'                   => $request->has('custom_storage_unit') ? ($request->input('custom_storage_unit') ?: 'GB') : null,
         ];
 
         $org->update(array_filter($fields, fn($v) => $v !== null));
+
+        // Dismiss old storage notifications so new ones with correct unit get created
+        \App\Models\Master\OrganizationStorageNotification::on('mysql_master')
+            ->where('organization_id', $org->id)
+            ->update(['is_dismissed' => true]);
+
+        // Trigger fresh notification check with new limits
+        \App\Services\StorageNotificationService::checkAndNotify($org);
 
         return response()->json([
             'success' => true,
@@ -1983,6 +2542,7 @@ class SuperAdminController extends Controller
                 's3_bucket'                   => $org->storage_s3_bucket,
                 's3_region'                   => $org->storage_s3_region,
                 's3_prefix'                   => $org->storage_s3_prefix,
+                's3_endpoint'                 => $org->storage_s3_endpoint,
                 'cleanup_months'              => $org->storage_cleanup_months,
                 'large_file_threshold_mb'     => $org->storage_large_file_threshold_mb,
                 'auto_cleanup_enabled'        => $org->storage_auto_cleanup,
@@ -1990,6 +2550,7 @@ class SuperAdminController extends Controller
                 'critical_threshold_percent'  => $org->storage_critical_threshold,
                 'auto_delete_enabled'         => $org->storage_auto_delete,
                 'custom_max_storage_gb'       => $org->custom_max_storage_gb,
+                'storage_unit'                => $org->storage_unit,
             ],
         ]);
     }
@@ -1998,10 +2559,11 @@ class SuperAdminController extends Controller
     {
         $request->validate([
             's3_bucket'       => 'required|string|max:255',
-            's3_region'       => ['required','string','max:50', Rule::in(['us-east-1','us-east-2','us-west-1','us-west-2','eu-north-1','eu-west-1','eu-west-2','eu-central-1','ap-south-1','ap-southeast-1','ap-northeast-1','sa-east-1'])],
+            's3_region'       => 'nullable|string|max:50',
             's3_access_key'   => 'required|string|max:255',
             's3_secret_key'   => 'required|string|max:255',
             's3_prefix'       => 'nullable|string|max:100',
+            's3_endpoint'     => 'nullable|string|max:500',
         ]);
 
         $org = Organization::on('mysql_master')->find($id);
@@ -2010,29 +2572,37 @@ class SuperAdminController extends Controller
         }
 
         try {
-            config([
-                'filesystems.disks.s3_test' => [
-                    'driver'                  => 's3',
-                    'key'                     => $request->input('s3_access_key'),
-                    'secret'                  => $request->input('s3_secret_key'),
-                    'region'                  => $request->input('s3_region'),
-                    'bucket'                  => $request->input('s3_bucket'),
-                    'use_path_style_endpoint' => false,
-                ],
-            ]);
+            $diskConfig = [
+                'driver'                  => 's3',
+                'key'                     => $request->input('s3_access_key'),
+                'secret'                  => $request->input('s3_secret_key'),
+                'region'                  => $request->input('s3_region') ?: 'us-east-1',
+                'bucket'                  => $request->input('s3_bucket'),
+                'use_path_style_endpoint' => false,
+            ];
+
+            // S3-compatible provider (Cloudflare R2, DigitalOcean Spaces, Wasabi, MinIO etc.)
+            $endpoint = $request->input('s3_endpoint');
+            if (!empty($endpoint)) {
+                $diskConfig['endpoint'] = $endpoint;
+                $diskConfig['use_path_style_endpoint'] = true;
+            }
+
+            config(['filesystems.disks.s3_test' => $diskConfig]);
 
             $disk = Storage::disk('s3_test');
             $prefix = rtrim($request->input('s3_prefix', ''), '/');
             $disk->files($prefix ? $prefix.'/' : '', 1);
 
+            $provider = !empty($endpoint) ? 'S3-compatible provider' : 'AWS S3';
             return response()->json([
                 'success' => true,
-                'message' => 'S3 connection successful. Bucket is accessible.',
+                'message' => "{$provider} connection successful. Bucket is accessible.",
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'S3 connection failed: ' . $e->getMessage(),
+                'message' => 'Connection failed: ' . $e->getMessage(),
             ]);
         }
     }
@@ -2336,6 +2906,7 @@ class SuperAdminController extends Controller
         $status = $request->query('status');
         $query = \App\Models\Master\OrganizationSupportTicket::on('mysql_master')
             ->where('organization_id', $org->id)
+            ->where('source', '!=', 'feedback')
             ->with('user:id,name,email');
 
         if ($status) {
@@ -2367,11 +2938,30 @@ class SuperAdminController extends Controller
             ];
         });
 
+        $ticketModel = \App\Models\Master\OrganizationSupportTicket::on('mysql_master')->where('organization_id', $org->id);
+
+        $supportCounts = [
+            'open'    => (clone $ticketModel)->where('source', '!=', 'feedback')->where('status', 'open')->count(),
+            'pending' => (clone $ticketModel)->where('source', '!=', 'feedback')->where('status', 'pending')->count(),
+            'resolved'=> (clone $ticketModel)->where('source', '!=', 'feedback')->where('status', 'resolved')->count(),
+            'closed'  => (clone $ticketModel)->where('source', '!=', 'feedback')->where('status', 'closed')->count(),
+        ];
+
+        $feedbackCounts = [
+            'open'    => (clone $ticketModel)->where('source', 'feedback')->where('status', 'open')->count(),
+            'pending' => (clone $ticketModel)->where('source', 'feedback')->where('status', 'pending')->count(),
+            'resolved'=> (clone $ticketModel)->where('source', 'feedback')->where('status', 'resolved')->count(),
+            'closed'  => (clone $ticketModel)->where('source', 'feedback')->where('status', 'closed')->count(),
+        ];
+
         $counts = [
-            'open'    => \App\Models\Master\OrganizationSupportTicket::on('mysql_master')->where('organization_id', $org->id)->where('status', 'open')->count(),
-            'pending' => \App\Models\Master\OrganizationSupportTicket::on('mysql_master')->where('organization_id', $org->id)->where('status', 'pending')->count(),
-            'resolved'=> \App\Models\Master\OrganizationSupportTicket::on('mysql_master')->where('organization_id', $org->id)->where('status', 'resolved')->count(),
-            'closed'  => \App\Models\Master\OrganizationSupportTicket::on('mysql_master')->where('organization_id', $org->id)->where('status', 'closed')->count(),
+            'open'    => $supportCounts['open'] + $feedbackCounts['open'],
+            'pending' => $supportCounts['pending'] + $feedbackCounts['pending'],
+            'resolved'=> $supportCounts['resolved'] + $feedbackCounts['resolved'],
+            'closed'  => $supportCounts['closed'] + $feedbackCounts['closed'],
+            'support' => $supportCounts,
+            'feedback'=> $feedbackCounts,
+            'total'   => array_sum($supportCounts) + array_sum($feedbackCounts),
         ];
 
         return response()->json(['success' => true, 'tickets' => $tickets, 'counts' => $counts]);
@@ -2386,6 +2976,7 @@ class SuperAdminController extends Controller
 
         $ticket = \App\Models\Master\OrganizationSupportTicket::on('mysql_master')
             ->where('organization_id', $org->id)
+            ->where('source', '!=', 'feedback')
             ->with('user:id,name,email')
             ->with('messages.user:id,name,email')
             ->find($ticketId);
@@ -2425,7 +3016,9 @@ class SuperAdminController extends Controller
                 'status'        => $ticket->status,
                 'priority'      => $ticket->priority,
                 'category'      => $ticket->category,
+                'source'        => $ticket->source ?? 'manual',
                 'assigned_to'   => $ticket->assigned_to_name,
+                'feedback_metadata' => $ticket->feedback_metadata,
                 'user'          => $ticket->user ? [
                     'id'    => $ticket->user->id,
                     'name'  => $ticket->user->name,
@@ -2448,6 +3041,7 @@ class SuperAdminController extends Controller
 
         $ticket = \App\Models\Master\OrganizationSupportTicket::on('mysql_master')
             ->where('organization_id', $org->id)
+            ->where('source', '!=', 'feedback')
             ->find($ticketId);
 
         if (!$ticket) {
@@ -2481,6 +3075,7 @@ class SuperAdminController extends Controller
 
         $ticket = \App\Models\Master\OrganizationSupportTicket::on('mysql_master')
             ->where('organization_id', $org->id)
+            ->where('source', '!=', 'feedback')
             ->find($ticketId);
 
         if (!$ticket) {
@@ -2490,5 +3085,919 @@ class SuperAdminController extends Controller
         $ticket->update(['status' => 'closed', 'closed_at' => now()]);
 
         return response()->json(['success' => true, 'message' => 'Ticket closed.']);
+    }
+
+    // ─── Organization Feedback Tickets ───────────────────────────
+
+    /**
+     * Get all feedback-based support tickets across all organizations.
+     */
+    public function allFeedbackTickets(Request $request): JsonResponse
+    {
+        $query = \App\Models\Master\OrganizationSupportTicket::on('mysql_master')
+            ->where('source', 'feedback')
+            ->with('organization:id,name,slug')
+            ->with('user:id,name,email');
+
+        if ($status = $request->query('status')) {
+            $query->where('status', $status);
+        }
+
+        if ($priority = $request->query('priority')) {
+            $query->where('priority', $priority);
+        }
+
+        if ($orgId = $request->query('organization_id')) {
+            $query->where('organization_id', $orgId);
+        }
+
+        if ($search = $request->query('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('subject', 'like', "%{$search}%")
+                  ->orWhere('feedback_reference_number', 'like', "%{$search}%")
+                  ->orWhere('feedback_metadata->user_name', 'like', "%{$search}%")
+                  ->orWhereHas('organization', function ($q2) use ($search) {
+                      $q2->where('name', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        if ($feedbackType = $request->query('feedback_type')) {
+            $query->whereJsonContains('feedback_metadata->feedback_type', $feedbackType);
+        }
+
+        if ($priority = $request->query('priority')) {
+            $query->where('priority', strtolower($priority));
+        }
+
+        if ($dateStart = $request->query('date_start')) {
+            $query->where('created_at', '>=', $dateStart);
+        }
+
+        if ($dateEnd = $request->query('date_end')) {
+            $query->where('created_at', '<=', $dateEnd . ' 23:59:59');
+        }
+
+        $tickets = $query->orderBy('created_at', 'desc')
+            ->paginate($request->input('per_page', 20));
+
+        $counts = [
+            'open'          => \App\Models\Master\OrganizationSupportTicket::on('mysql_master')->where('source', 'feedback')->where('status', 'open')->count(),
+            'under_review'  => \App\Models\Master\OrganizationSupportTicket::on('mysql_master')->where('source', 'feedback')->where('status', 'under_review')->count(),
+            'accepted'      => \App\Models\Master\OrganizationSupportTicket::on('mysql_master')->where('source', 'feedback')->where('status', 'accepted')->count(),
+            'planned'       => \App\Models\Master\OrganizationSupportTicket::on('mysql_master')->where('source', 'feedback')->where('status', 'planned')->count(),
+            'in_development'=> \App\Models\Master\OrganizationSupportTicket::on('mysql_master')->where('source', 'feedback')->where('status', 'in_development')->count(),
+            'testing'       => \App\Models\Master\OrganizationSupportTicket::on('mysql_master')->where('source', 'feedback')->where('status', 'testing')->count(),
+            'resolved'      => \App\Models\Master\OrganizationSupportTicket::on('mysql_master')->where('source', 'feedback')->where('status', 'resolved')->count(),
+            'closed'        => \App\Models\Master\OrganizationSupportTicket::on('mysql_master')->where('source', 'feedback')->where('status', 'closed')->count(),
+            'rejected'      => \App\Models\Master\OrganizationSupportTicket::on('mysql_master')->where('source', 'feedback')->where('status', 'rejected')->count(),
+            'total'         => \App\Models\Master\OrganizationSupportTicket::on('mysql_master')->where('source', 'feedback')->count(),
+        ];
+
+        // Per-org feedback counts for card display
+        $orgCounts = \App\Models\Master\OrganizationSupportTicket::on('mysql_master')
+            ->where('source', 'feedback')
+            ->selectRaw('organization_id, status, COUNT(*) as cnt')
+            ->groupBy('organization_id', 'status')
+            ->get()
+            ->groupBy('organization_id')
+            ->map(function ($rows) {
+                $counts = ['open' => 0, 'under_review' => 0, 'accepted' => 0, 'planned' => 0, 'in_development' => 0, 'testing' => 0, 'resolved' => 0, 'closed' => 0, 'rejected' => 0, 'total' => 0];
+                foreach ($rows as $row) {
+                    $counts[$row->status] = $row->cnt;
+                    $counts['total'] += $row->cnt;
+                }
+                return $counts;
+            });
+
+        return response()->json([
+            'success' => true,
+            'data' => $tickets->items(),
+            'counts' => $counts,
+            'org_counts' => $orgCounts,
+            'total' => $tickets->total(),
+            'page' => $tickets->currentPage(),
+            'per_page' => $tickets->perPage(),
+            'last_page' => $tickets->lastPage(),
+        ]);
+    }
+
+    /**
+     * Get detail of a feedback-based support ticket.
+     */
+    public function feedbackTicketDetail(Request $request, string $ticketId): JsonResponse
+    {
+        $ticket = \App\Models\Master\OrganizationSupportTicket::on('mysql_master')
+            ->where('source', 'feedback')
+            ->with('organization:id,name,slug,storage_driver,storage_s3_prefix,storage_s3_bucket,storage_s3_region,storage_s3_access_key,storage_s3_secret_key,storage_s3_endpoint')
+            ->with('user:id,name,email')
+            ->with('messages.user:id,name,email')
+            ->find($ticketId);
+
+        if (!$ticket) {
+            return response()->json(['success' => false, 'message' => 'Feedback ticket not found.'], 404);
+        }
+
+        // Mark org messages as read
+        \App\Models\Master\OrganizationSupportMessage::on('mysql_master')
+            ->where('ticket_id', $ticket->id)
+            ->where('sender_type', 'organization')
+            ->where('is_read', false)
+            ->update(['is_read' => true]);
+
+        $messages = $ticket->messages->filter(function ($msg) use ($ticket) {
+            return $msg->message !== $ticket->message;
+        })->values()->map(function ($msg) {
+            return [
+                'id' => $msg->id,
+                'message' => $msg->message,
+                'sender_type' => $msg->sender_type,
+                'is_read' => $msg->is_read,
+                'user' => $msg->user ? [
+                    'id' => $msg->user->id,
+                    'name' => $msg->user->name,
+                    'email' => $msg->user->email,
+                ] : null,
+                'created_at' => $msg->created_at?->toISOString(),
+            ];
+        });
+
+        $metadata = $ticket->feedback_metadata ?? [];
+        $feedbackDescription = $metadata['description'] ?? null;
+
+        // Resolve file URLs for attachments (S3 pre-signed or local /storage/ paths)
+        $org = $ticket->organization;
+        if ($org) {
+            if (!empty($metadata['screenshot_path'])) {
+                $metadata['screenshot_url'] = \App\Services\StorageDiskResolver::getUrl($org, $metadata['screenshot_path']);
+            }
+            if (!empty($metadata['recording_path'])) {
+                $metadata['recording_url'] = \App\Services\StorageDiskResolver::getUrl($org, $metadata['recording_path']);
+            }
+            if (!empty($metadata['attachment_path'])) {
+                $metadata['attachment_url'] = \App\Services\StorageDiskResolver::getUrl($org, $metadata['attachment_path']);
+            }
+        }
+
+        if (!$feedbackDescription && $ticket->tenant_feedback_id && $ticket->organization) {
+            try {
+                $pdo = $this->getTenantPdo($ticket->organization);
+                $stmt = $pdo->prepare("SELECT description FROM feedback WHERE id = ?");
+                $stmt->execute([$ticket->tenant_feedback_id]);
+                $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+                if ($row && !empty($row['description'])) {
+                    $feedbackDescription = $row['description'];
+                }
+                $pdo = null;
+            } catch (\Throwable $e) {
+                \Log::error("Failed to fetch feedback description from tenant DB: " . $e->getMessage());
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'ticket' => [
+                'id' => $ticket->id,
+                'ticket_number' => $ticket->ticket_number,
+                'subject' => $ticket->subject,
+                'message' => $ticket->message,
+                'description' => $feedbackDescription,
+                'status' => $ticket->status,
+                'priority' => $ticket->priority,
+                'category' => $ticket->category,
+                'source' => $ticket->source,
+                'feedback_reference_number' => $ticket->feedback_reference_number,
+                'feedback_metadata' => $metadata,
+                'organization' => $ticket->organization ? [
+                    'id' => $ticket->organization->id,
+                    'name' => $ticket->organization->name,
+                    'slug' => $ticket->organization->slug,
+                ] : null,
+                'user' => $ticket->user ? [
+                    'id' => $ticket->user->id,
+                    'name' => $ticket->user->name,
+                    'email' => $ticket->user->email,
+                ] : null,
+                'created_at' => $ticket->created_at?->toISOString(),
+                'updated_at' => $ticket->updated_at?->toISOString(),
+            ],
+            'messages' => $messages,
+        ]);
+    }
+
+    /**
+     * Reply to a feedback-based support ticket.
+     * Also creates FeedbackNote in tenant DB so user sees it in FeedbackCenter.
+     */
+    public function feedbackTicketReply(Request $request, string $ticketId): JsonResponse
+    {
+        $request->validate(['message' => 'required|string']);
+
+        $ticket = \App\Models\Master\OrganizationSupportTicket::on('mysql_master')
+            ->where('source', 'feedback')
+            ->with('organization')
+            ->find($ticketId);
+
+        if (!$ticket) {
+            return response()->json(['success' => false, 'message' => 'Feedback ticket not found.'], 404);
+        }
+
+        if ($ticket->status === 'closed') {
+            return response()->json(['success' => false, 'message' => 'Cannot reply to a closed ticket.'], 400);
+        }
+
+        // 1. Save reply in master DB support messages
+        $msg = \App\Models\Master\OrganizationSupportMessage::on('mysql_master')->create([
+            'ticket_id' => $ticket->id,
+            'user_id' => null,
+            'message' => $request->message,
+            'sender_type' => 'support',
+        ]);
+
+        if ($ticket->status === 'open') {
+            $ticket->update(['status' => 'pending']);
+            \App\Models\Master\OrganizationSupportMessage::on('mysql_master')->create([
+                'ticket_id' => $ticket->id,
+                'user_id' => null,
+                'message' => "Status changed from \"Open\" to \"Under Review\"",
+                'sender_type' => 'support',
+            ]);
+        }
+
+        $adminName = $request->header('X-Admin-Name', 'Super Admin');
+        $feedbackId = $ticket->tenant_feedback_id ?? null;
+        $org = $ticket->organization;
+
+        // 2. Write FeedbackNote in tenant DB so user can see reply in FeedbackCenter
+        if ($feedbackId && $org) {
+            try {
+                $pdo = $this->getTenantPdo($org);
+                $stmt = $pdo->prepare(
+                    "INSERT INTO feedback_notes (feedback_id, user_id, note, created_at, updated_at) VALUES (?, NULL, ?, NOW(), NOW())"
+                );
+                $stmt->execute([$feedbackId, "[Super Admin Reply] {$request->message}"]);
+                $pdo = null;
+            } catch (\Throwable $e) {
+                \Log::error("Failed to write FeedbackNote to tenant DB: " . $e->getMessage(), [
+                    'ticket_id' => $ticket->id,
+                    'feedback_id' => $feedbackId,
+                    'org_id' => $org->id,
+                ]);
+            }
+        }
+
+        // 3. Log to ActivityLog (master DB)
+        ActivityLog::create([
+            'user' => $adminName,
+            'action' => "Replied to feedback ticket {$ticket->ticket_number}" . ($feedbackId ? " (Feedback #{$feedbackId})" : ''),
+            'target' => $ticket->subject,
+            'ip' => $request->ip(),
+            'status' => 'success',
+        ]);
+
+        // 4. Log to tenant AuditLog
+        if ($org) {
+            $this->writeTenantAuditLog($org, [
+                'module' => 'Feedback',
+                'action' => 'Super Admin Reply',
+                'entity_type' => 'Feedback',
+                'entity_id' => $feedbackId,
+                'description' => "{$adminName} replied to feedback ticket {$ticket->ticket_number}: " . \Illuminate\Support\Str::limit($request->message, 200),
+                'new_values' => json_encode(['message' => $request->message, 'ticket_number' => $ticket->ticket_number]),
+                'status' => 'success',
+            ]);
+        }
+
+        // 5. Log to FeedbackActivityLog in tenant DB
+        if ($feedbackId && $org) {
+            try {
+                $pdo = $this->getTenantPdo($org);
+                $stmt = $pdo->prepare(
+                    "INSERT INTO feedback_activity_logs (feedback_id, user_id, action, details, created_at, updated_at) VALUES (?, NULL, ?, ?, NOW(), NOW())"
+                );
+                $stmt->execute([$feedbackId, 'super_admin_replied', "{$adminName} replied: " . \Illuminate\Support\Str::limit($request->message, 500)]);
+                $pdo = null;
+            } catch (\Throwable $e) {
+                \Log::error("Failed to write FeedbackActivityLog to tenant DB: " . $e->getMessage(), [
+                    'feedback_id' => $feedbackId,
+                    'org_id' => $org->id,
+                ]);
+            }
+        }
+
+        // 6. Log to Laravel application log
+        \Log::info("Super Admin replied to feedback ticket", [
+            'admin' => $adminName,
+            'ticket_number' => $ticket->ticket_number,
+            'feedback_id' => $feedbackId,
+            'organization_id' => $ticket->organization_id,
+            'message_preview' => \Illuminate\Support\Str::limit($request->message, 100),
+        ]);
+
+        return response()->json(['success' => true, 'reply' => $msg]);
+    }
+
+    /**
+     * Close a feedback-based support ticket.
+     * Also updates Feedback status in tenant DB.
+     */
+    public function feedbackTicketClose(Request $request, string $ticketId): JsonResponse
+    {
+        $ticket = \App\Models\Master\OrganizationSupportTicket::on('mysql_master')
+            ->where('source', 'feedback')
+            ->with('organization')
+            ->find($ticketId);
+
+        if (!$ticket) {
+            return response()->json(['success' => false, 'message' => 'Feedback ticket not found.'], 404);
+        }
+
+        $oldStatus = $ticket->status;
+        $ticket->update(['status' => 'closed', 'closed_at' => now()]);
+
+        $adminName = $request->header('X-Admin-Name', 'Super Admin');
+        $feedbackId = $ticket->tenant_feedback_id ?? null;
+        $org = $ticket->organization;
+
+        // Insert status change message for timeline
+        $statusLabels = [
+            'open' => 'Open', 'under_review' => 'Under Review', 'accepted' => 'Accepted',
+            'planned' => 'Planned', 'in_development' => 'In Development', 'testing' => 'Testing',
+            'resolved' => 'Resolved', 'closed' => 'Closed', 'rejected' => 'Rejected',
+        ];
+        $oldLabel = $statusLabels[$oldStatus] ?? $oldStatus;
+        \App\Models\Master\OrganizationSupportMessage::on('mysql_master')->create([
+            'ticket_id' => $ticket->id,
+            'user_id' => null,
+            'message' => "Status changed from \"{$oldLabel}\" to \"Closed\" by {$adminName}",
+            'sender_type' => 'support',
+        ]);
+
+        // 1. Update Feedback status in tenant DB
+        if ($feedbackId && $org) {
+            try {
+                $pdo = $this->getTenantPdo($org);
+                $stmt = $pdo->prepare("UPDATE feedback SET status = 'Closed', updated_at = NOW() WHERE id = ?");
+                $stmt->execute([$feedbackId]);
+                $pdo = null;
+            } catch (\Throwable $e) {
+                \Log::error("Failed to update Feedback status in tenant DB: " . $e->getMessage(), [
+                    'feedback_id' => $feedbackId,
+                    'org_id' => $org->id,
+                ]);
+            }
+        }
+
+        // 2. Log to ActivityLog (master DB)
+        ActivityLog::create([
+            'user' => $adminName,
+            'action' => "Closed feedback ticket {$ticket->ticket_number}" . ($feedbackId ? " (Feedback #{$feedbackId})" : ''),
+            'target' => $ticket->subject,
+            'ip' => $request->ip(),
+            'status' => 'success',
+        ]);
+
+        // 3. Log to tenant AuditLog
+        if ($org) {
+            $this->writeTenantAuditLog($org, [
+                'module' => 'Feedback',
+                'action' => 'Super Admin Closed',
+                'entity_type' => 'Feedback',
+                'entity_id' => $feedbackId,
+                'description' => "{$adminName} closed feedback ticket {$ticket->ticket_number} (was: {$oldStatus})",
+                'old_values' => json_encode(['status' => $oldStatus]),
+                'new_values' => json_encode(['status' => 'closed']),
+                'status' => 'success',
+            ]);
+        }
+
+        // 4. Log to FeedbackActivityLog in tenant DB
+        if ($feedbackId && $org) {
+            try {
+                $pdo = $this->getTenantPdo($org);
+                $stmt = $pdo->prepare(
+                    "INSERT INTO feedback_activity_logs (feedback_id, user_id, action, details, created_at, updated_at) VALUES (?, NULL, ?, ?, NOW(), NOW())"
+                );
+                $stmt->execute([$feedbackId, 'super_admin_closed', "{$adminName} closed this feedback ticket"]);
+                $pdo = null;
+            } catch (\Throwable $e) {
+                \Log::error("Failed to write FeedbackActivityLog to tenant DB: " . $e->getMessage(), [
+                    'feedback_id' => $feedbackId,
+                    'org_id' => $org->id,
+                ]);
+            }
+        }
+
+        // 5. Log to Laravel application log
+        \Log::info("Super Admin closed feedback ticket", [
+            'admin' => $adminName,
+            'ticket_number' => $ticket->ticket_number,
+            'feedback_id' => $feedbackId,
+            'organization_id' => $ticket->organization_id,
+            'old_status' => $oldStatus,
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'Feedback ticket closed.']);
+    }
+
+    /**
+     * Update status of a feedback-based support ticket.
+     * Also updates Feedback status in tenant DB.
+     */
+    public function feedbackTicketUpdateStatus(Request $request, string $ticketId): JsonResponse
+    {
+        $request->validate([
+            'status' => 'required|string|in:open,under_review,accepted,planned,in_development,testing,resolved,closed,rejected',
+        ]);
+
+        $ticket = \App\Models\Master\OrganizationSupportTicket::on('mysql_master')
+            ->where('source', 'feedback')
+            ->with('organization')
+            ->find($ticketId);
+
+        if (!$ticket) {
+            return response()->json(['success' => false, 'message' => 'Feedback ticket not found.'], 404);
+        }
+
+        $oldStatus = $ticket->status;
+        $newStatus = $request->status;
+
+        $updates = ['status' => $newStatus];
+        if ($newStatus === 'resolved' && $oldStatus !== 'resolved') {
+            $updates['resolved_at'] = now();
+        }
+        if ($newStatus === 'closed' && $oldStatus !== 'closed') {
+            $updates['closed_at'] = now();
+        }
+
+        $ticket->update($updates);
+
+        $adminName = $request->header('X-Admin-Name', 'Super Admin');
+        $feedbackId = $ticket->tenant_feedback_id ?? null;
+        $org = $ticket->organization;
+
+        // Format status labels for display
+        $statusLabels = [
+            'open' => 'Open',
+            'under_review' => 'Under Review',
+            'accepted' => 'Accepted',
+            'planned' => 'Planned',
+            'in_development' => 'In Development',
+            'testing' => 'Testing',
+            'resolved' => 'Resolved',
+            'closed' => 'Closed',
+            'rejected' => 'Rejected',
+        ];
+        $oldLabel = $statusLabels[$oldStatus] ?? $oldStatus;
+        $newLabel = $statusLabels[$newStatus] ?? $newStatus;
+
+        // Map support status to feedback status (for tenant DB feedback table)
+        $feedbackStatusMap = [
+            'open' => 'New',
+            'under_review' => 'Under Review',
+            'accepted' => 'Accepted',
+            'planned' => 'Planned',
+            'in_development' => 'In Development',
+            'testing' => 'Testing',
+            'resolved' => 'Resolved',
+            'closed' => 'Closed',
+            'rejected' => 'Rejected',
+        ];
+
+        // 0. Insert status change message into OrganizationSupportMessage (for admin timeline)
+        \App\Models\Master\OrganizationSupportMessage::on('mysql_master')->create([
+            'ticket_id' => $ticket->id,
+            'user_id' => null,
+            'message' => "Status changed from \"{$oldLabel}\" to \"{$newLabel}\" by {$adminName}",
+            'sender_type' => 'support',
+        ]);
+
+        // 1. Update Feedback status in tenant DB
+        if ($feedbackId && $org && isset($feedbackStatusMap[$newStatus])) {
+            try {
+                $pdo = $this->getTenantPdo($org);
+                $stmt = $pdo->prepare("UPDATE feedback SET status = ?, updated_at = NOW() WHERE id = ?");
+                $stmt->execute([$feedbackStatusMap[$newStatus], $feedbackId]);
+                $pdo = null;
+            } catch (\Throwable $e) {
+                \Log::error("Failed to update Feedback status in tenant DB: " . $e->getMessage(), [
+                    'feedback_id' => $feedbackId,
+                    'org_id' => $org->id,
+                ]);
+            }
+        }
+
+        // 2. Log to ActivityLog (master DB)
+        ActivityLog::create([
+            'user' => $adminName,
+            'action' => "Feedback ticket {$ticket->ticket_number} status changed from '{$oldStatus}' to '{$newStatus}'" . ($feedbackId ? " (Feedback #{$feedbackId})" : ''),
+            'target' => $ticket->subject,
+            'ip' => $request->ip(),
+            'status' => 'success',
+        ]);
+
+        // 3. Log to tenant AuditLog
+        if ($org) {
+            $this->writeTenantAuditLog($org, [
+                'module' => 'Feedback',
+                'action' => 'Status Changed',
+                'entity_type' => 'Feedback',
+                'entity_id' => $feedbackId,
+                'description' => "{$adminName} changed feedback ticket {$ticket->ticket_number} status from '{$oldStatus}' to '{$newStatus}'",
+                'old_values' => json_encode(['status' => $oldStatus]),
+                'new_values' => json_encode(['status' => $newStatus]),
+                'status' => 'success',
+            ]);
+        }
+
+        // 4. Log to FeedbackActivityLog in tenant DB
+        if ($feedbackId && $org) {
+            try {
+                $pdo = $this->getTenantPdo($org);
+                $stmt = $pdo->prepare(
+                    "INSERT INTO feedback_activity_logs (feedback_id, user_id, action, details, created_at, updated_at) VALUES (?, NULL, ?, ?, NOW(), NOW())"
+                );
+                $stmt->execute([$feedbackId, 'status_changed', "{$adminName} changed status from '{$oldStatus}' to '{$newStatus}'"]);
+                $pdo = null;
+            } catch (\Throwable $e) {
+                \Log::error("Failed to write FeedbackActivityLog to tenant DB: " . $e->getMessage(), [
+                    'feedback_id' => $feedbackId,
+                    'org_id' => $org->id,
+                ]);
+            }
+        }
+
+        // 5. Log to Laravel application log
+        \Log::info("Super Admin updated feedback ticket status", [
+            'admin' => $adminName,
+            'ticket_number' => $ticket->ticket_number,
+            'feedback_id' => $feedbackId,
+            'organization_id' => $ticket->organization_id,
+            'old_status' => $oldStatus,
+            'new_status' => $newStatus,
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'Status updated.']);
+    }
+
+    // ─── Organization Audit Logs (reads from tenant DB) ───────────
+
+    private function getTenantPdo(Organization $org): \PDO
+    {
+        $dbName = $org->database_name;
+        $host = $org->database_host ?: config('database.connections.mysql_master.host', '127.0.0.1');
+        $port = (int) ($org->database_port ?: config('database.connections.mysql_master.port', 3306));
+        $username = $org->database_username ?: config('database.connections.mysql_master.username', 'root');
+        $dbPassword = $org->database_password ?? config('database.connections.mysql_master.password', '');
+
+        $dsn = sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4', $host, $port, $dbName);
+        $pdo = new \PDO($dsn, $username, $dbPassword, [
+            \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+            \PDO::ATTR_TIMEOUT => 5,
+        ]);
+        $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
+        return $pdo;
+    }
+
+    private function writeTenantAuditLog(Organization $org, array $data): void
+    {
+        try {
+            $pdo = $this->getTenantPdo($org);
+            $request = request();
+
+            // Ensure user_name column exists
+            $this->ensureAuditLogUserNameColumn($pdo);
+
+            // Parse user agent for browser, OS, device
+            $ua = $this->parseUserAgent($request->userAgent());
+
+            // Get authenticated super admin info
+            $userId = null;
+            $userName = null;
+            $adminUser = $this->getSuperAdminUser();
+            if ($adminUser) {
+                $userName = $adminUser->name ?? null;
+                if (!empty($adminUser->email)) {
+                    $findUser = $pdo->prepare("SELECT id FROM users WHERE email = ? LIMIT 1");
+                    $findUser->execute([$adminUser->email]);
+                    $tenantUser = $findUser->fetch(\PDO::FETCH_ASSOC);
+                    if ($tenantUser) {
+                        $userId = (int) $tenantUser['id'];
+                    }
+                }
+            }
+
+            $stmt = $pdo->prepare("
+                INSERT INTO audit_logs (user_id, user_name, module, action, entity_type, entity_id, description, old_values, new_values, status, ip_address, user_agent, browser, os, device, request_method, request_url, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+            ");
+            $stmt->execute([
+                $userId,
+                $userName,
+                $data['module'] ?? null,
+                $data['action'] ?? null,
+                $data['entity_type'] ?? null,
+                $data['entity_id'] ?? null,
+                $data['description'] ?? null,
+                $data['old_values'] ?? null,
+                $data['new_values'] ?? null,
+                $data['status'] ?? 'success',
+                $data['ip_address'] ?? $request->ip(),
+                $data['user_agent'] ?? $request->userAgent(),
+                $ua['browser'],
+                $ua['os'],
+                $ua['device'],
+                $request->method(),
+                $data['request_url'] ?? $request->fullUrl(),
+            ]);
+
+            $pdo = null;
+        } catch (\Throwable $e) {
+            \Log::warning("Failed to write tenant audit log for org {$org->id}: " . $e->getMessage());
+        }
+    }
+
+    private function ensureAuditLogUserNameColumn(\PDO $pdo): void
+    {
+        try {
+            $stmt = $pdo->prepare("SHOW COLUMNS FROM audit_logs LIKE 'user_name'");
+            $stmt->execute();
+            if ($stmt->fetch() === false) {
+                $pdo->exec("ALTER TABLE audit_logs ADD COLUMN user_name VARCHAR(255) NULL AFTER user_id");
+            }
+        } catch (\Throwable $e) {
+            // Column may already exist or table may not exist yet
+        }
+    }
+
+    private function parseUserAgent(?string $ua): array
+    {
+        $result = ['browser' => 'Unknown', 'os' => 'Unknown', 'device' => 'Desktop'];
+
+        if (!$ua) {
+            return $result;
+        }
+
+        $ua = mb_strtolower($ua);
+
+        if (str_contains($ua, 'edg')) {
+            $result['browser'] = 'Edge';
+        } elseif (str_contains($ua, 'chrome')) {
+            $result['browser'] = 'Chrome';
+        } elseif (str_contains($ua, 'safari') && !str_contains($ua, 'chrome')) {
+            $result['browser'] = 'Safari';
+        } elseif (str_contains($ua, 'firefox')) {
+            $result['browser'] = 'Firefox';
+        } elseif (str_contains($ua, 'opera') || str_contains($ua, 'opr')) {
+            $result['browser'] = 'Opera';
+        } elseif (str_contains($ua, 'msie') || str_contains($ua, 'trident')) {
+            $result['browser'] = 'Internet Explorer';
+        }
+
+        if (str_contains($ua, 'windows')) {
+            $result['os'] = 'Windows';
+        } elseif (str_contains($ua, 'mac os') || str_contains($ua, 'macintosh')) {
+            $result['os'] = 'macOS';
+        } elseif (str_contains($ua, 'linux') && !str_contains($ua, 'android')) {
+            $result['os'] = 'Linux';
+        } elseif (str_contains($ua, 'android')) {
+            $result['os'] = 'Android';
+        } elseif (str_contains($ua, 'ios') || str_contains($ua, 'iphone') || str_contains($ua, 'ipad')) {
+            $result['os'] = 'iOS';
+        }
+
+        if (str_contains($ua, 'mobile') || str_contains($ua, 'iphone') || str_contains($ua, 'android')) {
+            $result['device'] = 'Mobile';
+        } elseif (str_contains($ua, 'tablet') || str_contains($ua, 'ipad')) {
+            $result['device'] = 'Tablet';
+        } elseif (str_contains($ua, 'bot') || str_contains($ua, 'crawl')) {
+            $result['device'] = 'Bot';
+        }
+
+        return $result;
+    }
+
+    /**
+     * Validate that an email domain has valid MX records and is not a known throwaway/fake domain.
+     * Prevents registration with fake/dummy email addresses.
+     */
+    private static function isValidEmailDomain(string $domain): bool
+    {
+        // Allow common dev/test domains
+        $allowedDomains = ['localhost', 'test.com', 'example.com', 'mailinator.com'];
+        if (in_array($domain, $allowedDomains)) {
+            return true;
+        }
+        // Allow draft emails
+        if (str_ends_with($domain, 'draft.local')) {
+            return true;
+        }
+
+        // Block known fake/throwaway/temporary email domains
+        $blockedDomains = [
+            'mailinator.com', 'guerrillamail.com', 'guerrillamail.net', 'guerrillamail.org',
+            'tempmail.com', 'throwaway.email', 'temp-mail.org', 'fakeinbox.com',
+            'sharklasers.com', 'guerrillamailblock.com', 'grr.la', 'dispostable.com',
+            'yopmail.com', 'yopmail.fr', 'maildrop.cc', 'trashmail.com',
+            'mailnator.com', 'tempr.email', 'discard.email', 'discardmail.com',
+            '10minutemail.com', 'getnada.com', 'mohmal.com',
+            'test.com', 'example.com', 'localhost',
+        ];
+        if (in_array($domain, $blockedDomains)) {
+            return false;
+        }
+
+        // Check MX/A records using dns_get_record (works on Windows + Linux)
+        $records = dns_get_record($domain, DNS_MX);
+        if (!empty($records)) {
+            // Extra check: block domains with suspicious MX records (like root "." only)
+            if (count($records) === 1 && trim($records[0]['target'], '.') === '') {
+                return false;
+            }
+            return true;
+        }
+        // Fallback: check A record
+        $aRecords = dns_get_record($domain, DNS_A);
+        return !empty($aRecords);
+    }
+
+    public function orgAuditLogs(Request $request, string $id): JsonResponse
+    {
+        $org = Organization::on('mysql_master')->find($id);
+        if (!$org) {
+            return response()->json(['success' => false, 'message' => 'Organization not found.'], 404);
+        }
+
+        try {
+            $pdo = $this->getTenantPdo($org);
+            $this->ensureAuditLogUserNameColumn($pdo);
+
+            $perPage = (int) $request->input('per_page', 25);
+            $page = (int) $request->input('page', 1);
+            $offset = ($page - 1) * $perPage;
+
+            $where = [];
+            $bindings = [];
+
+            if ($request->filled('module')) {
+                $where[] = 'al.module = ?';
+                $bindings[] = $request->input('module');
+            }
+            if ($request->filled('action')) {
+                $where[] = 'al.action = ?';
+                $bindings[] = $request->input('action');
+            }
+            if ($request->filled('status')) {
+                $where[] = 'al.status = ?';
+                $bindings[] = $request->input('status');
+            }
+            if ($request->filled('user_id')) {
+                $where[] = 'al.user_id = ?';
+                $bindings[] = (int) $request->input('user_id');
+            }
+            if ($request->filled('date_from')) {
+                $where[] = 'al.created_at >= ?';
+                $bindings[] = $request->input('date_from') . ' 00:00:00';
+            }
+            if ($request->filled('date_to')) {
+                $where[] = 'al.created_at <= ?';
+                $bindings[] = $request->input('date_to') . ' 23:59:59';
+            }
+            if ($request->filled('search')) {
+                $where[] = '(al.description LIKE ? OR al.module LIKE ? OR al.action LIKE ? OR al.ip_address LIKE ?)';
+                $search = '%' . $request->input('search') . '%';
+                $bindings[] = $search;
+                $bindings[] = $search;
+                $bindings[] = $search;
+                $bindings[] = $search;
+            }
+
+            $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+
+            $sortField = $request->input('sort_field', 'created_at');
+            $sortOrder = $request->input('sort_order', 'desc');
+            $allowedSorts = ['created_at', 'module', 'action', 'status'];
+            if (!in_array($sortField, $allowedSorts)) {
+                $sortField = 'created_at';
+            }
+            $sortOrder = strtolower($sortOrder) === 'asc' ? 'ASC' : 'DESC';
+
+            // Get total count
+            $countStmt = $pdo->prepare("SELECT COUNT(*) FROM audit_logs al {$whereClause}");
+            $countStmt->execute($bindings);
+            $total = (int) $countStmt->fetchColumn();
+            $lastPage = max(1, (int) ceil($total / $perPage));
+
+            // Fetch logs with user join, fallback to user_name column (for super admin entries)
+            $sql = "SELECT al.*, u.id AS uid, COALESCE(u.name, al.user_name) AS uname, u.email AS uemail, u.role AS urole
+                    FROM audit_logs al
+                    LEFT JOIN users u ON al.user_id = u.id
+                    {$whereClause}
+                    ORDER BY al.{$sortField} {$sortOrder}
+                    LIMIT {$perPage} OFFSET {$offset}";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($bindings);
+            $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+            $data = array_map(function ($row) {
+                return [
+                    'id' => (int) $row['id'],
+                    'user_id' => $row['user_id'] ? (int) $row['user_id'] : null,
+                    'module' => $row['module'],
+                    'action' => $row['action'],
+                    'entity_type' => $row['entity_type'],
+                    'entity_id' => $row['entity_id'] ? (int) $row['entity_id'] : null,
+                    'description' => $row['description'],
+                    'old_values' => $row['old_values'] ? json_decode($row['old_values'], true) : null,
+                    'new_values' => $row['new_values'] ? json_decode($row['new_values'], true) : null,
+                    'status' => $row['status'],
+                    'ip_address' => $row['ip_address'],
+                    'browser' => $row['browser'],
+                    'os' => $row['os'],
+                    'device' => $row['device'],
+                    'request_method' => $row['request_method'],
+                    'request_url' => $row['request_url'],
+                    'created_at' => $row['created_at'],
+                    'updated_at' => $row['updated_at'],
+                    'user' => $row['uname'] ? [
+                        'id' => $row['uid'] ? (int) $row['uid'] : null,
+                        'name' => $row['uname'],
+                        'email' => $row['uemail'] ?? null,
+                        'role' => $row['urole'] ?? 'super_admin',
+                    ] : null,
+                ];
+            }, $rows);
+
+            $pdo = null;
+
+            return response()->json([
+                'data' => $data,
+                'meta' => [
+                    'current_page' => $page,
+                    'last_page' => $lastPage,
+                    'per_page' => $perPage,
+                    'total' => $total,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch audit logs: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function orgAuditLogModules(Request $request, string $id): JsonResponse
+    {
+        $org = Organization::on('mysql_master')->find($id);
+        if (!$org) {
+            return response()->json(['success' => false, 'message' => 'Organization not found.'], 404);
+        }
+
+        try {
+            $pdo = $this->getTenantPdo($org);
+            $stmt = $pdo->query("SELECT DISTINCT module FROM audit_logs ORDER BY module");
+            $modules = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+            $pdo = null;
+            return response()->json(['data' => $modules]);
+        } catch (\Throwable $e) {
+            return response()->json(['data' => []]);
+        }
+    }
+
+    public function orgAuditLogActions(Request $request, string $id): JsonResponse
+    {
+        $org = Organization::on('mysql_master')->find($id);
+        if (!$org) {
+            return response()->json(['success' => false, 'message' => 'Organization not found.'], 404);
+        }
+
+        try {
+            $pdo = $this->getTenantPdo($org);
+            $stmt = $pdo->query("SELECT DISTINCT action FROM audit_logs ORDER BY action");
+            $actions = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+            $pdo = null;
+            return response()->json(['data' => $actions]);
+        } catch (\Throwable $e) {
+            return response()->json(['data' => []]);
+        }
+    }
+
+    public function orgAuditLogUsers(Request $request, string $id): JsonResponse
+    {
+        $org = Organization::on('mysql_master')->find($id);
+        if (!$org) {
+            return response()->json(['success' => false, 'message' => 'Organization not found.'], 404);
+        }
+
+        try {
+            $pdo = $this->getTenantPdo($org);
+            $stmt = $pdo->query("SELECT DISTINCT u.id, u.name, u.email, u.role FROM users u INNER JOIN audit_logs al ON al.user_id = u.id ORDER BY u.name");
+            $users = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+            $pdo = null;
+            return response()->json(['data' => array_map(fn($u) => ['id' => (int) $u['id'], 'name' => $u['name'], 'email' => $u['email'], 'role' => $u['role']], $users)]);
+        } catch (\Throwable $e) {
+            return response()->json(['data' => []]);
+        }
     }
 }

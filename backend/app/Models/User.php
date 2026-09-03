@@ -71,6 +71,12 @@ class User extends Authenticatable
         'emergency_contact_phone',
 
         // Emails
+        'email_mode',
+        'email_verified_at',
+        'email_verification_code',
+        'email_verification_expires_at',
+        'email_skip_until',
+        'email_verification_exempt',
         'personal_email',
         'professional_email',
         'professional_email_password',
@@ -112,7 +118,12 @@ class User extends Authenticatable
     ];
 
     protected $casts = [
-        // 'email_verified_at' => 'datetime',
+        'email_verified_at' => 'datetime',
+        'email_verification_expires_at' => 'datetime',
+        'email_skip_until' => 'datetime',
+        'email_verification_exempt' => 'boolean',
+        'personal_email_verified_at' => 'datetime',
+        'professional_email_verified_at' => 'datetime',
         'password' => 'hashed',
         'active' => 'boolean',
         'must_change_password' => 'boolean',
@@ -232,5 +243,124 @@ class User extends Authenticatable
     public function followedProjects(): BelongsToMany
     {
         return $this->belongsToMany(Project::class, 'project_followers')->withTimestamps();
+    }
+
+    /** Email identities registered for this user (global uniqueness tracking). */
+    public function emailIdentities(): HasMany
+    {
+        return $this->hasMany(\App\Models\EmailIdentity::class);
+    }
+
+    /*
+    |------------------------------------------------------------------
+    | Email Helper Methods
+    |------------------------------------------------------------------
+    */
+
+    /** Check if this user uses two-email mode. */
+    public function usesTwoEmails(): bool
+    {
+        return $this->email_mode === 'two_emails';
+    }
+
+    /** Check if this user uses single email mode. */
+    public function usesSingleEmail(): bool
+    {
+        return $this->email_mode !== 'two_emails';
+    }
+
+    /** Check if email verification is needed.
+     *  Only: single email mode + manual password + not yet verified + not exempt.
+     *  Skip period only delays deactivation, not the verification requirement. */
+    public function needsEmailVerification(): bool
+    {
+        if ($this->email_mode !== 'single') return false;
+        if ($this->email_verification_exempt) return false;
+        if ($this->must_change_password) return false;
+        if (!is_null($this->email_verified_at)) return false;
+        return true;
+    }
+
+    /** Get the email address where verification code should be sent. */
+    public function getVerificationEmailAttribute(): ?string
+    {
+        if ($this->usesTwoEmails() && $this->personal_email) {
+            return $this->personal_email;
+        }
+        return $this->email;
+    }
+
+    /**
+     * Get the authentication email for this user.
+     * In single mode, this is the primary email.
+     * In two-email mode, this is the professional email.
+     */
+    public function getAuthenticationEmailAttribute(): ?string
+    {
+        if ($this->usesTwoEmails() && $this->professional_email) {
+            return $this->professional_email;
+        }
+        return $this->email;
+    }
+
+    /**
+     * Get the contact/information email for this user.
+     * In single mode, this is the primary email.
+     * In two-email mode, this is the personal email.
+     */
+    public function getContactEmailAttribute(): ?string
+    {
+        if ($this->usesTwoEmails() && $this->personal_email) {
+            return $this->personal_email;
+        }
+        return $this->email;
+    }
+
+    /** Check if the authentication email is verified. */
+    public function isAuthenticationEmailVerified(): bool
+    {
+        if ($this->usesTwoEmails()) {
+            return $this->professional_email_verified_at !== null;
+        }
+        return $this->email_verified_at !== null;
+    }
+
+    /** Check if the personal email is verified. */
+    public function isPersonalEmailVerified(): bool
+    {
+        return $this->personal_email_verified_at !== null;
+    }
+
+    /** Check if the professional email is verified. */
+    public function isProfessionalEmailVerified(): bool
+    {
+        return $this->professional_email_verified_at !== null;
+    }
+
+    /**
+     * Normalize an email for uniqueness comparison.
+     * Trims whitespace and lowercases the address.
+     */
+    public static function normalizeEmail(string $email): string
+    {
+        return strtolower(trim($email));
+    }
+
+    /**
+     * Get all email addresses associated with this user as an array.
+     */
+    public function getAllEmails(): array
+    {
+        $emails = [];
+        if ($this->email) {
+            $emails[] = $this->email;
+        }
+        if ($this->personal_email && $this->personal_email !== $this->email) {
+            $emails[] = $this->personal_email;
+        }
+        if ($this->professional_email && $this->professional_email !== $this->email) {
+            $emails[] = $this->professional_email;
+        }
+        return array_unique($emails);
     }
 }
