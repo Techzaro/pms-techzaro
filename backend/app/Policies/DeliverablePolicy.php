@@ -176,7 +176,7 @@ class DeliverablePolicy
             return false;
         }
 
-        if (in_array($user->role, ['admin', 'super_admin'])) {
+        if (in_array($user->role, ['admin', 'super_admin', 'manager'])) {
             return true;
         }
 
@@ -184,7 +184,7 @@ class DeliverablePolicy
             return true;
         }
 
-        if ($deliverable->task && (int) $deliverable->task->assigned_by === (int) $user->id) {
+        if ($deliverable->task && ((int) $deliverable->task->assigned_by === (int) $user->id || (int) ($deliverable->task->creator_id ?? 0) === (int) $user->id)) {
             return true;
         }
 
@@ -208,7 +208,10 @@ class DeliverablePolicy
             return true;
         }
 
-        return (int) $deliverable->assigned_to === (int) $user->id || (int) ($deliverable->current_owner ?? 0) === (int) $user->id;
+        $isAssignee = (int) $deliverable->assigned_to === (int) $user->id || (int) ($deliverable->current_owner ?? 0) === (int) $user->id;
+        $isCreator = (int) $deliverable->created_by === (int) $user->id || ($deliverable->task && (int) $deliverable->task->assigned_by === (int) $user->id);
+
+        return $isAssignee || $isCreator;
     }
 
     /**
@@ -223,6 +226,14 @@ class DeliverablePolicy
      * Determine whether the user can continue the deliverable.
      */
     public function continue(User $user, Deliverable $deliverable): bool
+    {
+        return $this->startTimer($user, $deliverable);
+    }
+
+    /**
+     * Determine whether the user can abandon the deliverable.
+     */
+    public function abandon(User $user, Deliverable $deliverable): bool
     {
         return $this->startTimer($user, $deliverable);
     }
@@ -314,5 +325,21 @@ class DeliverablePolicy
     public function manageNotes(User $user, Deliverable $deliverable): bool
     {
         return $this->view($user, $deliverable);
+    }
+
+    /**
+     * Determine whether the user can mark the deliverable as completed.
+     */
+    public function markAsCompleted(User $user, Deliverable $deliverable): bool
+    {
+        if (! $this->belongsToSameTenant($user, $deliverable)) {
+            return false;
+        }
+
+        if (in_array($user->role, ['admin', 'super_admin'])) {
+            return true;
+        }
+
+        return (int) $deliverable->created_by === (int) $user->id || ($deliverable->task && (int) $deliverable->task->assigned_by === (int) $user->id);
     }
 }

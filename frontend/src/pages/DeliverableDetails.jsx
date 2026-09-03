@@ -18,6 +18,7 @@ import Breadcrumb from "../components/Breadcrumb";
 import ConfirmModal from "../components/ConfirmModal";
 import PauseReasonModal from "../components/PauseReasonModal";
 import ReopenDialog from "../components/ReopenDialog";
+import AbandonModal from "../components/AbandonModal";
 import TransferTaskDialog from "../components/TransferTaskDialog";
 import DelegationChain from "../components/DelegationChain";
 import TaskDiscussion from "../components/TaskDiscussion";
@@ -184,6 +185,8 @@ function SubtaskDetails() {
   const { submitting: assignerResuming, run: runAssignerResume } = useSubmit();
   const { submitting: revoking, run: runRevoke } = useSubmit();
   const [reopenDialogOpen, setReopenDialogOpen] = useState(false);
+  const [abandonModalOpen, setAbandonModalOpen] = useState(false);
+  const [abandonSubmitting, setAbandonSubmitting] = useState(false);
   const [transferDialog, setTransferDialog] = useState(false);
 
   const [notes, setNotes] = useState([]);
@@ -395,6 +398,37 @@ if (res.ok) {
     fetchSubtask();
   };
 
+  const handleAbandonSubmit = async (reason) => {
+    setAbandonSubmitting(true);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/deliverables/${subtaskId}/abandon`, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ reason }),
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        publish('deliverable:updated', data.deliverable || data);
+        publish('data:changed', { type: 'deliverable', action: 'updated' });
+        showSuccessMessage("Subtask", "abandoned");
+        setAbandonModalOpen(false);
+        fetchSubtask();
+      } else {
+        notify.error(data.message || t("Failed to abandon subtask.", { defaultValue: "Failed to abandon subtask." }));
+      }
+    } catch {
+      notify.error(t("An error occurred. Please try again.", { defaultValue: "An error occurred. Please try again." }));
+    } finally {
+      setAbandonSubmitting(false);
+    }
+  };
+
   const handleAcknowledge = async () => {
     await runAcknowledge(async () => {
       try {
@@ -588,10 +622,11 @@ if (res.ok) {
   const isPending = ["pending", "reopened"].includes(subtask.status);
   const timerRunning = timerState === "running";
   const timerPaused = timerState === "paused";
-  const isAdminOrManager = currentUser && ["admin", "manager"].includes(currentUser.role);
-  const canStartSubtaskTimer = !readOnly && (isAssignee || isAdminOrManager) && ["in_progress", "reopened"].includes(subtask.status) && (!timerState || timerState === "idle") && !isAssignerLocked && (!isTransferor || transferorHasApproved) && !subtask?.active_outgoing_delegation && !hasPendingDelegation;
-  const canPauseSubtask = !readOnly && (isAssignee || isAdminOrManager) && ["in_progress", "submitted"].includes(subtask.status) && timerRunning && !isAssignerLocked && (!isTransferor || transferorHasApproved) && !subtask?.active_outgoing_delegation;
-  const canResumeSubtask = !readOnly && (isAssignee || isAdminOrManager) && (subtask.status === "paused" || timerPaused) && !isAssignerLocked && (!isTransferor || transferorHasApproved) && !subtask?.active_outgoing_delegation && !hasPendingDelegation;
+  const isAdminOrManager = currentUser && ["admin", "manager", "super_admin"].includes(currentUser.role);
+  const canStartSubtaskTimer = !readOnly && (isAssignee || isCreator || isAdminOrManager) && ["in_progress", "reopened"].includes(subtask.status) && (!timerState || timerState === "idle") && !isAssignerLocked && (!isTransferor || transferorHasApproved) && !subtask?.active_outgoing_delegation && !hasPendingDelegation;
+  const canPauseSubtask = !readOnly && (isAssignee || isCreator || isAdminOrManager) && ["in_progress", "submitted"].includes(subtask.status) && timerRunning && !isAssignerLocked && (!isTransferor || transferorHasApproved) && !subtask?.active_outgoing_delegation;
+  const canResumeSubtask = !readOnly && (isAssignee || isCreator || isAdminOrManager) && (subtask.status === "paused" || timerPaused) && !isAssignerLocked && (!isTransferor || transferorHasApproved) && !subtask?.active_outgoing_delegation && !hasPendingDelegation;
+  const canAbandonSubtask = !readOnly && (isAssignee || isCreator || isAdminOrManager) && !["abandoned", "approved", "completed", "submitted", "submitted_late"].includes(subtask.status);
 
   return (
     <>
@@ -656,13 +691,13 @@ if (res.ok) {
                 <div className="td-title-actions">
                   <button className="td-nav-btn" onClick={() => goToSubtask(prevSubtaskId)} disabled={!prevSubtaskId}><ChevronLeft size={18} /></button>
                   <button className="td-nav-btn" onClick={() => goToSubtask(nextSubtaskId)} disabled={!nextSubtaskId}><ChevronRight size={18} /></button>
-                  {isCreator && !readOnly && !["approved", "submitted"].includes(subtask.status) && (
+                  {(isCreator || isAdminOrManager) && !readOnly && !["approved", "submitted"].includes(subtask.status) && (
                     <button className="td-btn-outline" onClick={() => setShowEditModal(true)}>
                       <Pencil size={15} strokeWidth={2.5} />
                       {t("Edit", { defaultValue: "Edit" })}
                     </button>
                   )}
-                  {!readOnly && (isCreator || isAdminManager) && (
+                  {!readOnly && (isCreator || isAdminOrManager) && (
                     <button className="td-btn-danger" onClick={() => setDeleteConfirmOpen(true)}>
                       <Trash2 size={15} />
                       {t("Delete", { defaultValue: "Delete" })}
@@ -718,8 +753,18 @@ if (res.ok) {
                       <button className="td-btn-danger" onClick={() => setShowRejectForm(true)}>{t("Decline", { defaultValue: "Decline" })}</button>
                     </>
                   )}
-                  {!readOnly && isApproved && canApproveReject && (
+                  {!readOnly && canApproveReject && ["completed", "approved", "declined", "rejected", "abandoned"].includes(subtask.status) && (
                     <button className="td-btn-outline" onClick={handleReopen}>{t("Reopen", { defaultValue: "Reopen" })}</button>
+                  )}
+                  {canAbandonSubtask && (
+                    <button
+                      className="td-btn-danger"
+                      onClick={() => setAbandonModalOpen(true)}
+                      style={{ background: "#dc2626", color: "#ffffff", border: "none", fontWeight: 600, padding: "8px 16px", borderRadius: "8px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                    >
+                      <Trash2 size={15} />
+                      {t("Abandon Subtask", { defaultValue: "Abandon Subtask" })}
+                    </button>
                   )}
                   {isTransferor && transferorReturnToSelf && subtask?.status === "submitted" && !transferorHasApproved && (
                     <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 14px", borderRadius: "6px", backgroundColor: "#EFF6FF", color: "#1D4ED8", fontSize: "13px", fontWeight: 600 }}>
@@ -748,13 +793,13 @@ if (res.ok) {
                   <span className="td-badge-dot" style={{ background: statusColor(subtask.status) }} />
                   {statusLabel(subtask.status, t)}
                 </span>
-                {(subtask.is_reopened || (Array.isArray(subtask?.states) && subtask.states.some((s) => String(s).toLowerCase() === "reopened")) || subtask?.reopened_at || (subtask?.reopen_count && subtask.reopen_count > 0)) && (
+                {Boolean(subtask.is_reopened || (Array.isArray(subtask?.states) && subtask.states.some((s) => String(s).toLowerCase() === "reopened")) || subtask?.reopened_at || Number(subtask?.reopen_count) > 0) && (
                   <span className="td-badge" style={{ background: "#EDE9FE", color: "#6D28D9", border: "1px solid #DDD6FE" }}>
                     <span className="td-badge-dot" style={{ background: "#6D28D9" }} />
                     {t("Reopened", { defaultValue: "Reopened" })}
                   </span>
                 )}
-                {(subtask.is_transferred || (Array.isArray(subtask?.states) && subtask.states.some((s) => String(s).toLowerCase() === "transferred")) || (Array.isArray(subtask?.delegation_chain) && subtask.delegation_chain.length > 0)) && (
+                {Boolean(subtask.is_transferred || (Array.isArray(subtask?.states) && subtask.states.some((s) => String(s).toLowerCase() === "transferred")) || (Array.isArray(subtask?.delegation_chain) && subtask.delegation_chain.length > 0)) && (
                   <span className="td-badge" style={{ background: "#E0E7FF", color: "#4338CA", border: "1px solid #C7D2FE" }}>
                     <span className="td-badge-dot" style={{ background: "#4338CA" }} />
                     {t("Transferred", { defaultValue: "Transferred" })}
@@ -1373,6 +1418,15 @@ if (res.ok) {
         confirmText={t("Delete", { defaultValue: "Delete" })}
         cancelText={t("Cancel", { defaultValue: "Cancel" })}
         danger
+      />
+      <AbandonModal
+        isOpen={abandonModalOpen}
+        onClose={() => setAbandonModalOpen(false)}
+        title={t("Abandon Subtask", { defaultValue: "Abandon Subtask" })}
+        subtitle={t("Please state the reason for abandoning this subtask.", { defaultValue: "Please state the reason for abandoning this subtask." })}
+        actionLabel={t("Abandon Subtask", { defaultValue: "Abandon Subtask" })}
+        onSubmit={handleAbandonSubmit}
+        loading={abandonSubmitting}
       />
     </>
   );

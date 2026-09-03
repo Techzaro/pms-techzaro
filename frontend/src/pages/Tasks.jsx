@@ -710,7 +710,12 @@ function Tasks() {
                   </div>
                   
                   <div className="col-task-name">
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                      {item.item_type === "subtask" && (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", background: "#EEF2FF", color: "#4F46E5", border: "1px solid #C7D2FE", borderRadius: "4px", padding: "1px 5px", fontSize: "10px", fontWeight: 700, lineHeight: "14px", flexShrink: 0 }}>
+                          ↳ {t("Subtask", { defaultValue: "Subtask" })}
+                        </span>
+                      )}
                       {hasChain && <ArrowUpRight size={14} style={{ color: "#6B7280", flexShrink: 0 }} />}
                       <div className="task-title">{item.title}</div>
                       {item.is_shared && (
@@ -719,8 +724,13 @@ function Tasks() {
                           {t("Shared", { defaultValue: "Shared" })}
                         </span>
                       )}
-                      <TaskNotesPopover taskId={item.id} itemType="task" />
+                      <TaskNotesPopover taskId={item.id} itemType={item.item_type === "subtask" ? "deliverable" : "task"} />
                     </div>
+                    {item.item_type === "subtask" && item.parent_task && (
+                      <div style={{ fontSize: "11px", color: "#6366f1", marginTop: "2px", display: "flex", alignItems: "center", gap: "4px" }}>
+                        <span>↳ {t("Parent", { defaultValue: "Parent" })}: <strong>{item.parent_task.business_id ? `[${item.parent_task.business_id}] ` : ""}{item.parent_task.title}</strong></span>
+                      </div>
+                    )}
                     {item.project && (
                       <Link to={rolePath(`projects/project-details/${item.project.id}`)} onClick={(e) => e.stopPropagation()} style={{ fontSize: "11px", color: "#6B7280", textDecoration: "none", marginTop: "2px", display: "inline-block" }}>
                         {item.project.title}
@@ -767,7 +777,10 @@ function Tasks() {
                     <button
                       className="action-icon-btn action-view action-trigger-lg"
                       title={t("View Task", { defaultValue: "View Task" })}
-                      onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } })}
+                      onClick={() => {
+                        const targetId = item.item_type === "subtask" ? (item.parent_id || item.task_id || item.id) : item.id;
+                        navigate(rolePath(`tasks/task-details/${targetId}`), { state: { taskIds: taskIdList, from: 'tasks' } });
+                      }}
                     >
                       <IoEyeOutline size={18} />
                     </button>

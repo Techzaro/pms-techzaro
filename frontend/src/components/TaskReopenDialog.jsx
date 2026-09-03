@@ -37,11 +37,13 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
   const [newDeadline, setNewDeadline] = useState("");
   const [link, setLink] = useState("");
   const [files, setFiles] = useState([]);
+  const [assigneeId, setAssigneeId] = useState("");
+  const [availableUsers, setAvailableUsers] = useState([]);
   const { submitting, run } = useSubmit();
   const fileInputRef = useRef(null);
 
-  const initialValues = useMemo(() => ({ reopenReason: "", reopenReasonDetail: "", instructions: "", newDeadline: "", link: "", files: [] }), []);
-  const currentValues = useMemo(() => ({ reopenReason, reopenReasonDetail, instructions, newDeadline, link, files }), [reopenReason, reopenReasonDetail, instructions, newDeadline, link, files]);
+  const initialValues = useMemo(() => ({ reopenReason: "", reopenReasonDetail: "", instructions: "", newDeadline: "", link: "", files: [], assigneeId: "" }), []);
+  const currentValues = useMemo(() => ({ reopenReason, reopenReasonDetail, instructions, newDeadline, link, files, assigneeId }), [reopenReason, reopenReasonDetail, instructions, newDeadline, link, files, assigneeId]);
   const { isDirty, handleClose, markSaved, resetBaseline, ConfirmDialog } = useUnsavedChanges(initialValues, currentValues, onClose);
   useEscapeKey(isOpen, handleClose);
 
@@ -54,11 +56,47 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
       setNewDeadline(task?.end_date ? toDatetimeLocal(task.end_date) : "");
       setLink("");
       setFiles([]);
+
+      // Default assignee to current owner or assigned_to or first assignee
+      const defaultAssignee = task?.current_owner || task?.assigned_to || (task?.assignees && task.assignees[0]?.id) || "";
+      setAssigneeId(defaultAssignee ? String(defaultAssignee) : "");
+
+      fetchUsers();
     } else {
       document.body.style.overflow = "";
     }
     return () => { document.body.style.overflow = ""; };
-  }, [isOpen]);
+  }, [isOpen, task]);
+
+  const fetchUsers = async () => {
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/team-users`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const usersList = data.users || data.data || data || [];
+        // Ensure task assignees are in the list if not already
+        const existingIds = new Set(usersList.map((u) => u.id));
+        const combined = [...usersList];
+        if (task?.assignees && Array.isArray(task.assignees)) {
+          task.assignees.forEach((a) => {
+            if (!existingIds.has(a.id)) {
+              combined.push(a);
+              existingIds.add(a.id);
+            }
+          });
+        }
+        setAvailableUsers(combined);
+      }
+    } catch {
+      // fallback to task assignees
+      if (task?.assignees && Array.isArray(task.assignees)) {
+        setAvailableUsers(task.assignees);
+      }
+    }
+  };
 
   const handleSubmit = async () => {
     if (!reopenReason) {
@@ -74,6 +112,9 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
         const token = authToken();
         const formData = new FormData();
         formData.append("reopen_reason", reopenReason);
+        if (assigneeId) {
+          formData.append("assignee_id", assigneeId);
+        }
         if (reopenReason === "Other" || reopenReasonDetail.trim()) {
           formData.append("reopen_reason_detail", reopenReasonDetail.trim());
         }
@@ -122,6 +163,25 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
         </div>
 
         <div className="rd-body">
+          <div className="rd-field">
+            <label className="rd-label">
+              {t("Who should receive this update?", { defaultValue: "Who should receive this update?" })}{" "}
+              <span style={{ color: "var(--color-danger)" }}>*</span>
+            </label>
+            <select
+              className="rd-input"
+              value={assigneeId}
+              onChange={(e) => setAssigneeId(e.target.value)}
+            >
+              <option value="">{t("Select assignee...", { defaultValue: "Select assignee..." })}</option>
+              {availableUsers.map((u) => (
+                <option key={u.id} value={String(u.id)}>
+                  {u.name || u.email} {u.role ? `(${u.role})` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="rd-field">
             <label className="rd-label">{t("Reason for Reopening", { defaultValue: "Reason for Reopening" })} <span style={{ color: "var(--color-danger)" }}>*</span></label>
             <select

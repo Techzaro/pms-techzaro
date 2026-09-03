@@ -45,6 +45,8 @@ class TaskResource extends JsonResource
             'reopen_comment' => $this->reopen_comment,
             'reopen_instructions' => $this->reopen_instructions,
             'reopen_new_deadline' => $this->reopen_new_deadline?->format('Y-m-d\TH:i:s'),
+            'completion_reason' => $this->completion_reason,
+            'completion_notes' => $this->completion_notes,
             'created_at' => $this->created_at?->format('Y-m-d\TH:i:s'),
             'updated_at' => $this->updated_at?->format('Y-m-d\TH:i:s'),
             'project' => ProjectMinResource::make($this->whenLoaded('project')),

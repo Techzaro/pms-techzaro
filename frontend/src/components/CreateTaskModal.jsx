@@ -8,6 +8,7 @@ import useAutoSave from "../hooks/useAutoSave";
 import AutoSaveIndicator from "./AutoSaveIndicator";
 import draftService from "../services/draftService";
 import UserSelectDropdown from "./UserSelectDropdown";
+import ParentTaskSelectDropdown from "./ParentTaskSelectDropdown";
 import CustomSelect from "./CustomSelect";
 import MultiSelectDropdown from "./MultiSelectDropdown";
 import LoadingButton from "./LoadingButton";
@@ -962,19 +963,13 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                 return (
                   <div className="task-field">
                     <label>{t("Sub-task Of (Optional)", { defaultValue: "Sub-task Of" })}</label>
-                    <CustomSelect
+                    <ParentTaskSelectDropdown
                       name="parent_id"
+                      tasks={projectTasks}
                       value={form.parent_id || ""}
                       onChange={(val) => { setForm((prev) => ({ ...prev, parent_id: val })); markDirty(); }}
                       disabled={!hasProjectSelected}
                       placeholder={!hasProjectSelected ? t("Select a project first", { defaultValue: "Select a project first" }) : t("None (Main Task)", { defaultValue: "None (Main Task)" })}
-                      options={[
-                        { value: "", label: t("None (Main Task)", { defaultValue: "None (Main Task)" }) },
-                        ...projectTasks.map((t) => ({
-                          value: t.id,
-                          label: `${t.business_id ? t.business_id + " — " : ""}${t.title}`,
-                        })),
-                      ]}
                     />
                   </div>
                 );

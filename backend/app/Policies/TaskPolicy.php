@@ -161,11 +161,7 @@ class TaskPolicy
             return false;
         }
 
-        if (in_array($user->role, ['admin', 'super_admin'])) {
-            return true;
-        }
-
-        if ($user->role === 'manager') {
+        if (in_array($user->role, ['admin', 'super_admin', 'manager'])) {
             return true;
         }
 
@@ -180,7 +176,7 @@ class TaskPolicy
         }
 
         // Assigner / Creator
-        if ((int) $task->assigned_by === (int) $user->id) {
+        if ((int) $task->assigned_by === (int) $user->id || (int) ($task->creator_id ?? 0) === (int) $user->id) {
             return true;
         }
 
@@ -196,12 +192,12 @@ class TaskPolicy
             return false;
         }
 
-        if (in_array($user->role, ['admin', 'super_admin'])) {
+        if (in_array($user->role, ['admin', 'super_admin', 'manager'])) {
             return true;
         }
 
-        // Assigner / Creator can delete if not approved
-        if ((int) $task->assigned_by === (int) $user->id) {
+        // Assigner / Creator
+        if ((int) $task->assigned_by === (int) $user->id || (int) ($task->creator_id ?? 0) === (int) $user->id) {
             return true;
         }
 
@@ -251,8 +247,9 @@ class TaskPolicy
 
         $isAssignee = (int) $task->assigned_to === (int) $user->id || $task->assignees()->where('users.id', $user->id)->exists();
         $isCurrentOwner = $task->current_owner && (int) $task->current_owner === (int) $user->id;
+        $isAssigner = (int) $task->assigned_by === (int) $user->id || (int) ($task->creator_id ?? 0) === (int) $user->id;
 
-        return $isAssignee || $isCurrentOwner;
+        return $isAssignee || $isCurrentOwner || $isAssigner;
     }
 
     /**
@@ -329,7 +326,7 @@ class TaskPolicy
         }
 
         // Assigner / Creator
-        return (int) $task->assigned_by === (int) $user->id;
+        return (int) $task->assigned_by === (int) $user->id || (int) ($task->creator_id ?? 0) === (int) $user->id;
     }
 
     /**
@@ -408,6 +405,14 @@ class TaskPolicy
     }
 
     /**
+     * Directly abandon a task. Both relevant task participants (Assigner and Assignee) may abandon.
+     */
+    public function abandon(User $user, Task $task): bool
+    {
+        return $this->startTimer($user, $task);
+    }
+
+    /**
      * Request Abandon.
      */
     public function requestAbandon(User $user, Task $task): bool
@@ -439,6 +444,22 @@ class TaskPolicy
      */
     public function completeTask(User $user, Task $task): bool
     {
+        if (in_array($user->role, ['admin', 'super_admin'])) {
+            return true;
+        }
+
+        return (int) $task->assigned_by === (int) $user->id;
+    }
+
+    /**
+     * Determine whether the user can mark the task as completed.
+     */
+    public function markAsCompleted(User $user, Task $task): bool
+    {
+        if (! $this->belongsToSameTenant($user, $task)) {
+            return false;
+        }
+
         if (in_array($user->role, ['admin', 'super_admin'])) {
             return true;
         }

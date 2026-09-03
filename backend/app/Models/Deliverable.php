@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -15,11 +16,13 @@ use App\Services\BusinessIdService;
  */
 class Deliverable extends Model
 {
+    use SoftDeletes;
     protected $fillable = [
         'subtask_number',
         'business_id',
         'project_id',
         'task_id',
+        'parent_deliverable_id',
         'title',
         'description',
         'kb_ids',
@@ -83,6 +86,8 @@ class Deliverable extends Model
         'allow_transfer',
         'is_reopened',
         'is_transferred',
+        'completion_reason',
+        'completion_notes',
     ];
 
     /**
@@ -368,6 +373,24 @@ class Deliverable extends Model
     public function task(): BelongsTo
     {
         return $this->belongsTo(Task::class);
+    }
+
+    /** The parent deliverable/subtask this deliverable belongs to (optional, for infinite nesting). */
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(Deliverable::class, 'parent_deliverable_id');
+    }
+
+    /** The child deliverables/subtasks under this deliverable. */
+    public function children(): HasMany
+    {
+        return $this->hasMany(Deliverable::class, 'parent_deliverable_id');
+    }
+
+    /** All recursive child deliverables. */
+    public function allChildren(): HasMany
+    {
+        return $this->children()->with('allChildren');
     }
 
     /** All submissions for this deliverable. */

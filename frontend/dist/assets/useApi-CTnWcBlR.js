@@ -1,0 +1,1 @@
+import{bn as e,q as t}from"./index-D6uM6Pwi.js";function n(n,r,i,a={}){return e({queryKey:Array.isArray(n)?n:[n,i],queryFn:()=>t.get(r,i),...a})}export{n as t};

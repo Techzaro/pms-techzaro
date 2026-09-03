@@ -1,0 +1,1 @@
+import{i as e}from"./useTranslation-FWcS6GZA.js";import t from"./Admin-Cp7_7U2I.js";var n=e();function r(){return(0,n.jsx)(t,{})}export{r as default};

@@ -51,8 +51,14 @@ class TaskCommentController extends Controller
         $query = TaskComment::whereNull('parent_id')
             ->with([
                 'user:id,name,role,avatar',
+                'quotedComment:id,user_id,body,file_name',
+                'quotedComment.user:id,name,avatar',
                 'replies' => function ($q) {
-                    $q->with('user:id,name,role,avatar')->oldest();
+                    $q->with([
+                        'user:id,name,role,avatar',
+                        'quotedComment:id,user_id,body,file_name',
+                        'quotedComment.user:id,name,avatar',
+                    ])->oldest();
                 },
             ])
             ->orderBy('created_at', 'asc');
@@ -120,6 +126,8 @@ class TaskCommentController extends Controller
         $validated = $request->validate([
             'body' => 'required|string|max:10000',
             'parent_id' => 'nullable|exists:task_comments,id',
+            'quoted_message_id' => 'nullable|exists:task_comments,id',
+            'quoted_text' => 'nullable|string|max:5000',
             'file' => 'nullable|file|max:20480',
             'mentioned_user_ids' => 'nullable|array',
             'mentioned_user_ids.*' => 'integer|exists:users,id',
@@ -143,6 +151,8 @@ class TaskCommentController extends Controller
         $commentData = [
             'user_id' => $user->id,
             'parent_id' => $validated['parent_id'] ?? null,
+            'quoted_message_id' => $validated['quoted_message_id'] ?? null,
+            'quoted_text' => $validated['quoted_text'] ?? null,
             'body' => $validated['body'],
             'delegation_id' => $activeDelegation?->id,
         ];
@@ -171,7 +181,11 @@ class TaskCommentController extends Controller
         }
 
         $comment = TaskComment::create($commentData);
-        $comment->load('user:id,name,role,avatar');
+        $comment->load([
+            'user:id,name,role,avatar',
+            'quotedComment:id,user_id,body,file_name',
+            'quotedComment.user:id,name,avatar',
+        ]);
 
         // Mention notifications
         if (! empty($validated['mentioned_user_ids'])) {

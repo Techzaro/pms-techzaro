@@ -686,19 +686,7 @@ function Header() {
           </button>
           )}
 
-          {getCurrentRole() !== "guest" && hasModule("deliverables") && (
-          <button
-            className="task-btn1"
-            style={{ background: "#7c3aed" }}
-            title={t("Create Subtask", { defaultValue: "Create Subtask" })}
-            onClick={() =>
-              setShowSubtaskModal(true)
-            }
-          >
-            <span className="quick-btn-full">{t("Add Subtask")}</span>
-            <span className="quick-btn-short">+S</span>
-          </button>
-          )}
+          {/* Standalone subtask creation button removed per SRS (subtasks created strictly in TaskDetails) */}
 
           {/* Quick-create project button – visible to admin/manager only */}
 
@@ -910,12 +898,6 @@ function Header() {
             }}
           />
         </div>
-      )}
-
-      {showSubtaskModal && (
-        <CreateDeliverableModel
-          onClose={() => setShowSubtaskModal(false)}
-        />
       )}
 
     </>

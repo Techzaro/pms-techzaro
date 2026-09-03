@@ -1681,13 +1681,13 @@ function ProjectDetails() {
                                               <span className="dot" style={{ background: STATUS_TEXT_COLORS[statusKey === "reopened" ? "pending" : statusKey] || "var(--text-dark)" }}></span>
                                               {formatStatus(tItem.status === "reopened" ? "pending" : tItem.status)}
                                             </span>
-                                            {(tItem.is_reopened || (Array.isArray(tItem?.states) && tItem.states.some((s) => String(s).toLowerCase() === "reopened")) || tItem?.reopened_at || (tItem?.reopen_count && tItem.reopen_count > 0)) && (
+                                            {Boolean(tItem.is_reopened || (Array.isArray(tItem?.states) && tItem.states.some((s) => String(s).toLowerCase() === "reopened")) || tItem?.reopened_at || Number(tItem?.reopen_count) > 0) && (
                                               <span className="badge" style={{ background: "#EDE9FE", color: "#6D28D9", border: "1px solid #DDD6FE", fontSize: 10, padding: "2px 6px", borderRadius: 4 }}>
                                                 <span className="dot" style={{ background: "#6D28D9", width: 5, height: 5 }} />
                                                 {t("Reopened", { defaultValue: "Reopened" })}
                                               </span>
                                             )}
-                                            {(tItem.is_transferred || (Array.isArray(tItem?.states) && tItem.states.some((s) => String(s).toLowerCase() === "transferred")) || (Array.isArray(tItem?.delegation_chain) && tItem.delegation_chain.length > 0)) && (
+                                            {Boolean(tItem.is_transferred || (Array.isArray(tItem?.states) && tItem.states.some((s) => String(s).toLowerCase() === "transferred")) || (Array.isArray(tItem?.delegation_chain) && tItem.delegation_chain.length > 0)) && (
                                               <span className="badge" style={{ background: "#E0E7FF", color: "#4338CA", border: "1px solid #C7D2FE", fontSize: 10, padding: "2px 6px", borderRadius: 4 }}>
                                                 <span className="dot" style={{ background: "#4338CA", width: 5, height: 5 }} />
                                                 {t("Transferred", { defaultValue: "Transferred" })}

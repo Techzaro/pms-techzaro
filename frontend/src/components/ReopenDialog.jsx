@@ -37,11 +37,13 @@ function ReopenDialog({ isOpen, onClose, subtask, onReopenSuccess }) {
   const [newDeadline, setNewDeadline] = useState("");
   const [link, setLink] = useState("");
   const [files, setFiles] = useState([]);
+  const [assigneeId, setAssigneeId] = useState("");
+  const [availableUsers, setAvailableUsers] = useState([]);
   const { submitting, run } = useSubmit();
   const fileInputRef = useRef(null);
 
-  const initialValues = useMemo(() => ({ reopenReason: "", reopenReasonDetail: "", instructions: "", newDeadline: "", link: "", files: [] }), []);
-  const currentValues = useMemo(() => ({ reopenReason, reopenReasonDetail, instructions, newDeadline, link, files }), [reopenReason, reopenReasonDetail, instructions, newDeadline, link, files]);
+  const initialValues = useMemo(() => ({ reopenReason: "", reopenReasonDetail: "", instructions: "", newDeadline: "", link: "", files: [], assigneeId: "" }), []);
+  const currentValues = useMemo(() => ({ reopenReason, reopenReasonDetail, instructions, newDeadline, link, files, assigneeId }), [reopenReason, reopenReasonDetail, instructions, newDeadline, link, files, assigneeId]);
   const { isDirty, handleClose, markSaved, resetBaseline, ConfirmDialog } = useUnsavedChanges(initialValues, currentValues, onClose);
   useEscapeKey(isOpen, handleClose);
 
@@ -54,11 +56,39 @@ function ReopenDialog({ isOpen, onClose, subtask, onReopenSuccess }) {
       setNewDeadline(subtask?.due_date ? toDatetimeLocal(subtask.due_date) : "");
       setLink("");
       setFiles([]);
+
+      const defaultAssignee = subtask?.current_owner || subtask?.assigned_to || (subtask?.assignee && subtask.assignee.id) || "";
+      setAssigneeId(defaultAssignee ? String(defaultAssignee) : "");
+
+      fetchUsers();
     } else {
       document.body.style.overflow = "";
     }
     return () => { document.body.style.overflow = ""; };
-  }, [isOpen]);
+  }, [isOpen, subtask]);
+
+  const fetchUsers = async () => {
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/team-users`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const usersList = data.users || data.data || data || [];
+        const existingIds = new Set(usersList.map((u) => u.id));
+        const combined = [...usersList];
+        if (subtask?.assignee && !existingIds.has(subtask.assignee.id)) {
+          combined.push(subtask.assignee);
+        }
+        setAvailableUsers(combined);
+      }
+    } catch {
+      if (subtask?.assignee) {
+        setAvailableUsers([subtask.assignee]);
+      }
+    }
+  };
 
   const handleSubmit = async () => {
     if (!reopenReason) {
@@ -74,6 +104,9 @@ function ReopenDialog({ isOpen, onClose, subtask, onReopenSuccess }) {
         const token = authToken();
         const formData = new FormData();
         formData.append("reopen_reason", reopenReason);
+        if (assigneeId) {
+          formData.append("assignee_id", assigneeId);
+        }
         if (reopenReason === "Other" || reopenReasonDetail.trim()) {
           formData.append("reopen_reason_detail", reopenReasonDetail.trim());
         }
@@ -122,6 +155,25 @@ function ReopenDialog({ isOpen, onClose, subtask, onReopenSuccess }) {
         </div>
 
         <div className="rd-body">
+          <div className="rd-field">
+            <label className="rd-label">
+              {t("Who should receive this update?", { defaultValue: "Who should receive this update?" })}{" "}
+              <span style={{ color: "var(--color-danger)" }}>*</span>
+            </label>
+            <select
+              className="rd-input"
+              value={assigneeId}
+              onChange={(e) => setAssigneeId(e.target.value)}
+            >
+              <option value="">{t("Select assignee...", { defaultValue: "Select assignee..." })}</option>
+              {availableUsers.map((u) => (
+                <option key={u.id} value={String(u.id)}>
+                  {u.name || u.email} {u.role ? `(${u.role})` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="rd-field">
             <label className="rd-label">{t("Reason for Reopening", { defaultValue: "Reason for Reopening" })} <span style={{ color: "var(--color-danger)" }}>*</span></label>
             <select

@@ -41,6 +41,11 @@ import {
   Pin,
   Activity,
   BookOpen,
+  History,
+  MessageSquare,
+  Paperclip,
+  CheckSquare,
+  LayoutDashboard,
 } from "lucide-react";
 import { usePinnedTasks, togglePinTask, isTaskPinned } from "../utils/pinnedTasks";
 import { IoEyeOutline } from "react-icons/io5";
@@ -65,7 +70,11 @@ import AddAccessModal from "../components/AddAccessModal";
 import AddNoteModal from "../components/AddNoteModal";
 import TaskDiscussion from "../components/TaskDiscussion";
 import UnifiedActivityFeed from "../components/UnifiedActivityFeed";
+import TaskEvents from "../components/TaskEvents";
+import TaskKnowledge from "../components/TaskKnowledge";
+import TaskMembers from "../components/TaskMembers";
 import AbandonModal from "../components/AbandonModal";
+import MarkTaskCompletedModal from "../components/MarkTaskCompletedModal";
 import CreateDeliverableModel from "../components/layout/CreateDeliverableModel";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
@@ -321,11 +330,13 @@ function TaskDetails() {
   const [deleteTaskConfirmOpen, setDeleteTaskConfirmOpen] = useState(false);
   const [tab, setTab] = useState("overview");
   const [showCreateSubtaskModal, setShowCreateSubtaskModal] = useState(false);
+  const [parentDeliverableForCreate, setParentDeliverableForCreate] = useState(null);
   const [submitModal, setSubmitModal] = useState({ open: false, subtask: null });
   const [taskSubmitModalOpen, setTaskSubmitModalOpen] = useState(false);
   const [isEditingTaskSubmission, setIsEditingTaskSubmission] = useState(false);
   const [taskConfirmDialog, setTaskConfirmDialog] = useState({ open: false, type: null });
   const [taskReopenDialog, setTaskReopenDialog] = useState(false);
+  const [markCompletedModalOpen, setMarkCompletedModalOpen] = useState(false);
   const [transferDialog, setTransferDialog] = useState(false);
   const [taskActing, setTaskActing] = useState(false);
   const [noteInput, setNoteInput] = useState("");
@@ -630,13 +641,13 @@ function TaskDetails() {
   const isOnlyFollower = isFollower && !isAdminOrManager && !isCreator && !isAssignee;
   const taskStatus = (task?.status || "").toLowerCase();
   const isTerminalOrSubmitted = ["submitted", "submitted_late", "approved", "abandoned"].includes(taskStatus);
-  const canEdit = (readOnly || isOnlyFollower) ? false : (task?.can_edit ?? (task && currentUser && isCreator && !["approved", "submitted", "submitted_late", "abandoned"].includes(taskStatus)));
+  const canEdit = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isCreator || isAdminOrManager) && !["approved", "submitted", "submitted_late", "abandoned"].includes(taskStatus));
   const canDelete = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isCreator || isAdminOrManager));
   const canSubmitTask = !readOnly && !isTerminalOrSubmitted && !isOnlyFollower && (task?.can_submit === true || (isAssignee && ["in_progress", "reopened", "paused"].includes(taskStatus)));
   const canAcknowledge = (readOnly || isOnlyFollower) ? false : (task && currentUser && isAssignee && ["pending", "reopened"].includes(task?.status));
-  const canStartTimer = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isAdminOrManager) && ["in_progress", "in-progress"].includes(task?.status) && (!task?.timer || task?.timer?.state === "idle" || !task?.timer?.state) && !task?.assigner_paused);
-  const canPause = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isAdminOrManager) && ["in_progress", "submitted"].includes(task?.status) && task?.timer?.state === "running" && !task?.assigner_paused);
-  const canContinue = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isAdminOrManager) && (task?.status === "paused" || task?.timer?.state === "paused") && !task?.assigner_paused);
+  const canStartTimer = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isCreator || isSuperAdmin || isAdminOrManager) && ["in_progress", "in-progress"].includes(task?.status) && (!task?.timer || task?.timer?.state === "idle" || !task?.timer?.state) && !task?.assigner_paused);
+  const canPause = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isCreator || isSuperAdmin || isAdminOrManager) && ["in_progress", "submitted"].includes(task?.status) && task?.timer?.state === "running" && !task?.assigner_paused);
+  const canContinue = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isCreator || isSuperAdmin || isAdminOrManager) && (task?.status === "paused" || task?.timer?.state === "paused") && !task?.assigner_paused);
   const isAssignerLocked = !!task?.assigner_paused;
   const canAssignerPause = (readOnly || isOnlyFollower) ? false : (task && currentUser && isCreator && !task?.assigner_paused && ["pending", "in_progress", "reopened", "paused", "submitted"].includes(task?.status));
   const canAssignerResume = (readOnly || isOnlyFollower) ? false : (task && currentUser && isCreator && task?.assigner_paused);
@@ -648,6 +659,17 @@ function TaskDetails() {
   const isDelegatee = task?.is_delegatee ?? (task?.current_owner && currentUser && parseInt(task.current_owner, 10) === parseInt(currentUser.id, 10)) ?? false;
   const isCurrentOwner = task?.is_current_owner ?? (task?.current_owner && currentUser && parseInt(task.current_owner, 10) === parseInt(currentUser.id, 10)) ?? isAssignee;
   const canApprove = (readOnly || isOnlyFollower) ? false : (!isAssignee && (isCreator || isSuperAdmin));
+  const isAssignerOrCreator = isCreator || isSuperAdmin || (currentUser && (task?.assigned_by === currentUser.id || task?.creator_id === currentUser.id));
+  const canReopen = (readOnly || isOnlyFollower)
+    ? false
+    : ((isAssignerOrCreator || task?.can_decline_submission) &&
+       ["completed", "declined", "abandoned", "approved", "submitted", "submitted_late", "rejected"].includes(taskStatus));
+  const canMarkCompleted = (readOnly || isOnlyFollower)
+    ? false
+    : ((isCreator || isSuperAdmin) && ["pending", "in_progress", "in-progress", "paused", "not_started", "assigned", "planned", "planning", "acknowledged", "reopened"].includes(taskStatus));
+  const canAbandon = (readOnly || isOnlyFollower)
+    ? false
+    : (task && currentUser && (isAssignee || isCreator || isSuperAdmin || isAdminOrManager) && !["abandoned", "approved", "completed", "submitted", "submitted_late"].includes(taskStatus));
 
   const { submitting: acknowledging, run: runAcknowledge } = useSubmit();
   const { submitting: startingTimer, run: runStartTimer } = useSubmit();
@@ -1578,6 +1600,16 @@ function TaskDetails() {
                       {forwardingTask ? "Submitting..." : "Submit"}
                     </button>
                   )}
+                  {canMarkCompleted && (
+                    <button
+                      className="td-btn-success"
+                      style={{ background: "#16a34a", color: "#ffffff", border: "none", fontWeight: 600, padding: "8px 16px", borderRadius: "8px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                      onClick={() => setMarkCompletedModalOpen(true)}
+                    >
+                      <CheckCircle2 size={15} />
+                      {t("Mark as Completed", { defaultValue: "Mark as Completed" })}
+                    </button>
+                  )}
                   {canApprove && (task?.status === "submitted" || task?.status === "submitted_late" || task?.status === "reopened") && (
                     <button
                       className="td-btn-success"
@@ -1600,7 +1632,7 @@ function TaskDetails() {
                       {rejectingTask ? "Declining..." : "Decline Task"}
                     </button>
                   )}
-                  {(canApprove || task?.can_decline_submission) && (task?.status === "submitted" || task?.status === "submitted_late" || task?.status === "approved" || task?.status === "abandoned") && (
+                  {canReopen && (
                     <button
                       className="td-btn-secondary"
                       style={{ border: "1px solid var(--border-color, #e5e7eb)", fontWeight: 600, padding: "8px 16px", borderRadius: "8px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px", background: "var(--bg-card, #ffffff)", color: "var(--color-primary, #2563EB)" }}
@@ -1610,7 +1642,7 @@ function TaskDetails() {
                       {t("Reopen Task", { defaultValue: "Reopen Task" })}
                     </button>
                   )}
-                  {canApprove && task?.status !== "abandoned" && task?.status !== "approved" && (
+                  {canAbandon && (
                     <button
                       className="td-btn-danger"
                       style={{ background: "#dc2626", color: "#ffffff", border: "none", fontWeight: 600, padding: "8px 16px", borderRadius: "8px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}
@@ -1686,13 +1718,13 @@ function TaskDetails() {
                   <span className="td-badge-dot" style={{ background: statusColor(task?.status) }} />
                   {statusLabel(task?.status || "Pending", t)}
                 </span>
-                {(task?.is_reopened || (Array.isArray(task?.states) && task.states.some((s) => String(s).toLowerCase() === "reopened")) || task?.reopened_at || (task?.reopen_count && task.reopen_count > 0)) && (
+                {Boolean(task?.is_reopened || (Array.isArray(task?.states) && task.states.some((s) => String(s).toLowerCase() === "reopened")) || task?.reopened_at || Number(task?.reopen_count) > 0) && (
                   <span className="td-badge" style={{ background: "#EDE9FE", color: "#6D28D9", border: "1px solid #DDD6FE" }}>
                     <span className="td-badge-dot" style={{ background: "#6D28D9" }} />
                     {t("Reopened", { defaultValue: "Reopened" })}
                   </span>
                 )}
-                {(task?.is_transferred || (Array.isArray(task?.states) && task.states.some((s) => String(s).toLowerCase() === "transferred")) || (Array.isArray(task?.delegation_chain) && task.delegation_chain.length > 0)) && (
+                {Boolean(task?.is_transferred || (Array.isArray(task?.states) && task.states.some((s) => String(s).toLowerCase() === "transferred")) || (Array.isArray(task?.delegation_chain) && task.delegation_chain.length > 0)) && (
                   <span className="td-badge" style={{ background: "#E0E7FF", color: "#4338CA", border: "1px solid #C7D2FE" }}>
                     <span className="td-badge-dot" style={{ background: "#4338CA" }} />
                     {t("Transferred", { defaultValue: "Transferred" })}
@@ -1776,10 +1808,13 @@ function TaskDetails() {
                 {/* TABS */}
                 <div className="td-tabs">
                   {[
-                    { id: "overview", label: t("Overview", { defaultValue: "Overview" }), icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg> },
-                    { id: "subtasks", label: t("Subtasks", { defaultValue: "Subtasks" }), icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg> },
+                    { id: "overview", label: t("Overview", { defaultValue: "Overview" }), icon: <LayoutDashboard size={16} /> },
+                    { id: "subtasks", label: t("Subtasks", { defaultValue: "Subtasks" }), icon: <CheckSquare size={16} /> },
                     { id: "files", label: t("Platform files & links", { defaultValue: "Platform files & links" }), icon: <FolderOpen size={16} /> },
-                    { id: "access", label: t("Access", { defaultValue: "Access" }), icon: <Shield size={16} /> },
+                    { id: "access", label: t("Accessess", { defaultValue: "Accessess" }), icon: <Shield size={16} /> },
+                    { id: "members", label: t("Members", { defaultValue: "Members" }), icon: <Users size={16} /> },
+                    { id: "knowledge", label: t("Knowledge Base", { defaultValue: "Knowledge Base" }), icon: <BookOpen size={16} /> },
+                    { id: "events", label: t("Events & Announcements", { defaultValue: "Events & Announcements" }), icon: <Calendar size={16} /> },
                     { id: "activity", label: t("Activity", { defaultValue: "Activity" }), icon: <Activity size={16} /> },
                   ].filter((t) => currentUser?.role !== "guest" || t.id !== "subtasks").map(({ id, label, icon }) => (
                     <button key={id} className={`td-tab ${tab === id ? "td-tab--on" : ""}`} onClick={() => setTab(id)}>
@@ -1841,9 +1876,12 @@ function TaskDetails() {
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                           <input type="text" placeholder={t("Search subtasks...", { defaultValue: "Search subtasks..." })} value={subtaskSearch} onChange={(e) => setSubtaskSearch(e.target.value)} />
                         </div>
-                        {!readOnly && isCreator && (
+                        {!readOnly && (isCreator || isAdminOrManager) && (
                           <button
-                            onClick={() => setShowCreateSubtaskModal(true)}
+                            onClick={() => {
+                              setParentDeliverableForCreate(null);
+                              setShowCreateSubtaskModal(true);
+                            }}
                             style={{ marginLeft: 12, display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", background: "var(--color-primary)", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap" }}
                           >
                             <Plus size={15} /> {t("Create Subtask", { defaultValue: "Create Subtask" })}
@@ -1852,10 +1890,30 @@ function TaskDetails() {
                       </div>
                       {(() => {
                         const allSubtasks = orderedSubtasks.length ? orderedSubtasks : (task.deliverables || []);
-                        const subtasksSearch = subtaskSearch ? allSubtasks.filter((d) => {
-                          const q = subtaskSearch.toLowerCase();
-                          return (d.title || "").toLowerCase().includes(q) || (d.description || "").toLowerCase().includes(q);
-                        }) : allSubtasks;
+                        const buildHierarchicalSubtasks = (subtasks, search = "") => {
+                          if (search) {
+                            const q = search.toLowerCase();
+                            return subtasks.filter((d) => (d.title || "").toLowerCase().includes(q) || (d.description || "").toLowerCase().includes(q)).map(s => ({ ...s, depth: 0 }));
+                          }
+                          const result = [];
+                          const map = new Map();
+                          subtasks.forEach(s => map.set(s.id, s));
+                          const traverse = (parentId, depth) => {
+                            const items = subtasks.filter(s => {
+                              if (parentId === null) {
+                                return !s.parent_deliverable_id || !map.has(s.parent_deliverable_id);
+                              }
+                              return s.parent_deliverable_id === parentId;
+                            });
+                            for (const item of items) {
+                              result.push({ ...item, depth });
+                              traverse(item.id, depth + 1);
+                            }
+                          };
+                          traverse(null, 0);
+                          return result;
+                        };
+                        const subtasksSearch = buildHierarchicalSubtasks(allSubtasks, subtaskSearch);
                         return subtasksSearch.length === 0 ? (
                           <p className="td-empty">{subtaskSearch ? t("No subtasks match your search.", { defaultValue: "No subtasks match your search." }) : t("No subtasks linked to this task.", { defaultValue: "No subtasks linked to this task." })}</p>
                         ) : (
@@ -1879,12 +1937,22 @@ function TaskDetails() {
                               return (
                               <div className="deliveries-table-row" style={{ gridTemplateColumns: "80px 2fr 1.2fr 110px 130px 50px", alignItems: "center" }}>
                                 <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={d.id} businessId={d.business_id} color="#16a34a" />
-                                <div className="user-box" style={{ gap: "20px" }}>
-                                  <div className="avatar" style={{ background: statusBgColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), color: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), width: '42px', height: '42px', fontSize: '14px', flexShrink: 0 }}>
+                                <div className="user-box" style={{ gap: "10px", paddingLeft: `${(d.depth || 0) * 20}px` }}>
+                                  {d.depth > 0 && (
+                                    <span style={{ color: "var(--color-primary, #6366f1)", fontSize: 13, fontWeight: 700, flexShrink: 0 }}>↳</span>
+                                  )}
+                                  <div className="avatar" style={{ background: statusBgColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), color: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), width: '38px', height: '38px', fontSize: '13px', flexShrink: 0 }}>
                                     {initials(d.title)}
                                   </div>
                                   <div style={{ minWidth: 0 }}>
-                                    <div className="user-name" style={{ fontSize: 14, fontWeight: 600 }}>{d.title}</div>
+                                    <div className="user-name" style={{ fontSize: 14, fontWeight: 600, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                                      <span>{d.title}</span>
+                                      {d.depth > 0 && (
+                                        <span style={{ fontSize: 10, background: "#EEF2FF", color: "#4F46E5", padding: "1px 6px", borderRadius: 4, fontWeight: 500 }}>
+                                          {t("Sub", { defaultValue: "Sub" })}-{d.depth + 1}
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
                                 <div>
@@ -1897,13 +1965,13 @@ function TaskDetails() {
                                       <span className="dot" style={{ background: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'in_progress' : d.status) }} />
                                       {statusLabel(d.status, t)}
                                     </span>
-                                    {(d.is_reopened || (Array.isArray(d?.states) && d.states.some((s) => String(s).toLowerCase() === "reopened")) || d?.reopened_at || (d?.reopen_count && d.reopen_count > 0)) && (
+                                    {Boolean(d.is_reopened || (Array.isArray(d?.states) && d.states.some((s) => String(s).toLowerCase() === "reopened")) || d?.reopened_at || Number(d?.reopen_count) > 0) && (
                                       <span className="badge" style={{ background: "#EDE9FE", color: "#6D28D9", border: "1px solid #DDD6FE", fontSize: 10, padding: "2px 6px", borderRadius: 4 }}>
                                         <span className="dot" style={{ background: "#6D28D9", width: 5, height: 5 }} />
                                         {t("Reopened", { defaultValue: "Reopened" })}
                                       </span>
                                     )}
-                                    {(d.is_transferred || (Array.isArray(d?.states) && d.states.some((s) => String(s).toLowerCase() === "transferred")) || (Array.isArray(d?.delegation_chain) && d.delegation_chain.length > 0)) && (
+                                    {Boolean(d.is_transferred || (Array.isArray(d?.states) && d.states.some((s) => String(s).toLowerCase() === "transferred")) || (Array.isArray(d?.delegation_chain) && d.delegation_chain.length > 0)) && (
                                       <span className="badge" style={{ background: "#E0E7FF", color: "#4338CA", border: "1px solid #C7D2FE", fontSize: 10, padding: "2px 6px", borderRadius: 4 }}>
                                         <span className="dot" style={{ background: "#4338CA", width: 5, height: 5 }} />
                                         {t("Transferred", { defaultValue: "Transferred" })}
@@ -1928,6 +1996,19 @@ function TaskDetails() {
                                       navigate(rolePath(`deliveries/deliverable-details/${d.id}`), { state: { from: subtaskFrom, subtaskIds: deliverableIds, readOnly: isGuest } });
                                     }}
                                   >
+                                    {!readOnly && (isCreator || isAdminOrManager) && (
+                                      <button
+                                        className="action-icon-btn"
+                                        title={t("Add Child Subtask", { defaultValue: "Add Child Subtask" })}
+                                        onClick={() => {
+                                          setParentDeliverableForCreate(d);
+                                          setShowCreateSubtaskModal(true);
+                                        }}
+                                        style={{ color: "#4F46E5" }}
+                                      >
+                                        <Plus size={16} />
+                                      </button>
+                                    )}
                                     <button className="action-icon-btn action-note" title={t("Add Note", { defaultValue: "Add Note" })} onClick={() => setNoteModal({ open: true, itemId: d.id })}>
                                       <StickyNote size={14} />
                                     </button>
@@ -2076,6 +2157,18 @@ function TaskDetails() {
                         </div>
                       )}
                     </div>
+                  )}
+
+                  {tab === "members" && (
+                    <TaskMembers task={task} assignees={assignees} followers={followers} assigner={assigner} />
+                  )}
+
+                  {tab === "knowledge" && (
+                    <TaskKnowledge taskId={task.id} initialKnowledgeBases={task.knowledge_bases || task.knowledgeBases} readOnly={readOnly} />
+                  )}
+
+                  {tab === "events" && (
+                    <TaskEvents taskId={task.id} initialEvents={task.events} readOnly={readOnly} />
                   )}
 
                   {tab === "activity" && (
@@ -2626,8 +2719,11 @@ function TaskDetails() {
           projectId={task?.project_id || null}
           taskId={task?.id || null}
           taskTitle={task?.title || null}
+          parentDeliverableId={parentDeliverableForCreate?.id || null}
+          parentDeliverable={parentDeliverableForCreate}
           onClose={(refresh) => {
             setShowCreateSubtaskModal(false);
+            setParentDeliverableForCreate(null);
             if (refresh) fetchTask(false);
           }}
         />
@@ -2641,7 +2737,16 @@ function TaskDetails() {
         onSaved={() => { setNoteModal({ open: false, itemId: null }); fetchTask(false); }}
       />
 
-      {!readOnly && !(isAssignee || isCreator) && isTransferor && (
+      {!readOnly && (
+        <MarkTaskCompletedModal
+          isOpen={markCompletedModalOpen}
+          onClose={() => setMarkCompletedModalOpen(false)}
+          task={task}
+          onCompleteSuccess={handleTaskActionSuccess}
+        />
+      )}
+
+      {!readOnly && taskReopenDialog && (
         <TaskReopenDialog
           isOpen={taskReopenDialog}
           onClose={() => setTaskReopenDialog(false)}

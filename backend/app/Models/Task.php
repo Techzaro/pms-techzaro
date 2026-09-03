@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -18,6 +19,7 @@ use Carbon\Carbon;
  */
 class Task extends Model
 {
+    use SoftDeletes;
     protected $fillable = [
         'task_number',
         'business_id',
@@ -87,6 +89,8 @@ class Task extends Model
         'allow_transfer',
         'is_reopened',
         'is_transferred',
+        'completion_reason',
+        'completion_notes',
     ];
 
     /**
@@ -618,6 +622,30 @@ class Task extends Model
     public function comments()
     {
         return $this->hasMany(TaskComment::class)->latest();
+    }
+
+    /** Discussion messages alias for comments. */
+    public function messages()
+    {
+        return $this->hasMany(TaskComment::class)->latest();
+    }
+
+    /** Personal notes attached to this task. */
+    public function personalNotes()
+    {
+        return $this->hasMany(TaskPersonalNote::class)->orderBy('created_at', 'desc');
+    }
+
+    /** Events linked to this task. */
+    public function events(): BelongsToMany
+    {
+        return $this->belongsToMany(Event::class, 'event_task')->withTimestamps();
+    }
+
+    /** Knowledge base articles linked to this task. */
+    public function knowledgeBases(): BelongsToMany
+    {
+        return $this->belongsToMany(KnowledgeBase::class, 'knowledge_base_task')->withTimestamps();
     }
 
     /** Access credentials attached to this task. */
