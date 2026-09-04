@@ -97,6 +97,11 @@ const { canCreateUser, maxUsers, currentUsers, usersRemaining, getLimitMessage, 
   const [pendingDeletionUser, setPendingDeletionUser] = useState(null);
   const [deleteGuestConfirmOpen, setDeleteGuestConfirmOpen] = useState(false);
   const [pendingDeleteGuest, setPendingDeleteGuest] = useState(null);
+  const [projectInvolvement, setProjectInvolvement] = useState(null);
+  const [reassignConfirmOpen, setReassignConfirmOpen] = useState(false);
+  const [reassignNow, setReassignNow] = useState(false);
+  const [reassignSelectOpen, setReassignSelectOpen] = useState(false);
+  const [selectedReassignUser, setSelectedReassignUser] = useState(null);
   const [projectsList, setProjectsList] = useState([]);
   const [newUser, setNewUser] = useState({
     fullName: "",
@@ -195,7 +200,7 @@ const { canCreateUser, maxUsers, currentUsers, usersRemaining, getLimitMessage, 
 
   const [localUsers, setLocalUsers] = useState([]);
   const [activeDragId, setActiveDragId] = useState(null);
-  const [emailPolicy, setEmailPolicy] = useState("standard");
+  const [emailMode, setEmailMode] = useState("single");
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const localUsersRef = useRef(localUsers);
   localUsersRef.current = localUsers;
@@ -357,18 +362,6 @@ const { canCreateUser, maxUsers, currentUsers, usersRemaining, getLimitMessage, 
       fetchCurrentUser();
     }
     fetchUsers();
-
-    // Fetch email policy for the organization
-    fetch(`${API_URL}/organization-settings/email-policy`, {
-      headers: { Accept: "application/json", ...authHeaders() },
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data?.success && data?.email_policy) {
-          setEmailPolicy(data.email_policy);
-        }
-      })
-      .catch(() => {});
   }, [navigate]);
 
   useAutoRefresh(fetchUsers, { events: ["data:changed"] });
@@ -518,6 +511,7 @@ const { canCreateUser, maxUsers, currentUsers, usersRemaining, getLimitMessage, 
     const isCustomDesg = !designations.includes(desgVal) && desgVal !== "";
 
     setEditingUser(fullUser);
+    setEmailMode(fullUser.email_mode || "single");
     setNewUser({
       fullName: fullUser.name || "",
       fatherName: fullUser.father_name || "",
@@ -854,15 +848,20 @@ const { canCreateUser, maxUsers, currentUsers, usersRemaining, getLimitMessage, 
       errors.emergencyContactPhone = t("Emergency Phone must be in format 03XX-XXXXXXX.", { defaultValue: "Emergency Phone must be in format 03XX-XXXXXXX." });
     }
     if (!newUser.personalEmail.trim()) {
-      errors.personalEmail = emailPolicy === "standard" ? t("Email Address is required.", { defaultValue: "Email Address is required." }) : t("Personal Email Address is required.", { defaultValue: "Personal Email Address is required." });
+      errors.personalEmail = emailMode === "single" ? t("Email Address is required.", { defaultValue: "Email Address is required." }) : t("Personal Email Address is required.", { defaultValue: "Personal Email Address is required." });
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.personalEmail.trim())) {
       errors.personalEmail = t("Please enter a valid email address.", { defaultValue: "Please enter a valid email address." });
     }
-    if (emailPolicy !== "standard") {
+    if (emailMode === "two_emails") {
       if (!newUser.professionalEmail.trim()) {
-        errors.professionalEmail = t("Professional Email Address is required.", { defaultValue: "Professional Email Address is required." });
+        errors.professionalEmail = t("Professional / ERP Email Address is required.", { defaultValue: "Professional / ERP Email Address is required." });
       } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.professionalEmail.trim())) {
         errors.professionalEmail = t("Please enter a valid professional email address.", { defaultValue: "Please enter a valid professional email address." });
+      }
+      // Validate emails are different
+      if (newUser.personalEmail.trim() && newUser.professionalEmail.trim() &&
+          newUser.personalEmail.trim().toLowerCase() === newUser.professionalEmail.trim().toLowerCase()) {
+        errors.professionalEmail = t("Personal and Professional email addresses must be different.", { defaultValue: "Personal and Professional email addresses must be different." });
       }
       const isExistingProEmail = editingUser && newUser.professionalEmail.trim() === (editingUser.professional_email || "").trim();
       if (newUser.professionalEmail.trim() && !newUser.professionalEmailPassword.trim() && !isExistingProEmail) {
@@ -1064,8 +1063,50 @@ if (!newUser.employeeCode.trim()) errors.employeeCode = t("Employee Code is requ
     }
   };
 
-  const handleAdminDeleteUser = (user) => {
+  const handleAdminDeleteUser = async (user) => {
     setPendingDeletionUser(user);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/users/${user.id}/project-involvement`, {
+        method: "GET",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.has_involvement) {
+        setProjectInvolvement(data);
+        setReassignConfirmOpen(true);
+      } else {
+        setAdminDeleteConfirmOpen(true);
+      }
+    } catch (err) {
+      setAdminDeleteConfirmOpen(true);
+    }
+  };
+
+  const handleReassignChoice = (assignNow) => {
+    setReassignNow(assignNow);
+    setReassignConfirmOpen(false);
+    if (assignNow) {
+      setReassignSelectOpen(true);
+    } else {
+      setAdminDeleteConfirmOpen(true);
+    }
+  };
+
+  const handleConfirmReassign = async () => {
+    if (!selectedReassignUser || !pendingDeletionUser) return;
+    try {
+      const token = authToken();
+      await fetch(`${API_URL}/users/${pendingDeletionUser.id}/reassign-projects`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ new_user_id: selectedReassignUser.id }),
+      });
+    } catch (err) {
+      // proceed with deletion even if reassign fails
+    }
+    setReassignSelectOpen(false);
+    setSelectedReassignUser(null);
     setAdminDeleteConfirmOpen(true);
   };
 
@@ -1088,6 +1129,7 @@ if (!newUser.employeeCode.trim()) errors.employeeCode = t("Employee Code is requ
     } finally {
       setAdminDeleteConfirmOpen(false);
       setPendingDeletionUser(null);
+      setProjectInvolvement(null);
     }
   };
 
@@ -1553,7 +1595,14 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
 
     const formData = new FormData();
     formData.append("name", (newUser.fullName || "").trim() || "Draft User");
-    formData.append("email", (newUser.personalEmail || newUser.email || "").trim());
+    formData.append("email_mode", emailMode);
+    if (emailMode === "single") {
+      formData.append("email", (newUser.personalEmail || "").trim());
+      formData.append("personal_email", newUser.personalEmail || "");
+    } else {
+      formData.append("email", (newUser.professionalEmail || newUser.personalEmail || "").trim());
+      formData.append("personal_email", newUser.personalEmail || "");
+    }
     formData.append("father_name", newUser.fatherName);
     formData.append("id_card_number", newUser.idCardNumber);
     formData.append("present_address", newUser.presentAddress);
@@ -1562,7 +1611,6 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
     formData.append("emergency_contact_name", newUser.emergencyContactName);
     formData.append("emergency_contact_relation", newUser.emergencyContactRelation);
     formData.append("emergency_contact_phone", newUser.emergencyContactPhone);
-    formData.append("personal_email", newUser.personalEmail || "");
     formData.append("professional_email", newUser.professionalEmail || "");
     if (!editingUser || newUser.professionalEmailPassword) {
       formData.append("professional_email_password", newUser.professionalEmailPassword || "");
@@ -2269,24 +2317,91 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
                   </div>
                 </div>
 
-                {/* ===== Email Accounts ===== */}
-                <h3 className="form-section-title">{t("Email Accounts", { defaultValue: "Email Accounts" })}</h3>
-                <div className="user-form-grid">
-                  {emailPolicy === "standard" ? (
-                    <div className="form-row">
-                      <label htmlFor="personalEmail">{t("Email Address *", { defaultValue: "Email Address *" })}</label>
-                      <input type="email" id="personalEmail" name="personalEmail" value={newUser.personalEmail} onChange={(e) => { const val = e.target.value; setNewUser((prev) => ({ ...prev, personalEmail: val, professionalEmail: val })); markDirty(); }} placeholder={t("Enter email address", { defaultValue: "Enter email address" })} className={addErrors.personalEmail ? "field-error" : ""} />
-                      {addErrors.personalEmail && <span className="field-error-text">{addErrors.personalEmail}</span>}
+                {/* ===== Email Configuration + Password Generation ===== */}
+                {!editingUser && emailMode === "single" ? (
+                  <div className="email-password-side-by-side">
+                    <div>
+                      <h3 className="form-section-title">{t("Email Configuration", { defaultValue: "Email Configuration" })}</h3>
+                      <div className="user-form-grid" style={{ gridTemplateColumns: "1fr" }}>
+                        <div className="form-row">
+                          <label>{t("Email Mode", { defaultValue: "Email Mode" })}</label>
+                          <div style={{ display: "flex", gap: "24px", marginTop: "8px", alignItems: "center" }}>
+                            <label style={{ display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer", fontWeight: "normal", fontSize: "14px", whiteSpace: "nowrap" }}>
+                              <input type="radio" name="emailMode" value="single" checked={emailMode === "single"} onChange={() => { setEmailMode("single"); setNewUser((prev) => ({ ...prev, professionalEmail: "", professionalEmailPassword: "" })); markDirty(); }} />
+                              {t("Single Email", { defaultValue: "Single Email" })}
+                            </label>
+                            <label style={{ display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer", fontWeight: "normal", fontSize: "14px", whiteSpace: "nowrap" }}>
+                              <input type="radio" name="emailMode" value="two_emails" checked={emailMode === "two_emails"} onChange={() => { setEmailMode("two_emails"); markDirty(); }} />
+                              {t("Two Emails", { defaultValue: "Two Emails" })}
+                            </label>
+                          </div>
+                          <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "6px" }}>
+                            {t("Single email for login, notifications, and all communication.", { defaultValue: "Single email for login, notifications, and all communication." })}
+                          </p>
+                        </div>
+                        <div className="form-row">
+                          <label htmlFor="personalEmail">{t("Email Address *", { defaultValue: "Email Address *" })}</label>
+                          <input type="email" id="personalEmail" name="personalEmail" value={newUser.personalEmail} onChange={(e) => { const val = e.target.value; setNewUser((prev) => ({ ...prev, personalEmail: val })); markDirty(); }} placeholder={t("Enter email address", { defaultValue: "Enter email address" })} className={addErrors.personalEmail ? "field-error" : ""} />
+                          {addErrors.personalEmail && <span className="field-error-text">{addErrors.personalEmail}</span>}
+                        </div>
+                      </div>
                     </div>
-                  ) : (
-                    <>
+                    <div>
+                      <h3 className="form-section-title">{t("Password Generation", { defaultValue: "Password Generation" })}</h3>
+                      <div className="user-form-grid" style={{ gridTemplateColumns: "1fr" }}>
+                        <div className="form-row">
+                          <label>{t("Account Password Mode", { defaultValue: "Account Password Mode" })}</label>
+                          <div style={{ display: "flex", gap: "24px", marginTop: "8px", alignItems: "center" }}>
+                            <label style={{ display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer", fontWeight: "normal", fontSize: "14px", whiteSpace: "nowrap" }}>
+                              <input type="radio" name="passwordType" value="auto" checked={newUser.passwordType !== "manual"} onChange={() => { setNewUser((prev) => ({ ...prev, passwordType: "auto" })); markDirty(); }} />
+                              {t("Auto-generated password", { defaultValue: "Auto-generated password" })}
+                            </label>
+                            <label style={{ display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer", fontWeight: "normal", fontSize: "14px", whiteSpace: "nowrap" }}>
+                              <input type="radio" name="passwordType" value="manual" checked={newUser.passwordType === "manual"} onChange={() => { setNewUser((prev) => ({ ...prev, passwordType: "manual" })); markDirty(); }} />
+                              {t("Manually generated password", { defaultValue: "Manually generated password" })}
+                            </label>
+                          </div>
+                        </div>
+                        {newUser.passwordType === "manual" && (
+                          <div className="form-row">
+                            <label htmlFor="userPassword">{t("Initial Account Password *", { defaultValue: "Initial Account Password *" })}</label>
+                            <input type="text" id="userPassword" name="password" value={newUser.password || ""} onChange={handleChange} placeholder={t("Enter initial password (min 6 characters)", { defaultValue: "Enter initial password (min 6 characters)" })} className={addErrors.password ? "field-error" : ""} />
+                            {addErrors.password && <span className="field-error-text">{addErrors.password}</span>}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* ===== Email Accounts (stacked - two emails mode or editing) ===== */}
+                    <h3 className="form-section-title">{t("Email Configuration", { defaultValue: "Email Configuration" })}</h3>
+                    <div className="user-form-grid">
+                      {!editingUser && (
+                        <div className="form-row" style={{ gridColumn: "1 / -1" }}>
+                          <label>{t("Email Mode", { defaultValue: "Email Mode" })}</label>
+                          <div style={{ display: "flex", gap: "24px", marginTop: "8px", alignItems: "center" }}>
+                            <label style={{ display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer", fontWeight: "normal", fontSize: "14px", whiteSpace: "nowrap" }}>
+                              <input type="radio" name="emailMode" value="single" checked={emailMode === "single"} onChange={() => { setEmailMode("single"); setNewUser((prev) => ({ ...prev, professionalEmail: "", professionalEmailPassword: "" })); markDirty(); }} />
+                              {t("Single Email", { defaultValue: "Single Email" })}
+                            </label>
+                            <label style={{ display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer", fontWeight: "normal", fontSize: "14px", whiteSpace: "nowrap" }}>
+                              <input type="radio" name="emailMode" value="two_emails" checked={emailMode === "two_emails"} onChange={() => { setEmailMode("two_emails"); markDirty(); }} />
+                              {t("Two Emails", { defaultValue: "Two Emails" })}
+                            </label>
+                          </div>
+                          <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "6px" }}>
+                            {t("Separate personal (information) and professional (ERP authentication) emails.", { defaultValue: "Separate personal (information) and professional (ERP authentication) emails." })}
+                          </p>
+                        </div>
+                      )}
                       <div className="form-row">
-                        <label htmlFor="personalEmail">{t("Personal Email Address *", { defaultValue: "Personal Email Address *" })}</label>
+                        <label htmlFor="personalEmail">{t("Information / Personal Email *", { defaultValue: "Information / Personal Email *" })}</label>
                         <input type="email" id="personalEmail" name="personalEmail" value={newUser.personalEmail} onChange={handleChange} placeholder={t("Enter personal email address", { defaultValue: "Enter personal email address" })} className={addErrors.personalEmail ? "field-error" : ""} />
                         {addErrors.personalEmail && <span className="field-error-text">{addErrors.personalEmail}</span>}
                       </div>
                       <div className="form-row">
-                        <label htmlFor="professionalEmail">{t("Professional Email *", { defaultValue: "Professional Email *" })}</label>
+                        <label htmlFor="professionalEmail">{t("ERP / Professional Email *", { defaultValue: "ERP / Professional Email *" })}</label>
                         <input type="email" id="professionalEmail" name="professionalEmail" value={newUser.professionalEmail} onChange={handleChange} placeholder={t("Enter professional email address", { defaultValue: "Enter professional email address" })} className={addErrors.professionalEmail ? "field-error" : ""} />
                         {addErrors.professionalEmail && <span className="field-error-text">{addErrors.professionalEmail}</span>}
                       </div>
@@ -2302,88 +2417,62 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
                         </div>
                         {addErrors.professionalEmailPassword && <span className="field-error-text">{addErrors.professionalEmailPassword}</span>}
                       </div>
-                    </>
-                  )}
-                  {editingUser && (
-                    <div className="form-row">
-                      <label htmlFor="userStatus">{t("Account Status *", { defaultValue: "Account Status *" })}</label>
-                      <select
-                        id="userStatus"
-                        name="userStatus"
-                        className="user-field-input"
-                        value={newUser.status || (newUser.active !== false ? "Active" : "Inactive")}
-                        onChange={(e) => { setNewUser((prev) => ({ ...prev, status: e.target.value })); markDirty(); }}
-                        style={{
-                          width: "100%",
-                          height: "44px",
-                          border: "1px solid var(--border-color)",
-                          borderRadius: "10px",
-                          padding: "0 12px",
-                          fontSize: "14px",
-                          background: "var(--bg-card)",
-                          color: "var(--text-dark)",
-                        }}
-                      >
-                        <option value="Active">{t("Active", { defaultValue: "Active" })}</option>
-                        <option value="Inactive">{t("Inactive", { defaultValue: "Inactive" })}</option>
-                        <option value="Resigned">{t("Resigned", { defaultValue: "Resigned" })}</option>
-                      </select>
-                    </div>
-                  )}
-                </div>
-
-                {/* ===== Password Generation ===== */}
-                {!editingUser && (
-                  <>
-                    <h3 className="form-section-title">{t("Password Generation", { defaultValue: "Password Generation" })}</h3>
-                    <div className="user-form-grid">
-                      <div className="form-row" style={{ gridColumn: "1 / -1" }}>
-                        <label>{t("Account Password Mode", { defaultValue: "Account Password Mode" })}</label>
-                        <div style={{ display: "flex", gap: "20px", marginTop: "8px", alignItems: "center" }}>
-                          <label style={{ display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer", fontWeight: "normal", fontSize: "14px" }}>
-                            <input
-                              type="radio"
-                              name="passwordType"
-                              value="auto"
-                              checked={newUser.passwordType !== "manual"}
-                              onChange={() => {
-                                setNewUser((prev) => ({ ...prev, passwordType: "auto" }));
-                                markDirty();
-                              }}
-                            />
-                            {t("Auto-generated password", { defaultValue: "Auto-generated password" })}
-                          </label>
-                          <label style={{ display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer", fontWeight: "normal", fontSize: "14px" }}>
-                            <input
-                              type="radio"
-                              name="passwordType"
-                              value="manual"
-                              checked={newUser.passwordType === "manual"}
-                              onChange={() => {
-                                setNewUser((prev) => ({ ...prev, passwordType: "manual" }));
-                                markDirty();
-                              }}
-                            />
-                            {t("Manually generated password", { defaultValue: "Manually generated password" })}
-                          </label>
-                        </div>
-                      </div>
-                      {newUser.passwordType === "manual" && (
+                      {editingUser && (
                         <div className="form-row">
-                          <label htmlFor="userPassword">{t("Initial Account Password *", { defaultValue: "Initial Account Password *" })}</label>
-                          <input
-                            type="text"
-                            id="userPassword"
-                            name="password"
-                            value={newUser.password || ""}
-                            onChange={handleChange}
-                            placeholder={t("Enter initial password (min 6 characters)", { defaultValue: "Enter initial password (min 6 characters)" })}
-                            className={addErrors.password ? "field-error" : ""}
-                          />
-                          {addErrors.password && <span className="field-error-text">{addErrors.password}</span>}
+                          <label htmlFor="userStatus">{t("Account Status *", { defaultValue: "Account Status *" })}</label>
+                          <select
+                            id="userStatus"
+                            name="userStatus"
+                            className="user-field-input"
+                            value={newUser.status || (newUser.active !== false ? "Active" : "Inactive")}
+                            onChange={(e) => { setNewUser((prev) => ({ ...prev, status: e.target.value })); markDirty(); }}
+                            style={{
+                              width: "100%",
+                              height: "44px",
+                              border: "1px solid var(--border-color)",
+                              borderRadius: "10px",
+                              padding: "0 12px",
+                              fontSize: "14px",
+                              background: "var(--bg-card)",
+                              color: "var(--text-dark)",
+                            }}
+                          >
+                            <option value="Active">{t("Active", { defaultValue: "Active" })}</option>
+                            <option value="Inactive">{t("Inactive", { defaultValue: "Inactive" })}</option>
+                            <option value="Resigned">{t("Resigned", { defaultValue: "Resigned" })}</option>
+                          </select>
                         </div>
                       )}
                     </div>
+
+                    {/* ===== Password Generation (stacked below) ===== */}
+                    {!editingUser && (
+                      <>
+                        <h3 className="form-section-title">{t("Password Generation", { defaultValue: "Password Generation" })}</h3>
+                        <div className="user-form-grid">
+                          <div className="form-row" style={{ gridColumn: "1 / -1" }}>
+                            <label>{t("Account Password Mode", { defaultValue: "Account Password Mode" })}</label>
+                            <div style={{ display: "flex", gap: "24px", marginTop: "8px", alignItems: "center" }}>
+                              <label style={{ display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer", fontWeight: "normal", fontSize: "14px", whiteSpace: "nowrap" }}>
+                                <input type="radio" name="passwordType" value="auto" checked={newUser.passwordType !== "manual"} onChange={() => { setNewUser((prev) => ({ ...prev, passwordType: "auto" })); markDirty(); }} />
+                                {t("Auto-generated password", { defaultValue: "Auto-generated password" })}
+                              </label>
+                              <label style={{ display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer", fontWeight: "normal", fontSize: "14px", whiteSpace: "nowrap" }}>
+                                <input type="radio" name="passwordType" value="manual" checked={newUser.passwordType === "manual"} onChange={() => { setNewUser((prev) => ({ ...prev, passwordType: "manual" })); markDirty(); }} />
+                                {t("Manually generated password", { defaultValue: "Manually generated password" })}
+                              </label>
+                            </div>
+                          </div>
+                          {newUser.passwordType === "manual" && (
+                            <div className="form-row">
+                              <label htmlFor="userPassword">{t("Initial Account Password *", { defaultValue: "Initial Account Password *" })}</label>
+                              <input type="text" id="userPassword" name="password" value={newUser.password || ""} onChange={handleChange} placeholder={t("Enter initial password (min 6 characters)", { defaultValue: "Enter initial password (min 6 characters)" })} className={addErrors.password ? "field-error" : ""} />
+                              {addErrors.password && <span className="field-error-text">{addErrors.password}</span>}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
 
@@ -3033,6 +3122,125 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
       title={t("Delete Guest Account", { defaultValue: "Delete Guest Account" })}
       message={t('Are you sure you want to delete guest "{{name}}"? This action cannot be undone.', { name: pendingDeleteGuest?.name, defaultValue: `Are you sure you want to delete guest "${pendingDeleteGuest?.name}"? This action cannot be undone.` })}
       confirmText={t("Delete Guest", { defaultValue: "Delete Guest" })}
+      cancelText={t("Cancel", { defaultValue: "Cancel" })}
+      danger
+    />
+
+    {/* Project Involvement Reassign Choice Modal */}
+    {reassignConfirmOpen && createPortal(
+      <div style={{ position: "fixed", inset: 0, zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)" }}>
+        <div style={{ background: "var(--bg-card, #fff)", borderRadius: 16, padding: "28px 32px", width: 480, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }}>
+          <h3 style={{ margin: "0 0 8px", fontSize: 20, fontWeight: 700, color: "var(--text-heading, #111827)" }}>
+            {t("User is Project Manager", { defaultValue: "User is Project Manager" })}
+          </h3>
+          <p style={{ margin: "0 0 8px", fontSize: 14, color: "#6b7280", lineHeight: 1.5 }}>
+            {t('User "{{name}}" is involved in the following projects:', { name: pendingDeletionUser?.name, defaultValue: `User "${pendingDeletionUser?.name}" is involved in the following projects:` })}
+          </p>
+          <div style={{ maxHeight: 120, overflowY: "auto", marginBottom: 16, padding: "8px 12px", background: "#f9fafb", borderRadius: 8, fontSize: 13 }}>
+            {projectInvolvement?.created?.length > 0 && (
+              <div><strong>{t("Created:", { defaultValue: "Created:" })}</strong> {Object.values(projectInvolvement.created).join(", ")}</div>
+            )}
+            {projectInvolvement?.assigned?.length > 0 && (
+              <div><strong>{t("Assigned:", { defaultValue: "Assigned:" })}</strong> {Object.values(projectInvolvement.assigned).join(", ")}</div>
+            )}
+            {projectInvolvement?.guest?.length > 0 && (
+              <div><strong>{t("Guest:", { defaultValue: "Guest:" })}</strong> {Object.values(projectInvolvement.guest).join(", ")}</div>
+            )}
+          </div>
+          <p style={{ margin: "0 0 20px", fontSize: 14, color: "#374151", fontWeight: 500 }}>
+            {t("Do you want to reassign their projects to another user now?", { defaultValue: "Do you want to reassign their projects to another user now?" })}
+          </p>
+          <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+            <button
+              onClick={() => handleReassignChoice(false)}
+              style={{ padding: "10px 20px", borderRadius: 10, border: "none", background: "#e5e7eb", color: "#374151", cursor: "pointer", fontWeight: 600, fontSize: 14 }}
+            >
+              {t("Later", { defaultValue: "Later" })}
+            </button>
+            <button
+              onClick={() => handleReassignChoice(true)}
+              style={{ padding: "10px 20px", borderRadius: 10, border: "none", background: "var(--color-primary, #2563eb)", color: "#fff", cursor: "pointer", fontWeight: 600, fontSize: 14 }}
+            >
+              {t("Reassign Now", { defaultValue: "Reassign Now" })}
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    )}
+
+    {/* Reassign User Select Modal */}
+    {reassignSelectOpen && createPortal(
+      <div style={{ position: "fixed", inset: 0, zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)" }}>
+        <div style={{ background: "var(--bg-card, #fff)", borderRadius: 16, padding: "28px 32px", width: 480, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }}>
+          <h3 style={{ margin: "0 0 8px", fontSize: 20, fontWeight: 700, color: "var(--text-heading, #111827)" }}>
+            {t("Select New Manager", { defaultValue: "Select New Manager" })}
+          </h3>
+          <p style={{ margin: "0 0 16px", fontSize: 14, color: "#6b7280" }}>
+            {t("Choose a user to take over the projects:", { defaultValue: "Choose a user to take over the projects:" })}
+          </p>
+          <div style={{ maxHeight: 250, overflowY: "auto", marginBottom: 20, border: "1px solid #e5e7eb", borderRadius: 8 }}>
+            {(users || []).filter(u => u.id !== pendingDeletionUser?.id && u.active !== false).map((u) => (
+              <div
+                key={u.id}
+                onClick={() => setSelectedReassignUser(u)}
+                style={{
+                  padding: "10px 14px",
+                  cursor: "pointer",
+                  background: selectedReassignUser?.id === u.id ? "#eff6ff" : "transparent",
+                  borderBottom: "1px solid #f3f4f6",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  fontSize: 14,
+                }}
+              >
+                <div style={{
+                  width: 28, height: 28, borderRadius: "50%",
+                  background: selectedReassignUser?.id === u.id ? "var(--color-primary, #2563eb)" : "#e5e7eb",
+                  color: selectedReassignUser?.id === u.id ? "#fff" : "#6b7280",
+                  display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 600, fontSize: 12, flexShrink: 0,
+                }}>
+                  {u.name?.charAt(0)?.toUpperCase()}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 500 }}>{u.name}</div>
+                  <div style={{ fontSize: 12, color: "#9ca3af" }}>{u.email}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+            <button
+              onClick={() => { setReassignSelectOpen(false); setSelectedReassignUser(null); setReassignConfirmOpen(true); }}
+              style={{ padding: "10px 20px", borderRadius: 10, border: "none", background: "#e5e7eb", color: "#374151", cursor: "pointer", fontWeight: 600, fontSize: 14 }}
+            >
+              {t("Back", { defaultValue: "Back" })}
+            </button>
+            <button
+              onClick={handleConfirmReassign}
+              disabled={!selectedReassignUser}
+              style={{ padding: "10px 20px", borderRadius: 10, border: "none", background: selectedReassignUser ? "var(--color-primary, #2563eb)" : "#d1d5db", color: "#fff", cursor: selectedReassignUser ? "pointer" : "not-allowed", fontWeight: 600, fontSize: 14 }}
+            >
+              {t("Confirm & Delete", { defaultValue: "Confirm & Delete" })}
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    )}
+
+    {/* Admin Delete User Confirmation Modal (updated) */}
+    <ConfirmModal
+      isOpen={adminDeleteConfirmOpen}
+      onClose={() => { setAdminDeleteConfirmOpen(false); setPendingDeletionUser(null); setProjectInvolvement(null); }}
+      onConfirm={confirmAdminDeleteUser}
+      title={t("Delete User Account", { defaultValue: "Delete User Account" })}
+      message={projectInvolvement?.has_involvement
+        ? t('User "{{name}}" will be removed from all projects. Their created projects will be reassigned to the selected user. Continue?', { name: pendingDeletionUser?.name, defaultValue: `User "${pendingDeletionUser?.name}" will be removed from all projects. Their created projects will be reassigned to the selected user. Continue?` })
+        : t('Are you sure you want to permanently delete user "{{name}}"? All associated files and settings will be permanently removed.', { name: pendingDeletionUser?.name, defaultValue: `Are you sure you want to permanently delete user "${pendingDeletionUser?.name}"? All associated files and settings will be permanently removed.` })
+      }
+      confirmText={t("Delete User", { defaultValue: "Delete User" })}
       cancelText={t("Cancel", { defaultValue: "Cancel" })}
       danger
     />

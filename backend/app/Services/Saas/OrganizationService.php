@@ -81,16 +81,9 @@ class OrganizationService
     {
         $dbName = $data['database_name'] ?? config('tenancy.database_prefix', 'pms_tenant_') . $data['slug'];
 
-        // 1. Provision database (creates DB + runs migrations)
+        // 1. Provision database (creates DB + runs migrations + applies column fixes)
         $this->db->createDatabase($dbName);
         $this->db->runMigrations($dbName);
-
-        // 1b. Fix any missing columns/tables that migrations might have missed
-        try {
-            \App\Console\Commands\FixTenantColumns::fixDatabaseProgrammatic($dbName);
-        } catch (\Throwable $e) {
-            \Log::warning('FixTenantColumns failed during OrganizationService create', ['db' => $dbName, 'error' => $e->getMessage()]);
-        }
 
         // 2. Create organization record
         $organization = Organization::create([

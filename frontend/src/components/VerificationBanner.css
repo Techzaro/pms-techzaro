@@ -1,0 +1,198 @@
+.verification-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  background: linear-gradient(135deg, #fef9c3, #fde68a);
+  border: 1px solid #fbbf24;
+  border-radius: 10px;
+  padding: 8px 10px 8px 16px;
+  margin: 0 0 12px 0;
+  width: fit-content;
+  position: relative;
+  z-index: 999;
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.18);
+}
+
+.vb-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vb-icon {
+  font-size: 15px;
+}
+
+.vb-text {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #92400e;
+  white-space: nowrap;
+}
+
+.vb-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.vb-btn {
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+  letter-spacing: 0.2px;
+}
+
+.vb-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.vb-verify {
+  background: #4f46e5;
+  color: #fff;
+}
+
+.vb-verify:hover:not(:disabled) {
+  background: #4338ca;
+}
+
+.vb-skip {
+  background: transparent;
+  color: #92400e;
+  border: 1px solid #d97706;
+}
+
+.vb-skip:hover:not(:disabled) {
+  background: rgba(217, 119, 6, 0.1);
+}
+
+/* Popup */
+.vb-popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(8px) saturate(120%);
+  -webkit-backdrop-filter: blur(8px) saturate(120%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: vbOverlayIn 0.15s ease-out;
+}
+
+@keyframes vbOverlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes vbPopupIn {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.vb-popup {
+  background: #fff;
+  border-radius: 16px;
+  padding: 32px;
+  max-width: 400px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+  animation: vbPopupIn 0.25s ease-out;
+}
+
+.vb-popup h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 8px;
+}
+
+.vb-popup p {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0 0 16px;
+}
+
+.vb-code-inputs {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.vb-code-input {
+  width: 44px;
+  height: 52px;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 700;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  outline: none;
+  transition: border-color 0.2s;
+  color: #111827;
+}
+
+.vb-code-input:focus {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.vb-popup-resend {
+  background: none;
+  border: none;
+  color: #4f46e5;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px;
+  margin-bottom: 16px;
+}
+
+.vb-popup-resend:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.vb-popup-resend:disabled {
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.vb-popup-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.vb-popup-cancel {
+  background: #f3f4f6;
+  color: #374151;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.vb-popup-cancel:hover {
+  background: #e5e7eb;
+}
+
+@media (max-width: 1200px) {
+  .verification-banner {
+    margin-bottom: 10px;
+  }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

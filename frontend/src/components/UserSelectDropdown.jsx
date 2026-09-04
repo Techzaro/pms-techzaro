@@ -205,11 +205,14 @@ const UserSelectDropdown = ({
         />
       </div>
 
-      {selectedNamesList.length > 0 && (
+      {selectedIds.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "8px" }}>
-          {selectedNamesList.map((name, index) => {
-            const rawId = selectedIds[index];
+          {selectedIds.map((rawId, index) => {
             const numId = Number(typeof rawId === "object" ? rawId?.id : rawId);
+            if (!numId) return null;
+            const foundUser = (users || []).find((u) => Number(u.id) === numId);
+            const chipName = (typeof rawId === "object" && rawId?.name) || foundUser?.name || null;
+            if (!chipName) return null;
             return (
               <span
                 key={numId || index}
@@ -226,7 +229,7 @@ const UserSelectDropdown = ({
                   border: "1px solid var(--color-primary-border, #bfdbfe)",
                 }}
               >
-                {name}
+                {chipName}
                 {!viewOnly && !disabled && (
                   <button
                     type="button"
@@ -246,7 +249,7 @@ const UserSelectDropdown = ({
                       fontSize: "14px",
                       lineHeight: 1,
                     }}
-                    title={t("Remove {{name}}", { name, defaultValue: `Remove ${name}` })}
+                    title={t("Remove {{name}}", { name: chipName, defaultValue: `Remove ${chipName}` })}
                   >
                     &times;
                   </button>

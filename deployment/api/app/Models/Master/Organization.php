@@ -17,6 +17,9 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property int    $id
  * @property string $name
  * @property string $slug
+ * @property string|null $admin_name
+ * @property string|null $admin_email
+ * @property int|null    $founding_admin_id
  * @property string $database_name
  * @property string $database_host
  * @property int    $database_port
@@ -24,7 +27,6 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string|null $database_password
  * @property string $status
  * @property string $timezone
- * @property string $email_policy
  * @property string|null $logo_path
  * @property array|null  $settings
  * @property \Carbon\Carbon|null $trial_ends_at
@@ -42,6 +44,10 @@ class Organization extends Model
     protected $fillable = [
         'name',
         'slug',
+        'organization_code',
+        'admin_name',
+        'admin_email',
+        'founding_admin_id',
         'type',
         'database_name',
         'database_host',
@@ -50,7 +56,13 @@ class Organization extends Model
         'database_password',
         'status',
         'timezone',
-        'email_policy',
+        'country',
+        'website',
+        'description',
+        'industry',
+        'default_timezone',
+        'enforce_working_hours',
+        'working_hours',
         'logo_path',
         'settings',
         'trial_ends_at',
@@ -66,10 +78,12 @@ class Organization extends Model
         'storage_s3_region',
         'storage_s3_access_key',
         'storage_s3_secret_key',
+        'storage_s3_endpoint',
         'storage_cleanup_months',
         'storage_large_file_threshold_mb',
         'storage_auto_cleanup',
         'custom_max_storage_gb',
+        'storage_unit',
     ];
 
     protected $hidden = [
@@ -78,6 +92,8 @@ class Organization extends Model
 
     protected $casts = [
         'settings'                   => 'array',
+        'working_hours'              => 'array',
+        'enforce_working_hours'      => 'boolean',
         'database_port'              => 'integer',
         'trial_ends_at'              => 'datetime',
         'suspended_at'               => 'datetime',
@@ -86,7 +102,25 @@ class Organization extends Model
         'storage_warn_threshold'     => 'integer',
         'storage_critical_threshold' => 'integer',
         'storage_pin_threshold'      => 'integer',
+        'custom_max_storage_gb'      => 'float',
     ];
+
+    /*
+    |------------------------------------------------------------------
+    | Boot
+    |------------------------------------------------------------------
+    */
+
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        static::creating(function (Organization $org) {
+            if (empty($org->organization_code)) {
+                $org->organization_code = Organization::generateOrganizationCode($org->name);
+            }
+        });
+    }
 
     /*
     |------------------------------------------------------------------
@@ -175,6 +209,31 @@ class Organization extends Model
     |------------------------------------------------------------------
     */
 
+    /**
+     * Generate a unique org-specific connection code.
+     * Format: {NAME_PREFIX}-{RANDOM} e.g. GOO-B1F50 for "Googles"
+     * Name prefix = first 3 uppercase alpha chars from org name.
+     * Random part = 5 uppercase alphanumeric chars.
+     */
+    public static function generateOrganizationCode(?string $orgName = null): string
+    {
+        $prefix = 'ORG';
+        if ($orgName) {
+            $clean = preg_replace('/[^a-zA-Z]/', '', $orgName);
+            $prefix = strtoupper(substr($clean, 0, 3));
+            if (strlen($prefix) < 3) {
+                $prefix = str_pad($prefix, 3, 'X');
+            }
+        }
+
+        do {
+            $random = strtoupper(substr(bin2hex(random_bytes(4)), 0, 5));
+            $code = $prefix . '-' . $random;
+        } while (static::on('mysql_master')->where('organization_code', $code)->exists());
+
+        return $code;
+    }
+
     /** Check if the organization is currently active. */
     public function isActive(): bool
     {
@@ -199,18 +258,6 @@ class Organization extends Model
     public function isSuspended(): bool
     {
         return $this->status === 'suspended';
-    }
-
-    /** Check if the organization uses company_required email policy. */
-    public function isCompanyEmailRequired(): bool
-    {
-        return $this->email_policy === 'company_required';
-    }
-
-    /** Get the email policy with fallback to standard. */
-    public function getEmailPolicy(): string
-    {
-        return $this->email_policy ?? 'standard';
     }
 
     /** Get the full database connection config for this organization. */

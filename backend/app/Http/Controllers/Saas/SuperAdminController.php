@@ -262,6 +262,65 @@ class SuperAdminController extends Controller
 
     // ─── Public Organization Registration ───────────────────────────
 
+    /**
+     * Check if an email is available globally across all tenant databases.
+     * Used by the Create Organization form to validate before proceeding.
+     */
+    public function checkEmailAvailability(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'email' => 'required|email',
+        ]);
+
+        $normalizedEmail = strtolower(trim($validated['email']));
+
+        // Validate email domain has valid MX records (prevent fake/dummy emails)
+        $domain = strtolower(trim(substr(strrchr($normalizedEmail, '@'), 1)));
+        if ($domain && !self::isValidEmailDomain($domain)) {
+            return response()->json([
+                'available' => false,
+                'message' => "The email domain '{$domain}' is not valid or does not exist.",
+            ]);
+        }
+
+        $existingOrgs = Organization::where('status', '!=', 'deleted')->get();
+
+        foreach ($existingOrgs as $org) {
+            try {
+                $dbName = $org->database_name;
+                if (!$dbName) continue;
+                $result = DB::connection('mysql_master')->select(
+                    "SELECT id FROM `{$dbName}`.`users` WHERE LOWER(email) = ? OR LOWER(personal_email) = ? OR LOWER(professional_email) = ? LIMIT 1",
+                    [$normalizedEmail, $normalizedEmail, $normalizedEmail]
+                );
+                if (!empty($result)) {
+                    return response()->json([
+                        'available' => false,
+                        'message' => 'This email is already registered in organization "' . $org->name . '".',
+                    ]);
+                }
+                try {
+                    $identityResult = DB::connection('mysql_master')->select(
+                        "SELECT id FROM `{$dbName}`.`email_identities` WHERE normalized_email = ? LIMIT 1",
+                        [$normalizedEmail]
+                    );
+                    if (!empty($identityResult)) {
+                        return response()->json([
+                            'available' => false,
+                            'message' => 'This email is already registered in organization "' . $org->name . '".',
+                        ]);
+                    }
+                } catch (\Throwable $e) {
+                    // email_identities table may not exist in older tenants
+                }
+            } catch (\Throwable $e) {
+                continue;
+            }
+        }
+
+        return response()->json(['available' => true]);
+    }
+
     public function register(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -269,27 +328,41 @@ class SuperAdminController extends Controller
             'name'         => 'required|string|max:255',
             'email'        => 'required|email',
             'phone'        => 'nullable|string|max:50',
-            'email_policy' => 'nullable|string|in:standard,company_required',
         ]);
 
-        // Check if email already exists as admin in any tenant DB
+        // Check if email already exists in ANY tenant DB (email, personal_email, or professional_email)
         $email = $validated['email'];
+        $normalizedEmail = strtolower(trim($email));
         $existingOrgs = Organization::where('status', '!=', 'deleted')->get();
         foreach ($existingOrgs as $org) {
             try {
                 $dbName = $org->database_name;
-                $exists = DB::connection('mysql')->select("SHOW TABLES LIKE ?", [$dbName . '.users']);
-                if (!empty($exists)) {
-                    $result = DB::connection('mysql')->select(
-                        "SELECT id FROM `{$dbName}`.`users` WHERE email = ? LIMIT 1",
-                        [$email]
+                if (!$dbName) continue;
+                // Check users table directly (cross-database query via mysql_master)
+                $result = DB::connection('mysql_master')->select(
+                    "SELECT id FROM `{$dbName}`.`users` WHERE LOWER(email) = ? OR LOWER(personal_email) = ? OR LOWER(professional_email) = ? LIMIT 1",
+                    [$normalizedEmail, $normalizedEmail, $normalizedEmail]
+                );
+                if (!empty($result)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'This email is already registered. Please use a different email or contact support.',
+                    ], 422);
+                }
+                // Also check email_identities table for global uniqueness
+                try {
+                    $identityResult = DB::connection('mysql_master')->select(
+                        "SELECT id FROM `{$dbName}`.`email_identities` WHERE normalized_email = ? LIMIT 1",
+                        [$normalizedEmail]
                     );
-                    if (!empty($result)) {
+                    if (!empty($identityResult)) {
                         return response()->json([
                             'success' => false,
                             'message' => 'This email is already registered. Please use a different email or contact support.',
                         ], 422);
                     }
+                } catch (\Throwable $e) {
+                    // email_identities table may not exist in older tenants
                 }
             } catch (\Throwable $e) {
                 continue;
@@ -344,7 +417,6 @@ class SuperAdminController extends Controller
                 'type'            => 'standard',
                 'status'          => 'trial',
                 'timezone'        => 'Asia/Karachi',
-                'email_policy'    => $validated['email_policy'] ?? 'standard',
                 'trial_ends_at'   => now()->addMinutes($trialMinutes),
             ]);
 
@@ -564,7 +636,6 @@ class SuperAdminController extends Controller
             'admin_email'    => 'required|email',
             'admin_name'     => 'required|string|max:255',
             'admin_phone'    => 'nullable|string|max:50',
-            'email_policy'   => 'nullable|string|in:standard,company_required',
             'plan_id'        => 'required|integer|exists:mysql_master.organization_plans,id',
             'billing_period' => 'nullable|string|in:monthly,yearly',
             'customize_trial' => 'nullable|boolean',
@@ -587,6 +658,43 @@ class SuperAdminController extends Controller
 
         // Use custom slug or auto-generate from name
         $slug = !empty($validated['slug']) ? Str::slug($validated['slug']) : Str::slug($validated['name']);
+
+        // Global email uniqueness check: admin_email cannot be used in ANY tenant
+        $normalizedEmail = strtolower(trim($validated['admin_email']));
+        $existingOrgs = Organization::where('status', '!=', 'deleted')->get();
+        foreach ($existingOrgs as $org) {
+            try {
+                $chkDb = $org->database_name;
+                if (!$chkDb) continue;
+                $result = DB::connection('mysql_master')->select(
+                    "SELECT id FROM `{$chkDb}`.`users` WHERE LOWER(email) = ? OR LOWER(personal_email) = ? OR LOWER(professional_email) = ? LIMIT 1",
+                    [$normalizedEmail, $normalizedEmail, $normalizedEmail]
+                );
+                if (!empty($result)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'This email is already registered. Please use a different email or contact support.',
+                    ], 422);
+                }
+                try {
+                    $identityResult = DB::connection('mysql_master')->select(
+                        "SELECT id FROM `{$chkDb}`.`email_identities` WHERE normalized_email = ? LIMIT 1",
+                        [$normalizedEmail]
+                    );
+                    if (!empty($identityResult)) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'This email is already registered. Please use a different email or contact support.',
+                        ], 422);
+                    }
+                } catch (\Throwable $e) {
+                    // email_identities table may not exist in older tenants
+                }
+            } catch (\Throwable $e) {
+                continue;
+            }
+        }
+
         $originalSlug = $slug;
         $counter = 1;
         while (Organization::withTrashed()->where('slug', $slug)->exists()) {
@@ -639,7 +747,6 @@ class SuperAdminController extends Controller
                 'type'            => 'standard',
                 'status'          => 'trial',
                 'timezone'        => 'Asia/Karachi',
-                'email_policy'    => $validated['email_policy'] ?? 'standard',
                 'trial_ends_at'   => now()->addMinutes($trialMinutes),
             ]);
 
@@ -789,7 +896,6 @@ class SuperAdminController extends Controller
         $validated = $request->validate([
             'name'            => 'sometimes|string|max:255',
             'slug'            => 'sometimes|string|max:255|unique:mysql_master.organizations,slug,' . $id,
-            'email_policy'    => 'sometimes|string|in:standard,company_required',
             'timezone'        => 'sometimes|string|max:50',
             'type'            => 'sometimes|string|in:standard',
             'plan_id'         => 'sometimes|integer|exists:mysql_master.organization_plans,id',
@@ -3669,6 +3775,50 @@ class SuperAdminController extends Controller
         }
 
         return $result;
+    }
+
+    /**
+     * Validate that an email domain has valid MX records and is not a known throwaway/fake domain.
+     * Prevents registration with fake/dummy email addresses.
+     */
+    private static function isValidEmailDomain(string $domain): bool
+    {
+        // Allow common dev/test domains
+        $allowedDomains = ['localhost', 'test.com', 'example.com', 'mailinator.com'];
+        if (in_array($domain, $allowedDomains)) {
+            return true;
+        }
+        // Allow draft emails
+        if (str_ends_with($domain, 'draft.local')) {
+            return true;
+        }
+
+        // Block known fake/throwaway/temporary email domains
+        $blockedDomains = [
+            'mailinator.com', 'guerrillamail.com', 'guerrillamail.net', 'guerrillamail.org',
+            'tempmail.com', 'throwaway.email', 'temp-mail.org', 'fakeinbox.com',
+            'sharklasers.com', 'guerrillamailblock.com', 'grr.la', 'dispostable.com',
+            'yopmail.com', 'yopmail.fr', 'maildrop.cc', 'trashmail.com',
+            'mailnator.com', 'tempr.email', 'discard.email', 'discardmail.com',
+            '10minutemail.com', 'getnada.com', 'mohmal.com',
+            'test.com', 'example.com', 'localhost',
+        ];
+        if (in_array($domain, $blockedDomains)) {
+            return false;
+        }
+
+        // Check MX/A records using dns_get_record (works on Windows + Linux)
+        $records = dns_get_record($domain, DNS_MX);
+        if (!empty($records)) {
+            // Extra check: block domains with suspicious MX records (like root "." only)
+            if (count($records) === 1 && trim($records[0]['target'], '.') === '') {
+                return false;
+            }
+            return true;
+        }
+        // Fallback: check A record
+        $aRecords = dns_get_record($domain, DNS_A);
+        return !empty($aRecords);
     }
 
     public function orgAuditLogs(Request $request, string $id): JsonResponse

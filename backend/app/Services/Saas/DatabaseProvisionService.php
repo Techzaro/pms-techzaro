@@ -5,6 +5,7 @@ namespace App\Services\Saas;
 use App\Console\Commands\FixTenantColumns;
 use App\Models\Master\Organization;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -66,8 +67,15 @@ class DatabaseProvisionService
      * Configure dynamic tenant connection for a database.
      */
     public function configureTenantConnection(string $databaseName): void
+     * Run all tenant migrations on a specific database.
+     *
+     * Creates a dedicated tenant_runner connection, runs all migration files,
+     * then applies FixTenantColumns for any legacy/missed columns.
+     */
+    public function runMigrations(string $databaseName): bool
     {
-        $masterConfig = config("database.connections.{$this->masterConnection}");
+        try {
+            $masterConfig = config("database.connections.{$this->masterConnection}");
 
         config()->set('database.connections.tenant', [
             'driver'         => 'mysql',

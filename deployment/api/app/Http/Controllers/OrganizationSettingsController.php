@@ -44,81 +44,6 @@ class OrganizationSettingsController extends Controller
     }
 
     /**
-     * Get the current organization's email policy.
-     */
-    public function getEmailPolicy(Request $request): JsonResponse
-    {
-        $org = $this->resolveOrganization($request);
-
-        if (!$org) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Organization not found.',
-            ], 404);
-        }
-
-        return response()->json([
-            'success' => true,
-            'email_policy' => $org->email_policy ?? 'standard',
-        ]);
-    }
-
-    /**
-     * Update the organization's email policy.
-     * Only admin/super_admin can change this setting.
-     */
-    public function updateEmailPolicy(Request $request): JsonResponse
-    {
-        $request->validate([
-            'email_policy' => ['required', Rule::in(['standard', 'company_required'])],
-        ]);
-
-        $org = $this->resolveOrganization($request);
-
-        if (!$org) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Organization not found.',
-            ], 404);
-        }
-
-        $oldPolicy = $org->email_policy ?? 'standard';
-        $newPolicy = $request->input('email_policy');
-
-        if ($oldPolicy === $newPolicy) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Email policy is already set to ' . $newPolicy . '.',
-                'email_policy' => $newPolicy,
-            ]);
-        }
-
-        $org->update(['email_policy' => $newPolicy]);
-
-        try {
-            $this->auditService->log(
-                module: 'organization_settings',
-                action: 'update_email_policy',
-                description: "Changed email policy from '{$oldPolicy}' to '{$newPolicy}'",
-                user: $request->user(),
-                entityType: 'Organization',
-                entityId: $org->id,
-                oldValues: ['email_policy' => $oldPolicy],
-                newValues: ['email_policy' => $newPolicy],
-                status: 'success'
-            );
-        } catch (\Throwable $e) {
-            \Log::error('Failed to log email policy change audit', ['error' => $e->getMessage()]);
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Email policy updated successfully. Existing users are not affected.',
-            'email_policy' => $newPolicy,
-        ]);
-    }
-
-    /**
      * Get the current organization's branding settings (logo + subtitle).
      */
     public function getBranding(Request $request): JsonResponse
@@ -262,7 +187,7 @@ class OrganizationSettingsController extends Controller
             ->first();
 
         if (!$subscription) {
-            $currentUsers = \App\Models\User::count();
+            $currentUsers = \App\Models\User::where('active', true)->count();
             $currentProjects = \App\Models\Project::count();
 
             return response()->json([
@@ -280,6 +205,7 @@ class OrganizationSettingsController extends Controller
                     'status' => $org->status,
                     'is_owner' => $org->isOwner(),
                     'trial_ends_at' => $org->trial_ends_at?->toISOString(),
+                    'founding_admin_id' => $org->founding_admin_id,
                 ],
             ]);
         }
@@ -299,15 +225,16 @@ class OrganizationSettingsController extends Controller
         $enabledModules = $modules->where('is_enabled', true);
         $disabledModules = $modules->where('is_enabled', false);
 
-        // Count ALL active users and projects (not scoped to subscription period)
-        // This ensures limits are enforced against total resource count
-        $currentUsers = \App\Models\User::count();
+        // Count active users and projects (not scoped to subscription period)
+        // Resigned/inactive users are excluded from limit enforcement
+        $currentUsers = \App\Models\User::where('active', true)->count();
         $currentProjects = \App\Models\Project::count();
 
         // Check for org-specific trial config overrides
         $effectiveMaxUsers = $plan?->max_users;
         $effectiveMaxProjects = $plan?->max_projects;
         $effectiveMaxStorage = $plan?->max_storage_gb;
+        $effectiveStorageUnit = $plan?->storage_unit ?? 'GB';
         $effectivePriceMonthly = $plan?->price_monthly;
         $effectivePriceYearly = $plan?->price_yearly;
         $isCustomPlan = $subscription->is_custom;
@@ -318,6 +245,7 @@ class OrganizationSettingsController extends Controller
             $effectiveMaxUsers = $subscription->custom_max_users ?? $effectiveMaxUsers;
             $effectiveMaxProjects = $subscription->custom_max_projects ?? $effectiveMaxProjects;
             $effectiveMaxStorage = $subscription->custom_max_storage_gb ?? $effectiveMaxStorage;
+            $effectiveStorageUnit = $subscription->storage_unit ?? $effectiveStorageUnit;
             $effectivePriceMonthly = $subscription->custom_price_monthly ?? $effectivePriceMonthly;
             $effectivePriceYearly = $subscription->custom_price_yearly ?? $effectivePriceYearly;
         }
@@ -331,6 +259,7 @@ class OrganizationSettingsController extends Controller
                 $effectiveMaxUsers = $trialSetting->max_users;
                 $effectiveMaxProjects = $trialSetting->max_projects;
                 $effectiveMaxStorage = $trialSetting->max_storage_gb;
+                $effectiveStorageUnit = $trialSetting->storage_unit ?? $effectiveStorageUnit;
                 $trialConfig = [
                     'is_custom' => true,
                     'trial_duration' => $trialSetting->trial_duration,
@@ -338,6 +267,7 @@ class OrganizationSettingsController extends Controller
                     'max_users' => $trialSetting->max_users,
                     'max_projects' => $trialSetting->max_projects,
                     'max_storage_gb' => $trialSetting->max_storage_gb,
+                    'storage_unit' => $trialSetting->storage_unit ?? 'GB',
                 ];
             } else {
                 $trialConfig = [
@@ -347,8 +277,15 @@ class OrganizationSettingsController extends Controller
                     'max_users' => $plan->max_users,
                     'max_projects' => $plan->max_projects,
                     'max_storage_gb' => $plan->max_storage_gb,
+                    'storage_unit' => $plan->storage_unit ?? 'GB',
                 ];
             }
+        }
+
+        // Org-level storage override (highest priority)
+        if ($org->custom_max_storage_gb !== null) {
+            $effectiveMaxStorage = $org->custom_max_storage_gb;
+            $effectiveStorageUnit = $org->storage_unit ?? $effectiveStorageUnit;
         }
 
         return response()->json([
@@ -375,6 +312,7 @@ class OrganizationSettingsController extends Controller
                 'max_users' => $effectiveMaxUsers,
                 'max_projects' => $effectiveMaxProjects,
                 'max_storage_gb' => $effectiveMaxStorage,
+                'storage_unit' => $effectiveStorageUnit,
                 'is_custom' => $isCustomPlan,
             ] : null,
             'trial_config' => $trialConfig,
@@ -393,6 +331,7 @@ class OrganizationSettingsController extends Controller
                 'status' => $org->status,
                 'is_owner' => $org->isOwner(),
                 'trial_ends_at' => $org->trial_ends_at?->toISOString(),
+                'founding_admin_id' => $org->founding_admin_id,
             ],
         ]);
     }
@@ -458,6 +397,7 @@ class OrganizationSettingsController extends Controller
             'organization' => [
                 'name' => $org->name,
                 'created_at' => $org->created_at?->toISOString(),
+                'founding_admin_id' => $org->founding_admin_id,
             ],
         ]);
     }
@@ -490,7 +430,7 @@ class OrganizationSettingsController extends Controller
                 'is_verified' => $d->is_verified,
             ]);
 
-        $currentUsers = \App\Models\User::count();
+        $currentUsers = \App\Models\User::where('active', true)->count();
         $currentProjects = \App\Models\Project::count();
 
         $plan = $subscription?->plan;
@@ -504,6 +444,7 @@ class OrganizationSettingsController extends Controller
         $effectiveMaxUsers = $plan?->max_users;
         $effectiveMaxProjects = $plan?->max_projects;
         $effectiveMaxStorage = $plan?->max_storage_gb;
+        $effectiveStorageUnit = $plan?->storage_unit ?? 'GB';
         $effectivePriceMonthly = $plan?->price_monthly;
         $effectivePriceYearly = $plan?->price_yearly;
         $isCustomPlan = $subscription?->is_custom ?? false;
@@ -512,6 +453,7 @@ class OrganizationSettingsController extends Controller
             $effectiveMaxUsers = $subscription->custom_max_users ?? $effectiveMaxUsers;
             $effectiveMaxProjects = $subscription->custom_max_projects ?? $effectiveMaxProjects;
             $effectiveMaxStorage = $subscription->custom_max_storage_gb ?? $effectiveMaxStorage;
+            $effectiveStorageUnit = $subscription->storage_unit ?? $effectiveStorageUnit;
             $effectivePriceMonthly = $subscription->custom_price_monthly ?? $effectivePriceMonthly;
             $effectivePriceYearly = $subscription->custom_price_yearly ?? $effectivePriceYearly;
         }
@@ -527,6 +469,7 @@ class OrganizationSettingsController extends Controller
                 'max_users' => $trialSetting->max_users,
                 'max_projects' => $trialSetting->max_projects,
                 'max_storage_gb' => $trialSetting->max_storage_gb,
+                'storage_unit' => $trialSetting->storage_unit ?? 'GB',
             ] : [
                 'is_custom' => false,
                 'trial_duration' => $plan->trial_duration ?? 14,
@@ -534,7 +477,14 @@ class OrganizationSettingsController extends Controller
                 'max_users' => $plan->max_users,
                 'max_projects' => $plan->max_projects,
                 'max_storage_gb' => $plan->max_storage_gb,
+                'storage_unit' => $plan->storage_unit ?? 'GB',
             ];
+        }
+
+        // Org-level storage override (highest priority)
+        if ($org->custom_max_storage_gb !== null) {
+            $effectiveMaxStorage = $org->custom_max_storage_gb;
+            $effectiveStorageUnit = $org->storage_unit ?? $effectiveStorageUnit;
         }
 
         $settings = $org->settings ?? [];
@@ -570,14 +520,17 @@ class OrganizationSettingsController extends Controller
                 'status' => $org->status,
                 'type' => $org->type,
                 'database_name' => $org->database_name,
-                'email_policy' => $org->email_policy ?? 'standard',
-                'timezone' => $org->timezone ?? 'Asia/Karachi',
+                'timezone' => $org->timezone ?? 'UTC',
+                'default_timezone' => $org->default_timezone ?? $org->timezone ?? 'UTC',
+                'enforce_working_hours' => (bool) ($org->enforce_working_hours ?? false),
+                'working_hours' => $org->working_hours,
                 'created_at' => $org->created_at?->toISOString(),
                 'admin_name' => $adminName,
                 'admin_email' => $adminEmail,
                 'admin_phone' => $adminPhone,
                 'country_code' => $org->country_code,
                 'is_owner' => $org->isOwner(),
+                'founding_admin_id' => $org->founding_admin_id,
                 'settings' => $settings,
                 'domain' => \App\Helpers\UrlHelper::getOrganizationUrl($org->slug),
             ],
@@ -600,6 +553,7 @@ class OrganizationSettingsController extends Controller
                 'max_users' => $effectiveMaxUsers,
                 'max_projects' => $effectiveMaxProjects,
                 'max_storage_gb' => $effectiveMaxStorage,
+                'storage_unit' => $effectiveStorageUnit,
                 'is_custom' => $isCustomPlan,
             ] : null,
             'trial_config' => $trialConfig,
@@ -649,12 +603,46 @@ class OrganizationSettingsController extends Controller
     }
 
     /**
-     * Update organization timezone preference.
+     * Get organization regional settings (default timezone and working hours).
      */
-    public function updateTimezone(Request $request): JsonResponse
+    public function getRegionalSettings(Request $request): JsonResponse
     {
-        $request->validate([
-            'timezone' => ['required', 'string', 'max:50'],
+        $org = $this->resolveOrganization($request);
+
+        if (!$org) {
+            return response()->json(['success' => false, 'message' => 'Organization not found.'], 404);
+        }
+
+        $defaultTimezone = $org->default_timezone ?? $org->timezone ?? 'UTC';
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'default_timezone'      => $defaultTimezone,
+                'timezone'              => $defaultTimezone,
+                'enforce_working_hours' => (bool) ($org->enforce_working_hours ?? false),
+                'working_hours'         => $org->working_hours,
+            ],
+            'regional_settings' => [
+                'default_timezone'      => $defaultTimezone,
+                'timezone'              => $defaultTimezone,
+                'enforce_working_hours' => (bool) ($org->enforce_working_hours ?? false),
+                'working_hours'         => $org->working_hours,
+            ],
+        ]);
+    }
+
+    /**
+     * Update organization regional settings (default timezone, enforce_working_hours, working_hours).
+     * Admin/Manager access only.
+     */
+    public function updateRegionalSettings(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'default_timezone'      => ['sometimes', 'nullable', 'string', 'timezone:all'],
+            'timezone'              => ['sometimes', 'nullable', 'string', 'timezone:all'],
+            'enforce_working_hours' => ['sometimes', 'boolean'],
+            'working_hours'         => ['sometimes', 'nullable', 'array'],
         ]);
 
         $org = $this->resolveOrganization($request);
@@ -663,12 +651,108 @@ class OrganizationSettingsController extends Controller
             return response()->json(['success' => false, 'message' => 'Organization not found.'], 404);
         }
 
-        $org->update(['timezone' => $request->input('timezone')]);
+        $oldValues = [
+            'default_timezone'      => $org->default_timezone ?? $org->timezone ?? 'UTC',
+            'timezone'              => $org->timezone ?? 'UTC',
+            'enforce_working_hours' => (bool) ($org->enforce_working_hours ?? false),
+            'working_hours'         => $org->working_hours,
+        ];
+
+        $updateData = [];
+        $changedParts = [];
+
+        if (array_key_exists('default_timezone', $validated) || array_key_exists('timezone', $validated)) {
+            $tz = $validated['default_timezone'] ?? $validated['timezone'] ?? 'UTC';
+            $updateData['default_timezone'] = $tz;
+            $updateData['timezone'] = $tz;
+            if ($tz !== $oldValues['default_timezone']) {
+                $changedParts[] = "Default timezone: {$tz}";
+            }
+        }
+
+        if (array_key_exists('enforce_working_hours', $validated)) {
+            $updateData['enforce_working_hours'] = (bool) $validated['enforce_working_hours'];
+            if ((bool) $validated['enforce_working_hours'] !== $oldValues['enforce_working_hours']) {
+                $changedParts[] = "Enforce working hours: " . ($validated['enforce_working_hours'] ? 'Enabled' : 'Disabled');
+            }
+        }
+
+        if (array_key_exists('working_hours', $validated)) {
+            $updateData['working_hours'] = $validated['working_hours'];
+            if (json_encode($validated['working_hours']) !== json_encode($oldValues['working_hours'])) {
+                $changedParts[] = "Working hours schedule";
+            }
+        }
+
+        $org->update($updateData);
+
+        $description = !empty($changedParts)
+            ? "Updated organization regional settings (" . implode(', ', $changedParts) . ")"
+            : "Updated organization regional settings and working hours";
+
+        try {
+            $this->auditService->log(
+                module: 'organization_settings',
+                action: 'update_regional_settings',
+                description: $description,
+                user: $request->user(),
+                entityType: 'Organization',
+                entityId: $org->id,
+                oldValues: $oldValues,
+                newValues: $updateData,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log organization regional settings change audit', ['error' => $e->getMessage()]);
+        }
+
+        $defaultTimezone = $org->default_timezone ?? $org->timezone ?? 'UTC';
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Organization regional settings updated successfully.',
+            'data' => [
+                'default_timezone'      => $defaultTimezone,
+                'timezone'              => $defaultTimezone,
+                'enforce_working_hours' => (bool) ($org->enforce_working_hours ?? false),
+                'working_hours'         => $org->working_hours,
+            ],
+            'regional_settings' => [
+                'default_timezone'      => $defaultTimezone,
+                'timezone'              => $defaultTimezone,
+                'enforce_working_hours' => (bool) ($org->enforce_working_hours ?? false),
+                'working_hours'         => $org->working_hours,
+            ],
+        ]);
+    }
+
+    /**
+     * Update organization timezone preference.
+     */
+    public function updateTimezone(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'timezone' => ['required', 'string', 'timezone:all'],
+        ]);
+
+        $org = $this->resolveOrganization($request);
+
+        if (!$org) {
+            return response()->json(['success' => false, 'message' => 'Organization not found.'], 404);
+        }
+
+        $tz = $validated['timezone'];
+        $org->update([
+            'timezone'         => $tz,
+            'default_timezone' => $tz,
+        ]);
 
         return response()->json([
             'success' => true,
             'message' => 'Timezone updated successfully.',
             'timezone' => $org->timezone,
+            'default_timezone' => $org->default_timezone,
         ]);
     }
 }
+

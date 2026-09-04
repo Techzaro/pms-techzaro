@@ -28,6 +28,13 @@ class FixTenantColumns extends Command
             ['name' => 'slack_webhook_url',             'definition' => "TEXT NULL AFTER `notification_preferences`"],
             ['name' => 'google_chat_webhook_url',       'definition' => "TEXT NULL AFTER `slack_webhook_url`"],
             ['name' => 'ms_teams_webhook_url',          'definition' => "TEXT NULL AFTER `google_chat_webhook_url`"],
+            ['name' => 'email_mode',                    'definition' => "VARCHAR(20) NULL AFTER `email`"],
+            ['name' => 'email_verification_code',       'definition' => "VARCHAR(6) NULL AFTER `email_mode`"],
+            ['name' => 'email_verification_expires_at', 'definition' => "TIMESTAMP NULL AFTER `email_verification_code`"],
+            ['name' => 'email_skip_until',              'definition' => "TIMESTAMP NULL AFTER `email_verification_expires_at`"],
+            ['name' => 'email_verified_at',             'definition' => "TIMESTAMP NULL AFTER `email_skip_until`"],
+            ['name' => 'personal_email_verified_at',    'definition' => "TIMESTAMP NULL AFTER `personal_email`"],
+            ['name' => 'professional_email_verified_at', 'definition' => "TIMESTAMP NULL AFTER `professional_email`"],
         ],
         'tasks' => [
             ['name' => 'recurrence_start_date',         'definition' => "TIMESTAMP NULL AFTER `recurrence_settings`"],
@@ -373,6 +380,24 @@ class FixTenantColumns extends Command
             INDEX `event_attachments_event_id_index` (`event_id`),
             FOREIGN KEY (`event_id`) REFERENCES `events`(`id`) ON DELETE CASCADE,
             FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'email_identities' => "CREATE TABLE IF NOT EXISTS `email_identities` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `normalized_email` VARCHAR(255) NOT NULL,
+            `original_email` VARCHAR(255) NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `type` VARCHAR(20) DEFAULT 'primary',
+            `verified` TINYINT(1) DEFAULT 0,
+            `verified_at` TIMESTAMP NULL,
+            `verification_token` VARCHAR(255) NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `email_identities_normalized_email_unique` (`normalized_email`),
+            INDEX `email_identities_user_id_index` (`user_id`),
+            INDEX `email_identities_type_index` (`type`),
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
     ];
 

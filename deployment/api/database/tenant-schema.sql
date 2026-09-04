@@ -1,6 +1,12 @@
-﻿/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `activities` (
+-- MariaDB dump 10.19  Distrib 10.4.32-MariaDB, for Win64 (AMD64)
+--
+-- Host: localhost    Database: pms_tenant_googles
+-- ------------------------------------------------------
+-- Server version	10.4.32-MariaDB
+--
+-- Table structure for table `activities`
+--
+CREATE TABLE IF NOT EXISTS `activities` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `user_id` bigint(20) unsigned NOT NULL,
   `activity_type` varchar(255) NOT NULL,
@@ -20,11 +26,11 @@ CREATE TABLE `activities` (
   KEY `activities_related_user_id_index` (`related_user_id`),
   CONSTRAINT `activities_related_user_id_foreign` FOREIGN KEY (`related_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `activities_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `audit_logs` (
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+--
+-- Table structure for table `audit_logs`
+--
+CREATE TABLE IF NOT EXISTS `audit_logs` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `user_id` bigint(20) unsigned DEFAULT NULL,
   `module` varchar(50) NOT NULL,
@@ -53,31 +59,31 @@ CREATE TABLE `audit_logs` (
   KEY `audit_logs_module_action_index` (`module`,`action`),
   KEY `audit_logs_entity_type_entity_id_index` (`entity_type`,`entity_id`),
   CONSTRAINT `audit_logs_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `cache` (
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+--
+-- Table structure for table `cache`
+--
+CREATE TABLE IF NOT EXISTS `cache` (
   `key` varchar(255) NOT NULL,
   `value` mediumtext NOT NULL,
   `expiration` int(11) NOT NULL,
   PRIMARY KEY (`key`),
   KEY `cache_expiration_index` (`expiration`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `cache_locks` (
+--
+-- Table structure for table `cache_locks`
+--
+CREATE TABLE IF NOT EXISTS `cache_locks` (
   `key` varchar(255) NOT NULL,
   `owner` varchar(255) NOT NULL,
   `expiration` int(11) NOT NULL,
   PRIMARY KEY (`key`),
   KEY `cache_locks_expiration_index` (`expiration`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `conversation_participants` (
+--
+-- Table structure for table `conversation_participants`
+--
+CREATE TABLE IF NOT EXISTS `conversation_participants` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `conversation_id` bigint(20) unsigned NOT NULL,
   `user_id` bigint(20) unsigned NOT NULL,
@@ -91,14 +97,15 @@ CREATE TABLE `conversation_participants` (
   CONSTRAINT `conversation_participants_conversation_id_foreign` FOREIGN KEY (`conversation_id`) REFERENCES `conversations` (`id`) ON DELETE CASCADE,
   CONSTRAINT `conversation_participants_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `conversations` (
+--
+-- Table structure for table `conversations`
+--
+CREATE TABLE IF NOT EXISTS `conversations` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `subject` varchar(255) DEFAULT NULL,
   `project_id` bigint(20) unsigned DEFAULT NULL,
   `created_by` bigint(20) unsigned NOT NULL,
+  `org_id` bigint(20) unsigned DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   `task_id` bigint(20) unsigned DEFAULT NULL,
@@ -113,10 +120,10 @@ CREATE TABLE `conversations` (
   CONSTRAINT `conversations_project_id_foreign` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`) ON DELETE SET NULL,
   CONSTRAINT `conversations_task_id_foreign` FOREIGN KEY (`task_id`) REFERENCES `tasks` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `deliverable_changes` (
+--
+-- Table structure for table `deliverable_changes`
+--
+CREATE TABLE IF NOT EXISTS `deliverable_changes` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `deliverable_id` bigint(20) unsigned NOT NULL,
   `field_name` varchar(64) NOT NULL,
@@ -132,14 +139,14 @@ CREATE TABLE `deliverable_changes` (
   CONSTRAINT `deliverable_changes_deliverable_id_foreign` FOREIGN KEY (`deliverable_id`) REFERENCES `deliverables` (`id`) ON DELETE CASCADE,
   CONSTRAINT `deliverable_changes_modified_by_foreign` FOREIGN KEY (`modified_by`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `deliverable_files` (
+--
+-- Table structure for table `deliverable_files`
+--
+CREATE TABLE IF NOT EXISTS `deliverable_files` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `deliverable_id` bigint(20) unsigned NOT NULL,
   `name` varchar(255) NOT NULL,
-  `url` varchar(255) DEFAULT NULL,
+  `url` varchar(4096) DEFAULT NULL,
   `sort_order` int(10) unsigned NOT NULL DEFAULT 0,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
@@ -147,10 +154,10 @@ CREATE TABLE `deliverable_files` (
   KEY `deliverable_files_deliverable_id_foreign` (`deliverable_id`),
   CONSTRAINT `deliverable_files_deliverable_id_foreign` FOREIGN KEY (`deliverable_id`) REFERENCES `deliverables` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `deliverable_pause_sessions` (
+--
+-- Table structure for table `deliverable_pause_sessions`
+--
+CREATE TABLE IF NOT EXISTS `deliverable_pause_sessions` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `deliverable_id` bigint(20) unsigned NOT NULL,
   `user_id` bigint(20) unsigned NOT NULL,
@@ -171,10 +178,10 @@ CREATE TABLE `deliverable_pause_sessions` (
   CONSTRAINT `deliverable_pause_sessions_resumed_by_foreign` FOREIGN KEY (`resumed_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `deliverable_pause_sessions_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `deliverable_submissions` (
+--
+-- Table structure for table `deliverable_submissions`
+--
+CREATE TABLE IF NOT EXISTS `deliverable_submissions` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `deliverable_id` bigint(20) unsigned NOT NULL,
   `submitted_by` bigint(20) unsigned NOT NULL,
@@ -200,10 +207,10 @@ CREATE TABLE `deliverable_submissions` (
   CONSTRAINT `deliverable_submissions_reopened_by_foreign` FOREIGN KEY (`reopened_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `deliverable_submissions_submitted_by_foreign` FOREIGN KEY (`submitted_by`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `deliverable_templates` (
+--
+-- Table structure for table `deliverable_templates`
+--
+CREATE TABLE IF NOT EXISTS `deliverable_templates` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `task_id` bigint(20) unsigned NOT NULL,
   `title` varchar(255) NOT NULL,
@@ -217,10 +224,10 @@ CREATE TABLE `deliverable_templates` (
   KEY `deliverable_templates_task_id_foreign` (`task_id`),
   CONSTRAINT `deliverable_templates_task_id_foreign` FOREIGN KEY (`task_id`) REFERENCES `tasks` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `deliverable_user` (
+--
+-- Table structure for table `deliverable_user`
+--
+CREATE TABLE IF NOT EXISTS `deliverable_user` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `deliverable_id` bigint(20) unsigned NOT NULL,
   `user_id` bigint(20) unsigned NOT NULL,
@@ -235,10 +242,10 @@ CREATE TABLE `deliverable_user` (
   CONSTRAINT `deliverable_user_deliverable_id_foreign` FOREIGN KEY (`deliverable_id`) REFERENCES `deliverables` (`id`) ON DELETE CASCADE,
   CONSTRAINT `deliverable_user_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `deliverable_user_notes` (
+--
+-- Table structure for table `deliverable_user_notes`
+--
+CREATE TABLE IF NOT EXISTS `deliverable_user_notes` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `deliverable_id` bigint(20) unsigned NOT NULL,
   `user_id` bigint(20) unsigned NOT NULL,
@@ -251,10 +258,10 @@ CREATE TABLE `deliverable_user_notes` (
   CONSTRAINT `deliverable_user_notes_deliverable_id_foreign` FOREIGN KEY (`deliverable_id`) REFERENCES `deliverables` (`id`) ON DELETE CASCADE,
   CONSTRAINT `deliverable_user_notes_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `deliverable_workflow_events` (
+--
+-- Table structure for table `deliverable_workflow_events`
+--
+CREATE TABLE IF NOT EXISTS `deliverable_workflow_events` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `deliverable_id` bigint(20) unsigned NOT NULL,
   `event_type` varchar(32) NOT NULL,
@@ -272,10 +279,10 @@ CREATE TABLE `deliverable_workflow_events` (
   CONSTRAINT `deliverable_workflow_events_deliverable_id_foreign` FOREIGN KEY (`deliverable_id`) REFERENCES `deliverables` (`id`) ON DELETE CASCADE,
   CONSTRAINT `deliverable_workflow_events_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `deliverables` (
+--
+-- Table structure for table `deliverables`
+--
+CREATE TABLE IF NOT EXISTS `deliverables` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `subtask_number` int(11) DEFAULT NULL,
   `business_id` varchar(40) DEFAULT NULL,
@@ -283,6 +290,7 @@ CREATE TABLE `deliverables` (
   `title` varchar(255) NOT NULL,
   `description` text DEFAULT NULL,
   `status` varchar(64) NOT NULL DEFAULT 'pending',
+  `has_edited_submission` tinyint(1) DEFAULT 0,
   `sort_order` int(10) unsigned NOT NULL DEFAULT 0,
   `submitted_at` timestamp NULL DEFAULT NULL,
   `approved_at` timestamp NULL DEFAULT NULL,
@@ -318,6 +326,7 @@ CREATE TABLE `deliverables` (
   `reopen_new_deadline` datetime DEFAULT NULL,
   `reopen_file_path` varchar(255) DEFAULT NULL,
   `reopen_file_name` varchar(255) DEFAULT NULL,
+  `reopen_link` text DEFAULT NULL,
   `reopen_count` int(11) NOT NULL DEFAULT 0,
   `reopen_reason` text DEFAULT NULL,
   `submission_count` int(11) NOT NULL DEFAULT 0,
@@ -326,6 +335,7 @@ CREATE TABLE `deliverables` (
   `rework_new_deadline` datetime DEFAULT NULL,
   `rework_file_path` varchar(255) DEFAULT NULL,
   `rework_file_name` varchar(255) DEFAULT NULL,
+  `rework_link` text DEFAULT NULL,
   `acknowledged_by` bigint(20) unsigned DEFAULT NULL,
   `acknowledged_at` timestamp NULL DEFAULT NULL,
   `paused_by` bigint(20) unsigned DEFAULT NULL,
@@ -342,6 +352,15 @@ CREATE TABLE `deliverables` (
   `timer_state` varchar(16) NOT NULL DEFAULT 'idle',
   `last_timer_event_at` timestamp NULL DEFAULT NULL,
   `work_completed_at` timestamp NULL DEFAULT NULL,
+  `abandon_requested_by` bigint(20) unsigned DEFAULT NULL,
+  `abandon_requested_at` timestamp NULL DEFAULT NULL,
+  `abandon_reason` text DEFAULT NULL,
+  `abandoned_by` bigint(20) unsigned DEFAULT NULL,
+  `abandoned_at` timestamp NULL DEFAULT NULL,
+  `abandon_declined_by` bigint(20) unsigned DEFAULT NULL,
+  `abandon_declined_at` timestamp NULL DEFAULT NULL,
+  `abandon_decline_reason` text DEFAULT NULL,
+  `previous_status` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `deliverables_business_id_unique` (`business_id`),
   KEY `deliverables_status_index` (`status`),
@@ -357,6 +376,12 @@ CREATE TABLE `deliverables` (
   KEY `deliverables_acknowledged_by_foreign` (`acknowledged_by`),
   KEY `deliverables_paused_by_foreign` (`paused_by`),
   KEY `deliverables_assigner_paused_by_foreign` (`assigner_paused_by`),
+  KEY `deliverables_abandon_requested_by_foreign` (`abandon_requested_by`),
+  KEY `deliverables_abandoned_by_foreign` (`abandoned_by`),
+  KEY `deliverables_abandon_declined_by_foreign` (`abandon_declined_by`),
+  CONSTRAINT `deliverables_abandon_declined_by_foreign` FOREIGN KEY (`abandon_declined_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `deliverables_abandon_requested_by_foreign` FOREIGN KEY (`abandon_requested_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `deliverables_abandoned_by_foreign` FOREIGN KEY (`abandoned_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `deliverables_acknowledged_by_foreign` FOREIGN KEY (`acknowledged_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `deliverables_approved_by_foreign` FOREIGN KEY (`approved_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `deliverables_assigned_to_foreign` FOREIGN KEY (`assigned_to`) REFERENCES `users` (`id`) ON DELETE SET NULL,
@@ -369,10 +394,10 @@ CREATE TABLE `deliverables` (
   CONSTRAINT `deliverables_task_id_foreign` FOREIGN KEY (`task_id`) REFERENCES `tasks` (`id`) ON DELETE SET NULL,
   CONSTRAINT `deliverables_updated_by_foreign` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `draft_versions` (
+--
+-- Table structure for table `draft_versions`
+--
+CREATE TABLE IF NOT EXISTS `draft_versions` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `draft_id` bigint(20) unsigned NOT NULL,
   `version` int(10) unsigned NOT NULL,
@@ -387,10 +412,10 @@ CREATE TABLE `draft_versions` (
   CONSTRAINT `draft_versions_draft_id_foreign` FOREIGN KEY (`draft_id`) REFERENCES `drafts` (`id`) ON DELETE CASCADE,
   CONSTRAINT `draft_versions_edited_by_foreign` FOREIGN KEY (`edited_by`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `drafts` (
+--
+-- Table structure for table `drafts`
+--
+CREATE TABLE IF NOT EXISTS `drafts` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `draft_code` varchar(20) NOT NULL,
   `module_type` varchar(50) NOT NULL,
@@ -428,10 +453,47 @@ CREATE TABLE `drafts` (
   CONSTRAINT `drafts_project_id_foreign` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`) ON DELETE SET NULL,
   CONSTRAINT `drafts_returned_from_user_id_foreign` FOREIGN KEY (`returned_from_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `event_users` (
+--
+-- Table structure for table `event_categories`
+--
+CREATE TABLE IF NOT EXISTS `event_categories` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) NOT NULL,
+  `slug` varchar(255) DEFAULT NULL,
+  `description` text DEFAULT NULL,
+  `icon` varchar(255) DEFAULT NULL,
+  `color` varchar(32) DEFAULT NULL,
+  `sort_order` int(11) NOT NULL DEFAULT 0,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `created_by` bigint(20) unsigned DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `event_categories_created_by_foreign` (`created_by`),
+  CONSTRAINT `event_categories_created_by_foreign` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+--
+-- Table structure for table `event_participants`
+--
+CREATE TABLE IF NOT EXISTS `event_participants` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `event_id` bigint(20) unsigned NOT NULL,
+  `user_id` bigint(20) unsigned NOT NULL,
+  `status` varchar(32) NOT NULL DEFAULT 'invited',
+  `response_notes` text DEFAULT NULL,
+  `attended` tinyint(1) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_event_user` (`event_id`,`user_id`),
+  KEY `evt_part_uid` (`user_id`),
+  CONSTRAINT `evt_part_eid` FOREIGN KEY (`event_id`) REFERENCES `events` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `evt_part_uid` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+--
+-- Table structure for table `event_users`
+--
+CREATE TABLE IF NOT EXISTS `event_users` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `event_id` bigint(20) unsigned NOT NULL,
   `user_id` bigint(20) unsigned NOT NULL,
@@ -443,20 +505,47 @@ CREATE TABLE `event_users` (
   CONSTRAINT `event_users_event_id_foreign` FOREIGN KEY (`event_id`) REFERENCES `events` (`id`) ON DELETE CASCADE,
   CONSTRAINT `event_users_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `events` (
+--
+-- Table structure for table `event_visibilities`
+--
+CREATE TABLE IF NOT EXISTS `event_visibilities` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `event_id` bigint(20) unsigned NOT NULL,
+  `user_id` bigint(20) unsigned DEFAULT NULL,
+  `team_id` bigint(20) unsigned DEFAULT NULL,
+  `department` varchar(100) DEFAULT NULL,
+  `role` varchar(50) DEFAULT NULL,
+  `is_visible` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `evt_vis_eid` (`event_id`),
+  KEY `evt_vis_uid` (`user_id`),
+  KEY `evt_vis_tid` (`team_id`),
+  CONSTRAINT `evt_vis_eid` FOREIGN KEY (`event_id`) REFERENCES `events` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `evt_vis_tid` FOREIGN KEY (`team_id`) REFERENCES `teams` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `evt_vis_uid` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+--
+-- Table structure for table `events`
+--
+CREATE TABLE IF NOT EXISTS `events` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `user_id` bigint(20) unsigned NOT NULL,
+  `organizer_id` bigint(20) unsigned DEFAULT NULL,
   `title` varchar(255) NOT NULL,
   `description` text DEFAULT NULL,
+  `meeting_link` varchar(2048) DEFAULT NULL,
+  `location` varchar(255) DEFAULT NULL,
   `type` varchar(64) NOT NULL DEFAULT 'Meeting',
+  `category_id` bigint(20) unsigned DEFAULT NULL,
   `color` varchar(16) DEFAULT NULL,
   `start_date` datetime NOT NULL,
   `end_date` datetime DEFAULT NULL,
   `all_day` tinyint(1) NOT NULL DEFAULT 0,
   `is_global` tinyint(1) NOT NULL DEFAULT 0,
+  `visibility_level` varchar(32) NOT NULL DEFAULT 'public',
+  `status` varchar(32) NOT NULL DEFAULT 'scheduled',
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -466,10 +555,10 @@ CREATE TABLE `events` (
   KEY `idx_events_dates` (`start_date`,`end_date`),
   CONSTRAINT `events_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `failed_jobs` (
+--
+-- Table structure for table `failed_jobs`
+--
+CREATE TABLE IF NOT EXISTS `failed_jobs` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `uuid` varchar(255) NOT NULL,
   `connection` text NOT NULL,
@@ -480,10 +569,86 @@ CREATE TABLE `failed_jobs` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `failed_jobs_uuid_unique` (`uuid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `job_batches` (
+--
+-- Table structure for table `feedback`
+--
+CREATE TABLE IF NOT EXISTS `feedback` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `reference_number` varchar(255) NOT NULL,
+  `feedback_type` enum('Bug Report','Feature Request','General Suggestion','Feature Rating','General Feedback') NOT NULL,
+  `subject` varchar(255) NOT NULL,
+  `description` text NOT NULL,
+  `priority` enum('Low','Medium','High','Urgent') DEFAULT 'Medium',
+  `rating` tinyint(3) unsigned DEFAULT NULL,
+  `status` enum('New','Under Review','Accepted','Planned','In Development','Testing','Resolved','Closed','Rejected') DEFAULT 'New',
+  `assigned_to` bigint(20) unsigned DEFAULT NULL,
+  `screenshot_path` varchar(255) DEFAULT NULL,
+  `recording_path` varchar(255) DEFAULT NULL,
+  `attachment_path` varchar(255) DEFAULT NULL,
+  `organization_id` bigint(20) unsigned DEFAULT NULL,
+  `organization_name` varchar(255) DEFAULT NULL,
+  `user_id` bigint(20) unsigned NOT NULL,
+  `user_name` varchar(255) NOT NULL,
+  `user_role` varchar(255) NOT NULL,
+  `module` varchar(255) DEFAULT NULL,
+  `current_page` varchar(255) DEFAULT NULL,
+  `submitted_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `browser` varchar(255) DEFAULT NULL,
+  `operating_system` varchar(255) DEFAULT NULL,
+  `device_type` varchar(255) DEFAULT NULL,
+  `ip_address` varchar(255) DEFAULT NULL,
+  `app_version` varchar(255) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `reference_number` (`reference_number`),
+  KEY `assigned_to` (`assigned_to`),
+  KEY `feedback_type` (`feedback_type`),
+  KEY `status` (`status`),
+  KEY `priority` (`priority`),
+  KEY `user_id` (`user_id`),
+  KEY `organization_id` (`organization_id`),
+  KEY `created_at` (`created_at`),
+  CONSTRAINT `feedback_ibfk_1` FOREIGN KEY (`assigned_to`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `feedback_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+--
+-- Table structure for table `feedback_activity_logs`
+--
+CREATE TABLE IF NOT EXISTS `feedback_activity_logs` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `feedback_id` bigint(20) unsigned NOT NULL,
+  `user_id` bigint(20) unsigned DEFAULT NULL,
+  `action` varchar(255) NOT NULL,
+  `details` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `feedback_id` (`feedback_id`),
+  KEY `user_id` (`user_id`),
+  CONSTRAINT `feedback_activity_logs_ibfk_1` FOREIGN KEY (`feedback_id`) REFERENCES `feedback` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `feedback_activity_logs_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+--
+-- Table structure for table `feedback_notes`
+--
+CREATE TABLE IF NOT EXISTS `feedback_notes` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `feedback_id` bigint(20) unsigned NOT NULL,
+  `user_id` bigint(20) unsigned NOT NULL,
+  `note` text NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `feedback_id` (`feedback_id`),
+  KEY `user_id` (`user_id`),
+  CONSTRAINT `feedback_notes_ibfk_1` FOREIGN KEY (`feedback_id`) REFERENCES `feedback` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `feedback_notes_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+--
+-- Table structure for table `job_batches`
+--
+CREATE TABLE IF NOT EXISTS `job_batches` (
   `id` varchar(255) NOT NULL,
   `name` varchar(255) NOT NULL,
   `total_jobs` int(11) NOT NULL,
@@ -496,10 +661,10 @@ CREATE TABLE `job_batches` (
   `finished_at` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `jobs` (
+--
+-- Table structure for table `jobs`
+--
+CREATE TABLE IF NOT EXISTS `jobs` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `queue` varchar(255) NOT NULL,
   `payload` longtext NOT NULL,
@@ -509,11 +674,105 @@ CREATE TABLE `jobs` (
   `created_at` int(10) unsigned NOT NULL,
   PRIMARY KEY (`id`),
   KEY `jobs_queue_index` (`queue`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `messages` (
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+--
+-- Table structure for table `kb_categories`
+--
+CREATE TABLE IF NOT EXISTS `kb_categories` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) NOT NULL,
+  `slug` varchar(255) DEFAULT NULL,
+  `description` text DEFAULT NULL,
+  `icon` varchar(255) DEFAULT NULL,
+  `color` varchar(32) DEFAULT NULL,
+  `sort_order` int(11) NOT NULL DEFAULT 0,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `created_by` bigint(20) unsigned DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `kb_categories_created_by_foreign` (`created_by`),
+  CONSTRAINT `kb_categories_created_by_foreign` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+--
+-- Table structure for table `kb_versions`
+--
+CREATE TABLE IF NOT EXISTS `kb_versions` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `knowledge_base_id` bigint(20) unsigned NOT NULL,
+  `version_number` int(11) NOT NULL DEFAULT 1,
+  `title` varchar(255) NOT NULL,
+  `content` longtext DEFAULT NULL,
+  `file_path` varchar(255) DEFAULT NULL,
+  `file_name` varchar(255) DEFAULT NULL,
+  `change_summary` varchar(255) DEFAULT NULL,
+  `created_by` bigint(20) unsigned NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `kb_ver_kbid` (`knowledge_base_id`),
+  KEY `kb_ver_uid` (`created_by`),
+  CONSTRAINT `kb_ver_kbid` FOREIGN KEY (`knowledge_base_id`) REFERENCES `knowledge_bases` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `kb_ver_uid` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+--
+-- Table structure for table `kb_visibilities`
+--
+CREATE TABLE IF NOT EXISTS `kb_visibilities` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `knowledge_base_id` bigint(20) unsigned NOT NULL,
+  `user_id` bigint(20) unsigned DEFAULT NULL,
+  `team_id` bigint(20) unsigned DEFAULT NULL,
+  `department` varchar(100) DEFAULT NULL,
+  `role` varchar(50) DEFAULT NULL,
+  `is_visible` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `kb_vis_kbid` (`knowledge_base_id`),
+  KEY `kb_vis_uid` (`user_id`),
+  KEY `kb_vis_tid` (`team_id`),
+  CONSTRAINT `kb_vis_kbid` FOREIGN KEY (`knowledge_base_id`) REFERENCES `knowledge_bases` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `kb_vis_tid` FOREIGN KEY (`team_id`) REFERENCES `teams` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `kb_vis_uid` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+--
+-- Table structure for table `knowledge_bases`
+--
+CREATE TABLE IF NOT EXISTS `knowledge_bases` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `title` varchar(255) NOT NULL,
+  `slug` varchar(255) DEFAULT NULL,
+  `content` longtext DEFAULT NULL,
+  `category` varchar(255) DEFAULT 'General',
+  `category_id` bigint(20) unsigned DEFAULT NULL,
+  `visibility_level` varchar(32) NOT NULL DEFAULT 'organization',
+  `status` varchar(32) NOT NULL DEFAULT 'published',
+  `project_id` bigint(20) unsigned DEFAULT NULL,
+  `department` varchar(255) DEFAULT NULL,
+  `organization` varchar(255) DEFAULT NULL,
+  `file_path` varchar(255) DEFAULT NULL,
+  `file_name` varchar(255) DEFAULT NULL,
+  `reference_link` varchar(2048) DEFAULT NULL,
+  `created_by` bigint(20) unsigned NOT NULL,
+  `updated_by` bigint(20) unsigned DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  `is_pinned` tinyint(1) NOT NULL DEFAULT 0,
+  `views_count` bigint(20) unsigned NOT NULL DEFAULT 0,
+  `tags` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`tags`)),
+  PRIMARY KEY (`id`),
+  KEY `project_id` (`project_id`),
+  KEY `created_by` (`created_by`),
+  KEY `updated_by` (`updated_by`),
+  CONSTRAINT `knowledge_bases_ibfk_1` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `knowledge_bases_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `knowledge_bases_ibfk_3` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+--
+-- Table structure for table `messages`
+--
+CREATE TABLE IF NOT EXISTS `messages` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `conversation_id` bigint(20) unsigned NOT NULL,
   `user_id` bigint(20) unsigned NOT NULL,
@@ -528,19 +787,29 @@ CREATE TABLE `messages` (
   CONSTRAINT `messages_conversation_id_foreign` FOREIGN KEY (`conversation_id`) REFERENCES `conversations` (`id`) ON DELETE CASCADE,
   CONSTRAINT `messages_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `migrations` (
-  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `migration` varchar(255) NOT NULL,
-  `batch` int(11) NOT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=135 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `notifications` (
+--
+-- Table structure for table `migrations`
+--
+--
+-- Table structure for table `notification_comments`
+--
+CREATE TABLE IF NOT EXISTS `notification_comments` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `notification_id` bigint(20) unsigned NOT NULL,
+  `user_id` bigint(20) unsigned NOT NULL,
+  `comment` text NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `notification_id` (`notification_id`),
+  KEY `user_id` (`user_id`),
+  CONSTRAINT `notification_comments_ibfk_1` FOREIGN KEY (`notification_id`) REFERENCES `notifications` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `notification_comments_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+--
+-- Table structure for table `notifications`
+--
+CREATE TABLE IF NOT EXISTS `notifications` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `user_id` bigint(20) unsigned NOT NULL,
   `sender_user_id` bigint(20) unsigned DEFAULT NULL,
@@ -564,20 +833,20 @@ CREATE TABLE `notifications` (
   KEY `idx_notif_dedup` (`type`,`related_module`,`related_id`,`user_id`),
   CONSTRAINT `notifications_sender_user_id_foreign` FOREIGN KEY (`sender_user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   CONSTRAINT `notifications_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=26 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `password_reset_tokens` (
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+--
+-- Table structure for table `password_reset_tokens`
+--
+CREATE TABLE IF NOT EXISTS `password_reset_tokens` (
   `email` varchar(255) NOT NULL,
   `token` varchar(255) NOT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`email`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `personal_access_tokens` (
+--
+-- Table structure for table `personal_access_tokens`
+--
+CREATE TABLE IF NOT EXISTS `personal_access_tokens` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `tokenable_type` varchar(255) NOT NULL,
   `tokenable_id` bigint(20) unsigned NOT NULL,
@@ -592,11 +861,11 @@ CREATE TABLE `personal_access_tokens` (
   UNIQUE KEY `personal_access_tokens_token_unique` (`token`),
   KEY `personal_access_tokens_tokenable_type_tokenable_id_index` (`tokenable_type`,`tokenable_id`),
   KEY `personal_access_tokens_expires_at_index` (`expires_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=17 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `project_access_credential_user` (
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+--
+-- Table structure for table `project_access_credential_user`
+--
+CREATE TABLE IF NOT EXISTS `project_access_credential_user` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `credential_id` bigint(20) unsigned NOT NULL,
   `user_id` bigint(20) unsigned NOT NULL,
@@ -608,10 +877,10 @@ CREATE TABLE `project_access_credential_user` (
   CONSTRAINT `project_access_credential_user_credential_id_foreign` FOREIGN KEY (`credential_id`) REFERENCES `project_access_credentials` (`id`) ON DELETE CASCADE,
   CONSTRAINT `project_access_credential_user_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `project_access_credentials` (
+--
+-- Table structure for table `project_access_credentials`
+--
+CREATE TABLE IF NOT EXISTS `project_access_credentials` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `project_id` bigint(20) unsigned NOT NULL,
   `website_name` varchar(255) NOT NULL,
@@ -627,10 +896,10 @@ CREATE TABLE `project_access_credentials` (
   CONSTRAINT `project_access_credentials_created_by_foreign` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`),
   CONSTRAINT `project_access_credentials_project_id_foreign` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `project_changes` (
+--
+-- Table structure for table `project_changes`
+--
+CREATE TABLE IF NOT EXISTS `project_changes` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `project_id` bigint(20) unsigned NOT NULL,
   `field_name` varchar(64) NOT NULL,
@@ -646,14 +915,14 @@ CREATE TABLE `project_changes` (
   CONSTRAINT `project_changes_modified_by_foreign` FOREIGN KEY (`modified_by`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   CONSTRAINT `project_changes_project_id_foreign` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `project_files` (
+--
+-- Table structure for table `project_files`
+--
+CREATE TABLE IF NOT EXISTS `project_files` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `project_id` bigint(20) unsigned NOT NULL,
   `name` varchar(255) NOT NULL,
-  `url` varchar(255) DEFAULT NULL,
+  `url` varchar(4096) DEFAULT NULL,
   `sort_order` int(11) NOT NULL DEFAULT 0,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
@@ -661,10 +930,25 @@ CREATE TABLE `project_files` (
   KEY `idx_project_files_project_id` (`project_id`),
   CONSTRAINT `project_files_project_id_foreign` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `project_milestones` (
+--
+-- Table structure for table `project_followers`
+--
+CREATE TABLE IF NOT EXISTS `project_followers` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `project_id` bigint(20) unsigned NOT NULL,
+  `user_id` bigint(20) unsigned NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_project_user` (`project_id`,`user_id`),
+  KEY `project_followers_user_id_foreign` (`user_id`),
+  CONSTRAINT `project_followers_project_id_foreign` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `project_followers_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+--
+-- Table structure for table `project_milestones`
+--
+CREATE TABLE IF NOT EXISTS `project_milestones` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `project_id` bigint(20) unsigned NOT NULL,
   `title` varchar(255) NOT NULL,
@@ -686,10 +970,10 @@ CREATE TABLE `project_milestones` (
   CONSTRAINT `project_milestones_owner_id_foreign` FOREIGN KEY (`owner_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `project_milestones_project_id_foreign` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `project_visibility` (
+--
+-- Table structure for table `project_visibility`
+--
+CREATE TABLE IF NOT EXISTS `project_visibility` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `project_id` bigint(20) unsigned NOT NULL,
   `user_id` bigint(20) unsigned NOT NULL,
@@ -703,10 +987,10 @@ CREATE TABLE `project_visibility` (
   CONSTRAINT `project_visibility_project_id_foreign` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`) ON DELETE CASCADE,
   CONSTRAINT `project_visibility_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `project_workflow_events` (
+--
+-- Table structure for table `project_workflow_events`
+--
+CREATE TABLE IF NOT EXISTS `project_workflow_events` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `project_id` bigint(20) unsigned NOT NULL,
   `user_id` bigint(20) unsigned NOT NULL,
@@ -723,11 +1007,11 @@ CREATE TABLE `project_workflow_events` (
   KEY `idx_pwe_user_id` (`user_id`),
   CONSTRAINT `project_workflow_events_project_id_foreign` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`) ON DELETE CASCADE,
   CONSTRAINT `project_workflow_events_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `projects` (
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+--
+-- Table structure for table `projects`
+--
+CREATE TABLE IF NOT EXISTS `projects` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `project_code` varchar(20) DEFAULT NULL,
   `project_number` int(11) DEFAULT NULL,
@@ -764,11 +1048,11 @@ CREATE TABLE `projects` (
   CONSTRAINT `projects_created_by_foreign` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   CONSTRAINT `projects_team_id_foreign` FOREIGN KEY (`team_id`) REFERENCES `teams` (`id`) ON DELETE SET NULL,
   CONSTRAINT `projects_updated_by_foreign` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `resignation_logs` (
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+--
+-- Table structure for table `resignation_logs`
+--
+CREATE TABLE IF NOT EXISTS `resignation_logs` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `user_id` bigint(20) unsigned NOT NULL,
   `resigned_by` bigint(20) unsigned NOT NULL,
@@ -791,10 +1075,10 @@ CREATE TABLE `resignation_logs` (
   CONSTRAINT `resignation_logs_resigned_by_foreign` FOREIGN KEY (`resigned_by`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   CONSTRAINT `resignation_logs_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `sessions` (
+--
+-- Table structure for table `sessions`
+--
+CREATE TABLE IF NOT EXISTS `sessions` (
   `id` varchar(255) NOT NULL,
   `user_id` bigint(20) unsigned DEFAULT NULL,
   `ip_address` varchar(45) DEFAULT NULL,
@@ -805,10 +1089,10 @@ CREATE TABLE `sessions` (
   KEY `sessions_user_id_index` (`user_id`),
   KEY `sessions_last_activity_index` (`last_activity`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `submission_attachments` (
+--
+-- Table structure for table `submission_attachments`
+--
+CREATE TABLE IF NOT EXISTS `submission_attachments` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `submission_id` bigint(20) unsigned NOT NULL,
   `submission_type` varchar(32) NOT NULL COMMENT 'task or deliverable',
@@ -818,16 +1102,16 @@ CREATE TABLE `submission_attachments` (
   `file_type` varchar(255) DEFAULT NULL COMMENT 'mime type',
   `file_size` bigint(20) unsigned DEFAULT NULL,
   `attachment_type` enum('file','image','link') NOT NULL DEFAULT 'file',
-  `url` varchar(255) DEFAULT NULL COMMENT 'external link URL or local file path',
+  `url` varchar(4096) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `submission_attachments_submission_id_submission_type_index` (`submission_id`,`submission_type`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `task_access_credential_user` (
+--
+-- Table structure for table `task_access_credential_user`
+--
+CREATE TABLE IF NOT EXISTS `task_access_credential_user` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `credential_id` bigint(20) unsigned NOT NULL,
   `user_id` bigint(20) unsigned NOT NULL,
@@ -839,10 +1123,10 @@ CREATE TABLE `task_access_credential_user` (
   CONSTRAINT `task_access_credential_user_credential_id_foreign` FOREIGN KEY (`credential_id`) REFERENCES `task_access_credentials` (`id`) ON DELETE CASCADE,
   CONSTRAINT `task_access_credential_user_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `task_access_credentials` (
+--
+-- Table structure for table `task_access_credentials`
+--
+CREATE TABLE IF NOT EXISTS `task_access_credentials` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `task_id` bigint(20) unsigned NOT NULL,
   `website_name` varchar(255) NOT NULL,
@@ -858,10 +1142,10 @@ CREATE TABLE `task_access_credentials` (
   CONSTRAINT `task_access_credentials_created_by_foreign` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`),
   CONSTRAINT `task_access_credentials_task_id_foreign` FOREIGN KEY (`task_id`) REFERENCES `tasks` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `task_changes` (
+--
+-- Table structure for table `task_changes`
+--
+CREATE TABLE IF NOT EXISTS `task_changes` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `task_id` bigint(20) unsigned NOT NULL,
   `field_name` varchar(64) NOT NULL,
@@ -877,10 +1161,10 @@ CREATE TABLE `task_changes` (
   CONSTRAINT `task_changes_modified_by_foreign` FOREIGN KEY (`modified_by`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   CONSTRAINT `task_changes_task_id_foreign` FOREIGN KEY (`task_id`) REFERENCES `tasks` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `task_comments` (
+--
+-- Table structure for table `task_comments`
+--
+CREATE TABLE IF NOT EXISTS `task_comments` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `task_id` bigint(20) unsigned NOT NULL,
   `deliverable_id` bigint(20) unsigned DEFAULT NULL,
@@ -910,10 +1194,10 @@ CREATE TABLE `task_comments` (
   CONSTRAINT `task_comments_task_id_foreign` FOREIGN KEY (`task_id`) REFERENCES `tasks` (`id`) ON DELETE CASCADE,
   CONSTRAINT `task_comments_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `task_delegations` (
+--
+-- Table structure for table `task_delegations`
+--
+CREATE TABLE IF NOT EXISTS `task_delegations` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `task_id` bigint(20) unsigned NOT NULL,
   `deliverable_id` bigint(20) unsigned DEFAULT NULL,
@@ -943,14 +1227,14 @@ CREATE TABLE `task_delegations` (
   CONSTRAINT `task_delegations_parent_delegation_id_foreign` FOREIGN KEY (`parent_delegation_id`) REFERENCES `task_delegations` (`id`) ON DELETE SET NULL,
   CONSTRAINT `task_delegations_task_id_foreign` FOREIGN KEY (`task_id`) REFERENCES `tasks` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `task_files` (
+--
+-- Table structure for table `task_files`
+--
+CREATE TABLE IF NOT EXISTS `task_files` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `task_id` bigint(20) unsigned NOT NULL,
   `name` varchar(255) NOT NULL,
-  `url` varchar(255) DEFAULT NULL,
+  `url` varchar(4096) DEFAULT NULL,
   `sort_order` int(11) NOT NULL DEFAULT 0,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
@@ -958,10 +1242,25 @@ CREATE TABLE `task_files` (
   KEY `idx_task_files_task_id` (`task_id`),
   CONSTRAINT `task_files_task_id_foreign` FOREIGN KEY (`task_id`) REFERENCES `tasks` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `task_pause_sessions` (
+--
+-- Table structure for table `task_followers`
+--
+CREATE TABLE IF NOT EXISTS `task_followers` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `task_id` bigint(20) unsigned NOT NULL,
+  `user_id` bigint(20) unsigned NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_task_user` (`task_id`,`user_id`),
+  KEY `task_followers_user_id_foreign` (`user_id`),
+  CONSTRAINT `task_followers_task_id_foreign` FOREIGN KEY (`task_id`) REFERENCES `tasks` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `task_followers_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+--
+-- Table structure for table `task_pause_sessions`
+--
+CREATE TABLE IF NOT EXISTS `task_pause_sessions` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `task_id` bigint(20) unsigned NOT NULL,
   `user_id` bigint(20) unsigned NOT NULL,
@@ -982,10 +1281,25 @@ CREATE TABLE `task_pause_sessions` (
   CONSTRAINT `task_pause_sessions_task_id_foreign` FOREIGN KEY (`task_id`) REFERENCES `tasks` (`id`) ON DELETE CASCADE,
   CONSTRAINT `task_pause_sessions_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `task_submissions` (
+--
+-- Table structure for table `task_saved_views`
+--
+CREATE TABLE IF NOT EXISTS `task_saved_views` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` bigint(20) unsigned NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `filters` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`filters`)),
+  `is_default` tinyint(1) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_user_default` (`user_id`,`is_default`),
+  CONSTRAINT `task_saved_views_uid` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+--
+-- Table structure for table `task_submissions`
+--
+CREATE TABLE IF NOT EXISTS `task_submissions` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `task_id` bigint(20) unsigned NOT NULL,
   `submitted_by` bigint(20) unsigned NOT NULL,
@@ -1011,10 +1325,10 @@ CREATE TABLE `task_submissions` (
   CONSTRAINT `task_submissions_submitted_by_foreign` FOREIGN KEY (`submitted_by`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   CONSTRAINT `task_submissions_task_id_foreign` FOREIGN KEY (`task_id`) REFERENCES `tasks` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `task_user` (
+--
+-- Table structure for table `task_user`
+--
+CREATE TABLE IF NOT EXISTS `task_user` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `task_id` bigint(20) unsigned NOT NULL,
   `user_id` bigint(20) unsigned NOT NULL,
@@ -1032,10 +1346,10 @@ CREATE TABLE `task_user` (
   CONSTRAINT `task_user_task_id_foreign` FOREIGN KEY (`task_id`) REFERENCES `tasks` (`id`) ON DELETE CASCADE,
   CONSTRAINT `task_user_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `task_user_notes` (
+--
+-- Table structure for table `task_user_notes`
+--
+CREATE TABLE IF NOT EXISTS `task_user_notes` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `task_id` bigint(20) unsigned NOT NULL,
   `user_id` bigint(20) unsigned NOT NULL,
@@ -1044,14 +1358,12 @@ CREATE TABLE `task_user_notes` (
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `task_user_notes_task_id_foreign` (`task_id`),
-  KEY `task_user_notes_user_id_foreign` (`user_id`),
-  CONSTRAINT `task_user_notes_task_id_foreign` FOREIGN KEY (`task_id`) REFERENCES `tasks` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `task_user_notes_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+  KEY `task_user_notes_user_id_foreign` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `task_workflow_events` (
+--
+-- Table structure for table `task_workflow_events`
+--
+CREATE TABLE IF NOT EXISTS `task_workflow_events` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `task_id` bigint(20) unsigned NOT NULL,
   `user_id` bigint(20) unsigned NOT NULL,
@@ -1070,10 +1382,10 @@ CREATE TABLE `task_workflow_events` (
   CONSTRAINT `task_workflow_events_task_id_foreign` FOREIGN KEY (`task_id`) REFERENCES `tasks` (`id`) ON DELETE CASCADE,
   CONSTRAINT `task_workflow_events_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `tasks` (
+--
+-- Table structure for table `tasks`
+--
+CREATE TABLE IF NOT EXISTS `tasks` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `task_number` int(11) DEFAULT NULL,
   `business_id` varchar(30) DEFAULT NULL,
@@ -1082,6 +1394,8 @@ CREATE TABLE `tasks` (
   `description` text DEFAULT NULL,
   `requirements` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`requirements`)),
   `status` varchar(64) NOT NULL DEFAULT 'pending',
+  `states` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`states`)),
+  `has_edited_submission` tinyint(1) DEFAULT 0,
   `sort_order` int(10) unsigned NOT NULL DEFAULT 0,
   `submitted_at` timestamp NULL DEFAULT NULL,
   `approved_at` timestamp NULL DEFAULT NULL,
@@ -1106,6 +1420,8 @@ CREATE TABLE `tasks` (
   `priority` varchar(32) NOT NULL DEFAULT 'Medium',
   `task_type` varchar(255) NOT NULL DEFAULT 'standard',
   `recurrence_settings` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`recurrence_settings`)),
+  `recurrence_start_date` timestamp NULL DEFAULT NULL,
+  `recurrence_end_date` timestamp NULL DEFAULT NULL,
   `recurrence_status` varchar(255) NOT NULL DEFAULT 'active',
   `daily_quantity` int(11) DEFAULT NULL,
   `total_days` int(11) DEFAULT NULL,
@@ -1132,9 +1448,19 @@ CREATE TABLE `tasks` (
   `reopen_new_deadline` datetime DEFAULT NULL,
   `reopen_file_path` varchar(255) DEFAULT NULL,
   `reopen_file_name` varchar(255) DEFAULT NULL,
+  `reopen_link` text DEFAULT NULL,
   `reopen_count` int(11) NOT NULL DEFAULT 0,
   `reopen_reason` text DEFAULT NULL,
   `submission_count` int(11) NOT NULL DEFAULT 0,
+  `abandon_requested_by` bigint(20) unsigned DEFAULT NULL,
+  `abandon_requested_at` timestamp NULL DEFAULT NULL,
+  `abandon_reason` text DEFAULT NULL,
+  `abandoned_by` bigint(20) unsigned DEFAULT NULL,
+  `abandoned_at` timestamp NULL DEFAULT NULL,
+  `abandon_declined_by` bigint(20) unsigned DEFAULT NULL,
+  `abandon_declined_at` timestamp NULL DEFAULT NULL,
+  `abandon_decline_reason` text DEFAULT NULL,
+  `previous_status` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `tasks_business_id_unique` (`business_id`),
   KEY `tasks_status_index` (`status`),
@@ -1150,6 +1476,12 @@ CREATE TABLE `tasks` (
   KEY `tasks_acknowledged_by_foreign` (`acknowledged_by`),
   KEY `tasks_paused_by_foreign` (`paused_by`),
   KEY `tasks_assigner_paused_by_foreign` (`assigner_paused_by`),
+  KEY `tasks_abandon_requested_by_foreign` (`abandon_requested_by`),
+  KEY `tasks_abandoned_by_foreign` (`abandoned_by`),
+  KEY `tasks_abandon_declined_by_foreign` (`abandon_declined_by`),
+  CONSTRAINT `tasks_abandon_declined_by_foreign` FOREIGN KEY (`abandon_declined_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `tasks_abandon_requested_by_foreign` FOREIGN KEY (`abandon_requested_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `tasks_abandoned_by_foreign` FOREIGN KEY (`abandoned_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `tasks_acknowledged_by_foreign` FOREIGN KEY (`acknowledged_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `tasks_approved_by_foreign` FOREIGN KEY (`approved_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `tasks_assigned_by_foreign` FOREIGN KEY (`assigned_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
@@ -1161,10 +1493,10 @@ CREATE TABLE `tasks` (
   CONSTRAINT `tasks_reopened_by_foreign` FOREIGN KEY (`reopened_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `tasks_updated_by_foreign` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `team_user` (
+--
+-- Table structure for table `team_user`
+--
+CREATE TABLE IF NOT EXISTS `team_user` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `team_id` bigint(20) unsigned NOT NULL,
   `user_id` bigint(20) unsigned NOT NULL,
@@ -1177,14 +1509,16 @@ CREATE TABLE `team_user` (
   CONSTRAINT `team_user_team_id_foreign` FOREIGN KEY (`team_id`) REFERENCES `teams` (`id`) ON DELETE CASCADE,
   CONSTRAINT `team_user_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `teams` (
+--
+-- Table structure for table `teams`
+--
+CREATE TABLE IF NOT EXISTS `teams` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `name` varchar(255) NOT NULL,
   `leader_id` bigint(20) unsigned DEFAULT NULL,
   `description` text DEFAULT NULL,
+  `status` varchar(255) DEFAULT 'active',
+  `is_draft` tinyint(1) DEFAULT 0,
   `created_by` bigint(20) unsigned NOT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
@@ -1194,10 +1528,36 @@ CREATE TABLE `teams` (
   CONSTRAINT `teams_created_by_foreign` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   CONSTRAINT `teams_leader_id_foreign` FOREIGN KEY (`leader_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `user_activity_views` (
+--
+-- Table structure for table `templates`
+--
+CREATE TABLE IF NOT EXISTS `templates` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `title` varchar(255) NOT NULL,
+  `description` text DEFAULT NULL,
+  `category` varchar(255) DEFAULT 'General',
+  `visibility_level` enum('private','project_team','department_team','organization') DEFAULT 'private',
+  `project_id` bigint(20) unsigned DEFAULT NULL,
+  `department` varchar(255) DEFAULT NULL,
+  `organization` varchar(255) DEFAULT NULL,
+  `data` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`data`)),
+  `file_path` varchar(255) DEFAULT NULL,
+  `created_by` bigint(20) unsigned NOT NULL,
+  `updated_by` bigint(20) unsigned DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `project_id` (`project_id`),
+  KEY `created_by` (`created_by`),
+  KEY `updated_by` (`updated_by`),
+  CONSTRAINT `templates_ibfk_1` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `templates_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `templates_ibfk_3` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+--
+-- Table structure for table `user_activity_views`
+--
+CREATE TABLE IF NOT EXISTS `user_activity_views` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `user_id` bigint(20) unsigned NOT NULL,
   `entity_type` varchar(32) NOT NULL,
@@ -1210,10 +1570,10 @@ CREATE TABLE `user_activity_views` (
   KEY `user_activity_views_entity_type_entity_id_index` (`entity_type`,`entity_id`),
   CONSTRAINT `user_activity_views_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `user_changes` (
+--
+-- Table structure for table `user_changes`
+--
+CREATE TABLE IF NOT EXISTS `user_changes` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `user_id` bigint(20) unsigned NOT NULL,
   `field_name` varchar(64) NOT NULL,
@@ -1228,10 +1588,10 @@ CREATE TABLE `user_changes` (
   CONSTRAINT `user_changes_modified_by_foreign` FOREIGN KEY (`modified_by`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   CONSTRAINT `user_changes_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `user_device_tokens` (
+--
+-- Table structure for table `user_device_tokens`
+--
+CREATE TABLE IF NOT EXISTS `user_device_tokens` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `user_id` bigint(20) unsigned NOT NULL,
   `device_token` varchar(500) NOT NULL,
@@ -1243,10 +1603,10 @@ CREATE TABLE `user_device_tokens` (
   UNIQUE KEY `user_device_tokens_user_id_device_token_unique` (`user_id`,`device_token`),
   CONSTRAINT `user_device_tokens_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `user_email_preferences` (
+--
+-- Table structure for table `user_email_preferences`
+--
+CREATE TABLE IF NOT EXISTS `user_email_preferences` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `user_id` bigint(20) unsigned NOT NULL,
   `task_notifications` tinyint(1) NOT NULL DEFAULT 1,
@@ -1263,10 +1623,10 @@ CREATE TABLE `user_email_preferences` (
   UNIQUE KEY `user_email_preferences_user_id_unique` (`user_id`),
   CONSTRAINT `user_email_preferences_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `users` (
+--
+-- Table structure for table `users`
+--
+CREATE TABLE IF NOT EXISTS `users` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `name` varchar(255) NOT NULL,
   `avatar` varchar(255) DEFAULT NULL,
@@ -1277,6 +1637,9 @@ CREATE TABLE `users` (
   `password` varchar(255) NOT NULL,
   `role` enum('admin','manager','team_lead','member','guest') DEFAULT 'member',
   `active` tinyint(1) NOT NULL DEFAULT 1,
+  `deletion_requested` tinyint(1) DEFAULT 0,
+  `deletion_requested_by` bigint(20) unsigned DEFAULT NULL,
+  `status` varchar(32) DEFAULT 'Active',
   `sort_order` int(10) unsigned NOT NULL DEFAULT 0,
   `must_change_password` tinyint(1) NOT NULL DEFAULT 0,
   `credentials_managed_by_admin` tinyint(1) NOT NULL DEFAULT 0,
@@ -1291,8 +1654,15 @@ CREATE TABLE `users` (
   `emergency_contact_name` varchar(255) DEFAULT NULL,
   `emergency_contact_relation` varchar(255) DEFAULT NULL,
   `emergency_contact_phone` varchar(255) DEFAULT NULL,
+  `email_mode` varchar(20) DEFAULT 'single',
+  `email_verification_code` varchar(6) DEFAULT NULL,
+  `email_verification_expires_at` timestamp NULL DEFAULT NULL,
+  `email_skip_until` timestamp NULL DEFAULT NULL,
+  `email_verified_at` timestamp NULL DEFAULT NULL,
   `personal_email` varchar(255) DEFAULT NULL,
+  `personal_email_verified_at` timestamp NULL DEFAULT NULL,
   `professional_email` varchar(255) DEFAULT NULL,
+  `professional_email_verified_at` timestamp NULL DEFAULT NULL,
   `professional_email_password` varchar(255) DEFAULT NULL,
   `recovery_email` varchar(255) DEFAULT NULL,
   `hired_for` varchar(255) DEFAULT NULL,
@@ -1322,6 +1692,10 @@ CREATE TABLE `users` (
   `remember_token` varchar(100) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
+  `notification_preferences` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`notification_preferences`)),
+  `slack_webhook_url` text DEFAULT NULL,
+  `google_chat_webhook_url` text DEFAULT NULL,
+  `ms_teams_webhook_url` text DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `users_email_unique` (`email`),
   KEY `idx_users_role` (`role`),
@@ -1331,5 +1705,24 @@ CREATE TABLE `users` (
   KEY `users_resigned_by_foreign` (`resigned_by`),
   CONSTRAINT `users_password_changed_by_foreign` FOREIGN KEY (`password_changed_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `users_resigned_by_foreign` FOREIGN KEY (`resigned_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `email_identities` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `normalized_email` varchar(255) NOT NULL,
+  `original_email` varchar(255) NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `type` varchar(20) DEFAULT 'primary',
+  `verified` tinyint(1) DEFAULT 0,
+  `verified_at` timestamp NULL DEFAULT NULL,
+  `verification_token` varchar(255) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `email_identities_normalized_email_unique` (`normalized_email`),
+  KEY `email_identities_user_id_index` (`user_id`),
+  KEY `email_identities_type_index` (`type`),
+  CONSTRAINT `email_identities_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Dump completed on 2026-09-02 12:00:00

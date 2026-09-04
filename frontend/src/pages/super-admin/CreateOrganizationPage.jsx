@@ -80,7 +80,25 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
     }
   }, [selectedPlanId, plans, trialDefaults]);
 
-  const handleNext = () => { if (!form.name || !form.admin_name || !form.admin_email) return; setStep(2); setError(null); };
+  const [emailChecking, setEmailChecking] = useState(false);
+
+  const handleNext = async () => {
+    if (!form.name || !form.admin_name || !form.admin_email) return;
+    setEmailChecking(true); setError(null);
+    try {
+      const res = await api.checkEmailAvailability(form.admin_email);
+      if (!res.available) {
+        setError(res.message || t('This email is already registered.', { defaultValue: 'This email is already registered.' }));
+        setEmailChecking(false);
+        return;
+      }
+      setStep(2); setError(null);
+    } catch (e) {
+      setError(e.message || t('Failed to check email availability.', { defaultValue: 'Failed to check email availability.' }));
+    } finally {
+      setEmailChecking(false);
+    }
+  };
   const handleBack = () => { setStep(1); setError(null); };
 
   const toSlug = (str) => str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
@@ -391,9 +409,9 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
             {t('Cancel', { defaultValue: 'Cancel' })}
           </button>
           {step === 1 ? (
-            <button onClick={handleNext} disabled={!form.name || !form.admin_name || !form.admin_email}
+            <button onClick={handleNext} disabled={!form.name || !form.admin_name || !form.admin_email || emailChecking}
               className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed">
-              {t('Next', { defaultValue: 'Next' })} <ArrowRight className="w-4 h-4" />
+              {emailChecking ? <><Loader2 className="w-4 h-4 animate-spin" /> {t('Checking...', { defaultValue: 'Checking...' })}</> : <>{t('Next', { defaultValue: 'Next' })} <ArrowRight className="w-4 h-4" /></>}
             </button>
           ) : (
             <div className="flex-1 flex gap-3">

@@ -15,6 +15,7 @@ import Header from "./Header";
 import Sidebar from "./Sidebar";
 import ChatWidget from "./ChatWidget";
 import StorageNotificationBanner from "../StorageNotificationBanner";
+import VerificationBanner from "../VerificationBanner";
 import { authToken } from "../../utils/auth";
 import { publish } from "../../utils/eventBus";
 import API_URL from "../../config/api";
@@ -109,6 +110,7 @@ function DashboardLayout({ children }) {
         <Sidebar />
 
         <div className="dashboard-content">
+          <VerificationBanner />
           <StorageNotificationBanner />
           {children || <Outlet />}
         </div>

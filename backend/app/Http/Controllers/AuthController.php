@@ -54,9 +54,6 @@ class AuthController extends Controller
                 'password' => 'required',
             ]);
 
-            // Note: personal email restriction removed — allow authentication
-            // any additional organization-level email policy is enforced elsewhere.
-
             // Rate limiting key per normalized email & IP
             $throttleKey = Str::lower(trim($request->email)) . '|' . $request->ip();
 
@@ -75,11 +72,21 @@ class AuthController extends Controller
             // Look up user by email — guests use personal_email, employees use professional_email
             $dbNotFound = false;
             $crossTenantResult = null;
+            $personalEmailBlocked = false;
             try {
+                // First try professional_email and email (primary login fields)
                 $user = User::where('professional_email', $request->email)
                     ->orWhere('email', $request->email)
-                    ->orWhere('personal_email', $request->email)
                     ->first();
+
+                // If not found, check personal_email — but block it for two-email users
+                if (!$user) {
+                    $user = User::where('personal_email', $request->email)->first();
+                    if ($user && $user->email_mode === 'two_emails') {
+                        $personalEmailBlocked = true;
+                        $user = null;
+                    }
+                }
             } catch (\Throwable $e) {
                 // Database may not exist (org deleted). Mark it and try cross-tenant.
                 $user = null;
@@ -88,8 +95,15 @@ class AuthController extends Controller
                 }
             }
 
-            if (! $user || ! Hash::check($request->password, $user->password ?? '')) {
-                // Track failed attempt with 15-minute decay window (900 seconds)
+            if ($personalEmailBlocked) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Personal email cannot be used to login. Please use your professional email.',
+                ], 401);
+            }
+
+            if (! $user) {
+                // User not found in current tenant — try cross-tenant lookup
                 RateLimiter::hit($throttleKey, 900);
 
                 if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
@@ -103,8 +117,6 @@ class AuthController extends Controller
                     ], 429);
                 }
 
-                // Try cross-tenant lookup
-                // Reset mysql connection to default before searching across tenants
                 if ($dbNotFound) {
                     config()->set('database.connections.mysql.database', config('database.connections.mysql_master.database'));
                     DB::purge('mysql');
@@ -114,16 +126,34 @@ class AuthController extends Controller
                 $result = $this->findUserAcrossTenants($request->email, $defaultDb, $request->password);
                 $crossTenantResult = $result;
                 if (! $result) {
-                    // Also check soft-deleted orgs — their DB may have been dropped
                     $deletedOrgWithUser = $this->findUserInDeletedOrgs($request->email);
                     $errorMsg = $deletedOrgWithUser
                         ? 'Organization does not exist. Please contact administration.'
-                        : 'Invalid Email or Password';
+                        : 'This user does not exist.';
                     return response()->json([
                         'success' => false,
                         'message' => $errorMsg,
                     ], 401);
                 }
+            } elseif (! Hash::check($request->password, $user->password ?? '')) {
+                // User exists but password is wrong
+                RateLimiter::hit($throttleKey, 900);
+
+                if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
+                    $seconds = RateLimiter::availableIn($throttleKey);
+                    $minutes = max(1, (int) ceil($seconds / 60));
+                    $unit = $minutes === 1 ? 'minute' : 'minutes';
+
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Too many failed login attempts. Please try again in {$minutes} {$unit}.",
+                    ], 429);
+                }
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Your password is incorrect.',
+                ], 401);
             }
 
             // Successful login — reset rate limiter counter to 0
@@ -190,6 +220,8 @@ class AuthController extends Controller
                     'message' => 'Your account has been resigned. You no longer have access to the system. Please contact your administrator.',
                 ], 403);
             }
+
+
 
             // ── Organization status & subscription check ──────────────────────
             $masterOrg = null;
@@ -286,6 +318,8 @@ class AuthController extends Controller
                 'token' => $token,
                 'role' => $role,
                 'must_change_password' => (bool) $user->must_change_password,
+                'email_verified' => !is_null($user->email_verified_at),
+                'needs_email_verification' => $user->needsEmailVerification(),
                 'remember_me' => $rememberMe,
                 'expires_at' => $expiresAt->toISOString(),
                 'tenant_slug' => $finalTenantSlug,
@@ -1231,12 +1265,27 @@ class AuthController extends Controller
                 ]);
 
                 $stmt = $pdo->prepare(
-                    "SELECT id, password FROM `users` WHERE professional_email = ? OR email = ? OR personal_email = ? LIMIT 1"
+                    "SELECT id, password, email_mode FROM `users` WHERE professional_email = ? OR email = ? OR personal_email = ? LIMIT 1"
                 );
                 $stmt->execute([$email, $email, $email]);
                 $foundUserRow = $stmt->fetch(\PDO::FETCH_OBJ);
 
                 if (! $foundUserRow) {
+                    $pdo = null;
+                    continue;
+                }
+
+                // Block personal email login for two-email users in cross-tenant lookup
+                $isPersonalEmailMatch = false;
+                $checkStmt = $pdo->prepare("SELECT email_mode, professional_email, email, personal_email FROM `users` WHERE id = ? LIMIT 1");
+                $checkStmt->execute([$foundUserRow->id]);
+                $checkRow = $checkStmt->fetch(\PDO::FETCH_OBJ);
+                if ($checkRow && $checkRow->email_mode === 'two_emails') {
+                    if (strtolower($email) === strtolower($checkRow->personal_email ?? '')) {
+                        $isPersonalEmailMatch = true;
+                    }
+                }
+                if ($isPersonalEmailMatch) {
                     $pdo = null;
                     continue;
                 }

@@ -36,6 +36,9 @@ Schedule::command('subscriptions:renew')->dailyAt('01:00')->withoutOverlapping()
 // Expire shared resources that have passed their expiration date - run hourly
 Schedule::command('sharing:expire-resources')->hourly();
 
+// Deactivate users whose email verification skip (7 days) has expired - run daily at 00:05
+Schedule::command('email:deactivate-expired')->dailyAt('00:05');
+
 /*
 | Artisan Commands
 | Custom Artisan commands for the application.

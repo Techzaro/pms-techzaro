@@ -646,7 +646,7 @@ const EditProjectModal = ({ project, onClose, onProjectUpdated }) => {
           team_ids: form.team_ids,
           assigned_users: form.assigned_users.length > 0 ? form.assigned_users : [],
           followers: form.followers || [],
-          guest_ids: form.guest_ids.length > 0 ? form.guest_ids : [],
+          guest_ids: (form.guest_ids || []).filter((id) => allUsers.some((u) => Number(u.id) === Number(id))),
           client_name: form.client_name.trim() || null,
           priority: form.priority,
           status: form.status,

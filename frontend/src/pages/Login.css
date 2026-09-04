@@ -282,3 +282,43 @@
     width: 70px;
   }
 }
+
+/* ── Email Verification Code Inputs (inline on login page) ── */
+.verify-code-inputs {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin: 20px 0 16px;
+}
+
+.verify-code-input {
+  width: 48px;
+  height: 56px;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 700;
+  border: 2px solid #d1d5db;
+  border-radius: 10px;
+  outline: none;
+  background: #f9fafb;
+  color: #1e293b;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.verify-code-input:focus {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+  background: #fff;
+}
+
+.skip-btn {
+  transition: background 0.2s, border-color 0.2s;
+}
+.skip-btn:hover {
+  background: #f3f4f6 !important;
+  border-color: #9ca3af !important;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
