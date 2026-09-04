@@ -1671,10 +1671,10 @@ function ProjectDetails() {
                                           <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={tItem.id} businessId={tItem.business_id} />
                                           {currentUser?.role !== "guest" && <div>{isCreator || isAdminOrManager ? ((tItem.assignees || []).map((a) => a.name).join(", ") || "—") : (tItem.assigner?.name || "—")}</div>}
                                         <div className="ptt-col-name">
-                                          <Link to={rolePath(`tasks/task-details/${tItem.id}`)} state={{ from: getTaskFrom(tItem) }} className="ptt-task-link">
-                                            {tItem.title}
-                                          </Link>
-                                        </div>
+                                           <Link to={rolePath(`tasks/task-details/${tItem.id}`)} state={{ from: "project", projectId: project?.id || projectId, projectTitle: project?.title, returnUrl: location.pathname + (location.search || "?tab=tasks") }} className="ptt-task-link">
+                                             {tItem.title}
+                                           </Link>
+                                         </div>
                                         <div>
                                           <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", alignItems: "center" }}>
                                             <span className="badge" style={{ background: STATUS_COLORS[statusKey === "reopened" ? "pending" : statusKey] || "var(--bg-hover)", color: STATUS_TEXT_COLORS[statusKey === "reopened" ? "pending" : statusKey] || "var(--text-dark)" }}>
@@ -1733,7 +1733,7 @@ function ProjectDetails() {
                                                   <IoEyeOutline size={20} />
                                                 </button>
                                               }
-                                              onTriggerClick={() => navigate(rolePath(`tasks/task-details/${tItem.id}`), { state: { from: getTaskFrom(tItem) } })}
+                                              onTriggerClick={() => navigate(rolePath(`tasks/task-details/${tItem.id}`), { state: { from: "project", projectId: project?.id || projectId, projectTitle: project?.title, returnUrl: location.pathname + (location.search || "?tab=tasks") } })}
                                             >
                                               <button className="action-icon-btn action-note" title={t("Add Note", { defaultValue: "Add Note" })} onClick={() => setNoteModal({ open: true, itemId: tItem.id })}>
                                                 <StickyNote size={14} />

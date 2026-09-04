@@ -485,7 +485,7 @@ function UserPerformance() {
                   return (
                     <div className="up-table-row" key={uniqueKey}>
                       <div className="col-task-name">
-                        <div className="task-title">{item.title}</div>
+                        <div className="task-title" title={item.title} style={{ maxWidth: "250px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</div>
                       </div>
 
                       <div className="col-status">

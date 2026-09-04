@@ -509,6 +509,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/task-saved-views', [\App\Http\Controllers\TaskSavedViewController::class, 'store']);
     Route::put('/task-saved-views/{taskSavedView}', [\App\Http\Controllers\TaskSavedViewController::class, 'update']);
     Route::delete('/task-saved-views/{taskSavedView}', [\App\Http\Controllers\TaskSavedViewController::class, 'destroy']);
+    Route::get('/saved-views', [\App\Http\Controllers\TaskSavedViewController::class, 'index']);
+    Route::post('/saved-views', [\App\Http\Controllers\TaskSavedViewController::class, 'store']);
+    Route::put('/saved-views/{taskSavedView}', [\App\Http\Controllers\TaskSavedViewController::class, 'update']);
+    Route::delete('/saved-views/{taskSavedView}', [\App\Http\Controllers\TaskSavedViewController::class, 'destroy']);
     Route::get('/tasks', [TaskController::class, 'allTasks']);
 
     // Task filtering routes
@@ -594,7 +598,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Personal user notes on deliverables (private per user)
     Route::get('/deliverables/{deliverable}/my-note', [DeliverableController::class, 'myNote']); // View own note
-    Route::post('/deliverables/{deliverable}/my-note', [DeliverableController::class, 'storeNote']); // Create/update own note
+    Route::post('/deliverables/{deliverable}/my-note', [DeliverableController::class, 'storeNote']); // Create own note
+    Route::put('/deliverables/{deliverable}/my-note/{note}', [DeliverableController::class, 'updateNote']); // Update own note
     Route::delete('/deliverables/{deliverable}/my-note/{note}', [DeliverableController::class, 'destroyNote']); // Delete own note
 
     /*
@@ -643,6 +648,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/activities/past', [ActivityController::class, 'past']); // Past activities
     Route::get('/activities', [ActivityController::class, 'index']); // All activities
     Route::get('/tasks/{task}/unified-activity', [TaskController::class, 'unifiedActivity']);
+    Route::get('/tasks/{task}/activity', [TaskController::class, 'activity']);
     Route::get('/projects/{project}/unified-activity', [ProjectController::class, 'unifiedActivity']);
 
     /*

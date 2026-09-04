@@ -855,14 +855,21 @@ function Header() {
                     <div
                       key={n.id}
                       className={`notif-panel-item ${!n.is_read ? "notif-panel-item--unread" : "notif-panel-item--read"}${notifHighlightIndex === idx ? ' notif-panel-item--highlighted' : ''}`}
-                      onClick={() => { markAsRead(n.id); setShowNotifications(false); navigate(getNotificationDestination(n)); }}
+                      onClick={() => { markAsRead(n.id); setShowNotifications(false); navigate(getNotificationDestination(n), { state: { from: "notifications", returnUrl: location.pathname } }); }}
                       onMouseEnter={() => setNotifHighlightIndex(idx)}
                     >
                       <div className={`notif-panel-dot ${!n.is_read ? "notif-panel-dot--unread" : ""}`} />
                       <div className="notif-panel-content">
                         <p className={`notif-panel-title ${!n.is_read ? "notif-panel-title--unread" : ""}`}>{n.title || n.type}</p>
                         <p className="notif-panel-msg">{n.message}</p>
-                        <span className="notif-panel-time">{formatDateTimeInline(n.created_at)}</span>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "4px" }}>
+                          <span className="notif-panel-time">{formatDateTimeInline(n.created_at)}</span>
+                          {(n.related_module === "task" || n.type?.startsWith("task_") || (n.link && n.link.includes("/tasks/"))) && (
+                            <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-primary, #2563eb)", background: "var(--color-primary-bg, #eff6ff)", padding: "1px 6px", borderRadius: "4px" }}>
+                              {t("View Task", { defaultValue: "View Task" })} →
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))

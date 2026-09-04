@@ -375,10 +375,48 @@ function AllDeliveries() {
           search={search}
           onSearchChange={setSearch}
           filters={advancedFilters}
-          onFilterChange={(key, val) => setAdvancedFilters((prev) => ({ ...prev, [key]: val }))}
+          activeStatus={statusFilter}
+          onFilterChange={(key, val) => {
+            setAdvancedFilters((prev) => ({ ...prev, [key]: val }));
+            setPage(1);
+          }}
+          onApplyFilters={(appliedFilters, appliedSort) => {
+            setStatusFilter("");
+            setSearchParams({});
+            setAdvancedFilters((prev) => ({
+              ...prev,
+              statuses: appliedFilters?.statuses || appliedFilters?.status || [],
+              status: appliedFilters?.statuses || appliedFilters?.status || [],
+              states: appliedFilters?.states || [],
+              due_states: appliedFilters?.due_states || [],
+              priority: appliedFilters?.priority || appliedFilters?.priorities || [],
+              user_id: appliedFilters?.user_id || appliedFilters?.assigned_to || [],
+              project_id: appliedFilters?.project_id || [],
+              created_by: appliedFilters?.created_by || [],
+              follower_id: appliedFilters?.follower_id || [],
+              start_date: appliedFilters?.start_date || "",
+              end_date: appliedFilters?.end_date || "",
+            }));
+            setPage(1);
+          }}
           onReset={() => {
             setSearch("");
-            setAdvancedFilters({ user_id: [], project_id: [], status: [], start_date: "", end_date: "" });
+            setStatusFilter("");
+            setSearchParams({});
+            setAdvancedFilters({
+              user_id: [],
+              project_id: [],
+              status: [],
+              statuses: [],
+              states: [],
+              due_states: [],
+              priority: [],
+              created_by: [],
+              follower_id: [],
+              start_date: "",
+              end_date: "",
+            });
+            setPage(1);
           }}
         />
 
@@ -450,13 +488,13 @@ function AllDeliveries() {
                     {/* Sub-Task Name */}
                     <div className="col-subtask-name">
                       {item.delegation_chain && item.delegation_chain.length > 0 && <ArrowUpRight size={14} style={{ color: "#6B7280", flexShrink: 0 }} />}
-                      <div className="task-title">{item.title}</div>
+                      <div className="task-title" title={item.title} style={{ maxWidth: "250px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</div>
                     </div>
 
                     {/* Parent Task */}
                     <div className="col-parent-task">
                       <div>
-                        <div className="task-title">{item.task?.title || "-"}</div>
+                        <div className="task-title" title={item.task?.title || "-"} style={{ maxWidth: "250px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.task?.title || "-"}</div>
                       </div>
                     </div>
 

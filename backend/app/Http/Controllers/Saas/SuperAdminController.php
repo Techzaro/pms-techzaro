@@ -602,15 +602,15 @@ class SuperAdminController extends Controller
             $this->dbService->dropDatabase($dbName);
             $this->dbService->createDatabase($dbName);
 
-            // Step 2: Import tenant schema (fast — bypasses 134 individual migrations)
-            $this->importTenantSchema($dbName);
-
-            // Step 2b: Fix any missing columns/tables that schema import might have missed
+            // Step 2: Import tenant schema baseline (if available) + programmatically run all migrations & column fixes
             try {
-                \App\Console\Commands\FixTenantColumns::fixDatabaseProgrammatic($dbName);
+                $this->importTenantSchema($dbName);
             } catch (\Throwable $e) {
-                \Log::warning('FixTenantColumns failed during storeOrganization', ['db' => $dbName, 'error' => $e->getMessage()]);
+                \Log::warning('importTenantSchema fallback to direct migrations', ['db' => $dbName, 'error' => $e->getMessage()]);
             }
+
+            // Run all tenant migrations and automated column fixes via DatabaseProvisionService
+            $this->dbService->runMigrations($dbName);
 
             // Step 3: Create organization record
             $masterConfig = config('database.connections.mysql_master');

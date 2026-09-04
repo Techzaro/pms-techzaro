@@ -12,12 +12,16 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
+use App\Services\ActivityService;
+use App\Services\AuditService;
 use App\Services\StorageDiskResolver;
 
 class TaskCommentController extends Controller
 {
     public function __construct(
-        private NotificationService $notificationService
+        private NotificationService $notificationService,
+        private ActivityService $activityService,
+        private AuditService $auditService
     ) {}
 
     public function index(Request $request, Task $task): JsonResponse
@@ -201,6 +205,41 @@ class TaskCommentController extends Controller
             }
         }
 
+        $targetTaskId = $taskId ?: ($deliverable ? $deliverable->task_id : null);
+        $moduleName = $deliverableId ? 'Subtask Management' : 'Task Management';
+        $entityType = $deliverableId ? 'deliverable' : 'task';
+        $entityId = $deliverableId ?: $targetTaskId;
+        $commentDesc = $deliverableId ? 'Added a comment to subtask' : 'Added a comment to task';
+
+        if ($targetTaskId) {
+            $this->activityService->log(
+                $user->id,
+                'task_comment_added',
+                $commentDesc,
+                'task',
+                $targetTaskId,
+                'comment_added',
+                null,
+                null,
+                ['comment_id' => $comment->id, 'deliverable_id' => $deliverableId]
+            );
+        }
+
+        try {
+            $this->auditService->log(
+                module: $moduleName,
+                action: 'Comment Added',
+                description: $commentDesc,
+                user: $user,
+                entityType: $entityType,
+                entityId: $entityId,
+                newValues: ['comment_id' => $comment->id, 'task_id' => $targetTaskId, 'deliverable_id' => $deliverableId],
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit for comment', ['error' => $e->getMessage()]);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Comment posted successfully.',
@@ -236,6 +275,41 @@ class TaskCommentController extends Controller
 
         $comment->load('user:id,name,role,avatar');
 
+        $targetTaskId = $comment->task_id ?: ($comment->deliverable ? $comment->deliverable->task_id : null);
+        $moduleName = $comment->deliverable_id ? 'Subtask Management' : 'Task Management';
+        $entityType = $comment->deliverable_id ? 'deliverable' : 'task';
+        $entityId = $comment->deliverable_id ?: $targetTaskId;
+        $commentDesc = $comment->deliverable_id ? 'Edited a comment on subtask' : 'Edited a comment on task';
+
+        if ($targetTaskId) {
+            $this->activityService->log(
+                $user->id,
+                'task_comment_edited',
+                $commentDesc,
+                'task',
+                $targetTaskId,
+                'comment_edited',
+                null,
+                null,
+                ['comment_id' => $comment->id]
+            );
+        }
+
+        try {
+            $this->auditService->log(
+                module: $moduleName,
+                action: 'Comment Edited',
+                description: $commentDesc,
+                user: $user,
+                entityType: $entityType,
+                entityId: $entityId,
+                newValues: ['comment_id' => $comment->id, 'task_id' => $targetTaskId, 'deliverable_id' => $comment->deliverable_id],
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit for comment update', ['error' => $e->getMessage()]);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Comment updated successfully.',
@@ -264,7 +338,42 @@ class TaskCommentController extends Controller
             }
         }
 
+        $targetTaskId = $comment->task_id ?: ($comment->deliverable ? $comment->deliverable->task_id : null);
+        $moduleName = $comment->deliverable_id ? 'Subtask Management' : 'Task Management';
+        $entityType = $comment->deliverable_id ? 'deliverable' : 'task';
+        $entityId = $comment->deliverable_id ?: $targetTaskId;
+        $commentDesc = $comment->deliverable_id ? 'Deleted a comment from subtask' : 'Deleted a comment from task';
+
+        if ($targetTaskId) {
+            $this->activityService->log(
+                $user->id,
+                'task_comment_deleted',
+                $commentDesc,
+                'task',
+                $targetTaskId,
+                'comment_deleted',
+                null,
+                null,
+                ['comment_id' => $comment->id, 'deliverable_id' => $comment->deliverable_id]
+            );
+        }
+
         $comment->delete();
+
+        try {
+            $this->auditService->log(
+                module: $moduleName,
+                action: 'Comment Deleted',
+                description: $commentDesc,
+                user: $user,
+                entityType: $entityType,
+                entityId: $entityId,
+                oldValues: ['comment_id' => $comment->id, 'task_id' => $targetTaskId, 'deliverable_id' => $comment->deliverable_id],
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit for comment deletion', ['error' => $e->getMessage()]);
+        }
 
         return response()->json([
             'success' => true,
@@ -603,8 +712,18 @@ class TaskCommentController extends Controller
             }
         }
 
-        if ((int) $task->assigned_to && (int) $task->assigned_to !== (int) $poster->id) {
-            $notifyUserIds[] = (int) $task->assigned_to;
+        if ($comment->parent_id) {
+            $parentComment = TaskComment::find($comment->parent_id);
+            if ($parentComment && $parentComment->user_id && (int) $parentComment->user_id !== (int) $poster->id) {
+                $notifyUserIds[] = (int) $parentComment->user_id;
+            }
+        }
+
+        if ($comment->quoted_message_id) {
+            $quotedComment = TaskComment::find($comment->quoted_message_id);
+            if ($quotedComment && $quotedComment->user_id && (int) $quotedComment->user_id !== (int) $poster->id) {
+                $notifyUserIds[] = (int) $quotedComment->user_id;
+            }
         }
 
         $notifyUserIds = array_unique(array_filter($notifyUserIds));
@@ -660,6 +779,20 @@ class TaskCommentController extends Controller
             $task = $deliverable->task;
             if ($task->assigner && (int) $task->assigner->id !== (int) $poster->id) {
                 $notifyUserIds[] = $task->assigner->id;
+            }
+        }
+
+        if ($comment->parent_id) {
+            $parentComment = TaskComment::find($comment->parent_id);
+            if ($parentComment && $parentComment->user_id && (int) $parentComment->user_id !== (int) $poster->id) {
+                $notifyUserIds[] = (int) $parentComment->user_id;
+            }
+        }
+
+        if ($comment->quoted_message_id) {
+            $quotedComment = TaskComment::find($comment->quoted_message_id);
+            if ($quotedComment && $quotedComment->user_id && (int) $quotedComment->user_id !== (int) $poster->id) {
+                $notifyUserIds[] = (int) $quotedComment->user_id;
             }
         }
 

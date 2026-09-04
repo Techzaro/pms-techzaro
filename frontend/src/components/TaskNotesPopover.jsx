@@ -1,13 +1,14 @@
 /**
  * TaskNotesPopover.jsx
- * Note icon next to task name. On hover shows notes popover.
- * Each note has edit button on hover for inline editing.
+ * Personal Notes column badge & popover.
+ * Shows personal/private notes for the authenticated user on hover/click.
+ * Supports viewing, inline adding, editing, and deleting notes.
  */
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { StickyNote, Pencil, Trash2, Check, X } from "lucide-react";
+import { StickyNote, Pencil, Trash2, Check, X, Plus, Send } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import "./TaskNotesPopover.css";
@@ -19,12 +20,15 @@ const TaskNotesPopover = ({ taskId, itemType = "task" }) => {
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText] = useState("");
+  const [newNoteText, setNewNoteText] = useState("");
   const [saving, setSaving] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const wrapRef = useRef(null);
   const popoverRef = useRef(null);
   const timeoutRef = useRef(null);
   const editInputRef = useRef(null);
+  const newNoteInputRef = useRef(null);
 
   const endpoint = itemType === "task"
     ? `${API_URL}/tasks/${taskId}/my-note`
@@ -39,11 +43,15 @@ const TaskNotesPopover = ({ taskId, itemType = "task" }) => {
       });
       if (res.ok) {
         const data = await res.json();
-        setNotes(data.notes || []);
+        setNotes(data.notes || (data.note ? [data.note] : []));
       }
     } catch {}
     setLoading(false);
   }, [endpoint]);
+
+  useEffect(() => {
+    fetchNotes();
+  }, [fetchNotes]);
 
   const handleDeleteNote = async (e, noteId) => {
     if (e && e.stopPropagation) {
@@ -51,7 +59,6 @@ const TaskNotesPopover = ({ taskId, itemType = "task" }) => {
       e.preventDefault();
     }
     const token = authToken();
-    // Optimistically update list
     setNotes((prev) => prev.filter((n) => n.id !== noteId));
     try {
       const res = await fetch(`${endpoint}/${noteId}`, {
@@ -71,23 +78,59 @@ const TaskNotesPopover = ({ taskId, itemType = "task" }) => {
     }
   };
 
+  const handleAddNote = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (e && e.stopPropagation) e.stopPropagation();
+    if (!newNoteText.trim() || adding) return;
+
+    setAdding(true);
+    const token = authToken();
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ note: newNoteText.trim() }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.notes) {
+          setNotes(data.notes);
+        } else if (data.note) {
+          setNotes((prev) => [data.note, ...prev.filter((n) => n.id !== data.note.id)]);
+        } else {
+          fetchNotes();
+        }
+        setNewNoteText("");
+      }
+    } catch {
+      fetchNotes();
+    }
+    setAdding(false);
+  };
+
   const calcPosition = useCallback(() => {
     if (!wrapRef.current) return;
     const rect = wrapRef.current.getBoundingClientRect();
     const popoverEl = popoverRef.current;
-    const popoverWidth = popoverEl ? popoverEl.offsetWidth : 250;
-    const popoverHeight = popoverEl ? popoverEl.offsetHeight : 150;
+    const popoverWidth = popoverEl ? popoverEl.offsetWidth : 280;
+    const popoverHeight = popoverEl ? popoverEl.offsetHeight : 220;
 
-    let top = rect.bottom + 8;
+    let top = rect.bottom + 6;
     let left = rect.left;
 
-    if (left + popoverWidth > window.innerWidth) {
-      left = window.innerWidth - popoverWidth - 8;
+    if (left + popoverWidth > window.innerWidth - 12) {
+      left = window.innerWidth - popoverWidth - 12;
     }
-    if (top + popoverHeight > window.innerHeight) {
-      top = rect.top - popoverHeight - 8;
+    if (left < 12) left = 12;
+
+    if (top + popoverHeight > window.innerHeight - 12) {
+      top = rect.top - popoverHeight - 6;
     }
-    if (top < 0) top = 4;
+    if (top < 12) top = 12;
 
     setPos({ top, left });
   }, []);
@@ -99,11 +142,11 @@ const TaskNotesPopover = ({ taskId, itemType = "task" }) => {
 
   const handleMouseLeave = () => {
     timeoutRef.current = setTimeout(() => {
-      if (!editingId) setOpen(false);
-    }, 200);
+      if (!editingId && !newNoteText.trim()) setOpen(false);
+    }, 250);
   };
 
-  const handleNoteMouseEnter = () => {
+  const handlePopoverMouseEnter = () => {
     clearTimeout(timeoutRef.current);
   };
 
@@ -112,33 +155,21 @@ const TaskNotesPopover = ({ taskId, itemType = "task" }) => {
   }, []);
 
   useEffect(() => {
-    const loadInitial = async () => {
-      const token = authToken();
-      try {
-        const res = await fetch(endpoint, {
-          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setNotes(data.notes || []);
-        }
-      } catch {}
-    };
-    loadInitial();
-  }, [endpoint]);
-
-  useEffect(() => {
     if (open) {
-      fetchNotes();
       requestAnimationFrame(() => calcPosition());
     }
-  }, [open, fetchNotes, calcPosition]);
+  }, [open, calcPosition, notes.length]);
 
   useEffect(() => {
     if (!open) return;
     const onScroll = () => calcPosition();
+    const onResize = () => calcPosition();
     window.addEventListener("scroll", onScroll, true);
-    return () => window.removeEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onResize);
+    };
   }, [open, calcPosition]);
 
   useEffect(() => {
@@ -184,11 +215,17 @@ const TaskNotesPopover = ({ taskId, itemType = "task" }) => {
           Accept: "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ note: editText }),
+        body: JSON.stringify({ note: editText.trim() }),
       });
       if (res.ok) {
         const data = await res.json();
-        setNotes(data.notes || []);
+        if (data.notes) {
+          setNotes(data.notes);
+        } else {
+          setNotes((prev) =>
+            prev.map((n) => (n.id === noteId ? { ...n, note: editText.trim() } : n))
+          );
+        }
         setEditingId(null);
         setEditText("");
       }
@@ -196,9 +233,8 @@ const TaskNotesPopover = ({ taskId, itemType = "task" }) => {
     setSaving(false);
   };
 
-  const hasNotes = notes.length > 0;
-
-  if (!hasNotes) return null;
+  const hasNotes = notes && notes.length > 0;
+  const firstNoteSnippet = hasNotes && notes[0]?.note ? notes[0].note.trim() : "";
 
   return (
     <div
@@ -206,28 +242,65 @@ const TaskNotesPopover = ({ taskId, itemType = "task" }) => {
       ref={wrapRef}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onClick={(e) => {
+        e.stopPropagation();
+        setOpen((prev) => !prev);
+      }}
     >
-      <div className="tnp-icon tnp-has-notes">
-        <StickyNote size={14} />
-      </div>
+      {hasNotes ? (
+        <div className="tnp-pill tnp-pill-active" title={firstNoteSnippet}>
+          <StickyNote size={13} className="tnp-pill-icon" />
+          <span className="tnp-pill-text">
+            {firstNoteSnippet.length > 18 ? `${firstNoteSnippet.slice(0, 18)}...` : firstNoteSnippet}
+          </span>
+          {notes.length > 1 && (
+            <span className="tnp-pill-count">+{notes.length - 1}</span>
+          )}
+        </div>
+      ) : (
+        <div className="tnp-pill tnp-pill-empty" title={t("Add private note", { defaultValue: "Add private note" })}>
+          <StickyNote size={13} className="tnp-pill-icon" />
+          <span className="tnp-pill-text">{t("Add Note", { defaultValue: "Add Note" })}</span>
+        </div>
+      )}
+
       {open &&
         createPortal(
           <div
             className="tnp-popover"
             ref={popoverRef}
             style={{ position: "fixed", top: pos.top, left: pos.left, zIndex: 99999 }}
-            onMouseEnter={handleNoteMouseEnter}
+            onMouseEnter={handlePopoverMouseEnter}
             onMouseLeave={handleMouseLeave}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="tnp-popover-header">
-              <StickyNote size={14} />
-              <span>{t("Notes ({{count}})", { defaultValue: `Notes (${notes.length})`, count: notes.length })}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <StickyNote size={14} style={{ color: "#F59E0B" }} />
+                <span style={{ fontWeight: 600 }}>{t("Personal Notes", { defaultValue: "Personal Notes" })}</span>
+                {hasNotes && <span className="tnp-header-badge">{notes.length}</span>}
+              </div>
+              <button
+                type="button"
+                className="tnp-close-btn"
+                onClick={() => setOpen(false)}
+                title={t("Close", { defaultValue: "Close" })}
+              >
+                <X size={13} />
+              </button>
             </div>
+
             <div className="tnp-popover-body">
-              {loading ? (
-                <div className="tnp-loading">{t("Loading...", { defaultValue: "Loading..." })}</div>
+              {loading && notes.length === 0 ? (
+                <div className="tnp-loading">{t("Loading notes...", { defaultValue: "Loading notes..." })}</div>
               ) : notes.length === 0 ? (
-                <div className="tnp-empty">{t("No notes yet", { defaultValue: "No notes yet" })}</div>
+                <div className="tnp-empty">
+                  <StickyNote size={20} style={{ opacity: 0.4, marginBottom: 4 }} />
+                  <div>{t("No personal notes yet", { defaultValue: "No personal notes yet" })}</div>
+                  <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "2px" }}>
+                    {t("Private to you only", { defaultValue: "Private to you only" })}
+                  </div>
+                </div>
               ) : (
                 notes.map((n) => (
                   <div key={n.id} className="tnp-note">
@@ -248,23 +321,54 @@ const TaskNotesPopover = ({ taskId, itemType = "task" }) => {
                           }}
                         />
                         <div className="tnp-edit-actions">
-                          <button className="tnp-edit-btn tnp-edit-save" onClick={() => handleEditSave(n.id)} disabled={saving}>
+                          <button
+                            type="button"
+                            className="tnp-edit-btn tnp-edit-save"
+                            onClick={() => handleEditSave(n.id)}
+                            disabled={saving || !editText.trim()}
+                            title={t("Save note", { defaultValue: "Save note" })}
+                          >
                             <Check size={12} />
                           </button>
-                          <button className="tnp-edit-btn tnp-edit-cancel" onClick={handleEditCancel}>
+                          <button
+                            type="button"
+                            className="tnp-edit-btn tnp-edit-cancel"
+                            onClick={handleEditCancel}
+                            title={t("Cancel", { defaultValue: "Cancel" })}
+                          >
                             <X size={12} />
                           </button>
                         </div>
                       </div>
                     ) : (
                       <>
-                        <p className="tnp-note-text">{n.note}</p>
-                        <div style={{ display: "flex", alignItems: "center", gap: "4px", marginLeft: "auto" }}>
-                          <button className="tnp-edit-icon" title={t("Edit note", { defaultValue: "Edit note" })} onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleEditStart(n); }}>
-                            <Pencil size={12} />
+                        <div className="tnp-note-content">
+                          <p className="tnp-note-text">{n.note}</p>
+                          {n.created_at && (
+                            <span className="tnp-note-time">
+                              {new Date(n.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                            </span>
+                          )}
+                        </div>
+                        <div className="tnp-note-actions">
+                          <button
+                            type="button"
+                            className="tnp-action-btn"
+                            title={t("Edit note", { defaultValue: "Edit note" })}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditStart(n);
+                            }}
+                          >
+                            <Pencil size={11} />
                           </button>
-                          <button className="tnp-edit-icon" title={t("Delete note", { defaultValue: "Delete note" })} onClick={(e) => handleDeleteNote(e, n.id)} style={{ color: "#ef4444" }}>
-                            <Trash2 size={12} />
+                          <button
+                            type="button"
+                            className="tnp-action-btn tnp-delete-btn"
+                            title={t("Delete note", { defaultValue: "Delete note" })}
+                            onClick={(e) => handleDeleteNote(e, n.id)}
+                          >
+                            <Trash2 size={11} />
                           </button>
                         </div>
                       </>
@@ -272,6 +376,35 @@ const TaskNotesPopover = ({ taskId, itemType = "task" }) => {
                   </div>
                 ))
               )}
+            </div>
+
+            {/* Quick Add Note Footer */}
+            <div className="tnp-popover-footer">
+              <form onSubmit={handleAddNote} className="tnp-add-form">
+                <input
+                  ref={newNoteInputRef}
+                  type="text"
+                  className="tnp-add-input"
+                  placeholder={t("Add a private note...", { defaultValue: "Add a private note..." })}
+                  value={newNoteText}
+                  onChange={(e) => setNewNoteText(e.target.value)}
+                  disabled={adding}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleAddNote(e);
+                    }
+                  }}
+                />
+                <button
+                  type="submit"
+                  className="tnp-add-btn"
+                  disabled={adding || !newNoteText.trim()}
+                  title={t("Add note", { defaultValue: "Add note" })}
+                >
+                  <Send size={12} />
+                </button>
+              </form>
             </div>
           </div>,
           document.body

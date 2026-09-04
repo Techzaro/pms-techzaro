@@ -14,6 +14,7 @@ import { useTranslation } from "react-i18next";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage, notify, toast } from "../utils/notify";
 import {
+  ArrowLeft,
   BarChart3,
   Calendar,
   Check,
@@ -315,12 +316,17 @@ function TaskDetails() {
   const location = useLocation();
   const notify = useNotification();
   const taskIds = location.state?.taskIds || [];
-  const sourcePages = {
+  const sourcePages = useMemo(() => ({
     tasks: { label: t("Assigned To You", { defaultValue: "Assigned To You" }), path: rolePath("tasks") },
     taskby: { label: t("Assigned By You", { defaultValue: "Assigned By You" }), path: rolePath("taskby") },
     "self-tasks": { label: t("Self Tasks", { defaultValue: "Self Tasks" }), path: rolePath("self-tasks") },
     "all-tasks": { label: t("All Tasks", { defaultValue: "All Tasks" }), path: rolePath("all-tasks") },
-  };
+    "guest-tasks": { label: t("Guest Tasks", { defaultValue: "Guest Tasks" }), path: rolePath("guest-tasks") },
+    dashboard: { label: t("Dashboard", { defaultValue: "Dashboard" }), path: rolePath("dashboard") },
+    notifications: { label: t("Notifications", { defaultValue: "Notifications" }), path: rolePath("notifications") },
+    "user-performance": { label: t("User Performance", { defaultValue: "User Performance" }), path: rolePath("user-performance") },
+    sharing: { label: t("Shared Resources", { defaultValue: "Shared Resources" }), path: rolePath("sharing") },
+  }), [t]);
   const isDeletingRef = useRef(false);
   const [task, setTask] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -400,6 +406,90 @@ function TaskDetails() {
   } = useActivityHighlight("task", task?.id, task?.activity_max_id || 0, taskChangesForHighlight);
 
   const source = sourcePages[location.state?.from] || null;
+
+  const breadcrumbItems = useMemo(() => {
+    if (!task) return [];
+    const from = location.state?.from || new URLSearchParams(location.search).get("from");
+    const returnUrl = location.state?.returnUrl;
+    const project = task.project || task.project_relation;
+
+    // 1. Explicitly coming from a project
+    if (from === "project" || location.state?.projectId || (project && from === "project")) {
+      const pId = location.state?.projectId || project?.id;
+      const pTitle = location.state?.projectTitle || project?.title || t("Project Details", { defaultValue: "Project Details" });
+      return [
+        { label: t("Projects", { defaultValue: "Projects" }), path: rolePath("projects") },
+        { label: pTitle, path: returnUrl || rolePath(`projects/project-details/${pId}`) },
+        { label: task.title },
+      ];
+    }
+
+    // 2. Coming from a known page / view
+    if (from && sourcePages[from]) {
+      const src = sourcePages[from];
+      if (from === "dashboard" || from === "notifications" || from === "user-performance" || from === "sharing") {
+        return [
+          { label: src.label, path: returnUrl || src.path },
+          { label: task.title },
+        ];
+      }
+      return [
+        { label: t("Tasks", { defaultValue: "Tasks" }), path: rolePath("tasks") },
+        { label: src.label, path: returnUrl || src.path },
+        { label: task.title },
+      ];
+    }
+
+    // 3. Fallback: If task belongs to a project, include project in breadcrumbs
+    if (project?.id) {
+      return [
+        { label: t("Projects", { defaultValue: "Projects" }), path: rolePath("projects") },
+        { label: project.title, path: rolePath(`projects/project-details/${project.id}`) },
+        { label: task.title },
+      ];
+    }
+
+    // 4. Default: Tasks > [Task Title]
+    return [
+      { label: t("Tasks", { defaultValue: "Tasks" }), path: rolePath("tasks") },
+      { label: task.title },
+    ];
+  }, [task, location.state, location.search, sourcePages, t]);
+
+  const handleBack = () => {
+    // 1. If explicit returnUrl in state
+    if (location.state?.returnUrl) {
+      navigate(location.state.returnUrl);
+      return;
+    }
+
+    // 2. If explicit 'from' parameter
+    const from = location.state?.from || new URLSearchParams(location.search).get("from");
+    if (from === "project") {
+      const pId = location.state?.projectId || task?.project?.id;
+      if (pId) {
+        navigate(rolePath(`projects/project-details/${pId}`));
+        return;
+      }
+      navigate(rolePath("projects"));
+      return;
+    }
+
+    if (from && sourcePages[from]) {
+      navigate(sourcePages[from].path);
+      return;
+    }
+
+    // 3. If task has a parent project, fallback to project
+    if (task?.project?.id) {
+      navigate(rolePath(`projects/project-details/${task.project.id}`));
+      return;
+    }
+
+    // 4. Default fallback: Tasks list
+    navigate(rolePath("tasks"));
+  };
+
   const isSharedTask = taskId && String(taskId).startsWith("shared_");
   const sharedResourceId = isSharedTask ? String(taskId).replace("shared_", "") : null;
   const [sharedPermission, setSharedPermission] = useState(null);
@@ -1491,16 +1581,21 @@ function TaskDetails() {
           <div className="td-layout">
             {/* ===== LEFT ===== */}
             <div className="td-main">
-              <Breadcrumb items={[
-                { label: t("Tasks", { defaultValue: "Tasks" }), path: rolePath("tasks") },
-                ...(source ? [{ label: source.label, path: source.path }] : []),
-                { label: task.title },
-              ]} />
+              <Breadcrumb items={breadcrumbItems} />
 
               <div className="td-title-row">
                 <div className="td-title-actions">
-                  <button className="td-nav-btn" onClick={() => goToTask(prevTaskId)} disabled={!prevTaskId}><ChevronLeft size={18} /></button>
-                  <button className="td-nav-btn" onClick={() => goToTask(nextTaskId)} disabled={!nextTaskId}><ChevronRight size={18} /></button>
+                  <button
+                    className="td-btn-outline td-back-btn"
+                    onClick={handleBack}
+                    title={t("Back to Previous Context", { defaultValue: "Back to Previous Context" })}
+                    style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+                  >
+                    <ArrowLeft size={16} />
+                    <span>{t("Back", { defaultValue: "Back" })}</span>
+                  </button>
+                  <button className="td-nav-btn" onClick={() => goToTask(prevTaskId)} disabled={!prevTaskId} title={t("Previous Task", { defaultValue: "Previous Task" })}><ChevronLeft size={18} /></button>
+                  <button className="td-nav-btn" onClick={() => goToTask(nextTaskId)} disabled={!nextTaskId} title={t("Next Task", { defaultValue: "Next Task" })}><ChevronRight size={18} /></button>
                   {canEdit && (
                     <button className="td-btn-outline" onClick={() => setShowEditModal(true)}>
                       <Pencil size={15} strokeWidth={2.5} />
@@ -1803,6 +1898,10 @@ function TaskDetails() {
                     {location.state?.from === "tasks" && t("Assigned to You", { defaultValue: "Assigned to You" })}
                     {location.state?.from === "self-tasks" && t("Self Tasks", { defaultValue: "Self Tasks" })}
                     {location.state?.from === "all-tasks" && t("All Tasks", { defaultValue: "All Tasks" })}
+                    {location.state?.from === "guest-tasks" && t("Guest Tasks", { defaultValue: "Guest Tasks" })}
+                    {location.state?.from === "project" && (location.state?.projectTitle || task?.project?.title || t("Project Tasks", { defaultValue: "Project Tasks" }))}
+                    {location.state?.from === "dashboard" && t("Dashboard", { defaultValue: "Dashboard" })}
+                    {location.state?.from === "notifications" && t("Notifications", { defaultValue: "Notifications" })}
                   </h2>
                 </div>
                 {/* TABS */}

@@ -411,8 +411,13 @@ function Deliveries() {
   const currentUser = getUser();
   const canCreateSubtask = currentUser && ["admin", "manager", "team_lead"].includes(currentUser.role);
 
-  const pendingStatuses = ["pending", "planned", "Planning", "Planned"];
-  const inProgressStatuses = ["in_progress", "In Progress", "In-progress"];
+  const pendingStatuses = ["pending", "planned", "planning", "Pending", "Planned", "Planning"];
+  const inProgressStatuses = ["in_progress", "In Progress", "In-progress", "reopened", "Reopened", "doing"];
+  const completedStatuses = ["completed", "approved", "done", "Completed", "Approved", "Done"];
+  const pausedStatuses = ["paused", "Paused", "hold", "on_hold"];
+  const submittedStatuses = ["submitted", "Submitted", "review", "in_review", "under_review"];
+  const declinedStatuses = ["declined", "rejected", "failed", "Declined", "Rejected", "Failed"];
+  const abandonedStatuses = ["abandoned", "abandon_requested", "Abandoned", "Abandon Requested"];
 
   const allCount = displayItems.length;
   const dueTodayCount = displayItems.filter((i) => {
@@ -422,13 +427,15 @@ function Deliveries() {
   }).length;
   const pendingCount = displayItems.filter((i) => i && pendingStatuses.includes(i.status)).length;
   const inProgressCount = displayItems.filter((i) => i && inProgressStatuses.includes(i.status)).length;
-  const pausedCount = displayItems.filter((i) => i && i.status === "paused").length;
-  const submittedCount = displayItems.filter((i) => i && i.status === "submitted").length;
+  const pausedCount = displayItems.filter((i) => i && pausedStatuses.includes(i.status)).length;
+  const submittedCount = displayItems.filter((i) => i && submittedStatuses.includes(i.status)).length;
   const reopenedCount = displayItems.filter((i) => i && i.status === "reopened").length;
   const transferredCount = displayItems.filter((i) => i && Array.isArray(i.delegation_chain) && i.delegation_chain.length > 0).length;
-  const approvedCount = displayItems.filter((i) => i && i.status === "approved").length;
-  const rejectedCount = displayItems.filter((i) => i && i.status === "rejected").length;
-  const abandonedCount = displayItems.filter((i) => i && (i.status === "abandoned" || i.status === "abandon_requested")).length;
+  const completedCount = displayItems.filter((i) => i && completedStatuses.includes(i.status)).length;
+  const approvedCount = completedCount;
+  const declinedCount = displayItems.filter((i) => i && declinedStatuses.includes(i.status)).length;
+  const rejectedCount = declinedCount;
+  const abandonedCount = displayItems.filter((i) => i && abandonedStatuses.includes(i.status)).length;
 
   const searchFilteredItems = useMemo(() => {
     let list = displayItems;
@@ -468,16 +475,16 @@ function Deliveries() {
           if (st === "due_today") {
             const d = item.due_date || item.end_date || item.start_date ? new Date(item.due_date || item.end_date || item.start_date) : null;
             const isToday = d && !isNaN(d.getTime()) && d.toDateString() === new Date().toDateString();
-            const isDone = ["approved", "completed", "done"].includes((item.status || "").toLowerCase());
+            const isDone = completedStatuses.includes(item.status);
             return isToday && !isDone;
           }
-          if (st === "pending") return ["pending", "planned", "Planning", "Planned"].includes(item.status);
-          if (st === "in_progress") return ["in_progress", "In Progress", "in-progress"].includes(item.status);
-          if (st === "paused") return ["paused", "pause", "Pause"].includes(item.status);
+          if (st === "pending") return pendingStatuses.includes(item.status);
+          if (st === "in_progress") return inProgressStatuses.includes(item.status);
+          if (st === "paused") return pausedStatuses.includes(item.status);
           if (st === "transferred") return Array.isArray(item.delegation_chain) && item.delegation_chain.length > 0;
-          if (st === "rejected" || st === "declined") return item.status === "rejected" || item.status === "declined";
-          if (st === "abandoned") return item.status === "abandoned" || item.status === "abandon_requested";
-          if (st === "approved") return item.status === "approved" || item.status === "completed";
+          if (st === "rejected" || st === "declined") return declinedStatuses.includes(item.status);
+          if (st === "abandoned") return abandonedStatuses.includes(item.status);
+          if (st === "approved" || st === "completed") return completedStatuses.includes(item.status);
           return item.status === st;
         });
       });
@@ -501,16 +508,32 @@ function Deliveries() {
   const filteredItems = statusFilter && statusFilter !== "due_today"
     ? searchFilteredItems.filter((item) => {
         if (!item) return false;
-        if (statusFilter === "pending") {
+        const sf = String(statusFilter).toLowerCase();
+        if (sf === "pending") {
           return pendingStatuses.includes(item.status);
         }
-        if (statusFilter === "transferred") {
+        if (sf === "in_progress") {
+          return inProgressStatuses.includes(item.status);
+        }
+        if (sf === "submitted") {
+          return submittedStatuses.includes(item.status);
+        }
+        if (sf === "completed" || sf === "approved") {
+          return completedStatuses.includes(item.status);
+        }
+        if (sf === "paused") {
+          return pausedStatuses.includes(item.status);
+        }
+        if (sf === "declined" || sf === "rejected") {
+          return declinedStatuses.includes(item.status);
+        }
+        if (sf === "abandoned") {
+          return abandonedStatuses.includes(item.status);
+        }
+        if (sf === "transferred") {
           return Array.isArray(item.delegation_chain) && item.delegation_chain.length > 0;
         }
-        if (statusFilter === "abandoned") {
-          return item.status === "abandoned" || item.status === "abandon_requested";
-        }
-        return item.status === statusFilter;
+        return String(item.status).toLowerCase() === sf;
       })
     : searchFilteredItems;
 
@@ -546,17 +569,14 @@ function Deliveries() {
 
         <DraggableStatusBadges
           badges={[
-            { id: "due_today", label: t("Due Today", { defaultValue: "Due Today" }), count: dueTodayCount, className: "DueToday", dotColor: "#EF4444" },
+            { id: "", label: t("All", { defaultValue: "All" }), count: allCount, className: "All" },
             { id: "pending", label: t("Pending", { defaultValue: "Pending" }), count: pendingCount, className: "Pending" },
             { id: "in_progress", label: t("In Progress", { defaultValue: "In Progress" }), count: inProgressCount, className: "InProgress" },
-            { id: "paused", label: t("Paused", { defaultValue: "Paused" }), count: pausedCount, className: "Paused" },
             { id: "submitted", label: t("Submitted", { defaultValue: "Submitted" }), count: submittedCount, className: "Submitted" },
-            { id: "reopened", label: t("Reopened", { defaultValue: "Reopened" }), count: reopenedCount, className: "Reopened" },
-            { id: "transferred", label: t("Transferred", { defaultValue: "Transferred" }), count: transferredCount, className: "Transferred" },
-            { id: "approved", label: t("Completed", { defaultValue: "Completed" }), count: approvedCount, className: "Approved" },
-            { id: "rejected", label: t("Declined", { defaultValue: "Declined" }), count: rejectedCount, className: "Rejected" },
+            { id: "completed", label: t("Completed", { defaultValue: "Completed" }), count: completedCount, className: "Approved" },
+            { id: "paused", label: t("Paused", { defaultValue: "Paused" }), count: pausedCount, className: "Paused" },
+            { id: "declined", label: t("Declined", { defaultValue: "Declined" }), count: declinedCount, className: "Rejected" },
             { id: "abandoned", label: t("Abandoned", { defaultValue: "Abandoned" }), count: abandonedCount, className: "Abandoned", dotColor: "#DC2626" },
-            { id: "", label: t("All", { defaultValue: "All" }), count: allCount, className: "All" },
           ]}
           activeStatus={statusFilter}
           onSelectStatus={selectStatusFilter}
@@ -569,10 +589,48 @@ function Deliveries() {
           search={search}
           onSearchChange={setSearch}
           filters={advancedFilters}
-          onFilterChange={(key, val) => setAdvancedFilters((prev) => ({ ...prev, [key]: val }))}
+          activeStatus={statusFilter}
+          onFilterChange={(key, val) => {
+            setAdvancedFilters((prev) => ({ ...prev, [key]: val }));
+            setPage(1);
+          }}
+          onApplyFilters={(appliedFilters, appliedSort) => {
+            setStatusFilter("");
+            setSearchParams({});
+            setAdvancedFilters((prev) => ({
+              ...prev,
+              statuses: appliedFilters?.statuses || appliedFilters?.status || [],
+              status: appliedFilters?.statuses || appliedFilters?.status || [],
+              states: appliedFilters?.states || [],
+              due_states: appliedFilters?.due_states || [],
+              priority: appliedFilters?.priority || appliedFilters?.priorities || [],
+              user_id: appliedFilters?.user_id || appliedFilters?.assigned_to || [],
+              project_id: appliedFilters?.project_id || [],
+              created_by: appliedFilters?.created_by || [],
+              follower_id: appliedFilters?.follower_id || [],
+              start_date: appliedFilters?.start_date || "",
+              end_date: appliedFilters?.end_date || "",
+            }));
+            setPage(1);
+          }}
           onReset={() => {
             setSearch("");
-            setAdvancedFilters({ user_id: [], project_id: [], status: [], start_date: "", end_date: "" });
+            setStatusFilter("");
+            setSearchParams({});
+            setAdvancedFilters({
+              user_id: [],
+              project_id: [],
+              status: [],
+              statuses: [],
+              states: [],
+              due_states: [],
+              priority: [],
+              created_by: [],
+              follower_id: [],
+              start_date: "",
+              end_date: "",
+            });
+            setPage(1);
           }}
         />
 
@@ -616,13 +674,13 @@ function Deliveries() {
                         {getInitials(item.title)}
                       </div>
                       <div>
-                        <div className="user-name">{item.title}</div>
+                        <div className="user-name" title={item.title} style={{ maxWidth: "250px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</div>
                       </div>
                     </div>
                      <div>
-                        <div className="task-title">{item.task?.title || "-"}</div>
+                        <div className="task-title" title={item.task?.title || "-"} style={{ maxWidth: "250px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.task?.title || "-"}</div>
                        {(item.project || item.task?.project) && item.task?.title && (
-                         <Link to={rolePath(`projects/project-details/${(item.project || item.task.project).id}`)} onClick={(e) => e.stopPropagation()} style={{ fontSize: "11px", color: "#2563eb", textDecoration: "none", marginTop: "2px", display: "inline-block" }}>
+                         <Link to={rolePath(`projects/project-details/${(item.project || item.task.project).id}`)} onClick={(e) => e.stopPropagation()} style={{ fontSize: "11px", color: "#2563eb", textDecoration: "none", marginTop: "2px", display: "inline-block", maxWidth: "250px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={(item.project || item.task.project).title}>
                            {(item.project || item.task.project).title}
                          </Link>
                        )}

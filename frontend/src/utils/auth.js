@@ -69,27 +69,85 @@ function _migrateIfNeeded() {
   return true;
 }
 
-/* ───── current role (strictly tab-scoped, no cross-tab leakage) ───── */
+/* ───── current role (persisted across tabs via localStorage) ───── */
 
 export function getCurrentRole() {
-  return sessionStorage.getItem("currentRole") || "";
+  const fromSession = sessionStorage.getItem("currentRole");
+  if (fromSession) return fromSession;
+  const fromLocal = localStorage.getItem("currentRole") || localStorage.getItem("lastActiveRole") || "";
+  if (fromLocal) {
+    try { sessionStorage.setItem("currentRole", fromLocal); } catch {}
+    return fromLocal;
+  }
+  // Try to find any active session role in localStorage
+  for (const r of ROLES) {
+    const sessions = _getSessions(r);
+    const validSid = Object.keys(sessions).find(sid => {
+      const s = sessions[sid];
+      return s && s.token && (!s.expiresAt || Date.now() <= s.expiresAt);
+    });
+    if (validSid) {
+      try { sessionStorage.setItem("currentRole", r); } catch {}
+      try { sessionStorage.setItem("sessionId", validSid); } catch {}
+      try { localStorage.setItem("currentRole", r); } catch {}
+      try { localStorage.setItem("sessionId", validSid); } catch {}
+      return r;
+    }
+  }
+  return "";
 }
 
 export function setCurrentRole(role) {
-  try { sessionStorage.setItem("currentRole", role); } catch {}
+  try {
+    if (role) {
+      sessionStorage.setItem("currentRole", role);
+      localStorage.setItem("currentRole", role);
+      localStorage.setItem("lastActiveRole", role);
+    } else {
+      sessionStorage.removeItem("currentRole");
+      localStorage.removeItem("currentRole");
+    }
+  } catch {}
 }
 
-/* ───── session ID (strictly tab-scoped, no cross-tab leakage) ───── */
+/* ───── session ID (persisted across tabs via localStorage) ───── */
 
 export function getSessionId() {
-  return sessionStorage.getItem("sessionId") || "";
+  const fromSession = sessionStorage.getItem("sessionId");
+  if (fromSession) return fromSession;
+  const fromLocal = localStorage.getItem("sessionId") || localStorage.getItem("lastActiveSessionId") || "";
+  if (fromLocal) {
+    try { sessionStorage.setItem("sessionId", fromLocal); } catch {}
+    return fromLocal;
+  }
+  const role = getCurrentRole();
+  if (role) {
+    const sessions = _getSessions(role);
+    const validSid = Object.keys(sessions).find(sid => {
+      const s = sessions[sid];
+      return s && s.token && (!s.expiresAt || Date.now() <= s.expiresAt);
+    });
+    if (validSid) {
+      try { sessionStorage.setItem("sessionId", validSid); } catch {}
+      try { localStorage.setItem("sessionId", validSid); } catch {}
+      return validSid;
+    }
+  }
+  return "";
 }
 
 export function setSessionId(id) {
   if (id) {
-    try { sessionStorage.setItem("sessionId", id); } catch {}
+    try {
+      sessionStorage.setItem("sessionId", id);
+      localStorage.setItem("sessionId", id);
+      localStorage.setItem("lastActiveSessionId", id);
+    } catch {}
   } else {
-    try { sessionStorage.removeItem("sessionId"); } catch {}
+    try {
+      sessionStorage.removeItem("sessionId");
+      localStorage.removeItem("sessionId");
+    } catch {}
   }
 }
 
@@ -97,7 +155,27 @@ export function setSessionId(id) {
 
 export function getToken(role) {
   let r = role || getCurrentRole();
-  if (!r) return "";
+  if (!r) {
+    for (const testRole of ROLES) {
+      const sessObj = _getSessions(testRole);
+      const validSid = Object.keys(sessObj).find(sid => {
+        const s = sessObj[sid];
+        return s && s.token && (!s.expiresAt || Date.now() <= s.expiresAt);
+      });
+      if (validSid) {
+        r = testRole;
+        setCurrentRole(r);
+        setSessionId(validSid);
+        break;
+      }
+    }
+  }
+
+  if (!r) {
+    const fallbackToken = localStorage.getItem("token");
+    if (fallbackToken) return fallbackToken;
+    return "";
+  }
 
   let sid = getSessionId();
 
@@ -111,25 +189,25 @@ export function getToken(role) {
   let sessions = _getSessions(r);
   let sess = sid ? sessions[sid] : null;
 
-  // No fallback to other tabs' sessions — each tab owns its own session
-  // If session not found or expired, return empty (forces re-login)
+  if (!sess) {
+    const anyValidSid = Object.keys(sessions).find(k => {
+      const s = sessions[k];
+      return s && s.token && (!s.expiresAt || Date.now() <= s.expiresAt);
+    });
+    if (anyValidSid) {
+      sid = anyValidSid;
+      sess = sessions[sid];
+      setSessionId(sid);
+    }
+  }
+
   if (!sess || (sess.expiresAt && Date.now() > sess.expiresAt)) {
     if (sess && sess.expiresAt && Date.now() > sess.expiresAt) {
-      // Clean up expired session from pool
       delete sessions[sid];
       _setSessions(r, sessions);
     }
-    sessionStorage.removeItem("sessionId");
-    return "";
-  }
-
-  if (!sess) return "";
-
-  // Check expiration
-  if (sess.expiresAt && Date.now() > sess.expiresAt) {
-    delete sessions[sid];
-    _setSessions(r, sessions);
-    sessionStorage.removeItem("sessionId");
+    const fallbackToken = localStorage.getItem("token");
+    if (fallbackToken) return fallbackToken;
     return "";
   }
 
@@ -147,6 +225,10 @@ export function setToken(role, token) {
       _setSessions(r, sessions);
     }
   }
+  try {
+    localStorage.setItem("token", token);
+    if (r) localStorage.setItem(`token_${r}`, token);
+  } catch {}
 }
 
 export function removeToken(role) {
@@ -159,15 +241,40 @@ export function removeToken(role) {
       delete sessions[sid];
       _setSessions(r, sessions);
     }
-    sessionStorage.removeItem("sessionId");
   }
+  try {
+    localStorage.removeItem("token");
+    if (r) localStorage.removeItem(`token_${r}`);
+  } catch {}
 }
 
 /* ───── user object ───── */
 
 export function getUser(role) {
   let r = role || getCurrentRole();
-  if (!r) return null;
+  if (!r) {
+    for (const testRole of ROLES) {
+      const sessObj = _getSessions(testRole);
+      const validSid = Object.keys(sessObj).find(sid => {
+        const s = sessObj[sid];
+        return s && s.token && (!s.expiresAt || Date.now() <= s.expiresAt);
+      });
+      if (validSid) {
+        r = testRole;
+        setCurrentRole(r);
+        setSessionId(validSid);
+        break;
+      }
+    }
+  }
+
+  if (!r) {
+    try {
+      const fallbackUser = JSON.parse(localStorage.getItem("user")) || null;
+      if (fallbackUser) return fallbackUser;
+    } catch {}
+    return null;
+  }
 
   let sid = getSessionId();
 
@@ -181,22 +288,27 @@ export function getUser(role) {
   let sessions = _getSessions(r);
   let sess = sid ? sessions[sid] : null;
 
-  // No fallback to other tabs' sessions
+  if (!sess) {
+    const anyValidSid = Object.keys(sessions).find(k => {
+      const s = sessions[k];
+      return s && s.token && (!s.expiresAt || Date.now() <= s.expiresAt);
+    });
+    if (anyValidSid) {
+      sid = anyValidSid;
+      sess = sessions[sid];
+      setSessionId(sid);
+    }
+  }
+
   if (!sess || (sess.expiresAt && Date.now() > sess.expiresAt)) {
     if (sess && sess.expiresAt && Date.now() > sess.expiresAt) {
       delete sessions[sid];
       _setSessions(r, sessions);
     }
-    sessionStorage.removeItem("sessionId");
-    return null;
-  }
-
-  if (!sess) return null;
-
-  if (sess.expiresAt && Date.now() > sess.expiresAt) {
-    delete sessions[sid];
-    _setSessions(r, sessions);
-    sessionStorage.removeItem("sessionId");
+    try {
+      const fallbackUser = JSON.parse(localStorage.getItem("user")) || null;
+      if (fallbackUser) return fallbackUser;
+    } catch {}
     return null;
   }
 
@@ -231,6 +343,10 @@ export function setUser(role, user) {
       _setSessions(r, sessions);
     }
   }
+  try {
+    localStorage.setItem("user", JSON.stringify(user || {}));
+    if (r) localStorage.setItem(`user_${r}`, JSON.stringify(user || {}));
+  } catch {}
 }
 
 export function removeUser(role) {
@@ -293,6 +409,20 @@ export function saveSession(role, token, user, rememberMe = false, expiresAt = n
   setCurrentRole(role);
   setSessionId(sid);
 
+  try {
+    localStorage.setItem("currentRole", role);
+    localStorage.setItem("lastActiveRole", role);
+    localStorage.setItem("sessionId", sid);
+    localStorage.setItem("lastActiveSessionId", sid);
+    localStorage.setItem("token", token);
+    localStorage.setItem(`token_${role}`, token);
+    localStorage.setItem("user", JSON.stringify(user || {}));
+    localStorage.setItem(`user_${role}`, JSON.stringify(user || {}));
+    if (user?.organization?.slug || user?.tenant_slug) {
+      setTenantSlug(user?.organization?.slug || user?.tenant_slug);
+    }
+  } catch {}
+
   return true;
 }
 
@@ -315,6 +445,12 @@ export function clearSession(role) {
 
   localStorage.removeItem(`token_${r}`);
   localStorage.removeItem(`user_${r}`);
+  localStorage.removeItem("token");
+  localStorage.removeItem("user");
+  localStorage.removeItem("currentRole");
+  localStorage.removeItem("lastActiveRole");
+  localStorage.removeItem("sessionId");
+  localStorage.removeItem("lastActiveSessionId");
 
   if (getCurrentRole() === r) {
     sessionStorage.removeItem("currentRole");
@@ -322,13 +458,13 @@ export function clearSession(role) {
 }
 
 /**
- * Clears only THIS tab's sessions. Other tabs remain unaffected.
+ * Clears sessions and resets auth state.
  */
 export function clearAllSessions() {
   const r = getCurrentRole();
   const sid = getSessionId();
 
-  // Only remove THIS tab's session from the pool
+  // Remove THIS tab's session from the pool
   if (r && sid) {
     const sessions = _getSessions(r);
     if (sessions[sid]) {
@@ -337,45 +473,63 @@ export function clearAllSessions() {
     }
   }
 
-  // Clear only this tab's sessionStorage
+  // Clear all role pools if logging out completely
+  for (const roleKey of ROLES) {
+    localStorage.removeItem(`sessions_${roleKey}`);
+    localStorage.removeItem(`token_${roleKey}`);
+    localStorage.removeItem(`user_${roleKey}`);
+  }
+
+  // Clear tab sessionStorage
   sessionStorage.removeItem("sessionId");
   sessionStorage.removeItem("currentRole");
   sessionStorage.removeItem("tenant_slug");
 
-  // Clear legacy keys
+  // Clear localStorage keys
   localStorage.removeItem("token");
+  localStorage.removeItem("user");
   localStorage.removeItem("role");
   localStorage.removeItem("userId");
   localStorage.removeItem("name");
   localStorage.removeItem("email");
+  localStorage.removeItem("currentRole");
   localStorage.removeItem("lastActiveRole");
+  localStorage.removeItem("sessionId");
   localStorage.removeItem("lastActiveSessionId");
+  localStorage.removeItem("tenant_slug");
 }
 
 export function getTenantSlug() {
-  // Per-tab only: never share tenant_slug across tabs via localStorage
-  const stored = sessionStorage.getItem("tenant_slug") || "";
-  // Also try to extract from URL path as fallback
+  const stored = sessionStorage.getItem("tenant_slug") || localStorage.getItem("tenant_slug") || "";
   const pathMatch = window.location.pathname.match(/^\/org\/([a-z0-9\-]+)(?:\/|$)/);
   const urlSlug = pathMatch ? pathMatch[1] : "";
-  // Prefer stored value, but if it looks wrong (doesn't match URL), use URL slug
-  if (stored && urlSlug && stored !== urlSlug) {
-    setTenantSlug(urlSlug);
-    return urlSlug;
+  const effectiveSlug = urlSlug || stored || "";
+  if (effectiveSlug) {
+    try {
+      sessionStorage.setItem("tenant_slug", effectiveSlug);
+      localStorage.setItem("tenant_slug", effectiveSlug);
+    } catch {}
   }
-  return stored || urlSlug;
+  return effectiveSlug;
 }
 
 export function setTenantSlug(slug) {
   if (slug) {
-    sessionStorage.setItem("tenant_slug", slug);
+    try {
+      sessionStorage.setItem("tenant_slug", slug);
+      localStorage.setItem("tenant_slug", slug);
+    } catch {}
   } else {
-    sessionStorage.removeItem("tenant_slug");
+    try {
+      sessionStorage.removeItem("tenant_slug");
+      localStorage.removeItem("tenant_slug");
+    } catch {}
   }
 }
 
 export function clearTenantSlug() {
   sessionStorage.removeItem("tenant_slug");
+  localStorage.removeItem("tenant_slug");
 }
 
 /* ───── stored email fallback (for super-admin / cross-role use) ── */
@@ -503,26 +657,70 @@ function _setSuperAdminSessions(sessions) {
 }
 
 export function getSuperAdminRole() {
-  return sessionStorage.getItem(SUPER_ADMIN_ROLE_KEY) || "super_admin";
+  return sessionStorage.getItem(SUPER_ADMIN_ROLE_KEY) || localStorage.getItem(SUPER_ADMIN_ROLE_KEY) || "super_admin";
 }
 
 export function setSuperAdminRole(role) {
-  sessionStorage.setItem(SUPER_ADMIN_ROLE_KEY, role);
+  try {
+    sessionStorage.setItem(SUPER_ADMIN_ROLE_KEY, role);
+    localStorage.setItem(SUPER_ADMIN_ROLE_KEY, role);
+  } catch {}
 }
 
 export function getSuperAdminSessionId() {
-  return sessionStorage.getItem(SUPER_ADMIN_SESSION_KEY) || "";
+  const fromSession = sessionStorage.getItem(SUPER_ADMIN_SESSION_KEY);
+  if (fromSession) return fromSession;
+  const fromLocal = localStorage.getItem(SUPER_ADMIN_SESSION_KEY);
+  if (fromLocal) {
+    try { sessionStorage.setItem(SUPER_ADMIN_SESSION_KEY, fromLocal); } catch {}
+    return fromLocal;
+  }
+  const sessions = _getSuperAdminSessions();
+  const validSid = Object.keys(sessions).find(sid => {
+    const s = sessions[sid];
+    return s && s.token && (!s.expiresAt || Date.now() <= s.expiresAt);
+  });
+  if (validSid) {
+    try {
+      sessionStorage.setItem(SUPER_ADMIN_SESSION_KEY, validSid);
+      localStorage.setItem(SUPER_ADMIN_SESSION_KEY, validSid);
+    } catch {}
+    return validSid;
+  }
+  return "";
 }
 
 export function setSuperAdminSessionId(id) {
-  sessionStorage.setItem(SUPER_ADMIN_SESSION_KEY, id);
+  if (id) {
+    try {
+      sessionStorage.setItem(SUPER_ADMIN_SESSION_KEY, id);
+      localStorage.setItem(SUPER_ADMIN_SESSION_KEY, id);
+    } catch {}
+  } else {
+    try {
+      sessionStorage.removeItem(SUPER_ADMIN_SESSION_KEY);
+      localStorage.removeItem(SUPER_ADMIN_SESSION_KEY);
+    } catch {}
+  }
 }
 
 export function getSuperAdminToken() {
-  const sid = getSuperAdminSessionId();
+  let sid = getSuperAdminSessionId();
+  const sessions = _getSuperAdminSessions();
+
+  if (!sid) {
+    const validSid = Object.keys(sessions).find(k => {
+      const s = sessions[k];
+      return s && s.token && (!s.expiresAt || Date.now() <= s.expiresAt);
+    });
+    if (validSid) {
+      sid = validSid;
+      setSuperAdminSessionId(sid);
+    }
+  }
+
   if (!sid) return "";
 
-  const sessions = _getSuperAdminSessions();
   const sess = sessions[sid];
   if (!sess) return "";
 
@@ -530,6 +728,7 @@ export function getSuperAdminToken() {
     delete sessions[sid];
     _setSuperAdminSessions(sessions);
     sessionStorage.removeItem(SUPER_ADMIN_SESSION_KEY);
+    localStorage.removeItem(SUPER_ADMIN_SESSION_KEY);
     return "";
   }
 
@@ -537,10 +736,22 @@ export function getSuperAdminToken() {
 }
 
 export function getSuperAdminUser() {
-  const sid = getSuperAdminSessionId();
+  let sid = getSuperAdminSessionId();
+  const sessions = _getSuperAdminSessions();
+
+  if (!sid) {
+    const validSid = Object.keys(sessions).find(k => {
+      const s = sessions[k];
+      return s && s.token && (!s.expiresAt || Date.now() <= s.expiresAt);
+    });
+    if (validSid) {
+      sid = validSid;
+      setSuperAdminSessionId(sid);
+    }
+  }
+
   if (!sid) return null;
 
-  const sessions = _getSuperAdminSessions();
   const sess = sessions[sid];
   if (!sess) return null;
 
@@ -548,6 +759,7 @@ export function getSuperAdminUser() {
     delete sessions[sid];
     _setSuperAdminSessions(sessions);
     sessionStorage.removeItem(SUPER_ADMIN_SESSION_KEY);
+    localStorage.removeItem(SUPER_ADMIN_SESSION_KEY);
     return null;
   }
 
@@ -586,9 +798,11 @@ export function clearSuperAdminSession() {
       _setSuperAdminSessions(sessions);
     }
     sessionStorage.removeItem(SUPER_ADMIN_SESSION_KEY);
+    localStorage.removeItem(SUPER_ADMIN_SESSION_KEY);
   }
 
   sessionStorage.removeItem(SUPER_ADMIN_ROLE_KEY);
+  localStorage.removeItem(SUPER_ADMIN_ROLE_KEY);
 }
 
 export function superAdminAuthToken() {

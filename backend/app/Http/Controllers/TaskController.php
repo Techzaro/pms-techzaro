@@ -17,6 +17,7 @@ use App\Models\TaskPersonalNote;
 use App\Models\TaskSubmission;
 use App\Models\TaskUserNote;
 use App\Models\TaskWorkflowEvent;
+use App\Models\Team;
 use App\Models\User;
 use App\Services\ActivityService;
 use App\Services\AuditService;
@@ -1466,8 +1467,8 @@ class TaskController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'task_management',
-                action: 'create',
+                module: 'Task Management',
+                action: 'Task Created',
                 description: "Created {$taskCount} task(s) in project {$project->title}",
                 user: $user,
                 entityType: 'Task',
@@ -1813,8 +1814,8 @@ class TaskController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'task_management',
-                action: 'create',
+                module: 'Task Management',
+                action: 'Task Created',
                 description: "Created {$taskCount} standalone task(s)",
                 user: $user,
                 entityType: 'Task',
@@ -2007,7 +2008,81 @@ class TaskController extends Controller
         $task->update($validated);
 
         if ($request->has('followers')) {
-            $task->followers()->sync($followers ?? []);
+            $oldFollowerIds = $task->followers()->pluck('users.id')->toArray();
+            $newFollowerIds = array_map('intval', $followers ?? []);
+            $addedFollowerIds = array_values(array_diff($newFollowerIds, $oldFollowerIds));
+            $removedFollowerIds = array_values(array_diff($oldFollowerIds, $newFollowerIds));
+
+            $task->followers()->sync($newFollowerIds);
+
+            if (! empty($addedFollowerIds)) {
+                $addedNames = User::whereIn('id', $addedFollowerIds)->pluck('name')->implode(', ');
+                TaskWorkflowEvent::create([
+                    'task_id' => $task->id,
+                    'user_id' => $user->id,
+                    'action' => 'follower_added',
+                    'comment' => "Added follower(s): {$addedNames}",
+                ]);
+                $this->activityService->log(
+                    $user->id,
+                    'task_follower_added',
+                    "Added follower(s) {$addedNames} to task \"{$task->title}\"",
+                    'task',
+                    $task->id,
+                    'follower_added',
+                    $task->title,
+                    null,
+                    ['added_users' => $addedNames]
+                );
+                try {
+                    $this->auditService->log(
+                        module: 'Task Management',
+                        action: 'Follower Added',
+                        description: "Added follower(s) {$addedNames} to task \"{$task->title}\"",
+                        user: $user,
+                        entityType: 'Task',
+                        entityId: $task->id,
+                        newValues: ['added_users' => $addedNames],
+                        status: 'success'
+                    );
+                } catch (\Throwable $e) {
+                    \Log::error('Failed to log audit for follower added', ['error' => $e->getMessage()]);
+                }
+            }
+            if (! empty($removedFollowerIds)) {
+                $removedNames = User::whereIn('id', $removedFollowerIds)->pluck('name')->implode(', ');
+                TaskWorkflowEvent::create([
+                    'task_id' => $task->id,
+                    'user_id' => $user->id,
+                    'action' => 'follower_removed',
+                    'comment' => "Removed follower(s): {$removedNames}",
+                ]);
+                $this->activityService->log(
+                    $user->id,
+                    'task_follower_removed',
+                    "Removed follower(s) {$removedNames} from task \"{$task->title}\"",
+                    'task',
+                    $task->id,
+                    'follower_removed',
+                    $task->title,
+                    null,
+                    ['removed_users' => $removedNames]
+                );
+                try {
+                    $this->auditService->log(
+                        module: 'Task Management',
+                        action: 'Follower Removed',
+                        description: "Removed follower(s) {$removedNames} from task \"{$task->title}\"",
+                        user: $user,
+                        entityType: 'Task',
+                        entityId: $task->id,
+                        oldValues: ['removed_users' => $removedNames],
+                        status: 'success'
+                    );
+                } catch (\Throwable $e) {
+                    \Log::error('Failed to log audit for follower removed', ['error' => $e->getMessage()]);
+                }
+            }
         }
 
         // Rename existing files/links if provided
@@ -2156,15 +2231,21 @@ class TaskController extends Controller
             : 'Updated task details for "'.$task->title.'"';
         $this->activityService->log($user->id, 'task_updated', $changeSummary, 'task', $task->id);
 
+        $actionName = 'Task Edited';
+        if (! empty($assigneeIds) && $oldAssigneeIds !== $assigneeIds && count($changes) === 1) {
+            $actionName = 'Task Assigned';
+        }
+
         try {
             $this->auditService->log(
-                module: 'task_management',
-                action: 'update',
-                description: "Updated task {$task->title}",
+                module: 'Task Management',
+                action: $actionName,
+                description: $changeSummary,
                 user: $user,
                 entityType: 'Task',
                 entityId: $task->id,
                 oldValues: $oldValues,
+                newValues: $changes,
                 status: 'success'
             );
         } catch (\Throwable $e) {
@@ -2492,8 +2573,8 @@ class TaskController extends Controller
 
             try {
                 $this->auditService->log(
-                    module: 'task_management',
-                    action: 'complete',
+                    module: 'Task Management',
+                    action: 'Task Completed',
                     description: "Completed task {$task->title}",
                     user: $user,
                     entityType: 'Task',
@@ -2644,8 +2725,8 @@ class TaskController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'task_management',
-                action: 'mark_as_completed',
+                module: 'Task Management',
+                action: 'Task Completed',
                 description: "{$user->name} marked the task as completed. Reason: {$reason}",
                 user: $user,
                 entityType: 'Task',
@@ -2831,6 +2912,22 @@ class TaskController extends Controller
             }
 
             try {
+                if (isset($this->auditService)) {
+                    $this->auditService->log(
+                        module: 'Task Management',
+                        action: 'Task Started',
+                        description: 'Acknowledged task "'.$task->title.'"',
+                        user: $user,
+                        entityType: 'Task',
+                        entityId: $task->id,
+                        status: 'success'
+                    );
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Audit log warning during acknowledge: ' . $e->getMessage());
+            }
+
+            try {
                 $task->load('project:id,title');
                 // Notify the task creator (Excluding self-notification)
                 if (isset($this->notificationService)) {
@@ -2973,6 +3070,22 @@ class TaskController extends Controller
             }
 
             try {
+                if (isset($this->auditService)) {
+                    $this->auditService->log(
+                        module: 'Task Management',
+                        action: ($task->timer_state === 'paused' || $currentStatus === 'paused') ? 'Task Resumed' : 'Task Started',
+                        description: 'Started timer for task "'.$task->title.'"',
+                        user: $user,
+                        entityType: 'Task',
+                        entityId: $task->id,
+                        status: 'success'
+                    );
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Audit log warning during startTimer: ' . $e->getMessage());
+            }
+
+            try {
                 $task->load('project:id,title');
                 if (isset($this->notificationService)) {
                     if ($task->assigned_by && (int) $task->assigned_by !== (int) $user->id) {
@@ -3083,18 +3196,48 @@ class TaskController extends Controller
             'comment' => $user->name.' paused this task — Reason: '.$reasonLabel.($validated['reason_detail'] ? ' ('.$validated['reason_detail'].')' : ''),
         ]);
 
+        $this->activityService->log(
+            $user->id,
+            'task_paused',
+            'Paused task "'.$task->title.'" — Reason: '.$reasonLabel,
+            'task',
+            $task->id,
+            'paused',
+            $task->title,
+            $task->assigned_to,
+            ['reason' => $validated['reason'], 'reason_detail' => $validated['reason_detail'] ?? null]
+        );
+
         $task->load('project:id,title');
 
+        $targetRecipients = [];
         if ($task->assigned_by && (int) $task->assigned_by !== (int) $user->id) {
+            $targetRecipients[] = (int) $task->assigned_by;
+        }
+        if ((int) ($task->assigned_by ?? 0) === (int) $user->id || in_array($user->role, ['admin', 'manager', 'super_admin'])) {
+            $assigneeIds = $task->assignees()->pluck('users.id')->toArray();
+            if ($task->current_owner) {
+                $assigneeIds[] = (int) $task->current_owner;
+            }
+            foreach ($assigneeIds as $aId) {
+                if ((int) $aId !== (int) $user->id) {
+                    $targetRecipients[] = (int) $aId;
+                }
+            }
+        }
+        $targetRecipients = array_values(array_unique($targetRecipients));
+
+        foreach ($targetRecipients as $recipientId) {
+            $isTargetCreator = (int) $recipientId === (int) ($task->assigned_by ?? 0);
             $this->notificationService->notify(
-                (int) $task->assigned_by,
+                $recipientId,
                 (int) $user->id,
                 'task_paused',
                 'task',
                 (int) $task->id,
                 'Task Paused',
                 $user->name.' paused task "'.$task->title.'" — Reason: '.$reasonLabel,
-                '/tasks/task-details/'.$task->id.'?from=taskby'
+                '/tasks/task-details/'.$task->id.'?from='.($isTargetCreator ? 'taskby' : 'tasks')
             );
         }
 
@@ -3103,6 +3246,21 @@ class TaskController extends Controller
 
         if ($task->assigned_by) {
             $this->clearDashboardCache((int) $task->assigned_by);
+        }
+
+        try {
+            $this->auditService->log(
+                module: 'Task Management',
+                action: 'Task Paused',
+                description: "Paused task '{$task->title}' — Reason: {$reasonLabel}",
+                user: $user,
+                entityType: 'Task',
+                entityId: $task->id,
+                newValues: ['reason' => $validated['reason'], 'reason_detail' => $validated['reason_detail'] ?? null],
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            Log::error('Failed to log audit in pause', ['error' => $e->getMessage()]);
         }
 
         return response()->json([
@@ -3158,19 +3316,47 @@ class TaskController extends Controller
             'comment' => $user->name.' resumed this task',
         ]);
 
+        $this->activityService->log(
+            $user->id,
+            'task_resumed',
+            'Resumed task "'.$task->title.'"',
+            'task',
+            $task->id,
+            'resumed',
+            $task->title,
+            $task->assigned_to
+        );
+
         $task->load('project:id,title');
 
-        // Notify the task creator (Excluding self-notification)
+        $targetRecipients = [];
         if ($task->assigned_by && (int) $task->assigned_by !== (int) $user->id) {
+            $targetRecipients[] = (int) $task->assigned_by;
+        }
+        if ((int) ($task->assigned_by ?? 0) === (int) $user->id || in_array($user->role, ['admin', 'manager', 'super_admin'])) {
+            $assigneeIds = $task->assignees()->pluck('users.id')->toArray();
+            if ($task->current_owner) {
+                $assigneeIds[] = (int) $task->current_owner;
+            }
+            foreach ($assigneeIds as $aId) {
+                if ((int) $aId !== (int) $user->id) {
+                    $targetRecipients[] = (int) $aId;
+                }
+            }
+        }
+        $targetRecipients = array_values(array_unique($targetRecipients));
+
+        foreach ($targetRecipients as $recipientId) {
+            $isTargetCreator = (int) $recipientId === (int) ($task->assigned_by ?? 0);
             $this->notificationService->notify(
-                (int) $task->assigned_by,
+                $recipientId,
                 (int) $user->id,
-                'task_continued',
+                'task_resumed',
                 'task',
                 (int) $task->id,
-                'Task Continued',
-                $user->name.' continued task "'.$task->title.'".',
-                '/tasks/task-details/'.$task->id.'?from=taskby'
+                'Task Resumed',
+                $user->name.' resumed task "'.$task->title.'".',
+                '/tasks/task-details/'.$task->id.'?from='.($isTargetCreator ? 'taskby' : 'tasks')
             );
         }
 
@@ -3179,6 +3365,20 @@ class TaskController extends Controller
 
         if ($task->assigned_by) {
             $this->clearDashboardCache((int) $task->assigned_by);
+        }
+
+        try {
+            $this->auditService->log(
+                module: 'Task Management',
+                action: 'Task Resumed',
+                description: "Resumed task '{$task->title}'",
+                user: $user,
+                entityType: 'Task',
+                entityId: $task->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            Log::error('Failed to log audit in continueTask', ['error' => $e->getMessage()]);
         }
 
         return response()->json([
@@ -3272,8 +3472,8 @@ class TaskController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'task_management',
-                action: 'assigner_pause',
+                module: 'Task Management',
+                action: 'Task Paused',
                 description: 'Assigner paused task '.$task->title,
                 user: $user,
                 entityType: 'Task',
@@ -3373,8 +3573,8 @@ class TaskController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'task_management',
-                action: 'assigner_resume',
+                module: 'Task Management',
+                action: 'Task Resumed',
                 description: 'Assigner resumed task '.$task->title,
                 user: $user,
                 entityType: 'Task',
@@ -3632,8 +3832,8 @@ class TaskController extends Controller
 
             try {
                 $this->auditService->log(
-                    module: 'task_management',
-                    action: 'submit_self_task',
+                    module: 'Task Management',
+                    action: 'Task Completed',
                     description: "Completed self-task {$task->title}",
                     user: $user,
                     entityType: 'Task',
@@ -3746,8 +3946,8 @@ class TaskController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'task_management',
-                action: 'submit',
+                module: 'Task Management',
+                action: $isResubmit ? 'Task Resubmitted' : 'Task Submitted',
                 description: ($isResubmit ? 'Resubmitted' : 'Submitted')." task {$task->title}",
                 user: $user,
                 entityType: 'Task',
@@ -4126,8 +4326,8 @@ class TaskController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'task_management',
-                action: 'approve',
+                module: 'Task Management',
+                action: 'Task Approved',
                 description: "Approved task {$task->title}",
                 user: $user,
                 entityType: 'Task',
@@ -4239,9 +4439,9 @@ class TaskController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'task_management',
-                action: 'reject',
-                description: "Rejected task {$task->title}",
+                module: 'Task Management',
+                action: 'Task Declined',
+                description: "Declined task {$task->title}",
                 user: $user,
                 entityType: 'Task',
                 entityId: $task->id,
@@ -4460,8 +4660,8 @@ class TaskController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'task_management',
-                action: 'reopen',
+                module: 'Task Management',
+                action: 'Task Reopened',
                 description: "Reopened task {$task->title}. Reason: {$reopenReasonText}",
                 user: $user,
                 entityType: 'Task',
@@ -4651,8 +4851,8 @@ class TaskController extends Controller
 
             try {
                 $this->auditService->log(
-                    module: 'task_management',
-                    action: 'delete',
+                    module: 'Task Management',
+                    action: 'Task Deleted',
                     description: "Deleted task {$task->title}",
                     user: $user,
                     entityType: 'Task',
@@ -4779,10 +4979,22 @@ class TaskController extends Controller
             'comment' => 'File uploaded: '.$file->getClientOriginalName(),
         ]);
 
+        $this->activityService->log(
+            $user->id,
+            'task_attachment_added',
+            "Uploaded file \"{$customName}\" to task \"{$task->title}\"",
+            'task',
+            $task->id,
+            'attachment_added',
+            $task->title,
+            null,
+            ['file_name' => $customName, 'file_url' => $fileUrl]
+        );
+
         try {
             $this->auditService->log(
-                module: 'project_management',
-                action: 'create',
+                module: 'Task Management',
+                action: 'Attachment Added',
                 description: "Uploaded file \"{$customName}\" to task \"{$task->title}\"",
                 user: $user,
                 entityType: 'TaskFile',
@@ -4839,10 +5051,22 @@ class TaskController extends Controller
             'comment' => 'Link added: '.$linkName,
         ]);
 
+        $this->activityService->log(
+            $user->id,
+            'task_attachment_added',
+            "Added link \"{$linkName}\" to task \"{$task->title}\"",
+            'task',
+            $task->id,
+            'attachment_added',
+            $task->title,
+            null,
+            ['link_name' => $linkName, 'link_url' => $validated['url']]
+        );
+
         try {
             $this->auditService->log(
-                module: 'project_management',
-                action: 'create',
+                module: 'Task Management',
+                action: 'Attachment Added',
                 description: "Added link \"{$linkName}\" to task \"{$task->title}\"",
                 user: $user,
                 entityType: 'TaskFile',
@@ -4904,10 +5128,22 @@ class TaskController extends Controller
             'comment' => 'File removed: '.$fileName,
         ]);
 
+        $this->activityService->log(
+            $user->id,
+            'task_attachment_removed',
+            "Removed attachment \"{$fileName}\" from task \"{$task->title}\"",
+            'task',
+            $task->id,
+            'attachment_removed',
+            $task->title,
+            null,
+            ['file_name' => $fileName]
+        );
+
         $this->auditService->log(
-            'task_management', 'delete',
+            'Task Management', 'Attachment Removed',
             "Deleted file \"{$fileName}\" from task \"{$task->title}\"",
-            $user, 'task_file', $file->id,
+            $user, 'TaskFile', $file->id,
             ['file_name' => $fileName, 'task_id' => $task->id, 'task_title' => $task->title],
             null, 'success'
         );
@@ -5234,55 +5470,74 @@ class TaskController extends Controller
         $timeFilter = $request->input('time_filter');
 
         $tasksQuery = Task::query();
+        $permittedProjectIds = $this->getPermittedProjectIds($user);
 
-        // ── Role-based visibility (TASK_036 Fix) ──
+        // ── Role-based visibility (SRS Point 14) ──
         switch ($role) {
             case 'admin':
             case 'manager':
-                // Admin and Manager can view ALL tasks
+            case 'super_admin':
+                // Admin, Manager, and Super Admin can view ALL tasks
                 break;
 
             case 'team_lead':
             case 'teamlead':
-                // Team Lead sees ONLY their own tasks + tasks assigned to their led team members
+                // Team Lead sees their own tasks + tasks assigned to their led/member team members + tasks in permitted projects
                 $ledTeamIds = $user->ledTeams()->pluck('teams.id');
                 $memberTeamIds = $user->teams()->pluck('teams.id');
                 $allTeamIds = $ledTeamIds->merge($memberTeamIds)->unique();
 
+                $scopeUserIds = collect([$user->id]);
                 if ($allTeamIds->isNotEmpty()) {
-                    $scopeUserIds = DB::table('team_user')
+                    $teamUserIds = DB::table('team_user')
                         ->whereIn('team_id', $allTeamIds)
-                        ->pluck('user_id')
-                        ->push($user->id)
-                        ->unique();
+                        ->pluck('user_id');
+                    $scopeUserIds = $scopeUserIds->merge($teamUserIds)->unique();
+                }
 
-                    $tasksQuery->where(function ($q) use ($scopeUserIds, $user) {
-                        $q->where('assigned_by', $user->id)
-                            ->orWhere('assigned_to', $user->id)
-                            ->orWhereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id))
-                            ->orWhereIn('assigned_to', $scopeUserIds)
-                            ->orWhereHas('assignees', fn ($aq) => $aq->whereIn('users.id', $scopeUserIds));
-                    });
-                } else {
-                    // No teams — only own tasks
+                $tasksQuery->where(function ($q) use ($scopeUserIds, $user, $permittedProjectIds) {
+                    $q->where('assigned_by', $user->id)
+                        ->orWhere('assigned_to', $user->id)
+                        ->orWhereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id))
+                        ->orWhereHas('followers', fn ($fq) => $fq->where('users.id', $user->id))
+                        ->orWhereIn('assigned_to', $scopeUserIds)
+                        ->orWhereHas('assignees', fn ($aq) => $aq->whereIn('users.id', $scopeUserIds));
+
+                    if (!empty($permittedProjectIds)) {
+                        $q->orWhereIn('project_id', $permittedProjectIds);
+                    }
+                });
+                break;
+
+            case 'guest':
+                // Guests see tasks assigned to them or tasks in guest-accessible projects
+                if (empty($permittedProjectIds)) {
                     $tasksQuery->where(function ($q) use ($user) {
                         $q->where('assigned_by', $user->id)
                             ->orWhere('assigned_to', $user->id)
                             ->orWhereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id));
                     });
+                } else {
+                    $tasksQuery->where(function ($q) use ($user, $permittedProjectIds) {
+                        $q->where('assigned_by', $user->id)
+                            ->orWhere('assigned_to', $user->id)
+                            ->orWhereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id))
+                            ->orWhereIn('project_id', $permittedProjectIds);
+                    });
                 }
                 break;
 
-            case 'guest':
-                // Guests cannot access All Tasks
-                return response()->json(['data' => collect(), 'total' => 0]);
-
             default:
-                // Member: ONLY tasks directly assigned to or created by the member
-                $tasksQuery->where(function ($q) use ($user) {
+                // Member: Tasks directly assigned to, created by, or followed by member + ALL tasks within permitted organizational projects (SRS Point 14)
+                $tasksQuery->where(function ($q) use ($user, $permittedProjectIds) {
                     $q->where('assigned_by', $user->id)
                         ->orWhere('assigned_to', $user->id)
-                        ->orWhereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id));
+                        ->orWhereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id))
+                        ->orWhereHas('followers', fn ($fq) => $fq->where('users.id', $user->id));
+
+                    if (!empty($permittedProjectIds)) {
+                        $q->orWhereIn('project_id', $permittedProjectIds);
+                    }
                 });
                 break;
         }
@@ -5365,43 +5620,63 @@ class TaskController extends Controller
         switch ($role) {
             case 'admin':
             case 'manager':
-                // Admin and Manager can view ALL deliverables
+            case 'super_admin':
+                // Admin, Manager, Super Admin can view ALL deliverables
                 break;
             case 'team_lead':
             case 'teamlead':
                 $ledTeamIds = $user->ledTeams()->pluck('teams.id');
                 $memberTeamIds = $user->teams()->pluck('teams.id');
                 $allTeamIds = $ledTeamIds->merge($memberTeamIds)->unique();
+                $scopeUserIds = collect([$user->id]);
                 if ($allTeamIds->isNotEmpty()) {
-                    $scopeUserIds = DB::table('team_user')
+                    $teamUserIds = DB::table('team_user')
                         ->whereIn('team_id', $allTeamIds)
-                        ->pluck('user_id')
-                        ->push($user->id)
-                        ->unique();
+                        ->pluck('user_id');
+                    $scopeUserIds = $scopeUserIds->merge($teamUserIds)->unique();
+                }
 
-                    $delivQuery->where(function ($q) use ($scopeUserIds, $user) {
-                        $q->where('created_by', $user->id)
-                            ->orWhere('assigned_to', $user->id)
-                            ->orWhereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id))
-                            ->orWhereIn('assigned_to', $scopeUserIds)
-                            ->orWhereHas('assignees', fn ($aq) => $aq->whereIn('users.id', $scopeUserIds));
-                    });
-                } else {
+                $delivQuery->where(function ($q) use ($scopeUserIds, $user, $permittedProjectIds) {
+                    $q->where('created_by', $user->id)
+                        ->orWhere('assigned_to', $user->id)
+                        ->orWhereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id))
+                        ->orWhereIn('assigned_to', $scopeUserIds)
+                        ->orWhereHas('assignees', fn ($aq) => $aq->whereIn('users.id', $scopeUserIds));
+
+                    if (!empty($permittedProjectIds)) {
+                        $q->orWhereIn('project_id', $permittedProjectIds)
+                            ->orWhereHas('task', fn ($tq) => $tq->whereIn('project_id', $permittedProjectIds));
+                    }
+                });
+                break;
+            case 'guest':
+                if (empty($permittedProjectIds)) {
                     $delivQuery->where(function ($q) use ($user) {
                         $q->where('created_by', $user->id)
                             ->orWhere('assigned_to', $user->id)
                             ->orWhereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id));
                     });
+                } else {
+                    $delivQuery->where(function ($q) use ($user, $permittedProjectIds) {
+                        $q->where('created_by', $user->id)
+                            ->orWhere('assigned_to', $user->id)
+                            ->orWhereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id))
+                            ->orWhereIn('project_id', $permittedProjectIds)
+                            ->orWhereHas('task', fn ($tq) => $tq->whereIn('project_id', $permittedProjectIds));
+                    });
                 }
                 break;
-            case 'guest':
-                return response()->json(['data' => collect(), 'total' => 0]);
             default:
-                // Member: ONLY deliverables directly assigned to or created by member
-                $delivQuery->where(function ($q) use ($user) {
+                // Member: Deliverables directly assigned to or created by member + deliverables within permitted organizational projects
+                $delivQuery->where(function ($q) use ($user, $permittedProjectIds) {
                     $q->where('created_by', $user->id)
                         ->orWhere('assigned_to', $user->id)
                         ->orWhereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id));
+
+                    if (!empty($permittedProjectIds)) {
+                        $q->orWhereIn('project_id', $permittedProjectIds)
+                            ->orWhereHas('task', fn ($tq) => $tq->whereIn('project_id', $permittedProjectIds));
+                    }
                 });
                 break;
         }
@@ -5430,6 +5705,50 @@ class TaskController extends Controller
             'data' => $allItems,
             'total' => $allItems->count(),
         ]);
+    }
+
+    /**
+     * Get IDs of all projects permitted/accessible to the given user based on their role,
+     * team memberships/leadership, assigned_users, manual visibility, and guest access.
+     */
+    protected function getPermittedProjectIds(User $user): array
+    {
+        if (in_array($user->role, ['admin', 'manager', 'super_admin'])) {
+            return Project::pluck('id')->toArray();
+        }
+
+        if ($user->role === 'guest') {
+            return Project::where(function ($q) use ($user) {
+                $q->whereJsonContains('guest_ids', (int) $user->id)
+                    ->orWhereJsonContains('guest_ids', (string) $user->id);
+            })->pluck('id')->toArray();
+        }
+
+        $userTeamIds = Team::where('leader_id', $user->id)
+            ->orWhereHas('members', fn ($q) => $q->where('users.id', $user->id))
+            ->pluck('id')
+            ->toArray();
+
+        return Project::where(function ($q) use ($user, $userTeamIds) {
+            $q->whereHas('manuallyVisibleTo', fn ($mq) => $mq->where('user_id', $user->id))
+                ->orWhere(function ($sq) use ($user, $userTeamIds) {
+                    $sq->where(function ($sub) use ($user, $userTeamIds) {
+                        $sub->where('created_by', $user->id)
+                            ->orWhereIn('team_id', $userTeamIds)
+                            ->orWhereHas('team.members', fn ($tq) => $tq->where('users.id', $user->id))
+                            ->orWhereHas('team', fn ($tq) => $tq->where('leader_id', $user->id));
+
+                        if (!empty($userTeamIds)) {
+                            foreach ($userTeamIds as $tid) {
+                                $sub->orWhereJsonContains('team_ids', (int) $tid)
+                                    ->orWhereJsonContains('team_ids', (string) $tid);
+                            }
+                        }
+                    })->whereDoesntHave('visibility', fn ($vq) => $vq->where('user_id', $user->id)->where('is_visible', false));
+                })
+                ->orWhereJsonContains('assigned_users', (int) $user->id)
+                ->orWhereJsonContains('assigned_users', (string) $user->id);
+        })->pluck('id')->toArray();
     }
 
     /**
@@ -5956,9 +6275,84 @@ class TaskController extends Controller
             $query->whereDate('tasks.end_date', '<=', $endDate);
         }
 
+        // Priority Filter (single or multi-select)
+        $priorities = $request->input('priority', $request->input('priorities', []));
+        if (is_string($priorities) && str_contains($priorities, ',')) {
+            $priorities = explode(',', $priorities);
+        }
+        if (! is_array($priorities) && ! empty($priorities)) {
+            $priorities = [$priorities];
+        }
+        if (! empty($priorities) && is_array($priorities)) {
+            $priorities = array_values(array_filter(array_map('trim', $priorities)));
+            if (! empty($priorities)) {
+                $query->whereIn('tasks.priority', $priorities);
+            }
+        }
+
+        // Creator / Assigner Filter
+        $creatorIds = $request->input('created_by', $request->input('creator_id', $request->input('assigned_by', [])));
+        if (is_string($creatorIds) && str_contains($creatorIds, ',')) {
+            $creatorIds = explode(',', $creatorIds);
+        }
+        if (! is_array($creatorIds) && ! empty($creatorIds)) {
+            $creatorIds = [$creatorIds];
+        }
+        if (! empty($creatorIds) && is_array($creatorIds)) {
+            $creatorIds = array_values(array_filter(array_map('intval', $creatorIds)));
+            if (! empty($creatorIds)) {
+                $query->where(function ($q) use ($creatorIds) {
+                    $q->whereIn('tasks.assigned_by', $creatorIds)
+                      ->orWhereIn('tasks.created_by', $creatorIds);
+                });
+            }
+        }
+
+        // Follower Filter
+        $followerIds = $request->input('follower_id', $request->input('follower_ids', []));
+        if (is_string($followerIds) && str_contains($followerIds, ',')) {
+            $followerIds = explode(',', $followerIds);
+        }
+        if (! is_array($followerIds) && ! empty($followerIds)) {
+            $followerIds = [$followerIds];
+        }
+        if (! empty($followerIds) && is_array($followerIds)) {
+            $followerIds = array_values(array_filter(array_map('intval', $followerIds)));
+            if (! empty($followerIds)) {
+                $query->whereHas('followers', fn ($fq) => $fq->whereIn('users.id', $followerIds));
+            }
+        }
+
+        // Team Filter
+        $teamIds = $request->input('team_id', $request->input('team_ids', []));
+        if (is_string($teamIds) && str_contains($teamIds, ',')) {
+            $teamIds = explode(',', $teamIds);
+        }
+        if (! is_array($teamIds) && ! empty($teamIds)) {
+            $teamIds = [$teamIds];
+        }
+        if (! empty($teamIds) && is_array($teamIds)) {
+            $teamIds = array_values(array_filter(array_map('intval', $teamIds)));
+            if (! empty($teamIds)) {
+                $query->whereHas('project', fn ($pq) => $pq->whereIn('projects.team_id', $teamIds));
+            }
+        }
+
+        // Due date range filters
+        $dueDateFrom = $request->input('due_date_from') ?: $request->input('end_date_from');
+        $dueDateTo = $request->input('due_date_to') ?: $request->input('end_date_to');
+        $dueDate = $request->input('due_date') ?: $request->input('end_date');
+        if ($dueDateFrom && $dueDateTo) {
+            $query->whereDate('tasks.end_date', '>=', $dueDateFrom)->whereDate('tasks.end_date', '<=', $dueDateTo);
+        } elseif ($dueDateFrom) {
+            $query->whereDate('tasks.end_date', '>=', $dueDateFrom);
+        } elseif ($dueDateTo) {
+            $query->whereDate('tasks.end_date', '<=', $dueDateTo);
+        }
+
         // 2. ORDER BY
-        $sortBy = $request->input('sort_by') ?: $request->input('sort_field');
-        $sortDir = strtolower($request->input('sort_direction') ?: $request->input('sort_dir') ?: $request->input('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $sortBy = $request->input('sort_by') ?: $request->input('sort_field') ?: $request->input('sortBy');
+        $sortDir = strtolower($request->input('sort_direction') ?: $request->input('sort_dir') ?: $request->input('sort_order', $request->input('sortOrder', 'desc'))) === 'asc' ? 'asc' : 'desc';
 
         if ($sortBy) {
             $sortByClean = strtolower(trim((string) $sortBy));
@@ -5979,8 +6373,10 @@ class TaskController extends Controller
                 $query->orderBy('tasks.status', $sortDir)->orderBy('tasks.id', 'desc');
             } elseif ($sortByClean === 'title' || $sortByClean === 'task_name' || $sortByClean === 'name') {
                 $query->orderBy('tasks.title', $sortDir)->orderBy('tasks.id', 'desc');
-            } elseif ($sortByClean === 'created_at' || $sortByClean === 'updated_at') {
-                $query->orderBy('tasks.'.$sortByClean, $sortDir)->orderBy('tasks.id', $sortDir);
+            } elseif ($sortByClean === 'last_updated' || $sortByClean === 'recently_updated' || $sortByClean === 'updated_at') {
+                $query->orderBy('tasks.updated_at', $sortDir)->orderBy('tasks.id', $sortDir);
+            } elseif ($sortByClean === 'recently_created' || $sortByClean === 'created_at') {
+                $query->orderBy('tasks.created_at', $sortDir)->orderBy('tasks.id', $sortDir);
             } elseif ($sortByClean === 'sort_order') {
                 $query->orderBy('tasks.sort_order', $sortDir)->orderBy('tasks.created_at', 'desc')->orderBy('tasks.id', 'desc');
             } elseif ($sortByClean === 'assigned_by') {
@@ -6286,6 +6682,21 @@ class TaskController extends Controller
         $this->activityService->log($user->id, 'task_abandon_requested', 'Requested to abandon task "'.$task->title.'"', 'task', $task->id);
         $this->clearDashboardCache($user->id);
 
+        try {
+            $this->auditService->log(
+                module: 'Task Management',
+                action: 'Task Abandon Requested',
+                description: 'Requested to abandon task "'.$task->title.'"' . (!empty($validated['reason']) ? " — Reason: {$validated['reason']}" : ''),
+                user: $user,
+                entityType: 'Task',
+                entityId: $task->id,
+                newValues: ['reason' => $validated['reason'] ?? null],
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            Log::error('Failed to log audit in requestAbandon', ['error' => $e->getMessage()]);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Abandon request submitted successfully',
@@ -6321,6 +6732,20 @@ class TaskController extends Controller
 
         $this->activityService->log($user->id, 'task_abandon_approved', 'Approved abandon request for task "'.$task->title.'"', 'task', $task->id);
         $this->clearDashboardCache($user->id);
+
+        try {
+            $this->auditService->log(
+                module: 'Task Management',
+                action: 'Task Abandoned',
+                description: 'Approved abandon request for task "'.$task->title.'"',
+                user: $user,
+                entityType: 'Task',
+                entityId: $task->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            Log::error('Failed to log audit in approveAbandon', ['error' => $e->getMessage()]);
+        }
 
         return response()->json([
             'success' => true,
@@ -6365,6 +6790,21 @@ class TaskController extends Controller
         $this->activityService->log($user->id, 'task_abandon_declined', 'Declined abandon request for task "'.$task->title.'"', 'task', $task->id);
         $this->clearDashboardCache($user->id);
 
+        try {
+            $this->auditService->log(
+                module: 'Task Management',
+                action: 'Task Abandon Declined',
+                description: 'Declined abandon request for task "'.$task->title.'"',
+                user: $user,
+                entityType: 'Task',
+                entityId: $task->id,
+                newValues: ['reason' => $validated['reason'] ?? null],
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            Log::error('Failed to log audit in declineAbandon', ['error' => $e->getMessage()]);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Task abandon request declined',
@@ -6401,14 +6841,69 @@ class TaskController extends Controller
             'updated_by' => $user->id,
         ]);
 
+        $targetRecipients = [];
+        if ($task->assigned_by && (int) $task->assigned_by !== (int) $user->id) {
+            $targetRecipients[] = (int) $task->assigned_by;
+        }
+        if ((int) ($task->assigned_by ?? 0) === (int) $user->id || in_array($user->role, ['admin', 'manager', 'super_admin'])) {
+            $assigneeIds = $task->assignees()->pluck('users.id')->toArray();
+            if ($task->current_owner) {
+                $assigneeIds[] = (int) $task->current_owner;
+            }
+            foreach ($assigneeIds as $aId) {
+                if ((int) $aId !== (int) $user->id) {
+                    $targetRecipients[] = (int) $aId;
+                }
+            }
+        }
+        $targetRecipients = array_values(array_unique($targetRecipients));
+
+        $abandonReasonText = $validated['reason'] ?? 'No reason provided';
+        foreach ($targetRecipients as $recipientId) {
+            $isTargetCreator = (int) $recipientId === (int) ($task->assigned_by ?? 0);
+            $this->notificationService->notify(
+                $recipientId,
+                (int) $user->id,
+                'task_abandoned',
+                'task',
+                (int) $task->id,
+                'Task Abandoned',
+                $user->name.' abandoned task "'.$task->title.'". Reason: '.$abandonReasonText,
+                '/tasks/task-details/'.$task->id.'?from='.($isTargetCreator ? 'taskby' : 'tasks')
+            );
+        }
+
         $this->activityService->log($user->id, 'task_abandoned', 'Abandoned task "'.$task->title.'"', 'task', $task->id);
         $this->clearDashboardCache($user->id);
+
+        try {
+            $this->auditService->log(
+                module: 'Task Management',
+                action: 'Task Abandoned',
+                description: 'Abandoned task "'.$task->title.'"'.($validated['reason'] ? " — Reason: {$validated['reason']}" : ''),
+                user: $user,
+                entityType: 'Task',
+                entityId: $task->id,
+                newValues: ['reason' => $validated['reason'] ?? null],
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            Log::error('Failed to log audit in abandon', ['error' => $e->getMessage()]);
+        }
 
         return response()->json([
             'success' => true,
             'message' => 'Task abandoned successfully',
             'task' => $this->taskWithTimer($task->fresh()->load(['assignees:id,name,email,role', 'assigner:id,name', 'abandonRequestedBy:id,name', 'abandonedBy:id,name', 'abandonDeclinedBy:id,name'])->toArray()),
         ]);
+    }
+
+    /**
+     * Get activity feed for a task (alias for unifiedActivity, satisfying SRS Point 17).
+     */
+    public function activity(Request $request, Task $task): JsonResponse
+    {
+        return $this->unifiedActivity($request, $task);
     }
 
     /**

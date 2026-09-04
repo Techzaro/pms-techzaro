@@ -96,8 +96,19 @@ class DeliverablePolicy
                     return true;
                 }
             }
+            if (!empty($project->team_ids)) {
+                $teamIds = array_map('intval', $project->team_ids);
+                $isTeamMember = $user->teams()->whereIn('teams.id', $teamIds)->exists()
+                    || $user->ledTeams()->whereIn('teams.id', $teamIds)->exists();
+                if ($isTeamMember) {
+                    return true;
+                }
+            }
             $projectAssigned = array_map('intval', $project->assigned_users ?? []);
             if (in_array((int) $user->id, $projectAssigned, true)) {
+                return true;
+            }
+            if ($project->manuallyVisibleTo()->where('user_id', $user->id)->exists()) {
                 return true;
             }
             if ($user->role === 'guest' && $project->isAccessibleByGuest($user)) {

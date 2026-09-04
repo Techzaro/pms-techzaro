@@ -651,9 +651,9 @@ class DeliverableController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'deliverable_management',
-                action: 'create',
-                description: "Created deliverable {$deliverable->title}",
+                module: 'Subtask Management',
+                action: 'Subtask Created',
+                description: "Created subtask {$deliverable->title}",
                 user: $user,
                 entityType: 'Deliverable',
                 entityId: $deliverable->id,
@@ -821,9 +821,9 @@ class DeliverableController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'deliverable_management',
-                action: 'create',
-                description: "Created deliverable {$deliverable->title}",
+                module: 'Subtask Management',
+                action: 'Subtask Created',
+                description: "Created subtask {$deliverable->title}",
                 user: $user,
                 entityType: 'Deliverable',
                 entityId: $deliverable->id,
@@ -1007,9 +1007,9 @@ class DeliverableController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'deliverable_management',
-                action: 'bulk_create',
-                description: 'Bulk created ' . count($createdDeliverables) . ' deliverables',
+                module: 'Subtask Management',
+                action: 'Subtask Created',
+                description: 'Bulk created ' . count($createdDeliverables) . ' subtasks',
                 user: $user,
                 entityType: 'Deliverable',
                 status: 'success'
@@ -1171,9 +1171,9 @@ class DeliverableController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'deliverable_management',
-                action: 'update',
-                description: "Updated deliverable {$deliverable->title}",
+                module: 'Subtask Management',
+                action: 'Subtask Edited',
+                description: "Updated subtask {$deliverable->title}",
                 user: $user,
                 entityType: 'Deliverable',
                 entityId: $deliverable->id,
@@ -1220,9 +1220,9 @@ class DeliverableController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'deliverable_management',
-                action: 'delete',
-                description: "Deleted deliverable {$deliverable->title}",
+                module: 'Subtask Management',
+                action: 'Subtask Deleted',
+                description: "Deleted subtask {$deliverable->title}",
                 user: $user,
                 entityType: 'Deliverable',
                 entityId: $deliverable->id,
@@ -1411,8 +1411,10 @@ class DeliverableController extends Controller
             DeliverableWorkflowEvent::create([
                 'deliverable_id' => $deliverable->id,
                 'user_id' => $user->id,
-                'event_type' => 'approval',
-                'comment' => $validated['comment'] ?? 'Self-deliverable auto-completed upon submission',
+                'event_type' => 'approved',
+                'comment' => $validated['comment'] ?? 'Self-deliverable completed',
+                'file_path' => $filePath,
+                'file_name' => $fileName,
             ]);
 
             $this->activityService->log($user->id, 'deliverable_completed', 'You completed self-deliverable "'.$deliverable->title.'"', 'deliverable', $deliverable->id);
@@ -1420,9 +1422,9 @@ class DeliverableController extends Controller
 
             try {
                 $this->auditService->log(
-                    module: 'deliverable_management',
-                    action: 'submit_self_deliverable',
-                    description: "Completed self-deliverable {$deliverable->title}",
+                    module: 'Subtask Management',
+                    action: 'Subtask Completed',
+                    description: "Completed self-subtask {$deliverable->title}",
                     user: $user,
                     entityType: 'Deliverable',
                     entityId: $deliverable->id,
@@ -1432,17 +1434,11 @@ class DeliverableController extends Controller
                 \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
             }
 
-            $responseMessage = 'Deliverable completed successfully';
-            if ($fileSkipped || $filesSkipped) {
-                $responseMessage = $this->buildFileSkippedMessage('deliverable');
-            }
-
             return response()->json([
                 'success' => true,
-                'message' => $responseMessage,
-                'file_skipped' => $fileSkipped || $filesSkipped,
+                'message' => 'Self-deliverable completed successfully',
                 'deliverable' => $deliverable->fresh()->load([
-                    'assignee:id,name,email,role', 'creator:id,name', 'approvedBy:id,name',
+                    'assignee:id,name,email,role', 'creator:id,name',
                     'submissions' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments'])->latest(),
                     'latestSubmission' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments']),
                 ]),
@@ -1539,9 +1535,9 @@ class DeliverableController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'deliverable_management',
-                action: 'submit',
-                description: ($isResubmit ? 'Resubmitted' : 'Submitted')." deliverable {$deliverable->title}",
+                module: 'Subtask Management',
+                action: $isResubmit ? 'Subtask Resubmitted' : 'Subtask Submitted',
+                description: ($isResubmit ? 'Resubmitted' : 'Submitted')." subtask {$deliverable->title}",
                 user: $user,
                 entityType: 'Deliverable',
                 entityId: $deliverable->id,
@@ -1694,9 +1690,9 @@ class DeliverableController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'deliverable_management',
-                action: 'approve',
-                description: "Approved deliverable {$deliverable->title}",
+                module: 'Subtask Management',
+                action: 'Subtask Approved',
+                description: "Approved subtask {$deliverable->title}",
                 user: $user,
                 entityType: 'Deliverable',
                 entityId: $deliverable->id,
@@ -1781,9 +1777,9 @@ class DeliverableController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'deliverable_management',
-                action: 'reject',
-                description: "Rejected deliverable {$deliverable->title}",
+                module: 'Subtask Management',
+                action: 'Subtask Declined',
+                description: "Declined subtask {$deliverable->title}".(! empty($validated['comment']) ? " Reason: {$validated['comment']}" : ''),
                 user: $user,
                 entityType: 'Deliverable',
                 entityId: $deliverable->id,
@@ -1982,8 +1978,8 @@ class DeliverableController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'deliverable_management',
-                action: 'reopen',
+                module: 'Subtask Management',
+                action: 'Subtask Reopened',
                 description: "Reopened subtask {$deliverable->title}. Reason: {$reopenReasonText}",
                 user: $user,
                 entityType: 'Deliverable',
@@ -2114,9 +2110,9 @@ class DeliverableController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'deliverable_management',
-                action: 'mark_as_completed',
-                description: "{$user->name} marked the deliverable as completed. Reason: {$reason}",
+                module: 'Subtask Management',
+                action: 'Subtask Completed',
+                description: "{$user->name} marked subtask {$deliverable->title} as completed. Reason: {$reason}",
                 user: $user,
                 entityType: 'Deliverable',
                 entityId: $deliverable->id,
@@ -2161,9 +2157,9 @@ class DeliverableController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'deliverable_management',
-                action: 'self_approve',
-                description: "Self-approved deliverable {$deliverable->title}",
+                module: 'Subtask Management',
+                action: 'Subtask Approved',
+                description: "Self-approved subtask {$deliverable->title}",
                 user: $user,
                 entityType: 'Deliverable',
                 entityId: $deliverable->id,
@@ -2607,7 +2603,8 @@ class DeliverableController extends Controller
             ]);
         }
 
-        if ($deliverable->timer_state === 'paused' || $deliverable->status === 'paused') {
+        $isResume = ($deliverable->timer_state === 'paused' || $deliverable->status === 'paused');
+        if ($isResume) {
             $deliverable->resumeTimer($user->id);
             $deliverable->update(['status' => 'in_progress', 'paused_by' => null, 'paused_at' => null, 'updated_by' => $user->id]);
 
@@ -2626,6 +2623,20 @@ class DeliverableController extends Controller
                 'user_id' => $user->id,
                 'comment' => 'Work timer started',
             ]);
+        }
+
+        try {
+            $this->auditService->log(
+                module: 'Subtask Management',
+                action: $isResume ? 'Subtask Resumed' : 'Subtask Started',
+                description: ($isResume ? 'Resumed' : 'Started')." subtask {$deliverable->title}",
+                user: $user,
+                entityType: 'Deliverable',
+                entityId: $deliverable->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit in deliverable startTimer', ['error' => $e->getMessage()]);
         }
 
         return response()->json([
@@ -2665,6 +2676,20 @@ class DeliverableController extends Controller
             'comment' => 'Timer paused'.($validated['reason'] ? ' — '.$validated['reason'] : ''),
         ]);
 
+        try {
+            $this->auditService->log(
+                module: 'Subtask Management',
+                action: 'Subtask Paused',
+                description: "Paused subtask {$deliverable->title}".($validated['reason'] ? " — {$validated['reason']}" : ''),
+                user: $user,
+                entityType: 'Deliverable',
+                entityId: $deliverable->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit in deliverable pause', ['error' => $e->getMessage()]);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Timer paused',
@@ -2698,6 +2723,20 @@ class DeliverableController extends Controller
             'user_id' => $user->id,
             'comment' => 'Timer resumed',
         ]);
+
+        try {
+            $this->auditService->log(
+                module: 'Subtask Management',
+                action: 'Subtask Resumed',
+                description: "Resumed subtask {$deliverable->title}",
+                user: $user,
+                entityType: 'Deliverable',
+                entityId: $deliverable->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit in deliverable continueTimer', ['error' => $e->getMessage()]);
+        }
 
         return response()->json([
             'success' => true,
@@ -2741,6 +2780,20 @@ class DeliverableController extends Controller
             'comment' => 'Assigner paused the deliverable',
         ]);
 
+        try {
+            $this->auditService->log(
+                module: 'Subtask Management',
+                action: 'Subtask Paused',
+                description: "Assigner paused subtask {$deliverable->title}",
+                user: $user,
+                entityType: 'Deliverable',
+                entityId: $deliverable->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit in deliverable assignerPause', ['error' => $e->getMessage()]);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Deliverable paused by assigner',
@@ -2778,6 +2831,20 @@ class DeliverableController extends Controller
             'event_type' => 'assigner_resumed',
             'comment' => 'Assigner resumed the deliverable',
         ]);
+
+        try {
+            $this->auditService->log(
+                module: 'Subtask Management',
+                action: 'Subtask Resumed',
+                description: "Assigner resumed subtask {$deliverable->title}",
+                user: $user,
+                entityType: 'Deliverable',
+                entityId: $deliverable->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit in deliverable assignerResume', ['error' => $e->getMessage()]);
+        }
 
         return response()->json([
             'success' => true,
@@ -2892,8 +2959,8 @@ class DeliverableController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'project_management',
-                action: 'create',
+                module: 'Subtask Management',
+                action: 'Attachment Added',
                 description: "Uploaded file \"{$name}\" to subtask \"{$deliverable->title}\"",
                 user: $user,
                 entityType: 'DeliverableFile',
@@ -2940,8 +3007,8 @@ class DeliverableController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'project_management',
-                action: 'create',
+                module: 'Subtask Management',
+                action: 'Attachment Added',
                 description: "Added link \"{$linkName}\" to subtask \"{$deliverable->title}\"",
                 user: $user,
                 entityType: 'DeliverableFile',
@@ -3001,13 +3068,20 @@ class DeliverableController extends Controller
         $file->delete();
         $deliverable->update(['updated_by' => $user->id]);
 
-        $this->auditService->log(
-            'deliverables', 'delete',
-            "Deleted file \"{$fileName}\" from deliverable \"{$deliverable->title}\"",
-            $user, 'deliverable_file', $file->id,
-            ['file_name' => $fileName, 'deliverable_id' => $deliverable->id, 'deliverable_title' => $deliverable->title],
-            null, 'success'
-        );
+        try {
+            $this->auditService->log(
+                module: 'Subtask Management',
+                action: 'Attachment Removed',
+                description: "Deleted file \"{$fileName}\" from subtask \"{$deliverable->title}\"",
+                user: $user,
+                entityType: 'DeliverableFile',
+                entityId: $file->id,
+                oldValues: ['file_name' => $fileName, 'deliverable_id' => $deliverable->id, 'deliverable_title' => $deliverable->title],
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log deliverable file delete audit', ['error' => $e->getMessage()]);
+        }
 
         return response()->json(['success' => true, 'message' => 'File deleted']);
     }
@@ -3040,14 +3114,15 @@ class DeliverableController extends Controller
     public function myNote(Request $request, Deliverable $deliverable)
     {
         $this->authorize('manageNotes', $deliverable);
-        $note = DeliverableUserNote::where('deliverable_id', $deliverable->id)
+        $notes = DeliverableUserNote::where('deliverable_id', $deliverable->id)
             ->where('user_id', $request->user()->id)
-            ->first();
+            ->orderBy('created_at', 'desc')
+            ->get();
 
         return response()->json([
             'success' => true,
-            'note' => $note,
-            'notes' => $note ? [$note] : [],
+            'note' => $notes->first(),
+            'notes' => $notes,
         ]);
     }
 
@@ -3057,14 +3132,41 @@ class DeliverableController extends Controller
     public function storeNote(Request $request, Deliverable $deliverable)
     {
         $this->authorize('manageNotes', $deliverable);
-        $validated = $request->validate(['note' => 'nullable|string|max:5000']);
+        $validated = $request->validate(['note' => 'required|string|max:5000']);
 
-        $note = DeliverableUserNote::updateOrCreate(
-            ['deliverable_id' => $deliverable->id, 'user_id' => $request->user()->id],
-            ['note' => $validated['note'] ?? null]
-        );
+        $note = DeliverableUserNote::create([
+            'deliverable_id' => $deliverable->id,
+            'user_id' => $request->user()->id,
+            'note' => $validated['note'],
+        ]);
 
-        return response()->json(['success' => true, 'message' => 'Note saved', 'note' => $note]);
+        $notes = DeliverableUserNote::where('deliverable_id', $deliverable->id)
+            ->where('user_id', $request->user()->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json(['success' => true, 'message' => 'Note saved', 'note' => $note, 'notes' => $notes]);
+    }
+
+    /**
+     * Update the current user's personal note on a deliverable.
+     */
+    public function updateNote(Request $request, Deliverable $deliverable, DeliverableUserNote $note)
+    {
+        $this->authorize('manageNotes', $deliverable);
+        if ((int) $note->user_id !== (int) $request->user()->id) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $validated = $request->validate(['note' => 'required|string|max:5000']);
+        $note->update(['note' => $validated['note']]);
+
+        $notes = DeliverableUserNote::where('deliverable_id', $deliverable->id)
+            ->where('user_id', $request->user()->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json(['success' => true, 'message' => 'Note updated', 'note' => $note, 'notes' => $notes]);
     }
 
     /**
@@ -3079,7 +3181,12 @@ class DeliverableController extends Controller
 
         $note->delete();
 
-        return response()->json(['success' => true, 'message' => 'Note deleted']);
+        $notes = DeliverableUserNote::where('deliverable_id', $deliverable->id)
+            ->where('user_id', $request->user()->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json(['success' => true, 'message' => 'Note deleted', 'notes' => $notes]);
     }
 
     /**
@@ -3666,6 +3773,20 @@ class DeliverableController extends Controller
 
         $this->activityService->log($user->id, 'deliverable_abandon_requested', 'Requested to abandon subtask "'.$deliverable->title.'"', 'deliverable', $deliverable->id);
 
+        try {
+            $this->auditService->log(
+                module: 'Subtask Management',
+                action: 'Subtask Abandon Requested',
+                description: "Requested to abandon subtask {$deliverable->title}".(! empty($validated['reason']) ? " Reason: {$validated['reason']}" : ''),
+                user: $user,
+                entityType: 'Deliverable',
+                entityId: $deliverable->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit in deliverable requestAbandon', ['error' => $e->getMessage()]);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Abandon request submitted successfully',
@@ -3692,6 +3813,20 @@ class DeliverableController extends Controller
         ]);
 
         $this->activityService->log($user->id, 'deliverable_abandon_approved', 'Approved abandon request for subtask "'.$deliverable->title.'"', 'deliverable', $deliverable->id);
+
+        try {
+            $this->auditService->log(
+                module: 'Subtask Management',
+                action: 'Subtask Abandoned',
+                description: "Approved abandon request for subtask {$deliverable->title}",
+                user: $user,
+                entityType: 'Deliverable',
+                entityId: $deliverable->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit in deliverable approveAbandon', ['error' => $e->getMessage()]);
+        }
 
         return response()->json([
             'success' => true,
@@ -3726,6 +3861,20 @@ class DeliverableController extends Controller
         ]);
 
         $this->activityService->log($user->id, 'deliverable_abandon_declined', 'Declined abandon request for subtask "'.$deliverable->title.'"', 'deliverable', $deliverable->id);
+
+        try {
+            $this->auditService->log(
+                module: 'Subtask Management',
+                action: 'Subtask Abandon Declined',
+                description: "Declined abandon request for subtask {$deliverable->title}".(! empty($validated['reason']) ? " Reason: {$validated['reason']}" : ''),
+                user: $user,
+                entityType: 'Deliverable',
+                entityId: $deliverable->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit in deliverable declineAbandon', ['error' => $e->getMessage()]);
+        }
 
         return response()->json([
             'success' => true,
@@ -3763,6 +3912,20 @@ class DeliverableController extends Controller
         ]);
 
         $this->activityService->log($user->id, 'deliverable_abandoned', 'Abandoned subtask "'.$deliverable->title.'"', 'deliverable', $deliverable->id);
+
+        try {
+            $this->auditService->log(
+                module: 'Subtask Management',
+                action: 'Subtask Abandoned',
+                description: "Abandoned subtask {$deliverable->title}".(! empty($validated['reason']) ? " Reason: {$validated['reason']}" : ''),
+                user: $user,
+                entityType: 'Deliverable',
+                entityId: $deliverable->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit in deliverable abandon', ['error' => $e->getMessage()]);
+        }
 
         return response()->json([
             'success' => true,

@@ -880,7 +880,7 @@ function Admin() {
                                   #{tVal.id} {tVal.project_title ? `• ${tVal.project_title}` : ""}
                                 </span>
                                 <h4
-                                  onClick={() => navigate(rolePath(`tasks/task-details/${tVal.id}`))}
+                                  onClick={() => navigate(rolePath(`tasks/task-details/${tVal.id}`), { state: { from: 'dashboard', returnUrl: rolePath('dashboard') } })}
                                   style={{ margin: "4px 0 0 0", fontSize: "14px", fontWeight: 700, color: "var(--text-heading)", cursor: "pointer", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
                                   title={tVal.title}
                                 >

@@ -81,9 +81,14 @@ class ActivityController extends Controller
         $page = (int) ($request->input('page') ?: 1);
         $offset = (int) ($request->input('offset') ?: (($page - 1) * $perPage));
 
-        $userId = $request->filled('user_id')
-            ? (int) $request->input('user_id')
-            : (in_array($user->role, ['admin', 'manager']) || $module ? 0 : $user->id);
+        $isAdminOrManager = in_array($user->role, ['admin', 'manager', 'super_admin']);
+        if (! $isAdminOrManager) {
+            $userId = (int) $user->id;
+        } else {
+            $userId = $request->filled('user_id')
+                ? (int) $request->input('user_id')
+                : ($module ? 0 : $user->id);
+        }
 
         $activities = $this->activityService->getActivities(
             $userId, $date, $perPage, $offset, $module, $action, $dateFrom, $dateTo, $search

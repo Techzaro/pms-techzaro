@@ -220,6 +220,24 @@ function AllTasks() {
         params.append("project_id", pList.join(","));
       }
 
+      const prioList = Array.isArray(advancedFilters.priority) ? advancedFilters.priority : [];
+      if (prioList.length > 0) {
+        prioList.forEach((pr) => params.append("priority[]", pr));
+        params.append("priority", prioList.join(","));
+      }
+
+      const creatorList = Array.isArray(advancedFilters.created_by) ? advancedFilters.created_by : [];
+      if (creatorList.length > 0) {
+        creatorList.forEach((cr) => params.append("created_by[]", cr));
+        params.append("created_by", creatorList.join(","));
+      }
+
+      const followerList = Array.isArray(advancedFilters.follower_id) ? advancedFilters.follower_id : [];
+      if (followerList.length > 0) {
+        followerList.forEach((fl) => params.append("follower_id[]", fl));
+        params.append("follower_id", followerList.join(","));
+      }
+
       if (advancedFilters.start_date) params.append("start_date", advancedFilters.start_date);
       if (advancedFilters.end_date) params.append("end_date", advancedFilters.end_date);
       if (sortBy) {
@@ -270,20 +288,27 @@ function AllTasks() {
   }, [searchParams]);
 
   const baseItems = orderedItems.length ? orderedItems : items;
-  const pendingStatuses = ["pending", "planned", "Planning", "Planned"];
-  const inProgressStatuses = ["in_progress", "In Progress", "In-progress", "reopened", "Reopened"];
+  const pendingStatuses = ["pending", "planned", "planning", "Pending", "Planned", "Planning"];
+  const inProgressStatuses = ["in_progress", "In Progress", "In-progress", "reopened", "Reopened", "doing"];
+  const completedStatuses = ["completed", "approved", "done", "Completed", "Approved", "Done"];
+  const pausedStatuses = ["paused", "Paused", "hold", "on_hold"];
+  const submittedStatuses = ["submitted", "Submitted", "review", "in_review", "under_review"];
+  const declinedStatuses = ["declined", "rejected", "failed", "Declined", "Rejected", "Failed"];
+  const abandonedStatuses = ["abandoned", "abandon_requested", "Abandoned", "Abandon Requested"];
 
   const allCount = useMemo(() => baseItems.length, [baseItems]);
   const dueTodayCount = useMemo(() => baseItems.filter((i) => { const d = i.end_date ? new Date(i.end_date) : null; return d && d.toDateString() === new Date().toDateString(); }).length, [baseItems]);
   const pendingCount = useMemo(() => baseItems.filter((i) => pendingStatuses.includes(i.status)).length, [baseItems]);
   const inProgressCount = useMemo(() => baseItems.filter((i) => inProgressStatuses.includes(i.status)).length, [baseItems]);
-  const pausedCount = useMemo(() => baseItems.filter((i) => i.status === "paused").length, [baseItems]);
-  const submittedCount = useMemo(() => baseItems.filter((i) => i.status === "submitted").length, [baseItems]);
+  const pausedCount = useMemo(() => baseItems.filter((i) => pausedStatuses.includes(i.status)).length, [baseItems]);
+  const submittedCount = useMemo(() => baseItems.filter((i) => submittedStatuses.includes(i.status)).length, [baseItems]);
   const reopenedCount = useMemo(() => baseItems.filter((i) => i.status === "reopened").length, [baseItems]);
   const transferredCount = useMemo(() => baseItems.filter((i) => i.delegation_chain && i.delegation_chain.length > 0).length, [baseItems]);
-  const approvedCount = useMemo(() => baseItems.filter((i) => i.status === "approved").length, [baseItems]);
-  const rejectedCount = useMemo(() => baseItems.filter((i) => i.status === "rejected").length, [baseItems]);
-  const abandonedCount = useMemo(() => baseItems.filter((i) => i.status === "abandoned" || i.status === "abandon_requested").length, [baseItems]);
+  const completedCount = useMemo(() => baseItems.filter((i) => completedStatuses.includes(i.status)).length, [baseItems]);
+  const approvedCount = completedCount;
+  const declinedCount = useMemo(() => baseItems.filter((i) => declinedStatuses.includes(i.status)).length, [baseItems]);
+  const rejectedCount = declinedCount;
+  const abandonedCount = useMemo(() => baseItems.filter((i) => abandonedStatuses.includes(i.status)).length, [baseItems]);
 
   const filteredItems = useMemo(() => {
     let list = baseItems;
@@ -296,23 +321,31 @@ function AllTasks() {
           const d = new Date(dateVal);
           const now = new Date();
           const isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
-          const isCompleted = ["approved", "completed", "done"].includes((item.status || "").toLowerCase());
+          const isCompleted = completedStatuses.includes(item.status);
           return isToday && !isCompleted;
         });
       } else if (sf === "pending") {
         list = list.filter((item) => pendingStatuses.includes(item.status));
       } else if (sf === "in_progress") {
         list = list.filter((item) => inProgressStatuses.includes(item.status));
-      } else if (sf === "rejected" || sf === "declined") {
-        list = list.filter((item) => item.status === "rejected" || item.status === "declined");
+      } else if (sf === "submitted") {
+        list = list.filter((item) => submittedStatuses.includes(item.status));
+      } else if (sf === "completed" || sf === "approved") {
+        list = list.filter((item) => completedStatuses.includes(item.status));
+      } else if (sf === "paused") {
+        list = list.filter((item) => pausedStatuses.includes(item.status));
+      } else if (sf === "declined" || sf === "rejected") {
+        list = list.filter((item) => declinedStatuses.includes(item.status));
       } else if (sf === "abandoned") {
-        list = list.filter((item) => item.status === "abandoned" || item.status === "abandon_requested");
+        list = list.filter((item) => abandonedStatuses.includes(item.status));
+      } else if (sf === "transferred") {
+        list = list.filter((item) => item.delegation_chain && item.delegation_chain.length > 0);
       } else {
         list = list.filter((item) => String(item.status).toLowerCase() === sf);
       }
     }
     return list;
-  }, [baseItems, statusFilter]);
+  }, [baseItems, statusFilter, pendingStatuses, inProgressStatuses, submittedStatuses, completedStatuses, pausedStatuses, declinedStatuses, abandonedStatuses]);
 
   const taskIdList = filteredItems.map((i) => i.id);
 
@@ -352,9 +385,9 @@ function AllTasks() {
           { id: "pending", label: t("Pending", { defaultValue: "Pending" }), count: pendingCount, className: "Pending" },
           { id: "in_progress", label: t("In Progress", { defaultValue: "In Progress" }), count: inProgressCount, className: "InProgress" },
           { id: "submitted", label: t("Submitted", { defaultValue: "Submitted" }), count: submittedCount, className: "Submitted" },
-          { id: "approved", label: t("Completed", { defaultValue: "Completed" }), count: approvedCount, className: "Approved" },
+          { id: "completed", label: t("Completed", { defaultValue: "Completed" }), count: completedCount, className: "Approved" },
           { id: "paused", label: t("Paused", { defaultValue: "Paused" }), count: pausedCount, className: "Paused" },
-          { id: "rejected", label: t("Declined", { defaultValue: "Declined" }), count: rejectedCount, className: "Rejected" },
+          { id: "declined", label: t("Declined", { defaultValue: "Declined" }), count: declinedCount, className: "Rejected" },
           { id: "abandoned", label: t("Abandoned", { defaultValue: "Abandoned" }), count: abandonedCount, className: "Abandoned", dotColor: "#DC2626" },
         ]}
         activeStatus={statusFilter}
@@ -368,10 +401,58 @@ function AllTasks() {
         search={search}
         onSearchChange={setSearch}
         filters={advancedFilters}
-        onFilterChange={(key, val) => setAdvancedFilters((prev) => ({ ...prev, [key]: val }))}
+        activeStatus={statusFilter}
+        sortBy={sortBy}
+        sortDirection={sortDirection}
+        onSortChange={(col, dir) => {
+          setSortBy(col);
+          setSortDirection(dir || "desc");
+          setPage(1);
+        }}
+        onFilterChange={(key, val) => {
+          setAdvancedFilters((prev) => ({ ...prev, [key]: val }));
+          setPage(1);
+        }}
+        onApplyFilters={(appliedFilters, appliedSort) => {
+          setStatusFilter("");
+          setSearchParams({});
+          setAdvancedFilters((prev) => ({
+            ...prev,
+            statuses: appliedFilters?.statuses || appliedFilters?.status || [],
+            states: appliedFilters?.states || [],
+            due_states: appliedFilters?.due_states || [],
+            priority: appliedFilters?.priority || appliedFilters?.priorities || [],
+            user_id: appliedFilters?.user_id || appliedFilters?.assigned_to || [],
+            project_id: appliedFilters?.project_id || [],
+            created_by: appliedFilters?.created_by || [],
+            follower_id: appliedFilters?.follower_id || [],
+            start_date: appliedFilters?.start_date || "",
+            end_date: appliedFilters?.end_date || "",
+          }));
+          if (appliedSort && appliedSort.sort_by) {
+            setSortBy(appliedSort.sort_by);
+            setSortDirection(appliedSort.sort_direction || "desc");
+          }
+          setPage(1);
+        }}
         onReset={() => {
           setSearch("");
-          setAdvancedFilters({ user_id: [], project_id: [], status: [], start_date: "", end_date: "" });
+          setStatusFilter("");
+          setSearchParams({});
+          setAdvancedFilters({
+            user_id: [],
+            project_id: [],
+            status: [],
+            statuses: [],
+            states: [],
+            due_states: [],
+            priority: [],
+            created_by: [],
+            follower_id: [],
+            start_date: "",
+            end_date: "",
+          });
+          setPage(1);
         }}
       />
 
@@ -391,7 +472,7 @@ function AllTasks() {
           <div style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("status")}>
             {t("Status", { defaultValue: "Status" })}
           </div>
-          <div>{t("Progress", { defaultValue: "Progress" })}</div>
+          <div>{t("Personal Notes", { defaultValue: "Personal Notes" })}</div>
           <div style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("priority")}>
             {t("Priority", { defaultValue: "Priority" })}
           </div>
@@ -463,16 +544,17 @@ function AllTasks() {
                         </span>
                       )}
                       {item.delegation_chain && item.delegation_chain.length > 0 && <ArrowUpRight size={14} style={{ color: "#6B7280", flexShrink: 0 }} />}
-                      <div className="task-title">{item.title}</div>
-                      <TaskNotesPopover taskId={item.id} itemType={item.item_type === "subtask" ? "deliverable" : "task"} />
+                      <div className="task-title" title={item.title} style={{ maxWidth: "250px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</div>
                     </div>
                     {item.item_type === "subtask" && item.parent_task && (
                       <div style={{ fontSize: "11px", color: "#6366f1", marginTop: "2px", display: "flex", alignItems: "center", gap: "4px" }}>
-                        <span>↳ {t("Parent", { defaultValue: "Parent" })}: <strong>{item.parent_task.business_id ? `[${item.parent_task.business_id}] ` : ""}{item.parent_task.title}</strong></span>
+                        <span title={item.parent_task.title} style={{ maxWidth: "250px", display: "inline-block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          ↳ {t("Parent", { defaultValue: "Parent" })}: <strong>{item.parent_task.business_id ? `[${item.parent_task.business_id}] ` : ""}{item.parent_task.title}</strong>
+                        </span>
                       </div>
                     )}
                     {item.project && (
-                      <Link to={rolePath(`projects/project-details/${item.project.id}`)} onClick={(e) => e.stopPropagation()} style={{ fontSize: "11px", color: "#2563eb", textDecoration: "none", marginTop: "2px", display: "inline-block" }}>
+                      <Link to={rolePath(`projects/project-details/${item.project.id}`)} onClick={(e) => e.stopPropagation()} style={{ fontSize: "11px", color: "#2563eb", textDecoration: "none", marginTop: "2px", display: "inline-block", maxWidth: "250px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.project.title}>
                         {item.project.title}
                       </Link>
                     )}
@@ -483,24 +565,10 @@ function AllTasks() {
                     <TaskMultiStatusBadges item={item} />
                   </div>
 
-                  {/* Progress */}
-                  {(() => {
-                    const isTerminal = ["completed", "approved", "submitted", "submitted_late", "done"].includes((item.status || "").toLowerCase());
-                    const prog = isTerminal ? 100 : (item.deliverables_progress || 0);
-                    return (
-                      <div className="col-progress">
-                        <div style={{ fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "2px" }}>
-                          {prog}%
-                        </div>
-                        <div className="progress-bar-track" style={{ width: "80px" }}>
-                          <div className="progress-bar-fill" style={{ width: `${prog}%` }}></div>
-                        </div>
-                        <div style={{ fontSize: "11px", color: "#6b7280", whiteSpace: "nowrap" }}>
-                          {item.approved_deliverables || 0}/{item.total_deliverables || 0}
-                        </div>
-                      </div>
-                    );
-                  })()}
+                  {/* Personal Notes */}
+                  <div className="col-notes">
+                    <TaskNotesPopover taskId={item.id} itemType={item.item_type === "subtask" ? "deliverable" : "task"} />
+                  </div>
 
                   {/* Priority */}
                   <div className="col-priority">

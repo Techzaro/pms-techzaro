@@ -101,9 +101,24 @@ class TaskPolicy
                 }
             }
 
+            // Multiple project teams (team_ids)
+            if (!empty($task->project->team_ids)) {
+                $teamIds = array_map('intval', $task->project->team_ids);
+                $isTeamMember = $user->teams()->whereIn('teams.id', $teamIds)->exists()
+                    || $user->ledTeams()->whereIn('teams.id', $teamIds)->exists();
+                if ($isTeamMember) {
+                    return true;
+                }
+            }
+
             // Project Assigned Users
             $projectAssigned = array_map('intval', $task->project->assigned_users ?? []);
             if (in_array((int) $user->id, $projectAssigned, true)) {
+                return true;
+            }
+
+            // Explicit Manual Visibility
+            if ($task->project->manuallyVisibleTo()->where('user_id', $user->id)->exists()) {
                 return true;
             }
 
