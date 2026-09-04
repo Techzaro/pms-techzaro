@@ -25,7 +25,7 @@ function PinnedTasksSubWidget() {
     <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "200px", overflowY: "auto" }}>
       {pinnedTasks.map((tItem) => (
         <div key={tItem.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", borderRadius: "8px", background: "var(--bg-card-subtle, #f8fafc)", border: "1px solid var(--border-color, #e2e8f0)" }}>
-          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-heading)", cursor: "pointer" }} onClick={() => navigate(rolePath(`tasks/task-details/${tItem.id}`))}>
+          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-heading)", cursor: "pointer" }} onClick={() => navigate(rolePath(`tasks/task-details/${tItem.id}`), { state: { from: 'dashboard', returnUrl: location.pathname } })}>
             #{tItem.id} - {tItem.title}
           </span>
           <button onClick={() => togglePinTask(tItem)} style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer" }} title={t("Unpin", { defaultValue: "Unpin" })}>

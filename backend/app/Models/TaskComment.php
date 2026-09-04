@@ -16,6 +16,8 @@ class TaskComment extends Model
         'deliverable_id',
         'user_id',
         'parent_id',
+        'quoted_message_id',
+        'quoted_text',
         'body',
         'file_path',
         'file_name',
@@ -51,6 +53,11 @@ class TaskComment extends Model
     public function parent(): BelongsTo
     {
         return $this->belongsTo(TaskComment::class, 'parent_id');
+    }
+
+    public function quotedComment(): BelongsTo
+    {
+        return $this->belongsTo(TaskComment::class, 'quoted_message_id');
     }
 
     public function replies(): HasMany

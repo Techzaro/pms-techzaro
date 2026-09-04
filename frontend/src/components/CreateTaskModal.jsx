@@ -8,6 +8,7 @@ import useAutoSave from "../hooks/useAutoSave";
 import AutoSaveIndicator from "./AutoSaveIndicator";
 import draftService from "../services/draftService";
 import UserSelectDropdown from "./UserSelectDropdown";
+import ParentTaskSelectDropdown from "./ParentTaskSelectDropdown";
 import CustomSelect from "./CustomSelect";
 import MultiSelectDropdown from "./MultiSelectDropdown";
 import LoadingButton from "./LoadingButton";
@@ -172,6 +173,9 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
   const [kbArticles, setKbArticles] = useState([]);
   const [eventsList, setEventsList] = useState([]);
 
+  const taskNameInputRef = useRef(null);
+  const [projectTasks, setProjectTasks] = useState([]);
+
   const [form, setForm] = useState(() => {
     const user = getUser();
     const defaultTransfer = (user?.role === "admin" || user?.role === "manager") ? "allow" : "disallow";
@@ -181,11 +185,12 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
       followers: [],
       title: "",
       description: "",
-      priority: "Medium",
+      priority: "High",
       task_type: "standard",
       start_date: "",
       end_date: "",
       allow_transfer: defaultTransfer,
+      parent_id: "",
     };
   });
 
@@ -317,13 +322,44 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
     loadDraft();
   }, [restoreDraftId]);
 
-  const handleSaveDraft = async () => {
+  const handleSaveDraftAndClose = async () => {
     try {
       const payload = {
         module_type: "task",
         title: form.title || "Untitled Task Draft",
-        draft_data: { ...form, kb_ids: kbIds, event_ids: eventIds, deliverables: subtasks, recurringTemplates: recurringTemplates, requirementsList, links: links.map(l => ({ url: l.url, name: l.name || l.customName })) },
-        project_id: form.project_id?.[0] || projectId,
+        draft_data: {
+          ...form,
+          kb_ids: kbIds,
+          event_ids: eventIds,
+          deliverables: subtasks,
+          recurringTemplates,
+          requirementsList,
+          links: links.map((l) => ({ url: l.url, name: l.name || l.customName })),
+        },
+        project_id: form.project_id?.[0] || projectId || null,
+      };
+      if (draftId) {
+        await draftService.update(draftId, { title: payload.title, draft_data: payload.draft_data }, { skipNotify: true });
+      } else {
+        await draftService.create(payload, { skipNotify: true });
+      }
+      setIsDirty(false);
+      showSuccessMessage("Draft", "saved");
+      publish("draft:created", {});
+      onClose(true);
+    } catch (err) {
+      console.error("Save draft failed:", err);
+      notify.error(err.message || "Failed to save draft");
+    }
+  };
+
+  const handleAutoSaveDraft = async () => {
+    try {
+      const payload = {
+        module_type: "task",
+        title: form.title || "Untitled Task Draft",
+        draft_data: { ...form, kb_ids: kbIds, event_ids: eventIds, deliverables: subtasks, recurringTemplates, requirementsList, links: links.map(l => ({ url: l.url, name: l.name || l.customName })) },
+        project_id: form.project_id?.[0] || projectId || null,
       };
       if (draftId) {
         await draftService.update(draftId, { title: payload.title, draft_data: payload.draft_data }, { skipNotify: true });
@@ -338,8 +374,27 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
   };
 
   useEffect(() => {
-    draftSaveRef.current = handleSaveDraft;
+    draftSaveRef.current = handleAutoSaveDraft;
   });
+
+  useEffect(() => {
+    const token = authToken();
+    const pids = projectId ? [projectId] : (Array.isArray(form.project_id) ? form.project_id : (form.project_id ? [form.project_id] : []));
+    if (pids.length === 1) {
+      fetch(`${API_URL}/projects/${pids[0]}/tasks`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
+      })
+        .then((r) => (r.ok ? r.json() : []))
+        .then((d) => {
+          const items = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
+          setProjectTasks(items);
+        })
+        .catch(() => setProjectTasks([]));
+    } else {
+      setProjectTasks([]);
+    }
+  }, [projectId, form.project_id]);
 
   const preview = useMemo(() => {
     if (form.task_type !== "recurring") return null;
@@ -397,7 +452,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
         fetch(`${API_URL}/projects`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
           .then((r) => (r.ok ? r.json() : [])).then((d) => { const l = d?.data || d; setProjects(Array.isArray(l) ? l : []); }).catch(() => {}),
         fetch(`${API_URL}/team-users`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
-          .then((r) => (r.ok ? r.json() : { users: [] })).then((d) => { const u = ensureCurrentUser(Array.isArray(d) ? d : (d.users || [])); setAllUsers(u); setDisplayUsers(u); }).catch(() => {}),
+          .then((r) => (r.ok ? r.json() : { users: [] })).then((d) => { const u = ensureCurrentUser(Array.isArray(d) ? d : (d.users || [])); setAllUsers(u); }).catch(() => {}),
         fetch(`${API_URL}/knowledge-base?all=true`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
           .then((r) => (r.ok ? r.json() : [])).then((d) => { const items = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : []; setKbArticles(items); }).catch(() => {}),
         fetch(`${API_URL}/events?all=true`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
@@ -421,12 +476,13 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
   const fetchMembersForProjects = useCallback((projectIds) => {
     const token = authToken();
     const currentUser = getUser();
-    if (!projectIds || projectIds.length === 0) {
-      setDisplayUsers(allUsers);
+    const ids = Array.isArray(projectIds) ? projectIds : (projectIds ? [projectIds] : []);
+    if (!ids || ids.length === 0) {
+      setDisplayUsers([]);
       return;
     }
     Promise.all(
-      projectIds.map((pid) =>
+      ids.map((pid) =>
         fetch(`${API_URL}/projects/${pid}/members`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
           .then((r) => (r.ok ? r.json() : [])).catch(() => [])
       )
@@ -436,10 +492,10 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
         (Array.isArray(members) ? members : []).forEach((u) => map.set(u.id, u));
         return map;
       });
-      let users;
+      let users = [];
       if (memberSets.length === 1) {
         users = Array.from(memberSets[0].values());
-      } else {
+      } else if (memberSets.length > 1) {
         const smallest = memberSets.reduce((a, b) => a.size <= b.size ? a : b);
         users = [];
         smallest.forEach((u, id) => {
@@ -450,13 +506,13 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
         users = [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: currentUser.role, department: currentUser.department }, ...users];
       }
       setDisplayUsers(users);
-    }).catch(() => setDisplayUsers(allUsers));
-  }, [allUsers]);
+    }).catch(() => setDisplayUsers([]));
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     if (name === "project_id") {
-      setForm((prev) => ({ ...prev, project_id: value, assigned_to: [] }));
+      setForm((prev) => ({ ...prev, project_id: value, assigned_to: [], followers: [] }));
       fetchMembersForProjects(value);
     } else {
       setForm((prev) => ({ ...prev, [name]: value }));
@@ -625,8 +681,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
     return true;
   };
 
-  const handleSubmit = async (e) => {
-    if (e?.preventDefault) e.preventDefault();
+  const submitTask = async (isCreateMore = false) => {
     if (!validateForm()) return;
     await run(async () => {
       try {
@@ -658,6 +713,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
           followers: form.followers || [],
           kb_ids: kbIds.length > 0 ? kbIds.map(Number) : [],
           event_ids: eventIds.length > 0 ? eventIds.map(Number) : [],
+          parent_id: form.parent_id || undefined,
         };
 
         const projectIds = projectId ? [projectId] : form.project_id;
@@ -712,7 +768,39 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
         publish("data:changed", { type: "task", action: "created" });
         if (restoreDraftId) draftService.delete(restoreDraftId).catch(() => {});
         if (onTaskCreated) onTaskCreated();
-        onClose(true);
+
+        if (isCreateMore) {
+          const user = getUser();
+          const defaultTransfer = (user?.role === "admin" || user?.role === "manager") ? "allow" : "disallow";
+          setForm((prev) => ({
+            ...prev,
+            title: "",
+            description: "",
+            start_date: "",
+            end_date: "",
+            parent_id: "",
+            assigned_to: [],
+            followers: [],
+            task_type: "standard",
+            priority: "High",
+            allow_transfer: prev.allow_transfer || defaultTransfer,
+          }));
+          setSubtasks([]);
+          setRecurringTemplates([{ title: "", description: "", quantity: 1, combined: false }]);
+          setRequirementsList([]);
+          setPendingFiles([]);
+          setLinks([]);
+          setKbIds([]);
+          setEventIds([]);
+          setDraftId(null);
+          setIsDirty(false);
+          setFormErrors({});
+          setTimeout(() => {
+            taskNameInputRef.current?.focus();
+          }, 100);
+        } else {
+          onClose(true);
+        }
       } catch (err) {
         notify.error(err.message);
       }
@@ -736,23 +824,35 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
               <AutoSaveIndicator isSaving={isSaving} lastSaved={lastSaved} />
             </div>
             <div className="task-header-actions">
-              <button className="task-save-draft-btn" onClick={handleSaveDraft} type="button" disabled={!form.title.trim()}>
-                {t("Save Draft", { defaultValue: "Save Draft" })}
+              <button className="task-save-draft-btn" onClick={handleSaveDraftAndClose} type="button" disabled={!form.title.trim()}>
+                {t("Save as Draft", { defaultValue: "Save as Draft" })}
               </button>
-              <LoadingButton className="task-create-btn" onClick={handleSubmit} loading={submitting}>{t("+ Create Task", { defaultValue: "+ Create Task" })}</LoadingButton>
+              <button className="task-create-more-btn" onClick={() => submitTask(true)} type="button" disabled={submitting}>
+                {t("Create More", { defaultValue: "Create More" })}
+              </button>
+              <LoadingButton className="task-create-btn" onClick={() => submitTask(false)} loading={submitting}>
+                {t("+ Create Task", { defaultValue: "+ Create Task" })}
+              </LoadingButton>
               <button className="task-close-btn" onClick={handleClose}>✕</button>
             </div>
           </div>
-
           {/* BODY */}
-          <form onSubmit={handleSubmit} className="task-body">
+          <form onSubmit={(e) => { e.preventDefault(); submitTask(false); }} className="task-body">
+            {/* LEFT SIDE (Core Content) */}
             <div className="task-left">
+              {/* Project & Assign To */}
               <div className="task-grid-2">
                 {!projectId ? (
                   <div className="task-field">
                     <label>{t("Projects")} <span style={{ color: "#ef4444" }}>*</span></label>
-                    <MultiSelectDropdown name="project_id" value={form.project_id} onChange={(val) => handleChange({ target: { name: "project_id", value: val } })}
-                      placeholder={t("Select projects", { defaultValue: "Select projects" })} searchPlaceholder={t("Search projects...")} options={projects.map((p) => ({ value: p.id, label: p.title }))} />
+                    <MultiSelectDropdown
+                      name="project_id"
+                      value={form.project_id}
+                      onChange={(val) => handleChange({ target: { name: "project_id", value: val } })}
+                      placeholder={t("Select projects", { defaultValue: "Select projects" })}
+                      searchPlaceholder={t("Search projects...")}
+                      options={projects.map((p) => ({ value: p.id, label: p.title }))}
+                    />
                     {formErrors.project_id && <span className="field-error-text">{formErrors.project_id}</span>}
                   </div>
                 ) : (
@@ -761,82 +861,203 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                     <div className="task-project-name">{projectName || t("Current Project", { defaultValue: "Current Project" })}</div>
                   </div>
                 )}
-                <div className="task-field">
-                  <label>{t("Assign To", { defaultValue: "Assign To" })} <span>*</span></label>
-                  <UserSelectDropdown users={displayUsers} selectedIds={form.assigned_to} onChange={handleAssignedToChange}
-                    placeholder={t("Click to select members", { defaultValue: "Click to select members" })} error={!!formErrors.assigned_to} />
-                  {formErrors.assigned_to && <span className="field-error-text">{formErrors.assigned_to}</span>}
+                {(() => {
+                  const selectedProjectIds = projectId
+                    ? [projectId]
+                    : (Array.isArray(form.project_id)
+                        ? form.project_id
+                        : (form.project_id ? [form.project_id] : []));
+                  const hasProjectSelected = selectedProjectIds.length > 0;
 
-                  {/* Assignee Timezone, Current Time & Working Hours (SRS Sec 13 & 17) */}
-                  {form.assigned_to && form.assigned_to.length > 0 && (
-                    <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "6px" }}>
-                      {displayUsers
-                        .filter((u) => form.assigned_to.includes(u.id))
-                        .map((u) => {
-                          const tz = u.timezone || "UTC";
-                          const uTime = formatLocalTime(new Date().toISOString(), tz);
-                          const workingHoursStr = formatWorkingHoursSummary(u.working_hours, tz);
-                          return (
-                            <div
-                              key={u.id}
-                              style={{
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: "3px",
-                                fontSize: "12px",
-                                color: "var(--text-secondary, #4b5563)",
-                                background: "var(--bg-hover, #f8fafc)",
-                                padding: "6px 10px",
-                                borderRadius: "6px",
-                                border: "1px solid var(--border-light, #e2e8f0)",
-                              }}
-                            >
-                              <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                                <Clock size={13} style={{ color: "var(--color-primary, #4f46e5)", flexShrink: 0 }} />
-                                <span>
-                                  <strong>{u.name}</strong>'s {t("Time", { defaultValue: "Time" })}:{" "}
-                                  <span style={{ color: "var(--color-primary, #4f46e5)", fontWeight: 600 }}>{uTime}</span> ({tz})
-                                </span>
-                              </div>
-                              <div style={{ fontSize: "11px", color: "var(--text-secondary)", paddingLeft: "19px" }}>
-                                🕒 {t("Working Hours", { defaultValue: "Working Hours" })}: <span style={{ fontWeight: 500, color: "var(--text-primary, #1e293b)" }}>{workingHoursStr}</span>
-                              </div>
-                            </div>
-                          );
-                        })}
+                  return (
+                    <div className="task-field">
+                      <label>{t("Assign To", { defaultValue: "Assign To" })} <span style={{ color: "#ef4444" }}>*</span></label>
+                      <UserSelectDropdown
+                        users={displayUsers}
+                        selectedIds={form.assigned_to}
+                        onChange={handleAssignedToChange}
+                        disabled={!hasProjectSelected}
+                        placeholder={!hasProjectSelected ? t("Select a project first", { defaultValue: "Select a project first" }) : t("Click to select members", { defaultValue: "Click to select members" })}
+                        error={!!formErrors.assigned_to}
+                      />
+                      {formErrors.assigned_to && <span className="field-error-text">{formErrors.assigned_to}</span>}
+
+                      {/* Assignee Timezone, Current Time & Working Hours (SRS Sec 13 & 17) */}
+                      {form.assigned_to && form.assigned_to.length > 0 && (
+                        <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                          {displayUsers
+                            .filter((u) => form.assigned_to.includes(u.id))
+                            .map((u) => {
+                              const tz = u.timezone || "UTC";
+                              const uTime = formatLocalTime(new Date().toISOString(), tz);
+                              const workingHoursStr = formatWorkingHoursSummary(u.working_hours, tz);
+                              return (
+                                <div
+                                  key={u.id}
+                                  style={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: "3px",
+                                    fontSize: "12px",
+                                    color: "var(--text-secondary, #4b5563)",
+                                    background: "var(--bg-hover, #f8fafc)",
+                                    padding: "6px 10px",
+                                    borderRadius: "6px",
+                                    border: "1px solid var(--border-light, #e2e8f0)",
+                                  }}
+                                >
+                                  <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                                    <Clock size={13} style={{ color: "var(--color-primary, #4f46e5)", flexShrink: 0 }} />
+                                    <span>
+                                      <strong>{u.name}</strong>'s {t("Time", { defaultValue: "Time" })}:{" "}
+                                      <span style={{ color: "var(--color-primary, #4f46e5)", fontWeight: 600 }}>{uTime}</span> ({tz})
+                                    </span>
+                                  </div>
+                                  <div style={{ fontSize: "11px", color: "var(--text-secondary)", paddingLeft: "19px" }}>
+                                    🕒 {t("Working Hours", { defaultValue: "Working Hours" })}: <span style={{ fontWeight: 500, color: "var(--text-primary, #1e293b)" }}>{workingHoursStr}</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
+                  );
+                })()}
               </div>
 
-              <div className="task-field">
-                <label>{t("Followers (Optional)", { defaultValue: "Followers (Optional)" })}</label>
-                <UserSelectDropdown
-                  users={displayUsers.filter((u) => !form.assigned_to.includes(u.id))}
-                  selectedIds={form.followers || []}
-                  onChange={handleFollowersChange}
-                  placeholder={t("Click to select followers", { defaultValue: "Click to select followers" })}
-                />
-              </div>
-
+              {/* Task Name */}
               <div className="task-field">
                 <label>{t("Task Name")} <span>*</span></label>
-                <input type="text" name="title" placeholder={t("Enter task name..", { defaultValue: "Enter task name.." })} value={form.title} onChange={handleChange} className={formErrors.title ? "field-error" : ""} />
+                <input
+                  ref={taskNameInputRef}
+                  type="text"
+                  name="title"
+                  placeholder={t("Enter task name..", { defaultValue: "Enter task name.." })}
+                  value={form.title}
+                  onChange={handleChange}
+                  className={formErrors.title ? "field-error" : ""}
+                />
                 {formErrors.title && <span className="field-error-text">{formErrors.title}</span>}
               </div>
 
+              {/* Task Description */}
               <div className="task-field">
                 <label>{t("Description", { defaultValue: "Description" })}</label>
                 <RichTextEditor
                   value={form.description}
-                  onChange={(val) => { const clean = (s) => (s || "").replace(/<[^>]*>/g, "").trim(); setForm((prev) => ({ ...prev, description: val })); markDirty(); }}
+                  onChange={(val) => { setForm((prev) => ({ ...prev, description: val })); markDirty(); }}
                   placeholder={t("Enter task description...", { defaultValue: "Enter task description..." })}
                 />
               </div>
 
-              {/* LINKS & ATTACHMENTS */}
+              {/* Sub-task Of */}
+              {(() => {
+                const selectedProjectIds = projectId
+                  ? [projectId]
+                  : (Array.isArray(form.project_id)
+                      ? form.project_id
+                      : (form.project_id ? [form.project_id] : []));
+                const hasProjectSelected = selectedProjectIds.length > 0;
+
+                return (
+                  <div className="task-field">
+                    <label>{t("Sub-task Of (Optional)", { defaultValue: "Sub-task Of" })}</label>
+                    <ParentTaskSelectDropdown
+                      name="parent_id"
+                      tasks={projectTasks}
+                      value={form.parent_id || ""}
+                      onChange={(val) => { setForm((prev) => ({ ...prev, parent_id: val })); markDirty(); }}
+                      disabled={!hasProjectSelected}
+                      placeholder={!hasProjectSelected ? t("Select a project first", { defaultValue: "Select a project first" }) : t("None (Main Task)", { defaultValue: "None (Main Task)" })}
+                    />
+                  </div>
+                );
+              })()}
+
+              {/* Subtasks List */}
+              {subtasks.length > 0 && (
+                <div className="task-card task-card--bordered">
+                  <div className="task-card-top">
+                    <span>{t("Subtasks", { defaultValue: "Subtasks" })}</span>
+                  </div>
+                  <div className="task-phase-list">
+                    {subtasks.map((d, index) => {
+                      const assignedUser = d.assigned_to ? displayUsers.find(u => String(u.id) === String(d.assigned_to)) : null;
+                      const isDropdownOpen = openSubtaskDropdown === index;
+                      return (
+                        <div key={index} className="task-phase-item" style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #f3f4f6", position: "relative" }}>
+                          <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#8b5cf6", display: "inline-block", flexShrink: 0 }}></span>
+                          <span style={{ flex: 1, fontSize: 13, color: "#111827" }}>{d.title}</span>
+                          <span style={{ fontSize: 11, color: "#6b7280", whiteSpace: "pre-line" }}>
+                            {d.start_date ? formatDateTime(d.start_date).replace("\n", " ") : ""}
+                            {d.start_date && d.due_date ? "\n" : ""}
+                            {d.due_date ? formatDateTime(d.due_date).replace("\n", " ") : "No due date"}
+                          </span>
+                          <div style={{ position: "relative" }}>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setOpenSubtaskDropdown(isDropdownOpen ? null : index); }}
+                              onKeyDown={(e) => handleSubtaskDropdownKeyDown(e, index)}
+                              style={{
+                                fontSize: 11, cursor: "pointer", padding: "3px 8px", borderRadius: 4, border: "1px solid #e5e7eb",
+                                background: assignedUser ? "#eef2ff" : "#f9fafb", color: assignedUser ? "#6366f1" : "#6b7280",
+                                fontWeight: 500, whiteSpace: "nowrap",
+                              }}
+                            >
+                              {assignedUser ? assignedUser.name : "Assign"}
+                            </button>
+                            {isDropdownOpen && (
+                              <div onClick={(e) => e.stopPropagation()} ref={subtaskAssigneeListRef} style={{
+                                position: "absolute", bottom: "100%", right: 0, zIndex: 100,
+                                background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8,
+                                boxShadow: "0 4px 12px rgba(0,0,0,0.1)", minWidth: 150, padding: "4px 0", marginBottom: 4,
+                              }}>
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); handleSubtaskAssignee(index, null); }}
+                                  onMouseEnter={() => setSubtaskAssigneeHighlightedIndex(0)}
+                                  style={{
+                                    display: "block", width: "100%", textAlign: "left", padding: "6px 12px",
+                                    fontSize: 12, cursor: "pointer",
+                                    background: subtaskAssigneeHighlightedIndex === 0 ? "#eef2ff" : (!assignedUser ? "#f3f4f6" : "transparent"),
+                                    border: "none", color: "#374151",
+                                  }}
+                                >
+                                  All assignees
+                                </button>
+                                {displayUsers.filter(u => form.assigned_to.includes(u.id)).map((u, uIdx) => (
+                                  <button
+                                    key={u.id}
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); handleSubtaskAssignee(index, u.id); }}
+                                    onMouseEnter={() => setSubtaskAssigneeHighlightedIndex(uIdx + 1)}
+                                    style={{
+                                      display: "block", width: "100%", textAlign: "left", padding: "6px 12px",
+                                      fontSize: 12, cursor: "pointer",
+                                      background: subtaskAssigneeHighlightedIndex === uIdx + 1 ? "#eef2ff" : (String(d.assigned_to) === String(u.id) ? "#f3f4f6" : "transparent"),
+                                      border: "none", color: "#374151",
+                                    }}
+                                  >
+                                    <span>{u.name}</span>
+                                    {u.role && <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: 6 }}>({u.role.replace("_", " ")})</span>}
+                                    {u.department && <span style={{ fontSize: 10, fontWeight: 500, color: "#6366f1", background: "#eef2ff", padding: "1px 5px", borderRadius: 4, marginLeft: 4 }}>{u.department}</span>}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <button type="button" className="task-phase-item-remove" onClick={() => { setPendingRemoveItem({ type: "subtask", index }); setRemoveConfirmOpen(true); }} style={{ fontSize: 14 }}>✕</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Attachments & Links */}
               <div className="task-field">
-                <label>{t("Links & Attachment", { defaultValue: "Links & Attachment" })}</label>
+                <label>{t("Attachments & Links", { defaultValue: "Attachments & Links" })}</label>
                 <div className="task-drop-zone" ref={dropRef} onDrop={handleDrop} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onClick={() => fileInputRef.current?.click()}>
                   <div className="task-drop-content">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -888,119 +1109,82 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                     <button type="button" className="task-link-add-btn" onClick={handleAddLink} disabled={!linkInput.trim()}>{t("Add Link", { defaultValue: "Add Link" })}</button>
                   </div>
                 </div>
-              </div>
 
-              {links.length > 0 && (
-                <div className="cp-attachments-list">
-                  {links.map((link, index) => (
-                    <div key={index} className="cp-attachment-item">
-                      <span className="cp-attachment-drag" title={t("Drag to reorder", { defaultValue: "Drag to reorder" })}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
-                      </span>
-                      <span className="task-attachment-icon">🔗</span>
-                      <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-                        <span className="task-attachment-name" style={{ fontWeight: 600, fontSize: "13px" }}>{link.customName || link.name}</span>
-                        <a href={link.url} target="_blank" rel="noopener noreferrer" className="task-attachment-link" style={{ fontSize: "12px", color: "#6366f1" }}>
-                          {link.url.length > 45 ? link.url.substring(0, 45) + "..." : link.url}
-                        </a>
-                      </div>
-                      <div className="cp-attachment-actions">
-                        <button type="button" className="cp-action-btn cp-action-btn-edit" title={t("Edit Link", { defaultValue: "Edit Link" })} onClick={() => {
-                          setEditingLink({ type: "pending", index });
-                          setEditLinkForm({ title: link.customName || link.name, url: link.url });
-                        }}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
-                        </button>
-                        <button type="button" className="cp-action-btn cp-action-btn-delete" title={t("Delete Link", { defaultValue: "Delete Link" })} onClick={() => { setPendingRemoveItem({ type: "link", index }); setRemoveConfirmOpen(true); }}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-            </div>
-
-            {/* RIGHT SIDE */}
-            <div className="task-right">
-
-              <div className="task-field">
-                <label>{t("Priority")} <span style={{ color: "#ef4444" }}>*</span></label>
-                <CustomSelect name="priority" value={form.priority}
-                  onChange={(val) => { setForm((prev) => ({ ...prev, priority: val })); markDirty(); }}
-                  options={[
-                    { value: "Medium", label: t("Medium") },
-                    { value: "Low", label: t("Low") },
-                    { value: "High", label: t("High") },
-                  ]} />
-              </div>
-
-              {/* REFERENCE KNOWLEDGE BASE */}
-              <div className="task-field">
-                <label>{t("Reference Knowledge Base", { defaultValue: "Reference Knowledge Base" })}</label>
-                <MultiSelectDropdown
-                  name="kb_ids"
-                  value={kbIds}
-                  onChange={(vals) => { setKbIds(vals.map(Number)); markDirty(); }}
-                  placeholder={t("Select Knowledge Base", { defaultValue: "Select Knowledge Base" })}
-                  searchPlaceholder={t("Search Knowledge Base...", { defaultValue: "Search Knowledge Base..." })}
-                  options={(kbArticles || []).map((item) => ({
-                    value: Number(item?.id),
-                    label: item?.title || `Article #${item?.id}`,
-                  }))}
-                />
-              </div>
-
-              {/* REFERENCE EVENT */}
-              <div className="task-field">
-                <label>{t("Reference Event", { defaultValue: "Reference Event" })}</label>
-                <MultiSelectDropdown
-                  name="event_ids"
-                  value={eventIds}
-                  onChange={(vals) => { setEventIds(vals.map(Number)); markDirty(); }}
-                  placeholder={t("Select Event", { defaultValue: "Select Event" })}
-                  searchPlaceholder={t("Search Events...", { defaultValue: "Search Events..." })}
-                  options={(eventsList || []).map((item) => ({
-                    value: Number(item?.id),
-                    label: item?.title || `Event #${item?.id}`,
-                  }))}
-                />
-              </div>
-
-              <div className="task-field">
-                <label>{t("Requirements", { defaultValue: "Requirements" })}</label>
-                <div className="cp-goals-input-row">
-                  <input type="text" placeholder={t("Enter a requirement", { defaultValue: "Enter a requirement" })} value={reqInput} onChange={(e) => { setReqInput(e.target.value); markDirty(); }} onKeyDown={handleReqKeyDown} />
-                  <button type="button" className="cp-goals-add-btn" onClick={handleAddRequirement} disabled={!reqInput.trim()}>{t("Add", { defaultValue: "Add" })}</button>
-                </div>
-                {requirementsList.length > 0 && (
-                  <div className="cp-goals-list">
-                    {requirementsList.map((req, index) => (
-                      <div key={index} className="cp-goals-item">
-                        <span className="cp-goals-item-text">{req}</span>
-                        <button type="button" className="cp-goals-item-remove" onClick={() => { setPendingRemoveItem({ type: "requirement", index }); setRemoveConfirmOpen(true); }}>✕</button>
+                {links.length > 0 && (
+                  <div className="cp-attachments-list" style={{ marginTop: "12px" }}>
+                    {links.map((link, index) => (
+                      <div key={index} className="cp-attachment-item">
+                        <span className="cp-attachment-drag" title={t("Drag to reorder", { defaultValue: "Drag to reorder" })}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+                        </span>
+                        <span className="task-attachment-icon">🔗</span>
+                        <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+                          <span className="task-attachment-name" style={{ fontWeight: 600, fontSize: "13px" }}>{link.customName || link.name}</span>
+                          <a href={link.url} target="_blank" rel="noopener noreferrer" className="task-attachment-link" style={{ fontSize: "12px", color: "#6366f1" }}>
+                            {link.url.length > 45 ? link.url.substring(0, 45) + "..." : link.url}
+                          </a>
+                        </div>
+                        <div className="cp-attachment-actions">
+                          <button type="button" className="cp-action-btn cp-action-btn-edit" title={t("Edit Link", { defaultValue: "Edit Link" })} onClick={() => {
+                            setEditingLink({ type: "pending", index });
+                            setEditLinkForm({ title: link.customName || link.name, url: link.url });
+                          }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                          </button>
+                          <button type="button" className="cp-action-btn cp-action-btn-delete" title={t("Delete Link", { defaultValue: "Delete Link" })} onClick={() => { setPendingRemoveItem({ type: "link", index }); setRemoveConfirmOpen(true); }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
+            </div>
 
+            {/* RIGHT SIDE (Metadata & Controls) */}
+            <div className="task-right">
+              {/* Priority */}
+              <div className="task-field">
+                <label>{t("Priority")} <span style={{ color: "#ef4444" }}>*</span></label>
+                <CustomSelect
+                  name="priority"
+                  value={form.priority}
+                  onChange={(val) => { setForm((prev) => ({ ...prev, priority: val })); markDirty(); }}
+                  options={[
+                    { value: "Urgent", label: t("Urgent", { defaultValue: "Urgent" }) },
+                    { value: "High", label: t("High", { defaultValue: "High" }) },
+                    { value: "Medium", label: t("Medium", { defaultValue: "Medium" }) },
+                    { value: "Low", label: t("Low", { defaultValue: "Low" }) },
+                  ]}
+                />
+                {formErrors.priority && <span className="field-error-text">{formErrors.priority}</span>}
+              </div>
+
+              {/* Dates */}
               <div className="task-card task-card--bordered">
                 <div className="task-card-top"><span>{t("Dates", { defaultValue: "Dates" })}</span></div>
                 <div className="task-deadline-grid">
                   <div>
                     <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>{t("Start", { defaultValue: "Start" })}</label>
-                    <input type="datetime-local" value={form.start_date || form.recurrence_start_date || ""}
+                    <input
+                      type="datetime-local"
+                      value={form.start_date || form.recurrence_start_date || ""}
                       onChange={(e) => { setForm((prev) => ({ ...prev, start_date: e.target.value, recurrence_start_date: e.target.value })); markDirty(); }}
-                      min={getNowDatetimeLocal()} />
+                      min={getNowDatetimeLocal()}
+                    />
+                    {formErrors.start_date && <span className="field-error-text">{formErrors.start_date}</span>}
                   </div>
                   <div>
                     <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>{t("End", { defaultValue: "End" })}</label>
-                    <input type="datetime-local" value={form.end_date || form.recurrence_end_date || ""}
+                    <input
+                      type="datetime-local"
+                      value={form.end_date || form.recurrence_end_date || ""}
                       onChange={(e) => { setForm((prev) => ({ ...prev, end_date: e.target.value, recurrence_end_date: e.target.value })); markDirty(); }}
-                      min={getNowDatetimeLocal()}
-                      max={projectEndDate ? toDatetimeLocal(projectEndDate) : undefined} />
+                      min={form.start_date || getNowDatetimeLocal()}
+                      max={projectEndDate ? toDatetimeLocal(projectEndDate) : undefined}
+                    />
+                    {formErrors.end_date && <span className="field-error-text">{formErrors.end_date}</span>}
                     {projectEndDate && <span style={{ fontSize: 11, color: "#9ca3af", marginTop: 2, display: "block" }}>{t("Max", { defaultValue: "Max" })}: {new Date(projectEndDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>}
                   </div>
                 </div>
@@ -1027,9 +1211,94 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                 )}
               </div>
 
+              {/* Followers */}
+              {(() => {
+                const selectedProjectIds = projectId
+                  ? [projectId]
+                  : (Array.isArray(form.project_id)
+                      ? form.project_id
+                      : (form.project_id ? [form.project_id] : []));
+                const hasProjectSelected = selectedProjectIds.length > 0;
+
+                return (
+                  <div className="task-field">
+                    <label>{t("Followers (Optional)", { defaultValue: "Followers (Optional)" })}</label>
+                    <UserSelectDropdown
+                      users={displayUsers.filter((u) => !form.assigned_to.includes(u.id))}
+                      selectedIds={form.followers || []}
+                      onChange={handleFollowersChange}
+                      disabled={!hasProjectSelected}
+                      placeholder={!hasProjectSelected ? t("Select a project first", { defaultValue: "Select a project first" }) : t("Click to select followers", { defaultValue: "Click to select followers" })}
+                    />
+                  </div>
+                );
+              })()}
+
+              {/* Requirements */}
+              <div className="task-field">
+                <label>{t("Requirements", { defaultValue: "Requirements" })}</label>
+                <div className="cp-goals-input-row">
+                  <input
+                    type="text"
+                    placeholder={t("Enter a requirement", { defaultValue: "Enter a requirement" })}
+                    value={reqInput}
+                    onChange={(e) => { setReqInput(e.target.value); markDirty(); }}
+                    onKeyDown={handleReqKeyDown}
+                  />
+                  <button type="button" className="cp-goals-add-btn" onClick={handleAddRequirement} disabled={!reqInput.trim()}>
+                    {t("Add", { defaultValue: "Add" })}
+                  </button>
+                </div>
+                {requirementsList.length > 0 && (
+                  <div className="cp-goals-list">
+                    {requirementsList.map((req, index) => (
+                      <div key={index} className="cp-goals-item">
+                        <span className="cp-goals-item-text">{req}</span>
+                        <button type="button" className="cp-goals-item-remove" onClick={() => { setPendingRemoveItem({ type: "requirement", index }); setRemoveConfirmOpen(true); }}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Reference Event */}
+              <div className="task-field">
+                <label>{t("Reference Event", { defaultValue: "Reference Event" })}</label>
+                <MultiSelectDropdown
+                  name="event_ids"
+                  value={eventIds}
+                  onChange={(vals) => { setEventIds(vals.map(Number)); markDirty(); }}
+                  placeholder={t("Select Event", { defaultValue: "Select Event" })}
+                  searchPlaceholder={t("Search Events...", { defaultValue: "Search Events..." })}
+                  options={(eventsList || []).map((item) => ({
+                    value: Number(item?.id),
+                    label: item?.title || `Event #${item?.id}`,
+                  }))}
+                />
+              </div>
+
+              {/* Reference Knowledge Base */}
+              <div className="task-field">
+                <label>{t("Reference Knowledge Base", { defaultValue: "Reference Knowledge Base" })}</label>
+                <MultiSelectDropdown
+                  name="kb_ids"
+                  value={kbIds}
+                  onChange={(vals) => { setKbIds(vals.map(Number)); markDirty(); }}
+                  placeholder={t("Select Knowledge Base", { defaultValue: "Select Knowledge Base" })}
+                  searchPlaceholder={t("Search Knowledge Base...", { defaultValue: "Search Knowledge Base..." })}
+                  options={(kbArticles || []).map((item) => ({
+                    value: Number(item?.id),
+                    label: item?.title || `Article #${item?.id}`,
+                  }))}
+                />
+              </div>
+
+              {/* Task Type */}
               <div className="task-card">
                 <label>{t("Task Type", { defaultValue: "Task Type" })}</label>
-                <CustomSelect name="task_type" value={form.task_type}
+                <CustomSelect
+                  name="task_type"
+                  value={form.task_type}
                   onChange={(val) => {
                     setForm((prev) => ({ ...prev, task_type: val })); markDirty();
                     if (val === "recurring") {
@@ -1038,36 +1307,33 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                       }
                     }
                   }}
-                  options={[{ value: "standard", label: t("Standard", { defaultValue: "Standard" }) }, { value: "recurring", label: t("Recurring", { defaultValue: "Recurring" }) }]} />
+                  options={[
+                    { value: "standard", label: t("Standard", { defaultValue: "Standard" }) },
+                    { value: "recurring", label: t("Recurring", { defaultValue: "Recurring" }) },
+                  ]}
+                />
               </div>
 
-              <div className="task-card">
-                <label>{t("Transfer To", { defaultValue: "Transfer To" })}</label>
-                <CustomSelect name="allow_transfer" value={form.allow_transfer ?? "allow"}
-                  onChange={(val) => { setForm((prev) => ({ ...prev, allow_transfer: val })); markDirty(); }}
-                  options={[{ value: "allow", label: t("Allow", { defaultValue: "Allow" }) }, { value: "disallow", label: t("Disallow", { defaultValue: "Disallow" }) }]} />
-                <small style={{ fontSize: 11, color: "#9ca3af", marginTop: 4, display: "block" }}>
-                  {t("Whether assignees can transfer this task to others", { defaultValue: "Whether assignees can transfer this task to others" })}
-                </small>
-              </div>
-
-              {/* RECURRING SETTINGS */}
+              {/* Recurring Settings */}
               {form.task_type === "recurring" && (
                 <>
                   <div className="task-card">
-                    <div className="task-card-top"><span>Recurrence Settings</span></div>
+                    <div className="task-card-top"><span>{t("Recurrence Settings", { defaultValue: "Recurrence Settings" })}</span></div>
                     <div className="task-field" style={{ marginBottom: 10 }}>
-                      <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Repeat</label>
-                      <CustomSelect name="repeat" value={recurrenceSettings.repeat}
+                      <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>{t("Repeat", { defaultValue: "Repeat" })}</label>
+                      <CustomSelect
+                        name="repeat"
+                        value={recurrenceSettings.repeat}
                         onChange={(val) => handleRecurringSettingChange("repeat", val)}
-                        options={REPEAT_OPTIONS} />
+                        options={REPEAT_OPTIONS}
+                      />
                     </div>
 
                     <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #e5e7eb" }}>
-                      <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 8 }}>Dates</label>
+                      <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 8 }}>{t("Dates", { defaultValue: "Dates" })}</label>
                       <div className="task-deadline-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                         <div>
-                          <label style={{ fontSize: 12, color: "#6b7280", display: "block", marginBottom: 4 }}>Start</label>
+                          <label style={{ fontSize: 12, color: "#6b7280", display: "block", marginBottom: 4 }}>{t("Start", { defaultValue: "Start" })}</label>
                           <input
                             type="datetime-local"
                             value={form.recurrence_start_date || form.start_date || ""}
@@ -1076,7 +1342,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                           />
                         </div>
                         <div>
-                          <label style={{ fontSize: 12, color: "#6b7280", display: "block", marginBottom: 4 }}>End</label>
+                          <label style={{ fontSize: 12, color: "#6b7280", display: "block", marginBottom: 4 }}>{t("End", { defaultValue: "End" })}</label>
                           <input
                             type="datetime-local"
                             value={form.recurrence_end_date || form.end_date || ""}
@@ -1093,22 +1359,25 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                     {(recurrenceSettings.repeat === "daily" || recurrenceSettings.repeat === "custom") && (
                       <div className="task-field" style={{ marginBottom: 10 }}>
                         <label style={{ fontSize: 13, color: "#6b7280", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                          <input type="checkbox" checked={recurrenceSettings.skip_weekends}
+                          <input
+                            type="checkbox"
+                            checked={recurrenceSettings.skip_weekends}
                             onChange={(e) => handleRecurringSettingChange("skip_weekends", e.target.checked)}
-                            style={{ width: 16, height: 16, accentColor: "#6366f1" }} />
-                          Skip weekends (Sat/Sun)
+                            style={{ width: 16, height: 16, accentColor: "#6366f1" }}
+                          />
+                          {t("Skip weekends (Sat/Sun)", { defaultValue: "Skip weekends (Sat/Sun)" })}
                         </label>
                       </div>
                     )}
 
                     <p style={{ fontSize: 12, color: "#6b7280", margin: 0 }}>
-                      Subtasks auto-distribute between <strong>Start Date</strong> and <strong>Due Date</strong>.
+                      {t("Subtasks auto-distribute between Start Date and Due Date.", { defaultValue: "Subtasks auto-distribute between Start Date and Due Date." })}
                     </p>
                   </div>
 
                   <div className="task-card">
                     <div className="task-card-top">
-                      <span>Subtask Templates</span>
+                      <span>{t("Subtask Templates", { defaultValue: "Subtask Templates" })}</span>
                       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                         <button type="button" className="task-icon-btn" title={t("Available variables", { defaultValue: "Available variables" })} onClick={() => setShowVariablesHint(!showVariablesHint)}>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
@@ -1168,85 +1437,22 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                 </>
               )}
 
-              {subtasks.length > 0 && (
-                <div className="task-card task-card--bordered">
-                  <div className="task-card-top">
-                    <span>Subtasks</span>
-                  </div>
-                  <div className="task-phase-list">
-                    {subtasks.map((d, index) => {
-                      const assignedUser = d.assigned_to ? displayUsers.find(u => String(u.id) === String(d.assigned_to)) : null;
-                      const isDropdownOpen = openSubtaskDropdown === index;
-                      return (
-                      <div key={index} className="task-phase-item" style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #f3f4f6", position: "relative" }}>
-                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#8b5cf6", display: "inline-block", flexShrink: 0 }}></span>
-                        <span style={{ flex: 1, fontSize: 13, color: "#111827" }}>{d.title}</span>
-                        <span style={{ fontSize: 11, color: "#6b7280", whiteSpace: "pre-line" }}>
-                          {d.start_date ? formatDateTime(d.start_date).replace("\n", " ") : ""}
-                          {d.start_date && d.due_date ? "\n" : ""}
-                          {d.due_date ? formatDateTime(d.due_date).replace("\n", " ") : "No due date"}
-                        </span>
-                        <div style={{ position: "relative" }}>
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); setOpenSubtaskDropdown(isDropdownOpen ? null : index); }}
-                            onKeyDown={(e) => handleSubtaskDropdownKeyDown(e, index)}
-                            style={{
-                              fontSize: 11, cursor: "pointer", padding: "3px 8px", borderRadius: 4, border: "1px solid #e5e7eb",
-                              background: assignedUser ? "#eef2ff" : "#f9fafb", color: assignedUser ? "#6366f1" : "#6b7280",
-                              fontWeight: 500, whiteSpace: "nowrap",
-                            }}
-                          >
-                            {assignedUser ? assignedUser.name : "Assign"}
-                          </button>
-                          {isDropdownOpen && (
-                            <div onClick={(e) => e.stopPropagation()} ref={subtaskAssigneeListRef} style={{
-                              position: "absolute", bottom: "100%", right: 0, zIndex: 100,
-                              background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8,
-                              boxShadow: "0 4px 12px rgba(0,0,0,0.1)", minWidth: 150, padding: "4px 0", marginBottom: 4,
-                            }}>
-                              <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); handleSubtaskAssignee(index, null); }}
-                                onMouseEnter={() => setSubtaskAssigneeHighlightedIndex(0)}
-                                style={{
-                                  display: "block", width: "100%", textAlign: "left", padding: "6px 12px",
-                                  fontSize: 12, cursor: "pointer",
-                                  background: subtaskAssigneeHighlightedIndex === 0 ? "#eef2ff" : (!assignedUser ? "#f3f4f6" : "transparent"),
-                                  border: "none", color: "#374151",
-                                }}
-                              >
-                                All assignees
-                              </button>
-                              {displayUsers.filter(u => form.assigned_to.includes(u.id)).map((u, uIdx) => (
-                                <button
-                                  key={u.id}
-                                  type="button"
-                                  onClick={(e) => { e.stopPropagation(); handleSubtaskAssignee(index, u.id); }}
-                                  onMouseEnter={() => setSubtaskAssigneeHighlightedIndex(uIdx + 1)}
-                                  style={{
-                                    display: "block", width: "100%", textAlign: "left", padding: "6px 12px",
-                                    fontSize: 12, cursor: "pointer",
-                                    background: subtaskAssigneeHighlightedIndex === uIdx + 1 ? "#eef2ff" : (String(d.assigned_to) === String(u.id) ? "#f3f4f6" : "transparent"),
-                                    border: "none", color: "#374151",
-                                  }}
-                                >
-                                  <span>{u.name}</span>
-                                  {u.role && <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: 6 }}>({u.role.replace("_", " ")})</span>}
-                                  {u.department && <span style={{ fontSize: 10, fontWeight: 500, color: "#6366f1", background: "#eef2ff", padding: "1px 5px", borderRadius: 4, marginLeft: 4 }}>{u.department}</span>}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        <button type="button" className="task-phase-item-remove" onClick={() => { setPendingRemoveItem({ type: "subtask", index }); setRemoveConfirmOpen(true); }} style={{ fontSize: 14 }}>✕</button>
-                      </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
+              {/* Transfer */}
+              <div className="task-card">
+                <label>{t("Transfer To", { defaultValue: "Transfer To" })}</label>
+                <CustomSelect
+                  name="allow_transfer"
+                  value={form.allow_transfer ?? "allow"}
+                  onChange={(val) => { setForm((prev) => ({ ...prev, allow_transfer: val })); markDirty(); }}
+                  options={[
+                    { value: "allow", label: t("Allow", { defaultValue: "Allow" }) },
+                    { value: "disallow", label: t("Disallow", { defaultValue: "Disallow" }) },
+                  ]}
+                />
+                <small style={{ fontSize: 11, color: "#9ca3af", marginTop: 4, display: "block" }}>
+                  {t("Whether assignees can transfer this task to others", { defaultValue: "Whether assignees can transfer this task to others" })}
+                </small>
+              </div>
             </div>
           </form>
         </div>

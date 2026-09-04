@@ -26,6 +26,11 @@ class ConnectionService
      */
     public function generateInvitation(Organization $organization): array
     {
+        if (empty($organization->organization_code)) {
+            $organization->organization_code = Organization::generateOrganizationCode($organization->name);
+            $organization->save();
+        }
+
         $connectionCode = $organization->organization_code;
         $shareLink = url("/share/connect/{$connectionCode}");
         $qrCodeUrl = url("/api/qr-code?size=200&data=" . urlencode($shareLink));

@@ -241,6 +241,14 @@
   margin-bottom: 0;
   background: var(--bg-card);
   padding: 0 8px;
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.td-tabs::-webkit-scrollbar {
+  display: none;
 }
 .td-tab {
   display: flex;

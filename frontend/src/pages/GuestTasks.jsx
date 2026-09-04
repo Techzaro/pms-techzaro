@@ -286,6 +286,36 @@ function GuestTasks() {
     }
   };
 
+  const handleStartTimer = async (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/start-timer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === taskId ? { ...item, status: "in_progress", ...(data.task || {}) } : item
+          )
+        );
+        publish('task:updated', { id: taskId, status: 'in_progress' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage(t("Task timer started", { defaultValue: "Task timer started" }));
+      } else {
+        notify.error(data.message || t("Failed to start task timer.", { defaultValue: "Failed to start task timer." }));
+      }
+    } catch {
+      notify.error(t("Failed to start task timer.", { defaultValue: "Failed to start task timer." }));
+    }
+  };
+
   const handleContinue = async (e, taskId) => {
     if (e && e.stopPropagation) {
       e.stopPropagation();
@@ -385,20 +415,27 @@ function GuestTasks() {
 
   // Deduped constants based on both branches
   const baseItems = orderedItems.length ? orderedItems : items;
-  const pendingStatuses = ["pending", "planned", "Planning", "Planned", "reopened"];
-  const inProgressStatuses = ["in_progress", "In Progress", "In-progress", "Reopened"];
+  const pendingStatuses = ["pending", "planned", "planning", "Pending", "Planned", "Planning"];
+  const inProgressStatuses = ["in_progress", "In Progress", "In-progress", "reopened", "Reopened", "doing"];
+  const completedStatuses = ["completed", "approved", "done", "Completed", "Approved", "Done"];
+  const pausedStatuses = ["paused", "Paused", "hold", "on_hold"];
+  const submittedStatuses = ["submitted", "Submitted", "review", "in_review", "under_review"];
+  const declinedStatuses = ["declined", "rejected", "failed", "Declined", "Rejected", "Failed"];
+  const abandonedStatuses = ["abandoned", "abandon_requested", "Abandoned", "Abandon Requested"];
 
   const allCount = useMemo(() => baseItems.length, [baseItems]);
   const dueTodayCount = useMemo(() => baseItems.filter((i) => { const d = i.end_date ? new Date(i.end_date) : null; return d && d.toDateString() === new Date().toDateString(); }).length, [baseItems]);
   const pendingCount = useMemo(() => baseItems.filter((i) => pendingStatuses.includes(i.status)).length, [baseItems]);
   const inProgressCount = useMemo(() => baseItems.filter((i) => inProgressStatuses.includes(i.status)).length, [baseItems]);
-  const pausedCount = useMemo(() => baseItems.filter((i) => i.status === "paused").length, [baseItems]);
-  const submittedCount = useMemo(() => baseItems.filter((i) => i.status === "submitted").length, [baseItems]);
+  const pausedCount = useMemo(() => baseItems.filter((i) => pausedStatuses.includes(i.status)).length, [baseItems]);
+  const submittedCount = useMemo(() => baseItems.filter((i) => submittedStatuses.includes(i.status)).length, [baseItems]);
   const reopenedCount = useMemo(() => baseItems.filter((i) => i.status === "reopened").length, [baseItems]);
   const transferredCount = useMemo(() => baseItems.filter((i) => i.delegation_chain && i.delegation_chain.length > 0).length, [baseItems]);
-  const approvedCount = useMemo(() => baseItems.filter((i) => i.status === "approved").length, [baseItems]);
-  const rejectedCount = useMemo(() => baseItems.filter((i) => i.status === "rejected").length, [baseItems]);
-  const abandonedCount = useMemo(() => baseItems.filter((i) => i.status === "abandoned").length, [baseItems]);
+  const completedCount = useMemo(() => baseItems.filter((i) => completedStatuses.includes(i.status)).length, [baseItems]);
+  const approvedCount = completedCount;
+  const declinedCount = useMemo(() => baseItems.filter((i) => declinedStatuses.includes(i.status)).length, [baseItems]);
+  const rejectedCount = declinedCount;
+  const abandonedCount = useMemo(() => baseItems.filter((i) => abandonedStatuses.includes(i.status)).length, [baseItems]);
   
   const searchFilteredItems = useMemo(() => debouncedSearch
     ? baseItems.filter((item) => {
@@ -412,27 +449,43 @@ function GuestTasks() {
     
   const filteredItems = useMemo(() => statusFilter
     ? searchFilteredItems.filter((item) => {
-        if (statusFilter === "due_today") {
+        const sf = String(statusFilter).toLowerCase();
+        if (sf === "due_today") {
           const dateVal = item.end_date || item.due_date || item.start_date;
           if (!dateVal) return false;
           const d = new Date(dateVal);
           const now = new Date();
           const isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
-          const isCompleted = ["approved", "completed", "done"].includes((item.status || "").toLowerCase());
+          const isCompleted = completedStatuses.includes(item.status);
           return isToday && !isCompleted;
         }
-        if (statusFilter === "pending") {
+        if (sf === "pending") {
           return pendingStatuses.includes(item.status);
         }
-        if (statusFilter === "in_progress") {
+        if (sf === "in_progress") {
           return inProgressStatuses.includes(item.status);
         }
-        if (statusFilter === "transferred") {
+        if (sf === "submitted") {
+          return submittedStatuses.includes(item.status);
+        }
+        if (sf === "completed" || sf === "approved") {
+          return completedStatuses.includes(item.status);
+        }
+        if (sf === "paused") {
+          return pausedStatuses.includes(item.status);
+        }
+        if (sf === "declined" || sf === "rejected") {
+          return declinedStatuses.includes(item.status);
+        }
+        if (sf === "abandoned") {
+          return abandonedStatuses.includes(item.status);
+        }
+        if (sf === "transferred") {
           return item.delegation_chain && item.delegation_chain.length > 0;
         }
-        return item.status === statusFilter;
+        return String(item.status).toLowerCase() === sf;
       })
-    : searchFilteredItems, [searchFilteredItems, statusFilter, pendingStatuses, inProgressStatuses]);
+    : searchFilteredItems, [searchFilteredItems, statusFilter, pendingStatuses, inProgressStatuses, submittedStatuses, completedStatuses, pausedStatuses, declinedStatuses, abandonedStatuses]);
 
   const taskIdList = items.map((i) => i.id);
   const totalPages = showAll ? 1 : Math.ceil(totalCount / itemsPerPage);
@@ -473,9 +526,9 @@ function GuestTasks() {
           { id: "pending", label: t("Pending", { defaultValue: "Pending" }), count: pendingCount, className: "Pending" },
           { id: "in_progress", label: t("In Progress", { defaultValue: "In Progress" }), count: inProgressCount, className: "InProgress" },
           { id: "submitted", label: t("Submitted", { defaultValue: "Submitted" }), count: submittedCount, className: "Submitted" },
-          { id: "approved", label: t("Approved", { defaultValue: "Approved" }), count: approvedCount, className: "Approved" },
+          { id: "completed", label: t("Completed", { defaultValue: "Completed" }), count: completedCount, className: "Approved" },
           { id: "paused", label: t("Paused", { defaultValue: "Paused" }), count: pausedCount, className: "Paused" },
-          { id: "rejected", label: t("Declined", { defaultValue: "Declined" }), count: rejectedCount, className: "Rejected" },
+          { id: "declined", label: t("Declined", { defaultValue: "Declined" }), count: declinedCount, className: "Rejected" },
           { id: "abandoned", label: t("Abandoned", { defaultValue: "Abandoned" }), count: abandonedCount, className: "Abandoned", dotColor: "#DC2626" },
         ]}
         activeStatus={statusFilter}
@@ -508,7 +561,7 @@ function GuestTasks() {
           <div className="status-column" style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("status")}>
             {t("Status", { defaultValue: "Status" })}
           </div>
-          <div>{t("Progress", { defaultValue: "Progress" })}</div>
+          <div>{t("Personal Notes", { defaultValue: "Personal Notes" })}</div>
           <div className="priority-column" style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("priority")}>
             {t("Priority", { defaultValue: "Priority" })}
           </div>
@@ -548,13 +601,24 @@ function GuestTasks() {
                   </div>
 
                   <div className="col-task-name">
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                      {item.item_type === "subtask" && (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", background: "#EEF2FF", color: "#4F46E5", border: "1px solid #C7D2FE", borderRadius: "4px", padding: "1px 5px", fontSize: "10px", fontWeight: 700, lineHeight: "14px", flexShrink: 0 }}>
+                          ↳ {t("Subtask", { defaultValue: "Subtask" })}
+                        </span>
+                      )}
                       {item.delegation_chain && item.delegation_chain.length > 0 && <ArrowUpRight size={14} style={{ color: "#6B7280", flexShrink: 0 }} />}
-                      <div className="task-title">{item.title}</div>
-                      <TaskNotesPopover taskId={item.id} itemType="task" />
+                      <div className="task-title" title={item.title} style={{ maxWidth: "250px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</div>
                     </div>
+                    {item.item_type === "subtask" && item.parent_task && (
+                      <div style={{ fontSize: "11px", color: "#6366f1", marginTop: "2px", display: "flex", alignItems: "center", gap: "4px" }}>
+                        <span title={item.parent_task.title} style={{ maxWidth: "250px", display: "inline-block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          ↳ {t("Parent", { defaultValue: "Parent" })}: <strong>{item.parent_task.business_id ? `[${item.parent_task.business_id}] ` : ""}{item.parent_task.title}</strong>
+                        </span>
+                      </div>
+                    )}
                     {item.project && (
-                      <Link to={rolePath(`projects/project-details/${item.project.id}`)} onClick={(e) => e.stopPropagation()} style={{ fontSize: "11px", color: "#2563eb", textDecoration: "none", marginTop: "2px", display: "inline-block" }}>
+                      <Link to={rolePath(`projects/project-details/${item.project.id}`)} onClick={(e) => e.stopPropagation()} style={{ fontSize: "11px", color: "#2563eb", textDecoration: "none", marginTop: "2px", display: "inline-block", maxWidth: "250px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.project.title}>
                         {item.project.title}
                       </Link>
                     )}
@@ -564,23 +628,9 @@ function GuestTasks() {
                     <TaskMultiStatusBadges item={item} />
                   </div>
 
-                  {(() => {
-                    const isTerminal = ["completed", "approved", "submitted", "submitted_late", "done"].includes((item.status || "").toLowerCase());
-                    const prog = isTerminal ? 100 : (item.deliverables_progress || 0);
-                    return (
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
-                        <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>
-                          {prog}%
-                        </div>
-                        <div className="progress-bar-track">
-                          <div className="progress-bar-fill" style={{ width: `${prog}%` }}></div>
-                        </div>
-                        <div style={{ fontSize: "12px", color: "#6b7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {t("{{approved}}/{{total}} subtasks", { approved: item.approved_deliverables || 0, total: item.total_deliverables || 0, defaultValue: `${item.approved_deliverables || 0}/${item.total_deliverables || 0} subtasks` })}
-                        </div>
-                      </div>
-                    );
-                  })()}
+                  <div className="col-notes">
+                    <TaskNotesPopover taskId={item.id} itemType={item.item_type === "subtask" ? "deliverable" : "task"} />
+                  </div>
 
                   <div className="col-priority">
                     <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
@@ -599,7 +649,10 @@ function GuestTasks() {
                     <button
                       className="action-icon-btn action-view action-trigger-lg"
                       title={t("View Task", { defaultValue: "View Task" })}
-                      onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'guest-tasks' } })}
+                      onClick={() => {
+                        const targetId = item.item_type === "subtask" ? (item.parent_id || item.task_id || item.id) : item.id;
+                        navigate(rolePath(`tasks/task-details/${targetId}`), { state: { taskIds: taskIdList, from: 'guest-tasks' } });
+                      }}
                     >
                       <IoEyeOutline size={20} />
                     </button>
@@ -677,17 +730,24 @@ function GuestTasks() {
                             </button>
                           );
                         }
-                        if (item.status === "paused") {
+                        if (item.status === "in_progress" && (!item.timer || item.timer?.state === "idle" || !item.timer?.state)) {
                           return (
-                            <button className="action-icon-btn action-submit" title={t("Continue Task", { defaultValue: "Continue Task" })} onClick={(e) => handleContinue(e, item.id)}>
+                            <button className="action-icon-btn action-submit" title={t("Start Timer", { defaultValue: "Start Timer" })} onClick={(e) => handleStartTimer(e, item.id)} style={{ color: "#2563eb" }}>
                               <Play size={16} />
                             </button>
                           );
                         }
-                        if (["in_progress", "submitted"].includes(item.status?.toLowerCase()) && !item.assigner_paused) {
+                        if (["in_progress", "submitted"].includes(item.status?.toLowerCase()) && item.timer?.state === "running" && !item.assigner_paused) {
                           return (
                             <button className="action-icon-btn action-submit" title={t("Pause Task", { defaultValue: "Pause Task" })} onClick={(e) => handlePause(e, item.id)} style={{ color: "#D97706" }}>
                               <Pause size={16} />
+                            </button>
+                          );
+                        }
+                        if (item.status === "paused" || item.timer?.state === "paused") {
+                          return (
+                            <button className="action-icon-btn action-submit" title={t("Continue Task", { defaultValue: "Continue Task" })} onClick={(e) => handleContinue(e, item.id)}>
+                              <Play size={16} />
                             </button>
                           );
                         }

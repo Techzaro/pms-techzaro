@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { parseUtcToEpochMs } from '../utils/timezoneUtils';
 
 function formatDuration(totalSeconds) {
   const h = Math.floor(totalSeconds / 3600);
@@ -6,6 +7,8 @@ function formatDuration(totalSeconds) {
   const s = totalSeconds % 60;
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
+
+export { parseUtcToEpochMs };
 
 export function useWorkTimer(timerData) {
   const [workDisplay, setWorkDisplay] = useState('00:00:00');
@@ -51,8 +54,9 @@ export function useWorkTimer(timerData) {
       return;
     }
 
-    const eventAt = timerData.last_timer_event_at
-      ? new Date(timerData.last_timer_event_at).getTime()
+    const parsedEventAt = parseUtcToEpochMs(timerData.last_timer_event_at);
+    const eventAt = parsedEventAt && !isNaN(parsedEventAt)
+      ? parsedEventAt
       : Date.now();
 
     if (state === 'running') {

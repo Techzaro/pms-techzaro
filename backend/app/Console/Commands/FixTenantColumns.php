@@ -38,6 +38,7 @@ class FixTenantColumns extends Command
             ['name' => 'email_verification_exempt',      'definition' => "TINYINT(1) DEFAULT 0 AFTER `email_verified_at`"],
         ],
         'tasks' => [
+            ['name' => 'deleted_at',                      'definition' => "TIMESTAMP NULL AFTER `updated_at`"],
             ['name' => 'recurrence_start_date',         'definition' => "TIMESTAMP NULL AFTER `recurrence_settings`"],
             ['name' => 'recurrence_end_date',           'definition' => "TIMESTAMP NULL AFTER `recurrence_start_date`"],
             ['name' => 'has_edited_submission',         'definition' => "TINYINT(1) DEFAULT 0 AFTER `status`"],

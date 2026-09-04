@@ -24,20 +24,30 @@ class QrCodeController extends Controller
             return response()->json(['error' => 'data parameter is required'], 400);
         }
 
-        // Use Google Charts API (no CORS, works server-side)
         $encodedData = urlencode($data);
-        $qrUrl = "https://chart.googleapis.com/chart?chs={$size}x{$size}&cht=qr&chl={$encodedData}";
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 5,
+                'ignore_errors' => true,
+            ],
+            'ssl' => [
+                'verify_peer' => false,
+                'verify_peer_name' => false,
+            ],
+        ]);
 
-        $imageContent = @file_get_contents($qrUrl);
+        // Primary: qrserver API
+        $qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size={$size}x{$size}&data={$encodedData}";
+        $imageContent = @file_get_contents($qrUrl, false, $context);
 
-        if ($imageContent === false) {
-            // Fallback: try qrserver API
-            $qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size={$size}x{$size}&data={$encodedData}";
-            $imageContent = @file_get_contents($qrUrl);
+        if ($imageContent === false || strlen($imageContent) < 50) {
+            // Fallback: QuickChart QR API
+            $qrUrlFallback = "https://quickchart.io/qr?size={$size}&text={$encodedData}&format=png";
+            $imageContent = @file_get_contents($qrUrlFallback, false, $context);
         }
 
-        if ($imageContent === false) {
-            return response()->json(['error' => 'Failed to generate QR code'], 500);
+        if ($imageContent === false || strlen($imageContent) < 50) {
+            return redirect($qrUrl);
         }
 
         return response($imageContent)

@@ -223,6 +223,44 @@ export function convertToUTC(localString, userTimezone = null, inputFormat = nul
 }
 
 /**
+ * Safely parses any date/timestamp string or Date object as UTC epoch milliseconds.
+ * Ensures ISO strings without timezone offsets (e.g., 'YYYY-MM-DD HH:mm:ss' or 'YYYY-MM-DDTHH:mm:ss')
+ * are strictly treated as UTC, preventing browser local timezone shifts.
+ *
+ * @param {string|Date|number} dateInput
+ * @returns {number|null} Epoch timestamp in milliseconds, or null if invalid
+ */
+export function parseUtcToEpochMs(dateInput) {
+  if (!dateInput) return null;
+  if (typeof dateInput === "number") {
+    return dateInput < 1e11 ? dateInput * 1000 : dateInput;
+  }
+  if (dateInput instanceof Date) {
+    return dateInput.getTime();
+  }
+  if (typeof dateInput === "string") {
+    let str = dateInput.trim();
+    if (!str) return null;
+    if (/Z$/i.test(str) || /[+-]\d{2}(?::?\d{2})?$/.test(str)) {
+      const ms = new Date(str).getTime();
+      return !isNaN(ms) ? ms : null;
+    }
+    // Normalize "YYYY-MM-DD HH:mm:ss" -> "YYYY-MM-DDTHH:mm:ssZ"
+    str = str.replace(" ", "T");
+    if (!str.endsWith("Z")) {
+      str += "Z";
+    }
+    const ms = new Date(str).getTime();
+    if (!isNaN(ms)) {
+      return ms;
+    }
+    const fallback = new Date(dateInput).getTime();
+    return !isNaN(fallback) ? fallback : null;
+  }
+  return null;
+}
+
+/**
  * Formats only the date part of a UTC timestamp according to user timezone and preference.
  *
  * @param {string|Date} dateStr

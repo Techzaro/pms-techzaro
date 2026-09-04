@@ -435,7 +435,7 @@ function SelfDeliveries() {
             { id: "submitted", label: t("Submitted", { defaultValue: "Submitted" }), count: submittedCount, className: "Submitted" },
             { id: "reopened", label: t("Reopened", { defaultValue: "Reopened" }), count: reopenedCount, className: "Reopened" },
             { id: "transferred", label: t("Transferred", { defaultValue: "Transferred" }), count: transferredCount, className: "Transferred" },
-            { id: "approved", label: t("Approved", { defaultValue: "Approved" }), count: approvedCount, className: "Approved" },
+            { id: "approved", label: t("Completed", { defaultValue: "Completed" }), count: approvedCount, className: "Approved" },
             { id: "rejected", label: t("Declined", { defaultValue: "Declined" }), count: rejectedCount, className: "Rejected" },
             { id: "rework_required", label: t("Rework Required", { defaultValue: "Rework Required" }), count: reworkRequiredCount, className: "Reopened" },
             { id: "", label: t("All", { defaultValue: "All" }), count: allCount, className: "All" },
@@ -451,10 +451,48 @@ function SelfDeliveries() {
           search={search}
           onSearchChange={setSearch}
           filters={advancedFilters}
-          onFilterChange={(key, val) => setAdvancedFilters((prev) => ({ ...prev, [key]: val }))}
+          activeStatus={statusFilter}
+          onFilterChange={(key, val) => {
+            setAdvancedFilters((prev) => ({ ...prev, [key]: val }));
+            setPage(1);
+          }}
+          onApplyFilters={(appliedFilters, appliedSort) => {
+            setStatusFilter("");
+            setSearchParams({});
+            setAdvancedFilters((prev) => ({
+              ...prev,
+              statuses: appliedFilters?.statuses || appliedFilters?.status || [],
+              status: appliedFilters?.statuses || appliedFilters?.status || [],
+              states: appliedFilters?.states || [],
+              due_states: appliedFilters?.due_states || [],
+              priority: appliedFilters?.priority || appliedFilters?.priorities || [],
+              user_id: appliedFilters?.user_id || appliedFilters?.assigned_to || [],
+              project_id: appliedFilters?.project_id || [],
+              created_by: appliedFilters?.created_by || [],
+              follower_id: appliedFilters?.follower_id || [],
+              start_date: appliedFilters?.start_date || "",
+              end_date: appliedFilters?.end_date || "",
+            }));
+            setPage(1);
+          }}
           onReset={() => {
             setSearch("");
-            setAdvancedFilters({ user_id: [], project_id: [], status: [], start_date: "", end_date: "" });
+            setStatusFilter("");
+            setSearchParams({});
+            setAdvancedFilters({
+              user_id: [],
+              project_id: [],
+              status: [],
+              statuses: [],
+              states: [],
+              due_states: [],
+              priority: [],
+              created_by: [],
+              follower_id: [],
+              start_date: "",
+              end_date: "",
+            });
+            setPage(1);
           }}
         />
 
@@ -485,13 +523,13 @@ function SelfDeliveries() {
                         {getInitials(item.title)}
                       </div>
                       <div>
-                        <div className="user-name">{item.delegation_chain && item.delegation_chain.length > 0 && <ArrowUpRight size={14} style={{ color: "#6B7280", flexShrink: 0 }} />} {item.title}</div>
+                        <div className="user-name" title={item.title} style={{ maxWidth: "250px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.delegation_chain && item.delegation_chain.length > 0 && <ArrowUpRight size={14} style={{ color: "#6B7280", flexShrink: 0 }} />} {item.title}</div>
                       </div>
                     </div>
                     <div>
-                      <div className="task-title">{item.task?.title || "-"}</div>
+                      <div className="task-title" title={item.task?.title || "-"} style={{ maxWidth: "250px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.task?.title || "-"}</div>
                       {(item.project || item.task?.project) && item.task?.title && (
-                        <Link to={rolePath(`projects/project-details/${(item.project || item.task.project).id}`)} onClick={(e) => e.stopPropagation()} style={{ fontSize: "11px", color: "#2563eb", textDecoration: "none", marginTop: "2px", display: "inline-block" }}>
+                        <Link to={rolePath(`projects/project-details/${(item.project || item.task.project).id}`)} onClick={(e) => e.stopPropagation()} style={{ fontSize: "11px", color: "#2563eb", textDecoration: "none", marginTop: "2px", display: "inline-block", maxWidth: "250px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={(item.project || item.task.project).title}>
                           {(item.project || item.task.project).title}
                         </Link>
                       )}

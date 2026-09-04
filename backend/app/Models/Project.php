@@ -270,6 +270,10 @@ class Project extends Model
     {
         $memberIds = collect($this->assigned_users ?? []);
 
+        if ($this->created_by) {
+            $memberIds->push($this->created_by);
+        }
+
         $teamIds = array_merge(
             $this->team_id ? [$this->team_id] : [],
             $this->team_ids ?? []

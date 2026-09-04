@@ -349,20 +349,22 @@ export default function EditTaskModal({ task, onClose }) {
       .then((data) => {
         const users = Array.isArray(data) ? data : (data.users || []);
         setAllUsers(users);
-        setDisplayUsers(users);
       })
       .catch(() => {});
   }, []);
 
   useEffect(() => {
     const token = authToken();
-    if (!form.project_id || form.project_id.length === 0) {
-      if (allUsers.length) setDisplayUsers(allUsers);
+    const pids = Array.isArray(form.project_id)
+      ? form.project_id
+      : (form.project_id ? [form.project_id] : []);
+    if (!pids || pids.length === 0) {
+      setDisplayUsers([]);
       return;
     }
     const currentUser = getUser();
     Promise.all(
-      form.project_id.map((pid) =>
+      pids.map((pid) =>
         fetch(`${API_URL}/projects/${pid}/members`, {
           headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
           skipLoader: true,
@@ -375,10 +377,10 @@ export default function EditTaskModal({ task, onClose }) {
         (Array.isArray(members) ? members : []).forEach((u) => map.set(u.id, u));
         return map;
       });
-      let users;
+      let users = [];
       if (memberSets.length === 1) {
         users = Array.from(memberSets[0].values());
-      } else {
+      } else if (memberSets.length > 1) {
         const smallest = memberSets.reduce((a, b) => a.size <= b.size ? a : b);
         users = [];
         smallest.forEach((u, id) => {
@@ -388,9 +390,9 @@ export default function EditTaskModal({ task, onClose }) {
       if (currentUser && !users.some((u) => u.id === currentUser.id)) {
         users = [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: currentUser.role, department: currentUser.department }, ...users];
       }
-      setDisplayUsers(users.length ? users : allUsers);
-    }).catch(() => { if (allUsers.length) setDisplayUsers(allUsers); });
-  }, [form.project_id, allUsers]);
+      setDisplayUsers(users);
+    }).catch(() => { setDisplayUsers([]); });
+  }, [form.project_id]);
 
   useEffect(() => {
     if (openSubtaskDropdown === null) return;
@@ -799,12 +801,22 @@ export default function EditTaskModal({ task, onClose }) {
                     {task.assignees?.map((a) => a.name).join(", ") || "—"}
                   </div>
                 ) : (
-                  <UserSelectDropdown
-                    users={displayUsers}
-                    selectedIds={selectedAssigneeIds}
-                    onChange={handleAssignedToChange}
-                    placeholder={t("Click to select members", { defaultValue: "Click to select members" })}
-                  />
+                  (() => {
+                    const selectedProjectIds = Array.isArray(form.project_id)
+                      ? form.project_id
+                      : (form.project_id ? [form.project_id] : (task?.project_id ? [task.project_id] : []));
+                    const hasProjectSelected = selectedProjectIds.length > 0;
+
+                    return (
+                      <UserSelectDropdown
+                        users={displayUsers}
+                        selectedIds={selectedAssigneeIds}
+                        onChange={handleAssignedToChange}
+                        disabled={!hasProjectSelected}
+                        placeholder={!hasProjectSelected ? t("Select a project first", { defaultValue: "Select a project first" }) : t("Click to select members", { defaultValue: "Click to select members" })}
+                      />
+                    );
+                  })()
                 )}
 
                 {/* Assignee Timezone, Current Time & Working Hours (SRS Sec 13 & 17) */}
@@ -849,15 +861,25 @@ export default function EditTaskModal({ task, onClose }) {
               </div>
             </div>
 
-            <div className="task-field">
-              <label>{t("Followers (Optional)", { defaultValue: "Followers (Optional)" })}</label>
-              <UserSelectDropdown
-                users={displayUsers.filter((u) => !selectedAssigneeIds.includes(u.id))}
-                selectedIds={selectedFollowerIds}
-                onChange={(ids) => { setSelectedFollowerIds(ids); markDirty(); }}
-                placeholder={t("Click to select followers", { defaultValue: "Click to select followers" })}
-              />
-            </div>
+            {(() => {
+              const selectedProjectIds = Array.isArray(form.project_id)
+                ? form.project_id
+                : (form.project_id ? [form.project_id] : (task?.project_id ? [task.project_id] : []));
+              const hasProjectSelected = selectedProjectIds.length > 0;
+
+              return (
+                <div className="task-field">
+                  <label>{t("Followers (Optional)", { defaultValue: "Followers (Optional)" })}</label>
+                  <UserSelectDropdown
+                    users={displayUsers.filter((u) => !selectedAssigneeIds.includes(u.id))}
+                    selectedIds={selectedFollowerIds}
+                    onChange={(ids) => { setSelectedFollowerIds(ids); markDirty(); }}
+                    disabled={!hasProjectSelected}
+                    placeholder={!hasProjectSelected ? t("Select a project first", { defaultValue: "Select a project first" }) : t("Click to select followers", { defaultValue: "Click to select followers" })}
+                  />
+                </div>
+              );
+            })()}
 
             <div className="task-field">
               <label>{t("Task Name")} <span>*</span></label>

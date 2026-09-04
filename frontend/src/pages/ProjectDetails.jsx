@@ -84,6 +84,7 @@ import "./Deliveries.css";
 import { authToken, rolePath, getUser } from "../utils/auth";
 import API_URL from "../config/api";
 import { publish } from "../utils/eventBus";
+import { parseUtcToEpochMs } from "../utils/formatDateTime";
 const API = API_URL;
 const API_BASE = API_URL.replace(/\/api\/?$/, "");
 
@@ -159,7 +160,7 @@ function statusSlug(status) {
 
 function timeAgo(iso) {
   if (!iso) return "";
-  const then = new Date(iso).getTime();
+  const then = parseUtcToEpochMs(iso) || new Date(iso).getTime();
   const sec = Math.max(0, Math.floor((Date.now() - then) / 1000));
   if (sec < 60) return "just now";
   if (sec < 3600) return `${Math.floor(sec / 60)} min ago`;
@@ -169,13 +170,13 @@ function timeAgo(iso) {
 
 function taskStatusLabel(status) {
   const s = (status || "").toLowerCase();
-  if (s === "pending") return "Pending";
+  if (s === "pending" || s === "reopened") return "Pending";
   if (s === "submitted") return "Submitted";
-  if (s === "reopened") return "Reopened";
-  if (s === "approved") return "Approved";
-  if (s === "rejected") return "Declined";
-  if (s === "completed" || s === "done") return "Completed";
+  if (s === "approved" || s === "completed" || s === "done") return "Completed";
+  if (s === "rejected" || s === "declined") return "Declined";
   if (s === "in_progress") return "In Progress";
+  if (s === "paused") return "Paused";
+  if (s === "abandoned") return "Abandoned";
   return status || "Pending";
 }
 
@@ -862,6 +863,32 @@ function ProjectDetails() {
       }
     } catch {
       notify.error(t("Failed to acknowledge task.", { defaultValue: "Failed to acknowledge task." }));
+    }
+  };
+
+  const handleTaskStartTimer = async (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    try {
+      const token = authToken();
+      const res = await fetch(`${API}/tasks/${taskId}/start-timer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "in_progress", ...(data.task || {}) } : t));
+        publish('task:updated', { id: taskId, status: 'in_progress' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage("Task", "timer started");
+      } else {
+        notify.error(data.message || t("Failed to start task timer.", { defaultValue: "Failed to start task timer." }));
+      }
+    } catch {
+      notify.error(t("Failed to start task timer.", { defaultValue: "Failed to start task timer." }));
     }
   };
 
@@ -1644,15 +1671,29 @@ function ProjectDetails() {
                                           <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={tItem.id} businessId={tItem.business_id} />
                                           {currentUser?.role !== "guest" && <div>{isCreator || isAdminOrManager ? ((tItem.assignees || []).map((a) => a.name).join(", ") || "—") : (tItem.assigner?.name || "—")}</div>}
                                         <div className="ptt-col-name">
-                                          <Link to={rolePath(`tasks/task-details/${tItem.id}`)} state={{ from: getTaskFrom(tItem) }} className="ptt-task-link">
-                                            {tItem.title}
-                                          </Link>
-                                        </div>
+                                           <Link to={rolePath(`tasks/task-details/${tItem.id}`)} state={{ from: "project", projectId: project?.id || projectId, projectTitle: project?.title, returnUrl: location.pathname + (location.search || "?tab=tasks") }} className="ptt-task-link">
+                                             {tItem.title}
+                                           </Link>
+                                         </div>
                                         <div>
-                                          <span className="badge" style={{ background: STATUS_COLORS[statusKey] || "var(--bg-hover)", color: STATUS_TEXT_COLORS[statusKey] || "var(--text-dark)" }}>
-                                            <span className="dot" style={{ background: STATUS_TEXT_COLORS[statusKey] || "var(--text-dark)" }}></span>
-                                            {formatStatus(tItem.status)}
-                                          </span>
+                                          <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", alignItems: "center" }}>
+                                            <span className="badge" style={{ background: STATUS_COLORS[statusKey === "reopened" ? "pending" : statusKey] || "var(--bg-hover)", color: STATUS_TEXT_COLORS[statusKey === "reopened" ? "pending" : statusKey] || "var(--text-dark)" }}>
+                                              <span className="dot" style={{ background: STATUS_TEXT_COLORS[statusKey === "reopened" ? "pending" : statusKey] || "var(--text-dark)" }}></span>
+                                              {formatStatus(tItem.status === "reopened" ? "pending" : tItem.status)}
+                                            </span>
+                                            {Boolean(tItem.is_reopened || (Array.isArray(tItem?.states) && tItem.states.some((s) => String(s).toLowerCase() === "reopened")) || tItem?.reopened_at || Number(tItem?.reopen_count) > 0) && (
+                                              <span className="badge" style={{ background: "#EDE9FE", color: "#6D28D9", border: "1px solid #DDD6FE", fontSize: 10, padding: "2px 6px", borderRadius: 4 }}>
+                                                <span className="dot" style={{ background: "#6D28D9", width: 5, height: 5 }} />
+                                                {t("Reopened", { defaultValue: "Reopened" })}
+                                              </span>
+                                            )}
+                                            {Boolean(tItem.is_transferred || (Array.isArray(tItem?.states) && tItem.states.some((s) => String(s).toLowerCase() === "transferred")) || (Array.isArray(tItem?.delegation_chain) && tItem.delegation_chain.length > 0)) && (
+                                              <span className="badge" style={{ background: "#E0E7FF", color: "#4338CA", border: "1px solid #C7D2FE", fontSize: 10, padding: "2px 6px", borderRadius: 4 }}>
+                                                <span className="dot" style={{ background: "#4338CA", width: 5, height: 5 }} />
+                                                {t("Transferred", { defaultValue: "Transferred" })}
+                                              </span>
+                                            )}
+                                          </div>
                                         </div>
                                         {(() => {
                                           const isTerminal = ["completed", "approved", "submitted", "submitted_late", "done"].includes((tItem.status || "").toLowerCase());
@@ -1692,7 +1733,7 @@ function ProjectDetails() {
                                                   <IoEyeOutline size={20} />
                                                 </button>
                                               }
-                                              onTriggerClick={() => navigate(rolePath(`tasks/task-details/${tItem.id}`), { state: { from: getTaskFrom(tItem) } })}
+                                              onTriggerClick={() => navigate(rolePath(`tasks/task-details/${tItem.id}`), { state: { from: "project", projectId: project?.id || projectId, projectTitle: project?.title, returnUrl: location.pathname + (location.search || "?tab=tasks") } })}
                                             >
                                               <button className="action-icon-btn action-note" title={t("Add Note", { defaultValue: "Add Note" })} onClick={() => setNoteModal({ open: true, itemId: tItem.id })}>
                                                 <StickyNote size={14} />
@@ -1786,17 +1827,24 @@ function ProjectDetails() {
                                                       </button>
                                                     );
                                                   }
-                                                  if (tItem.status === "paused") {
+                                                  if (tItem.status === "in_progress" && (!tItem.timer || tItem.timer?.state === "idle" || !tItem.timer?.state)) {
                                                     return (
-                                                      <button className="action-icon-btn action-submit" title={t("Continue", { defaultValue: "Continue" })} onClick={(e) => handleTaskContinue(e, tItem.id)} style={{ color: "#059669" }}>
+                                                      <button className="action-icon-btn action-submit" title={t("Start", { defaultValue: "Start" })} onClick={(e) => handleTaskStartTimer(e, tItem.id)} style={{ color: "#2563eb" }}>
                                                         <Play size={16} />
                                                       </button>
                                                     );
                                                   }
-                                                  if (["in_progress", "submitted"].includes(tItem.status?.toLowerCase()) && !tItem.assigner_paused) {
+                                                  if (["in_progress", "submitted"].includes(tItem.status?.toLowerCase()) && tItem.timer?.state === "running" && !tItem.assigner_paused) {
                                                     return (
                                                       <button className="action-icon-btn action-submit" title={t("Pause", { defaultValue: "Pause" })} onClick={(e) => handleTaskPause(e, tItem.id)} style={{ color: "#D97706" }}>
                                                         <Pause size={16} />
+                                                      </button>
+                                                    );
+                                                  }
+                                                  if (tItem.status === "paused" || tItem.timer?.state === "paused") {
+                                                    return (
+                                                      <button className="action-icon-btn action-submit" title={t("Continue", { defaultValue: "Continue" })} onClick={(e) => handleTaskContinue(e, tItem.id)} style={{ color: "#059669" }}>
+                                                        <Play size={16} />
                                                       </button>
                                                     );
                                                   }

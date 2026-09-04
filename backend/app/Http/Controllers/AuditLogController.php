@@ -18,6 +18,14 @@ class AuditLogController extends Controller
 
     public function index(Request $request): JsonResponse
     {
+        $user = $request->user();
+        if (! in_array($user->role, ['admin', 'manager', 'super_admin'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Admin or Manager access required to view audit logs.',
+            ], 403);
+        }
+
         $filters = $request->validate([
             'module' => 'nullable|string|max:50',
             'action' => 'nullable|string|max:50',

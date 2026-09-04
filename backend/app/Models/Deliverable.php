@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -15,11 +16,13 @@ use App\Services\BusinessIdService;
  */
 class Deliverable extends Model
 {
+    use SoftDeletes;
     protected $fillable = [
         'subtask_number',
         'business_id',
         'project_id',
         'task_id',
+        'parent_deliverable_id',
         'title',
         'description',
         'kb_ids',
@@ -81,6 +84,10 @@ class Deliverable extends Model
         'approval_chain',
         'delegation_count',
         'allow_transfer',
+        'is_reopened',
+        'is_transferred',
+        'completion_reason',
+        'completion_notes',
     ];
 
     /**
@@ -164,12 +171,12 @@ class Deliverable extends Model
         'reopened_at' => 'datetime:Y-m-d\TH:i:s',
         'reopen_new_deadline' => 'datetime:Y-m-d\TH:i:s',
         'rework_new_deadline' => 'datetime:Y-m-d\TH:i:s',
-        'acknowledged_at' => 'datetime:Y-m-d\TH:i:s',
-        'paused_at' => 'datetime:Y-m-d\TH:i:s',
-        'assigner_paused_at' => 'datetime:Y-m-d\TH:i:s',
-        'work_started_at' => 'datetime:Y-m-d\TH:i:s',
-        'last_timer_event_at' => 'datetime:Y-m-d\TH:i:s',
-        'work_completed_at' => 'datetime:Y-m-d\TH:i:s',
+        'acknowledged_at' => 'datetime:Y-m-d\TH:i:s\Z',
+        'paused_at' => 'datetime:Y-m-d\TH:i:s\Z',
+        'assigner_paused_at' => 'datetime:Y-m-d\TH:i:s\Z',
+        'work_started_at' => 'datetime:Y-m-d\TH:i:s\Z',
+        'last_timer_event_at' => 'datetime:Y-m-d\TH:i:s\Z',
+        'work_completed_at' => 'datetime:Y-m-d\TH:i:s\Z',
         'labels' => 'array',
         'tags' => 'array',
         'followers' => 'array',
@@ -188,6 +195,8 @@ class Deliverable extends Model
         'delegation_chain' => 'array',
         'approval_chain' => 'array',
         'delegation_count' => 'integer',
+        'is_reopened' => 'boolean',
+        'is_transferred' => 'boolean',
     ];
 
     /** Apply filters for querying deliverables. */
@@ -200,11 +209,14 @@ class Deliverable extends Model
                 $expandedStatuses = [];
                 $hasDueToday = false;
                 $hasTransferred = false;
+                $hasReopened = false;
                 foreach ($statuses as $st) {
                     if ($st === 'due_today') {
                         $hasDueToday = true;
                     } elseif ($st === 'transferred') {
                         $hasTransferred = true;
+                    } elseif ($st === 'reopened') {
+                        $hasReopened = true;
                     } elseif ($st === 'pending') {
                         $expandedStatuses = array_merge($expandedStatuses, ['pending', 'planned', 'Planning', 'Planned']);
                     } elseif ($st === 'in_progress') {
@@ -225,33 +237,54 @@ class Deliverable extends Model
                     }
                 }
                 $expandedStatuses = array_values(array_unique($expandedStatuses));
-                $query->where(function ($sq) use ($expandedStatuses, $hasDueToday, $hasTransferred) {
-                    $hasCondition = false;
-                    if (! empty($expandedStatuses)) {
-                        $sq->whereIn('status', $expandedStatuses);
-                        $hasCondition = true;
-                    }
-                    if ($hasDueToday) {
-                        $today = now()->toDateString();
-                        if ($hasCondition) {
-                            $sq->orWhere(function ($dq) use ($today) {
-                                $dq->whereDate('due_date', $today)->whereNotIn('status', ['approved', 'completed', 'done', 'abandoned']);
-                            });
-                        } else {
-                            $sq->whereDate('due_date', $today)->whereNotIn('status', ['approved', 'completed', 'done', 'abandoned']);
+                if (! empty($expandedStatuses) || $hasDueToday || $hasTransferred || $hasReopened) {
+                    $query->where(function ($sq) use ($expandedStatuses, $hasDueToday, $hasTransferred, $hasReopened) {
+                        $hasCondition = false;
+                        if (! empty($expandedStatuses)) {
+                            $sq->whereIn('status', $expandedStatuses);
                             $hasCondition = true;
                         }
-                    }
-                    if ($hasTransferred) {
-                        if ($hasCondition) {
-                            $sq->orWhere(function ($tq) {
-                                $tq->whereNotNull('delegation_chain')->where('delegation_chain', '!=', '[]');
-                            });
-                        } else {
-                            $sq->whereNotNull('delegation_chain')->where('delegation_chain', '!=', '[]');
+                        if ($hasDueToday) {
+                            $today = now()->toDateString();
+                            if ($hasCondition) {
+                                $sq->orWhere(function ($dq) use ($today) {
+                                    $dq->whereDate('due_date', $today)->whereNotIn('status', ['approved', 'completed', 'done', 'abandoned']);
+                                });
+                            } else {
+                                $sq->whereDate('due_date', $today)->whereNotIn('status', ['approved', 'completed', 'done', 'abandoned']);
+                                $hasCondition = true;
+                            }
                         }
-                    }
-                });
+                        if ($hasTransferred) {
+                            $transferredClause = function ($tq) {
+                                $tq->where('is_transferred', true)
+                                   ->orWhere(function ($sub) {
+                                       $sub->whereNotNull('delegation_chain')->where('delegation_chain', '!=', '[]');
+                                   });
+                            };
+                            if ($hasCondition) {
+                                $sq->orWhere($transferredClause);
+                            } else {
+                                $sq->where($transferredClause);
+                                $hasCondition = true;
+                            }
+                        }
+                        if ($hasReopened) {
+                            $reopenedClause = function ($rq) {
+                                $rq->where('is_reopened', true)
+                                   ->orWhere('status', 'reopened')
+                                   ->orWhere('reopen_count', '>', 0)
+                                   ->orWhereNotNull('reopened_at');
+                            };
+                            if ($hasCondition) {
+                                $sq->orWhere($reopenedClause);
+                            } else {
+                                $sq->where($reopenedClause);
+                                $hasCondition = true;
+                            }
+                        }
+                    });
+                }
             }
         }
 
@@ -340,6 +373,24 @@ class Deliverable extends Model
     public function task(): BelongsTo
     {
         return $this->belongsTo(Task::class);
+    }
+
+    /** The parent deliverable/subtask this deliverable belongs to (optional, for infinite nesting). */
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(Deliverable::class, 'parent_deliverable_id');
+    }
+
+    /** The child deliverables/subtasks under this deliverable. */
+    public function children(): HasMany
+    {
+        return $this->hasMany(Deliverable::class, 'parent_deliverable_id');
+    }
+
+    /** All recursive child deliverables. */
+    public function allChildren(): HasMany
+    {
+        return $this->children()->with('allChildren');
     }
 
     /** All submissions for this deliverable. */
