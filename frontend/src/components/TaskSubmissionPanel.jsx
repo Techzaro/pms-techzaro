@@ -546,7 +546,7 @@ function TaskSubmissionPanel({
               </>
             )}
 
-            {canApprove && status === "approved" && (
+            {canApprove && (status === "approved" || status === "completed" || status === "declined" || status === "rejected") && (
               <button
                 className="td-review-btn td-review-btn--reopen"
                 disabled={acting}

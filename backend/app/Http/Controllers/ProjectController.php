@@ -264,9 +264,29 @@ class ProjectController extends Controller
     public function getTasks(Project $project)
     {
         $tasks = $project->tasks()
-            ->select('id', 'business_id', 'title', 'status', 'priority', 'end_date')
+            ->select('id', 'business_id', 'title', 'status', 'priority', 'end_date', 'assigned_to', 'assigned_by', 'current_owner')
+            ->with([
+                'assignee:id,name,email,role',
+                'assignees:id,name,email,role',
+                'assigner:id,name,email,role',
+                'currentOwner:id,name',
+            ])
             ->orderBy('sort_order')
             ->get();
+
+        $tasks->transform(function ($task) {
+            $assigneeNames = [];
+            if ($task->currentOwner && !empty($task->currentOwner->name)) {
+                $assigneeNames[] = $task->currentOwner->name;
+            } elseif ($task->relationLoaded('assignees') && $task->assignees->isNotEmpty()) {
+                $assigneeNames = $task->assignees->pluck('name')->filter()->toArray();
+            } elseif ($task->assignee && !empty($task->assignee->name)) {
+                $assigneeNames[] = $task->assignee->name;
+            }
+
+            $task->assignee_name = !empty($assigneeNames) ? implode(', ', array_unique($assigneeNames)) : null;
+            return $task;
+        });
 
         return response()->json($tasks);
     }

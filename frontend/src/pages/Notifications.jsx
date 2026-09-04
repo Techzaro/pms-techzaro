@@ -10,6 +10,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { ExternalLink } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { authToken, rolePath, getUser, normalizeRole } from "../utils/auth";
@@ -561,6 +562,7 @@ function Notifications() {
 
                   <Link
                     to={n.type === "chat_message" ? "#" : getLinkPath(n)}
+                    state={{ from: "notifications", returnUrl: rolePath("notifications") }}
                     style={{ display: "flex", gap: 12, alignItems: "flex-start", flex: 1, minWidth: 0, textDecoration: "none" }}
                     onClick={(e) => {
                       if (!n.is_read) markAsRead(n.id);
@@ -578,6 +580,28 @@ function Notifications() {
                         {n.sender && !n.message.includes(n.sender.name) ? `${n.sender.name} - ` : ""}
                         {n.message}
                       </p>
+                      {(n.related_module === "task" || n.type?.startsWith("task_") || (n.link && n.link.includes("/tasks/"))) && (
+                        <div style={{ marginTop: "6px" }}>
+                          <span
+                            className="notif-view-task-btn"
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              padding: "3px 8px",
+                              fontSize: "11px",
+                              fontWeight: 600,
+                              borderRadius: "5px",
+                              background: "var(--color-primary-bg, #eff6ff)",
+                              color: "var(--color-primary, #2563eb)",
+                              border: "1px solid var(--color-primary-border, #bfdbfe)",
+                            }}
+                          >
+                            <ExternalLink size={12} />
+                            {t("View Task", { defaultValue: "View Task" })}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="notif-meta">

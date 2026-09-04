@@ -567,8 +567,10 @@
   font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
-  white-space: normal;
-  word-break: break-word;
+  max-width: 250px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .task-description {

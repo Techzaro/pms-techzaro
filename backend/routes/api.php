@@ -419,6 +419,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Task submission workflow (submit for review, approve, reject, reopen)
     Route::post('/tasks/{task}/acknowledge', [TaskController::class, 'acknowledge']); // Acknowledge task assignment
+    Route::post('/tasks/{task}/start-timer', [TaskController::class, 'startTimer']); // Start task timer explicitly
+    Route::post('/tasks/{task}/start', [TaskController::class, 'startTimer']); // Alias for start task timer
     Route::post('/tasks/{task}/pause', [TaskController::class, 'pause']); // Pause an in-progress task
     Route::post('/tasks/{task}/continue', [TaskController::class, 'continueTask']); // Continue a paused task
     Route::post('/tasks/{task}/assigner-pause', [TaskController::class, 'assignerPause']); // Assigner pauses task (locks assignee)
@@ -432,6 +434,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/tasks/{task}/approve', [TaskController::class, 'approve'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Approve submitted task
     Route::post('/tasks/{task}/reject', [TaskController::class, 'reject'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Reject submitted task
     Route::post('/tasks/{task}/reopen', [TaskController::class, 'reopen'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Reopen rejected task
+    Route::post('/tasks/{task}/mark-as-completed', [TaskController::class, 'markAsCompleted'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Force mark task as completed
     Route::post('/tasks/{task}/request-abandon', [TaskController::class, 'requestAbandon'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
     Route::post('/tasks/{task}/approve-abandon', [TaskController::class, 'approveAbandon'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
     Route::post('/tasks/{task}/decline-abandon', [TaskController::class, 'declineAbandon'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
@@ -494,12 +497,27 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/tasks/{task}/my-note', [\App\Http\Controllers\TaskUserNoteController::class, 'store']); // Create own note
     Route::put('/tasks/{task}/my-note/{note}', [\App\Http\Controllers\TaskUserNoteController::class, 'update']); // Update own note
     Route::delete('/tasks/{task}/my-note/{note}', [\App\Http\Controllers\TaskUserNoteController::class, 'destroy']); // Delete own note
+    Route::get('/tasks/{task}/personal-notes', [TaskController::class, 'getPersonalNotes']);
+    Route::post('/tasks/{task}/personal-notes', [TaskController::class, 'storePersonalNote']);
+    Route::delete('/tasks/{task}/personal-notes/{note}', [TaskController::class, 'deletePersonalNote']);
+
+    // Task Events & Knowledge Base linking
+    Route::get('/tasks/{task}/events', [TaskController::class, 'getEvents']);
+    Route::post('/tasks/{task}/events', [TaskController::class, 'linkEvent']);
+    Route::delete('/tasks/{task}/events/{event}', [TaskController::class, 'unlinkEvent']);
+    Route::get('/tasks/{task}/knowledge-bases', [TaskController::class, 'getKnowledgeBases']);
+    Route::post('/tasks/{task}/knowledge-bases', [TaskController::class, 'linkKnowledgeBase']);
+    Route::delete('/tasks/{task}/knowledge-bases/{knowledgeBase}', [TaskController::class, 'unlinkKnowledgeBase']);
 
         // Task Saved Views Routes (SRS Section 11)
     Route::get('/task-saved-views', [\App\Http\Controllers\TaskSavedViewController::class, 'index']);
     Route::post('/task-saved-views', [\App\Http\Controllers\TaskSavedViewController::class, 'store']);
     Route::put('/task-saved-views/{taskSavedView}', [\App\Http\Controllers\TaskSavedViewController::class, 'update']);
     Route::delete('/task-saved-views/{taskSavedView}', [\App\Http\Controllers\TaskSavedViewController::class, 'destroy']);
+    Route::get('/saved-views', [\App\Http\Controllers\TaskSavedViewController::class, 'index']);
+    Route::post('/saved-views', [\App\Http\Controllers\TaskSavedViewController::class, 'store']);
+    Route::put('/saved-views/{taskSavedView}', [\App\Http\Controllers\TaskSavedViewController::class, 'update']);
+    Route::delete('/saved-views/{taskSavedView}', [\App\Http\Controllers\TaskSavedViewController::class, 'destroy']);
     Route::get('/tasks', [TaskController::class, 'allTasks']);
 
     // Task filtering routes
@@ -529,6 +547,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware(\App\Http\Middleware\EnsureNotGuest::class)->group(function () {
         Route::post('/projects/{project}/deliverables', [DeliverableController::class, 'store']); // Create deliverable (project-scoped)
         Route::post('/deliverables', [DeliverableController::class, 'storeStandalone']); // Create deliverable (no project, task_id required)
+        Route::post('/deliverables/bulk', [DeliverableController::class, 'bulkStore']); // Create multiple deliverables in bulk
         Route::put('/deliverables/{deliverable}', [DeliverableController::class, 'update']); // Update deliverable
         Route::delete('/deliverables/{deliverable}', [DeliverableController::class, 'destroy']); // Delete deliverable
     });
@@ -549,6 +568,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Self-deliverable review actions (assignee reviews their own work)
     Route::post('/deliverables/{deliverable}/self-approve', [DeliverableController::class, 'selfApprove'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Self-approve deliverable
     Route::post('/deliverables/{deliverable}/self-rework', [DeliverableController::class, 'selfRework'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Mark for rework
+    Route::post('/deliverables/{deliverable}/mark-as-completed', [DeliverableController::class, 'markAsCompleted'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Force mark deliverable as completed
     Route::post('/deliverables/{deliverable}/request-abandon', [DeliverableController::class, 'requestAbandon'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
     Route::post('/deliverables/{deliverable}/approve-abandon', [DeliverableController::class, 'approveAbandon'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
     Route::post('/deliverables/{deliverable}/decline-abandon', [DeliverableController::class, 'declineAbandon'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
@@ -565,6 +585,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/deliverables/{deliverable}/acknowledge', [DeliverableController::class, 'acknowledge']); // Acknowledge deliverable assignment
 
     // Deliverable timer
+    Route::post('/deliverables/{deliverable}/start-timer', [DeliverableController::class, 'startTimer']); // Start deliverable timer explicitly
+    Route::post('/deliverables/{deliverable}/start', [DeliverableController::class, 'startTimer']); // Alias for start deliverable timer
     Route::post('/deliverables/{deliverable}/pause', [DeliverableController::class, 'pause']); // Pause deliverable timer
     Route::post('/deliverables/{deliverable}/continue', [DeliverableController::class, 'continueTimer']); // Resume deliverable timer
     Route::post('/deliverables/{deliverable}/assigner-pause', [DeliverableController::class, 'assignerPause']); // Assigner pauses deliverable
@@ -581,7 +603,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Personal user notes on deliverables (private per user)
     Route::get('/deliverables/{deliverable}/my-note', [DeliverableController::class, 'myNote']); // View own note
-    Route::post('/deliverables/{deliverable}/my-note', [DeliverableController::class, 'storeNote']); // Create/update own note
+    Route::post('/deliverables/{deliverable}/my-note', [DeliverableController::class, 'storeNote']); // Create own note
+    Route::put('/deliverables/{deliverable}/my-note/{note}', [DeliverableController::class, 'updateNote']); // Update own note
     Route::delete('/deliverables/{deliverable}/my-note/{note}', [DeliverableController::class, 'destroyNote']); // Delete own note
 
     /*
@@ -630,6 +653,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/activities/past', [ActivityController::class, 'past']); // Past activities
     Route::get('/activities', [ActivityController::class, 'index']); // All activities
     Route::get('/tasks/{task}/unified-activity', [TaskController::class, 'unifiedActivity']);
+    Route::get('/tasks/{task}/activity', [TaskController::class, 'activity']);
     Route::get('/projects/{project}/unified-activity', [ProjectController::class, 'unifiedActivity']);
 
     /*

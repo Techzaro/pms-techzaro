@@ -288,6 +288,7 @@ class DeliverableController extends Controller
     public function show(Request $request, $id)
     {
         $deliverable = Deliverable::findOrFail($id);
+        $this->authorize('view', $deliverable);
         $user = request()->user();
         $isCreator = (int) $deliverable->created_by === (int) $user->id;
         $isAssignee = (int) $deliverable->assigned_to === (int) $user->id;
@@ -477,12 +478,14 @@ class DeliverableController extends Controller
      */
     public function store(Request $request, Project $project)
     {
+        $this->authorize('create', [Deliverable::class, $project]);
         $validated = $request->validate([
             'title' => 'required|string|max:255', 'description' => 'nullable|string',
             'status' => 'nullable|string|max:64', 'priority' => 'nullable|string|max:32',
             'start_date' => 'nullable|date', 'due_date' => 'nullable|date',
             'assigned_to' => 'nullable|exists:users,id|required_without:task_id',
             'task_id' => 'nullable|exists:tasks,id',
+            'parent_deliverable_id' => 'nullable|exists:deliverables,id',
             'estimated_hours' => 'nullable|integer|min:0',
             'estimated_minutes' => 'nullable|integer|min:0|max:59',
             'labels' => 'nullable|array', 'labels.*' => 'string|max:100',
@@ -501,6 +504,14 @@ class DeliverableController extends Controller
             throw ValidationException::withMessages([
                 'assigned_to' => ['Please select at least one person to assign this subtask to.'],
             ]);
+        }
+
+        // Infer task_id from parent_deliverable_id if missing
+        if (! empty($validated['parent_deliverable_id']) && empty($validated['task_id'])) {
+            $parentDel = Deliverable::find($validated['parent_deliverable_id']);
+            if ($parentDel) {
+                $validated['task_id'] = $parentDel->task_id;
+            }
         }
 
         // Validate deliverable due_date does not exceed parent task end_date
@@ -555,7 +566,9 @@ class DeliverableController extends Controller
             'status' => $validated['status'] ?? 'pending', 'priority' => $validated['priority'] ?? 'Medium',
             'start_date' => $validated['start_date'] ?? null,
             'due_date' => $validated['due_date'] ?? null, 'assigned_to' => $validated['assigned_to'] ?? null,
-            'task_id' => $validated['task_id'] ?? null, 'created_by' => $user->id,
+            'task_id' => $validated['task_id'] ?? null,
+            'parent_deliverable_id' => $validated['parent_deliverable_id'] ?? null,
+            'created_by' => $user->id,
             'updated_by' => $user->id,
             'estimated_hours' => $validated['estimated_hours'] ?? null,
             'allow_transfer' => $validated['allow_transfer'] ?? true,
@@ -638,9 +651,9 @@ class DeliverableController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'deliverable_management',
-                action: 'create',
-                description: "Created deliverable {$deliverable->title}",
+                module: 'Subtask Management',
+                action: 'Subtask Created',
+                description: "Created subtask {$deliverable->title}",
                 user: $user,
                 entityType: 'Deliverable',
                 entityId: $deliverable->id,
@@ -663,12 +676,14 @@ class DeliverableController extends Controller
      */
     public function storeStandalone(Request $request)
     {
+        $this->authorize('create', Deliverable::class);
         $validated = $request->validate([
             'title' => 'required|string|max:255', 'description' => 'nullable|string',
             'status' => 'nullable|string|max:64', 'priority' => 'nullable|string|max:32',
             'start_date' => 'nullable|date', 'due_date' => 'nullable|date',
             'assigned_to' => 'nullable|exists:users,id',
             'task_id' => 'nullable|exists:tasks,id',
+            'parent_deliverable_id' => 'nullable|exists:deliverables,id',
             'project_id' => 'nullable|exists:projects,id',
             'estimated_hours' => 'nullable|integer|min:0',
             'estimated_minutes' => 'nullable|integer|min:0|max:59',
@@ -688,6 +703,19 @@ class DeliverableController extends Controller
             throw ValidationException::withMessages([
                 'assigned_to' => ['Please select at least one person to assign this subtask to.'],
             ]);
+        }
+
+        // Resolve parent deliverable if nested
+        if (! empty($validated['parent_deliverable_id'])) {
+            $parentDel = Deliverable::find($validated['parent_deliverable_id']);
+            if ($parentDel) {
+                if (empty($validated['task_id'])) {
+                    $validated['task_id'] = $parentDel->task_id;
+                }
+                if (empty($validated['project_id']) && ! empty($parentDel->project_id)) {
+                    $validated['project_id'] = $parentDel->project_id;
+                }
+            }
         }
 
         // Resolve project: from task, from body, or null
@@ -738,6 +766,7 @@ class DeliverableController extends Controller
             'start_date' => $validated['start_date'] ?? null,
             'due_date' => $validated['due_date'] ?? null, 'assigned_to' => $validated['assigned_to'] ?? null,
             'project_id' => $project?->id, 'task_id' => $validated['task_id'] ?? null,
+            'parent_deliverable_id' => $validated['parent_deliverable_id'] ?? null,
             'created_by' => $user->id, 'updated_by' => $user->id,
             'estimated_hours' => $validated['estimated_hours'] ?? null,
             'estimated_minutes' => $validated['estimated_minutes'] ?? null,
@@ -792,9 +821,9 @@ class DeliverableController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'deliverable_management',
-                action: 'create',
-                description: "Created deliverable {$deliverable->title}",
+                module: 'Subtask Management',
+                action: 'Subtask Created',
+                description: "Created subtask {$deliverable->title}",
                 user: $user,
                 entityType: 'Deliverable',
                 entityId: $deliverable->id,
@@ -812,6 +841,189 @@ class DeliverableController extends Controller
     }
 
     /**
+     * Bulk store multiple deliverables at once within a single task or parent deliverable.
+     *
+     * @param  Request  $request  Validated payload with 'subtasks' array and shared metadata.
+     * @return JsonResponse JSON response with the list of created deliverables.
+     */
+    public function bulkStore(Request $request)
+    {
+        $this->authorize('create', Deliverable::class);
+        $validated = $request->validate([
+            'subtasks' => 'required|array|min:1',
+            'subtasks.*.title' => 'required|string|max:255',
+            'subtasks.*.description' => 'nullable|string',
+            'subtasks.*.estimated_hours' => 'nullable|integer|min:0',
+            'subtasks.*.estimated_minutes' => 'nullable|integer|min:0|max:59',
+            'task_id' => 'nullable|exists:tasks,id',
+            'parent_deliverable_id' => 'nullable|exists:deliverables,id',
+            'project_id' => 'nullable|exists:projects,id',
+            'status' => 'nullable|string|max:64',
+            'priority' => 'nullable|string|max:32',
+            'start_date' => 'nullable|date',
+            'due_date' => 'nullable|date',
+            'assigned_to' => 'nullable|exists:users,id',
+            'assignees' => 'nullable|array',
+            'assignees.*' => 'exists:users,id',
+            'followers' => 'nullable|array',
+            'followers.*' => 'exists:users,id',
+            'dependencies' => 'nullable|array',
+            'dependencies.*' => 'exists:deliverables,id',
+            'allow_transfer' => 'nullable|boolean',
+            'kb_ids' => 'nullable|array',
+            'kb_ids.*' => 'nullable|integer',
+            'event_ids' => 'nullable|array',
+            'event_ids.*' => 'nullable|integer',
+        ]);
+
+        if (empty($request->input('assignees')) && empty($request->input('assigned_to'))) {
+            throw ValidationException::withMessages([
+                'assigned_to' => ['Please select at least one person to assign these subtasks to.'],
+            ]);
+        }
+
+        // Resolve parent deliverable if nested
+        if (! empty($validated['parent_deliverable_id'])) {
+            $parentDel = Deliverable::find($validated['parent_deliverable_id']);
+            if ($parentDel) {
+                if (empty($validated['task_id'])) {
+                    $validated['task_id'] = $parentDel->task_id;
+                }
+                if (empty($validated['project_id']) && ! empty($parentDel->project_id)) {
+                    $validated['project_id'] = $parentDel->project_id;
+                }
+            }
+        }
+
+        $project = null;
+        $task = null;
+        if (! empty($validated['task_id'])) {
+            $task = Task::find($validated['task_id']);
+            $project = $task?->project;
+        } elseif (! empty($validated['project_id'])) {
+            $project = Project::find($validated['project_id']);
+        }
+
+        if (! empty($validated['due_date']) && $task && $task->end_date) {
+            $deliverableDate = Carbon::parse($validated['due_date']);
+            $taskEnd = Carbon::parse($task->end_date);
+            if ($deliverableDate->gt($taskEnd)) {
+                throw ValidationException::withMessages([
+                    'due_date' => 'Subtask deadline cannot exceed the task deadline ('.$taskEnd->format('d M Y h:i A').').',
+                ]);
+            }
+        }
+
+        $allAssigneeIds = array_filter(array_unique(array_merge(
+            $validated['assignees'] ?? [],
+            $validated['assigned_to'] ? [$validated['assigned_to']] : [],
+        )));
+        if (! empty($allAssigneeIds) && $project) {
+            $projectMemberIds = $project->getMembers()->pluck('id')->map(fn ($id) => (int) $id)->toArray();
+            $adminManagerIds = User::whereIn('id', $allAssigneeIds)->whereIn('role', ['admin', 'manager'])->pluck('id')->map(fn ($id) => (int) $id)->toArray();
+            $allowedIds = array_unique(array_merge($projectMemberIds, $adminManagerIds));
+            $invalidIds = array_diff(array_map('intval', $allAssigneeIds), $allowedIds);
+            if (! empty($invalidIds)) {
+                throw ValidationException::withMessages([
+                    'assigned_to' => 'One or more selected users are not members of this project.',
+                ]);
+            }
+        }
+
+        $user = $request->user();
+        $assigneeIds = $validated['assignees'] ?? ($validated['assigned_to'] ? [$validated['assigned_to']] : []);
+        $createdDeliverables = [];
+
+        DB::transaction(function () use ($validated, $user, $project, $task, $assigneeIds, $request, &$createdDeliverables) {
+            foreach ($validated['subtasks'] as $item) {
+                $itemTitle = trim($item['title'] ?? '');
+                if (empty($itemTitle)) {
+                    continue;
+                }
+
+                $data = [
+                    'title' => $itemTitle,
+                    'description' => $item['description'] ?? ($validated['description'] ?? null),
+                    'status' => $validated['status'] ?? 'pending',
+                    'priority' => $validated['priority'] ?? 'Medium',
+                    'start_date' => $validated['start_date'] ?? null,
+                    'due_date' => $validated['due_date'] ?? null,
+                    'assigned_to' => $validated['assigned_to'] ?? null,
+                    'project_id' => $project?->id ?? ($validated['project_id'] ?? null),
+                    'task_id' => $validated['task_id'] ?? null,
+                    'parent_deliverable_id' => $validated['parent_deliverable_id'] ?? null,
+                    'created_by' => $user->id,
+                    'updated_by' => $user->id,
+                    'estimated_hours' => $item['estimated_hours'] ?? ($validated['estimated_hours'] ?? null),
+                    'estimated_minutes' => $item['estimated_minutes'] ?? ($validated['estimated_minutes'] ?? null),
+                    'labels' => $validated['labels'] ?? null,
+                    'tags' => $validated['tags'] ?? null,
+                    'followers' => $request->input('followers') ?? null,
+                    'dependencies' => $request->input('dependencies') ?? null,
+                    'allow_transfer' => $validated['allow_transfer'] ?? true,
+                    'kb_ids' => $validated['kb_ids'] ?? null,
+                    'event_ids' => $validated['event_ids'] ?? null,
+                ];
+
+                $del = $project
+                    ? $project->deliverables()->create($data)
+                    : Deliverable::create($data);
+
+                if (! empty($assigneeIds)) {
+                    $del->assignees()->sync($assigneeIds);
+                }
+
+                DeliverableWorkflowEvent::create([
+                    'deliverable_id' => $del->id,
+                    'user_id' => $user->id,
+                    'event_type' => 'created',
+                ]);
+
+                if ($del->assigned_to && (int) $del->assigned_to !== (int) $user->id) {
+                    $this->sendDeliverableNotification($del, $user, 'deliverable_assigned', 'Deliverable Assigned');
+                }
+
+                if ($del->task_id && $task) {
+                    $taskAssigneeIds = $task->assignees()->pluck('users.id')->toArray();
+                    if (! empty($taskAssigneeIds)) {
+                        $this->notificationService->notifyDeliverableAdded($del, $user, $taskAssigneeIds, 'task');
+                    }
+                }
+
+                try {
+                    $this->activityService->log(
+                        $user->id,
+                        'deliverable_created',
+                        'Created subtask "'.$del->title.'"',
+                        'deliverable',
+                        $del->id,
+                        'create'
+                    );
+                } catch (\Throwable $e) {}
+
+                $createdDeliverables[] = $del->load(['assignee:id,name,email,role', 'creator:id,name']);
+            }
+        });
+
+        try {
+            $this->auditService->log(
+                module: 'Subtask Management',
+                action: 'Subtask Created',
+                description: 'Bulk created ' . count($createdDeliverables) . ' subtasks',
+                user: $user,
+                entityType: 'Deliverable',
+                status: 'success'
+            );
+        } catch (\Throwable $e) {}
+
+        return response()->json([
+            'success' => true,
+            'message' => count($createdDeliverables) . ' subtasks created successfully',
+            'deliverables' => $createdDeliverables,
+        ], 201);
+    }
+
+    /**
      * Update an existing deliverable's properties and track field changes.
      *
      * Records field changes for audit trail, creates workflow events,
@@ -823,10 +1035,12 @@ class DeliverableController extends Controller
      */
     public function update(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('update', $deliverable);
         $user = $request->user();
-        $isCreator = (int) $deliverable->created_by === (int) $user->id;
-        if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        $isCreator = (int) $deliverable->created_by === (int) $user->id || ($deliverable->task && (int) $deliverable->task->assigned_by === (int) $user->id);
+        $isAdminOrManager = in_array($user->role, ['admin', 'manager', 'super_admin', 'team_lead']);
+        if (! $isCreator && ! $isAdminOrManager) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized — only the creator, task assigner, manager, or admin can edit this subtask'], 403);
         }
 
         $deliverable->load('project:id,title', 'task:id,title');
@@ -950,11 +1164,16 @@ class DeliverableController extends Controller
             ]);
         }
 
+        $changeSummary = count($changes) > 0
+            ? 'Updated subtask "'.$deliverable->title.'" ('.implode(', ', array_column($changes, 'label')).')'
+            : 'Updated subtask details for "'.$deliverable->title.'"';
+        $this->activityService->log($user->id, 'deliverable_updated', $changeSummary, 'deliverable', $deliverable->id);
+
         try {
             $this->auditService->log(
-                module: 'deliverable_management',
-                action: 'update',
-                description: "Updated deliverable {$deliverable->title}",
+                module: 'Subtask Management',
+                action: 'Subtask Edited',
+                description: "Updated subtask {$deliverable->title}",
                 user: $user,
                 entityType: 'Deliverable',
                 entityId: $deliverable->id,
@@ -981,23 +1200,29 @@ class DeliverableController extends Controller
      */
     public function destroy(Deliverable $deliverable)
     {
+        $this->authorize('delete', $deliverable);
         $user = request()->user();
-        $isCreator = (int) $deliverable->created_by === (int) $user->id;
-        if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        $isCreator = (int) $deliverable->created_by === (int) $user->id
+            || ($deliverable->task && ((int) $deliverable->task->assigned_by === (int) $user->id || (int) ($deliverable->task->creator_id ?? 0) === (int) $user->id));
+        $isAdminOrManager = in_array($user->role, ['admin', 'manager', 'super_admin']);
+
+        if (! $isCreator && ! $isAdminOrManager) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized — only the creator, task assigner, manager, or admin can delete this subtask'], 403);
         }
 
         if (in_array($deliverable->status, ['approved', 'submitted'])) {
             return response()->json(['success' => false, 'message' => 'Cannot delete a subtask that is '.$deliverable->status], 422);
         }
 
+        $this->activityService->log($user->id, 'deliverable_deleted', 'Deleted subtask "'.$deliverable->title.'"', 'deliverable', $deliverable->id);
+
         $deliverable->delete();
 
         try {
             $this->auditService->log(
-                module: 'deliverable_management',
-                action: 'delete',
-                description: "Deleted deliverable {$deliverable->title}",
+                module: 'Subtask Management',
+                action: 'Subtask Deleted',
+                description: "Deleted subtask {$deliverable->title}",
                 user: $user,
                 entityType: 'Deliverable',
                 entityId: $deliverable->id,
@@ -1046,6 +1271,7 @@ class DeliverableController extends Controller
      */
     public function submit(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('submit', $deliverable);
         $user = $request->user();
         $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
         $isCurrentOwner = $this->delegationService->isCurrentOwnerDeliverable($deliverable, $user);
@@ -1156,6 +1382,69 @@ class DeliverableController extends Controller
 
         $isResubmit = in_array($deliverable->status, ['rejected', 'reopened', 'rework_required']);
 
+        $creatorId = (int) $deliverable->created_by;
+        $ownerId = (int) ($deliverable->current_owner ?: $deliverable->assigned_to);
+        $isSelf = ($creatorId === (int) $user->id && $ownerId === (int) $user->id);
+
+        if ($isSelf) {
+            $updateData = [
+                'status' => 'approved',
+                'submitted_at' => now(),
+                'approved_at' => now(),
+                'approved_by' => $user->id,
+                'updated_by' => $user->id,
+            ];
+            if (in_array($deliverable->status, ['rejected', 'reopened'])) {
+                foreach (['rejected_at', 'rejected_by', 'rejection_comment', 'reopened_at', 'reopened_by', 'reopen_comment', 'reopen_instructions', 'reopen_new_deadline'] as $f) {
+                    $updateData[$f] = null;
+                }
+            }
+            if ($deliverable->status === 'rework_required') {
+                foreach (['rework_comment', 'rework_instructions', 'rework_new_deadline', 'rework_file_path', 'rework_file_name'] as $f) {
+                    $updateData[$f] = null;
+                }
+            }
+            $deliverable->stopTimer();
+            $deliverable->update($updateData);
+            $deliverable->increment('submission_count');
+
+            DeliverableWorkflowEvent::create([
+                'deliverable_id' => $deliverable->id,
+                'user_id' => $user->id,
+                'event_type' => 'approved',
+                'comment' => $validated['comment'] ?? 'Self-deliverable completed',
+                'file_path' => $filePath,
+                'file_name' => $fileName,
+            ]);
+
+            $this->activityService->log($user->id, 'deliverable_completed', 'You completed self-deliverable "'.$deliverable->title.'"', 'deliverable', $deliverable->id);
+            $this->clearDashboardCache($user->id);
+
+            try {
+                $this->auditService->log(
+                    module: 'Subtask Management',
+                    action: 'Subtask Completed',
+                    description: "Completed self-subtask {$deliverable->title}",
+                    user: $user,
+                    entityType: 'Deliverable',
+                    entityId: $deliverable->id,
+                    status: 'success'
+                );
+            } catch (\Throwable $e) {
+                \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Self-deliverable completed successfully',
+                'deliverable' => $deliverable->fresh()->load([
+                    'assignee:id,name,email,role', 'creator:id,name',
+                    'submissions' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments'])->latest(),
+                    'latestSubmission' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments']),
+                ]),
+            ]);
+        }
+
         $updateData = ['status' => 'submitted', 'submitted_at' => now()];
         if (in_array($deliverable->status, ['rejected', 'reopened'])) {
             foreach (['rejected_at', 'rejected_by', 'rejection_comment', 'reopened_at', 'reopened_by', 'reopen_comment', 'reopen_instructions', 'reopen_new_deadline'] as $f) {
@@ -1246,9 +1535,9 @@ class DeliverableController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'deliverable_management',
-                action: 'submit',
-                description: ($isResubmit ? 'Resubmitted' : 'Submitted')." deliverable {$deliverable->title}",
+                module: 'Subtask Management',
+                action: $isResubmit ? 'Subtask Resubmitted' : 'Subtask Submitted',
+                description: ($isResubmit ? 'Resubmitted' : 'Submitted')." subtask {$deliverable->title}",
                 user: $user,
                 entityType: 'Deliverable',
                 entityId: $deliverable->id,
@@ -1284,6 +1573,7 @@ class DeliverableController extends Controller
      */
     public function approve(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('approve', $deliverable);
         $user = $request->user();
         $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
         $isDelegationChain = $this->delegationService->isInDeliverableDelegationChain($deliverable, $user);
@@ -1400,9 +1690,9 @@ class DeliverableController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'deliverable_management',
-                action: 'approve',
-                description: "Approved deliverable {$deliverable->title}",
+                module: 'Subtask Management',
+                action: 'Subtask Approved',
+                description: "Approved subtask {$deliverable->title}",
                 user: $user,
                 entityType: 'Deliverable',
                 entityId: $deliverable->id,
@@ -1428,6 +1718,7 @@ class DeliverableController extends Controller
      */
     public function reject(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('reject', $deliverable);
         $user = $request->user();
         $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
         $isDelegationChain = $this->delegationService->isInDeliverableDelegationChain($deliverable, $user);
@@ -1443,9 +1734,13 @@ class DeliverableController extends Controller
         $validated = $request->validate(['comment' => 'nullable|string|max:2000']);
 
         $deliverable->update([
-            'status' => 'rejected', 'rejected_at' => now(), 'rejected_by' => $user->id,
+            'status' => 'pending',
+            'is_reopened' => true,
+            'rejected_at' => now(),
+            'rejected_by' => $user->id,
             'rejection_comment' => $validated['comment'] ?? null,
             'updated_by' => $user->id,
+            'states' => array_values(array_unique(array_merge(is_array($deliverable->states) ? $deliverable->states : [], ['Reopened']))),
         ]);
 
         DeliverableWorkflowEvent::create(['deliverable_id' => $deliverable->id, 'event_type' => 'rejected', 'user_id' => $user->id, 'comment' => $validated['comment'] ?? null]);
@@ -1482,9 +1777,9 @@ class DeliverableController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'deliverable_management',
-                action: 'reject',
-                description: "Rejected deliverable {$deliverable->title}",
+                module: 'Subtask Management',
+                action: 'Subtask Declined',
+                description: "Declined subtask {$deliverable->title}".(! empty($validated['comment']) ? " Reason: {$validated['comment']}" : ''),
                 user: $user,
                 entityType: 'Deliverable',
                 entityId: $deliverable->id,
@@ -1513,17 +1808,19 @@ class DeliverableController extends Controller
      */
     public function reopen(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('reopen', $deliverable);
         $user = $request->user();
         $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
         $isDelegationChain = $this->delegationService->isInDeliverableDelegationChain($deliverable, $user);
         if (! $isCreator && ! in_array($user->role, ['admin', 'manager', 'team_lead']) && ! $isDelegationChain) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
-        if (! in_array($deliverable->status, ['submitted', 'approved'])) {
-            return response()->json(['success' => false, 'message' => 'Can only reopen submitted or approved deliverables'], 422);
+        if (! in_array($deliverable->status, ['submitted', 'submitted_late', 'approved', 'completed', 'declined', 'rejected', 'abandoned'])) {
+            return response()->json(['success' => false, 'message' => 'Can only reopen completed, submitted, approved, declined, or abandoned deliverables'], 422);
         }
 
         $validated = $request->validate([
+            'assignee_id' => 'nullable|integer|exists:users,id',
             'reopen_reason' => 'required|string|max:500',
             'reopen_reason_detail' => 'nullable|string|max:2000',
             'instructions' => 'nullable|string|max:2000',
@@ -1573,16 +1870,26 @@ class DeliverableController extends Controller
             $reopenComment .= ': '.$validated['reopen_reason_detail'];
         }
 
+        $targetAssigneeId = ! empty($validated['assignee_id'])
+            ? (int) $validated['assignee_id']
+            : (int) ($deliverable->current_owner ?: $deliverable->assigned_to);
+
         $updateData = [
-            'status' => 'reopened', 'reopened_at' => now(), 'reopened_by' => $user->id,
+            'status' => 'pending',
+            'is_reopened' => true,
+            'reopened_at' => now(),
+            'reopened_by' => $user->id,
             'reopen_comment' => $reopenComment,
             'reopen_reason' => $validated['reopen_reason'],
             'reopen_instructions' => $validated['instructions'] ?? null,
             'reopen_link' => $validated['link'] ?? null,
             'updated_by' => $user->id,
+            'assigned_to' => $targetAssigneeId ?: $deliverable->assigned_to,
+            'current_owner' => $targetAssigneeId ?: $deliverable->current_owner,
         ];
         if (! empty($validated['new_deadline'])) {
             $updateData['reopen_new_deadline'] = $validated['new_deadline'];
+            $updateData['due_date'] = $validated['new_deadline'];
         }
         if (! empty($filePath)) {
             $updateData['reopen_file_path'] = $filePath;
@@ -1590,6 +1897,25 @@ class DeliverableController extends Controller
         }
 
         $deliverable->update($updateData);
+
+        // Update/Attach only target assignee in pivot table without modifying others
+        try {
+            if ($targetAssigneeId && method_exists($deliverable, 'assignees')) {
+                if ($deliverable->assignees()->where('users.id', $targetAssigneeId)->exists()) {
+                    $deliverable->assignees()->updateExistingPivot($targetAssigneeId, [
+                        'status' => 'pending',
+                        'submitted_at' => null,
+                    ]);
+                } else {
+                    $deliverable->assignees()->attach($targetAssigneeId, [
+                        'status' => 'pending',
+                        'due_date' => $deliverable->due_date ?? null,
+                    ]);
+                }
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('Deliverable assignees pivot update warning: '.$e->getMessage());
+        }
 
         // Increment reopen count
         $deliverable->increment('reopen_count');
@@ -1618,13 +1944,14 @@ class DeliverableController extends Controller
             $reopenReasonText .= ': '.$validated['reopen_reason_detail'];
         }
 
-        if ($deliverable->assigned_to) {
+        $notifyTarget = $targetAssigneeId ?: $deliverable->assigned_to;
+        if ($notifyTarget && (int) $notifyTarget !== (int) $user->id) {
             $msg = 'Your subtask "'.$deliverable->title.'" has been reopened. Reason: '.$reopenReasonText;
             if (! empty($validated['instructions'])) {
                 $msg .= ' Instructions: '.$validated['instructions'];
             }
             $this->notificationService->notify(
-                (int) $deliverable->assigned_to,
+                (int) $notifyTarget,
                 (int) $user->id,
                 'deliverable_reopened',
                 'deliverable',
@@ -1651,8 +1978,8 @@ class DeliverableController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'deliverable_management',
-                action: 'reopen',
+                module: 'Subtask Management',
+                action: 'Subtask Reopened',
                 description: "Reopened subtask {$deliverable->title}. Reason: {$reopenReasonText}",
                 user: $user,
                 entityType: 'Deliverable',
@@ -1679,6 +2006,135 @@ class DeliverableController extends Controller
     }
 
     /**
+     * Force mark a deliverable as completed by Assigner / Creator.
+     */
+    public function markAsCompleted(Request $request, Deliverable $deliverable): JsonResponse
+    {
+        $this->authorize('markAsCompleted', $deliverable);
+
+        $currentStatus = strtolower(trim((string) $deliverable->status));
+        $allowedStatuses = ['pending', 'not_started', 'assigned', 'planned', 'planning', 'in_progress', 'in-progress', 'acknowledged', 'paused', 'reopened', 'rework_required'];
+
+        if (! in_array($currentStatus, $allowedStatuses, true)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This deliverable cannot be marked as completed in its current status (' . $deliverable->status . ')',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'reason' => 'required|string|max:500',
+            'delivery_notes' => 'nullable|string|max:5000',
+            'attachments' => 'nullable|array',
+            'attachments.*' => 'file|max:51200',
+            'files' => 'nullable|array',
+            'files.*' => 'file|max:51200',
+            'file' => 'nullable|file|max:51200',
+        ]);
+
+        $user = $request->user();
+        $reason = trim($validated['reason']);
+        $notes = isset($validated['delivery_notes']) ? trim($validated['delivery_notes']) : null;
+
+        $uploadedFiles = [];
+        if ($request->hasFile('attachments')) {
+            $uploadedFiles = $request->file('attachments');
+        } elseif ($request->hasFile('files')) {
+            $uploadedFiles = $request->file('files');
+        } elseif ($request->hasFile('file')) {
+            $uploadedFiles = [$request->file('file')];
+        }
+
+        $fileSkipped = false;
+        $org = $request->attributes->get('currentOrganization');
+        foreach ($uploadedFiles as $uploadedFile) {
+            if ($uploadedFile && $uploadedFile->isValid()) {
+                $storageCheck = $this->checkStorageLimit($request, $uploadedFile);
+                if ($storageCheck && ! $storageCheck['allowed']) {
+                    $fileSkipped = true;
+                    continue;
+                }
+                if ($org) {
+                    $path = StorageDiskResolver::store($org, $uploadedFile, 'deliverable-files/'.$deliverable->id);
+                    $fileUrl = StorageDiskResolver::isS3($org) ? $path : '/storage/'.$path;
+                } else {
+                    $path = $uploadedFile->store('deliverable-files/'.$deliverable->id, 'public');
+                    $fileUrl = '/storage/'.$path;
+                }
+                $nextOrder = (int) $deliverable->files()->max('sort_order') + 1;
+                $deliverable->files()->create([
+                    'name' => $uploadedFile->getClientOriginalName(),
+                    'url' => $fileUrl,
+                    'sort_order' => $nextOrder,
+                ]);
+            }
+        }
+
+        $deliverable->update([
+            'status' => 'approved',
+            'completion_reason' => $reason,
+            'completion_notes' => $notes,
+            'approved_at' => now(),
+            'approved_by' => $user->id,
+            'updated_by' => $user->id,
+        ]);
+
+        $deliverable->stopTimer();
+
+        DeliverableWorkflowEvent::create([
+            'deliverable_id' => $deliverable->id,
+            'user_id' => $user->id,
+            'event_type' => 'marked_completed',
+            'comment' => "{$user->name} marked the deliverable as completed. Reason: {$reason}",
+        ]);
+
+        $this->activityService->log($user->id, 'deliverable_completed', "{$user->name} marked the deliverable as completed. Reason: {$reason}", 'deliverable', $deliverable->id);
+
+        if ($deliverable->assigned_to && (int) $deliverable->assigned_to !== (int) $user->id) {
+            $this->notificationService->notify(
+                (int) $deliverable->assigned_to,
+                $user->id,
+                'deliverable_completed',
+                'deliverable',
+                $deliverable->id,
+                'Deliverable Completed',
+                "{$user->name} marked the deliverable \"{$deliverable->title}\" as completed. Reason: {$reason}",
+                '/deliveries?selectedDeliverable='.$deliverable->id
+            );
+        }
+
+        $this->clearDashboardCache($user->id);
+        if ($deliverable->assigned_to) {
+            $this->clearDashboardCache((int) $deliverable->assigned_to);
+        }
+
+        try {
+            $this->auditService->log(
+                module: 'Subtask Management',
+                action: 'Subtask Completed',
+                description: "{$user->name} marked subtask {$deliverable->title} as completed. Reason: {$reason}",
+                user: $user,
+                entityType: 'Deliverable',
+                entityId: $deliverable->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit in deliverable markAsCompleted', ['error' => $e->getMessage()]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Deliverable marked as completed successfully',
+            'file_skipped' => $fileSkipped,
+            'deliverable' => $deliverable->fresh()->load([
+                'assignee:id,name,email,role', 'creator:id,name', 'approvedBy:id,name',
+                'submissions' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments'])->latest(),
+                'latestSubmission' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments']),
+            ]),
+        ]);
+    }
+
+    /**
      * Self-approve a deliverable (user is both creator and assignee).
      *
      * @param  Request  $request  The incoming HTTP request.
@@ -1687,6 +2143,7 @@ class DeliverableController extends Controller
      */
     public function selfApprove(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('approve', $deliverable);
         $user = $request->user();
         if ((int) $deliverable->created_by !== (int) $user->id || (int) $deliverable->assigned_to !== (int) $user->id) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
@@ -1700,9 +2157,9 @@ class DeliverableController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'deliverable_management',
-                action: 'self_approve',
-                description: "Self-approved deliverable {$deliverable->title}",
+                module: 'Subtask Management',
+                action: 'Subtask Approved',
+                description: "Self-approved subtask {$deliverable->title}",
                 user: $user,
                 entityType: 'Deliverable',
                 entityId: $deliverable->id,
@@ -1728,6 +2185,7 @@ class DeliverableController extends Controller
      */
     public function selfRework(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('reopen', $deliverable);
         $user = $request->user();
         if ((int) $deliverable->created_by !== (int) $user->id || (int) $deliverable->assigned_to !== (int) $user->id) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
@@ -1865,6 +2323,7 @@ class DeliverableController extends Controller
      */
     public function latestSubmission(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('view', $deliverable);
         $submission = DeliverableSubmission::where('deliverable_id', $deliverable->id)
             ->with(['submittedBy:id,name,email', 'attachments'])->latest()->first();
 
@@ -2052,7 +2511,7 @@ class DeliverableController extends Controller
     }
 
     /**
-     * Reorder deliverables by updating their sort_order values in bulk.
+     * Reorder deliverables by updating sort_order values in bulk.
      *
      * @param  Request  $request  Input: items[] with id and sort_order.
      * @return JsonResponse JSON response confirming reorder.
@@ -2061,17 +2520,15 @@ class DeliverableController extends Controller
     {
         $request->validate(['items' => 'required|array', 'items.*.id' => 'required|integer|exists:deliverables,id', 'items.*.sort_order' => 'required|integer|min:0']);
         $ids = [];
-        $cases = [];
         $bindings = [];
-        foreach ($request->items as $i => $item) {
-            $ids[] = $item['id'];
-            $cases[] = 'WHEN ? THEN ?';
-            $bindings[] = $item['id'];
-            $bindings[] = $item['sort_order'];
+        foreach ($request->items as $item) {
+            $ids[] = (int) $item['id'];
+            $bindings[] = (int) $item['id'];
+            $bindings[] = (int) $item['sort_order'];
         }
         if (! empty($ids)) {
-            $placeholders = implode(', ', array_fill(0, count($ids), '?'));
-            DB::statement('UPDATE deliverables SET sort_order = CASE id '.implode(' ', $cases)." END WHERE id IN ($placeholders)", [...$bindings, ...$ids]);
+            $ph = implode(',', array_fill(0, count($ids), '?'));
+            DB::statement('UPDATE deliverables SET sort_order = CASE id '.implode(' ', array_fill(0, count($ids), 'WHEN ? THEN ?'))." END WHERE id IN ($ph)", [...$bindings, ...$ids]);
         }
 
         return response()->json(['success' => true, 'message' => 'Deliverables reordered successfully']);
@@ -2084,6 +2541,7 @@ class DeliverableController extends Controller
      */
     public function acknowledge(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('acknowledge', $deliverable);
         $user = $request->user();
         $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
         $isAuthorizedRole = in_array($user->role, ['admin', 'manager', 'team_lead']);
@@ -2101,13 +2559,11 @@ class DeliverableController extends Controller
             'updated_by' => $user->id,
         ]);
 
-        $deliverable->startTimer();
-
         DeliverableWorkflowEvent::create([
             'deliverable_id' => $deliverable->id,
             'event_type' => 'acknowledged',
             'user_id' => $user->id,
-            'comment' => 'Acknowledged and started working',
+            'comment' => 'Acknowledged deliverable',
         ]);
 
         $this->activityService->log($user->id, 'deliverable_acknowledged', 'You acknowledged deliverable "'.$deliverable->title.'"', 'deliverable', $deliverable->id);
@@ -2122,10 +2578,80 @@ class DeliverableController extends Controller
     // ─── Timer ─────────────────────────────────────────────────
 
     /**
+     * Start the deliverable timer explicitly.
+     */
+    public function startTimer(Request $request, Deliverable $deliverable)
+    {
+        $this->authorize('startTimer', $deliverable);
+        $user = $request->user();
+        $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
+        $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
+        $isAdminOrManager = in_array($user->role, ['admin', 'manager', 'super_admin']);
+        if (! $isAssignee && ! $isCreator && ! $isAdminOrManager) {
+            return response()->json(['success' => false, 'message' => 'You do not have permission to start this subtask timer.'], 403);
+        }
+
+        if (! in_array($deliverable->status, ['in_progress', 'paused', 'reopened'])) {
+            return response()->json(['success' => false, 'message' => 'Subtask must be in progress to start timer. Please acknowledge it first.'], 422);
+        }
+
+        if ($deliverable->timer_state === 'running') {
+            return response()->json([
+                'success' => true,
+                'message' => 'Timer is already running',
+                'deliverable' => $deliverable->fresh(),
+            ]);
+        }
+
+        $isResume = ($deliverable->timer_state === 'paused' || $deliverable->status === 'paused');
+        if ($isResume) {
+            $deliverable->resumeTimer($user->id);
+            $deliverable->update(['status' => 'in_progress', 'paused_by' => null, 'paused_at' => null, 'updated_by' => $user->id]);
+
+            DeliverableWorkflowEvent::create([
+                'deliverable_id' => $deliverable->id,
+                'event_type' => 'resumed',
+                'user_id' => $user->id,
+                'comment' => 'Timer resumed',
+            ]);
+        } else {
+            $deliverable->startTimer();
+
+            DeliverableWorkflowEvent::create([
+                'deliverable_id' => $deliverable->id,
+                'event_type' => 'timer_started',
+                'user_id' => $user->id,
+                'comment' => 'Work timer started',
+            ]);
+        }
+
+        try {
+            $this->auditService->log(
+                module: 'Subtask Management',
+                action: $isResume ? 'Subtask Resumed' : 'Subtask Started',
+                description: ($isResume ? 'Resumed' : 'Started')." subtask {$deliverable->title}",
+                user: $user,
+                entityType: 'Deliverable',
+                entityId: $deliverable->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit in deliverable startTimer', ['error' => $e->getMessage()]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Timer started',
+            'deliverable' => $deliverable->fresh(),
+        ]);
+    }
+
+    /**
      * Pause the deliverable timer.
      */
     public function pause(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('pause', $deliverable);
         $user = $request->user();
         $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
         $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
@@ -2150,6 +2676,20 @@ class DeliverableController extends Controller
             'comment' => 'Timer paused'.($validated['reason'] ? ' — '.$validated['reason'] : ''),
         ]);
 
+        try {
+            $this->auditService->log(
+                module: 'Subtask Management',
+                action: 'Subtask Paused',
+                description: "Paused subtask {$deliverable->title}".($validated['reason'] ? " — {$validated['reason']}" : ''),
+                user: $user,
+                entityType: 'Deliverable',
+                entityId: $deliverable->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit in deliverable pause', ['error' => $e->getMessage()]);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Timer paused',
@@ -2162,6 +2702,7 @@ class DeliverableController extends Controller
      */
     public function continueTimer(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('continue', $deliverable);
         $user = $request->user();
         $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
         $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
@@ -2183,6 +2724,20 @@ class DeliverableController extends Controller
             'comment' => 'Timer resumed',
         ]);
 
+        try {
+            $this->auditService->log(
+                module: 'Subtask Management',
+                action: 'Subtask Resumed',
+                description: "Resumed subtask {$deliverable->title}",
+                user: $user,
+                entityType: 'Deliverable',
+                entityId: $deliverable->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit in deliverable continueTimer', ['error' => $e->getMessage()]);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Timer resumed',
@@ -2196,6 +2751,7 @@ class DeliverableController extends Controller
      */
     public function assignerPause(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('assignerPause', $deliverable);
         $user = $request->user();
         $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
         if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
@@ -2224,6 +2780,20 @@ class DeliverableController extends Controller
             'comment' => 'Assigner paused the deliverable',
         ]);
 
+        try {
+            $this->auditService->log(
+                module: 'Subtask Management',
+                action: 'Subtask Paused',
+                description: "Assigner paused subtask {$deliverable->title}",
+                user: $user,
+                entityType: 'Deliverable',
+                entityId: $deliverable->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit in deliverable assignerPause', ['error' => $e->getMessage()]);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Deliverable paused by assigner',
@@ -2237,6 +2807,7 @@ class DeliverableController extends Controller
      */
     public function assignerResume(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('assignerResume', $deliverable);
         $user = $request->user();
         $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
         if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
@@ -2261,6 +2832,20 @@ class DeliverableController extends Controller
             'comment' => 'Assigner resumed the deliverable',
         ]);
 
+        try {
+            $this->auditService->log(
+                module: 'Subtask Management',
+                action: 'Subtask Resumed',
+                description: "Assigner resumed subtask {$deliverable->title}",
+                user: $user,
+                entityType: 'Deliverable',
+                entityId: $deliverable->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit in deliverable assignerResume', ['error' => $e->getMessage()]);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Deliverable resumed by assigner',
@@ -2273,11 +2858,14 @@ class DeliverableController extends Controller
      */
     public function timer(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('view', $deliverable);
         return response()->json([
             'success' => true,
             'timer' => [
                 'state' => $deliverable->timer_state,
-                'work_started_at' => $deliverable->work_started_at?->format('Y-m-d\TH:i:s'),
+                'work_started_at' => $deliverable->work_started_at?->toIso8601String(),
+                'last_timer_event_at' => $deliverable->last_timer_event_at?->toIso8601String(),
+                'work_completed_at' => $deliverable->work_completed_at?->toIso8601String(),
                 'total_work_seconds' => $deliverable->getCurrentWorkSeconds(),
                 'elapsed_seconds' => $deliverable->getCurrentElapsedSeconds(),
                 'pause_count' => $deliverable->pause_count ?? 0,
@@ -2292,6 +2880,7 @@ class DeliverableController extends Controller
      */
     public function timerSessions(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('view', $deliverable);
         $sessions = $deliverable->pauseSessions()
             ->with(['user:id,name', 'resumedByUser:id,name'])
             ->get()
@@ -2300,8 +2889,8 @@ class DeliverableController extends Controller
                 'reason' => $s->reason,
                 'reason_label' => $s->reason_label,
                 'reason_detail' => $s->reason_detail,
-                'paused_at' => $s->paused_at?->format('Y-m-d\TH:i:s'),
-                'resumed_at' => $s->resumed_at?->format('Y-m-d\TH:i:s'),
+                'paused_at' => $s->paused_at?->toIso8601String(),
+                'resumed_at' => $s->resumed_at?->toIso8601String(),
                 'duration_seconds' => $s->duration_seconds,
                 'formatted_duration' => $s->formatted_duration,
                 'user' => $s->user ? ['id' => $s->user->id, 'name' => $s->user->name] : null,
@@ -2319,6 +2908,7 @@ class DeliverableController extends Controller
      */
     public function uploadFile(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('manageFiles', $deliverable);
         $user = $request->user();
         $isCreator = (int) $deliverable->created_by === (int) $user->id;
         $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
@@ -2369,8 +2959,8 @@ class DeliverableController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'project_management',
-                action: 'create',
+                module: 'Subtask Management',
+                action: 'Attachment Added',
                 description: "Uploaded file \"{$name}\" to subtask \"{$deliverable->title}\"",
                 user: $user,
                 entityType: 'DeliverableFile',
@@ -2394,6 +2984,7 @@ class DeliverableController extends Controller
      */
     public function addLink(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('manageFiles', $deliverable);
         $user = $request->user();
         $isCreator = (int) $deliverable->created_by === (int) $user->id;
         $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
@@ -2416,8 +3007,8 @@ class DeliverableController extends Controller
 
         try {
             $this->auditService->log(
-                module: 'project_management',
-                action: 'create',
+                module: 'Subtask Management',
+                action: 'Attachment Added',
                 description: "Added link \"{$linkName}\" to subtask \"{$deliverable->title}\"",
                 user: $user,
                 entityType: 'DeliverableFile',
@@ -2441,6 +3032,7 @@ class DeliverableController extends Controller
      */
     public function renameFile(Request $request, Deliverable $deliverable, DeliverableFile $file)
     {
+        $this->authorize('manageFiles', $deliverable);
         $user = $request->user();
         $isCreator = (int) $deliverable->created_by === (int) $user->id;
         if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
@@ -2458,6 +3050,7 @@ class DeliverableController extends Controller
      */
     public function deleteFile(Request $request, Deliverable $deliverable, DeliverableFile $file)
     {
+        $this->authorize('manageFiles', $deliverable);
         $user = $request->user();
         $isCreator = (int) $deliverable->created_by === (int) $user->id;
         if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
@@ -2475,13 +3068,20 @@ class DeliverableController extends Controller
         $file->delete();
         $deliverable->update(['updated_by' => $user->id]);
 
-        $this->auditService->log(
-            'deliverables', 'delete',
-            "Deleted file \"{$fileName}\" from deliverable \"{$deliverable->title}\"",
-            $user, 'deliverable_file', $file->id,
-            ['file_name' => $fileName, 'deliverable_id' => $deliverable->id, 'deliverable_title' => $deliverable->title],
-            null, 'success'
-        );
+        try {
+            $this->auditService->log(
+                module: 'Subtask Management',
+                action: 'Attachment Removed',
+                description: "Deleted file \"{$fileName}\" from subtask \"{$deliverable->title}\"",
+                user: $user,
+                entityType: 'DeliverableFile',
+                entityId: $file->id,
+                oldValues: ['file_name' => $fileName, 'deliverable_id' => $deliverable->id, 'deliverable_title' => $deliverable->title],
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log deliverable file delete audit', ['error' => $e->getMessage()]);
+        }
 
         return response()->json(['success' => true, 'message' => 'File deleted']);
     }
@@ -2491,6 +3091,7 @@ class DeliverableController extends Controller
      */
     public function reorderFiles(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('manageFiles', $deliverable);
         $request->validate([
             'items' => 'required|array',
             'items.*.id' => 'required|integer|exists:deliverable_files,id',
@@ -2512,14 +3113,16 @@ class DeliverableController extends Controller
      */
     public function myNote(Request $request, Deliverable $deliverable)
     {
-        $note = DeliverableUserNote::where('deliverable_id', $deliverable->id)
+        $this->authorize('manageNotes', $deliverable);
+        $notes = DeliverableUserNote::where('deliverable_id', $deliverable->id)
             ->where('user_id', $request->user()->id)
-            ->first();
+            ->orderBy('created_at', 'desc')
+            ->get();
 
         return response()->json([
             'success' => true,
-            'note' => $note,
-            'notes' => $note ? [$note] : [],
+            'note' => $notes->first(),
+            'notes' => $notes,
         ]);
     }
 
@@ -2528,14 +3131,42 @@ class DeliverableController extends Controller
      */
     public function storeNote(Request $request, Deliverable $deliverable)
     {
-        $validated = $request->validate(['note' => 'nullable|string|max:5000']);
+        $this->authorize('manageNotes', $deliverable);
+        $validated = $request->validate(['note' => 'required|string|max:5000']);
 
-        $note = DeliverableUserNote::updateOrCreate(
-            ['deliverable_id' => $deliverable->id, 'user_id' => $request->user()->id],
-            ['note' => $validated['note'] ?? null]
-        );
+        $note = DeliverableUserNote::create([
+            'deliverable_id' => $deliverable->id,
+            'user_id' => $request->user()->id,
+            'note' => $validated['note'],
+        ]);
 
-        return response()->json(['success' => true, 'message' => 'Note saved', 'note' => $note]);
+        $notes = DeliverableUserNote::where('deliverable_id', $deliverable->id)
+            ->where('user_id', $request->user()->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json(['success' => true, 'message' => 'Note saved', 'note' => $note, 'notes' => $notes]);
+    }
+
+    /**
+     * Update the current user's personal note on a deliverable.
+     */
+    public function updateNote(Request $request, Deliverable $deliverable, DeliverableUserNote $note)
+    {
+        $this->authorize('manageNotes', $deliverable);
+        if ((int) $note->user_id !== (int) $request->user()->id) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $validated = $request->validate(['note' => 'required|string|max:5000']);
+        $note->update(['note' => $validated['note']]);
+
+        $notes = DeliverableUserNote::where('deliverable_id', $deliverable->id)
+            ->where('user_id', $request->user()->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json(['success' => true, 'message' => 'Note updated', 'note' => $note, 'notes' => $notes]);
     }
 
     /**
@@ -2543,13 +3174,19 @@ class DeliverableController extends Controller
      */
     public function destroyNote(Request $request, Deliverable $deliverable, DeliverableUserNote $note)
     {
+        $this->authorize('manageNotes', $deliverable);
         if ((int) $note->user_id !== (int) $request->user()->id) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
         $note->delete();
 
-        return response()->json(['success' => true, 'message' => 'Note deleted']);
+        $notes = DeliverableUserNote::where('deliverable_id', $deliverable->id)
+            ->where('user_id', $request->user()->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json(['success' => true, 'message' => 'Note deleted', 'notes' => $notes]);
     }
 
     /**
@@ -2920,6 +3557,7 @@ class DeliverableController extends Controller
      */
     public function delegate(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('delegate', $deliverable);
         $user = $request->user();
         $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
         $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
@@ -2993,6 +3631,7 @@ class DeliverableController extends Controller
      */
     public function acceptDelegation(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('delegate', $deliverable);
         $user = $request->user();
 
         $delegation = TaskDelegation::where('deliverable_id', $deliverable->id)
@@ -3026,6 +3665,7 @@ class DeliverableController extends Controller
      */
     public function rejectDelegation(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('delegate', $deliverable);
         $user = $request->user();
 
         $validated = $request->validate([
@@ -3063,6 +3703,7 @@ class DeliverableController extends Controller
      */
     public function revokeDelegation(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('delegate', $deliverable);
         $user = $request->user();
 
         $validated = $request->validate([
@@ -3096,6 +3737,7 @@ class DeliverableController extends Controller
      */
     public function delegationChain(Deliverable $deliverable)
     {
+        $this->authorize('view', $deliverable);
         $chain = $this->delegationService->getDeliverableChainDetails($deliverable);
 
         return response()->json([
@@ -3110,6 +3752,7 @@ class DeliverableController extends Controller
      */
     public function requestAbandon(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('submit', $deliverable);
         $user = $request->user();
         if ($deliverable->status === 'abandoned') {
             return response()->json(['success' => false, 'message' => 'Subtask is already abandoned'], 422);
@@ -3130,6 +3773,20 @@ class DeliverableController extends Controller
 
         $this->activityService->log($user->id, 'deliverable_abandon_requested', 'Requested to abandon subtask "'.$deliverable->title.'"', 'deliverable', $deliverable->id);
 
+        try {
+            $this->auditService->log(
+                module: 'Subtask Management',
+                action: 'Subtask Abandon Requested',
+                description: "Requested to abandon subtask {$deliverable->title}".(! empty($validated['reason']) ? " Reason: {$validated['reason']}" : ''),
+                user: $user,
+                entityType: 'Deliverable',
+                entityId: $deliverable->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit in deliverable requestAbandon', ['error' => $e->getMessage()]);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Abandon request submitted successfully',
@@ -3142,6 +3799,7 @@ class DeliverableController extends Controller
      */
     public function approveAbandon(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('approve', $deliverable);
         $user = $request->user();
         if (! in_array($user->role, ['admin', 'manager'])) {
             return response()->json(['success' => false, 'message' => 'Unauthorized: Only Admins and Managers can approve abandon requests'], 403);
@@ -3156,6 +3814,20 @@ class DeliverableController extends Controller
 
         $this->activityService->log($user->id, 'deliverable_abandon_approved', 'Approved abandon request for subtask "'.$deliverable->title.'"', 'deliverable', $deliverable->id);
 
+        try {
+            $this->auditService->log(
+                module: 'Subtask Management',
+                action: 'Subtask Abandoned',
+                description: "Approved abandon request for subtask {$deliverable->title}",
+                user: $user,
+                entityType: 'Deliverable',
+                entityId: $deliverable->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit in deliverable approveAbandon', ['error' => $e->getMessage()]);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Subtask abandon approved successfully',
@@ -3168,6 +3840,7 @@ class DeliverableController extends Controller
      */
     public function declineAbandon(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('approve', $deliverable);
         $user = $request->user();
         if (! in_array($user->role, ['admin', 'manager'])) {
             return response()->json(['success' => false, 'message' => 'Unauthorized: Only Admins and Managers can decline abandon requests'], 403);
@@ -3189,6 +3862,20 @@ class DeliverableController extends Controller
 
         $this->activityService->log($user->id, 'deliverable_abandon_declined', 'Declined abandon request for subtask "'.$deliverable->title.'"', 'deliverable', $deliverable->id);
 
+        try {
+            $this->auditService->log(
+                module: 'Subtask Management',
+                action: 'Subtask Abandon Declined',
+                description: "Declined abandon request for subtask {$deliverable->title}".(! empty($validated['reason']) ? " Reason: {$validated['reason']}" : ''),
+                user: $user,
+                entityType: 'Deliverable',
+                entityId: $deliverable->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit in deliverable declineAbandon', ['error' => $e->getMessage()]);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Subtask abandon request declined',
@@ -3197,13 +3884,18 @@ class DeliverableController extends Controller
     }
 
     /**
-     * Directly abandon a deliverable/subtask (Admins & Managers ONLY).
+     * Directly abandon a deliverable/subtask. Both relevant participants (Assigner and Assignee) may abandon.
      */
     public function abandon(Request $request, Deliverable $deliverable)
     {
+        $this->authorize('abandon', $deliverable);
         $user = $request->user();
-        if (! in_array($user->role, ['admin', 'manager'])) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized: Only Admins and Managers can directly abandon subtasks'], 403);
+        $isCreator = (int) $deliverable->created_by === (int) $user->id || ($deliverable->task && (int) $deliverable->task->assigned_by === (int) $user->id);
+        $isAssignee = (int) $deliverable->assigned_to === (int) $user->id || (int) ($deliverable->current_owner ?? 0) === (int) $user->id;
+        $isAdminOrManager = in_array($user->role, ['admin', 'manager', 'super_admin']);
+
+        if (! $isCreator && ! $isAssignee && ! $isAdminOrManager) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized: Only the creator, assignee, or Admin/Manager can abandon subtasks'], 403);
         }
 
         $validated = $request->validate([
@@ -3220,6 +3912,20 @@ class DeliverableController extends Controller
         ]);
 
         $this->activityService->log($user->id, 'deliverable_abandoned', 'Abandoned subtask "'.$deliverable->title.'"', 'deliverable', $deliverable->id);
+
+        try {
+            $this->auditService->log(
+                module: 'Subtask Management',
+                action: 'Subtask Abandoned',
+                description: "Abandoned subtask {$deliverable->title}".(! empty($validated['reason']) ? " Reason: {$validated['reason']}" : ''),
+                user: $user,
+                entityType: 'Deliverable',
+                entityId: $deliverable->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit in deliverable abandon', ['error' => $e->getMessage()]);
+        }
 
         return response()->json([
             'success' => true,

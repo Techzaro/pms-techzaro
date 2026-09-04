@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -18,6 +19,7 @@ use Carbon\Carbon;
  */
 class Task extends Model
 {
+    use SoftDeletes;
     protected $fillable = [
         'task_number',
         'business_id',
@@ -85,6 +87,10 @@ class Task extends Model
         'approval_chain',
         'delegation_count',
         'allow_transfer',
+        'is_reopened',
+        'is_transferred',
+        'completion_reason',
+        'completion_notes',
     ];
 
     /**
@@ -225,13 +231,15 @@ class Task extends Model
         'pause_count' => 'integer',
         'total_pause_seconds' => 'integer',
         'resume_count' => 'integer',
-        'work_started_at' => 'datetime:Y-m-d\TH:i:s',
-        'last_timer_event_at' => 'datetime:Y-m-d\TH:i:s',
-        'work_completed_at' => 'datetime:Y-m-d\TH:i:s',
+        'work_started_at' => 'datetime:Y-m-d\TH:i:s\Z',
+        'last_timer_event_at' => 'datetime:Y-m-d\TH:i:s\Z',
+        'work_completed_at' => 'datetime:Y-m-d\TH:i:s\Z',
         'delegation_chain' => 'array',
         'approval_chain' => 'array',
         'delegation_count' => 'integer',
         'submission_forwarded_by' => 'array',
+        'is_reopened' => 'boolean',
+        'is_transferred' => 'boolean',
     ];
 
     /** Apply filters for querying tasks (SRS Sections 4, 5, 8, 9). */
@@ -302,7 +310,8 @@ class Task extends Model
                     }
                     if ($hasTransferred) {
                         $transferCondition = function ($tq) {
-                            $tq->whereJsonContains('tasks.states', 'Transferred')->orWhereJsonContains('tasks.states', 'transferred')
+                            $tq->where('tasks.is_transferred', true)
+                               ->orWhereJsonContains('tasks.states', 'Transferred')->orWhereJsonContains('tasks.states', 'transferred')
                                ->orWhere(function ($dtq) {
                                    $dtq->whereNotNull('tasks.delegation_chain')->where('tasks.delegation_chain', '!=', '[]');
                                });
@@ -316,7 +325,8 @@ class Task extends Model
                     }
                     if ($hasReopened) {
                         $reopenCondition = function ($rq) {
-                            $rq->whereJsonContains('tasks.states', 'Reopened')->orWhereJsonContains('tasks.states', 'reopened')
+                            $rq->where('tasks.is_reopened', true)
+                               ->orWhereJsonContains('tasks.states', 'Reopened')->orWhereJsonContains('tasks.states', 'reopened')
                                ->orWhere('tasks.status', 'reopened')
                                ->orWhere('tasks.reopen_count', '>', 0)
                                ->orWhereNotNull('tasks.reopened_at');
@@ -348,17 +358,18 @@ class Task extends Model
                         $stateItemLower = strtolower($stateItem);
                         $clause = function ($sq) use ($stateItem, $stateItemLower) {
                             if ($stateItemLower === 'reopened') {
-                                $sq->whereJsonContains('tasks.states', 'Reopened')->orWhereJsonContains('tasks.states', 'reopened')
+                                $sq->where('tasks.is_reopened', true)
+                                   ->orWhereJsonContains('tasks.states', 'Reopened')->orWhereJsonContains('tasks.states', 'reopened')
                                    ->orWhere('tasks.status', 'reopened')
                                    ->orWhere('tasks.reopen_count', '>', 0)
                                    ->orWhereNotNull('tasks.reopened_at');
                             } elseif ($stateItemLower === 'transferred') {
-                                $sq->whereJsonContains('tasks.states', 'Transferred')->orWhereJsonContains('tasks.states', 'transferred')
+                                $sq->where('tasks.is_transferred', true)
+                                   ->orWhereJsonContains('tasks.states', 'Transferred')->orWhereJsonContains('tasks.states', 'transferred')
                                    ->orWhere(function ($dtq) {
                                        $dtq->whereNotNull('tasks.delegation_chain')->where('tasks.delegation_chain', '!=', '[]');
                                    });
                             } else {
-                                $escaped = json_encode($stateItem);
                                 $sq->whereJsonContains('tasks.states', $stateItem);
                             }
                         };
@@ -611,6 +622,30 @@ class Task extends Model
     public function comments()
     {
         return $this->hasMany(TaskComment::class)->latest();
+    }
+
+    /** Discussion messages alias for comments. */
+    public function messages()
+    {
+        return $this->hasMany(TaskComment::class)->latest();
+    }
+
+    /** Personal notes attached to this task. */
+    public function personalNotes()
+    {
+        return $this->hasMany(TaskPersonalNote::class)->orderBy('created_at', 'desc');
+    }
+
+    /** Events linked to this task. */
+    public function events(): BelongsToMany
+    {
+        return $this->belongsToMany(Event::class, 'event_task')->withTimestamps();
+    }
+
+    /** Knowledge base articles linked to this task. */
+    public function knowledgeBases(): BelongsToMany
+    {
+        return $this->belongsToMany(KnowledgeBase::class, 'knowledge_base_task')->withTimestamps();
     }
 
     /** Access credentials attached to this task. */

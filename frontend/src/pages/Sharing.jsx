@@ -102,6 +102,11 @@ export default function Sharing() {
       const res = await fetch(`${API_URL}/sharing/connections`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("API Error:", text);
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
       const data = await res.json();
       if (data.success) setConnections(data.data);
     } catch (err) { console.error(err); }
@@ -113,6 +118,11 @@ export default function Sharing() {
       const res = await fetch(`${API_URL}/sharing/shared-by-us`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("API Error:", text);
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
       const data = await res.json();
       if (data.success) setSharedByUs(data.data.resources || []);
     } catch (err) { console.error(err); }
@@ -124,6 +134,11 @@ export default function Sharing() {
       const res = await fetch(`${API_URL}/sharing/shared-with-me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("API Error:", text);
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
       const data = await res.json();
       if (data.success) setSharedWithMe(data.data.resources || []);
     } catch (err) { console.error(err); }
@@ -135,6 +150,11 @@ export default function Sharing() {
       const res = await fetch(`${API_URL}/sharing/activities?limit=50`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("API Error:", text);
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
       const data = await res.json();
       if (data.success) setActivities(data.data.activities || []);
     } catch (err) { console.error(err); }
@@ -144,7 +164,11 @@ export default function Sharing() {
     try {
       const token = authToken();
       const res = await fetch(`${API_URL}/sharing/all-stats`, { headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) return;
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("API Error:", text);
+        return;
+      }
       const data = await res.json();
       if (data.success) {
         setStats(data.data.sharing);
@@ -159,6 +183,11 @@ export default function Sharing() {
       const res = await fetch(`${API_URL}/sharing/notifications`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("API Error:", text);
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
       const data = await res.json();
       if (data.success) setNotifications(data.data.notifications || []);
     } catch (err) { console.error(err); }
@@ -170,6 +199,11 @@ export default function Sharing() {
       const res = await fetch(`${API_URL}/sharing/notifications/unread-count`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("API Error:", text);
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
       const data = await res.json();
       if (data.success) setUnreadCount(data.data.count || 0);
     } catch (err) { console.error(err); }
@@ -234,6 +268,11 @@ export default function Sharing() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ identifier: findIdentifier.trim() }),
       });
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("API Error:", text);
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
       const data = await res.json();
       if (data.success) setFoundOrg(data.data);
       else setFoundOrg(null);

@@ -37,6 +37,9 @@ const CreateSubtaskModal = ({
   onClose,
   projectId: initialProjectId = null,
   taskId: initialTaskId = null,
+  taskTitle = null,
+  parentDeliverableId = null,
+  parentDeliverable = null,
   onCreated = null,
   restoreDraftId = null,
   editMode = false,
@@ -80,6 +83,7 @@ const CreateSubtaskModal = ({
       description: editData?.description || "",
       project_id: editData?.project_id || initialProjectId || "",
       task_id: editData?.task_id || initialTaskId || "",
+      parent_deliverable_id: editData?.parent_deliverable_id || parentDeliverableId || parentDeliverable?.id || null,
       assigned_to: editData?.assignees?.map(a => a.id || a) || (editData?.assigned_to ? [editData.assigned_to] : []),
       followers: editData?.followers?.map(f => f.id || f) || [],
       priority: editData?.priority || "Medium",
@@ -88,6 +92,38 @@ const CreateSubtaskModal = ({
       allow_transfer: defaultTransfer,
     };
   });
+
+  const [subtaskTitles, setSubtaskTitles] = useState(() => [editData?.title || ""]);
+
+  const handleTitleChange = (index, value) => {
+    setSubtaskTitles((prev) => {
+      const copy = [...prev];
+      copy[index] = value;
+      return copy;
+    });
+    if (index === 0) {
+      updateForm("title", value);
+    }
+    markDirty();
+    setFormErrors((p) => ({ ...p, title: undefined }));
+  };
+
+  const addTitleField = () => {
+    setSubtaskTitles((prev) => [...prev, ""]);
+    markDirty();
+  };
+
+  const removeTitleField = (index) => {
+    setSubtaskTitles((prev) => {
+      if (prev.length <= 1) return [""];
+      const copy = prev.filter((_, i) => i !== index);
+      if (index === 0 && copy[0]) {
+        updateForm("title", copy[0]);
+      }
+      return copy;
+    });
+    markDirty();
+  };
 
   const [pendingFiles, setPendingFiles] = useState([]);
   const [links, setLinks] = useState([]);
@@ -127,11 +163,11 @@ const CreateSubtaskModal = ({
   // Centralized project context: cached members, tasks, allUsers
   const { projects, allUsers, projectMembers, projectTasks } = useProjectContext(form.project_id || null);
 
-  // Determine which users to show: project members when project selected, else all users
+  // Determine which users to show: project members when project selected, else empty
   const displayUsers = useMemo(() => {
-    if (!form.project_id) return allUsers;
-    return projectMembers.length ? projectMembers : allUsers;
-  }, [form.project_id, projectMembers, allUsers]);
+    if (!form.project_id) return [];
+    return projectMembers.length ? projectMembers : [];
+  }, [form.project_id, projectMembers]);
 
   // Determine which tasks to show: project tasks when project selected, else all tasks (fetched globally)
   const [allTasks, setAllTasks] = useState([]);
@@ -288,7 +324,12 @@ const CreateSubtaskModal = ({
 
   const validateForm = useCallback(() => {
     const errors = {};
-    if (!form.title.trim()) errors.title = "Subtask title is required";
+    if (editMode) {
+      if (!form.title.trim()) errors.title = "Subtask title is required";
+    } else {
+      const valid = subtaskTitles.filter(t => t && t.trim());
+      if (valid.length === 0) errors.title = "At least one subtask title is required";
+    }
     if (!form.task_id) errors.task_id = "Parent task is required";
     if (!form.assigned_to || form.assigned_to.length === 0) errors.assigned_to = "Please select at least one person to assign this subtask to.";
     if (form.due_date && selectedTaskEndDate && new Date(form.due_date) > new Date(selectedTaskEndDate)) {
@@ -296,13 +337,14 @@ const CreateSubtaskModal = ({
     }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [form, selectedTaskEndDate]);
+  }, [form, editMode, subtaskTitles, selectedTaskEndDate]);
 
   const buildBody = useCallback(() => ({
     title: form.title.trim(),
     description: form.description || null,
     project_id: form.project_id || null,
     task_id: form.task_id || null,
+    parent_deliverable_id: form.parent_deliverable_id || parentDeliverableId || parentDeliverable?.id || null,
     priority: form.priority,
     start_date: form.start_date || null,
     due_date: form.due_date || null,
@@ -312,7 +354,7 @@ const CreateSubtaskModal = ({
     allow_transfer: form.allow_transfer === "allow",
     kb_ids: kbIds.length > 0 ? kbIds.map(Number) : [],
     event_ids: eventIds.length > 0 ? eventIds.map(Number) : [],
-  }), [form, kbIds, eventIds]);
+  }), [form, kbIds, eventIds, parentDeliverableId, parentDeliverable]);
 
   const uploadAttachments = useCallback(async (deliverableId) => {
     if (pendingFiles.length === 0 && links.length === 0) return;
@@ -342,41 +384,83 @@ const CreateSubtaskModal = ({
     if (!validateForm()) return;
     clearTimer();
     setIsDirty(false);
-    const body = buildBody();
 
     try {
       await run(async () => {
-        const url = editMode
-          ? `${API_URL}/deliverables/${editData.id}`
-          : (form.project_id ? `${API_URL}/projects/${form.project_id}/deliverables` : `${API_URL}/deliverables`);
-        const response = await fetch(url, {
-          method: editMode ? "PUT" : "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify(body),
-          _notifHandled: true,
-        });
-        const data = await response.json();
-        if (!response.ok) {
-          const msg = data.message || (editMode ? "Failed to update subtask" : "Failed to create subtask");
-          const errors = data.errors ? Object.values(data.errors).flat().join(". ") : "";
-          throw new Error(errors || msg);
+        if (editMode) {
+          const body = buildBody();
+          const response = await fetch(`${API_URL}/deliverables/${editData.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify(body),
+            _notifHandled: true,
+          });
+          const data = await response.json();
+          if (!response.ok) {
+            const msg = data.message || "Failed to update subtask";
+            const errors = data.errors ? Object.values(data.errors).flat().join(". ") : "";
+            throw new Error(errors || msg);
+          }
+          const subtask = data.deliverable;
+          if (subtask?.id) await uploadAttachments(subtask.id);
+          showSuccessMessage("Subtask", "updated");
+          publish("data:changed", { type: "deliverable", action: "updated" });
+          if (onUpdated) onUpdated(subtask);
+          onClose(true);
+        } else {
+          const validTitles = subtaskTitles.map(t => t.trim()).filter(Boolean);
+          const isBulk = validTitles.length > 1;
+          const url = `${API_URL}/deliverables/bulk`;
+          const payload = {
+            subtasks: validTitles.map(t => ({ title: t, description: form.description || null })),
+            project_id: form.project_id || null,
+            task_id: form.task_id || null,
+            parent_deliverable_id: form.parent_deliverable_id || parentDeliverableId || parentDeliverable?.id || null,
+            priority: form.priority,
+            start_date: form.start_date || null,
+            due_date: form.due_date || null,
+            assignees: form.assigned_to.length > 0 ? form.assigned_to : null,
+            assigned_to: form.assigned_to.length > 0 ? form.assigned_to[0] : null,
+            followers: form.followers || [],
+            allow_transfer: form.allow_transfer === "allow",
+            kb_ids: kbIds.length > 0 ? kbIds.map(Number) : [],
+            event_ids: eventIds.length > 0 ? eventIds.map(Number) : [],
+          };
+
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify(payload),
+            _notifHandled: true,
+          });
+          const data = await response.json();
+          if (!response.ok) {
+            const msg = data.message || "Failed to create subtasks";
+            const errors = data.errors ? Object.values(data.errors).flat().join(". ") : "";
+            throw new Error(errors || msg);
+          }
+
+          const createdList = data.deliverables || [];
+          if (createdList.length > 0 && (pendingFiles.length > 0 || links.length > 0)) {
+            await Promise.all(createdList.map(s => uploadAttachments(s.id)));
+          }
+
+          if (restoreDraftId) {
+            draftService.delete(restoreDraftId).catch(() => {});
+          }
+
+          showSuccessMessage("Subtask", isBulk ? `${createdList.length} subtasks created` : "created");
+          publish("data:changed", { type: "deliverable", action: "created" });
+          if (onCreated) onCreated(createdList[0] || null);
+          onClose(true);
         }
-        const subtask = data.deliverable;
-        if (subtask?.id) await uploadAttachments(subtask.id);
-        if (!editMode && restoreDraftId) {
-          draftService.delete(restoreDraftId).catch(() => {});
-        }
-        showSuccessMessage("Subtask", editMode ? "updated" : "created");
-        publish("data:changed", { type: "deliverable", action: editMode ? "updated" : "created" });
-        if (onCreated) onCreated(subtask);
-        onClose(true);
       });
     } catch (err) {
       if (err?.message) {
         notify.error(err.message);
       }
     }
-  }, [validateForm, buildBody, form.project_id, token, run, uploadAttachments, onCreated, onClose, draftId, clearTimer, setIsDirty, editMode, editData]);
+  }, [validateForm, clearTimer, setIsDirty, editMode, buildBody, editData, token, uploadAttachments, onUpdated, onClose, subtaskTitles, form, parentDeliverableId, parentDeliverable, kbIds, eventIds, pendingFiles, links, restoreDraftId, onCreated, run]);
 
   const handleFiles = useCallback((fileList) => {
     const newFiles = Array.from(fileList).map((f) => ({ file: f, name: f.name, customName: f.name.replace(/\.[^.]+$/, ""), size: f.size }));
@@ -415,6 +499,25 @@ const CreateSubtaskModal = ({
 
   const taskOptions = useMemo(() => displayTasks.map((t) => ({ value: t.id, label: `${t.business_id ? t.business_id + " — " : ""}${t.title}` })), [displayTasks]);
 
+  const parentContextText = useMemo(() => {
+    if (parentDeliverable) {
+      const code = parentDeliverable.business_id || `SUB-${parentDeliverable.id}`;
+      return `[${code}] ${parentDeliverable.title}`;
+    }
+    const currentTaskId = form.task_id || initialTaskId;
+    if (currentTaskId) {
+      const tObj = displayTasks.find((t) => String(t.id) === String(currentTaskId));
+      if (tObj) {
+        const code = tObj.business_id || `TSK-${tObj.id}`;
+        return `[${code}] ${tObj.title}`;
+      }
+      if (taskTitle) {
+        return `${taskTitle}`;
+      }
+    }
+    return null;
+  }, [parentDeliverable, form.task_id, initialTaskId, displayTasks, taskTitle]);
+
   return createPortal(
     <div className="task-overlay" style={{ zIndex: 10002 }}>
       <div className="task-modal" onClick={(e) => e.stopPropagation()}>
@@ -423,17 +526,25 @@ const CreateSubtaskModal = ({
           <div className="task-header-left">
             <div className="task-icon">{editMode ? "✏️" : "⊕"}</div>
             <div>
-              <h2>{editMode ? t("Edit Subtask", { defaultValue: "Edit Subtask" }) : t("Create Subtask", { defaultValue: "Create Subtask" })}</h2>
-              <p>{editMode ? t("Update subtask details below.", { defaultValue: "Update subtask details below." }) : t("Add subtask details below.", { defaultValue: "Add subtask details below." })}</p>
+              <h2>{editMode ? t("Edit Subtask", { defaultValue: "Edit Subtask" }) : t("Create Subtasks", { defaultValue: "Create Subtasks" })}</h2>
+              {parentContextText ? (
+                <div style={{ marginTop: 4, display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(99, 102, 241, 0.08)", border: "1px solid rgba(99, 102, 241, 0.2)", padding: "2px 8px", borderRadius: 6, fontSize: "0.82rem", color: "#4f46e5", fontWeight: 600 }}>
+                  <span>{parentDeliverable ? t("Under Subtask", { defaultValue: "Under Subtask" }) : t("For Task", { defaultValue: "For Task" })}: {parentContextText}</span>
+                </div>
+              ) : (
+                <p>{editMode ? t("Update subtask details below.", { defaultValue: "Update subtask details below." }) : t("Add subtask details below.", { defaultValue: "Add subtask details below." })}</p>
+              )}
             </div>
             {!editMode && <AutoSaveIndicator isSaving={isSaving} lastSaved={lastSaved} />}
           </div>
           <div className="task-header-actions">
-            <button className="task-save-draft-btn" onClick={handleSaveDraft} type="button" disabled={!form.title.trim()}>
-              {t("Save Draft", { defaultValue: "Save Draft" })}
-            </button>
+            {!editMode && (
+              <button className="task-save-draft-btn" onClick={handleSaveDraft} type="button" disabled={!subtaskTitles.some(t => t.trim())}>
+                {t("Save Draft", { defaultValue: "Save Draft" })}
+              </button>
+            )}
             <LoadingButton className="task-create-btn" onClick={() => doSubmit()} loading={submitting}>
-              {editMode ? t("Update Subtask", { defaultValue: "Update Subtask" }) : t("⊕ Create Subtask", { defaultValue: "⊕ Create Subtask" })}
+              {editMode ? t("Update Subtask", { defaultValue: "Update Subtask" }) : (subtaskTitles.filter(t => t.trim()).length > 1 ? t(`Create ${subtaskTitles.filter(t => t.trim()).length} Subtasks`, { defaultValue: `Create ${subtaskTitles.filter(t => t.trim()).length} Subtasks` }) : t("⊕ Create Subtask", { defaultValue: "⊕ Create Subtask" }))}
             </LoadingButton>
             <button className="task-close-btn" onClick={handleClose}>✕</button>
           </div>
@@ -472,15 +583,89 @@ const CreateSubtaskModal = ({
                   isDisabled={!!initialTaskId}
                 />
                 {formErrors.task_id && <small style={{ color: "#dc2626" }}>{formErrors.task_id}</small>}
+                {parentDeliverable && (
+                  <div style={{ marginTop: 6, fontSize: "0.82rem", color: "#6366f1", display: "flex", alignItems: "center", gap: 4, fontWeight: 500 }}>
+                    <span>↳ {t("Parent Subtask", { defaultValue: "Parent Subtask" })}: <strong>[{parentDeliverable.business_id || `SUB-${parentDeliverable.id}`}] {parentDeliverable.title}</strong></span>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Title */}
-            <div className="task-field">
-              <label>{t("Subtask Title", { defaultValue: "Subtask Title" })} <span>*</span></label>
-              <input type="text" className={formErrors.title ? "field-error" : ""} value={form.title} onChange={(e) => updateForm("title", e.target.value)} placeholder={t("Enter subtask title", { defaultValue: "Enter subtask title" })} />
-              {formErrors.title && <span className="field-error-text">{formErrors.title}</span>}
-            </div>
+            {/* Title / Checklist */}
+            {editMode ? (
+              <div className="task-field">
+                <label>{t("Subtask Title", { defaultValue: "Subtask Title" })} <span>*</span></label>
+                <input type="text" className={formErrors.title ? "field-error" : ""} value={form.title} onChange={(e) => updateForm("title", e.target.value)} placeholder={t("Enter subtask title", { defaultValue: "Enter subtask title" })} />
+                {formErrors.title && <span className="field-error-text">{formErrors.title}</span>}
+              </div>
+            ) : (
+              <div className="task-field">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <label style={{ margin: 0 }}>
+                    {t("Subtask Checklist / Titles", { defaultValue: "Subtask Checklist / Titles" })} <span>*</span>
+                  </label>
+                  <span style={{ fontSize: "0.78rem", color: "#6b7280" }}>
+                    {subtaskTitles.filter(t => t.trim()).length} {t("subtask(s) to create", { defaultValue: "subtask(s) to create" })}
+                  </span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {subtaskTitles.map((title, idx) => (
+                    <div key={idx} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ width: 26, height: 26, borderRadius: "50%", background: "#EEF2FF", color: "#4F46E5", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
+                        {idx + 1}
+                      </div>
+                      <input
+                        type="text"
+                        className={formErrors.title && idx === 0 && !title.trim() ? "field-error" : ""}
+                        value={title}
+                        onChange={(e) => handleTitleChange(idx, e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (idx === subtaskTitles.length - 1 && title.trim()) {
+                              addTitleField();
+                            }
+                          }
+                        }}
+                        placeholder={idx === 0 ? t("Enter first subtask title (press Enter to add next)...", { defaultValue: "Enter first subtask title (press Enter to add next)..." }) : t(`Enter subtask #${idx + 1} title...`, { defaultValue: `Enter subtask #${idx + 1} title...` })}
+                        style={{ flex: 1 }}
+                      />
+                      {subtaskTitles.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeTitleField(idx)}
+                          style={{ background: "none", border: "none", color: "#9ca3af", cursor: "pointer", padding: 4, borderRadius: 4, display: "flex", alignItems: "center" }}
+                          title={t("Remove item", { defaultValue: "Remove item" })}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {formErrors.title && <span className="field-error-text" style={{ marginTop: 4, display: "block" }}>{formErrors.title}</span>}
+                <button
+                  type="button"
+                  onClick={addTitleField}
+                  style={{
+                    marginTop: 8,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    background: "#F3F4F6",
+                    color: "#374151",
+                    border: "1px dashed #D1D5DB",
+                    borderRadius: 6,
+                    padding: "6px 12px",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  + {t("Add another subtask", { defaultValue: "Add another subtask" })}
+                </button>
+              </div>
+            )}
 
             {/* Description */}
             <div className="task-field">
@@ -585,7 +770,8 @@ const CreateSubtaskModal = ({
                 users={displayUsers}
                 selectedIds={form.assigned_to}
                 onChange={(ids) => updateForm("assigned_to", ids)}
-                placeholder={t("Click to select members", { defaultValue: "Click to select members" })}
+                disabled={!form.project_id}
+                placeholder={!form.project_id ? t("Select a project first", { defaultValue: "Select a project first" }) : t("Click to select members", { defaultValue: "Click to select members" })}
                 error={!!formErrors.assigned_to}
               />
               {formErrors.assigned_to && <span className="field-error-text" style={{ color: "#EF4444", fontSize: "12px", marginTop: "4px", display: "block" }}>{formErrors.assigned_to}</span>}
@@ -598,7 +784,8 @@ const CreateSubtaskModal = ({
                 users={displayUsers.filter(u => !form.assigned_to.includes(u.id))}
                 selectedIds={form.followers || []}
                 onChange={(ids) => updateForm("followers", ids)}
-                placeholder={t("Select followers (optional)", { defaultValue: "Select followers (optional)" })}
+                disabled={!form.project_id}
+                placeholder={!form.project_id ? t("Select a project first", { defaultValue: "Select a project first" }) : t("Select followers (optional)", { defaultValue: "Select followers (optional)" })}
               />
             </div>
 

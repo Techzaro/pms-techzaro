@@ -10,6 +10,7 @@ import {
   ChevronUp,
   X,
   FileText,
+  Quote,
 } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
@@ -113,6 +114,7 @@ function CommentItem({
   currentUser,
   onDelete,
   onEdit,
+  onQuote,
   depth,
   mentionableUsers = [],
 }) {
@@ -305,6 +307,32 @@ function CommentItem({
           )}
         </div>
 
+        {/* Quoted Message Preview */}
+        {(comment.quoted_text || comment.quotedComment?.body || comment.quoted_comment?.body) && (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "2px",
+              padding: "6px 12px",
+              borderLeft: "3px solid #6366f1",
+              background: "var(--bg-card-alt, #f8fafc)",
+              borderRadius: "0 6px 6px 0",
+              margin: "6px 0 10px 0",
+              fontSize: "12px",
+            }}
+          >
+            <span style={{ fontWeight: 600, color: "#4F46E5" }}>
+              {comment.quotedComment?.user?.name || comment.quoted_comment?.user?.name
+                ? `${comment.quotedComment?.user?.name || comment.quoted_comment?.user?.name}:`
+                : t("Quoted message:", { defaultValue: "Quoted message:" })}
+            </span>
+            <span style={{ color: "var(--text-secondary, #64748b)", fontStyle: "italic", whiteSpace: "pre-wrap" }}>
+              {comment.quoted_text || (comment.quotedComment?.body || comment.quoted_comment?.body || "").replace(/<[^>]*>/g, "")}
+            </span>
+          </div>
+        )}
+
         {editing ? (
           <div className="td-comment-edit-box">
             <textarea
@@ -381,8 +409,8 @@ function CommentItem({
           </div>
         )}
 
-        {!isReply && (
-          <div className="td-comment-footer">
+        <div className="td-comment-footer" style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center", marginTop: "6px" }}>
+          {!isReply && (
             <button
               className="td-comment-reply-btn"
               onClick={() => setReplyOpen(!replyOpen)}
@@ -392,24 +420,44 @@ function CommentItem({
                 <span className="td-comment-reply-count">{replies.length}</span>
               )}
             </button>
-            {replies.length > 0 && (
-              <button
-                className="td-comment-toggle-replies"
-                onClick={() => setShowReplies(!showReplies)}
-              >
-                {showReplies ? (
-                  <>
-                    <ChevronUp size={14} /> {t("Hide replies", { defaultValue: "Hide replies" })}
-                  </>
-                ) : (
-                  <>
-                    <ChevronDown size={14} /> {t("Show {{count}} {{reply}}", { defaultValue: `Show ${replies.length} ${replies.length === 1 ? "reply" : "replies"}`, count: replies.length, reply: replies.length === 1 ? t("reply", { defaultValue: "reply" }) : t("replies", { defaultValue: "replies" }) })}
-                  </>
-                )}
-              </button>
-            )}
-          </div>
-        )}
+          )}
+          <button
+            type="button"
+            className="td-comment-reply-btn"
+            style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
+            onClick={() => onQuote && onQuote(comment)}
+          >
+            <Quote size={12} />
+            {t("Quote", { defaultValue: "Quote" })}
+          </button>
+          {canEdit && !editing && (
+            <button
+              type="button"
+              className="td-comment-reply-btn"
+              style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
+              onClick={() => setEditing(true)}
+            >
+              <Pencil size={12} />
+              {t("Edit", { defaultValue: "Edit" })}
+            </button>
+          )}
+          {replies.length > 0 && !isReply && (
+            <button
+              className="td-comment-toggle-replies"
+              onClick={() => setShowReplies(!showReplies)}
+            >
+              {showReplies ? (
+                <>
+                  <ChevronUp size={14} /> {t("Hide replies", { defaultValue: "Hide replies" })}
+                </>
+              ) : (
+                <>
+                  <ChevronDown size={14} /> {t("Show {{count}} {{reply}}", { defaultValue: `Show ${replies.length} ${replies.length === 1 ? "reply" : "replies"}`, count: replies.length, reply: replies.length === 1 ? t("reply", { defaultValue: "reply" }) : t("replies", { defaultValue: "replies" }) })}
+                </>
+              )}
+            </button>
+          )}
+        </div>
 
         {replyOpen && (
           <div className="td-comment-reply-input" style={{ position: "relative" }}>
@@ -487,6 +535,7 @@ function CommentItem({
                 currentUser={currentUser}
                 onDelete={onDelete}
                 onEdit={onEdit}
+                onQuote={onQuote}
                 depth={depth + 1}
                 mentionableUsers={mentionableUsers}
               />
@@ -528,6 +577,7 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState("");
   const [mentionedUserIds, setMentionedUserIds] = useState([]);
+  const [activeQuote, setActiveQuote] = useState(null);
   const [sending, setSending] = useState(false);
   const [file, setFile] = useState(null);
   const [fileName, setFileName] = useState("");
@@ -659,6 +709,14 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
     };
   }, [showMentions]);
 
+  const handleQuote = (c) => {
+    setActiveQuote({
+      id: c.id,
+      author: c.user?.name || "User",
+      body: (c.body || "").replace(/<[^>]*>/g, "").trim(),
+    });
+  };
+
   const handlePost = async () => {
     const stripped = newComment.replace(/<[^>]*>/g, "").trim();
     if (!stripped && !file) return;
@@ -667,6 +725,10 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
       const token = authToken();
       const formData = new FormData();
       formData.append("body", newComment.trim());
+      if (activeQuote) {
+        formData.append("quoted_message_id", activeQuote.id);
+        formData.append("quoted_text", (activeQuote.body || "").substring(0, 500));
+      }
       if (file) {
         formData.append("file", file);
       }
@@ -685,6 +747,7 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
       if (res.ok && data.success) {
         setNewComment("");
         setMentionedUserIds([]);
+        setActiveQuote(null);
         setFile(null);
         setFileName("");
         fetchComments(1);
@@ -821,6 +884,7 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
                   currentUser={currentUser}
                   onDelete={handleDelete}
                   onEdit={handleRefresh}
+                  onQuote={handleQuote}
                   depth={0}
                   mentionableUsers={mentionableUsers}
                 />
@@ -852,6 +916,39 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
                       </div>
                     </button>
                   ))}
+                </div>
+              )}
+
+              {activeQuote && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "8px 12px",
+                    background: "var(--bg-card-alt, #eff6ff)",
+                    borderLeft: "4px solid #3b82f6",
+                    borderRadius: "4px",
+                    marginBottom: "8px",
+                    fontSize: "12px",
+                    color: "var(--text-primary, #1e40af)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
+                    <Quote size={14} style={{ flexShrink: 0, color: "#3b82f6" }} />
+                    <span style={{ fontWeight: 600, flexShrink: 0 }}>{t("Quoting {{name}}:", { name: activeQuote.author, defaultValue: `Quoting ${activeQuote.author}:` })}</span>
+                    <span style={{ fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      "{activeQuote.body}"
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveQuote(null)}
+                    style={{ background: "none", border: "none", color: "#6b7280", cursor: "pointer", padding: "2px", display: "flex" }}
+                    title={t("Cancel Quote", { defaultValue: "Cancel Quote" })}
+                  >
+                    <X size={14} />
+                  </button>
                 </div>
               )}
 

@@ -27,6 +27,7 @@ class AuditService
 
         return AuditLog::create([
             'user_id' => $user?->id,
+            'user_name' => $user?->name,
             'module' => $module,
             'action' => $action,
             'entity_type' => $entityType,

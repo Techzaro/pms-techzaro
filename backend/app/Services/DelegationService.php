@@ -135,11 +135,11 @@ class DelegationService
             }
             $reopenedParticipants = array_values(array_unique(array_filter(array_map('intval', $reopenedParticipants))));
 
-            // Reopen is visible to the user who reopened it and accepted transfer
-            // participants below that point. The creator above the current reviewer
-            // remains In Progress until the corrected submission reaches them.
-            if (! $subId || in_array($viewerId, $reopenedParticipants, true)) {
-                $displayStatus = in_array($rawStatus, ['reopened', 'rejected', 'declined'], true) ? $rawStatus : 'declined';
+            // If task is reopened or pending, its core workflow status is pending
+            if ($task->is_reopened || $rawStatus === 'pending' || $rawStatus === 'reopened') {
+                $displayStatus = 'pending';
+            } elseif (! $subId || in_array($viewerId, $reopenedParticipants, true)) {
+                $displayStatus = in_array($rawStatus, ['rejected', 'declined'], true) ? $rawStatus : 'declined';
             } else {
                 $displayStatus = 'in_progress';
             }
@@ -217,6 +217,7 @@ class DelegationService
             'approval_chain' => $approvalChain,
             'delegation_count' => $level,
             'status' => 'pending',
+            'is_transferred' => true,
             'states' => array_values(array_unique(array_merge(is_array($task->states) ? $task->states : [], ['Transferred']))),
         ]);
         $task->stopTimer();
@@ -245,7 +246,7 @@ class DelegationService
             ]);
         }
 
-        // Send notification to the delegatee
+        // Send notification to the delegatee (New Receiver)
         $this->notificationService->notify(
             $delegatedTo->id,
             $delegatedBy->id,
@@ -256,6 +257,21 @@ class DelegationService
             "{$delegatedBy->name} has delegated task {$task->business_id} (\"{$task->title}\") to you. Reason: {$reason}",
             '/tasks/task-details/'.$task->id.'?from=tasks'
         );
+
+        // Also notify the task creator if different from delegator and delegatee (SRS Point 13.2)
+        $creatorId = $this->creatorId($task);
+        if ($creatorId && (int) $creatorId !== (int) $delegatedBy->id && (int) $creatorId !== (int) $delegatedTo->id) {
+            $this->notificationService->notify(
+                (int) $creatorId,
+                (int) $delegatedBy->id,
+                'task_transferred',
+                'task',
+                (int) $task->id,
+                'Task Transferred',
+                "{$delegatedBy->name} transferred task {$task->business_id} (\"{$task->title}\") to {$delegatedTo->name}. Reason: {$reason}",
+                '/tasks/task-details/'.$task->id.'?from=taskby'
+            );
+        }
 
         // Log activity
         $this->activityService->log(
@@ -269,12 +285,13 @@ class DelegationService
         // Audit log
         try {
             $this->auditService->log(
-                module: 'task_management',
-                action: 'delegate',
+                module: 'Task Management',
+                action: 'Task Transferred',
                 description: "Delegated task {$task->title} to {$delegatedTo->name}",
                 user: $delegatedBy,
                 entityType: 'Task',
                 entityId: $task->id,
+                newValues: ['delegated_to' => $delegatedTo->id, 'reason' => $reason],
                 status: 'success'
             );
         } catch (\Throwable $e) {
@@ -334,8 +351,9 @@ class DelegationService
             'delegation_chain' => $existingChain,
             'approval_chain' => $approvalChain,
             'delegation_count' => $level,
-            'status' => 'paused',
-            'states' => array_values(array_unique(array_merge(is_array($task->states) ? $task->states : [], ['Transferred']))),
+            'status' => 'pending',
+            'is_transferred' => true,
+            'states' => array_values(array_unique(array_merge(is_array($deliverable->states) ? $deliverable->states : [], ['Transferred']))),
         ]);
 
         if (empty($deliverable->original_assigner)) {
@@ -373,6 +391,21 @@ class DelegationService
             'task',
             $deliverable->task_id
         );
+
+        try {
+            $this->auditService->log(
+                module: 'Subtask Management',
+                action: 'Subtask Transferred',
+                description: "Delegated subtask {$deliverable->title} to {$delegatedTo->name}",
+                user: $delegatedBy,
+                entityType: 'Deliverable',
+                entityId: $deliverable->id,
+                newValues: ['delegated_to' => $delegatedTo->id, 'reason' => $reason],
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            Log::error('Failed to log audit for deliverable delegation', ['error' => $e->getMessage()]);
+        }
 
         return $delegation;
     }
@@ -419,7 +452,6 @@ class DelegationService
                 'acknowledged_by' => $acceptor->id,
             ]);
 
-            $model->startTimer();
             $model->assignees()->updateExistingPivot($acceptor->id, [
                 'status' => 'in_progress',
             ]);
@@ -436,12 +468,6 @@ class DelegationService
                 'user_id' => $acceptor->id,
                 'action' => 'acknowledged',
                 'comment' => "{$acceptor->name} acknowledged this {$entityType}",
-            ]);
-            TaskWorkflowEvent::create([
-                'task_id' => $taskId,
-                'user_id' => $acceptor->id,
-                'action' => 'timer_started',
-                'comment' => 'Work timer started',
             ]);
         });
 
@@ -485,6 +511,20 @@ class DelegationService
             Log::warning('Delegation acceptance activity log failed', ['error' => $e->getMessage()]);
         }
 
+        try {
+            $this->auditService->log(
+                module: $isDeliverable ? 'Subtask Management' : 'Task Management',
+                action: $isDeliverable ? 'Subtask Delegation Accepted' : 'Task Delegation Accepted',
+                description: "Accepted delegation of {$entityType} {$model->title}",
+                user: $acceptor,
+                entityType: $isDeliverable ? 'Deliverable' : 'Task',
+                entityId: $model->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            Log::error('Failed to log audit for delegation acceptance', ['error' => $e->getMessage()]);
+        }
+
         return $delegation;
     }
 
@@ -506,9 +546,12 @@ class DelegationService
             'notes' => $reason,
         ]);
 
+        $isDeliverable = (bool) $delegation->deliverable_id;
+        $model = $isDeliverable ? $delegation->deliverable : $delegation->task;
+        $entityType = $isDeliverable ? 'deliverable' : 'task';
+
         // Update chain entry status
-        $task = $delegation->task;
-        $chain = $task->delegation_chain ?? [];
+        $chain = $model->delegation_chain ?? [];
         foreach ($chain as &$entry) {
             if ((int) $entry['id'] === (int) $delegation->id) {
                 $entry['status'] = 'rejected';
@@ -518,7 +561,7 @@ class DelegationService
         unset($entry);
 
         // Revert task ownership back to the delegator
-        $task->update([
+        $model->update([
             'delegation_chain' => $chain,
             'current_owner' => $delegation->delegated_by,
             'status' => 'pending',
@@ -526,22 +569,52 @@ class DelegationService
 
         $comment = "{$rejector->name} rejected the delegation.".($reason ? " Reason: {$reason}" : '');
 
+        $taskId = $isDeliverable ? $model->task_id : $model->id;
         TaskWorkflowEvent::create([
-            'task_id' => $task->id,
+            'task_id' => $taskId,
             'user_id' => $rejector->id,
             'action' => 'delegation_rejected',
             'comment' => $comment,
         ]);
 
+        $this->activityService->log(
+            $rejector->id,
+            'task_delegation_rejected',
+            "You rejected delegation of {$entityType} \"{$model->title}\"",
+            $entityType,
+            $model->id,
+            'delegation_rejected',
+            $model->title
+        );
+
+        try {
+            $this->auditService->log(
+                module: $isDeliverable ? 'Subtask Management' : 'Task Management',
+                action: $isDeliverable ? 'Subtask Delegation Rejected' : 'Task Delegation Rejected',
+                description: "Rejected delegation of {$entityType} {$model->title}".($reason ? " — Reason: {$reason}" : ''),
+                user: $rejector,
+                entityType: $isDeliverable ? 'Deliverable' : 'Task',
+                entityId: $model->id,
+                newValues: ['reason' => $reason],
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            Log::error('Failed to log audit for delegation rejection', ['error' => $e->getMessage()]);
+        }
+
+        $link = $isDeliverable
+            ? '/deliverables/'.$model->id
+            : '/tasks/task-details/'.$model->id.'?from=tasks';
+
         $this->notificationService->notify(
             $delegation->delegated_by,
             $rejector->id,
             'task_delegation_rejected',
-            'task',
-            $task->id,
+            $entityType,
+            $model->id,
             'Delegation Rejected',
-            "{$rejector->name} has rejected the delegation of task {$task->business_id}.".($reason ? " Reason: {$reason}" : ''),
-            '/tasks/task-details/'.$task->id.'?from=tasks'
+            "{$rejector->name} has rejected the delegation of {$entityType} {$model->business_id}.".($reason ? " Reason: {$reason}" : ''),
+            $link
         );
 
         return $delegation;
@@ -564,9 +637,12 @@ class DelegationService
             'revoked_at' => now(),
         ]);
 
+        $isDeliverable = (bool) $delegation->deliverable_id;
+        $model = $isDeliverable ? $delegation->deliverable : $delegation->task;
+        $entityType = $isDeliverable ? 'deliverable' : 'task';
+
         // Update chain entry status
-        $task = $delegation->task;
-        $chain = $task->delegation_chain ?? [];
+        $chain = $model->delegation_chain ?? [];
         foreach ($chain as &$entry) {
             if ((int) $entry['id'] === (int) $delegation->id) {
                 $entry['status'] = 'revoked';
@@ -576,7 +652,7 @@ class DelegationService
         unset($entry);
 
         // Revert task ownership back to the delegator
-        $task->update([
+        $model->update([
             'delegation_chain' => $chain,
             'current_owner' => $delegation->delegated_by,
             'status' => 'pending',
@@ -584,22 +660,51 @@ class DelegationService
 
         $comment = "{$revoker->name} revoked the delegation.";
 
+        $taskId = $isDeliverable ? $model->task_id : $model->id;
         TaskWorkflowEvent::create([
-            'task_id' => $task->id,
+            'task_id' => $taskId,
             'user_id' => $revoker->id,
             'action' => 'delegation_revoked',
             'comment' => $comment,
         ]);
 
+        $this->activityService->log(
+            $revoker->id,
+            'task_delegation_revoked',
+            "You revoked delegation of {$entityType} \"{$model->title}\"",
+            $entityType,
+            $model->id,
+            'delegation_revoked',
+            $model->title
+        );
+
+        try {
+            $this->auditService->log(
+                module: $isDeliverable ? 'Subtask Management' : 'Task Management',
+                action: $isDeliverable ? 'Subtask Delegation Revoked' : 'Task Delegation Revoked',
+                description: "Revoked delegation of {$entityType} {$model->title}",
+                user: $revoker,
+                entityType: $isDeliverable ? 'Deliverable' : 'Task',
+                entityId: $model->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            Log::error('Failed to log audit for delegation revocation', ['error' => $e->getMessage()]);
+        }
+
+        $link = $isDeliverable
+            ? '/deliverables/'.$model->id
+            : '/tasks/task-details/'.$model->id.'?from=tasks';
+
         $this->notificationService->notify(
             $delegation->delegated_to,
             $revoker->id,
             'task_delegation_revoked',
-            'task',
-            $task->id,
+            $entityType,
+            $model->id,
             'Delegation Revoked',
-            "The delegation of task {$task->business_id} has been revoked by {$revoker->name}.",
-            '/tasks/task-details/'.$task->id.'?from=tasks'
+            "The delegation of {$entityType} {$model->business_id} has been revoked by {$revoker->name}.",
+            $link
         );
 
         return $delegation;

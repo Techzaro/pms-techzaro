@@ -358,61 +358,7 @@ function Sidebar() {
           </div>
           )}
 
-          {/* Subtasks dropdown – sub-links for assigned/by-you/self; hidden for guest */}
-          {user.role !== "guest" && hasModule("deliverables") && (
-          <div className={`sidebar-dropdown-group ${subtasksOpen || isActive("deliveries") || isActive("deliveries-by-you") || isActive("self-deliveries") || isActive("all-deliverables") || location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`) ? "open active" : ""}`}>
-            <div
-              className="sidebar-dropdown-header"
-              onClick={toggleSubtasks}
-            >
-              <MdAssignment />
-              <span style={{ flex: 1 }}>{t("Subtasks")}</span>
-              <MdKeyboardArrowDown
-                size={18}
-                style={{
-                  transition: "transform 0.2s",
-                  transform: subtasksOpen ? "rotate(180deg)" : "rotate(0deg)",
-                }}
-              />
-            </div>
-            {subtasksOpen && (
-              <div className="sidebar-sub-links">
-                <Link
-                  to={rolePath("deliveries")}
-                  className={`sidebar-sub-link ${isActive("deliveries") || (isSubtaskDetailPage && getSubtaskFrom() === "deliveries") ? "active" : ""}`}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {t("Assigned To You")}
-                </Link>
-                {user.role !== "guest" && (
-                <>
-                <Link
-                  to={rolePath("deliveries-by-you")}
-                  className={`sidebar-sub-link ${isActive("deliveries-by-you") || (isSubtaskDetailPage && getSubtaskFrom() === "deliveries-by-you") ? "active" : ""}`}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {t("Assigned By You")}
-                </Link>
-                <Link
-                  to={rolePath("self-deliveries")}
-                  className={`sidebar-sub-link ${isActive("self-deliveries") || (isSubtaskDetailPage && getSubtaskFrom() === "self-deliveries") ? "active" : ""}`}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {t("Self Subtasks")}
-                </Link>
-                <Link
-                  to={rolePath("all-deliverables")}
-                  className={`sidebar-sub-link ${isActive("all-deliverables") || (isSubtaskDetailPage && getSubtaskFrom() === "all-deliverables") ? "active" : ""}`}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {t("All Sub-Tasks")}
-                </Link>
-                </>
-                )}
-              </div>
-            )}
-          </div>
-          )}
+          {/* Subtasks standalone navigation hidden per SRS (subtasks managed strictly within TaskDetails) */}
 
           {/* Drafts link */}
           {hasModule("drafts") && (

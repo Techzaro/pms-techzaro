@@ -55,7 +55,8 @@ export const STATUS_LABELS = {
   "In Progress": "In Progress",
   Paused: "Paused",
   Submitted: "Submitted",
-  Approved: "Approved",
+  Completed: "Completed",
+  Approved: "Completed",
   Declined: "Declined",
   Abandoned: "Abandoned",
   pending: "Pending",
@@ -63,14 +64,14 @@ export const STATUS_LABELS = {
   "in-progress": "In Progress",
   paused: "Paused",
   submitted: "Submitted",
-  reopened: "Reopened",
-  approved: "Approved",
+  reopened: "Pending",
+  approved: "Completed",
+  completed: "Completed",
   rejected: "Declined",
   declined: "Declined",
   abandon_requested: "Abandon Requested",
   abandoned: "Abandoned",
   Planning: "Pending",
-  Completed: "Approved",
   Pause: "Paused",
 };
 
@@ -89,14 +90,16 @@ export default function TaskMultiStatusBadges({ item }) {
   const { t } = useTranslation();
   if (!item) return null;
 
-  const viewerStatus = item?.display_status || item?.status || "Pending";
-  // Lists use the normal workflow status as the primary badge. Reopened is
-  // represented by the dedicated modifier icon; Task Details still shows the
-  // explicit Reopened status from its own header.
-  const rawStatus = String(viewerStatus).toLowerCase() === "reopened" ? "in_progress" : viewerStatus;
-  const normalizedKey = String(rawStatus).toLowerCase();
-  const primaryBg = STATUS_COLORS[rawStatus] || STATUS_COLORS[normalizedKey] || "#F3F4F6";
-  const primaryColor = STATUS_TEXT_COLORS[rawStatus] || STATUS_TEXT_COLORS[normalizedKey] || "#374151";
+  // The primary badge text and color MUST strictly and ONLY evaluate task.status.
+  // Reopened tasks or tasks flagged as reopened evaluate to pending.
+  const taskStatus = item?.status || "Pending";
+  const normalizedKey = String(taskStatus).toLowerCase();
+  const rawStatus = (normalizedKey === "reopened" || item?.is_reopened) && (normalizedKey === "reopened" || normalizedKey === "declined" || normalizedKey === "rejected")
+    ? "pending"
+    : (normalizedKey === "reopened" ? "pending" : taskStatus);
+  const statusKey = String(rawStatus).toLowerCase();
+  const primaryBg = STATUS_COLORS[rawStatus] || STATUS_COLORS[statusKey] || "#F3F4F6";
+  const primaryColor = STATUS_TEXT_COLORS[rawStatus] || STATUS_TEXT_COLORS[statusKey] || "#374151";
   const primaryLabel = formatStatus(rawStatus);
 
   // Subtle Reopened Indicator
