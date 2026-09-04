@@ -13,19 +13,15 @@ return new class extends Migration
             $table->unsignedBigInteger('created_by')->nullable()->change();
         });
 
-        // Drop old CASCADE foreign key and add new SET NULL one
-        $table = DB::getDoctrineSchemaManager()->listTableDetails('projects');
         $prefix = config('database.connections.mysql.prefix', '');
 
-        // Try to drop the old foreign key
         try {
             DB::statement("ALTER TABLE `{$prefix}projects` DROP FOREIGN KEY `projects_created_by_foreign`");
         } catch (\Throwable $e) {
-            // FK name might be different, try to find and drop it
             try {
-                $constraints = DB::select("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '{$prefix}projects' AND CONSTRAINT_TYPE = 'FOREIGN KEY'");
+                $constraints = DB::select("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND CONSTRAINT_TYPE = 'FOREIGN KEY'", ["{$prefix}projects"]);
                 foreach ($constraints as $c) {
-                    if ($c->CONSTRAINT_NAME === 'projects_created_by_foreign') {
+                    if (str_contains($c->CONSTRAINT_NAME, 'created_by')) {
                         DB::statement("ALTER TABLE `{$prefix}projects` DROP FOREIGN KEY `{$c->CONSTRAINT_NAME}`");
                         break;
                     }
@@ -35,7 +31,6 @@ return new class extends Migration
             }
         }
 
-        // Add new foreign key with SET NULL
         Schema::table('projects', function (Blueprint $table) {
             $table->foreign('created_by')->references('id')->on('users')->nullOnDelete();
         });

@@ -10,7 +10,7 @@ class FixTenantColumns extends Command
 {
     protected $signature = 'tenants:fix-columns
         {--database= : Fix a specific tenant database}
-        {--all : Fix all tenant databases}';
+        {--all : Fix all tenant databases including unregistered ones}';
 
     protected $description = 'Detect and add missing columns to tenant databases';
 
@@ -35,6 +35,7 @@ class FixTenantColumns extends Command
             ['name' => 'email_verified_at',             'definition' => "TIMESTAMP NULL AFTER `email_skip_until`"],
             ['name' => 'personal_email_verified_at',    'definition' => "TIMESTAMP NULL AFTER `personal_email`"],
             ['name' => 'professional_email_verified_at', 'definition' => "TIMESTAMP NULL AFTER `professional_email`"],
+            ['name' => 'email_verification_exempt',      'definition' => "TINYINT(1) DEFAULT 0 AFTER `email_verified_at`"],
         ],
         'tasks' => [
             ['name' => 'recurrence_start_date',         'definition' => "TIMESTAMP NULL AFTER `recurrence_settings`"],
@@ -438,12 +439,26 @@ class FixTenantColumns extends Command
             $databases[] = $database;
         } elseif ($runAll) {
             $organizations = Organization::whereIn('status', ['active', 'trial'])->get();
-            if ($organizations->isEmpty()) {
-                $this->warn('No active/trial organizations found.');
-                return Command::SUCCESS;
-            }
             foreach ($organizations as $org) {
                 $databases[] = $org->database_name;
+            }
+
+            $masterConfig = config("database.connections." . config('tenancy.master_connection', 'mysql_master'));
+            $pdo = DB::connection(config('tenancy.master_connection', 'mysql_master'))->getPdo();
+
+            $prefix = config('tenancy.database_prefix', 'pms_tenant_');
+            $results = $pdo->query("SHOW DATABASES LIKE '{$prefix}%'")->fetchAll(\PDO::FETCH_COLUMN);
+            foreach ($results as $dbName) {
+                if (!in_array($dbName, $databases)) {
+                    $databases[] = $dbName;
+                }
+            }
+
+            $results2 = $pdo->query("SHOW DATABASES LIKE 'techxaro_%'")->fetchAll(\PDO::FETCH_COLUMN);
+            foreach ($results2 as $dbName) {
+                if (!in_array($dbName, $databases)) {
+                    $databases[] = $dbName;
+                }
             }
         }
 
@@ -482,13 +497,15 @@ class FixTenantColumns extends Command
 
         $masterConfig = config("database.connections." . config('tenancy.master_connection', 'mysql_master'));
 
+        $org = Organization::where('database_name', $databaseName)->first();
+
         config()->set('database.connections.tenant_fix', [
             'driver'    => 'mysql',
-            'host'      => $masterConfig['host'],
-            'port'      => $masterConfig['port'],
+            'host'      => $org->database_host ?? $masterConfig['host'],
+            'port'      => $org->database_port ?? $masterConfig['port'],
             'database'  => $databaseName,
-            'username'  => $masterConfig['username'],
-            'password'  => $masterConfig['password'] ?? '',
+            'username'  => $org->database_username ?? $masterConfig['username'],
+            'password'  => $org->database_password ?? $masterConfig['password'] ?? '',
             'charset'   => 'utf8mb4',
             'collation' => 'utf8mb4_unicode_ci',
             'prefix'    => '',

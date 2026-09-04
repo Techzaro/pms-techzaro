@@ -135,6 +135,40 @@ class User extends Authenticatable
         'working_hours' => 'array',
     ];
 
+    protected static ?bool $emailVerificationExemptColumnExists = null;
+
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        static::creating(function (User $user) {
+            if (static::$emailVerificationExemptColumnExists === null) {
+                try {
+                    static::$emailVerificationExemptColumnExists = \Illuminate\Support\Facades\Schema::hasColumn('users', 'email_verification_exempt');
+                } catch (\Throwable $e) {
+                    static::$emailVerificationExemptColumnExists = false;
+                }
+            }
+            if (!static::$emailVerificationExemptColumnExists) {
+                unset($user->attributes['email_verification_exempt']);
+            }
+        });
+
+        static::updating(function (User $user) {
+            if (static::$emailVerificationExemptColumnExists === null) {
+                try {
+                    static::$emailVerificationExemptColumnExists = \Illuminate\Support\Facades\Schema::hasColumn('users', 'email_verification_exempt');
+                } catch (\Throwable $e) {
+                    static::$emailVerificationExemptColumnExists = false;
+                }
+            }
+            if (!static::$emailVerificationExemptColumnExists) {
+                unset($user->attributes['email_verification_exempt']);
+                unset($user->original['email_verification_exempt']);
+            }
+        });
+    }
+
     /**
      * Normalize the role attribute (e.g., 'teamlead' -> 'team_lead').
      */

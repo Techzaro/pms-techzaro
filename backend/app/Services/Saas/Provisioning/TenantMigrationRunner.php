@@ -69,13 +69,15 @@ class TenantMigrationRunner
         // Configure a temporary connection to check migration status
         $masterConfig = config("database.connections." . config('tenancy.master_connection', 'mysql_master'));
 
+        $org = \App\Models\Master\Organization::where('database_name', $databaseName)->first();
+
         config()->set('database.connections.tenant_status', [
             'driver'    => 'mysql',
-            'host'      => $masterConfig['host'],
-            'port'      => $masterConfig['port'],
+            'host'      => $org->database_host ?? $masterConfig['host'],
+            'port'      => $org->database_port ?? $masterConfig['port'],
             'database'  => $databaseName,
-            'username'  => $masterConfig['username'],
-            'password'  => $masterConfig['password'] ?? '',
+            'username'  => $org->database_username ?? $masterConfig['username'],
+            'password'  => $org->database_password ?? $masterConfig['password'] ?? '',
             'charset'   => 'utf8mb4',
             'collation' => 'utf8mb4_unicode_ci',
             'prefix'    => '',

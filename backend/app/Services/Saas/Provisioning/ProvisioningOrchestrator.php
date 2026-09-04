@@ -75,17 +75,28 @@ class ProvisioningOrchestrator
             $this->databaseCreator->create($dbName);
             $status->completeStep(ProvisioningStatus::STEP_CREATE_DATABASE);
 
-            // Step 3: Run Tenant Migrations
+            // Step 3: Run Tenant Migrations (individual — one fail won't stop the rest)
             $status->startStep(ProvisioningStatus::STEP_RUN_MIGRATIONS);
-            $this->migrationRunner->run($dbName);
-            $status->completeStep(ProvisioningStatus::STEP_RUN_MIGRATIONS);
+            try {
+                $this->migrationRunner->run($dbName);
+                $status->completeStep(ProvisioningStatus::STEP_RUN_MIGRATIONS);
+            } catch (\Throwable $e) {
+                Log::warning("Migration runner failed (non-fatal, continuing)", [
+                    'database' => $dbName,
+                    'error'    => $e->getMessage(),
+                ]);
+                $status->skipStep(ProvisioningStatus::STEP_RUN_MIGRATIONS);
+            }
 
-            // Step 3b: Fix missing columns (migration safety net)
+            // Step 3b: Fix missing columns (always runs regardless of migration results)
+            $status->startStep('fix_columns');
             try {
                 \App\Console\Commands\FixTenantColumns::fixDatabaseProgrammatic($dbName);
                 Log::info("Tenant column fixes applied", ['database' => $dbName]);
+                $status->completeStep('fix_columns');
             } catch (\Throwable $e) {
                 Log::warning("Column fix step failed (non-fatal)", ['error' => $e->getMessage()]);
+                $status->skipStep('fix_columns');
             }
 
             // Step 4: Run Tenant Seeders

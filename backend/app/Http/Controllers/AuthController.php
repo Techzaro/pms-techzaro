@@ -523,6 +523,9 @@ class AuthController extends Controller
             }
 
             $user->password = bcrypt($request->new_password);
+            if ($user->must_change_password && !$user->email_verified_at) {
+                $user->email_verified_at = now();
+            }
             $user->must_change_password = false;
             $user->active = true;
             $user->status = 'Active';
