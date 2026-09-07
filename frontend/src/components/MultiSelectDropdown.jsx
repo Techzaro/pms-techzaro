@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import "./MultiSelectDropdown.css";
 
-const MultiSelectDropdown = ({ value = [], onChange, options = [], placeholder = "Select...", searchPlaceholder = "Search...", name, size = "md", className = "" }) => {
+const MultiSelectDropdown = ({ value = [], onChange, options = [], placeholder = "Select...", searchPlaceholder = "Search...", name, size = "md", className = "", showChips = false }) => {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -155,6 +155,55 @@ const MultiSelectDropdown = ({ value = [], onChange, options = [], placeholder =
           </svg>
         </div>
       </div>
+      {showChips && value.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "8px" }}>
+          {value.map((v) => {
+            const opt = options.find((o) => String(o.value) === String(v));
+            const chipName = opt?.label || String(v);
+            return (
+              <span
+                key={v}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  padding: "3px 9px",
+                  borderRadius: "14px",
+                  fontSize: "12px",
+                  fontWeight: 500,
+                  background: "var(--color-primary-bg, #eff6ff)",
+                  color: "var(--color-primary, #2563eb)",
+                  border: "1px solid var(--color-primary-border, #bfdbfe)",
+                }}
+              >
+                {chipName}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleToggle(v);
+                  }}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: 0,
+                    marginLeft: "2px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    color: "inherit",
+                    fontSize: "14px",
+                    lineHeight: 1,
+                  }}
+                  title={t("Remove {{name}}", { name: chipName, defaultValue: `Remove ${chipName}` })}
+                >
+                  &times;
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      )}
       {open && (
         <div className="msd-dropdown">
           {filtered.length > 0 && (

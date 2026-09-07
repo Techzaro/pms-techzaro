@@ -190,7 +190,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
       start_date: "",
       end_date: "",
       allow_transfer: defaultTransfer,
-      parent_id: "",
+      parent_id: [],
     };
   });
 
@@ -304,6 +304,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
           start_date: d.start_date || "",
           end_date: d.end_date || "",
           allow_transfer: d.allow_transfer ?? "allow",
+          parent_id: Array.isArray(d.parent_id) ? d.parent_id : (d.parent_id ? [d.parent_id] : []),
         });
         if (d.requirementsList) setRequirementsList(d.requirementsList);
         if (d.deliverables) setSubtasks(d.deliverables);
@@ -713,7 +714,8 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
           followers: form.followers || [],
           kb_ids: kbIds.length > 0 ? kbIds.map(Number) : [],
           event_ids: eventIds.length > 0 ? eventIds.map(Number) : [],
-          parent_id: form.parent_id || undefined,
+          parent_id: Array.isArray(form.parent_id) ? (form.parent_id[0] || undefined) : (form.parent_id || undefined),
+          parent_ids: Array.isArray(form.parent_id) ? form.parent_id : (form.parent_id ? [form.parent_id] : []),
         };
 
         const projectIds = projectId ? [projectId] : form.project_id;
@@ -778,7 +780,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
             description: "",
             start_date: "",
             end_date: "",
-            parent_id: "",
+            parent_id: [],
             assigned_to: [],
             followers: [],
             task_type: "standard",
@@ -852,6 +854,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                       placeholder={t("Select projects", { defaultValue: "Select projects" })}
                       searchPlaceholder={t("Search projects...")}
                       options={projects.map((p) => ({ value: p.id, label: p.title }))}
+                      showChips={true}
                     />
                     {formErrors.project_id && <span className="field-error-text">{formErrors.project_id}</span>}
                   </div>
@@ -966,10 +969,11 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                     <ParentTaskSelectDropdown
                       name="parent_id"
                       tasks={projectTasks}
-                      value={form.parent_id || ""}
+                      value={form.parent_id || []}
                       onChange={(val) => { setForm((prev) => ({ ...prev, parent_id: val })); markDirty(); }}
                       disabled={!hasProjectSelected}
                       placeholder={!hasProjectSelected ? t("Select a project first", { defaultValue: "Select a project first" }) : t("None (Main Task)", { defaultValue: "None (Main Task)" })}
+                      showChips={true}
                     />
                   </div>
                 );
@@ -1274,6 +1278,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                     value: Number(item?.id),
                     label: item?.title || `Event #${item?.id}`,
                   }))}
+                  showChips={true}
                 />
               </div>
 
@@ -1290,6 +1295,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                     value: Number(item?.id),
                     label: item?.title || `Article #${item?.id}`,
                   }))}
+                  showChips={true}
                 />
               </div>
 

@@ -316,7 +316,13 @@ CREATE TABLE IF NOT EXISTS `deliverables` (
   `updated_by` bigint(20) unsigned DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
+  `deleted_at` timestamp NULL DEFAULT NULL,
   `task_id` bigint(20) unsigned DEFAULT NULL,
+  `parent_deliverable_id` bigint(20) unsigned DEFAULT NULL,
+  `is_reopened` tinyint(1) NOT NULL DEFAULT 0,
+  `is_transferred` tinyint(1) NOT NULL DEFAULT 0,
+  `completion_reason` varchar(255) DEFAULT NULL,
+  `completion_notes` text DEFAULT NULL,
   `approved_by` bigint(20) unsigned DEFAULT NULL,
   `rejected_by` bigint(20) unsigned DEFAULT NULL,
   `reopened_at` timestamp NULL DEFAULT NULL,
@@ -368,6 +374,7 @@ CREATE TABLE IF NOT EXISTS `deliverables` (
   KEY `deliverables_created_by_index` (`created_by`),
   KEY `deliverables_project_id_index` (`project_id`),
   KEY `deliverables_task_id_index` (`task_id`),
+  KEY `deliverables_parent_deliverable_id_index` (`parent_deliverable_id`),
   KEY `deliverables_due_date_index` (`due_date`),
   KEY `idx_deliverables_approved_by` (`approved_by`),
   KEY `idx_deliverables_rejected_by` (`rejected_by`),
@@ -392,6 +399,7 @@ CREATE TABLE IF NOT EXISTS `deliverables` (
   CONSTRAINT `deliverables_rejected_by_foreign` FOREIGN KEY (`rejected_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `deliverables_reopened_by_foreign` FOREIGN KEY (`reopened_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `deliverables_task_id_foreign` FOREIGN KEY (`task_id`) REFERENCES `tasks` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `deliverables_parent_deliverable_id_foreign` FOREIGN KEY (`parent_deliverable_id`) REFERENCES `deliverables` (`id`) ON DELETE SET NULL,
   CONSTRAINT `deliverables_updated_by_foreign` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 --
