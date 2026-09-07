@@ -732,6 +732,7 @@ const Taskby = () => {
                       >
                         <button className="action-icon-btn action-note" title={t("Add Note", { defaultValue: "Add Note" })} onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
                         {(() => {
+                          if (item.is_shared) return null;
                           const isRecurrence = item.task_type === "recurring" || !!item.recurrence_settings;
                           const recEnd = item.recurrence_end_date || item.end_date;
                           const isRecurrenceActive = isRecurrence ? (!recEnd || new Date(recEnd) > new Date()) : true;

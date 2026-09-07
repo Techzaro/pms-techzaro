@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import { useAutoRefresh } from "../utils/useAutoRefresh";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import ConfirmModal from "../components/ConfirmModal";
@@ -126,6 +127,10 @@ export default function EventsList() {
     fetchEvents();
     fetchSharedEvents();
   }, []);
+
+  useAutoRefresh(() => { fetchEvents(); fetchSharedEvents(); }, {
+    events: ['event:created', 'event:updated', 'event:deleted', 'data:changed', 'sharing:changed'],
+  });
 
   // Delete handler
   const handleDeleteConfirm = async () => {

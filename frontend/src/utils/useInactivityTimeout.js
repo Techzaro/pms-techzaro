@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from "react";
-import { getCurrentRole, logoutUser } from "./auth";
+import { getCurrentRole, logoutUser, superAdminAuthToken, logoutSuperAdmin } from "./auth";
+import { isAdminDomain } from "./domain";
 
 const INACTIVITY_TIMEOUT = 3 * 60 * 60 * 1000; // 3 hours
 
@@ -7,7 +8,11 @@ export function useInactivityTimeout() {
   const timerRef = useRef(null);
 
   const logout = useCallback(() => {
-    logoutUser("inactivity");
+    if (isAdminDomain()) {
+      logoutSuperAdmin();
+    } else {
+      logoutUser("inactivity");
+    }
   }, []);
 
   const resetTimer = useCallback(() => {
@@ -18,8 +23,13 @@ export function useInactivityTimeout() {
   }, [logout]);
 
   useEffect(() => {
-    const role = getCurrentRole();
-    if (!role) return;
+    // On admin domain, check super admin auth; on org domain, check regular role
+    if (isAdminDomain()) {
+      if (!superAdminAuthToken()) return;
+    } else {
+      const role = getCurrentRole();
+      if (!role) return;
+    }
 
     const events = [
       "mousedown",

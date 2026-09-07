@@ -191,6 +191,8 @@ class SharingController extends Controller
                 'notes' => $sharedResource->notes,
                 'shared_by_user' => $sharedResource->sharedByUser,
                 'users' => $sharedResource->users,
+                'parent_resource_id' => $sharedResource->parent_resource_id ?? null,
+                'cascade_shared' => !empty($sharedResource->parent_resource_id),
             ],
         ]);
     }
@@ -395,6 +397,8 @@ class SharingController extends Controller
                 'shared_at' => $resource->shared_at,
                 'expires_at' => $resource->expires_at,
                 'is_shared' => true,
+                'parent_resource_id' => $resource->parent_resource_id ?? null,
+                'cascade_shared' => !empty($resource->parent_resource_id),
             ];
 
             if ($actual) {

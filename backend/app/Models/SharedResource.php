@@ -24,6 +24,7 @@ class SharedResource extends Model
         'resource_type',
         'resource_id',
         'resource_name',
+        'parent_resource_id',
         'permission',
         'can_download',
         'status',
@@ -68,6 +69,16 @@ class SharedResource extends Model
     public function activityLogs(): HasMany
     {
         return $this->hasMany(SharedResourceActivityLog::class);
+    }
+
+    public function children(): HasMany
+    {
+        return $this->hasMany(SharedResource::class, 'parent_resource_id');
+    }
+
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(SharedResource::class, 'parent_resource_id');
     }
 
     /*

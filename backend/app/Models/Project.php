@@ -50,19 +50,16 @@ class Project extends Model
 
     /**
      * Auto-generate business_id if missing (for old data without migration).
+     * NOTE: Does NOT write to DB on read anymore (was causing N+1 UPDATE queries on every list page).
+     * Missing business_ids should be backfilled via a one-time artisan command.
      */
     public function getBusinessIdAttribute($value)
     {
         if ($value) return $value;
 
+        // Generate on-the-fly without persisting (read-only accessor)
         $service = app(BusinessIdService::class);
         $ids = $service->generateProjectBusinessId($this);
-        $this->updateQuietly([
-            'project_code' => $ids['code'],
-            'project_number' => $ids['number'],
-            'business_id' => $ids['business_id'],
-        ]);
-
         return $ids['business_id'];
     }
 
@@ -266,8 +263,15 @@ class Project extends Model
      * Get all active members of this project (assigned_users + team members + team leaders).
      * Returns a Collection of User models.
      */
+    private $_cachedMembers = null;
+
     public function getMembers()
     {
+        // Memoize per-instance to avoid re-querying (ProjectResource calls this per project)
+        if ($this->_cachedMembers !== null) {
+            return $this->_cachedMembers;
+        }
+
         $memberIds = collect($this->assigned_users ?? []);
 
         if ($this->created_by) {
@@ -296,14 +300,16 @@ class Project extends Model
         $memberIds = $memberIds->filter()->unique()->values()->all();
 
         if (empty($memberIds)) {
-            return collect();
+            $this->_cachedMembers = collect();
+            return $this->_cachedMembers;
         }
 
-        return User::whereIn('id', $memberIds)
+        $this->_cachedMembers = User::whereIn('id', $memberIds)
             ->where('active', true)
             ->select('id', 'name', 'email', 'role', 'department')
             ->orderBy('name')
             ->get();
+        return $this->_cachedMembers;
     }
 
     /** All users following this project (many-to-many). */

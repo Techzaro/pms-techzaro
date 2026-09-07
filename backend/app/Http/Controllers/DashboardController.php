@@ -418,11 +418,55 @@ class DashboardController extends Controller
             ->latest()
             ->get();
 
-        return $projects->map(function ($project) {
+        // Batch-load all team + user data to avoid N+1 getMembers() calls
+        $allTeamIds = collect();
+        $allUserIds = collect();
+        foreach ($projects as $project) {
+            $allUserIds->merge($project->assigned_users ?? []);
+            if ($project->created_by) $allUserIds->push($project->created_by);
+            $tids = array_merge($project->team_id ? [$project->team_id] : [], $project->team_ids ?? []);
+            $allTeamIds = $allTeamIds->merge($tids);
+        }
+        $allTeamIds = $allTeamIds->filter()->unique()->values()->all();
+        $allUserIds = $allUserIds->filter()->unique()->values()->all();
+
+        $teamsMap = [];
+        if (!empty($allTeamIds)) {
+            $teams = \App\Models\Team::whereIn('id', $allTeamIds)->with('members:id')->get();
+            foreach ($teams as $team) $teamsMap[$team->id] = $team;
+        }
+        $usersMap = [];
+        if (!empty($allUserIds)) {
+            $users = \App\Models\User::whereIn('id', $allUserIds)->where('active', true)
+                ->select('id', 'name', 'email', 'role', 'department')->get();
+            foreach ($users as $u) $usersMap[$u->id] = $u;
+        }
+
+        return $projects->map(function ($project) use ($teamsMap, $usersMap) {
             $total = $project->total_tasks ?? 0;
             $done = $project->completed_tasks ?? 0;
             $progress = $total > 0 ? (int) round(($done / $total) * 100) : 0;
-            $members = $project->getMembers();
+
+            // Compute members from pre-loaded data
+            $memberIds = array_filter(array_merge(
+                $project->assigned_users ?? [],
+                $project->created_by ? [$project->created_by] : []
+            ));
+            $teamIds = array_unique(array_filter(array_merge(
+                $project->team_id ? [$project->team_id] : [],
+                $project->team_ids ?? []
+            )));
+            foreach ($teamIds as $tid) {
+                if (isset($teamsMap[$tid])) {
+                    $memberIds = array_merge($memberIds, $teamsMap[$tid]->members->pluck('id')->toArray());
+                    if ($teamsMap[$tid]->leader_id) $memberIds[] = $teamsMap[$tid]->leader_id;
+                }
+            }
+            $memberIds = array_unique(array_filter($memberIds));
+            $members = collect();
+            foreach ($memberIds as $mid) {
+                if (isset($usersMap[$mid])) $members->push($usersMap[$mid]);
+            }
 
             return [
                 'id' => $project->id, 'name' => $project->title, 'client' => $project->client_name,

@@ -18,15 +18,17 @@ const originalFetch = window.fetch;
 window.fetch = async function (...args) {
   try {
     const [resource, config = {}] = args;
-    const noCacheConfig = { ...config, cache: 'no-store' };
     const tenantSlug = getTenantSlug();
     const url = typeof resource === 'string' ? resource : resource?.url || '';
     const skipTenantHeader = url.includes('/login') || url.includes('/forgot-password') || url.includes('/reset-password') || url.includes('/public/') || url.includes('/super-admin');
-    if (tenantSlug && !skipTenantHeader && noCacheConfig.headers) {
-      noCacheConfig.headers = { ...noCacheConfig.headers, "X-Tenant-ID": tenantSlug };
-    } else if (tenantSlug && !skipTenantHeader) {
-      noCacheConfig.headers = { "X-Tenant-ID": tenantSlug };
+
+    // Only add tenant header, don't force no-cache (allows browser HTTP cache for GET requests)
+    const headers = { ...config.headers };
+    if (tenantSlug && !skipTenantHeader) {
+      headers["X-Tenant-ID"] = tenantSlug;
     }
+    const noCacheConfig = { ...config, headers };
+
     const role = getCurrentRole();
     const tokenAtRequest = getToken(role);
     const res = await originalFetch.apply(this, [resource, noCacheConfig]);
@@ -35,6 +37,9 @@ window.fetch = async function (...args) {
     if (res.status === 401) {
       const url = typeof resource === "string" ? resource : resource?.url || "";
       if (url.includes("/super-admin")) return res;
+      // On admin domain, super admin has its own 401 handling (superAdminApi.js)
+      // Skip zombie tab detection to avoid cross-role interference from shared localStorage
+      if (isAdminDomain()) return res;
       const tokenNow = getToken(role);
       const isTokenExpired = tokenNow && tokenNow === tokenAtRequest;
       const isZombieTab = !tokenAtRequest && !tokenNow && role;
@@ -62,9 +67,10 @@ window.fetch = async function (...args) {
     }
 
     // Auto-show notifications for API responses (unless disabled via _notifHandled)
+    // Single clone + parse to avoid double-parsing the response body
     if (!config._notifHandled && res.status !== 204) {
-      const url = typeof resource === "string" ? resource : resource?.url || "";
-      const isApiCall = url.includes("/api") || (API_URL && url.includes(API_URL));
+      const notifUrl = typeof resource === "string" ? resource : resource?.url || "";
+      const isApiCall = notifUrl.includes("/api") || (API_URL && notifUrl.includes(API_URL));
       if (isApiCall) {
         try {
           const clone = res.clone();
@@ -96,9 +102,13 @@ export function onMutation() {}
 
 // Cross-tab session synchronization
 // Detects when our session is removed by another tab (e.g. logout)
+// NOTE: On admin domain, skip entirely — super admin uses its own session management
+// (clearSuperAdminSession + superAdminApi.js handles 401s independently)
 let _sessionConflictHandled = false;
 window.addEventListener("storage", (e) => {
   if (!e.key || _sessionConflictHandled) return;
+  if (isAdminDomain()) return;
+
   const role = getCurrentRole();
   if (!role) return;
   const sid = getSessionId();

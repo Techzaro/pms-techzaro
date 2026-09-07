@@ -81,6 +81,7 @@ function AllTasks() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState([]);
+  const [sharedTasks, setSharedTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -272,13 +273,34 @@ function AllTasks() {
     fetchTasks();
   }, [fetchTasks, page]);
 
-  useAutoRefresh(fetchTasks, {
-    events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
+  const fetchSharedTasks = useCallback(async () => {
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/sharing/shared-resources?type=task`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setSharedTasks(Array.isArray(data?.data) ? data.data : []);
+    } catch (err) {
+      console.error("Failed to fetch shared tasks:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSharedTasks();
+  }, [fetchSharedTasks]);
+
+  useAutoRefresh(() => { fetchTasks(); fetchSharedTasks(); }, {
+    events: ['task:created', 'task:updated', 'task:deleted', 'data:changed', 'sharing:changed'],
   });
 
   useEffect(() => {
-    setOrderedItems(items);
-  }, [items]);
+    const merged = [
+      ...items,
+      ...sharedTasks.filter((st) => !items.some((i) => String(i.id) === String(st.id))),
+    ];
+    setOrderedItems(merged);
+  }, [items, sharedTasks]);
 
   useEffect(() => {
     const filterParam = searchParams.get("filter");
@@ -545,6 +567,12 @@ function AllTasks() {
                       )}
                       {item.delegation_chain && item.delegation_chain.length > 0 && <ArrowUpRight size={14} style={{ color: "#6B7280", flexShrink: 0 }} />}
                       <div className="task-title" title={item.title} style={{ maxWidth: "250px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</div>
+                      {item.is_shared && (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", background: "#EDE9FE", color: "#7C3AED", border: "1px solid #DDD6FE", borderRadius: "4px", padding: "1px 5px", fontSize: "10px", fontWeight: 700, lineHeight: "14px", flexShrink: 0 }}>
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                          {t("Shared", { defaultValue: "Shared" })}
+                        </span>
+                      )}
                     </div>
                     {item.item_type === "subtask" && item.parent_task && (
                       <div style={{ fontSize: "11px", color: "#6366f1", marginTop: "2px", display: "flex", alignItems: "center", gap: "4px" }}>

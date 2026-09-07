@@ -49,6 +49,8 @@ export default function KnowledgeBaseList() {
   const navigate = useNavigate();
 
   const [items, setItems] = useState([]);
+  const [sharedKb, setSharedKb] = useState([]);
+  const [orderedItems, setOrderedItems] = useState([]);
   const [categories, setCategories] = useState([]);
   const [teams, setTeams] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -181,6 +183,31 @@ export default function KnowledgeBaseList() {
     fetchLookups();
     fetchItems();
   }, []);
+
+  const fetchSharedKb = async () => {
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/sharing/shared-resources?type=knowledge_base`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setSharedKb(Array.isArray(data?.data) ? data.data : []);
+    } catch (err) {
+      console.error("Failed to fetch shared KB:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchSharedKb();
+  }, []);
+
+  useEffect(() => {
+    const merged = [
+      ...items,
+      ...sharedKb.filter((sk) => !items.some((i) => String(i.id) === String(sk.id))),
+    ];
+    setOrderedItems(merged);
+  }, [items, sharedKb]);
 
   // ── Action Handlers ────────────────────────────────────────
 
@@ -417,7 +444,8 @@ export default function KnowledgeBaseList() {
 
   // ── Comprehensive Filtering Engine ───────────────────────────
   const filteredItems = useMemo(() => {
-    return items.filter((item) => {
+    const baseItems = orderedItems.length ? orderedItems : items;
+    return baseItems.filter((item) => {
       const searchLower = search.toLowerCase();
 
       // Multi-field search
@@ -1099,12 +1127,14 @@ export default function KnowledgeBaseList() {
   function renderArticleCard(item) {
     const isMenuOpen = openMenuId === item.id;
 
-    const canEdit =
+    const canEdit = item.is_shared ? false : (
       item.user_permissions?.can_edit ??
-      (item.created_by === user?.id || ["admin", "manager"].includes(user?.role));
-    const canDelete =
+      (item.created_by === user?.id || ["admin", "manager"].includes(user?.role))
+    );
+    const canDelete = item.is_shared ? false : (
       item.user_permissions?.can_delete ??
-      (item.created_by === user?.id || ["admin", "manager"].includes(user?.role));
+      (item.created_by === user?.id || ["admin", "manager"].includes(user?.role))
+    );
     const canDuplicate = item.user_permissions?.can_duplicate ?? user?.role !== "guest";
     const canArchive = item.user_permissions?.can_archive ?? canEdit;
     const canRestore = item.user_permissions?.can_restore ?? canEdit;
@@ -1148,9 +1178,15 @@ export default function KnowledgeBaseList() {
           {/* TITLE */}
           <h3
             onClick={() => navigate(rolePath(`knowledge-base/${item.id}`))}
-            style={{ margin: "0 0 8px", fontSize: "16px", fontWeight: 600, color: "var(--text-primary)", cursor: "pointer", lineHeight: "1.3" }}
+            style={{ margin: "0 0 8px", fontSize: "16px", fontWeight: 600, color: "var(--text-primary)", cursor: "pointer", lineHeight: "1.3", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}
           >
             {item.title}
+            {item.is_shared && (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", background: "#EDE9FE", color: "#7C3AED", border: "1px solid #DDD6FE", borderRadius: "4px", padding: "1px 6px", fontSize: "10px", fontWeight: 700, lineHeight: "14px", flexShrink: 0 }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                {t("Shared", { defaultValue: "Shared" })}
+              </span>
+            )}
           </h3>
 
           {/* CONTENT SNIPPET */}

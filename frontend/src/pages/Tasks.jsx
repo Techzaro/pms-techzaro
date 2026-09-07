@@ -309,7 +309,7 @@ function Tasks() {
     }
   }, [timeFilter, debouncedSearch, statusFilter, advancedFilters, sortBy, sortDirection]);
 
-  const fetchSharedTasks = async () => {
+  const fetchSharedTasks = useCallback(async () => {
     try {
       const token = authToken();
       const res = await fetch(`${API_URL}/sharing/shared-resources?type=task`, {
@@ -323,7 +323,7 @@ function Tasks() {
     } catch (err) {
       console.error("Error fetching shared tasks:", err);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchTasks();
@@ -351,64 +351,88 @@ function Tasks() {
   const declinedStatuses = ["declined", "rejected", "failed", "Declined", "Rejected", "Failed"];
   const abandonedStatuses = ["abandoned", "abandon_requested", "Abandoned", "Abandon Requested"];
 
-  const allCount = baseItems.length;
-  const dueTodayCount = baseItems.filter((i) => { const d = i.end_date ? new Date(i.end_date) : null; return d && d.toDateString() === new Date().toDateString(); }).length;
-  const pendingCount = baseItems.filter((i) => pendingStatuses.includes(i.status)).length;
-  const inProgressCount = baseItems.filter((i) => inProgressStatuses.includes(i.status)).length;
-  const pausedCount = baseItems.filter((i) => pausedStatuses.includes(i.status)).length;
-  const submittedCount = baseItems.filter((i) => submittedStatuses.includes(i.status)).length;
-  const reopenedCount = baseItems.filter((i) => i.status === "reopened").length;
-  const transferredCount = baseItems.filter((i) => i.delegation_chain && i.delegation_chain.length > 0).length;
-  const completedCount = baseItems.filter((i) => completedStatuses.includes(i.status)).length;
-  const approvedCount = completedCount;
-  const declinedCount = baseItems.filter((i) => declinedStatuses.includes(i.status)).length;
-  const rejectedCount = declinedCount;
-  const abandonedCount = baseItems.filter((i) => abandonedStatuses.includes(i.status)).length;
+  // Single-pass status counts instead of 11 separate .filter() iterations
+  const taskStatusCounts = useMemo(() => {
+    const counts = { all: 0, dueToday: 0, pending: 0, inProgress: 0, paused: 0, submitted: 0, reopened: 0, transferred: 0, completed: 0, approved: 0, declined: 0, rejected: 0, abandoned: 0 };
+    const todayStr = new Date().toDateString();
+    for (const i of baseItems) {
+      counts.all++;
+      const d = i.end_date ? new Date(i.end_date) : null;
+      if (d && d.toDateString() === todayStr) counts.dueToday++;
+      if (pendingStatuses.includes(i.status)) counts.pending++;
+      if (inProgressStatuses.includes(i.status)) counts.inProgress++;
+      if (pausedStatuses.includes(i.status)) counts.paused++;
+      if (submittedStatuses.includes(i.status)) counts.submitted++;
+      if (i.status === "reopened") counts.reopened++;
+      if (i.delegation_chain && i.delegation_chain.length > 0) counts.transferred++;
+      if (completedStatuses.includes(i.status)) counts.completed++;
+      if (declinedStatuses.includes(i.status)) counts.declined++;
+      if (abandonedStatuses.includes(i.status)) counts.abandoned++;
+    }
+    counts.approved = counts.completed;
+    counts.rejected = counts.declined;
+    return counts;
+  }, [baseItems, pendingStatuses, inProgressStatuses, completedStatuses, pausedStatuses, submittedStatuses, declinedStatuses, abandonedStatuses]);
+  const allCount = taskStatusCounts.all;
+  const dueTodayCount = taskStatusCounts.dueToday;
+  const pendingCount = taskStatusCounts.pending;
+  const inProgressCount = taskStatusCounts.inProgress;
+  const pausedCount = taskStatusCounts.paused;
+  const submittedCount = taskStatusCounts.submitted;
+  const reopenedCount = taskStatusCounts.reopened;
+  const transferredCount = taskStatusCounts.transferred;
+  const completedCount = taskStatusCounts.completed;
+  const approvedCount = taskStatusCounts.approved;
+  const declinedCount = taskStatusCounts.declined;
+  const rejectedCount = taskStatusCounts.rejected;
+  const abandonedCount = taskStatusCounts.abandoned;
   const searchFilteredItems = useMemo(() => {
     return baseItems;
   }, [baseItems]);
 
-  const filteredItems = statusFilter
-    ? searchFilteredItems.filter((item) => {
-        const sf = String(statusFilter).toLowerCase();
-        if (sf === "due_today") {
-          const dateVal = item.end_date || item.due_date || item.start_date;
-          if (!dateVal) return false;
-          const d = new Date(dateVal);
-          const now = new Date();
-          const isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
-          const isCompleted = completedStatuses.includes(item.status);
-          return isToday && !isCompleted;
-        }
-        if (sf === "pending") {
-          return pendingStatuses.includes(item.status);
-        }
-        if (sf === "in_progress") {
-          return inProgressStatuses.includes(item.status);
-        }
-        if (sf === "submitted") {
-          return submittedStatuses.includes(item.status);
-        }
-        if (sf === "completed" || sf === "approved") {
-          return completedStatuses.includes(item.status);
-        }
-        if (sf === "paused") {
-          return pausedStatuses.includes(item.status);
-        }
-        if (sf === "declined" || sf === "rejected") {
-          return declinedStatuses.includes(item.status);
-        }
-        if (sf === "abandoned") {
-          return abandonedStatuses.includes(item.status);
-        }
-        if (sf === "transferred") {
-          return item.delegation_chain && item.delegation_chain.length > 0;
-        }
-        return (item.status || "").toLowerCase() === sf;
-      })
-    : searchFilteredItems;
+  const filteredItems = useMemo(() => {
+    return statusFilter
+      ? searchFilteredItems.filter((item) => {
+          const sf = String(statusFilter).toLowerCase();
+          if (sf === "due_today") {
+            const dateVal = item.end_date || item.due_date || item.start_date;
+            if (!dateVal) return false;
+            const d = new Date(dateVal);
+            const now = new Date();
+            const isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+            const isCompleted = completedStatuses.includes(item.status);
+            return isToday && !isCompleted;
+          }
+          if (sf === "pending") {
+            return pendingStatuses.includes(item.status);
+          }
+          if (sf === "in_progress") {
+            return inProgressStatuses.includes(item.status);
+          }
+          if (sf === "submitted") {
+            return submittedStatuses.includes(item.status);
+          }
+          if (sf === "completed" || sf === "approved") {
+            return completedStatuses.includes(item.status);
+          }
+          if (sf === "paused") {
+            return pausedStatuses.includes(item.status);
+          }
+          if (sf === "declined" || sf === "rejected") {
+            return declinedStatuses.includes(item.status);
+          }
+          if (sf === "abandoned") {
+            return abandonedStatuses.includes(item.status);
+          }
+          if (sf === "transferred") {
+            return item.delegation_chain && item.delegation_chain.length > 0;
+          }
+          return (item.status || "").toLowerCase() === sf;
+        })
+      : searchFilteredItems;
+  }, [searchFilteredItems, statusFilter, completedStatuses, pendingStatuses, inProgressStatuses, submittedStatuses, pausedStatuses, declinedStatuses, abandonedStatuses]);
 
-  const taskIdList = filteredItems.map((i) => i.id);
+  const taskIdList = useMemo(() => filteredItems.map((i) => i.id), [filteredItems]);
 
   const totalPages = showAll ? 1 : Math.ceil(filteredItems.length / itemsPerPage);
   const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * itemsPerPage, page * itemsPerPage);

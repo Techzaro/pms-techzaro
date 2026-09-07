@@ -15,6 +15,8 @@ return new class extends Migration
             $table->unsignedBigInteger('shared_with_organization_id')->comment('Org receiving access');
             $table->string('resource_type', 50)->comment('project, task, document, event, knowledge_base');
             $table->unsignedBigInteger('resource_id');
+            $table->string('resource_name', 255)->nullable()->comment('Display name of the shared resource');
+            $table->unsignedBigInteger('parent_resource_id')->nullable()->comment('Parent resource for cascade sharing (e.g. project_id when task is cascade-shared)');
             $table->string('permission', 30)->default('view')->comment('view, comment, collaborate');
             $table->boolean('can_download')->default(false);
             $table->string('status', 20)->default('active')->comment('active, expired, revoked');
@@ -33,6 +35,7 @@ return new class extends Migration
             $table->index('connection_id');
             $table->index('status');
             $table->index('shared_with_organization_id');
+            $table->index('parent_resource_id');
             $table->unique(['connection_id', 'resource_type', 'resource_id'], 'unique_shared_resource');
         });
     }

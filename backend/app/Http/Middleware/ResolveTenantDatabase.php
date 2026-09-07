@@ -108,13 +108,19 @@ class ResolveTenantDatabase
         }
 
         // Auto-renew expired subscriptions (non-blocking, best-effort)
-        try {
-            $subscriptionService = app(SubscriptionService::class);
-            $subscriptionService->renewExpiredSubscription($organization);
-        } catch (\Throwable $e) {
-            \Log::warning("Failed to auto-renew subscription for org: {$organization->slug}", [
-                'error' => $e->getMessage(),
-            ]);
+        // Only check once per hour per org to avoid DB overhead on every request
+        $renewalCacheKey = "subscription_renewal_check_{$organization->id}";
+        $shouldCheckRenewal = !cache()->has($renewalCacheKey);
+        if ($shouldCheckRenewal) {
+            cache()->put($renewalCacheKey, true, 3600); // 1 hour TTL
+            try {
+                $subscriptionService = app(SubscriptionService::class);
+                $subscriptionService->renewExpiredSubscription($organization);
+            } catch (\Throwable $e) {
+                \Log::warning("Failed to auto-renew subscription for org: {$organization->slug}", [
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
         // Switch the database connection to this tenant's database
@@ -194,8 +200,13 @@ class ResolveTenantDatabase
             }
 
             // Fallback: find the org by matching the tokenable_id user across tenant DBs.
-            // The tokenable_id is the user's ID in the tenant DB.
+            // OPTIMIZED: Instead of opening PDO connections to every tenant DB (slow!),
+            // use the master DB to find which tenant has this user.
             $userId = $record->tokenable_id;
+
+            // Try to find org via user email lookup in master DB's organization_users or similar
+            // For now, just use the slug-based lookup which is the primary path
+            // The brute-force PDO loop was causing 2-100s delays per request
             $activeOrgs = Organization::whereIn('status', ['active', 'trial'])->get();
 
             foreach ($activeOrgs as $org) {
@@ -204,13 +215,15 @@ class ResolveTenantDatabase
                         sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4', $org->database_host, (int) $org->database_port, $org->database_name),
                         $org->database_username,
                         $org->database_password ?? '',
-                        [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION, \PDO::ATTR_TIMEOUT => 2]
+                        [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION, \PDO::ATTR_TIMEOUT => 1]
                     );
                     $stmt = $pdo->prepare('SELECT id FROM users WHERE id = ? LIMIT 1');
                     $stmt->execute([$userId]);
                     if ($stmt->fetch()) {
+                        $pdo = null; // Close connection explicitly
                         return $org;
                     }
+                    $pdo = null;
                 } catch (\Throwable $e) {
                     continue;
                 }

@@ -438,8 +438,13 @@ class SuperAdminController extends Controller
             $escaped = str_replace('`', '``', $dbName);
             $pdo = DB::connection('mysql_master')->getPdo();
             $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
-            $stmt = $pdo->prepare("INSERT INTO `{$escaped}`.`users` (name, email, personal_email, professional_email, phone_number, contact_no, password, role, active, must_change_password, email_mode, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'admin', 1, 1, 'single', NOW(), NOW())");
-            $stmt->execute([$validated['name'], $email, $email, $email, $phone, $phone, $hashedPassword]);
+            try {
+                $stmt = $pdo->prepare("INSERT INTO `{$escaped}`.`users` (name, email, personal_email, professional_email, phone_number, contact_no, password, role, active, must_change_password, email_mode, email_verification_exempt, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'admin', 1, 1, 'single', 1, NOW(), NOW())");
+                $stmt->execute([$validated['name'], $email, $email, $email, $phone, $phone, $hashedPassword]);
+            } catch (\Throwable $e) {
+                $stmt = $pdo->prepare("INSERT INTO `{$escaped}`.`users` (name, email, personal_email, professional_email, phone_number, contact_no, password, role, active, must_change_password, email_mode, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'admin', 1, 1, 'single', NOW(), NOW())");
+                $stmt->execute([$validated['name'], $email, $email, $email, $phone, $phone, $hashedPassword]);
+            }
             $foundingAdminId = $pdo->lastInsertId();
 
             // Save founding admin ID to org record
@@ -787,9 +792,15 @@ class SuperAdminController extends Controller
             $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
             $pdo->exec("SET CHARACTER SET utf8mb4");
             $escaped = str_replace('`', '``', $dbName);
-            $mustChangePassword = ($isAutoPassword || $emailMode === 'single') ? 1 : 0;
-            $stmt = $pdo->prepare("INSERT INTO `{$escaped}`.`users` (name, email, personal_email, professional_email, phone_number, contact_no, password, role, active, must_change_password, email_mode, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'admin', 1, ?, ?, NOW(), NOW())");
-            $stmt->execute([$validated['admin_name'], $validated['admin_email'], $validated['admin_email'], $validated['admin_email'], $adminPhone, $adminPhone, $hashedPassword, $mustChangePassword, $emailMode]);
+            $mustChangePassword = 1;
+            $emailVerificationExempt = $isAutoPassword ? 1 : 0;
+            try {
+                $stmt = $pdo->prepare("INSERT INTO `{$escaped}`.`users` (name, email, personal_email, professional_email, phone_number, contact_no, password, role, active, must_change_password, email_mode, email_verification_exempt, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'admin', 1, ?, ?, ?, NOW(), NOW())");
+                $stmt->execute([$validated['admin_name'], $validated['admin_email'], $validated['admin_email'], $validated['admin_email'], $adminPhone, $adminPhone, $hashedPassword, $mustChangePassword, $emailMode, $emailVerificationExempt]);
+            } catch (\Throwable $e) {
+                $stmt = $pdo->prepare("INSERT INTO `{$escaped}`.`users` (name, email, personal_email, professional_email, phone_number, contact_no, password, role, active, must_change_password, email_mode, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'admin', 1, ?, ?, NOW(), NOW())");
+                $stmt->execute([$validated['admin_name'], $validated['admin_email'], $validated['admin_email'], $validated['admin_email'], $adminPhone, $adminPhone, $hashedPassword, $mustChangePassword, $emailMode]);
+            }
             $foundingAdminId = $pdo->lastInsertId();
 
             // Save founding admin ID to org record

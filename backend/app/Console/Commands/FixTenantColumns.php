@@ -53,6 +53,7 @@ class FixTenantColumns extends Command
             ['name' => 'event_ids',                     'definition' => "JSON NULL AFTER `kb_ids`"],
         ],
         'deliverables' => [
+            ['name' => 'deleted_at',                    'definition' => "TIMESTAMP NULL AFTER `updated_at`"],
             ['name' => 'has_edited_submission',         'definition' => "TINYINT(1) DEFAULT 0 AFTER `status`"],
             ['name' => 'kb_ids',                        'definition' => "JSON NULL AFTER `description`"],
             ['name' => 'event_ids',                     'definition' => "JSON NULL AFTER `kb_ids`"],
@@ -111,6 +112,283 @@ class FixTenantColumns extends Command
     ];
 
     protected array $tableCreates = [
+        'event_task' => "CREATE TABLE IF NOT EXISTS `event_task` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `event_id` BIGINT UNSIGNED NOT NULL,
+            `task_id` BIGINT UNSIGNED NOT NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `event_task_event_id_task_id_unique` (`event_id`, `task_id`),
+            FOREIGN KEY (`event_id`) REFERENCES `events`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`task_id`) REFERENCES `tasks`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'knowledge_base_task' => "CREATE TABLE IF NOT EXISTS `knowledge_base_task` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `knowledge_base_id` BIGINT UNSIGNED NOT NULL,
+            `task_id` BIGINT UNSIGNED NOT NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `knowledge_base_task_kb_id_task_id_unique` (`knowledge_base_id`, `task_id`),
+            FOREIGN KEY (`knowledge_base_id`) REFERENCES `knowledge_bases`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`task_id`) REFERENCES `tasks`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'task_personal_notes' => "CREATE TABLE IF NOT EXISTS `task_personal_notes` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `task_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `note` TEXT NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            INDEX `task_personal_notes_task_id_user_id_index` (`task_id`, `user_id`),
+            FOREIGN KEY (`task_id`) REFERENCES `tasks`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'task_user_notes' => "CREATE TABLE IF NOT EXISTS `task_user_notes` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `task_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `note` TEXT NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            INDEX `task_user_notes_task_id_user_id_index` (`task_id`, `user_id`),
+            FOREIGN KEY (`task_id`) REFERENCES `tasks`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'task_user' => "CREATE TABLE IF NOT EXISTS `task_user` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `task_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `due_date` TIMESTAMP NULL,
+            `status` VARCHAR(64) DEFAULT 'pending',
+            `submitted_at` TIMESTAMP NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `task_user_task_id_user_id_unique` (`task_id`, `user_id`),
+            FOREIGN KEY (`task_id`) REFERENCES `tasks`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'team_user' => "CREATE TABLE IF NOT EXISTS `team_user` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `team_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `team_user_team_id_user_id_unique` (`team_id`, `user_id`),
+            FOREIGN KEY (`team_id`) REFERENCES `teams`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'deliverable_user' => "CREATE TABLE IF NOT EXISTS `deliverable_user` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `deliverable_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `deliverable_user_deliverable_id_user_id_unique` (`deliverable_id`, `user_id`),
+            FOREIGN KEY (`deliverable_id`) REFERENCES `deliverables`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'deliverable_submissions' => "CREATE TABLE IF NOT EXISTS `deliverable_submissions` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `deliverable_id` BIGINT UNSIGNED NOT NULL,
+            `submitted_by` BIGINT UNSIGNED NOT NULL,
+            `status` VARCHAR(32) DEFAULT 'submitted',
+            `notes` TEXT NULL,
+            `file_path` VARCHAR(1024) NULL,
+            `reviewed_by` BIGINT UNSIGNED NULL,
+            `reviewed_at` TIMESTAMP NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            INDEX `deliverable_submissions_deliverable_id_index` (`deliverable_id`),
+            FOREIGN KEY (`deliverable_id`) REFERENCES `deliverables`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`submitted_by`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'task_workflow_events' => "CREATE TABLE IF NOT EXISTS `task_workflow_events` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `task_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `action` VARCHAR(64) NOT NULL,
+            `notes` TEXT NULL,
+            `from_status` VARCHAR(64) NULL,
+            `to_status` VARCHAR(64) NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            INDEX `task_workflow_events_task_id_index` (`task_id`),
+            FOREIGN KEY (`task_id`) REFERENCES `tasks`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'project_workflow_events' => "CREATE TABLE IF NOT EXISTS `project_workflow_events` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `project_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `action` VARCHAR(64) NOT NULL,
+            `notes` TEXT NULL,
+            `from_status` VARCHAR(64) NULL,
+            `to_status` VARCHAR(64) NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            INDEX `project_workflow_events_project_id_index` (`project_id`),
+            FOREIGN KEY (`project_id`) REFERENCES `projects`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'deliverable_workflow_events' => "CREATE TABLE IF NOT EXISTS `deliverable_workflow_events` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `deliverable_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `action` VARCHAR(64) NOT NULL,
+            `notes` TEXT NULL,
+            `from_status` VARCHAR(64) NULL,
+            `to_status` VARCHAR(64) NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            INDEX `deliverable_workflow_events_deliverable_id_index` (`deliverable_id`),
+            FOREIGN KEY (`deliverable_id`) REFERENCES `deliverables`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'task_pause_sessions' => "CREATE TABLE IF NOT EXISTS `task_pause_sessions` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `task_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NULL,
+            `paused_at` TIMESTAMP NULL,
+            `resumed_at` TIMESTAMP NULL,
+            `duration_seconds` INT DEFAULT 0,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            INDEX `task_pause_sessions_task_id_index` (`task_id`),
+            FOREIGN KEY (`task_id`) REFERENCES `tasks`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'deliverable_pause_sessions' => "CREATE TABLE IF NOT EXISTS `deliverable_pause_sessions` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `deliverable_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NULL,
+            `paused_at` TIMESTAMP NULL,
+            `resumed_at` TIMESTAMP NULL,
+            `duration_seconds` INT DEFAULT 0,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            INDEX `deliverable_pause_sessions_deliverable_id_index` (`deliverable_id`),
+            FOREIGN KEY (`deliverable_id`) REFERENCES `deliverables`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'activities' => "CREATE TABLE IF NOT EXISTS `activities` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `user_id` BIGINT UNSIGNED NULL,
+            `type` VARCHAR(64) NULL,
+            `description` TEXT NULL,
+            `subject_type` VARCHAR(255) NULL,
+            `subject_id` BIGINT UNSIGNED NULL,
+            `properties` JSON NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            INDEX `activities_subject_type_subject_id_index` (`subject_type`, `subject_id`),
+            INDEX `activities_user_id_index` (`user_id`),
+            INDEX `activities_created_at_index` (`created_at`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'project_visibility' => "CREATE TABLE IF NOT EXISTS `project_visibility` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `project_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `project_visibility_project_id_user_id_unique` (`project_id`, `user_id`),
+            FOREIGN KEY (`project_id`) REFERENCES `projects`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'shared_resources' => "CREATE TABLE IF NOT EXISTS `shared_resources` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `shareable_type` VARCHAR(255) NOT NULL,
+            `shareable_id` BIGINT UNSIGNED NOT NULL,
+            `shared_by` BIGINT UNSIGNED NOT NULL,
+            `permission` VARCHAR(32) DEFAULT 'view',
+            `notes` TEXT NULL,
+            `expires_at` TIMESTAMP NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            INDEX `shared_resources_shareable_type_shareable_id_index` (`shareable_type`, `shareable_id`),
+            FOREIGN KEY (`shared_by`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'shared_resource_users' => "CREATE TABLE IF NOT EXISTS `shared_resource_users` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `shared_resource_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `permission` VARCHAR(32) DEFAULT 'view',
+            `viewed_at` TIMESTAMP NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `shared_resource_users_resource_user_unique` (`shared_resource_id`, `user_id`),
+            FOREIGN KEY (`shared_resource_id`) REFERENCES `shared_resources`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'event_users' => "CREATE TABLE IF NOT EXISTS `event_users` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `event_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `event_users_event_id_user_id_unique` (`event_id`, `user_id`),
+            FOREIGN KEY (`event_id`) REFERENCES `events`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'conversation_participants' => "CREATE TABLE IF NOT EXISTS `conversation_participants` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `conversation_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `last_read_at` TIMESTAMP NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `conversation_participants_conv_user_unique` (`conversation_id`, `user_id`),
+            FOREIGN KEY (`conversation_id`) REFERENCES `conversations`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'messages' => "CREATE TABLE IF NOT EXISTS `messages` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `conversation_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `body` TEXT NOT NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            INDEX `messages_conversation_id_index` (`conversation_id`),
+            FOREIGN KEY (`conversation_id`) REFERENCES `conversations`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
         'notification_comments' => "CREATE TABLE IF NOT EXISTS `notification_comments` (
             `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             `notification_id` BIGINT UNSIGNED NOT NULL,
@@ -443,6 +721,11 @@ class FixTenantColumns extends Command
             INDEX `email_identities_type_index` (`type`),
             FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'shared_resources' => [
+            ['name' => 'resource_name', 'definition' => "VARCHAR(255) NULL AFTER `resource_id`"],
+            ['name' => 'parent_resource_id', 'definition' => "BIGINT UNSIGNED NULL AFTER `resource_name`"],
+        ],
     ];
 
     protected array $tableSizeFixes = [

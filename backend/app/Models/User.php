@@ -309,7 +309,6 @@ class User extends Authenticatable
     public function needsEmailVerification(): bool
     {
         if ($this->email_mode !== 'single') return false;
-        if ($this->email_verification_exempt) return false;
         if ($this->must_change_password) return false;
         if (!is_null($this->email_verified_at)) return false;
         return true;

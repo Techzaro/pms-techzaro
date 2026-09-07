@@ -88,9 +88,7 @@ export function getCurrentRole() {
     });
     if (validSid) {
       try { sessionStorage.setItem("currentRole", r); } catch {}
-      try { sessionStorage.setItem("sessionId", validSid); } catch {}
       try { localStorage.setItem("currentRole", r); } catch {}
-      try { localStorage.setItem("sessionId", validSid); } catch {}
       return r;
     }
   }
@@ -110,43 +108,20 @@ export function setCurrentRole(role) {
   } catch {}
 }
 
-/* ───── session ID (persisted across tabs via localStorage) ───── */
+/* ───── session ID (tab-scoped via sessionStorage) ───── */
 
 export function getSessionId() {
-  const fromSession = sessionStorage.getItem("sessionId");
-  if (fromSession) return fromSession;
-  const fromLocal = localStorage.getItem("sessionId") || localStorage.getItem("lastActiveSessionId") || "";
-  if (fromLocal) {
-    try { sessionStorage.setItem("sessionId", fromLocal); } catch {}
-    return fromLocal;
-  }
-  const role = getCurrentRole();
-  if (role) {
-    const sessions = _getSessions(role);
-    const validSid = Object.keys(sessions).find(sid => {
-      const s = sessions[sid];
-      return s && s.token && (!s.expiresAt || Date.now() <= s.expiresAt);
-    });
-    if (validSid) {
-      try { sessionStorage.setItem("sessionId", validSid); } catch {}
-      try { localStorage.setItem("sessionId", validSid); } catch {}
-      return validSid;
-    }
-  }
-  return "";
+  return sessionStorage.getItem("sessionId") || "";
 }
 
 export function setSessionId(id) {
   if (id) {
     try {
       sessionStorage.setItem("sessionId", id);
-      localStorage.setItem("sessionId", id);
-      localStorage.setItem("lastActiveSessionId", id);
     } catch {}
   } else {
     try {
       sessionStorage.removeItem("sessionId");
-      localStorage.removeItem("sessionId");
     } catch {}
   }
 }
@@ -155,22 +130,6 @@ export function setSessionId(id) {
 
 export function getToken(role) {
   let r = role || getCurrentRole();
-  if (!r) {
-    for (const testRole of ROLES) {
-      const sessObj = _getSessions(testRole);
-      const validSid = Object.keys(sessObj).find(sid => {
-        const s = sessObj[sid];
-        return s && s.token && (!s.expiresAt || Date.now() <= s.expiresAt);
-      });
-      if (validSid) {
-        r = testRole;
-        setCurrentRole(r);
-        setSessionId(validSid);
-        break;
-      }
-    }
-  }
-
   if (!r) {
     const fallbackToken = localStorage.getItem("token");
     if (fallbackToken) return fallbackToken;
@@ -188,18 +147,6 @@ export function getToken(role) {
 
   let sessions = _getSessions(r);
   let sess = sid ? sessions[sid] : null;
-
-  if (!sess) {
-    const anyValidSid = Object.keys(sessions).find(k => {
-      const s = sessions[k];
-      return s && s.token && (!s.expiresAt || Date.now() <= s.expiresAt);
-    });
-    if (anyValidSid) {
-      sid = anyValidSid;
-      sess = sessions[sid];
-      setSessionId(sid);
-    }
-  }
 
   if (!sess || (sess.expiresAt && Date.now() > sess.expiresAt)) {
     if (sess && sess.expiresAt && Date.now() > sess.expiresAt) {
@@ -253,22 +200,6 @@ export function removeToken(role) {
 export function getUser(role) {
   let r = role || getCurrentRole();
   if (!r) {
-    for (const testRole of ROLES) {
-      const sessObj = _getSessions(testRole);
-      const validSid = Object.keys(sessObj).find(sid => {
-        const s = sessObj[sid];
-        return s && s.token && (!s.expiresAt || Date.now() <= s.expiresAt);
-      });
-      if (validSid) {
-        r = testRole;
-        setCurrentRole(r);
-        setSessionId(validSid);
-        break;
-      }
-    }
-  }
-
-  if (!r) {
     try {
       const fallbackUser = JSON.parse(localStorage.getItem("user")) || null;
       if (fallbackUser) return fallbackUser;
@@ -287,18 +218,6 @@ export function getUser(role) {
 
   let sessions = _getSessions(r);
   let sess = sid ? sessions[sid] : null;
-
-  if (!sess) {
-    const anyValidSid = Object.keys(sessions).find(k => {
-      const s = sessions[k];
-      return s && s.token && (!s.expiresAt || Date.now() <= s.expiresAt);
-    });
-    if (anyValidSid) {
-      sid = anyValidSid;
-      sess = sessions[sid];
-      setSessionId(sid);
-    }
-  }
 
   if (!sess || (sess.expiresAt && Date.now() > sess.expiresAt)) {
     if (sess && sess.expiresAt && Date.now() > sess.expiresAt) {
@@ -412,8 +331,6 @@ export function saveSession(role, token, user, rememberMe = false, expiresAt = n
   try {
     localStorage.setItem("currentRole", role);
     localStorage.setItem("lastActiveRole", role);
-    localStorage.setItem("sessionId", sid);
-    localStorage.setItem("lastActiveSessionId", sid);
     localStorage.setItem("token", token);
     localStorage.setItem(`token_${role}`, token);
     localStorage.setItem("user", JSON.stringify(user || {}));
@@ -440,17 +357,9 @@ export function clearSession(role) {
       delete sessions[sid];
       _setSessions(r, sessions);
     }
-    sessionStorage.removeItem("sessionId");
   }
 
-  localStorage.removeItem(`token_${r}`);
-  localStorage.removeItem(`user_${r}`);
-  localStorage.removeItem("token");
-  localStorage.removeItem("user");
-  localStorage.removeItem("currentRole");
-  localStorage.removeItem("lastActiveRole");
-  localStorage.removeItem("sessionId");
-  localStorage.removeItem("lastActiveSessionId");
+  sessionStorage.removeItem("sessionId");
 
   if (getCurrentRole() === r) {
     sessionStorage.removeItem("currentRole");
@@ -479,19 +388,6 @@ export function clearAllSessions() {
   sessionStorage.removeItem("currentRole");
   sessionStorage.removeItem("tenant_slug");
   sessionStorage.removeItem("vb_dismissed");
-
-  // Clear legacy localStorage keys for this tab only
-  localStorage.removeItem("token");
-  localStorage.removeItem("user");
-  localStorage.removeItem("role");
-  localStorage.removeItem("userId");
-  localStorage.removeItem("name");
-  localStorage.removeItem("email");
-  localStorage.removeItem("currentRole");
-  localStorage.removeItem("lastActiveRole");
-  localStorage.removeItem("sessionId");
-  localStorage.removeItem("lastActiveSessionId");
-  localStorage.removeItem("tenant_slug");
 }
 
 export function getTenantSlug() {

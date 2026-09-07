@@ -234,10 +234,70 @@ class ProjectController extends Controller
         }
         $projects = $projectsQuery->get();
 
-        return $projects->map(function ($project) use ($user) {
+        // Batch-load member counts to avoid N+1 queries (was: getMembers() per project = 3+ queries each)
+        $allUserIds = collect();
+        $allTeamIds = collect();
+        foreach ($projects as $project) {
+            $userIds = array_filter(array_merge(
+                $project->assigned_users ?? [],
+                $project->created_by ? [$project->created_by] : []
+            ));
+            $allUserIds = $allUserIds->merge($userIds);
+            $teamIds = array_merge(
+                $project->team_id ? [$project->team_id] : [],
+                $project->team_ids ?? []
+            );
+            $allTeamIds = $allTeamIds->merge($teamIds);
+        }
+        $allTeamIds = $allTeamIds->filter()->unique()->values()->all();
+        $allUserIds = $allUserIds->filter()->unique()->values()->all();
+
+        // Single query for all teams + their members
+        $teamsMap = [];
+        if (!empty($allTeamIds)) {
+            $teams = Team::whereIn('id', $allTeamIds)->with('members:id')->get();
+            foreach ($teams as $team) {
+                $teamsMap[$team->id] = $team;
+            }
+        }
+
+        // Single query for all active users
+        $usersMap = [];
+        if (!empty($allUserIds)) {
+            $users = User::whereIn('id', $allUserIds)->where('active', true)
+                ->select('id', 'name', 'email', 'role', 'department')->get();
+            foreach ($users as $u) {
+                $usersMap[$u->id] = $u;
+            }
+        }
+
+        return $projects->map(function ($project) use ($user, $teamsMap, $usersMap) {
             $isAssigned = in_array($user->id, $project->assigned_users ?? []);
             $project->is_assigned = $isAssigned;
-            $project->members_count = $project->getMembers()->count();
+
+            // Compute members_count from pre-loaded data instead of N+1 queries
+            $memberIds = array_filter(array_merge(
+                $project->assigned_users ?? [],
+                $project->created_by ? [$project->created_by] : []
+            ));
+            $teamIds = array_unique(array_filter(array_merge(
+                $project->team_id ? [$project->team_id] : [],
+                $project->team_ids ?? []
+            )));
+            foreach ($teamIds as $tid) {
+                if (isset($teamsMap[$tid])) {
+                    $memberIds = array_merge($memberIds, $teamsMap[$tid]->members->pluck('id')->toArray());
+                    if ($teamsMap[$tid]->leader_id) {
+                        $memberIds[] = $teamsMap[$tid]->leader_id;
+                    }
+                }
+            }
+            $memberIds = array_unique(array_filter($memberIds));
+            $activeCount = 0;
+            foreach ($memberIds as $mid) {
+                if (isset($usersMap[$mid])) $activeCount++;
+            }
+            $project->members_count = $activeCount;
 
             return $project;
         });

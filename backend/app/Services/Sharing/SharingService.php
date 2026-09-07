@@ -127,6 +127,21 @@ class SharingService
             details: ['permission' => $permission, 'can_download' => $canDownload]
         );
 
+        // If sharing a project, cascade to all child resources (tasks, events, knowledge bases)
+        if ($resourceType === 'project') {
+            $this->shareProjectChildren(
+                projectResourceId: $resourceId,
+                parentSharedResource: $sharedResource,
+                connection: $connection,
+                sharedByOrgId: $sharedByOrgId,
+                sharedWithOrgId: $sharedWithOrgId,
+                userId: $userId,
+                permission: $permission,
+                canDownload: $canDownload,
+                expiresAt: $expiresAt
+            );
+        }
+
         // Notify the receiving organization
         $this->notificationService->resourceShared(
             orgId: $sharedWithOrgId,
@@ -160,6 +175,15 @@ class SharingService
                 'permission'   => $newPermission,
                 'can_download' => $canDownload,
             ]);
+
+            // If updating a project, cascade permission to all child resources
+            if ($sharedResource->resource_type === 'project') {
+                $this->updateProjectChildrenPermissions(
+                    parentSharedResource: $sharedResource,
+                    newPermission: $newPermission,
+                    canDownload: $canDownload
+                );
+            }
 
             $this->logActivity(
                 connectionId: $sharedResource->connection_id,
@@ -215,6 +239,15 @@ class SharingService
             SharedResourceUser::where('shared_resource_id', $sharedResource->id)
                 ->where('status', 'active')
                 ->update(['status' => 'revoked']);
+
+            // If revoking a project, cascade revoke all child resources
+            if ($sharedResource->resource_type === 'project') {
+                $this->revokeProjectChildren(
+                    parentSharedResource: $sharedResource,
+                    userId: $userId,
+                    organizationId: $organizationId
+                );
+            }
 
             $this->logActivity(
                 connectionId: $sharedResource->connection_id,
@@ -564,6 +597,7 @@ class SharingService
                 'resource_type'               => $sharedResource->resource_type,
                 'resource_id'                 => $sharedResource->resource_id,
                 'resource_name'               => $sharedResource->resource_name,
+                'parent_resource_id'          => $sharedResource->parent_resource_id ?? null,
                 'permission'                  => $sharedResource->permission,
                 'can_download'                => $sharedResource->can_download,
                 'status'                      => $sharedResource->status,
@@ -666,6 +700,225 @@ class SharingService
             \Log::error("Failed to remove mirror from receiver DB: " . $e->getMessage());
         } finally {
             DB::purge($connName);
+        }
+    }
+
+    /**
+     * When sharing a project, cascade share all child resources:
+     * - Tasks (project_id = resourceId)
+     * - Events (project_id = resourceId)
+     * - Knowledge bases (project_id = resourceId)
+     */
+    private function shareProjectChildren(
+        int $projectResourceId,
+        SharedResource $parentSharedResource,
+        OrganizationConnection $connection,
+        int $sharedByOrgId,
+        int $sharedWithOrgId,
+        int $userId,
+        string $permission,
+        bool $canDownload,
+        ?string $expiresAt
+    ): void {
+        // Fetch child tasks
+        $tasks = Task::where('project_id', $projectResourceId)->get();
+
+        foreach ($tasks as $task) {
+            $this->shareChildResource(
+                parentSharedResource: $parentSharedResource,
+                resourceType: 'task',
+                resourceId: $task->id,
+                resourceName: $task->title,
+                connection: $connection,
+                sharedByOrgId: $sharedByOrgId,
+                sharedWithOrgId: $sharedWithOrgId,
+                userId: $userId,
+                permission: $permission,
+                canDownload: $canDownload,
+                expiresAt: $expiresAt
+            );
+        }
+
+        // Fetch child events (events table has project_id column)
+        $events = Event::where('project_id', $projectResourceId)->get();
+
+        foreach ($events as $event) {
+            $this->shareChildResource(
+                parentSharedResource: $parentSharedResource,
+                resourceType: 'event',
+                resourceId: $event->id,
+                resourceName: $event->title,
+                connection: $connection,
+                sharedByOrgId: $sharedByOrgId,
+                sharedWithOrgId: $sharedWithOrgId,
+                userId: $userId,
+                permission: $permission,
+                canDownload: $canDownload,
+                expiresAt: $expiresAt
+            );
+        }
+
+        // Fetch child knowledge bases (knowledge_bases table has project_id column)
+        $kbs = KnowledgeBase::where('project_id', $projectResourceId)->get();
+
+        foreach ($kbs as $kb) {
+            $this->shareChildResource(
+                parentSharedResource: $parentSharedResource,
+                resourceType: 'knowledge_base',
+                resourceId: $kb->id,
+                resourceName: $kb->title,
+                connection: $connection,
+                sharedByOrgId: $sharedByOrgId,
+                sharedWithOrgId: $sharedWithOrgId,
+                userId: $userId,
+                permission: $permission,
+                canDownload: $canDownload,
+                expiresAt: $expiresAt
+            );
+        }
+    }
+
+    /**
+     * Share a single child resource (task, event, or knowledge_base).
+     * Skips if already shared on this connection.
+     */
+    private function shareChildResource(
+        SharedResource $parentSharedResource,
+        string $resourceType,
+        int $resourceId,
+        string $resourceName,
+        OrganizationConnection $connection,
+        int $sharedByOrgId,
+        int $sharedWithOrgId,
+        int $userId,
+        string $permission,
+        bool $canDownload,
+        ?string $expiresAt
+    ): void {
+        try {
+            // Skip if already shared
+            $existing = SharedResource::where('connection_id', $connection->id)
+                ->where('resource_type', $resourceType)
+                ->where('resource_id', $resourceId)
+                ->where('status', 'active')
+                ->first();
+
+            if ($existing) {
+                return;
+            }
+
+            $childResource = SharedResource::create([
+                'connection_id'               => $connection->id,
+                'shared_by_organization_id'   => $sharedByOrgId,
+                'shared_with_organization_id' => $sharedWithOrgId,
+                'resource_type'               => $resourceType,
+                'resource_id'                 => $resourceId,
+                'resource_name'               => $resourceName,
+                'parent_resource_id'          => $parentSharedResource->id,
+                'permission'                  => $permission,
+                'can_download'                => $canDownload,
+                'status'                      => 'active',
+                'shared_by_user_id'           => $userId,
+                'shared_at'                   => now(),
+                'expires_at'                  => $expiresAt,
+            ]);
+
+            // Mirror to receiver DB
+            $this->mirrorToReceiverDb($childResource, $sharedWithOrgId);
+
+            // Log activity
+            $this->logActivity(
+                connectionId: $connection->id,
+                sharedResourceId: $childResource->id,
+                organizationId: $sharedByOrgId,
+                userId: $userId,
+                action: 'shared',
+                resourceType: $resourceType,
+                resourceId: $resourceId,
+                details: [
+                    'permission' => $permission,
+                    'can_download' => $canDownload,
+                    'parent_resource_id' => $parentSharedResource->id,
+                    'cascade_shared' => true,
+                ]
+            );
+        } catch (\Throwable $e) {
+            \Log::warning("Failed to cascade share child resource {$resourceType} #{$resourceId}: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * When revoking a project, revoke all cascade-shared child resources.
+     */
+    private function revokeProjectChildren(
+        SharedResource $parentSharedResource,
+        int $userId,
+        int $organizationId
+    ): void {
+        $children = SharedResource::where('parent_resource_id', $parentSharedResource->id)
+            ->where('status', 'active')
+            ->get();
+
+        foreach ($children as $child) {
+            try {
+                $child->update([
+                    'status'     => 'revoked',
+                    'revoked_at' => now(),
+                ]);
+
+                // Revoke user-level access
+                SharedResourceUser::where('shared_resource_id', $child->id)
+                    ->where('status', 'active')
+                    ->update(['status' => 'revoked']);
+
+                // Remove mirror from receiver DB
+                $this->removeMirrorFromReceiverDb($child);
+
+                // Log activity
+                $this->logActivity(
+                    connectionId: $child->connection_id,
+                    sharedResourceId: $child->id,
+                    organizationId: $organizationId,
+                    userId: $userId,
+                    action: 'unshared',
+                    resourceType: $child->resource_type,
+                    resourceId: $child->resource_id,
+                    details: [
+                        'previous_permission' => $child->permission,
+                        'cascade_revoked' => true,
+                        'parent_resource_id' => $parentSharedResource->id,
+                    ]
+                );
+            } catch (\Throwable $e) {
+                \Log::warning("Failed to cascade revoke child resource {$child->resource_type} #{$child->resource_id}: " . $e->getMessage());
+            }
+        }
+    }
+
+    /**
+     * When updating a project's permission, update all cascade-shared child resources.
+     */
+    private function updateProjectChildrenPermissions(
+        SharedResource $parentSharedResource,
+        string $newPermission,
+        bool $canDownload
+    ): void {
+        $children = SharedResource::where('parent_resource_id', $parentSharedResource->id)
+            ->where('status', 'active')
+            ->get();
+
+        foreach ($children as $child) {
+            try {
+                $child->update([
+                    'permission'   => $newPermission,
+                    'can_download' => $canDownload,
+                ]);
+
+                // Update mirror in receiver DB
+                $this->updateMirrorInReceiverDb($child);
+            } catch (\Throwable $e) {
+                \Log::warning("Failed to cascade update permission for child resource {$child->resource_type} #{$child->resource_id}: " . $e->getMessage());
+            }
         }
     }
 }

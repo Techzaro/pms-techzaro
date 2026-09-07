@@ -184,7 +184,7 @@ function Projects() {
   const isAdminOrManager = ["admin", "manager"].includes(String(currentRole || "").toLowerCase());
 
   /** Fetch all projects from the API, applying current date range filters. */
-  const fetchProjects = async () => {
+  const fetchProjects = useCallback(async () => {
     try {
       setLoading(true);
       const token = authToken();
@@ -225,9 +225,9 @@ function Projects() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [timeFilter, startDate, endDate]);
 
-  const fetchSharedProjects = async () => {
+  const fetchSharedProjects = useCallback(async () => {
     try {
       const token = authToken();
       const res = await fetch(`${API_URL}/sharing/shared-resources?type=project`, {
@@ -241,7 +241,7 @@ function Projects() {
     } catch (err) {
       console.error("Error fetching shared projects:", err);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchProjects();
@@ -446,13 +446,34 @@ function Projects() {
     return true;
   }), [orderedProjects, searchQuery, statusFilter, timeFilter, startDate, endDate]);
 
-  const allCount = useMemo(() => orderedProjects.length, [orderedProjects]);
-  const dueTodayCount = useMemo(() => orderedProjects.filter((p) => { if (!p.active_deadline) return false; const d = new Date(p.active_deadline); const t = new Date(); return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && d.getDate() === t.getDate(); }).length, [orderedProjects]);
-  const activeCount = useMemo(() => orderedProjects.filter((p) => p.status === "In-progress" || p.status === "in_progress" || p.status === "Planning" || p.status === "planned").length, [orderedProjects]);
-  const inProgressCount = useMemo(() => orderedProjects.filter((p) => { const s = (p.status || "").toLowerCase(); return s === "in-progress" || s === "in_progress" || s === "pending" || s === "planned"; }).length, [orderedProjects]);
-  const planningCount = useMemo(() => orderedProjects.filter((p) => { const s = (p.status || "").toLowerCase(); return s === "planning" || s === "planned"; }).length, [orderedProjects]);
-  const pauseCount = useMemo(() => orderedProjects.filter((p) => { const s = (p.status || "").toLowerCase(); return s === "pause" || s === "paused" || s === "rejected"; }).length, [orderedProjects]);
-  const completedCount = useMemo(() => orderedProjects.filter((p) => { const s = (p.status || "").toLowerCase(); return s === "completed" || s === "approved"; }).length, [orderedProjects]);
+  // Single-pass status counts instead of 7 separate .filter() iterations
+  const statusCounts = useMemo(() => {
+    const counts = { all: 0, dueToday: 0, active: 0, inProgress: 0, planning: 0, pause: 0, completed: 0 };
+    const today = new Date();
+    for (const p of orderedProjects) {
+      counts.all++;
+      const s = (p.status || "").toLowerCase();
+      if (p.active_deadline) {
+        const d = new Date(p.active_deadline);
+        if (d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate()) {
+          counts.dueToday++;
+        }
+      }
+      if (s === "in-progress" || s === "in_progress" || s === "planning" || s === "planned") counts.active++;
+      if (s === "in-progress" || s === "in_progress" || s === "pending" || s === "planned") counts.inProgress++;
+      if (s === "planning" || s === "planned") counts.planning++;
+      if (s === "pause" || s === "paused" || s === "rejected") counts.pause++;
+      if (s === "completed" || s === "approved") counts.completed++;
+    }
+    return counts;
+  }, [orderedProjects]);
+  const allCount = statusCounts.all;
+  const dueTodayCount = statusCounts.dueToday;
+  const activeCount = statusCounts.active;
+  const inProgressCount = statusCounts.inProgress;
+  const planningCount = statusCounts.planning;
+  const pauseCount = statusCounts.pause;
+  const completedCount = statusCounts.completed;
 
   const totalPages = showAll ? 1 : Math.ceil(filteredProjects.length / itemsPerPage);
   const paginatedProjects = showAll ? filteredProjects : filteredProjects.slice((page - 1) * itemsPerPage, page * itemsPerPage);
