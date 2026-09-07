@@ -1009,6 +1009,7 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
                   value: Number(item?.id),
                   label: item?.title || `Article #${item?.id}`,
                 }))}
+                showChips={true}
               />
             </div>
 
@@ -1025,6 +1026,7 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
                   value: Number(item?.id),
                   label: item?.title || `Event #${item?.id}`,
                 }))}
+                showChips={true}
               />
             </div>
 
@@ -1136,18 +1138,47 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
                 </div>
               )}
               {categoriesList.length > 0 && (
-                <div className="cp-goals-list">
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "8px" }}>
                   {categoriesList.map((cat, index) => (
-                    <div key={index} className="cp-goals-item">
-                      <span className="cp-goals-item-text">{cat}</span>
+                    <span
+                      key={cat || index}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "5px",
+                        padding: "3px 9px",
+                        borderRadius: "14px",
+                        fontSize: "12px",
+                        fontWeight: 500,
+                        background: "var(--color-primary-bg, #eff6ff)",
+                        color: "var(--color-primary, #2563eb)",
+                        border: "1px solid var(--color-primary-border, #bfdbfe)",
+                      }}
+                    >
+                      {cat}
                       <button
                         type="button"
-                        className="cp-goals-item-remove"
-                        onClick={() => { setPendingRemoveItem({ type: "category", index }); setRemoveConfirmOpen(true); }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveCategory(index);
+                        }}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          padding: 0,
+                          marginLeft: "2px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          color: "inherit",
+                          fontSize: "14px",
+                          lineHeight: 1,
+                        }}
+                        title={t("Remove {{name}}", { name: cat, defaultValue: `Remove ${cat}` })}
                       >
-                        ✕
+                        &times;
                       </button>
-                    </div>
+                    </span>
                   ))}
                 </div>
               )}
@@ -1231,6 +1262,59 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
                       </div>
                     )}
                   </div>
+                  {form.team_ids.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "8px" }}>
+                      {form.team_ids.map((teamId) => {
+                        const teamObj = teams.find((t) => Number(t.id) === Number(teamId));
+                        const chipName = teamObj?.name || `Team #${teamId}`;
+                        return (
+                          <span
+                            key={teamId}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "5px",
+                              padding: "3px 9px",
+                              borderRadius: "14px",
+                              fontSize: "12px",
+                              fontWeight: 500,
+                              background: "var(--color-primary-bg, #eff6ff)",
+                              color: "var(--color-primary, #2563eb)",
+                              border: "1px solid var(--color-primary-border, #bfdbfe)",
+                            }}
+                          >
+                            {chipName}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                markDirty();
+                                setForm((prev) => ({
+                                  ...prev,
+                                  team_ids: prev.team_ids.filter((id) => Number(id) !== Number(teamId)),
+                                }));
+                              }}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                cursor: "pointer",
+                                padding: 0,
+                                marginLeft: "2px",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                color: "inherit",
+                                fontSize: "14px",
+                                lineHeight: 1,
+                              }}
+                              title={t("Remove {{name}}", { name: chipName, defaultValue: `Remove ${chipName}` })}
+                            >
+                              &times;
+                            </button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 <div className="cp-field">

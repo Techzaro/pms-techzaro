@@ -336,12 +336,12 @@ class ProjectController extends Controller
 
         $tasks->transform(function ($task) {
             $assigneeNames = [];
-            if ($task->currentOwner && !empty($task->currentOwner->name)) {
-                $assigneeNames[] = $task->currentOwner->name;
-            } elseif ($task->relationLoaded('assignees') && $task->assignees->isNotEmpty()) {
+            if ($task->relationLoaded('assignees') && $task->assignees->isNotEmpty()) {
                 $assigneeNames = $task->assignees->pluck('name')->filter()->toArray();
             } elseif ($task->assignee && !empty($task->assignee->name)) {
                 $assigneeNames[] = $task->assignee->name;
+            } elseif ($task->currentOwner && !empty($task->currentOwner->name)) {
+                $assigneeNames[] = $task->currentOwner->name;
             }
 
             $task->assignee_name = !empty($assigneeNames) ? implode(', ', array_unique($assigneeNames)) : null;
