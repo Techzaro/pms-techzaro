@@ -736,10 +736,11 @@ function TaskDetails() {
   const canSubmitTask = !readOnly && !isTerminalOrSubmitted && !isOnlyFollower && (task?.can_submit === true || (isAssignee && ["in_progress", "reopened", "paused"].includes(taskStatus)));
   const canAcknowledge = (readOnly || isOnlyFollower) ? false : (task && currentUser && isAssignee && ["pending", "reopened"].includes(task?.status));
   const canStartTimer = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isCreator || isSuperAdmin || isAdminOrManager) && ["in_progress", "in-progress"].includes(task?.status) && (!task?.timer || task?.timer?.state === "idle" || !task?.timer?.state) && !task?.assigner_paused);
-  const canPause = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isCreator || isSuperAdmin || isAdminOrManager) && ["in_progress", "submitted"].includes(task?.status) && task?.timer?.state === "running" && !task?.assigner_paused);
-  const canContinue = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isCreator || isSuperAdmin || isAdminOrManager) && (task?.status === "paused" || task?.timer?.state === "paused") && !task?.assigner_paused);
   const isAssignerLocked = !!task?.assigner_paused;
-  const canAssignerPause = (readOnly || isOnlyFollower) ? false : (task && currentUser && isCreator && !task?.assigner_paused && ["pending", "in_progress", "reopened", "paused", "submitted"].includes(task?.status));
+  const canAssignerPause = (readOnly || isOnlyFollower) ? false : (task && currentUser && isCreator && !task?.assigner_paused && ["pending", "in_progress", "reopened", "submitted"].includes(task?.status) && task?.status !== "paused");
+  const canTimerPause = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isCreator || isSuperAdmin || isAdminOrManager) && ["in_progress", "submitted"].includes(task?.status) && task?.timer?.state === "running" && !task?.assigner_paused);
+  const canPause = (canTimerPause || canAssignerPause) && (!isTransferor || transferorHasApproved) && !task?.active_outgoing_delegation;
+  const canContinue = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isCreator || isSuperAdmin || isAdminOrManager) && (task?.status === "paused" || task?.timer?.state === "paused") && !task?.assigner_paused);
   const canAssignerResume = (readOnly || isOnlyFollower) ? false : (task && currentUser && isCreator && task?.assigner_paused);
   const isApproved = taskStatus === "approved";
   const isTransferor = task?.is_transferor ?? false;
@@ -1642,22 +1643,32 @@ function TaskDetails() {
                       {startingTimer ? t("Starting...", { defaultValue: "Starting..." }) : t("Start", { defaultValue: "Start" })}
                     </button>
                   )}
-                  {canPause && (!isTransferor || transferorHasApproved) && !task?.active_outgoing_delegation && (
-                    <button className="td-btn-primary" onClick={() => setPauseModalOpen(true)} disabled={pausing} style={{ backgroundColor: pausing ? "var(--text-muted)" : "var(--color-warning)", borderColor: pausing ? "var(--text-muted)" : "var(--color-warning)", opacity: pausing ? 0.7 : 1, cursor: pausing ? "not-allowed" : "pointer" }}>
+                  {canPause && (
+                    <button
+                      className="td-btn-primary"
+                      onClick={() => {
+                        if (canAssignerPause) {
+                          setAssignerPauseModalOpen(true);
+                        } else {
+                          setPauseModalOpen(true);
+                        }
+                      }}
+                      disabled={pausing || assignerPausing}
+                      style={{
+                        backgroundColor: (pausing || assignerPausing) ? "var(--text-muted)" : "var(--color-primary)",
+                        borderColor: (pausing || assignerPausing) ? "var(--text-muted)" : "var(--color-primary)",
+                        opacity: (pausing || assignerPausing) ? 0.7 : 1,
+                        cursor: (pausing || assignerPausing) ? "not-allowed" : "pointer"
+                      }}
+                    >
                       <Pause size={15} />
-                      {pausing ? t("Pausing...", { defaultValue: "Pausing..." }) : t("Pause", { defaultValue: "Pause" })}
+                      {(pausing || assignerPausing) ? t("Pausing...", { defaultValue: "Pausing..." }) : t("Pause", { defaultValue: "Pause" })}
                     </button>
                   )}
                   {canContinue && (!isTransferor || transferorHasApproved) && !task?.active_outgoing_delegation && !hasPendingDelegation && (
                     <button className="td-btn-primary" onClick={handleContinue} disabled={continuing} style={continuing ? { opacity: 0.6, cursor: "not-allowed" } : {}}>
                       <Play size={15} />
                       {continuing ? t("Resuming...", { defaultValue: "Resuming..." }) : t("Resume", { defaultValue: "Resume" })}
-                    </button>
-                  )}
-                  {canAssignerPause && !isTransferor && !task?.active_outgoing_delegation && (
-                    <button className="td-btn-primary" onClick={() => setAssignerPauseModalOpen(true)} disabled={assignerPausing} style={{ backgroundColor: assignerPausing ? "var(--text-muted)" : "var(--color-primary)", borderColor: assignerPausing ? "var(--text-muted)" : "var(--color-primary)", opacity: assignerPausing ? 0.7 : 1, cursor: assignerPausing ? "not-allowed" : "pointer" }}>
-                      <Lock size={15} />
-                      {assignerPausing ? t("Pausing...", { defaultValue: "Pausing..." }) : t("Pause", { defaultValue: "Pause" })}
                     </button>
                   )}
                   {canAssignerResume && !isTransferor && !task?.active_outgoing_delegation && (

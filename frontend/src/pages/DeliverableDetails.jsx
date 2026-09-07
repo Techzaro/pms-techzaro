@@ -613,7 +613,7 @@ if (res.ok) {
   const workflowEvents = Array.isArray(subtask.workflow_events) ? subtask.workflow_events : [];
   const canSubmit = isAssignee && ["rejected", "in_progress", "paused"].includes(subtask.status);
   const isAssignerLocked = !!subtask.assigner_paused;
-  const canAssignerPause = readOnly ? false : (isCreator && !subtask.assigner_paused && ["pending", "in_progress", "reopened", "paused", "submitted"].includes(subtask.status));
+  const canAssignerPause = readOnly ? false : (isCreator && !subtask.assigner_paused && ["pending", "in_progress", "reopened", "submitted"].includes(subtask.status) && subtask.status !== "paused");
   const canAssignerResume = readOnly ? false : (isCreator && subtask.assigner_paused);
   const isApproved = subtask.status === "approved";
   const isSubmitted = subtask.status === "submitted";
@@ -624,7 +624,8 @@ if (res.ok) {
   const timerPaused = timerState === "paused";
   const isAdminOrManager = currentUser && ["admin", "manager", "super_admin"].includes(currentUser.role);
   const canStartSubtaskTimer = !readOnly && (isAssignee || isCreator || isAdminOrManager) && ["in_progress", "reopened"].includes(subtask.status) && (!timerState || timerState === "idle") && !isAssignerLocked && (!isTransferor || transferorHasApproved) && !subtask?.active_outgoing_delegation && !hasPendingDelegation;
-  const canPauseSubtask = !readOnly && (isAssignee || isCreator || isAdminOrManager) && ["in_progress", "submitted"].includes(subtask.status) && timerRunning && !isAssignerLocked && (!isTransferor || transferorHasApproved) && !subtask?.active_outgoing_delegation;
+  const canTimerPause = !readOnly && (isAssignee || isCreator || isAdminOrManager) && ["in_progress", "submitted"].includes(subtask.status) && timerRunning && !isAssignerLocked;
+  const canPauseSubtask = (canTimerPause || canAssignerPause) && (!isTransferor || transferorHasApproved) && !subtask?.active_outgoing_delegation;
   const canResumeSubtask = !readOnly && (isAssignee || isCreator || isAdminOrManager) && (subtask.status === "paused" || timerPaused) && !isAssignerLocked && (!isTransferor || transferorHasApproved) && !subtask?.active_outgoing_delegation && !hasPendingDelegation;
   const canAbandonSubtask = !readOnly && (isAssignee || isCreator || isAdminOrManager) && !["abandoned", "approved", "completed", "submitted", "submitted_late"].includes(subtask.status);
 
@@ -708,10 +709,26 @@ if (res.ok) {
                       {t("Transfer", { defaultValue: "Transfer" })}
                     </button>
                   )}
-                  {canAssignerPause && !isTransferor && !subtask?.active_outgoing_delegation && (
-                    <button className="td-btn-primary" onClick={() => setAssignerPauseModalOpen(true)} disabled={assignerPausing} style={{ backgroundColor: assignerPausing ? "var(--text-muted)" : "var(--color-primary)", borderColor: assignerPausing ? "var(--text-muted)" : "var(--color-primary)", opacity: assignerPausing ? 0.7 : 1, cursor: assignerPausing ? "not-allowed" : "pointer" }}>
-                      <Lock size={15} />
-                      {assignerPausing ? t("Pausing...", { defaultValue: "Pausing..." }) : t("Pause", { defaultValue: "Pause" })}
+                  {canPauseSubtask && (
+                    <button
+                      className="td-btn-primary"
+                      onClick={() => {
+                        if (canAssignerPause) {
+                          setAssignerPauseModalOpen(true);
+                        } else {
+                          handlePause();
+                        }
+                      }}
+                      disabled={pausing || assignerPausing}
+                      style={{
+                        backgroundColor: (pausing || assignerPausing) ? "var(--text-muted)" : "var(--color-primary)",
+                        borderColor: (pausing || assignerPausing) ? "var(--text-muted)" : "var(--color-primary)",
+                        opacity: (pausing || assignerPausing) ? 0.7 : 1,
+                        cursor: (pausing || assignerPausing) ? "not-allowed" : "pointer"
+                      }}
+                    >
+                      <Pause size={15} />
+                      {(pausing || assignerPausing) ? t("Pausing...", { defaultValue: "Pausing..." }) : t("Pause", { defaultValue: "Pause" })}
                     </button>
                   )}
                   {canAssignerResume && !isTransferor && !subtask?.active_outgoing_delegation && (
@@ -737,9 +754,6 @@ if (res.ok) {
                       <Play size={15} />
                       {startingTimer ? t("Starting...", { defaultValue: "Starting..." }) : t("Start", { defaultValue: "Start" })}
                     </button>
-                  )}
-                  {canPauseSubtask && (
-                    <button className="td-btn-primary" onClick={handlePause} disabled={pausing} style={{ backgroundColor: pausing ? "#9CA3AF" : "#D97706" }}><Pause size={15} />{pausing ? t("Pausing...", { defaultValue: "Pausing..." }) : t("Pause", { defaultValue: "Pause" })}</button>
                   )}
                   {canResumeSubtask && (
                     <button className="td-btn-primary" onClick={handleResume} disabled={resuming}><Play size={15} />{resuming ? t("Resuming...", { defaultValue: "Resuming..." }) : t("Resume", { defaultValue: "Resume" })}</button>
