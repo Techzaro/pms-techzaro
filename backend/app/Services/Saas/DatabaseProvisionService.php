@@ -70,7 +70,7 @@ class DatabaseProvisionService
      * - Migration batch tracking
      * - Transaction per migration
      *
-     * After migrations, runs FixTenantColumns as safety net.
+     * After migrations, runs schema sync as safety net (auto-detects missing tables/columns).
      */
     public function runMigrations(string $databaseName): bool
     {
@@ -87,16 +87,27 @@ class DatabaseProvisionService
                 'output' => Artisan::output(),
             ]);
         } catch (\Throwable $e) {
-            Log::warning("Some migrations failed on tenant DB {$databaseName} (continuing with column fixes)", [
+            Log::warning("Some migrations failed on tenant DB {$databaseName} (continuing with schema sync)", [
                 'error'  => $e->getMessage(),
                 'output' => Artisan::output(),
             ]);
         }
 
+        // Run legacy FixTenantColumns first (fast, covers known cases)
         try {
             FixTenantColumns::fixDatabaseProgrammatic($databaseName);
         } catch (\Throwable $e) {
             Log::warning("Column fix step failed (non-fatal)", [
+                'database' => $databaseName,
+                'error'    => $e->getMessage(),
+            ]);
+        }
+
+        // Then run full schema sync (catches anything FixTenantColumns missed)
+        try {
+            $this->syncSchema($databaseName);
+        } catch (\Throwable $e) {
+            Log::warning("Schema sync failed (non-fatal)", [
                 'database' => $databaseName,
                 'error'    => $e->getMessage(),
             ]);
@@ -110,6 +121,72 @@ class DatabaseProvisionService
         }
 
         return true;
+    }
+
+    /**
+     * Sync a tenant database schema against the golden reference.
+     * Adds any missing tables/columns automatically.
+     */
+    public function syncSchema(string $databaseName): void
+    {
+        /** @var SchemaReferenceService $schemaRef */
+        $schemaRef = app(SchemaReferenceService::class);
+        $goldenSchema = $schemaRef->getGoldenSchema();
+
+        if (empty($goldenSchema)) {
+            Log::warning("Schema sync: golden schema is empty, skipping");
+            return;
+        }
+
+        $connectionName = 'tenant_runner';
+        $pdo = DB::connection($connectionName)->getPdo();
+
+        // Get current schema
+        $stmt = $pdo->query("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '{$databaseName}' AND TABLE_TYPE = 'BASE TABLE'");
+        $tables = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+
+        $tablesCreated = 0;
+        $columnsAdded = 0;
+
+        foreach ($goldenSchema as $tableName => $goldenColumns) {
+            if (!in_array($tableName, $tables)) {
+                // Table missing — create it
+                $createSql = $schemaRef->buildCreateTableSql($tableName);
+                if ($createSql) {
+                    try {
+                        $pdo->exec($createSql);
+                        $tablesCreated++;
+                        Log::info("Schema sync: Created table `{$databaseName}`.`{$tableName}`");
+                    } catch (\Throwable $e) {
+                        Log::warning("Schema sync: Failed to create `{$tableName}`: " . $e->getMessage());
+                    }
+                }
+            } else {
+                // Table exists — check columns
+                $colStmt = $pdo->prepare("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?");
+                $colStmt->execute([$databaseName, $tableName]);
+                $existingCols = $colStmt->fetchAll(\PDO::FETCH_COLUMN);
+
+                foreach ($goldenColumns as $colName => $goldenColInfo) {
+                    if (!in_array($colName, $existingCols)) {
+                        $addSql = $schemaRef->buildAddColumnSql($tableName, $colName);
+                        if ($addSql) {
+                            try {
+                                $pdo->exec($addSql);
+                                $columnsAdded++;
+                                Log::info("Schema sync: Added `{$databaseName}`.`{$tableName}`.`{$colName}`");
+                            } catch (\Throwable $e) {
+                                Log::warning("Schema sync: Failed to add `{$tableName}`.`{$colName}`: " . $e->getMessage());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if ($tablesCreated > 0 || $columnsAdded > 0) {
+            Log::info("Schema sync completed on {$databaseName}: {$tablesCreated} tables created, {$columnsAdded} columns added");
+        }
     }
 
     /**

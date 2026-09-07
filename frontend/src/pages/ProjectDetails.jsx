@@ -202,7 +202,7 @@ function sanitizeHtml(html) {
   return String(html || "").replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
 }
 
-function CredentialRow({ credential, onDelete, onEdit, isGuest }) {
+function CredentialRow({ credential, onDelete, onEdit, isGuest, isShared }) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const [copiedUser, setCopiedUser] = useState(false);
@@ -263,7 +263,7 @@ function CredentialRow({ credential, onDelete, onEdit, isGuest }) {
           )}
         </div>
         <div className="pd-cred-actions">
-          {!isGuest && (
+          {!isGuest && !isShared && (
             <>
               <button className="pd-cred-edit" onClick={() => onEdit?.(credential)} title={t("Edit credential", { defaultValue: "Edit credential" })}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
@@ -426,6 +426,13 @@ function ProjectDetails() {
 
   useEffect(() => {
     if (tab === "kb" && (project?.id || projectId)) {
+      // For shared projects, use embedded KB articles from cross-DB fetch
+      if (isShared && project?.projectKbArticles) {
+        const articles = Array.isArray(project.projectKbArticles) ? project.projectKbArticles : (project.projectKbArticles?.data || []);
+        setProjectKbArticles(articles);
+        setLoadingKb(false);
+        return;
+      }
       const pId = project?.id || projectId;
       setLoadingKb(true);
       const token = authToken();
@@ -466,6 +473,13 @@ function ProjectDetails() {
 
   useEffect(() => {
     if (tab === "events" && (project?.id || projectId)) {
+      // For shared projects, use embedded events from cross-DB fetch
+      if (isShared && project?.projectEvents) {
+        const eventsList = Array.isArray(project.projectEvents) ? project.projectEvents : (project.projectEvents?.data || []);
+        setProjectEvents(eventsList);
+        setLoadingProjectEvents(false);
+        return;
+      }
       const pId = project?.id || projectId;
       setLoadingProjectEvents(true);
       const token = authToken();
@@ -1089,8 +1103,8 @@ function ProjectDetails() {
   const isViewOnlyUser = !!project?.is_view_only || (project?.view_only_users || []).some((u) => Number(u?.id || u) === Number(currentUser?.id));
 
   const canEdit = !isShared && !isViewOnlyUser && (project?.can_edit || isAdminOrManager);
-  const canManage = !isViewOnlyUser && isAdminOrManager;
-  const canAddTask = !isViewOnlyUser && currentUser?.role !== "guest" && (isCreator || isAdminOrManager || isAssigned);
+  const canManage = !isShared && !isViewOnlyUser && isAdminOrManager;
+  const canAddTask = !isShared && !isViewOnlyUser && currentUser?.role !== "guest" && (isCreator || isAdminOrManager || isAssigned);
 
   const handleMilestoneToggle = async (milestone) => {
     await runMilestoneToggle(async () => {
@@ -1171,6 +1185,12 @@ function ProjectDetails() {
 
   const fetchAccessCredentials = async () => {
     if (!project) return;
+    // For shared projects, use embedded credentials from the cross-DB fetch
+    if (isShared && project.accessCredentials) {
+      setAccessCredentials(Array.isArray(project.accessCredentials) ? project.accessCredentials : (project.accessCredentials?.data || []));
+      setLoadingCredentials(false);
+      return;
+    }
     setLoadingCredentials(true);
     try {
       const token = authToken();
@@ -1381,7 +1401,7 @@ function ProjectDetails() {
               <div className="pd-meta-rows__content">
                 <div className="pd-meta-rows__header">
                   <span className="pd-meta-rows__label">{t("Project manager", { defaultValue: "Project manager" })}</span>
-                  {(currentUser?.role === "admin" || currentUser?.role === "manager") && !isViewOnlyUser && (
+                  {!isShared && (currentUser?.role === "admin" || currentUser?.role === "manager") && !isViewOnlyUser && (
                     <button className="pd-manager-edit" onClick={openManagerEdit} title={t("Change project manager", { defaultValue: "Change project manager" })}>
                       {t("Edit", { defaultValue: "Edit" })}
                     </button>
@@ -1551,7 +1571,7 @@ function ProjectDetails() {
                     <button className="td-nav-btn" onClick={() => goToProject(prevProjectId)} disabled={!prevProjectId} title={t("Previous project", { defaultValue: "Previous project" })}><ChevronLeft size={18} /></button>
                     <button className="td-nav-btn" onClick={() => goToProject(nextProjectId)} disabled={!nextProjectId} title={t("Next project", { defaultValue: "Next project" })}><ChevronRight size={18} /></button>
                     <span className={`pd-pill-status pd-pill-status--${statusSlug(project.status)}`}>{t(project.status, { defaultValue: project.status })}</span>
-                    {isAdminOrManager && !isViewOnlyUser && (
+                    {!isShared && isAdminOrManager && !isViewOnlyUser && (
                       <button type="button" className="pd-btn-tx pd-btn-tx--outline" onClick={openVisibility}>
                         <IoEyeOutline size={16} />
                         {t("Show To", { defaultValue: "Show To" })}
@@ -1569,7 +1589,7 @@ function ProjectDetails() {
                         {t("Share", { defaultValue: "Share" })}
                       </button>
                     )}
-                    {canEdit && (
+                    {!isShared && canEdit && (
                       <button type="button" className="pd-btn-tx pd-btn-tx--danger" onClick={handleDeleteProject}>
                         <Trash2 size={16} />
                         {t("Delete", { defaultValue: "Delete" })}
@@ -1652,7 +1672,7 @@ function ProjectDetails() {
                             <div className="project-task-table">
                                 <div className={`ptt-header ${currentUser?.role === "guest" ? "ptt-header--guest" : ""}`}>
                                 <div>{t("ID", { defaultValue: "ID" })}</div>
-                                {currentUser?.role !== "guest" && <div>{isCreator || isAdminOrManager ? t("Assigned To", { defaultValue: "Assigned To" }) : t("Assigned By", { defaultValue: "Assigned By" })}</div>}
+                                {currentUser?.role !== "guest" && <div>{isShared || isCreator || isAdminOrManager ? t("Assigned To", { defaultValue: "Assigned To" }) : t("Assigned By", { defaultValue: "Assigned By" })}</div>}
                                 <div className="ptt-col-name">{t("Task Name", { defaultValue: "Task Name" })}</div>
                                 <div>{t("Status", { defaultValue: "Status" })}</div>
                                 <div>{t("Progress", { defaultValue: "Progress" })}</div>
@@ -1669,7 +1689,7 @@ function ProjectDetails() {
                                       return (
                                         <div className={`ptt-row ${currentUser?.role === "guest" ? "ptt-row--guest" : ""}`} key={tItem.id}>
                                           <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={tItem.id} businessId={tItem.business_id} />
-                                          {currentUser?.role !== "guest" && <div>{isCreator || isAdminOrManager ? ((tItem.assignees || []).map((a) => a.name).join(", ") || "—") : (tItem.assigner?.name || "—")}</div>}
+                                          {currentUser?.role !== "guest" && <div>{isShared || isCreator || isAdminOrManager ? ((tItem.assignees || []).map((a) => a.name).join(", ") || "—") : (tItem.assigner?.name || "—")}</div>}
                                         <div className="ptt-col-name">
                                            <Link to={rolePath(`tasks/task-details/${tItem.id}`)} state={{ from: "project", projectId: project?.id || projectId, projectTitle: project?.title, returnUrl: location.pathname + (location.search || "?tab=tasks") }} className="ptt-task-link">
                                              {tItem.title}
@@ -1735,6 +1755,8 @@ function ProjectDetails() {
                                               }
                                               onTriggerClick={() => navigate(rolePath(`tasks/task-details/${tItem.id}`), { state: { from: "project", projectId: project?.id || projectId, projectTitle: project?.title, returnUrl: location.pathname + (location.search || "?tab=tasks") } })}
                                             >
+                                              {isShared ? null : (
+                                              <>
                                               <button className="action-icon-btn action-note" title={t("Add Note", { defaultValue: "Add Note" })} onClick={() => setNoteModal({ open: true, itemId: tItem.id })}>
                                                 <StickyNote size={14} />
                                               </button>
@@ -1866,6 +1888,8 @@ function ProjectDetails() {
 
                                                 return null;
                                               })()}
+                                              </>
+                                              )}
                                             </ActionPopover>
                                           </div>
                                         </div>
@@ -1896,7 +1920,7 @@ function ProjectDetails() {
                                 />
                               </div>
                             )}
-                            {isAdminOrManager && !isViewOnlyUser && (
+                            {!isShared && isAdminOrManager && !isViewOnlyUser && (
                               <button type="button" className="pd-btn-tx pd-btn-tx--primary" onClick={() => setShowAddFileModal(true)} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                                 <Plus size={16} /> {t("Add Files", { defaultValue: "Add Files" })}
                               </button>
@@ -1962,7 +1986,7 @@ function ProjectDetails() {
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                               <input type="text" placeholder={t("Search by member name or role...", { defaultValue: "Search by member name or role..." })} value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)} />
                             </div>
-                            {isAdminOrManager && !isViewOnlyUser && (
+                            {!isShared && isAdminOrManager && !isViewOnlyUser && (
                               <button
                                 type="button"
                                 onClick={() => setShowProjectMembersModal(true)}
@@ -2102,7 +2126,7 @@ function ProjectDetails() {
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                               <input type="text" placeholder={t("Search by title, username, or URL...", { defaultValue: "Search by title, username, or URL..." })} value={accessSearch} onChange={(e) => setAccessSearch(e.target.value)} />
                             </div>
-                            {isAdminOrManager && !isViewOnlyUser && (
+                            {!isShared && isAdminOrManager && !isViewOnlyUser && (
                               <button type="button" className="pd-btn-tx pd-btn-tx--primary" onClick={() => setShowAddAccessModal(true)} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                                 <Plus size={16} /> {t("Add Access", { defaultValue: "Add Access" })}
                               </button>
@@ -2126,16 +2150,17 @@ function ProjectDetails() {
                             ) : (
                               <div className="pd-credentials-list">
                                 {filteredAccess.map((cred) => (
-                                <CredentialRow
-                                  key={cred.id}
-                                  credential={cred}
-                                  onDelete={() => {
-                                    setPendingDeleteCredential(cred.id);
-                                    setDeleteCredentialConfirmOpen(true);
-                                  }}
-                                  onEdit={(c) => setEditingCredential(c)}
-                                  isGuest={currentUser?.role === "guest"}
-                                />
+                                 <CredentialRow
+                                   key={cred.id}
+                                   credential={cred}
+                                   onDelete={() => {
+                                     setPendingDeleteCredential(cred.id);
+                                     setDeleteCredentialConfirmOpen(true);
+                                   }}
+                                   onEdit={(c) => setEditingCredential(c)}
+                                   isGuest={currentUser?.role === "guest"}
+                                   isShared={isShared}
+                                 />
                               ))}
                             </div>
                           )})()}
@@ -2164,6 +2189,7 @@ function ProjectDetails() {
                                   onChange={(e) => setKbSearch(e.target.value)}
                                 />
                               </div>
+                              {!isShared && (
                               <button
                                 type="button"
                                 className="pd-btn-tx pd-btn-tx--primary"
@@ -2172,6 +2198,7 @@ function ProjectDetails() {
                               >
                                 <Plus size={16} /> {t("Add Document", { defaultValue: "Add Document" })}
                               </button>
+                              )}
                             </div>
                           </div>
 
@@ -2199,6 +2226,7 @@ function ProjectDetails() {
                                   <p style={{ margin: "0 0 16px", fontSize: "13px", color: "var(--text-secondary)" }}>
                                     {t("Create and share SOPs, architectural guidelines, or deliverable checklists for this project.", { defaultValue: "Create and share SOPs, architectural guidelines, or deliverable checklists for this project." })}
                                   </p>
+                                  {!isShared && (
                                   <button
                                     type="button"
                                     onClick={() => navigate(rolePath("knowledge-base/create"), { state: { projectId: project?.id || projectId, projectTitle: project?.title } })}
@@ -2206,6 +2234,7 @@ function ProjectDetails() {
                                   >
                                     <Plus size={14} style={{ display: "inline", verticalAlign: "-2px", marginRight: "4px" }} /> {t("Add Document", { defaultValue: "Add Document" })}
                                   </button>
+                                  )}
                                 </div>
                               );
                             }
@@ -2300,6 +2329,7 @@ function ProjectDetails() {
                                   onChange={(e) => setEventSearch(e.target.value)}
                                 />
                               </div>
+                              {!isShared && (
                               <button
                                 type="button"
                                 className="pd-btn-tx pd-btn-tx--primary"
@@ -2308,6 +2338,7 @@ function ProjectDetails() {
                               >
                                 <Plus size={16} /> {t("Add Event", { defaultValue: "Add Event" })}
                               </button>
+                              )}
                             </div>
                           </div>
 
@@ -2334,6 +2365,7 @@ function ProjectDetails() {
                                   <p style={{ margin: "0 0 16px", fontSize: "13px", color: "var(--text-secondary)" }}>
                                     {t("Schedule sprint meetings, demo sessions, and release deadlines for this project.", { defaultValue: "Schedule sprint meetings, demo sessions, and release deadlines for this project." })}
                                   </p>
+                                  {!isShared && (
                                   <button
                                     type="button"
                                     onClick={() => navigate(rolePath("events/create"), { state: { projectId: project?.id || projectId, projectTitle: project?.title } })}
@@ -2341,6 +2373,7 @@ function ProjectDetails() {
                                   >
                                     <Plus size={14} style={{ display: "inline", verticalAlign: "-2px", marginRight: "4px" }} /> {t("Add Event", { defaultValue: "Add Event" })}
                                   </button>
+                                  )}
                                 </div>
                               );
                             }
@@ -2423,7 +2456,7 @@ function ProjectDetails() {
                     {tab === "activity" && (
                       <div className="pd-tab-panel">
                         <section className="pd-card-flat" style={{ padding: "20px" }}>
-                          <UnifiedActivityFeed module="project" entityId={projectId} initialUsers={members} />
+                          <UnifiedActivityFeed module="project" entityId={isShared ? (project?.id || projectId) : projectId} initialUsers={members} />
                         </section>
                       </div>
                     )}

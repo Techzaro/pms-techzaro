@@ -88,7 +88,7 @@ class ProvisioningOrchestrator
                 $status->skipStep(ProvisioningStatus::STEP_RUN_MIGRATIONS);
             }
 
-            // Step 3b: Fix missing columns (always runs regardless of migration results)
+            // Step 3b: Fix missing columns + sync schema (always runs regardless of migration results)
             $status->startStep('fix_columns');
             try {
                 \App\Console\Commands\FixTenantColumns::fixDatabaseProgrammatic($dbName);
@@ -97,6 +97,17 @@ class ProvisioningOrchestrator
             } catch (\Throwable $e) {
                 Log::warning("Column fix step failed (non-fatal)", ['error' => $e->getMessage()]);
                 $status->skipStep('fix_columns');
+            }
+
+            // Step 3c: Full schema sync against golden reference (catches anything migrations + FixTenantColumns missed)
+            $status->startStep('schema_sync');
+            try {
+                app(\App\Services\Saas\DatabaseProvisionService::class)->syncSchema($dbName);
+                Log::info("Tenant schema sync completed", ['database' => $dbName]);
+                $status->completeStep('schema_sync');
+            } catch (\Throwable $e) {
+                Log::warning("Schema sync step failed (non-fatal)", ['error' => $e->getMessage()]);
+                $status->skipStep('schema_sync');
             }
 
             // Step 4: Run Tenant Seeders

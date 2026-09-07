@@ -2,11 +2,13 @@
 
 namespace App\Providers;
 
+use App\Listeners\AfterMigrationListener;
 use App\Listeners\LogAuthenticationEvents;
 use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
 use Illuminate\Auth\Events\PasswordReset;
+use Illuminate\Database\Events\MigrationsFinished;
 use App\Models\KnowledgeBase;
 use App\Models\Task;
 use App\Models\Deliverable;
@@ -37,5 +39,8 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(Logout::class, [LogAuthenticationEvents::class, 'handleLogout']);
         Event::listen(Failed::class, [LogAuthenticationEvents::class, 'handleFailedLogin']);
         Event::listen(PasswordReset::class, [LogAuthenticationEvents::class, 'handlePasswordReset']);
+
+        // Auto-sync tenant schemas after master DB migrations
+        Event::listen(MigrationsFinished::class, [AfterMigrationListener::class, 'handle']);
     }
 }

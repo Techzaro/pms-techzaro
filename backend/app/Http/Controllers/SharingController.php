@@ -530,6 +530,187 @@ class SharingController extends Controller
                 $model->$key = $value;
             }
 
+            // For projects, load relationships from sharer's DB so frontend tabs work
+            if ($resource->resource_type === 'project') {
+                $projectId = $resource->resource_id;
+
+                // Load tasks with their assignees
+                $taskRows = $conn->table('tasks')->where('project_id', $projectId)->get();
+                $tasks = collect();
+                foreach ($taskRows as $tRow) {
+                    $task = new \App\Models\Task();
+                    foreach ((array) $tRow as $k => $v) { $task->$k = $v; }
+
+                    // Load assignees from pivot table
+                    $assigneeIds = [];
+                    if ($conn->getSchemaBuilder()->hasTable('task_user')) {
+                        $pivotRows = $conn->table('task_user')->where('task_id', $tRow->id)->get();
+                        $assigneeIds = $pivotRows->pluck('user_id')->toArray();
+                    }
+                    // Also include assigned_to
+                    if ($tRow->assigned_to && !in_array($tRow->assigned_to, $assigneeIds)) {
+                        $assigneeIds[] = $tRow->assigned_to;
+                    }
+                    $assignees = collect();
+                    if (!empty($assigneeIds)) {
+                        $userRows = $conn->table('users')->whereIn('id', $assigneeIds)->get();
+                        foreach ($userRows as $uRow) {
+                            $assignees->push((array)$uRow);
+                        }
+                    }
+                    $task->assignees = $assignees->values();
+
+                    // Load assigner (assigned_by user)
+                    if ($tRow->assigned_by) {
+                        $assignerRow = $conn->table('users')->where('id', $tRow->assigned_by)->first();
+                        $task->assigner = $assignerRow ? (array)$assignerRow : null;
+                    } else {
+                        $task->assigner = null;
+                    }
+
+                    // Load creator
+                    if ($tRow->creator_id) {
+                        $creatorRow = $conn->table('users')->where('id', $tRow->creator_id)->first();
+                        $task->creator = $creatorRow ? (array)$creatorRow : null;
+                    }
+
+                    $tasks->push($task);
+                }
+                $model->setRelation('tasks', $tasks);
+
+                // Load project files
+                if ($conn->getSchemaBuilder()->hasTable('project_files')) {
+                    $fileRows = $conn->table('project_files')->where('project_id', $projectId)->orderBy('sort_order')->get();
+                    $model->setRelation('files', $fileRows);
+                } else {
+                    $model->setRelation('files', collect());
+                }
+
+                // Load members (assigned_users are stored as JSON array of user IDs)
+                $assignedUserIds = is_array($model->assigned_users) ? $model->assigned_users : (json_decode($model->assigned_users, true) ?? []);
+                $members = collect();
+                if (!empty($assignedUserIds)) {
+                    $userRows = $conn->table('users')->whereIn('id', $assignedUserIds)->get();
+                    foreach ($userRows as $uRow) {
+                        $members->push((array)$uRow);
+                    }
+                }
+                // Add creator as member
+                if ($model->created_by) {
+                    $creatorRow = $conn->table('users')->where('id', $model->created_by)->first();
+                    if ($creatorRow) {
+                        $creatorData = (array)$creatorRow;
+                        if (!$members->contains('id', $model->created_by)) {
+                            $members->push($creatorData);
+                        }
+                        $model->creator = $creatorData;
+                    }
+                }
+                $model->setRelation('members', $members->values());
+
+                // Load access credentials with assigned_users
+                if ($conn->getSchemaBuilder()->hasTable('project_access_credentials')) {
+                    $credRows = $conn->table('project_access_credentials')->where('project_id', $projectId)->get();
+                    $credentials = collect();
+                    foreach ($credRows as $credRow) {
+                        $credArr = (array)$credRow;
+                        // Decrypt password
+                        try {
+                            $credArr['password'] = \Illuminate\Support\Facades\Crypt::decryptString($credRow->password);
+                        } catch (\Exception $e) {
+                            $credArr['password'] = '';
+                        }
+                        // Load assigned_users from pivot table
+                        $credArr['assigned_users'] = [];
+                        if ($conn->getSchemaBuilder()->hasTable('project_access_credential_user')) {
+                            $credUserIds = $conn->table('project_access_credential_user')->where('credential_id', $credRow->id)->pluck('user_id')->toArray();
+                            if (!empty($credUserIds)) {
+                                $credUsers = $conn->table('users')->whereIn('id', $credUserIds)->get();
+                                $credArr['assigned_users'] = $credUsers->map(fn($u) => ['id' => $u->id, 'name' => $u->name, 'email' => $u->email])->values()->all();
+                            }
+                        }
+                        $credentials->push($credArr);
+                    }
+                    $model->setRelation('accessCredentials', $credentials);
+                } else {
+                    $model->setRelation('accessCredentials', collect());
+                }
+
+                // Load deliverables
+                if ($conn->getSchemaBuilder()->hasTable('deliverables')) {
+                    $delRows = $conn->table('deliverables')->where('project_id', $projectId)->get();
+                    $deliverables = collect();
+                    foreach ($delRows as $dRow) {
+                        $del = new \App\Models\Deliverable();
+                        foreach ((array)$dRow as $k => $v) { $del->$k = $v; }
+                        $deliverables->push($del);
+                    }
+                    $model->setRelation('deliverables', $deliverables);
+                } else {
+                    $model->setRelation('deliverables', collect());
+                }
+
+                // Load milestones
+                if ($conn->getSchemaBuilder()->hasTable('project_milestones')) {
+                    $msRows = $conn->table('project_milestones')->where('project_id', $projectId)->orderBy('sort_order')->get();
+                    $model->setRelation('milestones', $msRows);
+                } else {
+                    $model->setRelation('milestones', collect());
+                }
+
+                // Compute task counts
+                $totalTasks = $tasks->count();
+                $completedTasks = $tasks->filter(fn($t) => in_array($t->status ?? '', ['approved', 'completed', 'done']))->count();
+                $model->total_tasks = $totalTasks;
+                $model->completed_tasks = $completedTasks;
+
+                // Load knowledge base articles linked to this project
+                if ($conn->getSchemaBuilder()->hasTable('knowledge_bases')) {
+                    $kbRows = $conn->table('knowledge_bases')->where('project_id', $projectId)->get();
+                    $kbArticles = collect();
+                    foreach ($kbRows as $kbRow) {
+                        $kbArticles->push((array)$kbRow);
+                    }
+                    // Also load KB linked via project's kb_ids JSON field
+                    $kbIds = is_array($model->kb_ids) ? $model->kb_ids : (json_decode($model->kb_ids, true) ?? []);
+                    if (!empty($kbIds)) {
+                        $extraKb = $conn->table('knowledge_bases')->whereIn('id', $kbIds)->get();
+                        foreach ($extraKb as $ekb) {
+                            $ekbArr = (array)$ekb;
+                            if (!$kbArticles->contains('id', $ekbArr['id'] ?? null)) {
+                                $kbArticles->push($ekbArr);
+                            }
+                        }
+                    }
+                    $model->setRelation('projectKbArticles', $kbArticles->values());
+                } else {
+                    $model->setRelation('projectKbArticles', collect());
+                }
+
+                // Load events linked to this project
+                if ($conn->getSchemaBuilder()->hasTable('events')) {
+                    $eventRows = $conn->table('events')->where('project_id', $projectId)->get();
+                    $events = collect();
+                    foreach ($eventRows as $eRow) {
+                        $events->push((array)$eRow);
+                    }
+                    // Also load events linked via project's event_ids JSON field
+                    $eventIds = is_array($model->event_ids) ? $model->event_ids : (json_decode($model->event_ids, true) ?? []);
+                    if (!empty($eventIds)) {
+                        $extraEvents = $conn->table('events')->whereIn('id', $eventIds)->get();
+                        foreach ($extraEvents as $ee) {
+                            $eeArr = (array)$ee;
+                            if (!$events->contains('id', $eeArr['id'] ?? null)) {
+                                $events->push($eeArr);
+                            }
+                        }
+                    }
+                    $model->setRelation('projectEvents', $events->values());
+                } else {
+                    $model->setRelation('projectEvents', collect());
+                }
+            }
+
             return $model;
         } catch (\Throwable $e) {
             Log::warning("Failed to fetch shared resource from sharer DB: " . $e->getMessage());
