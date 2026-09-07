@@ -32,6 +32,7 @@ return Application::configure(basePath: dirname(__DIR__))
             \Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests::class,
             \App\Http\Middleware\ResolveTenantDatabase::class
         );
+        $middleware->prepend([\App\Http\Middleware\CorsMiddleware::class]);
         if (env('APP_ENV') === 'local') {
             $middleware->api(prepend: [
                 \App\Http\Middleware\QueryLogMiddleware::class,
@@ -42,9 +43,6 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\CheckUserStatus::class,
             \App\Http\Middleware\LocalizationMiddleware::class,
         ]);
-        // CorsMiddleware removed — CORS handled by:
-        // 1. public/index.php (OPTIONS preflight at PHP level)
-        // 2. Laravel built-in HandleCors via config/cors.php
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (AuthenticationException $e, Request $request) {

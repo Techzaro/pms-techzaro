@@ -47,6 +47,10 @@ class CorsMiddleware
             return false;
         }
 
+        if (in_array($host, ['localhost', '127.0.0.1'])) {
+            return true;
+        }
+
         $len = strlen('.techxaro.com');
         return substr($host, -$len) === '.techxaro.com';
     }

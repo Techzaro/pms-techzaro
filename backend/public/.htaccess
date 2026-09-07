@@ -1,11 +1,6 @@
 <IfModule mod_headers.c>
     # CORS headers for cross-origin requests (admin ↔ app subdomains)
-    SetEnvIf Origin "^https?://([a-zA-Z0-9\-]+\.)*techxaro\.com$" CORS_ORIGIN=$0
-
-    # Handle preflight OPTIONS requests
-    RewriteEngine On
-    RewriteCond %{REQUEST_METHOD} OPTIONS
-    RewriteRule ^(.*)$ $1 [R=200,L]
+    SetEnvIf Origin "^https?://(localhost|127\.0\.0\.1|([a-zA-Z0-9\-]+\.)*techxaro\.com)$" CORS_ORIGIN=$0
 
     # Apply CORS headers when origin matches
     Header set Access-Control-Allow-Origin "%{CORS_ORIGIN}e" env=CORS_ORIGIN
@@ -22,9 +17,6 @@ RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
 RewriteCond %{HTTP:x-xsrf-token} .
 RewriteRule .* - [E=HTTP_X_XSRF_TOKEN:%{HTTP:X-XSRF-Token}]
-
-RewriteCond %{REQUEST_METHOD} OPTIONS
-RewriteRule ^(.*)$ $1 [R=200,L]
 
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteCond %{REQUEST_URI} (.+)/$
