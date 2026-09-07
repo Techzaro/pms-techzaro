@@ -242,12 +242,17 @@ class SchemaReferenceService
 
             $schema[$tableName] = [];
             foreach ($columns as $col) {
+                // Clean MySQL 8+ EXTRA: strip "DEFAULT_GENERATED" prefix
+                $extra = $col['EXTRA'] ?? '';
+                $extra = str_ireplace('DEFAULT_GENERATED', '', $extra);
+                $extra = trim($extra);
+
                 $schema[$tableName][$col['COLUMN_NAME']] = [
                     'type'     => $col['COLUMN_TYPE'],
                     'nullable' => $col['IS_NULLABLE'] === 'YES',
                     'default'  => $col['COLUMN_DEFAULT'],
                     'key'      => $col['COLUMN_KEY'],
-                    'extra'    => $col['EXTRA'],
+                    'extra'    => $extra,
                 ];
             }
         }
@@ -267,26 +272,33 @@ class SchemaReferenceService
         }
 
         $columns = $schema[$tableName];
-        $lines = [];
+        $colLines = [];
         $primaryKeys = [];
+        $uniqueKeys = [];
 
         foreach ($columns as $colName => $colInfo) {
             $line = "`{$colName}` " . $this->buildColumnDefinition($colInfo);
-            $lines[] = $line;
+            $colLines[] = $line;
 
             if ($colInfo['key'] === 'PRI') {
                 $primaryKeys[] = "`{$colName}`";
             }
             if ($colInfo['key'] === 'UNI') {
-                $lines[] = "    UNIQUE KEY `{$tableName}_{$colName}_unique` (`{$colName}`)";
+                $uniqueKeys[] = "`{$colName}`";
             }
         }
 
+        // Add PRIMARY KEY after all columns
         if (!empty($primaryKeys)) {
-            $lines[] = "    PRIMARY KEY (" . implode(', ', $primaryKeys) . ")";
+            $colLines[] = "PRIMARY KEY (" . implode(', ', $primaryKeys) . ")";
         }
 
-        $body = implode(",\n    ", $lines);
+        // Add UNIQUE KEYs after all columns (not inline)
+        foreach ($uniqueKeys as $i => $uk) {
+            $colLines[] = "UNIQUE KEY `{$tableName}_uk{$i}` ({$uk})";
+        }
+
+        $body = implode(",\n    ", $colLines);
 
         return "CREATE TABLE IF NOT EXISTS `{$tableName}` (\n    {$body}\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
     }
@@ -307,17 +319,52 @@ class SchemaReferenceService
 
         if ($colInfo['default'] !== null && $colInfo['default'] !== '') {
             $default = $colInfo['default'];
-            // Don't wrap numeric or function defaults
-            if (!is_numeric($default) &&
-                !in_array(strtolower($default), ['current_timestamp', 'current_date', 'now()', 'null']) &&
-                !str_starts_with($default, "'")) {
-                $default = "'{$default}'";
+            $typeLower = strtolower($colInfo['type']);
+            $isTimestampType = str_contains($typeLower, 'timestamp') || str_contains($typeLower, 'datetime');
+
+            // Function defaults — use CURRENT_TIMESTAMP for timestamp/datetime only
+            $functionDefaults = ['current_timestamp', 'current_date', 'now()'];
+            $isFunction = false;
+            foreach ($functionDefaults as $fn) {
+                if (stripos($default, $fn) !== false) {
+                    $isFunction = true;
+                    break;
+                }
             }
-            $parts[] = "DEFAULT {$default}";
+
+            if ($isFunction && $isTimestampType) {
+                $parts[] = "DEFAULT CURRENT_TIMESTAMP";
+            } elseif ($isFunction && !$isTimestampType) {
+                // Non-timestamp column with CURRENT_TIMESTAMP default — skip (invalid)
+            } elseif (strtolower($default) === 'null') {
+                $parts[] = "DEFAULT NULL";
+            } elseif (is_numeric($default)) {
+                $parts[] = "DEFAULT {$default}";
+            } else {
+                // String default — strip existing quotes, then add single quotes
+                $default = trim($default, "'");
+                $default = str_replace("'", "''", $default);
+                $parts[] = "DEFAULT '{$default}'";
+            }
         }
 
-        if ($colInfo['extra'] !== null && $colInfo['extra'] !== '') {
-            $parts[] = $colInfo['extra'];
+        // Clean up MySQL 8+ specific EXTRA syntax that older MySQL versions don't support
+        $extra = $colInfo['extra'] ?? '';
+        if ($extra !== null && $extra !== '') {
+            // MySQL 8+ returns "DEFAULT_GENERATED on update CURRENT_TIMESTAMP"
+            // Strip "DEFAULT_GENERATED" — keep only "on update CURRENT_TIMESTAMP" for timestamp/datetime
+            $extra = str_ireplace('DEFAULT_GENERATED', '', $extra);
+            $extra = trim($extra);
+
+            // Only append "on update CURRENT_TIMESTAMP" for timestamp/datetime columns
+            if ($extra !== '' && stripos($extra, 'on update') !== false) {
+                $typeLower = strtolower($colInfo['type']);
+                if (str_contains($typeLower, 'timestamp') || str_contains($typeLower, 'datetime')) {
+                    $parts[] = $extra;
+                }
+            } elseif ($extra !== '' && strtolower($extra) === 'auto_increment') {
+                $parts[] = 'auto_increment';
+            }
         }
 
         return implode(' ', $parts);

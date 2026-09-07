@@ -12,7 +12,7 @@ import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useNotification } from "../context/NotificationContext";
-import { showSuccessMessage, notify, toast } from "../utils/notify";
+import { showSuccessMessage, toast } from "../utils/notify";
 import {
   ArrowLeft,
   BarChart3,
@@ -739,13 +739,13 @@ function TaskDetails() {
   const isAssignerLocked = !!task?.assigner_paused;
   const canAssignerPause = (readOnly || isOnlyFollower) ? false : (task && currentUser && isCreator && !task?.assigner_paused && ["pending", "in_progress", "reopened", "submitted"].includes(task?.status) && task?.status !== "paused");
   const canTimerPause = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isCreator || isSuperAdmin || isAdminOrManager) && ["in_progress", "submitted"].includes(task?.status) && task?.timer?.state === "running" && !task?.assigner_paused);
+  const isTransferor = task?.is_transferor ?? false;
+  const transferorReturnToSelf = task?.transferor_return_to_self ?? true;
+  const transferorHasApproved = task?.transferor_has_approved ?? false;
   const canPause = (canTimerPause || canAssignerPause) && (!isTransferor || transferorHasApproved) && !task?.active_outgoing_delegation;
   const canContinue = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isCreator || isSuperAdmin || isAdminOrManager) && (task?.status === "paused" || task?.timer?.state === "paused") && !task?.assigner_paused);
   const canAssignerResume = (readOnly || isOnlyFollower) ? false : (task && currentUser && isCreator && task?.assigner_paused);
   const isApproved = taskStatus === "approved";
-  const isTransferor = task?.is_transferor ?? false;
-  const transferorReturnToSelf = task?.transferor_return_to_self ?? true;
-  const transferorHasApproved = task?.transferor_has_approved ?? false;
   const hasPendingDelegation = task?.pending_delegation && task.pending_delegation.delegated_to === currentUser?.id;
   const isDelegatee = task?.is_delegatee ?? (task?.current_owner && currentUser && parseInt(task.current_owner, 10) === parseInt(currentUser.id, 10)) ?? false;
   const isCurrentOwner = task?.is_current_owner ?? (task?.current_owner && currentUser && parseInt(task.current_owner, 10) === parseInt(currentUser.id, 10)) ?? isAssignee;
