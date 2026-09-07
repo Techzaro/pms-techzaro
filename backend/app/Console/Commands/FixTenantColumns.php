@@ -95,6 +95,19 @@ class FixTenantColumns extends Command
             ['name' => 'event_start_time',              'definition' => "TIME NULL AFTER `event_date`"],
             ['name' => 'event_end_time',                'definition' => "TIME NULL AFTER `event_start_time`"],
         ],
+        'task_saved_views' => [
+            ['name' => 'view_name',                      'definition' => "VARCHAR(255) NULL AFTER `name`"],
+            ['name' => 'filter_payload',                 'definition' => "JSON NULL AFTER `filters`"],
+            ['name' => 'sort_parameters',                'definition' => "JSON NULL AFTER `filter_payload`"],
+        ],
+        'saved_views' => [
+            ['name' => 'view_name',                      'definition' => "VARCHAR(255) NOT NULL AFTER `user_id`"],
+            ['name' => 'name',                           'definition' => "VARCHAR(255) NULL AFTER `view_name`"],
+            ['name' => 'filter_payload',                 'definition' => "JSON NULL AFTER `name`"],
+            ['name' => 'filters',                        'definition' => "JSON NULL AFTER `filter_payload`"],
+            ['name' => 'sort_parameters',                'definition' => "JSON NULL AFTER `filters`"],
+            ['name' => 'is_default',                     'definition' => "TINYINT(1) DEFAULT 0 AFTER `sort_parameters`"],
+        ],
     ];
 
     protected array $tableCreates = [
@@ -353,12 +366,31 @@ class FixTenantColumns extends Command
             `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             `user_id` BIGINT UNSIGNED NOT NULL,
             `name` VARCHAR(255) NOT NULL,
+            `view_name` VARCHAR(255) NULL AFTER `name`,
             `filters` JSON NULL,
+            `filter_payload` JSON NULL AFTER `filters`,
+            `sort_parameters` JSON NULL AFTER `filter_payload`,
             `is_default` TINYINT(1) DEFAULT 0,
             `created_at` TIMESTAMP NULL,
             `updated_at` TIMESTAMP NULL,
             PRIMARY KEY (`id`),
             INDEX `task_saved_views_user_id_is_default_index` (`user_id`, `is_default`),
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'saved_views' => "CREATE TABLE IF NOT EXISTS `saved_views` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `view_name` VARCHAR(255) NOT NULL,
+            `name` VARCHAR(255) NULL,
+            `filter_payload` JSON NULL,
+            `filters` JSON NULL,
+            `sort_parameters` JSON NULL,
+            `is_default` TINYINT(1) DEFAULT 0,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            INDEX `saved_views_user_id_is_default_index` (`user_id`, `is_default`),
             FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 

@@ -438,7 +438,7 @@ class SuperAdminController extends Controller
             $escaped = str_replace('`', '``', $dbName);
             $pdo = DB::connection('mysql_master')->getPdo();
             $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
-            $stmt = $pdo->prepare("INSERT INTO `{$escaped}`.`users` (name, email, personal_email, professional_email, phone_number, contact_no, password, role, active, must_change_password, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'admin', 1, 1, NOW(), NOW())");
+            $stmt = $pdo->prepare("INSERT INTO `{$escaped}`.`users` (name, email, personal_email, professional_email, phone_number, contact_no, password, role, active, must_change_password, email_mode, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'admin', 1, 1, 'single', NOW(), NOW())");
             $stmt->execute([$validated['name'], $email, $email, $email, $phone, $phone, $hashedPassword]);
             $foundingAdminId = $pdo->lastInsertId();
 
@@ -476,6 +476,10 @@ class SuperAdminController extends Controller
                 );
             }
 
+            if (ob_get_level() > 0) {
+                ob_clean();
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Organization created successfully! Check your email for login credentials.',
@@ -486,6 +490,10 @@ class SuperAdminController extends Controller
                 ],
             ], 201);
         } catch (\Throwable $e) {
+            if (ob_get_level() > 0) {
+                ob_clean();
+            }
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to create organization: ' . $e->getMessage(),
@@ -654,6 +662,7 @@ class SuperAdminController extends Controller
             'custom_storage_unit'  => 'nullable|string|in:KB,MB,GB',
             'password_type'        => 'nullable|string|in:auto,manual',
             'password'             => 'nullable|string|min:6|max:255',
+            'email_mode'           => 'nullable|string|in:single,two_emails',
         ]);
 
         // Use custom slug or auto-generate from name
@@ -764,6 +773,7 @@ class SuperAdminController extends Controller
 
             // Step 6: Create admin user in tenant DB (active, must_change_password)
             $passwordType = $validated['password_type'] ?? 'auto';
+            $isAutoPassword = $passwordType !== 'manual';
             if ($passwordType === 'manual' && !empty($validated['password'])) {
                 $plainPassword = $validated['password'];
             } else {
@@ -771,13 +781,15 @@ class SuperAdminController extends Controller
             }
             $adminPhone = $validated['admin_phone'] ?? null;
             $hashedPassword = Hash::make($plainPassword);
+            $emailMode = $validated['email_mode'] ?? 'single';
 
             $pdo = DB::connection('mysql_master')->getPdo();
             $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
             $pdo->exec("SET CHARACTER SET utf8mb4");
             $escaped = str_replace('`', '``', $dbName);
-            $stmt = $pdo->prepare("INSERT INTO `{$escaped}`.`users` (name, email, personal_email, professional_email, phone_number, contact_no, password, role, active, must_change_password, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'admin', 1, 1, NOW(), NOW())");
-            $stmt->execute([$validated['admin_name'], $validated['admin_email'], $validated['admin_email'], $validated['admin_email'], $adminPhone, $adminPhone, $hashedPassword]);
+            $mustChangePassword = ($isAutoPassword || $emailMode === 'single') ? 1 : 0;
+            $stmt = $pdo->prepare("INSERT INTO `{$escaped}`.`users` (name, email, personal_email, professional_email, phone_number, contact_no, password, role, active, must_change_password, email_mode, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'admin', 1, ?, ?, NOW(), NOW())");
+            $stmt->execute([$validated['admin_name'], $validated['admin_email'], $validated['admin_email'], $validated['admin_email'], $adminPhone, $adminPhone, $hashedPassword, $mustChangePassword, $emailMode]);
             $foundingAdminId = $pdo->lastInsertId();
 
             // Save founding admin ID to org record
@@ -871,6 +883,12 @@ class SuperAdminController extends Controller
                 'status' => 'success',
             ]);
 
+            // Clear output buffer to prevent any accidental output (BOM, debug, etc.)
+            // from contaminating the JSON response on cPanel environments
+            if (ob_get_level() > 0) {
+                ob_clean();
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Organization provisioned successfully. Welcome email queued.',
@@ -879,6 +897,10 @@ class SuperAdminController extends Controller
                 'admin_password' => $plainPassword,
             ], 201);
         } catch (\Throwable $e) {
+            if (ob_get_level() > 0) {
+                ob_clean();
+            }
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to create organization: ' . $e->getMessage(),
@@ -1565,6 +1587,11 @@ class SuperAdminController extends Controller
         $pdo->exec("SET FOREIGN_KEY_CHECKS = 1");
         $pdo->exec("SET UNIQUE_CHECKS = 1");
         $pdo = null;
+
+        // Clear output buffer after heavy PDO operations to prevent BOM contamination
+        if (ob_get_level() > 0) {
+            ob_clean();
+        }
     }
 
     // ─── Organization Trial Settings ────────────────────────────────

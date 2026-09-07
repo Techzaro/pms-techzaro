@@ -2,7 +2,10 @@
 
 namespace App\Services\Saas;
 
+use App\Console\Commands\FixTenantColumns;
 use App\Models\Master\Organization;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -11,8 +14,7 @@ use Illuminate\Support\Facades\Log;
  *
  * Responsible ONLY for database-level operations:
  * - Creating tenant databases
- * - Running automated migrations on tenant databases
- * - Programmatically executing column and schema fixes
+ * - Running migrations on tenant databases
  * - Registering dynamic database connections
  * - Dropping databases
  *
@@ -61,107 +63,80 @@ class DatabaseProvisionService
     }
 
     /**
-     * Configure dynamic tenant connection for a database.
-     */
-    public function configureTenantConnection(string $databaseName): void
-    {
-        $masterConfig = config("database.connections." . config('tenancy.master_connection', 'mysql_master'));
-
-        config()->set('database.connections.tenant', [
-            'driver'         => 'mysql',
-            'host'           => $masterConfig['host'],
-            'port'           => $masterConfig['port'],
-            'database'       => $databaseName,
-            'username'       => $masterConfig['username'],
-            'password'       => $masterConfig['password'] ?? '',
-            'charset'        => 'utf8mb4',
-            'collation'      => 'utf8mb4_unicode_ci',
-            'prefix'         => '',
-            'prefix_indexes' => true,
-            'strict'         => true,
-            'engine'         => null,
-        ]);
-
-        DB::purge('tenant');
-    }
-
-    /**
      * Run all tenant migrations on a specific database.
      *
-     * Creates a dedicated tenant_runner connection, runs all migration files,
-     * then applies FixTenantColumns for any legacy/missed columns.
+     * Uses artisan migrate --database which properly handles:
+     * - Schema operations on the correct connection
+     * - Migration batch tracking
+     * - Transaction per migration
+     *
+     * After migrations, runs FixTenantColumns as safety net.
      */
-    public function runMigrations(string $databaseName, ?int $orgId = null): array
+    public function runMigrations(string $databaseName): bool
     {
         $this->configureTenantConnection($databaseName);
 
-        $migrationSuccess = true;
-        $migrationOutput = '';
-        $errorMessage = null;
-
         try {
-            $runner = new RobustTenantMigrationRunner();
-            $result = $runner->run($databaseName);
-
-            if (!empty($result['failed'])) {
-                Log::warning("Some migrations failed on {$databaseName} but rest completed", [
-                    'failed' => $result['failed'],
-                ]);
-            }
+            Artisan::call('migrate', [
+                '--database' => 'tenant_runner',
+                '--path'     => 'database/migrations',
+                '--force'    => true,
+            ]);
 
             Log::info("Migrations completed on tenant DB {$databaseName}", [
-                'migrated' => count($result['migrated']),
-                'failed'   => count($result['failed']),
-                'fixed'    => $result['fixed'],
+                'output' => Artisan::output(),
             ]);
         } catch (\Throwable $e) {
-            $migrationSuccess = false;
-            $errorMessage = $e->getMessage();
-            Log::error("Tenant migration encountered error (gracefully captured)", [
-                'organization_id' => $orgId ?? 'N/A',
-                'database'        => $databaseName,
-                'error'           => $e->getMessage(),
-                'trace'           => $e->getTraceAsString(),
+            Log::warning("Some migrations failed on tenant DB {$databaseName} (continuing with column fixes)", [
+                'error'  => $e->getMessage(),
+                'output' => Artisan::output(),
             ]);
         }
 
-        // Programmatically execute column and table fixes (tenants:fix-columns equivalent)
-        $fixesCount = 0;
         try {
-            $fixResult = FixTenantColumns::fixDatabaseQuiet($databaseName);
-            $fixesCount = $fixResult['fixed'] ?? 0;
-            if ($fixesCount > 0) {
-                Log::info("Automated column/table fixes applied to tenant database", [
-                    'organization_id' => $orgId ?? 'N/A',
-                    'database'        => $databaseName,
-                    'fixed'           => $fixesCount,
-                ]);
-            }
+            FixTenantColumns::fixDatabaseProgrammatic($databaseName);
         } catch (\Throwable $e) {
-            Log::warning("Tenant column fix step failed (non-fatal)", [
-                'organization_id' => $orgId ?? 'N/A',
-                'database'        => $databaseName,
-                'error'           => $e->getMessage(),
+            Log::warning("Column fix step failed (non-fatal)", [
+                'database' => $databaseName,
+                'error'    => $e->getMessage(),
             ]);
-        } finally {
-            DB::purge('tenant');
         }
 
-        return [
-            'success' => $migrationSuccess,
-            'output'  => $migrationOutput,
-            'fixes'   => $fixesCount,
-            'error'   => $errorMessage,
-        ];
+        DB::purge('tenant_runner');
+
+        // Clear any accidental output buffer contamination from Artisan/migration output
+        if (ob_get_level() > 0) {
+            ob_clean();
+        }
+
+        return true;
     }
 
     /**
-     * Create database and run migrations with automatic column fixes.
+     * Configure the tenant_runner connection using org credentials or master fallback.
      */
-    public function createAndProvisionDatabase(string $databaseName, ?int $orgId = null): array
+    protected function configureTenantConnection(string $databaseName): void
     {
-        $this->createDatabase($databaseName);
-        return $this->runMigrations($databaseName, $orgId);
+        $masterConfig = config("database.connections.{$this->masterConnection}");
+        $org = Organization::where('database_name', $databaseName)->first();
+
+        Config::set('database.connections.tenant_runner', [
+            'driver'    => 'mysql',
+            'host'      => $org->database_host ?? $masterConfig['host'],
+            'port'      => $org->database_port ?? $masterConfig['port'],
+            'database'  => $databaseName,
+            'username'  => $org->database_username ?? $masterConfig['username'],
+            'password'  => $org->database_password ?? $masterConfig['password'] ?? '',
+            'charset'   => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix'    => '',
+            'prefix_indexes' => true,
+            'strict'    => true,
+            'engine'    => null,
+        ]);
+
+        DB::purge('tenant_runner');
+        DB::reconnect('tenant_runner');
     }
 
     /**

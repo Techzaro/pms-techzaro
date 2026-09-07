@@ -464,7 +464,8 @@ export function clearAllSessions() {
   const r = getCurrentRole();
   const sid = getSessionId();
 
-  // Remove THIS tab's session from the pool
+  // Only remove THIS tab's session from the current role's pool.
+  // Other tabs with different roles remain unaffected.
   if (r && sid) {
     const sessions = _getSessions(r);
     if (sessions[sid]) {
@@ -473,20 +474,13 @@ export function clearAllSessions() {
     }
   }
 
-  // Clear all role pools if logging out completely
-  for (const roleKey of ROLES) {
-    localStorage.removeItem(`sessions_${roleKey}`);
-    localStorage.removeItem(`token_${roleKey}`);
-    localStorage.removeItem(`user_${roleKey}`);
-  }
-
   // Clear tab sessionStorage
   sessionStorage.removeItem("sessionId");
   sessionStorage.removeItem("currentRole");
   sessionStorage.removeItem("tenant_slug");
   sessionStorage.removeItem("vb_dismissed");
 
-  // Clear localStorage keys
+  // Clear legacy localStorage keys for this tab only
   localStorage.removeItem("token");
   localStorage.removeItem("user");
   localStorage.removeItem("role");

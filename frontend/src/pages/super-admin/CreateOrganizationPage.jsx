@@ -128,6 +128,7 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
         country_code: selectedCountry,
         plan_id: selectedPlanId, billing_period: billingPeriod,
         password_type: passwordType,
+        email_mode: 'single',
       };
       if (passwordType === 'manual' && adminPassword) {
         payload.password = adminPassword;
