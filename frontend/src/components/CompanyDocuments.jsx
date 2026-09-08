@@ -70,18 +70,40 @@ function CompanyDocuments({ isOpen, onClose }) {
         headers: { Accept: "application/json", Authorization: `Bearer ${authToken()}` },
         body: formData,
       });
-      const data = await res.json();
+
+      if (res.status === 413) {
+        notify.error(t("File is too large. Please upload a smaller file.", { defaultValue: "File is too large. Please upload a smaller file." }));
+        return;
+      }
+
+      let data = {};
+      try {
+        data = await res.json();
+      } catch {
+        notify.error(t("Server returned an invalid response. Please try again.", { defaultValue: "Server returned an invalid response. Please try again." }));
+        return;
+      }
+
       if (res.ok && data.success) {
         notify.success(data.message);
         fetchDocuments();
       } else {
         notify.error(data.message || t("Upload failed.", { defaultValue: "Upload failed." }));
       }
-    } catch {
-      notify.error(t("An error occurred during upload.", { defaultValue: "An error occurred during upload." }));
+    } catch (err) {
+      notify.error(err?.message || t("An error occurred during upload.", { defaultValue: "An error occurred during upload." }));
     } finally {
       setUploading(null);
     }
+  };
+
+  const handleView = (pathOrUrl) => {
+    if (!pathOrUrl) return;
+    const fileUrl = pathOrUrl.startsWith("http")
+      ? pathOrUrl
+      : `${API_URL.replace("/api", "")}/storage/${pathOrUrl}`;
+
+    window.open(fileUrl, "_blank", "noopener,noreferrer");
   };
 
   const handleDelete = async (type, filename) => {
@@ -179,14 +201,13 @@ function CompanyDocuments({ isOpen, onClose }) {
                           </label>
                           {exists && (
                             <>
-                              <a
-                                href={doc.url ? `${API_URL.replace("/api", "")}/storage/${doc.path}` : "#"}
-                                target="_blank"
-                                rel="noopener noreferrer"
+                              <button
+                                type="button"
                                 className="cd-view-btn"
+                                onClick={() => handleView(doc.path || doc.url)}
                               >
                                 {t("View", { defaultValue: "View" })}
-                              </a>
+                              </button>
                               <button className="cd-delete-btn" onClick={() => { setPendingDelete({ type: key, filename: "" }); setConfirmDeleteOpen(true); }}>
                                 {t("Delete", { defaultValue: "Delete" })}
                               </button>
@@ -242,14 +263,13 @@ function CompanyDocuments({ isOpen, onClose }) {
                     <div className="cd-other-files">
                       {otherDocs.files.map((file, idx) => (
                         <div key={idx} className="cd-other-file-row">
-                          <a
-                            href={`${API_URL.replace("/api", "")}/storage/${file.path}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <button
+                            type="button"
                             className="cd-other-file-name"
+                            onClick={() => handleView(file.path || file.url)}
                           >
                             {file.filename}
-                          </a>
+                          </button>
                           <button
                             className="cd-delete-btn"
                             onClick={() => { setPendingDelete({ type: "other_documents", filename: file.filename }); setConfirmDeleteOpen(true); }}

@@ -183,17 +183,18 @@ const { canCreateUser, maxUsers, currentUsers, usersRemaining, getLimitMessage, 
   const [editDocDeleteConfirm, setEditDocDeleteConfirm] = useState(false);
   const [companyDocsOpen, setCompanyDocsOpen] = useState(false);
   const [page, setPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  // Tab management: employees vs guests
-  const [activeTab, setActiveTab] = useState("employees");
+  // Tab management: main tab ("members" vs "guests") and status sub-tabs ("active" | "inactive" | "resigned")
+  const [mainTab, setMainTab] = useState("members");
+  const [statusSubTab, setStatusSubTab] = useState("active");
 
   // Guest management state
   const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
   const [editingGuest, setEditingGuest] = useState(null);
   const [guestSubmitting, setGuestSubmitting] = useState(false);
-  const [guestSearch, setGuestSearch] = useState("");
   const [guestPage, setGuestPage] = useState(1);
+  const [guestItemsPerPage, setGuestItemsPerPage] = useState(10);
   const [guestConfirmModal, setGuestConfirmModal] = useState({ open: false, type: "", guest: null });
   const [newGuest, setNewGuest] = useState({ name: "", personal_email: "", phone_number: "", company_name: "", avatar: null, _existingAvatar: null });
   const [guestErrors, setGuestErrors] = useState({});
@@ -362,6 +363,7 @@ const { canCreateUser, maxUsers, currentUsers, usersRemaining, getLimitMessage, 
       fetchCurrentUser();
     }
     fetchUsers();
+    fetchProjects();
   }, [navigate]);
 
   useAutoRefresh(fetchUsers, { events: ["data:changed"] });
@@ -374,7 +376,16 @@ const { canCreateUser, maxUsers, currentUsers, usersRemaining, getLimitMessage, 
     const tab = searchParams.get("tab");
     const editGuestId = searchParams.get("editGuest");
     if (tab === "guests") {
-      setActiveTab("guests");
+      setMainTab("guests");
+    } else if (tab === "inactive") {
+      setMainTab("members");
+      setStatusSubTab("inactive");
+    } else if (tab === "resigned") {
+      setMainTab("members");
+      setStatusSubTab("resigned");
+    } else if (tab === "active" || tab === "employees") {
+      setMainTab("members");
+      setStatusSubTab("active");
     }
     if (editGuestId && localUsers.length > 0) {
       const guest = localUsers.find((u) => String(u.id) === String(editGuestId) && u.role === "guest");
@@ -445,6 +456,7 @@ const { canCreateUser, maxUsers, currentUsers, usersRemaining, getLimitMessage, 
   }, []);
 
   const openModal = () => {
+    fetchProjects();
     setEditingUser(null);
     setAddErrors({});
     setShowProfPassword(false);
@@ -490,6 +502,7 @@ const { canCreateUser, maxUsers, currentUsers, usersRemaining, getLimitMessage, 
   };
 
   const openEditModal = async (user) => {
+    fetchProjects();
     setEditingUser(user);
     setAddErrors({});
 
@@ -509,6 +522,10 @@ const { canCreateUser, maxUsers, currentUsers, usersRemaining, getLimitMessage, 
     const isCustomDept = !departments.includes(deptVal) && deptVal !== "";
     const desgVal = fullUser.designation || "";
     const isCustomDesg = !designations.includes(desgVal) && desgVal !== "";
+
+    const existingProjectIds = fullUser.projects
+      ? fullUser.projects.map((p) => (typeof p === "object" ? p.id : p))
+      : (fullUser.project_ids || []);
 
     setEditingUser(fullUser);
     setEmailMode(fullUser.email_mode || "single");
@@ -535,6 +552,7 @@ const { canCreateUser, maxUsers, currentUsers, usersRemaining, getLimitMessage, 
       jobStartedDate: fullUser.job_started_date ? fullUser.job_started_date.substring(0, 10) : "",
       jobEndedDate: fullUser.job_ended_date ? fullUser.job_ended_date.substring(0, 10) : "",
       role: fullUser.role || "member",
+      project_ids: existingProjectIds,
       status: fullUser.status || (fullUser.active !== false ? "Active" : "Inactive"),
       grossSalary: fullUser.gross_salary || "",
       appliedVia: fullUser.applied_via || "",
@@ -725,7 +743,19 @@ const { canCreateUser, maxUsers, currentUsers, usersRemaining, getLimitMessage, 
         _notifHandled: true,
       });
 
-      const data = await res.json();
+      if (res.status === 413) {
+        notify.error(t("File is too large. Please upload smaller files.", { defaultValue: "File is too large. Please upload smaller files." }));
+        return;
+      }
+
+      let data = {};
+      try {
+        data = await res.json();
+      } catch {
+        notify.error(t("Server returned an invalid response. Please try again.", { defaultValue: "Server returned an invalid response. Please try again." }));
+        return;
+      }
+
       if (!res.ok) {
         if (data.errors) {
           const mapped = {};
@@ -1253,18 +1283,83 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
     );
   };
 
-  // Apply search, role, and status filters to users list (employees only)
+  const isUserActive = useCallback((u) => {
+    if (!u || u.role === "guest") return false;
+    if (u.status === "Resigned" || u.status === "resigned") return false;
+    if (u.status === "Inactive" || u.status === "inactive") return false;
+    return u.active !== false;
+  }, []);
+
+  const isUserInactive = useCallback((u) => {
+    if (!u || u.role === "guest") return false;
+    if (u.status === "Resigned" || u.status === "resigned") return false;
+    return u.active === false || u.status === "Inactive" || u.status === "inactive" || u.status === "Draft" || u.status === "draft";
+  }, []);
+
+  const isUserResigned = useCallback((u) => {
+    if (!u || u.role === "guest") return false;
+    return u.status === "Resigned" || u.status === "resigned";
+  }, []);
+
+  const isGuestResigned = useCallback((g) => {
+    if (!g || g.role !== "guest") return false;
+    return g.status === "Resigned" || g.status === "resigned" || (g.active === false && g.must_change_password === false);
+  }, []);
+
+  const isGuestInactive = useCallback((g) => {
+    if (!g || g.role !== "guest") return false;
+    if (isGuestResigned(g)) return false;
+    return g.active === false || g.status === "Inactive" || g.status === "inactive";
+  }, [isGuestResigned]);
+
+  const isGuestActive = useCallback((g) => {
+    if (!g || g.role !== "guest") return false;
+    if (isGuestResigned(g) || isGuestInactive(g)) return false;
+    return g.active !== false;
+  }, [isGuestResigned, isGuestInactive]);
+
+  const teamMembersCount = useMemo(() => localUsers.filter(Boolean).filter((u) => u.role !== "guest").length, [localUsers]);
+  const memberActiveCount = useMemo(() => localUsers.filter(Boolean).filter(isUserActive).length, [localUsers, isUserActive]);
+  const memberInactiveCount = useMemo(() => localUsers.filter(Boolean).filter(isUserInactive).length, [localUsers, isUserInactive]);
+  const memberResignedCount = useMemo(() => localUsers.filter(Boolean).filter(isUserResigned).length, [localUsers, isUserResigned]);
+
+  const guestActiveCount = useMemo(() => localUsers.filter(Boolean).filter(isGuestActive).length, [localUsers, isGuestActive]);
+  const guestInactiveCount = useMemo(() => localUsers.filter(Boolean).filter(isGuestInactive).length, [localUsers, isGuestInactive]);
+  const guestResignedCount = useMemo(() => localUsers.filter(Boolean).filter(isGuestResigned).length, [localUsers, isGuestResigned]);
+
+  const activeCount = mainTab === "guests" ? guestActiveCount : memberActiveCount;
+  const inactiveCount = mainTab === "guests" ? guestInactiveCount : memberInactiveCount;
+  const resignedCount = mainTab === "guests" ? guestResignedCount : memberResignedCount;
+
+  // Apply search, role, and status filters to users list
   const filteredUsers = localUsers.filter(Boolean).filter((user) => {
     if (user.role === "guest") return false;
+
+    // Filter based on statusSubTab
+    if (statusSubTab === "active" && !isUserActive(user)) return false;
+    if (statusSubTab === "inactive" && !isUserInactive(user)) return false;
+    if (statusSubTab === "resigned" && !isUserResigned(user)) return false;
+
+    const q = (searchQuery || "").toLowerCase().trim();
     const matchesSearch =
-      (user.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (user.professional_email || "").toLowerCase().includes(searchQuery.toLowerCase());
+      !q ||
+      (user.name || "").toLowerCase().includes(q) ||
+      (user.email || "").toLowerCase().includes(q) ||
+      (user.personal_email || "").toLowerCase().includes(q) ||
+      (user.professional_email || "").toLowerCase().includes(q) ||
+      (user.phone_number || user.contact_no || "").toLowerCase().includes(q) ||
+      (user.employee_code || "").toLowerCase().includes(q) ||
+      (user.department || "").toLowerCase().includes(q) ||
+      (user.designation || "").toLowerCase().includes(q) ||
+      (user.company_name || "").toLowerCase().includes(q);
+
     const matchesRole = roleFilter === "" || user.role === roleFilter;
     const matchesStatus =
       statusFilter === "" ||
-      (statusFilter === "active" && user.active !== false && user.status !== "Resigned" && user.status !== "resigned") ||
-      (statusFilter === "inactive" && user.active === false && user.status !== "Resigned" && user.status !== "resigned") ||
-      (statusFilter === "resigned" && (user.status === "Resigned" || user.status === "resigned"));
+      (statusFilter === "active" && isUserActive(user)) ||
+      (statusFilter === "inactive" && isUserInactive(user)) ||
+      (statusFilter === "resigned" && isUserResigned(user));
+
     return matchesSearch && matchesRole && matchesStatus;
   });
 
@@ -1275,8 +1370,8 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
     : filteredUsers;
 
   const showAllUsers = false;
-  const totalUserPages = Math.ceil(sortedUsers.length / ITEMS_PER_PAGE);
-  const paginatedUsers = sortedUsers.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+  const totalUserPages = Math.ceil(sortedUsers.length / itemsPerPage);
+  const paginatedUsers = sortedUsers.slice((page - 1) * itemsPerPage, page * itemsPerPage);
 
   const activeDragUser = activeDragId ? users.find((u) => u.id === activeDragId) : null;
 
@@ -1637,10 +1732,14 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
     formData.append("bank_account_number", newUser.bankAccountNumber);
     formData.append("bank_account_title", newUser.bankAccountTitle);
 
-    if (newUser.project_ids && newUser.project_ids.length > 0) {
-      newUser.project_ids.forEach((pid) => {
-        formData.append("project_ids[]", pid);
-      });
+    if (newUser.project_ids && Array.isArray(newUser.project_ids)) {
+      if (newUser.project_ids.length > 0) {
+        newUser.project_ids.forEach((pid) => {
+          formData.append("project_ids[]", pid);
+        });
+      } else if (editingUser) {
+        formData.append("project_ids", "");
+      }
     }
 
     const fileFields = [
@@ -1702,7 +1801,19 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
         _notifHandled: true,
       });
 
-      const data = await res.json();
+      if (res.status === 413) {
+        notify.error(t("File is too large. Please upload smaller files.", { defaultValue: "File is too large. Please upload smaller files." }));
+        return;
+      }
+
+      let data = {};
+      try {
+        data = await res.json();
+      } catch {
+        notify.error(t("Server returned an invalid response. Please try again or upload smaller files.", { defaultValue: "Server returned an invalid response. Please try again or upload smaller files." }));
+        return;
+      }
+
       if (!res.ok) {
         if (data.errors) {
           const fieldMap = {
@@ -1757,26 +1868,49 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
   // Guest list derived from users
   const guests = localUsers.filter(Boolean).filter((u) => u.role === "guest");
   const filteredGuests = guests.filter((g) => {
-    const q = guestSearch.toLowerCase();
-    return (
+    // Filter based on statusSubTab
+    if (statusSubTab === "active" && !isGuestActive(g)) return false;
+    if (statusSubTab === "inactive" && !isGuestInactive(g)) return false;
+    if (statusSubTab === "resigned" && !isGuestResigned(g)) return false;
+
+    const q = (searchQuery || "").toLowerCase().trim();
+    const matchesSearch =
+      !q ||
       (g.name || "").toLowerCase().includes(q) ||
-      (g.email || g.professional_email || g.personal_email || "").toLowerCase().includes(q) ||
-      (g.company_name || "").toLowerCase().includes(q)
-    );
+      (g.email || "").toLowerCase().includes(q) ||
+      (g.professional_email || "").toLowerCase().includes(q) ||
+      (g.personal_email || "").toLowerCase().includes(q) ||
+      (g.phone_number || g.contact_no || "").toLowerCase().includes(q) ||
+      (g.company_name || "").toLowerCase().includes(q) ||
+      (g.employee_code || "").toLowerCase().includes(q) ||
+      (g.department || "").toLowerCase().includes(q) ||
+      (g.designation || "").toLowerCase().includes(q);
+
+    const matchesStatus =
+      statusFilter === "" ||
+      (statusFilter === "active" && isGuestActive(g)) ||
+      (statusFilter === "inactive" && isGuestInactive(g)) ||
+      (statusFilter === "resigned" && isGuestResigned(g));
+
+    return matchesSearch && matchesStatus;
   });
-  const sortedGuests = [...filteredGuests].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-  const guestTotalPages = Math.ceil(sortedGuests.length / ITEMS_PER_PAGE);
-  const paginatedGuests = sortedGuests.slice((guestPage - 1) * ITEMS_PER_PAGE, guestPage * ITEMS_PER_PAGE);
+  const sortedGuests = sortOrder
+    ? [...filteredGuests].sort((a, b) =>
+        sortOrder === "asc" ? (a.name || "").localeCompare(b.name || "") : (b.name || "").localeCompare(a.name || "")
+      )
+    : [...filteredGuests].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  const guestTotalPages = Math.ceil(sortedGuests.length / guestItemsPerPage);
+  const paginatedGuests = sortedGuests.slice((guestPage - 1) * guestItemsPerPage, guestPage * guestItemsPerPage);
 
   const getGuestInitials = (name) => {
     return (name || "").split(" ").filter(Boolean).map((w) => w[0].toUpperCase()).join("");
   };
 
-  const getGuestStatus = (g) => {
-    if (g.active === false && g.must_change_password === false) return { label: t("Resigned", { defaultValue: "Resigned" }), className: "status-resigned" };
-    if (g.active === false) return { label: t("Inactive", { defaultValue: "Inactive" }), className: "status-inactive" };
+  const getGuestStatus = useCallback((g) => {
+    if (isGuestResigned(g)) return { label: t("Resigned", { defaultValue: "Resigned" }), className: "status-resigned" };
+    if (isGuestInactive(g)) return { label: t("Inactive", { defaultValue: "Inactive" }), className: "status-inactive" };
     return { label: t("Active", { defaultValue: "Active" }), className: "status-active" };
-  };
+  }, [isGuestResigned, isGuestInactive, t]);
 
   const formatDateShort = (d) => {
     if (!d) return "—";
@@ -1806,7 +1940,7 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
 
     const tableColumn = activeHeaderCols.map((col) => col.label);
 
-    const targetUsers = activeTab === "guests" ? paginatedGuests : paginatedUsers;
+    const targetUsers = mainTab === "guests" ? paginatedGuests : paginatedUsers;
     const tableRows = targetUsers.map((u) => {
       return activeHeaderCols.map((col) => {
         switch (col.key) {
@@ -1866,12 +2000,12 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
             <p>{t("Manage team members, clients (guests), roles and access permissions.", { defaultValue: "Manage team members, clients (guests), roles and access permissions." })}</p>
           </div>
           <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-            {activeTab === "employees" && (
+            {mainTab !== "guests" && (
               <button className="primary-button add-user-button" onClick={() => setCompanyDocsOpen(true)} style={{ background: "var(--color-success-bg)", color: "var(--color-success)", border: "1px solid var(--color-success)" }}>
                 {t("Company Documents", { defaultValue: "Company Documents" })}
               </button>
             )}
-            {activeTab === "employees" ? (
+            {mainTab !== "guests" ? (
               <button
                 className="primary-button add-user-button"
                 onClick={openModal}
@@ -1886,7 +2020,7 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
                 <CiCirclePlus fontSize={"21px"} /> {t("Add Guest", { defaultValue: "Add Guest" })}
               </button>
             )}
-            {!canCreateUser && activeTab === "employees" && (
+            {!canCreateUser && mainTab !== "guests" && (
               <span style={{ fontSize: '12px', color: 'var(--color-warning, #f59e0b)', maxWidth: '200px', lineHeight: 1.3 }}>
                 {getLimitMessage('user')}
               </span>
@@ -1926,29 +2060,70 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
           </div>
         </div>
 
-        {/* Tab Toggle */}
+        {/* Main Tab Toggle: Team Members vs Guests */}
         <div className="manage-users-tabs">
-          <button className={`tab-button ${activeTab === "employees" ? "tab-active" : ""}`} onClick={() => { setActiveTab("employees"); setPage(1); }}>
-            <span className="tab-icon">👤</span> {t("Team Members", { defaultValue: "Team Members" })}
-            <span className="tab-count">{localUsers.filter((u) => u.role !== "guest").length || ""}</span>
+          <button
+            className={`tab-button ${mainTab === "members" ? "tab-active" : ""}`}
+            onClick={() => { setMainTab("members"); setPage(1); }}
+          >
+            <span className="tab-icon">👥</span> {t("Team Members", { defaultValue: "Team Members" })}
+            <span className="tab-count">{teamMembersCount}</span>
           </button>
-          <button className={`tab-button ${activeTab === "guests" ? "tab-active" : ""}`} onClick={() => { setActiveTab("guests"); setGuestPage(1); }}>
-            <span className="tab-icon">👥</span> {t("Guests", { defaultValue: "Guests" })}
-            <span className="tab-count">{guests.length || ""}</span>
+          <button
+            className={`tab-button ${mainTab === "guests" ? "tab-active" : ""}`}
+            onClick={() => { setMainTab("guests"); setGuestPage(1); }}
+          >
+            <span className="tab-icon">👤</span> {t("Guests", { defaultValue: "Guests" })}
+            <span className="tab-count">{guests.length || "0"}</span>
           </button>
         </div>
 
-        {/* ═══════════ EMPLOYEES TAB ═══════════ */}
-        {activeTab === "employees" && (
-        <>
+        {/* Status Sub-Tabs (rendered for both Team Members and Guests) */}
+        <div className="manage-users-subtabs">
+          <button
+            className={`subtab-button ${statusSubTab === "active" ? "subtab-active" : ""}`}
+            onClick={() => {
+              setStatusSubTab("active");
+              setPage(1);
+              setGuestPage(1);
+            }}
+          >
+            <span className="tab-icon">🟢</span> {t("Active", { defaultValue: "Active" })}
+            <span className="tab-count">{activeCount}</span>
+          </button>
+          <button
+            className={`subtab-button ${statusSubTab === "inactive" ? "subtab-active" : ""}`}
+            onClick={() => {
+              setStatusSubTab("inactive");
+              setPage(1);
+              setGuestPage(1);
+            }}
+          >
+            <span className="tab-icon">🟡</span> {t("Inactive", { defaultValue: "Inactive" })}
+            <span className="tab-count">{inactiveCount}</span>
+          </button>
+          <button
+            className={`subtab-button ${statusSubTab === "resigned" ? "subtab-active" : ""}`}
+            onClick={() => {
+              setStatusSubTab("resigned");
+              setPage(1);
+              setGuestPage(1);
+            }}
+          >
+            <span className="tab-icon">🔴</span> {t("Resigned", { defaultValue: "Resigned" })}
+            <span className="tab-count">{resignedCount}</span>
+          </button>
+        </div>
+
+        {/* Global Filter Bar (when toggled via top-level Filters button) */}
         {showFilters && (
           <div className="bar" style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "16px", padding: "16px", background: "var(--bg-card, #ffffff)", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "12px" }}>
             <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center", width: "100%" }}>
               <div className="search-bar" style={{ flex: 1, minWidth: "220px" }}>
                 <IoSearchOutline fontSize={"25px"} />
-                <input type="text" placeholder={t("Search by name, email, or info...", { defaultValue: "Search by name, email, or info..." })} value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }} />
+                <input type="text" placeholder={t("Search by name, email, or info...", { defaultValue: "Search by name, email, or info..." })} value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setPage(1); setGuestPage(1); }} />
               </div>
-              <select className="bar-role" value={roleFilter} onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }}>
+              <select className="bar-role" value={roleFilter} onChange={(e) => { setRoleFilter(e.target.value); setPage(1); setGuestPage(1); }}>
                 <option value="">{t("All Roles", { defaultValue: "All Roles" })}</option>
                 <option value="admin">{t("Admin", { defaultValue: "Admin" })}</option>
                 <option value="manager">{t("Manager", { defaultValue: "Manager" })}</option>
@@ -1956,7 +2131,7 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
                 <option value="member">{t("Member", { defaultValue: "Member" })}</option>
                 <option value="guest">{t("Guest", { defaultValue: "Guest" })}</option>
               </select>
-              <select className="bar-status" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}>
+              <select className="bar-status" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); setGuestPage(1); }}>
                 <option value="">{t("All Statuses", { defaultValue: "All Statuses" })}</option>
                 <option value="active">{t("Active", { defaultValue: "Active" })}</option>
                 <option value="inactive">{t("Inactive", { defaultValue: "Inactive" })}</option>
@@ -1976,7 +2151,7 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
               {(roleFilter || statusFilter || searchQuery || timeFilter || sortOrder) && (
                 <button
                   type="button"
-                  onClick={() => { setRoleFilter(""); setStatusFilter(""); setSearchQuery(""); setTimeFilter(""); setSortOrder(""); setPage(1); }}
+                  onClick={() => { setRoleFilter(""); setStatusFilter(""); setSearchQuery(""); setTimeFilter(""); setSortOrder(""); setPage(1); setGuestPage(1); }}
                   style={{ padding: "6px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", background: "#ffffff", color: "#dc2626", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
                 >
                   {t("Clear Filters", { defaultValue: "Clear Filters" })}
@@ -2036,6 +2211,9 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
           </div>
         )}
 
+        {/* ═══════════ USER LIST (ACTIVE / INACTIVE / RESIGNED) ═══════════ */}
+        {mainTab === "members" && (
+        <>
         <div className="manage-users-table-card">
           <div className="table-card-header">
             <h2>{t("Existing Users", { defaultValue: "Existing Users" })}</h2>
@@ -2095,22 +2273,23 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
           </DndContext>
         </div>
 
-        {totalUserPages > 1 && (
-          <Pagination currentPage={page} totalPages={totalUserPages} onPageChange={setPage} />
-        )}
+        <Pagination
+          currentPage={page}
+          totalPages={totalUserPages}
+          onPageChange={setPage}
+          itemsPerPage={itemsPerPage}
+          onItemsPerPageChange={(val) => {
+            setItemsPerPage(val);
+            setPage(1);
+          }}
+          itemsPerPageOptions={[10, 25, 50, 100]}
+        />
         </>
         )}
 
         {/* ═══════════ GUESTS TAB ═══════════ */}
-        {activeTab === "guests" && (
+        {mainTab === "guests" && (
         <>
-        <div className="bar">
-          <div className="search-bar">
-            <IoSearchOutline fontSize={"25px"} />
-            <input type="text" placeholder={t("Search by guest name, email, or company...", { defaultValue: "Search by guest name, email, or company..." })} value={guestSearch} onChange={(e) => { setGuestSearch(e.target.value); setGuestPage(1); }} />
-          </div>
-        </div>
-
         <div className="manage-users-table-card">
           <div className="table-card-header">
             <h2>{t("Existing Guests", { defaultValue: "Existing Guests" })}</h2>
@@ -2181,16 +2360,24 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
                 })
               ) : (
                 <tr><td colSpan={selectedColumns.length + 1} className="empty-row">
-                  {guestSearch ? t("No guests match your search.", { defaultValue: "No guests match your search." }) : t("No guests yet. Click \"Add Guest\" to invite a guest.", { defaultValue: "No guests yet. Click \"Add Guest\" to invite a guest." })}
+                  {searchQuery || statusFilter ? t("No guests match your search or filters.", { defaultValue: "No guests match your search or filters." }) : t("No guests yet. Click \"Add Guest\" to invite a guest.", { defaultValue: "No guests yet. Click \"Add Guest\" to invite a guest." })}
                 </td></tr>
               )}
             </tbody>
           </table>
         </div>
 
-        {guestTotalPages > 1 && (
-          <Pagination currentPage={guestPage} totalPages={guestTotalPages} onPageChange={setGuestPage} />
-        )}
+        <Pagination
+          currentPage={guestPage}
+          totalPages={guestTotalPages}
+          onPageChange={setGuestPage}
+          itemsPerPage={guestItemsPerPage}
+          onItemsPerPageChange={(val) => {
+            setGuestItemsPerPage(val);
+            setGuestPage(1);
+          }}
+          itemsPerPageOptions={[10, 25, 50, 100]}
+        />
         </>
         )}
 
@@ -2634,6 +2821,7 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
                       }))}
                       placeholder={t("Select projects to assign...", { defaultValue: "Select projects to assign..." })}
                       searchPlaceholder={t("Search projects...", { defaultValue: "Search projects..." })}
+                      showChips={true}
                     />
                   </div>
                 </div>

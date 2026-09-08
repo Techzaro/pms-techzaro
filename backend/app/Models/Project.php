@@ -312,6 +312,12 @@ class Project extends Model
         return $this->_cachedMembers;
     }
 
+    /** All users assigned to this project (many-to-many). */
+    public function users(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'project_user')->withTimestamps();
+    }
+
     /** All users following this project (many-to-many). */
     public function followers(): BelongsToMany
     {

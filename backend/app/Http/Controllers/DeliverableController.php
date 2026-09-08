@@ -1888,20 +1888,16 @@ class DeliverableController extends Controller
 
         $deliverable->update($updateData);
 
-        // Update/Attach only target assignee in pivot table without modifying others
+        // Exclusively sync target assignee in pivot table so previous assignee is removed
         try {
             if ($targetAssigneeId && method_exists($deliverable, 'assignees')) {
-                if ($deliverable->assignees()->where('users.id', $targetAssigneeId)->exists()) {
-                    $deliverable->assignees()->updateExistingPivot($targetAssigneeId, [
-                        'status' => 'pending',
-                        'submitted_at' => null,
-                    ]);
-                } else {
-                    $deliverable->assignees()->attach($targetAssigneeId, [
+                $deliverable->assignees()->sync([
+                    $targetAssigneeId => [
                         'status' => 'pending',
                         'due_date' => $deliverable->due_date ?? null,
-                    ]);
-                }
+                        'submitted_at' => null,
+                    ],
+                ]);
             }
         } catch (\Throwable $e) {
             \Log::warning('Deliverable assignees pivot update warning: '.$e->getMessage());

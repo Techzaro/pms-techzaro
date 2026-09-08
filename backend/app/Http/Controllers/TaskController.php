@@ -4597,20 +4597,16 @@ class TaskController extends Controller
 
         $task->update($updateData);
 
-        // Update/Add only the target assignee in task_user pivot without modifying existing participants
+        // Exclusively sync target assignee in task_user pivot so previous assignee is removed
         try {
             if ($targetAssigneeId) {
-                if ($task->assignees()->where('users.id', $targetAssigneeId)->exists()) {
-                    $task->assignees()->updateExistingPivot($targetAssigneeId, [
-                        'status' => 'pending',
-                        'submitted_at' => null,
-                    ]);
-                } else {
-                    $task->assignees()->attach($targetAssigneeId, [
+                $task->assignees()->sync([
+                    $targetAssigneeId => [
                         'status' => 'pending',
                         'due_date' => $task->end_date ?? null,
-                    ]);
-                }
+                        'submitted_at' => null,
+                    ],
+                ]);
             }
         } catch (\Throwable $e) {
             \Log::warning('Task assignees pivot update on reopen warning: '.$e->getMessage());

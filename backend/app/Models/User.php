@@ -189,6 +189,12 @@ class User extends Authenticatable
         return $this->hasMany(Project::class, 'created_by');
     }
 
+    /** Projects assigned to this user (many-to-many). */
+    public function projects(): BelongsToMany
+    {
+        return $this->belongsToMany(Project::class, 'project_user')->withTimestamps();
+    }
+
     /** Teams this user belongs to. */
     public function teams(): BelongsToMany
     {

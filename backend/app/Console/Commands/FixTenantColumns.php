@@ -131,9 +131,23 @@ class FixTenantColumns extends Command
             ['name' => 'comment_type',                  'definition' => "VARCHAR(50) DEFAULT 'internal' AFTER `body`"],
             ['name' => 'visible_to_organizations',      'definition' => "JSON NULL AFTER `comment_type`"],
         ],
+        'audit_logs' => [
+            ['name' => 'user_name',                      'definition' => "VARCHAR(255) NULL AFTER `user_id`"],
+        ],
     ];
 
     protected array $tableCreates = [
+        'project_user' => "CREATE TABLE IF NOT EXISTS `project_user` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `project_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `project_user_project_id_user_id_unique` (`project_id`, `user_id`),
+            FOREIGN KEY (`project_id`) REFERENCES `projects`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
         'event_task' => "CREATE TABLE IF NOT EXISTS `event_task` (
             `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             `event_id` BIGINT UNSIGNED NOT NULL,
@@ -658,6 +672,18 @@ class FixTenantColumns extends Command
             `updated_at` TIMESTAMP NULL,
             PRIMARY KEY (`id`),
             UNIQUE KEY `project_followers_project_id_user_id_unique` (`project_id`, `user_id`),
+            FOREIGN KEY (`project_id`) REFERENCES `projects`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'project_user' => "CREATE TABLE IF NOT EXISTS `project_user` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `project_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `project_user_project_id_user_id_unique` (`project_id`, `user_id`),
             FOREIGN KEY (`project_id`) REFERENCES `projects`(`id`) ON DELETE CASCADE,
             FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",

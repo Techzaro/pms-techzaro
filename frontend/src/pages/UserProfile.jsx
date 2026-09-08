@@ -32,6 +32,7 @@ import "./UserProfile.css";
 import { useSubmit } from "../hooks/useSubmit";
 import LoadingButton from "../components/LoadingButton";
 import AdminChangePasswordModal from "../components/AdminChangePasswordModal";
+import MultiSelectDropdown from "../components/MultiSelectDropdown";
 import "./ManageUsers.css";
 import "./TaskDetails.css";
 
@@ -123,12 +124,14 @@ function UserProfile() {
     job_started_date: "",
     job_ended_date: "",
     role: "member",
+    project_ids: [],
     gross_salary: "",
     applied_via: "",
     bank_name: "",
     bank_account_number: "",
     bank_account_title: "",
   });
+  const [projectsList, setProjectsList] = useState([]);
   const [editErrors, setEditErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const { submitting, run } = useSubmit();
@@ -494,13 +497,35 @@ function UserProfile() {
       .join("");
   };
 
+  const fetchProjects = async () => {
+    try {
+      const token = authToken();
+      if (!token) return;
+      const res = await fetch(`${API_URL}/projects`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : (data?.projects || []);
+      setProjectsList(list);
+    } catch {
+      // ignore
+    }
+  };
+
   /** Populate the edit form with current user data and open the modal. */
   const openEditModal = () => {
+    fetchProjects();
     const u = profileData.user;
     const deptVal = u.department || "";
     const isCustomDept = !departments.includes(deptVal) && deptVal !== "";
     const desgVal = u.designation || "";
     const isCustomDesg = !designations.includes(desgVal) && desgVal !== "";
+
+    const existingProjectIds = u.projects
+      ? u.projects.map((p) => (typeof p === "object" ? p.id : p))
+      : (u.project_ids || []);
 
     setEditUser({
       name: u.name || "",
@@ -524,6 +549,7 @@ function UserProfile() {
       job_started_date: u.job_started_date ? u.job_started_date.substring(0, 10) : "",
       job_ended_date: u.job_ended_date ? u.job_ended_date.substring(0, 10) : "",
       role: u.role || "member",
+      project_ids: existingProjectIds,
       gross_salary: u.gross_salary || "",
       applied_via: u.applied_via || "",
       bank_name: u.bank_name || "",
@@ -938,6 +964,16 @@ if (!editUser.employee_code.trim()) errors.employee_code = t("Employee Code is r
       formData.append("bank_name", editUser.bank_name);
       formData.append("bank_account_number", editUser.bank_account_number);
       formData.append("bank_account_title", editUser.bank_account_title);
+
+      if (editUser.project_ids && Array.isArray(editUser.project_ids)) {
+        if (editUser.project_ids.length > 0) {
+          editUser.project_ids.forEach((pid) => {
+            formData.append("project_ids[]", pid);
+          });
+        } else {
+          formData.append("project_ids", "");
+        }
+      }
 
       const fileFields = [
         "employment_contract", "offer_letter", "techxaro_regulations",
@@ -1915,6 +1951,23 @@ if (!editUser.employee_code.trim()) errors.employee_code = t("Employee Code is r
                 <div className="form-row">
                   <label htmlFor="edit-applied_via">{t("Applied Via", { defaultValue: "Applied Via" })}</label>
                   <input type="text" id="edit-applied_via" name="applied_via" value={editUser.applied_via} onChange={handleEditChange} placeholder={t("e.g. Website, Referral, LinkedIn", { defaultValue: "e.g. Website, Referral, LinkedIn" })} />
+                </div>
+                <div className="form-row" style={{ gridColumn: "1 / -1" }}>
+                  <label>{t("Projects", { defaultValue: "Projects" })}</label>
+                  <MultiSelectDropdown
+                    value={editUser.project_ids || []}
+                    onChange={(val) => {
+                      setEditUser((prev) => ({ ...prev, project_ids: val }));
+                      setEditIsDirty(true);
+                    }}
+                    options={projectsList.map((p) => ({
+                      value: p.id,
+                      label: p.title + (p.business_id ? ` (${p.business_id})` : ""),
+                    }))}
+                    placeholder={t("Select projects to assign...", { defaultValue: "Select projects to assign..." })}
+                    searchPlaceholder={t("Search projects...", { defaultValue: "Search projects..." })}
+                    showChips={true}
+                  />
                 </div>
               </div>
 

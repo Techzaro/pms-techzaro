@@ -112,7 +112,7 @@ class UserController extends Controller
             });
         }
 
-        $users = $query->orderBy('sort_order')->latest('updated_at')->get();
+        $users = $query->with('projects:id,title,business_id')->orderBy('sort_order')->latest('updated_at')->get();
 
         return response()->json([
             'success' => true,
@@ -129,6 +129,8 @@ class UserController extends Controller
      */
     public function show(User $user)
     {
+        $user->load('projects:id,title,business_id');
+
         return response()->json([
             'success' => true,
             'user' => $user,
@@ -407,10 +409,15 @@ class UserController extends Controller
         // Attach user to selected projects immediately upon creation
         $projectIds = $request->input('project_ids', $request->input('projects', []));
         if (is_string($projectIds)) {
-            $projectIds = json_decode($projectIds, true) ?: explode(',', $projectIds);
+            $projectIds = json_decode($projectIds, true) ?: array_filter(explode(',', $projectIds));
         }
         if (! empty($projectIds) && is_array($projectIds)) {
             $projectIds = array_values(array_filter(array_map('intval', $projectIds)));
+            try {
+                $user->projects()->sync($projectIds);
+            } catch (\Throwable $e) {
+                Log::warning('Failed to sync projects pivot on create', ['user_id' => $user->id, 'error' => $e->getMessage()]);
+            }
             $projects = Project::whereIn('id', $projectIds)->get();
             foreach ($projects as $proj) {
                 $assignedUsers = (array) ($proj->assigned_users ?? []);
@@ -604,6 +611,8 @@ class UserController extends Controller
             'existing_other_docs' => 'nullable|string',
             'avatar' => 'nullable|image|mimes:jpeg,jpg,png,webp|max:5120',
             'avatar_remove' => 'nullable|in:1',
+            'project_ids' => 'nullable|array',
+            'project_ids.*' => 'integer|exists:projects,id',
         ]);
 
         // Validate email_mode specific requirements on update
@@ -905,6 +914,20 @@ class UserController extends Controller
                 $user->name,
                 ['message' => "You updated the profile of {$user->name}."]
             );
+        }
+
+        // Sync projects if provided in request
+        if ($request->has('project_ids') || $request->has('projects')) {
+            $rawProjects = $request->input('project_ids', $request->input('projects', []));
+            if (is_string($rawProjects)) {
+                $rawProjects = json_decode($rawProjects, true) ?: array_filter(explode(',', $rawProjects));
+            }
+            $projectIds = array_values(array_filter(array_map('intval', (array) $rawProjects)));
+            try {
+                $user->projects()->sync($projectIds);
+            } catch (\Throwable $e) {
+                Log::warning('Failed to sync projects pivot on update', ['user_id' => $user->id, 'error' => $e->getMessage()]);
+            }
         }
 
         // Handle file uploads
