@@ -11,6 +11,7 @@ import CustomSelect from "../components/CustomSelect";
 import ConfirmModal from "../components/ConfirmModal";
 import ShareKnowledgeModal from "../components/ShareKnowledgeModal";
 import UnifiedActivityFeed from "../components/UnifiedActivityFeed";
+import AttachResourceModal from "../components/AttachResourceModal";
 import API_URL from "../config/api";
 import { authToken, rolePath, getUser } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
@@ -51,6 +52,7 @@ import {
   Copy,
   Archive,
   Share2,
+  Link2,
 } from "lucide-react";
 
 // Register Font Whitelist for Quill
@@ -153,6 +155,7 @@ export default function KnowledgeBaseEditor() {
   // Actions & Favorites State
   const [isFavorited, setIsFavorited] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [attachModalOpen, setAttachModalOpen] = useState(false);
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
   const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
@@ -459,6 +462,28 @@ export default function KnowledgeBaseEditor() {
 
           if (!activeId && data.data?.id) {
             currentDocIdRef.current = data.data.id;
+            if (location.state?.taskId) {
+              fetch(`${API_URL}/tasks/${location.state.taskId}/knowledge-bases`, {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  "Content-Type": "application/json",
+                  Accept: "application/json",
+                },
+                body: JSON.stringify({ knowledge_base_id: data.data.id }),
+              }).catch(() => {});
+            }
+            if (location.state?.projectId) {
+              fetch(`${API_URL}/projects/${location.state.projectId}/knowledge-bases`, {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  "Content-Type": "application/json",
+                  Accept: "application/json",
+                },
+                body: JSON.stringify({ knowledge_base_id: data.data.id }),
+              }).catch(() => {});
+            }
             // Update URL without full reload
             window.history.replaceState(null, "", rolePath(`knowledge-base/edit/${data.data.id}`));
           }
@@ -868,6 +893,16 @@ export default function KnowledgeBaseEditor() {
                 </button>
               )}
 
+              {/* ATTACH TO PROJECT / TASK BUTTON */}
+              <button
+                type="button"
+                onClick={() => setAttachModalOpen(true)}
+                style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "7px 12px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-hover)", color: "var(--text-primary)", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                title={t("Attach to Project / Task", { defaultValue: "Attach to Project / Task" })}
+              >
+                <Link2 size={14} color="#2563eb" /> {t("Attach", { defaultValue: "Attach" })}
+              </button>
+
               {/* ARCHIVE / RESTORE BUTTON */}
               {status !== "archived" && canArchive && (
                 <button
@@ -917,6 +952,16 @@ export default function KnowledgeBaseEditor() {
             isOpen={shareModalOpen}
             onClose={() => setShareModalOpen(false)}
             article={rawArticle || { id, title, category: categoryName }}
+          />
+
+          {/* ATTACH RESOURCE MODAL IN VIEW */}
+          <AttachResourceModal
+            isOpen={attachModalOpen}
+            onClose={() => setAttachModalOpen(false)}
+            resource={{ type: "knowledge_base", id: id, title: title || rawArticle?.title }}
+            onSuccess={() => {
+              notify.success(t("Document attached successfully!", { defaultValue: "Document attached successfully!" }));
+            }}
           />
 
           {/* ARCHIVE CONFIRMATION MODAL IN VIEW */}

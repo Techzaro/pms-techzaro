@@ -83,12 +83,22 @@ function DeliveriesByYou() {
     return "";
   });
   const [timeFilter, setTimeFilter] = useState("");
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
   const [advancedFilters, setAdvancedFilters] = useState({
     user_id: [],
     project_id: [],
     status: [],
+    statuses: [],
+    states: [],
+    due_states: [],
+    priority: [],
+    created_by: [],
+    follower_id: [],
     start_date: "",
     end_date: "",
+    due_date_from: "",
+    due_date_to: "",
   });
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -115,18 +125,33 @@ function DeliveriesByYou() {
     const token = authToken();
     const params = new URLSearchParams();
     if (debouncedSearch) params.append("search", debouncedSearch);
-    if (timeFilter) params.append("time_filter", timeFilter);
+    if (timeFilter && timeFilter !== "custom") {
+      params.append("time_filter", timeFilter);
+    } else if (timeFilter === "custom") {
+      params.append("time_filter", "custom");
+      if (customStartDate) params.append("start_date", customStartDate);
+      if (customEndDate) params.append("end_date", customEndDate);
+    }
     if (advancedFilters.user_id && advancedFilters.user_id.length > 0) {
       params.append("user_id", Array.isArray(advancedFilters.user_id) ? advancedFilters.user_id.join(",") : advancedFilters.user_id);
     }
     if (advancedFilters.project_id && advancedFilters.project_id.length > 0) {
       params.append("project_id", Array.isArray(advancedFilters.project_id) ? advancedFilters.project_id.join(",") : advancedFilters.project_id);
     }
-    if (advancedFilters.status && advancedFilters.status.length > 0) {
-      params.append("status", Array.isArray(advancedFilters.status) ? advancedFilters.status.join(",") : advancedFilters.status);
+    const statusVal = advancedFilters.statuses?.length ? advancedFilters.statuses : advancedFilters.status;
+    if (statusVal && statusVal.length > 0) {
+      params.append("status", Array.isArray(statusVal) ? statusVal.join(",") : statusVal);
+    }
+    if (advancedFilters.priority && advancedFilters.priority.length > 0) {
+      params.append("priority", Array.isArray(advancedFilters.priority) ? advancedFilters.priority.join(",") : advancedFilters.priority);
+    }
+    if (advancedFilters.due_states && advancedFilters.due_states.length > 0) {
+      params.append("due_states", Array.isArray(advancedFilters.due_states) ? advancedFilters.due_states.join(",") : advancedFilters.due_states);
     }
     if (advancedFilters.start_date) params.append("start_date", advancedFilters.start_date);
     if (advancedFilters.end_date) params.append("end_date", advancedFilters.end_date);
+    if (advancedFilters.due_date_from) params.append("due_date_from", advancedFilters.due_date_from);
+    if (advancedFilters.due_date_to) params.append("due_date_to", advancedFilters.due_date_to);
 
     fetch(`${API_URL}/deliverables/assigned-by-me?${params.toString()}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -471,6 +496,14 @@ function DeliveriesByYou() {
         });
       });
     }
+    if (advancedFilters.priority && advancedFilters.priority.length > 0) {
+      const prios = (Array.isArray(advancedFilters.priority) ? advancedFilters.priority : [advancedFilters.priority]).map((p) => String(p).toLowerCase());
+      list = list.filter((item) => {
+        if (!item) return false;
+        const itemPrio = String(item.priority || "medium").toLowerCase();
+        return prios.includes(itemPrio);
+      });
+    }
     if (advancedFilters.start_date) {
       list = list.filter((item) => {
         if (!item || !item.start_date) return false;
@@ -523,7 +556,7 @@ function DeliveriesByYou() {
             <h1>{t("Subtasks Assigned By You", { defaultValue: "Subtasks Assigned By You" })}</h1>
             <p>{t("Subtasks assigned to others from tasks and projects you created", { defaultValue: "Subtasks assigned to others from tasks and projects you created" })}</p>
           </div>
-          <div className="header-actions">
+          <div className="header-actions" style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
             {canCreateSubtask && (
               <button className="add-btn" onClick={() => setShowCreateModal(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", background: "var(--color-primary)", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: 13 }}>
                 {t("+ Create Subtask", { defaultValue: "+ Create Subtask" })}
@@ -531,10 +564,29 @@ function DeliveriesByYou() {
             )}
             <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)} className="reports-filter">
               <option value="">{t("All Time", { defaultValue: "All Time" })}</option>
+              <option value="today">{t("Today", { defaultValue: "Today" })}</option>
               <option value="7">{t("Last 7 Days", { defaultValue: "Last 7 Days" })}</option>
               <option value="30">{t("Last 30 Days", { defaultValue: "Last 30 Days" })}</option>
               <option value="180">{t("Last 6 Months", { defaultValue: "Last 6 Months" })}</option>
+              <option value="custom">{t("Custom Date", { defaultValue: "Custom Date" })}</option>
             </select>
+            {timeFilter === "custom" && (
+              <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => { setCustomStartDate(e.target.value); setPage(1); }}
+                  style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--border-color, #cbd5e1)", fontSize: "13px" }}
+                />
+                <span style={{ fontSize: "12px", color: "#64748b" }}>{t("to", { defaultValue: "to" })}</span>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => { setCustomEndDate(e.target.value); setPage(1); }}
+                  style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--border-color, #cbd5e1)", fontSize: "13px" }}
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -565,7 +617,14 @@ function DeliveriesByYou() {
           filters={advancedFilters}
           activeStatus={statusFilter}
           onFilterChange={(key, val) => {
-            setAdvancedFilters((prev) => ({ ...prev, [key]: val }));
+            setAdvancedFilters((prev) => {
+              const updated = { ...prev, [key]: val };
+              if (key === "priority" || key === "priorities") {
+                updated.priority = val;
+                updated.priorities = val;
+              }
+              return updated;
+            });
             setPage(1);
           }}
           onApplyFilters={(appliedFilters, appliedSort) => {
@@ -584,6 +643,8 @@ function DeliveriesByYou() {
               follower_id: appliedFilters?.follower_id || [],
               start_date: appliedFilters?.start_date || "",
               end_date: appliedFilters?.end_date || "",
+              due_date_from: appliedFilters?.due_date_from || "",
+              due_date_to: appliedFilters?.due_date_to || "",
             }));
             setPage(1);
           }}
@@ -591,6 +652,8 @@ function DeliveriesByYou() {
             setSearch("");
             setStatusFilter("");
             setSearchParams({});
+            setCustomStartDate("");
+            setCustomEndDate("");
             setAdvancedFilters({
               user_id: [],
               project_id: [],
@@ -603,6 +666,8 @@ function DeliveriesByYou() {
               follower_id: [],
               start_date: "",
               end_date: "",
+              due_date_from: "",
+              due_date_to: "",
             });
             setPage(1);
           }}

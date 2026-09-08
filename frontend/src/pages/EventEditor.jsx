@@ -8,6 +8,7 @@ import RichTextEditor from "../components/RichTextEditor";
 import CreatableSelect from "react-select/creatable";
 import UnifiedActivityFeed from "../components/UnifiedActivityFeed";
 import ShareResourceModal from "../components/ShareResourceModal";
+import AttachResourceModal from "../components/AttachResourceModal";
 import DOMPurify from "dompurify";
 import API_URL from "../config/api";
 import { authToken, rolePath, getUser } from "../utils/auth";
@@ -45,6 +46,7 @@ import {
   UserPlus,
   X,
   Share2,
+  Link2,
 } from "lucide-react";
 import {
   convertToLocal,
@@ -84,6 +86,7 @@ export default function EventEditor() {
 
   // Share state (for view mode)
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showAttachModal, setShowAttachModal] = useState(false);
   const [hasActiveConnections, setHasActiveConnections] = useState(false);
 
   // Form Mode: 'event' vs 'announcement'
@@ -623,6 +626,30 @@ export default function EventEditor() {
 
       const data = await res.json();
       if (res.ok && data?.success) {
+        const createdEventId = data?.data?.id || data?.event?.id;
+        if (!isEditMode && createdEventId && locationState.state?.taskId) {
+          fetch(`${API_URL}/tasks/${locationState.state.taskId}/events`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+              Accept: "application/json",
+            },
+            body: JSON.stringify({ event_id: createdEventId }),
+          }).catch(() => {});
+        }
+        if (!isEditMode && createdEventId && locationState.state?.projectId) {
+          fetch(`${API_URL}/projects/${locationState.state.projectId}/events`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+              Accept: "application/json",
+            },
+            body: JSON.stringify({ event_id: createdEventId }),
+          }).catch(() => {});
+        }
+
         notify.success(
           isEditMode
             ? t("Event updated successfully!", { defaultValue: "Event updated successfully!" })
@@ -630,7 +657,14 @@ export default function EventEditor() {
             ? t("Company Announcement published!", { defaultValue: "Company Announcement published!" })
             : t("Event created successfully!", { defaultValue: "Event created successfully!" })
         );
-        navigate(rolePath("events"));
+
+        if (!isEditMode && locationState.state?.taskId) {
+          navigate(rolePath(`tasks/task-details/${locationState.state.taskId}`));
+        } else if (!isEditMode && locationState.state?.projectId) {
+          navigate(rolePath(`projects/project-details/${locationState.state.projectId}`));
+        } else {
+          navigate(rolePath("events"));
+        }
       } else {
         notify.error(data?.message || t("Failed to save event.", { defaultValue: "Failed to save event." }));
       }
@@ -859,6 +893,17 @@ export default function EventEditor() {
                   }}
                 >
                   {t("Edit", { defaultValue: "Edit" })}
+                </button>
+              )}
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => setShowAttachModal(true)}
+                  style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 14px", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--bg-hover)", color: "var(--text-primary)", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
+                  title={t("Attach to Project / Task", { defaultValue: "Attach to Project / Task" })}
+                >
+                  <Link2 size={15} color="#2563eb" />
+                  {t("Attach", { defaultValue: "Attach" })}
                 </button>
               )}
               {canEdit && hasActiveConnections && (
@@ -1234,6 +1279,40 @@ export default function EventEditor() {
               </div>
             </div>
           </div>
+        )}
+
+        {showAttachModal && (
+          <AttachResourceModal
+            isOpen={showAttachModal}
+            onClose={() => setShowAttachModal(false)}
+            resource={{
+              type: "event",
+              id: id,
+              title: title || loadedEvent?.title,
+            }}
+            onSuccess={() => {
+              notify.success(t("Event attached successfully!", { defaultValue: "Event attached successfully!" }));
+            }}
+          />
+        )}
+
+        {showShareModal && loadedEvent && (
+          <ShareResourceModal
+            resourceType="event"
+            resourceId={loadedEvent.id}
+            resourceName={loadedEvent.title}
+            onClose={() => setShowShareModal(false)}
+            onShared={() => {
+              setShowShareModal(false);
+              const token = authToken();
+              fetch(`${API_URL}/events/${id}`, {
+                headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+              }).then(r => r.json()).then(d => {
+                const ev = d?.data || d?.event;
+                if (ev) setLoadedEvent(ev);
+              }).catch(() => {});
+            }}
+          />
         )}
       </DashboardLayout>
     );

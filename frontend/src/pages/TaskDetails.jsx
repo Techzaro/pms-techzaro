@@ -117,15 +117,20 @@ function statusLabel(status, t) {
   const map = {
     pending: "Pending",
     in_progress: "In Progress",
+    "in-progress": "In Progress",
     acknowledged: "In Progress",
     paused: "Paused",
+    pause: "Paused",
     submitted: "Submitted",
+    submitted_late: "Submitted",
     reopened: "Pending",
     approved: "Completed",
     completed: "Completed",
     rejected: "Declined",
     declined: "Declined",
+    abandon_requested: "Abandon Requested",
     abandoned: "Abandoned",
+    planning: "Pending",
   };
   const label = map[s] || status || "Pending";
   return t ? t(label, { defaultValue: label }) : label;
@@ -134,26 +139,22 @@ function statusLabel(status, t) {
 /** Return text colour for a given task status. */
 function statusColor(status) {
   const s = (status || "").toLowerCase();
-  if (s === "approved") return "var(--color-success)";
-  if (s === "pending") return "var(--color-warning)";
-  if (s === "in_progress" || s === "acknowledged") return "var(--color-blue)";
-  if (s === "paused") return "var(--color-warning)";
-  if (s === "reopened") return "var(--color-warning)";
-  if (s === "submitted") return "var(--color-blue)";
-  if (s === "rejected") return "var(--color-danger)";
+  if (s === "approved" || s === "completed") return "var(--color-success)";
+  if (s === "pending" || s === "reopened" || s === "planning") return "var(--color-warning)";
+  if (s === "in_progress" || s === "in-progress" || s === "acknowledged" || s === "submitted" || s === "submitted_late") return "var(--color-blue)";
+  if (s === "paused" || s === "pause" || s === "abandon_requested") return "var(--color-warning)";
+  if (s === "rejected" || s === "declined" || s === "abandoned") return "var(--color-danger)";
   return "var(--text-dark)";
 }
 
 /** Return background colour for a given task status badge. */
 function statusBgColor(status) {
   const s = (status || "").toLowerCase();
-  if (s === "approved") return "var(--color-success-bg)";
-  if (s === "pending") return "var(--color-warning-bg)";
-  if (s === "in_progress" || s === "acknowledged") return "var(--color-blue-bg)";
-  if (s === "paused") return "var(--color-warning-bg)";
-  if (s === "reopened") return "var(--color-warning-bg)";
-  if (s === "submitted") return "var(--color-blue-bg)";
-  if (s === "rejected") return "var(--color-danger-bg)";
+  if (s === "approved" || s === "completed") return "var(--color-success-bg)";
+  if (s === "pending" || s === "reopened" || s === "planning") return "var(--color-warning-bg)";
+  if (s === "in_progress" || s === "in-progress" || s === "acknowledged" || s === "submitted" || s === "submitted_late") return "var(--color-blue-bg)";
+  if (s === "paused" || s === "pause" || s === "abandon_requested") return "var(--color-warning-bg)";
+  if (s === "rejected" || s === "declined" || s === "abandoned") return "var(--color-danger-bg)";
   return "var(--bg-hover)";
 }
 
@@ -725,8 +726,17 @@ function TaskDetails() {
   const currentUser = getUser();
   const isAdminOrManager = currentUser && ["admin", "manager"].includes(currentUser.role);
   const isSuperAdmin = currentUser && ["admin", "super_admin"].includes(currentUser.role);
-  const isCreator = task?.is_creator ?? (task && currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10));
-  const isAssignee = task?.is_assignee ?? (task && currentUser && (task.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10)));
+  const isCreator = Boolean(
+    task?.is_creator === true ||
+    (task && currentUser && (
+      parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10) ||
+      parseInt(task.creator_id, 10) === parseInt(currentUser.id, 10) ||
+      parseInt(task.original_assigner, 10) === parseInt(currentUser.id, 10) ||
+      parseInt(task.user_id, 10) === parseInt(currentUser.id, 10)
+    ))
+  );
+  const isAssignee = task?.is_assignee ?? (task && currentUser && ((task.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10)) || (task?.assigned_to && parseInt(task.assigned_to, 10) === parseInt(currentUser?.id, 10))));
+  const isCurrentOwner = Boolean(task?.is_current_owner ?? (task?.current_owner && currentUser && parseInt(task.current_owner, 10) === parseInt(currentUser.id, 10)) ?? isAssignee);
   const isFollower = (followers || []).some((f) => parseInt(f.id, 10) === parseInt(currentUser?.id, 10));
   const isOnlyFollower = isFollower && !isAdminOrManager && !isCreator && !isAssignee;
   const taskStatus = (task?.status || "").toLowerCase();
@@ -735,29 +745,35 @@ function TaskDetails() {
   const canDelete = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isCreator || isAdminOrManager));
   const canSubmitTask = !readOnly && !isTerminalOrSubmitted && !isOnlyFollower && (task?.can_submit === true || (isAssignee && ["in_progress", "reopened", "paused"].includes(taskStatus)));
   const canAcknowledge = (readOnly || isOnlyFollower) ? false : (task && currentUser && isAssignee && ["pending", "reopened"].includes(task?.status));
-  const canStartTimer = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isCreator || isSuperAdmin || isAdminOrManager) && ["in_progress", "in-progress"].includes(task?.status) && (!task?.timer || task?.timer?.state === "idle" || !task?.timer?.state) && !task?.assigner_paused);
+  const canStartTimer = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isCurrentOwner) && ["in_progress", "in-progress"].includes(task?.status) && (!task?.timer || task?.timer?.state === "idle" || !task?.timer?.state) && !task?.assigner_paused);
   const isAssignerLocked = !!task?.assigner_paused;
   const canAssignerPause = (readOnly || isOnlyFollower) ? false : (task && currentUser && isCreator && !task?.assigner_paused && ["pending", "in_progress", "reopened", "submitted"].includes(task?.status) && task?.status !== "paused");
-  const canTimerPause = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isCreator || isSuperAdmin || isAdminOrManager) && ["in_progress", "submitted"].includes(task?.status) && task?.timer?.state === "running" && !task?.assigner_paused);
+  const canTimerPause = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isCurrentOwner) && ["in_progress", "submitted"].includes(task?.status) && task?.timer?.state === "running" && !task?.assigner_paused);
   const isTransferor = task?.is_transferor ?? false;
   const transferorReturnToSelf = task?.transferor_return_to_self ?? true;
   const transferorHasApproved = task?.transferor_has_approved ?? false;
   const canPause = (canTimerPause || canAssignerPause) && (!isTransferor || transferorHasApproved) && !task?.active_outgoing_delegation;
-  const canContinue = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isCreator || isSuperAdmin || isAdminOrManager) && (task?.status === "paused" || task?.timer?.state === "paused") && !task?.assigner_paused);
+  const canContinue = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isCurrentOwner) && (task?.status === "paused" || task?.timer?.state === "paused") && !task?.assigner_paused);
   const canAssignerResume = (readOnly || isOnlyFollower) ? false : (task && currentUser && isCreator && task?.assigner_paused);
-  const isApproved = taskStatus === "approved";
-  const hasPendingDelegation = task?.pending_delegation && task.pending_delegation.delegated_to === currentUser?.id;
-  const isDelegatee = task?.is_delegatee ?? (task?.current_owner && currentUser && parseInt(task.current_owner, 10) === parseInt(currentUser.id, 10)) ?? false;
-  const isCurrentOwner = task?.is_current_owner ?? (task?.current_owner && currentUser && parseInt(task.current_owner, 10) === parseInt(currentUser.id, 10)) ?? isAssignee;
-  const canApprove = (readOnly || isOnlyFollower) ? false : (!isAssignee && (isCreator || isSuperAdmin));
-  const isAssignerOrCreator = isCreator || isSuperAdmin || (currentUser && (task?.assigned_by === currentUser.id || task?.creator_id === currentUser.id));
+  const hasPendingDelegation = Boolean(task?.pending_delegation && currentUser && parseInt(task.pending_delegation.delegated_to, 10) === parseInt(currentUser.id, 10));
+  const isTransferorApproval = (isTransferor || task?.is_transferor) && !transferorHasApproved && (task?.submission_stage === "awaiting_checkpoint" || task?.can_submit_to_next || ["submitted", "submitted_late"].includes(taskStatus));
+  const canApprove = (readOnly || isOnlyFollower)
+    ? false
+    : isTransferorApproval || ((isCreator || isSuperAdmin) && (!task?.is_transferred || transferorHasApproved || task?.submission_stage === "awaiting_creator"));
+  const isAssignerOrCreator = isCreator || isSuperAdmin || isAdminOrManager || (currentUser && (
+    parseInt(task?.assigned_by, 10) === parseInt(currentUser.id, 10) ||
+    parseInt(task?.creator_id, 10) === parseInt(currentUser.id, 10) ||
+    parseInt(task?.original_assigner, 10) === parseInt(currentUser.id, 10) ||
+    parseInt(task?.user_id, 10) === parseInt(currentUser.id, 10)
+  ));
   const canReopen = (readOnly || isOnlyFollower)
     ? false
-    : ((isAssignerOrCreator || task?.can_decline_submission) &&
+    : ((isAssignerOrCreator || task?.can_decline_submission || isTransferorApproval) &&
        ["completed", "declined", "abandoned", "approved", "submitted", "submitted_late", "rejected"].includes(taskStatus));
   const canMarkCompleted = (readOnly || isOnlyFollower)
     ? false
-    : ((isCreator || isSuperAdmin) && ["pending", "in_progress", "in-progress", "paused", "not_started", "assigned", "planned", "planning", "acknowledged", "reopened"].includes(taskStatus));
+    : (isCreator || isSuperAdmin || isAdminOrManager || isAssignerOrCreator) &&
+      !["completed", "approved", "abandoned"].includes(taskStatus);
   const canAbandon = (readOnly || isOnlyFollower)
     ? false
     : (task && currentUser && (isAssignee || isCreator || isSuperAdmin || isAdminOrManager) && !["abandoned", "approved", "completed", "submitted", "submitted_late"].includes(taskStatus));
@@ -831,8 +847,13 @@ function TaskDetails() {
   const assignees = task?.assignees || [];
   const assigner = task?.assigner;
   const project = task?.project;
-  const isTerminalTask = ["completed", "approved", "submitted", "submitted_late", "done"].includes((task?.status || "").toLowerCase());
-  const progress = isTerminalTask ? 100 : (typeof task?.deliverables_progress === "number" ? task.deliverables_progress : 0);
+  const isFinishedTask = ["completed", "approved", "done"].includes((task?.status || "").toLowerCase());
+  const subtasksList = orderedSubtasks.length ? orderedSubtasks : (task?.deliverables || []);
+  const totalSubtasks = task?.total_deliverables ?? subtasksList.length;
+  const completedSubtasks = task?.completed_deliverables ?? subtasksList.filter((s) => (s.status || "").toLowerCase() === "approved").length;
+  const progress = totalSubtasks > 0
+    ? Math.round((completedSubtasks / totalSubtasks) * 100)
+    : (isFinishedTask ? 100 : 0);
   const files = task?.files || [];
 
   const handleFileReorder = useCallback((reordered) => {
@@ -1437,9 +1458,13 @@ function TaskDetails() {
         const data = await res.json();
         if (res.ok) {
           setTask(data.task);
-          publish('task:updated', { id: taskId, status: 'approved' });
+          publish('task:updated', { id: taskId, status: data.task?.status || 'approved' });
           publish('data:changed', { type: 'task', action: 'updated' });
-          showSuccessMessage("Task", "approved");
+          if (data.task?.status === 'in_progress') {
+            notify.success(data.message || t("Transfer approved successfully. Task is now in progress and ready for submission to the original assigner.", { defaultValue: "Transfer approved successfully. Task is now in progress and ready for submission to the original assigner." }));
+          } else {
+            showSuccessMessage("Task", "approved");
+          }
         } else {
           notify.error(data.message || t("Failed to approve task.", { defaultValue: "Failed to approve task." }));
         }
@@ -1716,7 +1741,18 @@ function TaskDetails() {
                       {t("Mark as Completed", { defaultValue: "Mark as Completed" })}
                     </button>
                   )}
-                  {canApprove && (task?.status === "submitted" || task?.status === "submitted_late" || task?.status === "reopened") && (
+                  {isTransferorApproval && (
+                    <button
+                      className="td-btn-success"
+                      style={{ background: "#16a34a", color: "#ffffff", border: "none", fontWeight: 600, padding: "8px 16px", borderRadius: "8px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                      disabled={approvingTask}
+                      onClick={handleTaskApprove}
+                    >
+                      <CheckCircle2 size={15} />
+                      {approvingTask ? t("Approving...", { defaultValue: "Approving..." }) : t("Approve Transfer", { defaultValue: "Approve Transfer" })}
+                    </button>
+                  )}
+                  {!isTransferorApproval && canApprove && (task?.status === "submitted" || task?.status === "submitted_late" || task?.status === "reopened") && (
                     <button
                       className="td-btn-success"
                       style={{ background: "#16a34a", color: "#ffffff", border: "none", fontWeight: 600, padding: "8px 16px", borderRadius: "8px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}
@@ -1727,7 +1763,7 @@ function TaskDetails() {
                       {approvingTask ? t("Approving...", { defaultValue: "Approving..." }) : t("Approve Task", { defaultValue: "Approve Task" })}
                     </button>
                   )}
-                  {(canApprove || task?.can_decline_submission) && (task?.status === "submitted" || task?.status === "submitted_late") && (
+                  {(isTransferorApproval || canApprove || task?.can_decline_submission) && (task?.status === "submitted" || task?.status === "submitted_late") && (
                     <button
                       className="td-btn-danger"
                       style={{ background: "#dc2626", color: "#ffffff", border: "none", fontWeight: 600, padding: "8px 16px", borderRadius: "8px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}
@@ -1820,10 +1856,15 @@ function TaskDetails() {
               </div>
 
               <div className="td-badges">
-                <span className="td-badge" style={{ background: statusBgColor(task?.status), color: statusColor(task?.status) }}>
-                  <span className="td-badge-dot" style={{ background: statusColor(task?.status) }} />
-                  {statusLabel(task?.status || "Pending", t)}
-                </span>
+                {(() => {
+                  const effectiveStatus = task?.assigner_paused ? "paused" : (task?.my_status || task?.status || "Pending");
+                  return (
+                    <span className="td-badge" style={{ background: statusBgColor(effectiveStatus), color: statusColor(effectiveStatus) }}>
+                      <span className="td-badge-dot" style={{ background: statusColor(effectiveStatus) }} />
+                      {statusLabel(effectiveStatus, t)}
+                    </span>
+                  );
+                })()}
                 {Boolean(task?.is_reopened || (Array.isArray(task?.states) && task.states.some((s) => String(s).toLowerCase() === "reopened")) || task?.reopened_at || Number(task?.reopen_count) > 0) && (
                   <span className="td-badge" style={{ background: "#EDE9FE", color: "#6D28D9", border: "1px solid #DDD6FE" }}>
                     <span className="td-badge-dot" style={{ background: "#6D28D9" }} />
@@ -1834,6 +1875,12 @@ function TaskDetails() {
                   <span className="td-badge" style={{ background: "#E0E7FF", color: "#4338CA", border: "1px solid #C7D2FE" }}>
                     <span className="td-badge-dot" style={{ background: "#4338CA" }} />
                     {t("Transferred", { defaultValue: "Transferred" })}
+                  </span>
+                )}
+                {task?.assigner_paused && (
+                  <span className="td-badge" style={{ background: "#FEF3C7", color: "#92400E", border: "1px solid #FDE68A" }}>
+                    <Lock size={12} style={{ marginRight: 4 }} />
+                    {t("Paused by Assigner", { defaultValue: "Paused by Assigner" })}
                   </span>
                 )}
                 {Array.isArray(task?.states) && task.states.filter((st) => !["reopened", "transferred"].includes(String(st).toLowerCase())).map((st, idx) => (
@@ -2274,11 +2321,25 @@ function TaskDetails() {
                   )}
 
                   {tab === "knowledge" && (
-                    <TaskKnowledge taskId={task.id} initialKnowledgeBases={task.knowledge_bases || task.knowledgeBases} readOnly={readOnly} />
+                    <TaskKnowledge
+                      key={`task-kb-${task.id}-${(task.kb_ids || []).join(',')}`}
+                      task={task}
+                      taskId={task.id}
+                      initialKnowledgeBases={task.knowledge_bases || task.knowledgeBases}
+                      readOnly={readOnly}
+                      onUpdate={() => fetchTask(false)}
+                    />
                   )}
 
                   {tab === "events" && (
-                    <TaskEvents taskId={task.id} initialEvents={task.events} readOnly={readOnly} />
+                    <TaskEvents
+                      key={`task-events-${task.id}-${(task.event_ids || []).join(',')}`}
+                      task={task}
+                      taskId={task.id}
+                      initialEvents={task.events}
+                      readOnly={readOnly}
+                      onUpdate={() => fetchTask(false)}
+                    />
                   )}
 
                   {tab === "activity" && (
@@ -2598,34 +2659,40 @@ function TaskDetails() {
                   </div>
                 </li>
                 {(() => {
+                  const eagerKbs = Array.isArray(task?.knowledge_bases || task?.knowledgeBases)
+                    ? (task.knowledge_bases || task.knowledgeBases)
+                    : [];
                   const kbIds = Array.isArray(task?.kb_ids)
                     ? task.kb_ids
                     : task?.kb_id
                     ? [task.kb_id]
                     : [];
+                  const allResolvedKbs = [...eagerKbs];
+                  kbIds.forEach((kId) => {
+                    if (!allResolvedKbs.some((k) => String(k?.id) === String(kId))) {
+                      const found = (kbArticles || []).find((k) => String(k?.id) === String(kId));
+                      allResolvedKbs.push(found || { id: kId, title: `Article #${kId}` });
+                    }
+                  });
                   return (
                     <li>
                       <span className="td-dot" style={{ background: "#6366f1" }} />
                       <div>
                         <span className="td-info-label">{t("Knowledge Base", { defaultValue: "Knowledge Base" })}</span>
                         <span className="td-info-val">
-                          {kbIds && kbIds.length > 0 ? (
+                          {allResolvedKbs && allResolvedKbs.length > 0 ? (
                             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                              {kbIds.map((kId) => {
-                                const foundKb = kbArticles.find((k) => String(k.id) === String(kId));
-                                const kbTitle = foundKb?.title || `Article #${kId}`;
-                                return (
-                                  <Link
-                                    key={kId}
-                                    to={rolePath ? rolePath(`knowledge-base/${kId}`) : `/knowledge-base/${kId}`}
-                                    className="td-project-link"
-                                    style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}
-                                  >
-                                    <BookOpen size={14} style={{ flexShrink: 0 }} />
-                                    <span>{kbTitle}</span>
-                                  </Link>
-                                );
-                              })}
+                              {allResolvedKbs.map((kbItem) => (
+                                <Link
+                                  key={kbItem?.id}
+                                  to={rolePath ? rolePath(`knowledge-base/${kbItem?.id}`) : `/knowledge-base/${kbItem?.id}`}
+                                  className="td-project-link"
+                                  style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}
+                                >
+                                  <BookOpen size={14} style={{ flexShrink: 0 }} />
+                                  <span>{kbItem?.title || `Article #${kbItem?.id}`}</span>
+                                </Link>
+                              ))}
                             </div>
                           ) : "—"}
                         </span>
@@ -2634,34 +2701,38 @@ function TaskDetails() {
                   );
                 })()}
                 {(() => {
+                  const eagerEvents = Array.isArray(task?.events) ? task.events : [];
                   const eventIds = Array.isArray(task?.event_ids)
                     ? task.event_ids
                     : task?.event_id
                     ? [task.event_id]
                     : [];
+                  const allResolvedEvents = [...eagerEvents];
+                  eventIds.forEach((eId) => {
+                    if (!allResolvedEvents.some((e) => String(e?.id) === String(eId))) {
+                      const found = (eventsList || []).find((e) => String(e?.id) === String(eId));
+                      allResolvedEvents.push(found || { id: eId, title: `Event #${eId}` });
+                    }
+                  });
                   return (
                     <li>
                       <span className="td-dot" style={{ background: "#0ea5e9" }} />
                       <div>
                         <span className="td-info-label">{t("Event", { defaultValue: "Event" })}</span>
                         <span className="td-info-val">
-                          {eventIds && eventIds.length > 0 ? (
+                          {allResolvedEvents && allResolvedEvents.length > 0 ? (
                             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                              {eventIds.map((eId) => {
-                                const foundEv = eventsList.find((e) => String(e.id) === String(eId));
-                                const eventTitle = foundEv?.title || `Event #${eId}`;
-                                return (
-                                  <Link
-                                    key={eId}
-                                    to={rolePath ? rolePath(`events/${eId}`) : `/events/${eId}`}
-                                    className="td-project-link"
-                                    style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}
-                                  >
-                                    <Calendar size={14} style={{ flexShrink: 0 }} />
-                                    <span>{eventTitle}</span>
-                                  </Link>
-                                );
-                              })}
+                              {allResolvedEvents.map((evItem) => (
+                                <Link
+                                  key={evItem?.id}
+                                  to={rolePath ? rolePath(`events/${evItem?.id}`) : `/events/${evItem?.id}`}
+                                  className="td-project-link"
+                                  style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}
+                                >
+                                  <Calendar size={14} style={{ flexShrink: 0 }} />
+                                  <span>{evItem?.title || `Event #${evItem?.id}`}</span>
+                                </Link>
+                              ))}
                             </div>
                           ) : "—"}
                         </span>

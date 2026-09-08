@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
+import { useNotification } from "../context/NotificationContext";
+import { showSuccessMessage } from "../utils/notify";
 import RichTextEditor from "./RichTextEditor";
 import ConfirmModal from "./ConfirmModal";
 
@@ -119,6 +121,7 @@ function CommentItem({
   mentionableUsers = [],
 }) {
   const { t } = useTranslation();
+  const notify = useNotification();
   const [showReplies, setShowReplies] = useState(depth === 0);
   const [replyOpen, setReplyOpen] = useState(false);
   const [replyText, setReplyText] = useState("");
@@ -185,7 +188,8 @@ function CommentItem({
   );
 
   const handleReply = async () => {
-    if (!replyText.trim()) return;
+    const stripped = replyText.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
+    if (!stripped) return;
     setReplySending(true);
     try {
       const token = authToken();
@@ -200,8 +204,9 @@ function CommentItem({
 
       const res = await fetch(commentsEndpoint, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         body: formData,
+        _notifHandled: true,
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -209,9 +214,16 @@ function CommentItem({
         setReplyMentionedUserIds([]);
         setReplyOpen(false);
         onEdit();
+        showSuccessMessage("Reply", "posted successfully");
+      } else {
+        notify.error(data.message || t("Failed to send reply.", { defaultValue: "Failed to send reply." }));
       }
-    } catch (err) { console.error("Reply failed:", err); }
-    setReplySending(false);
+    } catch (err) {
+      console.error("Reply failed:", err);
+      notify.error(t("Failed to send reply.", { defaultValue: "Failed to send reply." }));
+    } finally {
+      setReplySending(false);
+    }
   };
 
   const handleEdit = async () => {
@@ -559,6 +571,7 @@ function CommentItem({
 
 export default function TaskDiscussion({ taskId, deliverableId, entityType, readOnly, teamUsers = [] }) {
   const { t } = useTranslation();
+  const notify = useNotification();
   const isDeliverable = entityType === "deliverable" && deliverableId;
   const commentsEndpoint = isDeliverable
     ? `${API_URL}/deliverables/${deliverableId}/comments`
@@ -717,9 +730,10 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
     });
   };
 
+  const hasContent = Boolean(newComment && newComment.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim()) || Boolean(file);
+
   const handlePost = async () => {
-    const stripped = newComment.replace(/<[^>]*>/g, "").trim();
-    if (!stripped && !file) return;
+    if (!hasContent) return;
     setSending(true);
     try {
       const token = authToken();
@@ -740,8 +754,9 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
 
       const res = await fetch(commentsEndpoint, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         body: formData,
+        _notifHandled: true,
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -750,10 +765,18 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
         setActiveQuote(null);
         setFile(null);
         setFileName("");
+        if (fileInputRef.current) fileInputRef.current.value = "";
         fetchComments(1);
+        showSuccessMessage("Comment", "posted successfully");
+      } else {
+        notify.error(data.message || t("Failed to post comment.", { defaultValue: "Failed to post comment." }));
       }
-    } catch (err) { console.error("Post comment failed:", err); }
-    setSending(false);
+    } catch (err) {
+      console.error("Post comment failed:", err);
+      notify.error(t("Failed to post comment.", { defaultValue: "Failed to post comment." }));
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleDelete = async (commentId) => {
@@ -988,7 +1011,7 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
                   <button
                     className="td-discussion-send-btn"
                     onClick={handlePost}
-                    disabled={sending || (!newComment.replace(/<[^>]*>/g, "").trim() && !file)}
+                    disabled={sending || !hasContent}
                   >
                     {sending ? (
                       t("Sending...", { defaultValue: "Sending..." })

@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Http\Resources\ProjectResource;
 use App\Models\Deliverable;
+use App\Models\Event;
+use App\Models\KnowledgeBase;
 use App\Models\Project;
 use App\Models\ProjectChange;
 use App\Models\ProjectFile;
@@ -2255,6 +2257,124 @@ class ProjectController extends Controller
             'success' => true,
             'data' => $sorted,
             'users' => $users,
+        ]);
+    }
+
+    public function getEvents(Project $project): JsonResponse
+    {
+        $eventIds = array_map('intval', is_array($project->event_ids) ? $project->event_ids : []);
+        $events = Event::whereIn('id', $eventIds)
+            ->orWhere('project_id', $project->id)
+            ->orderBy('start_date', 'asc')
+            ->get();
+        return response()->json(['success' => true, 'events' => $events]);
+    }
+
+    public function linkEvent(Request $request, Project $project): JsonResponse
+    {
+        $validated = $request->validate([
+            'event_id' => 'required|exists:events,id',
+        ]);
+
+        $eventId = (int) $validated['event_id'];
+        $currentEventIds = array_map('intval', is_array($project->event_ids) ? $project->event_ids : []);
+        if (!in_array($eventId, $currentEventIds, true)) {
+            $currentEventIds[] = $eventId;
+            $project->update(['event_ids' => array_values(array_unique($currentEventIds))]);
+        }
+
+        $events = Event::whereIn('id', $currentEventIds)
+            ->orWhere('project_id', $project->id)
+            ->orderBy('start_date', 'asc')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Event linked to project successfully.',
+            'events' => $events,
+            'project' => $project->fresh(),
+        ]);
+    }
+
+    public function unlinkEvent(Project $project, Event $event): JsonResponse
+    {
+        $currentEventIds = array_map('intval', is_array($project->event_ids) ? $project->event_ids : []);
+        $currentEventIds = array_values(array_filter($currentEventIds, fn($id) => (int)$id !== (int)$event->id));
+        $project->update(['event_ids' => $currentEventIds]);
+
+        if ((int)$event->project_id === (int)$project->id) {
+            $event->update(['project_id' => null]);
+        }
+
+        $events = Event::whereIn('id', $currentEventIds)
+            ->orWhere('project_id', $project->id)
+            ->orderBy('start_date', 'asc')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Event unlinked from project successfully.',
+            'events' => $events,
+            'project' => $project->fresh(),
+        ]);
+    }
+
+    public function getKnowledgeBases(Project $project): JsonResponse
+    {
+        $kbIds = array_map('intval', is_array($project->kb_ids) ? $project->kb_ids : []);
+        $kbs = KnowledgeBase::whereIn('id', $kbIds)
+            ->orWhere('project_id', $project->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+        return response()->json(['success' => true, 'knowledge_bases' => $kbs]);
+    }
+
+    public function linkKnowledgeBase(Request $request, Project $project): JsonResponse
+    {
+        $validated = $request->validate([
+            'knowledge_base_id' => 'required|exists:knowledge_bases,id',
+        ]);
+
+        $kbId = (int) $validated['knowledge_base_id'];
+        $currentKbIds = array_map('intval', is_array($project->kb_ids) ? $project->kb_ids : []);
+        if (!in_array($kbId, $currentKbIds, true)) {
+            $currentKbIds[] = $kbId;
+            $project->update(['kb_ids' => array_values(array_unique($currentKbIds))]);
+        }
+
+        $kbs = KnowledgeBase::whereIn('id', $currentKbIds)
+            ->orWhere('project_id', $project->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Knowledge base linked to project successfully.',
+            'knowledge_bases' => $kbs,
+            'project' => $project->fresh(),
+        ]);
+    }
+
+    public function unlinkKnowledgeBase(Project $project, KnowledgeBase $knowledgeBase): JsonResponse
+    {
+        $currentKbIds = array_map('intval', is_array($project->kb_ids) ? $project->kb_ids : []);
+        $currentKbIds = array_values(array_filter($currentKbIds, fn($id) => (int)$id !== (int)$knowledgeBase->id));
+        $project->update(['kb_ids' => $currentKbIds]);
+
+        if ((int)$knowledgeBase->project_id === (int)$project->id) {
+            $knowledgeBase->update(['project_id' => null]);
+        }
+
+        $kbs = KnowledgeBase::whereIn('id', $currentKbIds)
+            ->orWhere('project_id', $project->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Knowledge base unlinked from project successfully.',
+            'knowledge_bases' => $kbs,
+            'project' => $project->fresh(),
         ]);
     }
 }

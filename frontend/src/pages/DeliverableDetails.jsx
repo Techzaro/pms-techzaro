@@ -62,40 +62,46 @@ function timeAgo(iso, t) {
 
 function statusLabel(status, t) {
   const s = (status || "").toLowerCase();
-  let label = "Pending";
-  if (s === "pending" || s === "reopened") label = "Pending";
-  else if (s === "in_progress" || s === "acknowledged") label = "In Progress";
-  else if (s === "paused") label = "Paused";
-  else if (s === "submitted") label = "Submitted";
-  else if (s === "approved" || s === "completed") label = "Completed";
-  else if (s === "rejected" || s === "declined") label = "Declined";
-  else if (s === "abandoned") label = "Abandoned";
-  else label = status || "Pending";
+  const map = {
+    pending: "Pending",
+    in_progress: "In Progress",
+    "in-progress": "In Progress",
+    acknowledged: "In Progress",
+    paused: "Paused",
+    pause: "Paused",
+    submitted: "Submitted",
+    submitted_late: "Submitted",
+    reopened: "Pending",
+    approved: "Completed",
+    completed: "Completed",
+    rejected: "Declined",
+    declined: "Declined",
+    abandon_requested: "Abandon Requested",
+    abandoned: "Abandoned",
+    planning: "Pending",
+  };
+  const label = map[s] || status || "Pending";
   return t ? t(label, { defaultValue: label }) : label;
 }
 
 function statusColor(status) {
   const s = (status || "").toLowerCase();
-  if (s === "approved") return "#166534";
-  if (s === "pending") return "#92400E";
-  if (s === "in_progress" || s === "acknowledged") return "#1E40AF";
-  if (s === "paused") return "#B45309";
-  if (s === "submitted") return "#1E40AF";
-  if (s === "reopened") return "#92400E";
-  if (s === "rejected") return "#991B1B";
-  return "#374151";
+  if (s === "approved" || s === "completed") return "var(--color-success, #166534)";
+  if (s === "pending" || s === "reopened" || s === "planning") return "var(--color-warning, #92400E)";
+  if (s === "in_progress" || s === "in-progress" || s === "acknowledged" || s === "submitted" || s === "submitted_late") return "var(--color-blue, #1E40AF)";
+  if (s === "paused" || s === "pause" || s === "abandon_requested") return "var(--color-warning, #92400E)";
+  if (s === "rejected" || s === "declined" || s === "abandoned") return "var(--color-danger, #991B1B)";
+  return "var(--text-dark, #374151)";
 }
 
 function statusBgColor(status) {
   const s = (status || "").toLowerCase();
-  if (s === "approved") return "#DCFCE7";
-  if (s === "pending") return "#FEF3C7";
-  if (s === "in_progress" || s === "acknowledged") return "#DBEAFE";
-  if (s === "paused") return "#FEF3C7";
-  if (s === "submitted") return "#DBEAFE";
-  if (s === "reopened") return "#FEF3C7";
-  if (s === "rejected") return "#FEE2E2";
-  return "#F3F4F6";
+  if (s === "approved" || s === "completed") return "var(--color-success-bg, #DCFCE7)";
+  if (s === "pending" || s === "reopened" || s === "planning") return "var(--color-warning-bg, #FEF3C7)";
+  if (s === "in_progress" || s === "in-progress" || s === "acknowledged" || s === "submitted" || s === "submitted_late") return "var(--color-blue-bg, #DBEAFE)";
+  if (s === "paused" || s === "pause" || s === "abandon_requested") return "var(--color-warning-bg, #FEF3C7)";
+  if (s === "rejected" || s === "declined" || s === "abandoned") return "var(--color-danger-bg, #FEE2E2)";
+  return "var(--bg-hover, #F3F4F6)";
 }
 
 function priorityColor(priority) {
@@ -803,29 +809,40 @@ if (res.ok) {
 
               {/* Badges */}
               <div className="td-badges">
-                <span className="td-badge" style={{ background: statusBgColor(subtask.status), color: statusColor(subtask.status) }}>
-                  <span className="td-badge-dot" style={{ background: statusColor(subtask.status) }} />
-                  {statusLabel(subtask.status, t)}
-                </span>
-                {Boolean(subtask.is_reopened || (Array.isArray(subtask?.states) && subtask.states.some((s) => String(s).toLowerCase() === "reopened")) || subtask?.reopened_at || Number(subtask?.reopen_count) > 0) && (
+                {(() => {
+                  const effectiveStatus = subtask?.assigner_paused ? "paused" : (subtask?.status || "Pending");
+                  return (
+                    <span className="td-badge" style={{ background: statusBgColor(effectiveStatus), color: statusColor(effectiveStatus) }}>
+                      <span className="td-badge-dot" style={{ background: statusColor(effectiveStatus) }} />
+                      {statusLabel(effectiveStatus, t)}
+                    </span>
+                  );
+                })()}
+                {Boolean(subtask?.is_reopened || (Array.isArray(subtask?.states) && subtask.states.some((s) => String(s).toLowerCase() === "reopened")) || subtask?.reopened_at || Number(subtask?.reopen_count) > 0) && (
                   <span className="td-badge" style={{ background: "#EDE9FE", color: "#6D28D9", border: "1px solid #DDD6FE" }}>
                     <span className="td-badge-dot" style={{ background: "#6D28D9" }} />
                     {t("Reopened", { defaultValue: "Reopened" })}
                   </span>
                 )}
-                {Boolean(subtask.is_transferred || (Array.isArray(subtask?.states) && subtask.states.some((s) => String(s).toLowerCase() === "transferred")) || (Array.isArray(subtask?.delegation_chain) && subtask.delegation_chain.length > 0)) && (
+                {Boolean(subtask?.is_transferred || (Array.isArray(subtask?.states) && subtask.states.some((s) => String(s).toLowerCase() === "transferred")) || (Array.isArray(subtask?.delegation_chain) && subtask.delegation_chain.length > 0)) && (
                   <span className="td-badge" style={{ background: "#E0E7FF", color: "#4338CA", border: "1px solid #C7D2FE" }}>
                     <span className="td-badge-dot" style={{ background: "#4338CA" }} />
                     {t("Transferred", { defaultValue: "Transferred" })}
                   </span>
                 )}
-                <span className="td-badge" style={{ background: priorityBgColor(subtask.priority), color: priorityColor(subtask.priority) }}>
-                  <span className="td-badge-dot" style={{ background: priorityColor(subtask.priority) }} />
-                  {t("{{priority}} Priority", { priority: t(subtask.priority || "Medium", { defaultValue: subtask.priority || "Medium" }), defaultValue: `${subtask.priority || "Medium"} Priority` })}
+                {subtask?.assigner_paused && (
+                  <span className="td-badge" style={{ background: "#FEF3C7", color: "#92400E", border: "1px solid #FDE68A" }}>
+                    <Lock size={12} style={{ marginRight: 4 }} />
+                    {t("Paused by Assigner", { defaultValue: "Paused by Assigner" })}
+                  </span>
+                )}
+                <span className="td-badge" style={{ background: priorityBgColor(subtask?.priority), color: priorityColor(subtask?.priority) }}>
+                  <span className="td-badge-dot" style={{ background: priorityColor(subtask?.priority) }} />
+                  {t("{{priority}} Priority", { priority: t(subtask?.priority || "Medium", { defaultValue: subtask?.priority || "Medium" }), defaultValue: `${subtask?.priority || "Medium"} Priority` })}
                 </span>
-                <span className="td-badge" style={{ background: subtask.allow_transfer ? "#f0fdf4" : "#fef2f2", color: subtask.allow_transfer ? "#16a34a" : "#dc2626" }}>
-                  <span className="td-badge-dot" style={{ background: subtask.allow_transfer ? "#16a34a" : "#dc2626" }} />
-                  {subtask.allow_transfer ? t("Transfer Allowed", { defaultValue: "Transfer Allowed" }) : t("Transfer Not Allowed", { defaultValue: "Transfer Not Allowed" })}
+                <span className="td-badge" style={{ background: subtask?.allow_transfer ? "#f0fdf4" : "#fef2f2", color: subtask?.allow_transfer ? "#16a34a" : "#dc2626" }}>
+                  <span className="td-badge-dot" style={{ background: subtask?.allow_transfer ? "#16a34a" : "#dc2626" }} />
+                  {subtask?.allow_transfer ? t("Transfer Allowed", { defaultValue: "Transfer Allowed" }) : t("Transfer Not Allowed", { defaultValue: "Transfer Not Allowed" })}
                 </span>
               </div>
 

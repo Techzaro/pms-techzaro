@@ -317,4 +317,112 @@ class Project extends Model
     {
         return $this->belongsToMany(User::class, 'project_followers')->withTimestamps();
     }
+
+    /**
+     * Determine if a user is an active member or participant of this project.
+     * Safe from N+1 query issues by checking loaded relations first.
+     */
+    public function isMemberOrParticipant(User $user): bool
+    {
+        $userId = (int) $user->id;
+
+        // Admin, Manager, Super Admin have global access
+        if (in_array($user->role, ['admin', 'manager', 'super_admin'])) {
+            return true;
+        }
+
+        // Project Creator
+        if ((int) $this->created_by === $userId) {
+            return true;
+        }
+
+        // Check assigned_users JSON array column
+        $assignedUsers = array_map('intval', (array) ($this->assigned_users ?? []));
+        if (in_array($userId, $assignedUsers, true)) {
+            return true;
+        }
+
+        // Primary Team check
+        if (!empty($this->team_id)) {
+            if ($this->relationLoaded('team') && $this->team) {
+                if ((int) $this->team->leader_id === $userId) {
+                    return true;
+                }
+                if ($this->team->relationLoaded('members')) {
+                    if ($this->team->members->contains('id', $userId)) {
+                        return true;
+                    }
+                } else {
+                    try {
+                        if ($this->team->members()->where('users.id', $userId)->exists()) {
+                            return true;
+                        }
+                    } catch (\Throwable $e) {
+                    }
+                }
+            } else {
+                try {
+                    $isPrimaryTeamMember = Team::where('id', $this->team_id)
+                        ->where(function ($q) use ($userId) {
+                            $q->where('leader_id', $userId)
+                                ->orWhereHas('members', fn ($mq) => $mq->where('users.id', $userId));
+                        })->exists();
+                    if ($isPrimaryTeamMember) {
+                        return true;
+                    }
+                } catch (\Throwable $e) {
+                }
+            }
+        }
+
+        // Multiple teams check (team_ids JSON column)
+        if (!empty($this->team_ids) && is_array($this->team_ids)) {
+            $teamIds = array_filter(array_map('intval', $this->team_ids));
+            if (!empty($teamIds)) {
+                try {
+                    $isMultiTeamMember = $user->teams()->whereIn('teams.id', $teamIds)->exists()
+                        || $user->ledTeams()->whereIn('teams.id', $teamIds)->exists();
+                    if ($isMultiTeamMember) {
+                        return true;
+                    }
+                } catch (\Throwable $e) {
+                }
+            }
+        }
+
+        // Explicit manual visibility (unless hidden)
+        if ($this->relationLoaded('manuallyVisibleTo')) {
+            if ($this->manuallyVisibleTo->contains('user_id', $userId)) {
+                return true;
+            }
+        } else {
+            try {
+                if ($this->manuallyVisibleTo()->where('user_id', $userId)->exists()) {
+                    return true;
+                }
+            } catch (\Throwable $e) {
+            }
+        }
+
+        // Project followers
+        if ($this->relationLoaded('followers')) {
+            if ($this->followers->contains('id', $userId)) {
+                return true;
+            }
+        } else {
+            try {
+                if ($this->followers()->where('users.id', $userId)->exists()) {
+                    return true;
+                }
+            } catch (\Throwable $e) {
+            }
+        }
+
+        // Guest access
+        if ($user->role === 'guest' && $this->isAccessibleByGuest($user)) {
+            return true;
+        }
+
+        return false;
+    }
 }

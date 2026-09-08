@@ -148,6 +148,7 @@ export default function TaskFilterBar({
     { value: "Due This Month", label: t("Due This Month", { defaultValue: "Due This Month" }) },
     { value: "Overdue", label: t("Overdue", { defaultValue: "Overdue" }) },
     { value: "Upcoming", label: t("Upcoming", { defaultValue: "Upcoming" }) },
+    { value: "Custom Date", label: t("Custom Date", { defaultValue: "Custom Date" }) },
     { value: "No due date", label: t("No due date", { defaultValue: "No due date" }) },
   ];
 
@@ -848,6 +849,55 @@ export default function TaskFilterBar({
               searchPlaceholder={t("Search due state...", { defaultValue: "Search due state..." })}
             />
           </div>
+
+          {toArray(filters?.due_states || filters?.due_state).includes("Custom Date") && (
+            <>
+              <div style={{ flex: "1 1 130px", minWidth: 120 }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
+                  {t("Due From", { defaultValue: "Due From" })}
+                </label>
+                <input
+                  type="date"
+                  value={filters?.due_date_from || ""}
+                  onChange={(e) => onFilterChange && onFilterChange("due_date_from", e.target.value)}
+                  style={{
+                    width: "100%",
+                    height: "36px",
+                    padding: "4px 8px",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border-color, #cbd5e1)",
+                    background: "var(--bg-card, #ffffff)",
+                    color: "var(--text-primary, #0f172a)",
+                    fontSize: "12px",
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+              <div style={{ flex: "1 1 130px", minWidth: 120 }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
+                  {t("Due To", { defaultValue: "Due To" })}
+                </label>
+                <input
+                  type="date"
+                  value={filters?.due_date_to || ""}
+                  onChange={(e) => onFilterChange && onFilterChange("due_date_to", e.target.value)}
+                  style={{
+                    width: "100%",
+                    height: "36px",
+                    padding: "4px 8px",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border-color, #cbd5e1)",
+                    background: "var(--bg-card, #ffffff)",
+                    color: "var(--text-primary, #0f172a)",
+                    fontSize: "12px",
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+            </>
+          )}
 
           {/* 5. Person (Assignee) Multi-Select Filter */}
           <div style={{ flex: "1 1 160px", minWidth: 150 }}>

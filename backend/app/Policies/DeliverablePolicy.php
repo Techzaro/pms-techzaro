@@ -17,11 +17,17 @@ class DeliverablePolicy
      */
     protected function belongsToSameTenant(User $user, Deliverable $deliverable): bool
     {
-        $org = request()->attributes->get('currentOrganization');
-        if ($org && isset($org->id) && isset($user->organization_id)) {
-            if ((int) $org->id !== (int) $user->organization_id) {
-                return false;
+        try {
+            if (function_exists('app') && app()->bound('request')) {
+                $org = request()->attributes->get('currentOrganization');
+                if ($org && isset($org->id) && isset($user->organization_id)) {
+                    if ((int) $org->id !== (int) $user->organization_id) {
+                        return false;
+                    }
+                }
             }
+        } catch (\Throwable $e) {
+            // Container or request not bound (CLI / Unit tests)
         }
         return true;
     }
@@ -48,72 +54,102 @@ class DeliverablePolicy
             return true;
         }
 
+        $userId = (int) $user->id;
+
         // Deliverable Creator
-        if ((int) $deliverable->created_by === (int) $user->id) {
+        if ((int) $deliverable->created_by === $userId) {
             return true;
         }
 
         // Deliverable Assignee
-        if ((int) $deliverable->assigned_to === (int) $user->id) {
+        if ((int) $deliverable->assigned_to === $userId) {
             return true;
         }
 
         // Current Owner
-        if ($deliverable->current_owner && (int) $deliverable->current_owner === (int) $user->id) {
+        if ($deliverable->current_owner && (int) $deliverable->current_owner === $userId) {
             return true;
         }
 
         // Delegation Chain
-        if (! empty($deliverable->delegation_chain)) {
+        if (! empty($deliverable->delegation_chain) && is_iterable($deliverable->delegation_chain)) {
             foreach ($deliverable->delegation_chain as $entry) {
-                if ((int) ($entry['delegated_by'] ?? 0) === (int) $user->id || (int) ($entry['delegated_to'] ?? 0) === (int) $user->id) {
+                if ((int) ($entry['delegated_by'] ?? 0) === $userId || (int) ($entry['delegated_to'] ?? 0) === $userId) {
                     return true;
                 }
             }
         }
 
         // Task Assigner / Creator
-        if ($deliverable->task && (int) $deliverable->task->assigned_by === (int) $user->id) {
+        $task = null;
+        if ($deliverable->relationLoaded('task')) {
+            $task = $deliverable->task;
+        } elseif ($deliverable->task_id) {
+            try {
+                $task = Task::find($deliverable->task_id);
+            } catch (\Throwable $e) {
+            }
+        }
+
+        if ($task && ((int) $task->assigned_by === $userId || (int) ($task->creator_id ?? 0) === $userId)) {
             return true;
         }
 
-        // Task Assignee
-        if ($deliverable->task && ((int) $deliverable->task->assigned_to === (int) $user->id || $deliverable->task->assignees()->where('users.id', $user->id)->exists())) {
-            return true;
+        // Task Assignee / Follower
+        if ($task) {
+            if ((int) $task->assigned_to === $userId) {
+                return true;
+            }
+            if ($task->relationLoaded('assignees')) {
+                if ($task->assignees && $task->assignees->contains('id', $userId)) {
+                    return true;
+                }
+            } else {
+                try {
+                    if ($task->assignees()->where('users.id', $userId)->exists()) {
+                        return true;
+                    }
+                } catch (\Throwable $e) {
+                }
+            }
+            if ($task->relationLoaded('followers')) {
+                if ($task->followers && $task->followers->contains('id', $userId)) {
+                    return true;
+                }
+            } else {
+                try {
+                    if ($task->followers()->where('users.id', $userId)->exists()) {
+                        return true;
+                    }
+                } catch (\Throwable $e) {
+                }
+            }
         }
 
-        // Project Team or Creator
-        $project = $deliverable->project ?? ($deliverable->task ? $deliverable->task->project : null);
-        if ($project) {
-            if ((int) $project->created_by === (int) $user->id) {
-                return true;
+        // Parent Project Member / Participant (Safe relationship check)
+        $project = null;
+        if ($deliverable->relationLoaded('project')) {
+            $project = $deliverable->project;
+        } elseif ($deliverable->project_id) {
+            try {
+                $project = Project::find($deliverable->project_id);
+            } catch (\Throwable $e) {
             }
-            if ($project->team) {
-                if ((int) $project->team->leader_id === (int) $user->id) {
-                    return true;
-                }
-                if ($project->team->members()->where('users.id', $user->id)->exists()) {
-                    return true;
-                }
-            }
-            if (!empty($project->team_ids)) {
-                $teamIds = array_map('intval', $project->team_ids);
-                $isTeamMember = $user->teams()->whereIn('teams.id', $teamIds)->exists()
-                    || $user->ledTeams()->whereIn('teams.id', $teamIds)->exists();
-                if ($isTeamMember) {
-                    return true;
+        }
+
+        if (! $project && $task) {
+            if ($task->relationLoaded('project')) {
+                $project = $task->project;
+            } elseif ($task->project_id) {
+                try {
+                    $project = Project::find($task->project_id);
+                } catch (\Throwable $e) {
                 }
             }
-            $projectAssigned = array_map('intval', $project->assigned_users ?? []);
-            if (in_array((int) $user->id, $projectAssigned, true)) {
-                return true;
-            }
-            if ($project->manuallyVisibleTo()->where('user_id', $user->id)->exists()) {
-                return true;
-            }
-            if ($user->role === 'guest' && $project->isAccessibleByGuest($user)) {
-                return true;
-            }
+        }
+
+        if ($project && $project->isMemberOrParticipant($user)) {
+            return true;
         }
 
         return false;
@@ -132,18 +168,22 @@ class DeliverablePolicy
             if ((int) $task->assigned_by === (int) $user->id || (int) $task->assigned_to === (int) $user->id) {
                 return true;
             }
-            if ($task->assignees()->where('users.id', $user->id)->exists()) {
-                return true;
+            if ($task->relationLoaded('assignees')) {
+                if ($task->assignees && $task->assignees->contains('id', $user->id)) {
+                    return true;
+                }
+            } else {
+                try {
+                    if ($task->assignees()->where('users.id', $user->id)->exists()) {
+                        return true;
+                    }
+                } catch (\Throwable $e) {
+                }
             }
         }
 
         if ($project) {
-            if ((int) $project->created_by === (int) $user->id) {
-                return true;
-            }
-            if ($project->team && ((int) $project->team->leader_id === (int) $user->id || $project->team->members()->where('users.id', $user->id)->exists())) {
-                return true;
-            }
+            return $project->isMemberOrParticipant($user);
         }
 
         return $user->role !== 'guest';
@@ -151,6 +191,7 @@ class DeliverablePolicy
 
     /**
      * Determine whether the user can update the deliverable.
+     * Strictly restricted to Assignees, Creators, and authorized roles (Admins/Managers).
      */
     public function update(User $user, Deliverable $deliverable): bool
     {
@@ -162,16 +203,56 @@ class DeliverablePolicy
             return true;
         }
 
-        if ((int) $deliverable->created_by === (int) $user->id) {
+        $userId = (int) $user->id;
+
+        // Deliverable Creator
+        if ((int) $deliverable->created_by === $userId) {
             return true;
         }
 
-        if ($deliverable->task && (int) $deliverable->task->assigned_by === (int) $user->id) {
+        // Deliverable Assignee / Current Owner
+        if ((int) $deliverable->assigned_to === $userId || ($deliverable->current_owner && (int) $deliverable->current_owner === $userId)) {
             return true;
         }
 
-        $project = $deliverable->project ?? ($deliverable->task ? $deliverable->task->project : null);
-        if ($project && (int) $project->created_by === (int) $user->id) {
+        // Task Assigner / Creator
+        $task = null;
+        if ($deliverable->relationLoaded('task')) {
+            $task = $deliverable->task;
+        } elseif ($deliverable->task_id) {
+            try {
+                $task = Task::find($deliverable->task_id);
+            } catch (\Throwable $e) {
+            }
+        }
+
+        if ($task && ((int) $task->assigned_by === $userId || (int) ($task->creator_id ?? 0) === $userId)) {
+            return true;
+        }
+
+        // Project Creator
+        $project = null;
+        if ($deliverable->relationLoaded('project')) {
+            $project = $deliverable->project;
+        } elseif ($deliverable->project_id) {
+            try {
+                $project = Project::find($deliverable->project_id);
+            } catch (\Throwable $e) {
+            }
+        }
+
+        if (! $project && $task) {
+            if ($task->relationLoaded('project')) {
+                $project = $task->project;
+            } elseif ($task->project_id) {
+                try {
+                    $project = Project::find($task->project_id);
+                } catch (\Throwable $e) {
+                }
+            }
+        }
+
+        if ($project && (int) $project->created_by === $userId) {
             return true;
         }
 

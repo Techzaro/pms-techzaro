@@ -59,11 +59,14 @@ export const STATUS_LABELS = {
   Approved: "Completed",
   Declined: "Declined",
   Abandoned: "Abandoned",
+  "Abandon Requested": "Abandon Requested",
   pending: "Pending",
   in_progress: "In Progress",
   "in-progress": "In Progress",
+  acknowledged: "In Progress",
   paused: "Paused",
   submitted: "Submitted",
+  submitted_late: "Submitted",
   reopened: "Pending",
   approved: "Completed",
   completed: "Completed",
@@ -74,6 +77,25 @@ export const STATUS_LABELS = {
   Planning: "Pending",
   Pause: "Paused",
 };
+
+/**
+ * Strict helper to determine the primary effective status.
+ * Assigner paused takes highest priority and evaluates to "paused".
+ */
+export function getEffectiveStatus(item) {
+  if (!item) return "pending";
+  if (item?.assigner_paused) {
+    return "paused";
+  }
+  const st = String(item?.status || "pending").toLowerCase();
+  if (st === "pause") return "paused";
+  if (st === "in-progress" || st === "acknowledged") return "in_progress";
+  if (st === "submitted_late") return "submitted";
+  if (st === "completed") return "approved";
+  if (st === "rejected") return "declined";
+  if (st === "reopened") return "pending";
+  return st;
+}
 
 export function formatStatus(status) {
   if (!status) return "Pending";
@@ -90,13 +112,8 @@ export default function TaskMultiStatusBadges({ item }) {
   const { t } = useTranslation();
   if (!item) return null;
 
-  // The primary badge text and color MUST strictly and ONLY evaluate task.status.
-  // Reopened tasks or tasks flagged as reopened evaluate to pending.
-  const taskStatus = item?.status || "Pending";
-  const normalizedKey = String(taskStatus).toLowerCase();
-  const rawStatus = (normalizedKey === "reopened" || item?.is_reopened) && (normalizedKey === "reopened" || normalizedKey === "declined" || normalizedKey === "rejected")
-    ? "pending"
-    : (normalizedKey === "reopened" ? "pending" : taskStatus);
+  // The primary badge text and color strictly evaluates latest effective status.
+  const rawStatus = getEffectiveStatus(item);
   const statusKey = String(rawStatus).toLowerCase();
   const primaryBg = STATUS_COLORS[rawStatus] || STATUS_COLORS[statusKey] || "#F3F4F6";
   const primaryColor = STATUS_TEXT_COLORS[rawStatus] || STATUS_TEXT_COLORS[statusKey] || "#374151";

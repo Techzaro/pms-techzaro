@@ -26,6 +26,9 @@ import SortableTableWrapper from "../components/SortableTableWrapper";
 import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
 import ActionPopover from "../components/ActionPopover";
+import TaskReopenDialog from "../components/TaskReopenDialog";
+import AbandonModal from "../components/AbandonModal";
+import MarkTaskCompletedModal from "../components/MarkTaskCompletedModal";
 import TaskNotesPopover from "../components/TaskNotesPopover";
 import AddNoteModal from "../components/AddNoteModal";
 import TaskMultiStatusBadges from "../components/TaskMultiStatusBadges";
@@ -86,10 +89,16 @@ function GuestTasks() {
     return "";
   });
   const [timeFilter, setTimeFilter] = useState("");
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
   const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
   const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState(null);
+  const [reopenTask, setReopenTask] = useState(null);
+  const [abandonTask, setAbandonTask] = useState(null);
+  const [markCompletedTask, setMarkCompletedTask] = useState(null);
+  const [abandoning, setAbandoning] = useState(false);
 
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
@@ -119,7 +128,13 @@ function GuestTasks() {
       setLoading(true);
       const token = authToken();
       const params = new URLSearchParams();
-      if (timeFilter) params.append("time_filter", timeFilter);
+      if (timeFilter && timeFilter !== "custom") {
+        params.append("time_filter", timeFilter);
+      } else if (timeFilter === "custom") {
+        params.append("time_filter", "custom");
+        if (customStartDate) params.append("start_date", customStartDate);
+        if (customEndDate) params.append("end_date", customEndDate);
+      }
       if (debouncedSearch) params.append("search", debouncedSearch);
       
       // Kept from feature/time-zone
@@ -153,7 +168,7 @@ function GuestTasks() {
       setLoading(false);
       setItems([]);
     }
-  }, [timeFilter, debouncedSearch, statusFilter, sortBy, sortDirection]);
+  }, [timeFilter, customStartDate, customEndDate, debouncedSearch, statusFilter, sortBy, sortDirection]);
 
   // Merged dependencies from feature/time-zone and feature-Tasks-setup-backup
   useEffect(() => {
@@ -377,6 +392,130 @@ function GuestTasks() {
     }
   };
 
+  const handleDirectApprove = async (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === taskId ? { ...item, status: "approved", ...(data.task || {}) } : item
+          )
+        );
+        publish('task:updated', { id: taskId, status: 'approved' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage(t("Task", { defaultValue: "Task" }), t("approved", { defaultValue: "approved" }));
+      } else {
+        notify.error(data.message || t("Failed to approve task.", { defaultValue: "Failed to approve task." }));
+      }
+    } catch {
+      notify.error(t("An error occurred while approving task.", { defaultValue: "An error occurred while approving task." }));
+    }
+  };
+
+  const handleDirectDecline = async (e, task) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    const taskId = task.id;
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === taskId ? { ...item, status: "rejected", ...(data.task || {}) } : item
+          )
+        );
+        publish('task:updated', { id: taskId, status: 'rejected' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage(t("Task", { defaultValue: "Task" }), t("declined", { defaultValue: "declined" }));
+      } else {
+        notify.error(data.message || t("Failed to decline task.", { defaultValue: "Failed to decline task." }));
+      }
+    } catch {
+      notify.error(t("An error occurred while declining task.", { defaultValue: "An error occurred while declining task." }));
+    }
+  };
+
+  const handleDirectAbandonSubmit = async (reason) => {
+    if (!abandonTask) return;
+    setAbandoning(true);
+    const taskId = abandonTask.id;
+    const isUserAdminOrManager = ["admin", "manager"].includes(currentUser?.role);
+    const endpoint = isUserAdminOrManager ? `${API_URL}/tasks/${taskId}/abandon` : `${API_URL}/tasks/${taskId}/request-abandon`;
+    try {
+      const token = authToken();
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        body: JSON.stringify({ reason }),
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === taskId ? { ...item, status: "abandoned", ...(data.task || {}) } : item
+          )
+        );
+        publish('task:updated', { id: taskId, status: 'abandoned' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage(t("Task", { defaultValue: "Task" }), isUserAdminOrManager ? t("abandoned", { defaultValue: "abandoned" }) : t("abandon requested", { defaultValue: "abandon requested" }));
+        setAbandonTask(null);
+      } else {
+        notify.error(data.message || t("Failed to abandon task.", { defaultValue: "Failed to abandon task." }));
+      }
+    } catch {
+      notify.error(t("Failed to abandon task.", { defaultValue: "Failed to abandon task." }));
+    } finally {
+      setAbandoning(false);
+    }
+  };
+
+  const handleDirectReopenSuccess = (updatedTask) => {
+    if (!updatedTask && !reopenTask) return;
+    const taskId = updatedTask?.id || reopenTask?.id;
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === taskId ? { ...item, status: "pending", ...(updatedTask || {}) } : item
+      )
+    );
+    publish('task:updated', { id: taskId, status: 'pending' });
+    publish('data:changed', { type: 'task', action: 'updated' });
+    showSuccessMessage(t("Task", { defaultValue: "Task" }), t("reopened", { defaultValue: "reopened" }));
+    setReopenTask(null);
+  };
+
+  const handleDirectCompleteSuccess = (updatedTask) => {
+    if (!updatedTask && !markCompletedTask) return;
+    const taskId = updatedTask?.id || markCompletedTask?.id;
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === taskId ? { ...item, status: "completed", ...(updatedTask || {}) } : item
+      )
+    );
+    publish('task:updated', { id: taskId, status: 'completed' });
+    publish('data:changed', { type: 'task', action: 'updated' });
+    showSuccessMessage(t("Task", { defaultValue: "Task" }), t("marked as completed", { defaultValue: "marked as completed" }));
+    setMarkCompletedTask(null);
+  };
+
   const handleDelete = (e, taskId) => {
     if (e && e.stopPropagation) {
       e.stopPropagation();
@@ -508,13 +647,32 @@ function GuestTasks() {
         </div>
 
         <div className="task-btns">
-          <div className="all-time">
+          <div className="all-time" style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
             <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}>
               <option value="">{t("All Time", { defaultValue: "All Time" })}</option>
+              <option value="today">{t("Today", { defaultValue: "Today" })}</option>
               <option value="7">{t("Last 7 Days", { defaultValue: "Last 7 Days" })}</option>
               <option value="30">{t("Last 30 Days", { defaultValue: "Last 30 Days" })}</option>
               <option value="180">{t("Last 6 Months", { defaultValue: "Last 6 Months" })}</option>
+              <option value="custom">{t("Custom Date", { defaultValue: "Custom Date" })}</option>
             </select>
+            {timeFilter === "custom" && (
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-color, #cbd5e1)', fontSize: '13px' }}
+                />
+                <span style={{ fontSize: '12px', color: '#64748b' }}>{t("to", { defaultValue: "to" })}</span>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-color, #cbd5e1)', fontSize: '13px' }}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -675,7 +833,7 @@ function GuestTasks() {
                                 className="action-icon-btn"
                                 title={t("Approve Task", { defaultValue: "Approve Task" })}
                                 style={{ color: "#16A34A" }}
-                                onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'guest-tasks' } })}
+                                onClick={(e) => handleDirectApprove(e, item.id)}
                               >
                                 <CheckCircle2 size={16} />
                               </button>
@@ -685,7 +843,7 @@ function GuestTasks() {
                                 className="action-icon-btn"
                                 title={t("Decline Task", { defaultValue: "Decline Task" })}
                                 style={{ color: "#DC2626" }}
-                                onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'guest-tasks' } })}
+                                onClick={(e) => handleDirectDecline(e, item)}
                               >
                                 <XCircle size={16} />
                               </button>
@@ -695,7 +853,7 @@ function GuestTasks() {
                                 className="action-icon-btn"
                                 title={t("Reopen Task", { defaultValue: "Reopen Task" })}
                                 style={{ color: "#2563EB" }}
-                                onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'guest-tasks' } })}
+                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setReopenTask(item); }}
                               >
                                 <RotateCcw size={16} />
                               </button>
@@ -705,7 +863,7 @@ function GuestTasks() {
                                 className="action-icon-btn"
                                 title={isUserAdminOrManager ? t("Abandon Task", { defaultValue: "Abandon Task" }) : t("Request Abandon", { defaultValue: "Request Abandon" })}
                                 style={{ color: "#F59E0B" }}
-                                onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'guest-tasks' } })}
+                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setAbandonTask(item); }}
                               >
                                 <AlertOctagon size={16} />
                               </button>
@@ -825,6 +983,31 @@ function GuestTasks() {
         itemType="task"
         itemId={noteModal.itemId}
         onSaved={fetchTasks}
+      />
+
+      <TaskReopenDialog
+        isOpen={!!reopenTask}
+        onClose={() => setReopenTask(null)}
+        task={reopenTask}
+        onReopenSuccess={handleDirectReopenSuccess}
+      />
+
+      <AbandonModal
+        isOpen={!!abandonTask}
+        onClose={() => setAbandonTask(null)}
+        title={t("Abandon Task", { defaultValue: "Abandon Task" })}
+        subtitle={t("Please provide a reason for abandoning this task.", { defaultValue: "Please provide a reason for abandoning this task." })}
+        actionLabel={["admin", "manager"].includes(currentUser?.role) ? t("Abandon", { defaultValue: "Abandon" }) : t("Request Abandon", { defaultValue: "Request Abandon" })}
+        onSubmit={handleDirectAbandonSubmit}
+        loading={abandoning}
+      />
+
+      <MarkTaskCompletedModal
+        isOpen={!!markCompletedTask}
+        onClose={() => setMarkCompletedTask(null)}
+        task={markCompletedTask}
+        entityType="task"
+        onCompleteSuccess={handleDirectCompleteSuccess}
       />
 
     </DashboardLayout>

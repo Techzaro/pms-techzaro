@@ -5,6 +5,7 @@ import { useAutoRefresh } from "../utils/useAutoRefresh";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import ConfirmModal from "../components/ConfirmModal";
+import AttachResourceModal from "../components/AttachResourceModal";
 import API_URL from "../config/api";
 import { authToken, rolePath, getUser } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
@@ -30,6 +31,7 @@ import {
   Filter,
   ChevronDown,
   User,
+  Link2,
 } from "lucide-react";
 
 export default function EventsList() {
@@ -68,6 +70,7 @@ export default function EventsList() {
 
   // Modals
   const [deletingEvent, setDeletingEvent] = useState(null);
+  const [attachingEvent, setAttachingEvent] = useState(null);
 
   // Fetch categories
   const fetchCategories = async () => {
@@ -612,6 +615,22 @@ export default function EventsList() {
         cancelText={t("Cancel", { defaultValue: "Cancel" })}
         danger
       />
+
+      {/* ── ATTACH MODAL ─────────────────────────────── */}
+      {attachingEvent && (
+        <AttachResourceModal
+          isOpen={Boolean(attachingEvent)}
+          onClose={() => setAttachingEvent(null)}
+          resource={attachingEvent ? {
+            type: "event",
+            id: attachingEvent.id,
+            title: attachingEvent.title,
+          } : null}
+          onSuccess={() => {
+            fetchEvents();
+          }}
+        />
+      )}
     </DashboardLayout>
   );
 
@@ -668,6 +687,13 @@ export default function EventsList() {
 
             {canEditDelete && !ev.is_shared && (
               <div style={{ display: "flex", gap: "4px" }}>
+                <button
+                  onClick={() => setAttachingEvent(ev)}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "2px" }}
+                  title={t("Attach to Project / Task", { defaultValue: "Attach to Project / Task" })}
+                >
+                  <Link2 size={15} />
+                </button>
                 <button
                   onClick={() => navigate(rolePath(`events/edit/${ev.id}`))}
                   style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "2px" }}

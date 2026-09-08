@@ -30,6 +30,8 @@ import {
   Pencil,
   Play,
   Plus,
+  RotateCcw,
+  AlertOctagon,
   Shield,
   Share2,
   StickyNote,
@@ -64,6 +66,9 @@ import AddNoteModal from "../components/AddNoteModal";
 import ShareResourceModal from "../components/ShareResourceModal";
 import EditTaskModal from "../components/EditTaskModal";
 import PauseReasonModal from "../components/PauseReasonModal";
+import TaskReopenDialog from "../components/TaskReopenDialog";
+import AbandonModal from "../components/AbandonModal";
+import MarkTaskCompletedModal from "../components/MarkTaskCompletedModal";
 import ActionPopover from "../components/ActionPopover";
 import UnifiedActivityFeed from "../components/UnifiedActivityFeed";
 import ProjectMembersModal from "../components/ProjectMembersModal";
@@ -318,6 +323,10 @@ function ProjectDetails() {
   const { projectId } = useParams();
   const navigate = useNavigate();
   const notify = useNotification();
+
+  const isShared = Boolean(projectId && String(projectId).startsWith('shared_'));
+  const sharedResourceId = isShared ? String(projectId).replace('shared_', '') : null;
+
   const [projectIds, setProjectIds] = useState(() => {
     try { return JSON.parse(sessionStorage.getItem('projectIds') || '[]'); } catch { return []; }
   });
@@ -352,6 +361,10 @@ function ProjectDetails() {
   const [pauseModalTaskId, setPauseModalTaskId] = useState(null);
   const [holdingTaskId, setHoldingTaskId] = useState(null);
   const [resumingTaskId, setResumingTaskId] = useState(null);
+  const [reopenTask, setReopenTask] = useState(null);
+  const [abandonTask, setAbandonTask] = useState(null);
+  const [markCompletedTask, setMarkCompletedTask] = useState(null);
+  const [abandoning, setAbandoning] = useState(false);
   const [fileSearch, setFileSearch] = useState("");
   const [taskSearch, setTaskSearch] = useState("");
   const [subtaskSearch, setSubtaskSearch] = useState("");
@@ -366,6 +379,14 @@ function ProjectDetails() {
   const [loadingProjectEvents, setLoadingProjectEvents] = useState(false);
   const [eventSearch, setEventSearch] = useState("");
   const [eventsList, setEventsList] = useState([]);
+  const [showLinkKbModal, setShowLinkKbModal] = useState(false);
+  const [showLinkEventModal, setShowLinkEventModal] = useState(false);
+  const [selectedKbToLink, setSelectedKbToLink] = useState("");
+  const [selectedEventToLink, setSelectedEventToLink] = useState("");
+  const [linkingKb, setLinkingKb] = useState(false);
+  const [linkingEvent, setLinkingEvent] = useState(false);
+  const [linkKbSearch, setLinkKbSearch] = useState("");
+  const [linkEventSearch, setLinkEventSearch] = useState("");
   const [editFileItem, setEditFileItem] = useState(null);
   const [editFileName, setEditFileName] = useState("");
   const [editFileUrl, setEditFileUrl] = useState("");
@@ -443,33 +464,36 @@ function ProjectDetails() {
         .then((r) => r.json())
         .then((d) => {
           const list = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
-          const directKbId = project?.kb_id || project?.knowledge_base?.id || project?.knowledgeBase?.id;
+          const directKbIds = [
+            ...(Array.isArray(project?.kb_ids) ? project.kb_ids : (project?.kb_id ? [project.kb_id] : [])),
+            ...(Array.isArray(project?.knowledge_bases) ? project.knowledge_bases.map((k) => k?.id) : (project?.knowledge_base?.id ? [project.knowledge_base.id] : [])),
+          ].filter(Boolean).map(String);
+
           const taskKbIds = Array.isArray(project?.tasks)
-            ? project.tasks.map((t) => t.kb_id).filter(Boolean)
+            ? project.tasks.flatMap((t) => Array.isArray(t?.kb_ids) ? t.kb_ids : (t?.kb_id ? [t.kb_id] : [])).filter(Boolean).map(String)
             : [];
 
           let filtered = list.filter((a) =>
             String(a.project_id) === String(pId) ||
-            (directKbId && String(a.id) === String(directKbId)) ||
-            taskKbIds.map(String).includes(String(a.id))
+            directKbIds.includes(String(a.id)) ||
+            taskKbIds.includes(String(a.id))
           );
 
-          const linkedKbObj = project?.knowledge_base || project?.knowledgeBase;
-          if (linkedKbObj && linkedKbObj.id && !filtered.some((a) => String(a.id) === String(linkedKbObj.id))) {
-            filtered.unshift({
-              ...linkedKbObj,
-              isDirectLinked: true,
-            });
-          } else if (directKbId) {
-            filtered = filtered.map((a) => String(a.id) === String(directKbId) ? { ...a, isDirectLinked: true } : a);
-          }
+          const loadedKbs = Array.isArray(project?.knowledge_bases) ? project.knowledge_bases : (project?.knowledge_base ? [project.knowledge_base] : []);
+          loadedKbs.forEach((kObj) => {
+            if (kObj?.id && !filtered.some((a) => String(a.id) === String(kObj.id))) {
+              filtered.unshift({ ...kObj, isDirectLinked: true });
+            }
+          });
+
+          filtered = filtered.map((a) => directKbIds.includes(String(a.id)) ? { ...a, isDirectLinked: true } : a);
 
           setProjectKbArticles(filtered);
         })
         .catch((err) => console.error("Error fetching project KB", err))
         .finally(() => setLoadingKb(false));
     }
-  }, [tab, project?.id, project?.kb_id, project?.knowledge_base, project?.knowledgeBase, project?.tasks, projectId]);
+  }, [tab, project?.id, project?.kb_id, project?.kb_ids, project?.knowledge_base, project?.knowledge_bases, project?.tasks, projectId, isShared, project?.projectKbArticles]);
 
   useEffect(() => {
     if (tab === "events" && (project?.id || projectId)) {
@@ -490,34 +514,37 @@ function ProjectDetails() {
         .then((r) => r.json())
         .then((d) => {
           const list = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
-          const directEventId = project?.event_id || project?.event?.id;
+          const directEventIds = [
+            ...(Array.isArray(project?.event_ids) ? project.event_ids : (project?.event_id ? [project.event_id] : [])),
+            ...(Array.isArray(project?.events) ? project.events.map((e) => e?.id) : (project?.event?.id ? [project.event.id] : [])),
+          ].filter(Boolean).map(String);
+
           const taskEventIds = Array.isArray(project?.tasks)
-            ? project.tasks.map((t) => t.event_id).filter(Boolean)
+            ? project.tasks.flatMap((t) => Array.isArray(t?.event_ids) ? t.event_ids : (t?.event_id ? [t.event_id] : [])).filter(Boolean).map(String)
             : [];
 
           let filtered = list.filter((e) =>
             String(e.project_id) === String(pId) ||
             (e.visibility_level === "project_team" && String(e.project_id) === String(pId)) ||
-            (directEventId && String(e.id) === String(directEventId)) ||
-            taskEventIds.map(String).includes(String(e.id))
+            directEventIds.includes(String(e.id)) ||
+            taskEventIds.includes(String(e.id))
           );
 
-          const linkedEventObj = project?.event;
-          if (linkedEventObj && linkedEventObj.id && !filtered.some((e) => String(e.id) === String(linkedEventObj.id))) {
-            filtered.unshift({
-              ...linkedEventObj,
-              isDirectLinked: true,
-            });
-          } else if (directEventId) {
-            filtered = filtered.map((e) => String(e.id) === String(directEventId) ? { ...e, isDirectLinked: true } : e);
-          }
+          const loadedEvents = Array.isArray(project?.events) ? project.events : (project?.event ? [project.event] : []);
+          loadedEvents.forEach((eObj) => {
+            if (eObj?.id && !filtered.some((e) => String(e.id) === String(eObj.id))) {
+              filtered.unshift({ ...eObj, isDirectLinked: true });
+            }
+          });
+
+          filtered = filtered.map((e) => directEventIds.includes(String(e.id)) ? { ...e, isDirectLinked: true } : e);
 
           setProjectEvents(filtered);
         })
         .catch((err) => console.error("Error fetching project events", err))
         .finally(() => setLoadingProjectEvents(false));
     }
-  }, [tab, project?.id, project?.event_id, project?.event, project?.tasks, projectId]);
+  }, [tab, project?.id, project?.event_id, project?.event_ids, project?.event, project?.events, project?.tasks, projectId, isShared, project?.projectEvents]);
 
   useEffect(() => {
     const token = authToken();
@@ -677,9 +704,6 @@ function ProjectDetails() {
   const notifyRef = useRef(notify);
   notifyRef.current = notify;
   const loadErrorRef = useRef(false);
-
-  const isShared = projectId && String(projectId).startsWith('shared_');
-  const sharedResourceId = isShared ? String(projectId).replace('shared_', '') : null;
 
   const loadProject = useCallback(async () => {
     const token = authToken();
@@ -1004,6 +1028,104 @@ function ProjectDetails() {
     setResumingTaskId(null);
   };
 
+  const handleProjectTaskDirectApprove = async (e, taskId) => {
+    if (e && e.stopPropagation) { e.stopPropagation(); e.preventDefault(); }
+    try {
+      const token = authToken();
+      const res = await fetch(`${API}/tasks/${taskId}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "approved", ...(data.task || {}) } : t));
+        publish("task:updated", { id: taskId, status: "approved" });
+        publish("data:changed", { type: "task", action: "updated" });
+        showSuccessMessage(t("Task", { defaultValue: "Task" }), t("approved", { defaultValue: "approved" }));
+      } else {
+        notify.error(data.message || t("Failed to approve task.", { defaultValue: "Failed to approve task." }));
+      }
+    } catch {
+      notify.error(t("An error occurred while approving task.", { defaultValue: "An error occurred while approving task." }));
+    }
+  };
+
+  const handleProjectTaskDirectDecline = async (e, task) => {
+    if (e && e.stopPropagation) { e.stopPropagation(); e.preventDefault(); }
+    const taskId = task.id;
+    try {
+      const token = authToken();
+      const res = await fetch(`${API}/tasks/${taskId}/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "rejected", ...(data.task || {}) } : t));
+        publish("task:updated", { id: taskId, status: "rejected" });
+        publish("data:changed", { type: "task", action: "updated" });
+        showSuccessMessage(t("Task", { defaultValue: "Task" }), t("declined", { defaultValue: "declined" }));
+      } else {
+        notify.error(data.message || t("Failed to decline task.", { defaultValue: "Failed to decline task." }));
+      }
+    } catch {
+      notify.error(t("An error occurred while declining task.", { defaultValue: "An error occurred while declining task." }));
+    }
+  };
+
+  const handleProjectTaskDirectAbandonSubmit = async (reason) => {
+    if (!abandonTask) return;
+    setAbandoning(true);
+    const taskId = abandonTask.id;
+    const isUserAdminOrManager = ["admin", "manager"].includes(currentUser?.role);
+    const endpoint = isUserAdminOrManager ? `${API}/tasks/${taskId}/abandon` : `${API}/tasks/${taskId}/request-abandon`;
+    try {
+      const token = authToken();
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        body: JSON.stringify({ reason }),
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "abandoned", ...(data.task || {}) } : t));
+        publish("task:updated", { id: taskId, status: "abandoned" });
+        publish("data:changed", { type: "task", action: "updated" });
+        showSuccessMessage(t("Task", { defaultValue: "Task" }), isUserAdminOrManager ? t("abandoned", { defaultValue: "abandoned" }) : t("abandon requested", { defaultValue: "abandon requested" }));
+        setAbandonTask(null);
+      } else {
+        notify.error(data.message || t("Failed to abandon task.", { defaultValue: "Failed to abandon task." }));
+      }
+    } catch {
+      notify.error(t("Failed to abandon task.", { defaultValue: "Failed to abandon task." }));
+    } finally {
+      setAbandoning(false);
+    }
+  };
+
+  const handleProjectTaskDirectReopenSuccess = (updatedTask) => {
+    if (!updatedTask && !reopenTask) return;
+    const taskId = updatedTask?.id || reopenTask?.id;
+    setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "pending", ...(updatedTask || {}) } : t));
+    publish("task:updated", { id: taskId, status: "pending" });
+    publish("data:changed", { type: "task", action: "updated" });
+    showSuccessMessage(t("Task", { defaultValue: "Task" }), t("reopened", { defaultValue: "reopened" }));
+    setReopenTask(null);
+  };
+
+  const handleProjectTaskDirectCompleteSuccess = (updatedTask) => {
+    if (!updatedTask && !markCompletedTask) return;
+    const taskId = updatedTask?.id || markCompletedTask?.id;
+    setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "completed", ...(updatedTask || {}) } : t));
+    publish("task:updated", { id: taskId, status: "completed" });
+    publish("data:changed", { type: "task", action: "updated" });
+    showSuccessMessage(t("Task", { defaultValue: "Task" }), t("marked as completed", { defaultValue: "marked as completed" }));
+    setMarkCompletedTask(null);
+  };
+
   const handleDeleteProject = async () => {
     setDeleteProjectConfirmOpen(true);
   };
@@ -1046,6 +1168,110 @@ function ProjectDetails() {
   const { isDirty: visIsDirty, setIsDirty: setVisIsDirty, handleClose: handleVisClose, ConfirmDialog: VisConfirmDialog } = useConfirmOnClose(closeVisibility);
 
   const { isDirty: mgrIsDirty, setIsDirty: setMgrIsDirty, handleClose: handleMgrClose, ConfirmDialog:MgrConfirmDialog } = useConfirmOnClose(() => setShowManagerModal(false));
+
+  const handleLinkKb = async (kbId) => {
+    if (!kbId || !project?.id) return;
+    setLinkingKb(true);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/projects/${project.id}/knowledge-bases`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ knowledge_base_id: kbId }),
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showSuccessMessage("Knowledge Base", "linked successfully");
+        setShowLinkKbModal(false);
+        setSelectedKbToLink("");
+        loadProject();
+        publish('project:updated', { id: project.id });
+        publish('data:changed', { type: 'project', action: 'updated' });
+      } else {
+        notify.error(data.message || t("Failed to link Knowledge Base article.", { defaultValue: "Failed to link Knowledge Base article." }));
+      }
+    } catch {
+      notify.error(t("Failed to link Knowledge Base article.", { defaultValue: "Failed to link Knowledge Base article." }));
+    } finally {
+      setLinkingKb(false);
+    }
+  };
+
+  const handleUnlinkKb = async (kbId) => {
+    if (!kbId || !project?.id) return;
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/projects/${project.id}/knowledge-bases/${kbId}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showSuccessMessage("Knowledge Base", "unlinked successfully");
+        loadProject();
+        publish('project:updated', { id: project.id });
+        publish('data:changed', { type: 'project', action: 'updated' });
+      } else {
+        notify.error(data.message || t("Failed to unlink Knowledge Base article.", { defaultValue: "Failed to unlink Knowledge Base article." }));
+      }
+    } catch {
+      notify.error(t("Failed to unlink Knowledge Base article.", { defaultValue: "Failed to unlink Knowledge Base article." }));
+    }
+  };
+
+  const handleLinkEvent = async (eventId) => {
+    if (!eventId || !project?.id) return;
+    setLinkingEvent(true);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/projects/${project.id}/events`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ event_id: eventId }),
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showSuccessMessage("Event", "linked successfully");
+        setShowLinkEventModal(false);
+        setSelectedEventToLink("");
+        loadProject();
+        publish('project:updated', { id: project.id });
+        publish('data:changed', { type: 'project', action: 'updated' });
+      } else {
+        notify.error(data.message || t("Failed to link Event.", { defaultValue: "Failed to link Event." }));
+      }
+    } catch {
+      notify.error(t("Failed to link Event.", { defaultValue: "Failed to link Event." }));
+    } finally {
+      setLinkingEvent(false);
+    }
+  };
+
+  const handleUnlinkEvent = async (eventId) => {
+    if (!eventId || !project?.id) return;
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/projects/${project.id}/events/${eventId}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showSuccessMessage("Event", "unlinked successfully");
+        loadProject();
+        publish('project:updated', { id: project.id });
+        publish('data:changed', { type: 'project', action: 'updated' });
+      } else {
+        notify.error(data.message || t("Failed to unlink Event.", { defaultValue: "Failed to unlink Event." }));
+      }
+    } catch {
+      notify.error(t("Failed to unlink Event.", { defaultValue: "Failed to unlink Event." }));
+    }
+  };
 
   const { submitting: milestoneToggling, run: runMilestoneToggle } = useSubmit();
 
@@ -1458,11 +1684,11 @@ function ProjectDetails() {
               </li>
             )}
             {(() => {
-              const kbIds = Array.isArray(project?.kb_ids)
-                ? project.kb_ids
-                : project?.kb_id
-                ? [project.kb_id]
-                : [];
+              const directKbIds = [
+                ...(Array.isArray(project?.kb_ids) ? project.kb_ids : (project?.kb_id ? [project.kb_id] : [])),
+                ...(Array.isArray(project?.knowledge_bases) ? project.knowledge_bases.map((k) => k?.id) : (project?.knowledge_base?.id ? [project.knowledge_base.id] : [])),
+              ];
+              const kbIds = Array.from(new Set(directKbIds.filter(Boolean).map(String)));
               return (
                 <li>
                   <span className="pd-meta-rows__ic">
@@ -1474,7 +1700,10 @@ function ProjectDetails() {
                       {kbIds && kbIds.length > 0 ? (
                         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                           {kbIds.map((kId) => {
-                            const foundKb = kbArticles.find((k) => String(k.id) === String(kId)) || projectKbArticles.find((k) => String(k.id) === String(kId));
+                            const foundKb =
+                              (Array.isArray(project?.knowledge_bases) ? project.knowledge_bases.find((k) => String(k?.id) === String(kId)) : null) ||
+                              kbArticles.find((k) => String(k?.id) === String(kId)) ||
+                              projectKbArticles.find((k) => String(k?.id) === String(kId));
                             const kbTitle = foundKb?.title || `Article #${kId}`;
                             return (
                               <Link
@@ -1495,11 +1724,11 @@ function ProjectDetails() {
               );
             })()}
             {(() => {
-              const eventIds = Array.isArray(project?.event_ids)
-                ? project.event_ids
-                : project?.event_id
-                ? [project.event_id]
-                : [];
+              const directEventIds = [
+                ...(Array.isArray(project?.event_ids) ? project.event_ids : (project?.event_id ? [project.event_id] : [])),
+                ...(Array.isArray(project?.events) ? project.events.map((e) => e?.id) : (project?.event?.id ? [project.event.id] : [])),
+              ];
+              const eventIds = Array.from(new Set(directEventIds.filter(Boolean).map(String)));
               return (
                 <li>
                   <span className="pd-meta-rows__ic">
@@ -1511,7 +1740,10 @@ function ProjectDetails() {
                       {eventIds && eventIds.length > 0 ? (
                         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                           {eventIds.map((eId) => {
-                            const foundEv = eventsList.find((e) => String(e.id) === String(eId)) || projectEvents.find((e) => String(e.id) === String(eId));
+                            const foundEv =
+                              (Array.isArray(project?.events) ? project.events.find((e) => String(e?.id) === String(eId)) : null) ||
+                              eventsList.find((e) => String(e?.id) === String(eId)) ||
+                              projectEvents.find((e) => String(e?.id) === String(eId));
                             const eventTitle = foundEv?.title || `Event #${eId}`;
                             return (
                               <Link
@@ -1827,6 +2059,74 @@ function ProjectDetails() {
                                                         style={{ color: "#7C3AED", cursor: holdingTaskId === tItem.id ? "not-allowed" : "pointer" }}
                                                       >
                                                         <Lock size={16} />
+                                                      </button>
+                                                    );
+                                                  }
+                                                  // Approve / Decline for submitted tasks
+                                                  const canApprove = isAssigner || ["admin", "manager"].includes(currentUser?.role) || tItem.is_next_approver;
+                                                  if (canApprove && (tItem.status === "submitted" || tItem.status === "reopened")) {
+                                                    buttons.push(
+                                                      <button
+                                                        key="approve"
+                                                        className="action-icon-btn"
+                                                        title={t("Approve Task", { defaultValue: "Approve Task" })}
+                                                        style={{ color: "#16A34A" }}
+                                                        onClick={(e) => handleProjectTaskDirectApprove(e, tItem.id)}
+                                                      >
+                                                        <CheckCircle2 size={16} />
+                                                      </button>
+                                                    );
+                                                    buttons.push(
+                                                      <button
+                                                        key="decline"
+                                                        className="action-icon-btn"
+                                                        title={t("Decline Task", { defaultValue: "Decline Task" })}
+                                                        style={{ color: "#DC2626" }}
+                                                        onClick={(e) => handleProjectTaskDirectDecline(e, tItem)}
+                                                      >
+                                                        <XCircle size={16} />
+                                                      </button>
+                                                    );
+                                                  }
+                                                  // Reopen
+                                                  if (canApprove && (tItem.status === "approved" || tItem.status === "submitted" || tItem.status === "reopened" || tItem.status === "abandoned")) {
+                                                    buttons.push(
+                                                      <button
+                                                        key="reopen"
+                                                        className="action-icon-btn"
+                                                        title={t("Reopen Task", { defaultValue: "Reopen Task" })}
+                                                        style={{ color: "#2563EB" }}
+                                                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); setReopenTask(tItem); }}
+                                                      >
+                                                        <RotateCcw size={16} />
+                                                      </button>
+                                                    );
+                                                  }
+                                                  // Abandon
+                                                  if (tItem.status !== "abandoned") {
+                                                    buttons.push(
+                                                      <button
+                                                        key="abandon"
+                                                        className="action-icon-btn"
+                                                        title={["admin", "manager"].includes(currentUser?.role) ? t("Abandon Task", { defaultValue: "Abandon Task" }) : t("Request Abandon", { defaultValue: "Request Abandon" })}
+                                                        style={{ color: "#F59E0B" }}
+                                                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); setAbandonTask(tItem); }}
+                                                      >
+                                                        <AlertOctagon size={16} />
+                                                      </button>
+                                                    );
+                                                  }
+                                                  // Mark as Completed
+                                                  if (canApprove && !["completed", "abandoned"].includes(tItem.status)) {
+                                                    buttons.push(
+                                                      <button
+                                                        key="complete"
+                                                        className="action-icon-btn"
+                                                        title={t("Mark as Completed", { defaultValue: "Mark as Completed" })}
+                                                        style={{ color: "#7C3AED" }}
+                                                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); setMarkCompletedTask(tItem); }}
+                                                      >
+                                                        <CheckCircle2 size={16} />
                                                       </button>
                                                     );
                                                   }
@@ -2190,14 +2490,28 @@ function ProjectDetails() {
                                 />
                               </div>
                               {!isShared && (
-                              <button
-                                type="button"
-                                className="pd-btn-tx pd-btn-tx--primary"
-                                onClick={() => navigate(rolePath("knowledge-base/create"), { state: { projectId: project?.id || projectId, projectTitle: project?.title } })}
-                                style={{ display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap" }}
-                              >
-                                <Plus size={16} /> {t("Add Document", { defaultValue: "Add Document" })}
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  className="pd-btn-tx pd-btn-tx--outline"
+                                  onClick={() => {
+                                    setLinkKbSearch("");
+                                    setSelectedKbToLink("");
+                                    setShowLinkKbModal(true);
+                                  }}
+                                  style={{ display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap" }}
+                                >
+                                  <BookOpen size={15} /> {t("Link Document", { defaultValue: "Link Document" })}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="pd-btn-tx pd-btn-tx--primary"
+                                  onClick={() => navigate(rolePath("knowledge-base/create"), { state: { projectId: project?.id || projectId, projectTitle: project?.title } })}
+                                  style={{ display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap" }}
+                                >
+                                  <Plus size={16} /> {t("Add Document", { defaultValue: "Add Document" })}
+                                </button>
+                              </>
                               )}
                             </div>
                           </div>
@@ -2227,13 +2541,26 @@ function ProjectDetails() {
                                     {t("Create and share SOPs, architectural guidelines, or deliverable checklists for this project.", { defaultValue: "Create and share SOPs, architectural guidelines, or deliverable checklists for this project." })}
                                   </p>
                                   {!isShared && (
-                                  <button
-                                    type="button"
-                                    onClick={() => navigate(rolePath("knowledge-base/create"), { state: { projectId: project?.id || projectId, projectTitle: project?.title } })}
-                                    style={{ padding: "7px 16px", borderRadius: "6px", background: "#2563eb", color: "#ffffff", border: "none", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
-                                  >
-                                    <Plus size={14} style={{ display: "inline", verticalAlign: "-2px", marginRight: "4px" }} /> {t("Add Document", { defaultValue: "Add Document" })}
-                                  </button>
+                                  <div style={{ display: "flex", justifyContent: "center", gap: "10px" }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setLinkKbSearch("");
+                                        setSelectedKbToLink("");
+                                        setShowLinkKbModal(true);
+                                      }}
+                                      style={{ padding: "7px 16px", borderRadius: "6px", background: "var(--bg-card)", color: "var(--color-primary)", border: "1px solid var(--border-color)", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                                    >
+                                      <BookOpen size={14} style={{ display: "inline", verticalAlign: "-2px", marginRight: "4px" }} /> {t("Link Existing Document", { defaultValue: "Link Existing Document" })}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => navigate(rolePath("knowledge-base/create"), { state: { projectId: project?.id || projectId, projectTitle: project?.title } })}
+                                      style={{ padding: "7px 16px", borderRadius: "6px", background: "#2563eb", color: "#ffffff", border: "none", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                                    >
+                                      <Plus size={14} style={{ display: "inline", verticalAlign: "-2px", marginRight: "4px" }} /> {t("Add Document", { defaultValue: "Add Document" })}
+                                    </button>
+                                  </div>
                                   )}
                                 </div>
                               );
@@ -2242,7 +2569,7 @@ function ProjectDetails() {
                             return (
                               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "14px", marginTop: "18px" }}>
                                 {filteredKb.map((item) => {
-                                  const isLinked = item.isDirectLinked || String(item.id) === String(project?.kb_id || project?.knowledge_base?.id || project?.knowledgeBase?.id);
+                                  const isLinked = item.isDirectLinked || String(item.id) === String(project?.kb_id || project?.knowledge_base?.id || project?.knowledgeBase?.id) || (Array.isArray(project?.kb_ids) && project.kb_ids.map(String).includes(String(item.id))) || (Array.isArray(project?.knowledge_bases) && project.knowledge_bases.some((k) => String(k?.id) === String(item.id)));
                                   return (
                                     <div
                                       key={item.id}
@@ -2290,6 +2617,15 @@ function ProjectDetails() {
                                         </div>
                                       </div>
                                       <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", borderTop: "1px solid var(--border-color)", paddingTop: "10px" }}>
+                                        {isLinked && !isShared && (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleUnlinkKb(item.id)}
+                                            style={{ padding: "5px 12px", borderRadius: "6px", background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                                          >
+                                            {t("Unlink", { defaultValue: "Unlink" })}
+                                          </button>
+                                        )}
                                         <button
                                           type="button"
                                           onClick={() => navigate(rolePath(`knowledge-base/${item.id}`))}
@@ -2330,14 +2666,28 @@ function ProjectDetails() {
                                 />
                               </div>
                               {!isShared && (
-                              <button
-                                type="button"
-                                className="pd-btn-tx pd-btn-tx--primary"
-                                onClick={() => navigate(rolePath("events/create"), { state: { projectId: project?.id || projectId, projectTitle: project?.title } })}
-                                style={{ display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap" }}
-                              >
-                                <Plus size={16} /> {t("Add Event", { defaultValue: "Add Event" })}
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  className="pd-btn-tx pd-btn-tx--outline"
+                                  onClick={() => {
+                                    setLinkEventSearch("");
+                                    setSelectedEventToLink("");
+                                    setShowLinkEventModal(true);
+                                  }}
+                                  style={{ display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap" }}
+                                >
+                                  <Calendar size={15} /> {t("Link Event", { defaultValue: "Link Event" })}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="pd-btn-tx pd-btn-tx--primary"
+                                  onClick={() => navigate(rolePath("events/create"), { state: { projectId: project?.id || projectId, projectTitle: project?.title } })}
+                                  style={{ display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap" }}
+                                >
+                                  <Plus size={16} /> {t("Add Event", { defaultValue: "Add Event" })}
+                                </button>
+                              </>
                               )}
                             </div>
                           </div>
@@ -2366,13 +2716,26 @@ function ProjectDetails() {
                                     {t("Schedule sprint meetings, demo sessions, and release deadlines for this project.", { defaultValue: "Schedule sprint meetings, demo sessions, and release deadlines for this project." })}
                                   </p>
                                   {!isShared && (
-                                  <button
-                                    type="button"
-                                    onClick={() => navigate(rolePath("events/create"), { state: { projectId: project?.id || projectId, projectTitle: project?.title } })}
-                                    style={{ padding: "7px 16px", borderRadius: "6px", background: "#2563eb", color: "#ffffff", border: "none", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
-                                  >
-                                    <Plus size={14} style={{ display: "inline", verticalAlign: "-2px", marginRight: "4px" }} /> {t("Add Event", { defaultValue: "Add Event" })}
-                                  </button>
+                                  <div style={{ display: "flex", justifyContent: "center", gap: "10px" }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setLinkEventSearch("");
+                                        setSelectedEventToLink("");
+                                        setShowLinkEventModal(true);
+                                      }}
+                                      style={{ padding: "7px 16px", borderRadius: "6px", background: "var(--bg-card)", color: "var(--color-primary)", border: "1px solid var(--border-color)", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                                    >
+                                      <Calendar size={14} style={{ display: "inline", verticalAlign: "-2px", marginRight: "4px" }} /> {t("Link Existing Event", { defaultValue: "Link Existing Event" })}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => navigate(rolePath("events/create"), { state: { projectId: project?.id || projectId, projectTitle: project?.title } })}
+                                      style={{ padding: "7px 16px", borderRadius: "6px", background: "#2563eb", color: "#ffffff", border: "none", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                                    >
+                                      <Plus size={14} style={{ display: "inline", verticalAlign: "-2px", marginRight: "4px" }} /> {t("Add Event", { defaultValue: "Add Event" })}
+                                    </button>
+                                  </div>
                                   )}
                                 </div>
                               );
@@ -2383,7 +2746,7 @@ function ProjectDetails() {
                                 {filteredEv.map((ev) => {
                                   const dateStr = ev.start_date ? new Date(ev.start_date).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) : t("Scheduled", { defaultValue: "Scheduled" });
                                   const timeStr = ev.start_date && !ev.all_day ? new Date(ev.start_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : (ev.all_day ? t("All Day", { defaultValue: "All Day" }) : "");
-                                  const isLinked = ev.isDirectLinked || String(ev.id) === String(project?.event_id || project?.event?.id);
+                                  const isLinked = ev.isDirectLinked || String(ev.id) === String(project?.event_id || project?.event?.id) || (Array.isArray(project?.event_ids) && project.event_ids.map(String).includes(String(ev.id))) || (Array.isArray(project?.events) && project.events.some((e) => String(e?.id) === String(ev.id)));
 
                                   return (
                                     <div
@@ -2435,6 +2798,15 @@ function ProjectDetails() {
                                         )}
                                       </div>
                                       <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", borderTop: "1px solid var(--border-color)", paddingTop: "10px" }}>
+                                        {isLinked && !isShared && (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleUnlinkEvent(ev.id)}
+                                            style={{ padding: "5px 12px", borderRadius: "6px", background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                                          >
+                                            {t("Unlink", { defaultValue: "Unlink" })}
+                                          </button>
+                                        )}
                                         <button
                                           type="button"
                                           onClick={() => navigate(rolePath(`events/${ev.id}`))}
@@ -2572,6 +2944,31 @@ function ProjectDetails() {
         itemType="task"
         itemId={noteModal.itemId}
         onSaved={() => { setNoteModal({ open: false, itemId: null }); loadProject(); }}
+      />
+
+      <TaskReopenDialog
+        isOpen={!!reopenTask}
+        onClose={() => setReopenTask(null)}
+        task={reopenTask}
+        onReopenSuccess={handleProjectTaskDirectReopenSuccess}
+      />
+
+      <AbandonModal
+        isOpen={!!abandonTask}
+        onClose={() => setAbandonTask(null)}
+        title={t("Abandon Task", { defaultValue: "Abandon Task" })}
+        subtitle={t("Please provide a reason for abandoning this task.", { defaultValue: "Please provide a reason for abandoning this task." })}
+        actionLabel={["admin", "manager"].includes(currentUser?.role) ? t("Abandon", { defaultValue: "Abandon" }) : t("Request Abandon", { defaultValue: "Request Abandon" })}
+        onSubmit={handleProjectTaskDirectAbandonSubmit}
+        loading={abandoning}
+      />
+
+      <MarkTaskCompletedModal
+        isOpen={!!markCompletedTask}
+        onClose={() => setMarkCompletedTask(null)}
+        task={markCompletedTask}
+        entityType="task"
+        onCompleteSuccess={handleProjectTaskDirectCompleteSuccess}
       />
 
       {visibilityOpen && (
@@ -2838,6 +3235,168 @@ function ProjectDetails() {
         project={project}
         onSuccess={loadProject}
       />
+
+      {showLinkKbModal && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 10000, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
+          onClick={() => setShowLinkKbModal(false)}
+        >
+          <div
+            style={{ background: "var(--bg-card, #ffffff)", borderRadius: "12px", width: "100%", maxWidth: "500px", maxHeight: "80vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)", overflow: "hidden" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 600, display: "flex", alignItems: "center", gap: "8px" }}>
+                <BookOpen size={18} color="#2563eb" /> {t("Link Knowledge Base Document", { defaultValue: "Link Knowledge Base Document" })}
+              </h3>
+              <button onClick={() => setShowLinkKbModal(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)" }}>
+                <X size={18} />
+              </button>
+            </div>
+            <div style={{ padding: "12px 20px" }}>
+              <div className="pd-files-search" style={{ margin: 0, width: "100%" }}>
+                <input
+                  type="text"
+                  placeholder={t("Search documents...", { defaultValue: "Search documents..." })}
+                  value={linkKbSearch}
+                  onChange={(e) => setLinkKbSearch(e.target.value)}
+                />
+              </div>
+            </div>
+            <div style={{ padding: "0 20px 16px 20px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: "8px" }}>
+              {kbArticles
+                .filter((k) => !linkKbSearch.trim() || k.title?.toLowerCase().includes(linkKbSearch.toLowerCase()))
+                .map((k) => {
+                  const isSelected = selectedKbToLink === k.id;
+                  const alreadyLinked = (Array.isArray(project?.kb_ids) && project.kb_ids.map(String).includes(String(k.id))) || (Array.isArray(project?.knowledge_bases) && project.knowledge_bases.some((kb) => String(kb?.id) === String(k.id)));
+                  return (
+                    <div
+                      key={k.id}
+                      onClick={() => !alreadyLinked && setSelectedKbToLink(k.id)}
+                      style={{
+                        padding: "10px 14px",
+                        borderRadius: "8px",
+                        border: isSelected ? "1px solid #2563eb" : "1px solid var(--border-color)",
+                        background: isSelected ? "#eff6ff" : (alreadyLinked ? "var(--bg-card-subtle)" : "var(--bg-card)"),
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        cursor: alreadyLinked ? "default" : "pointer",
+                        opacity: alreadyLinked ? 0.6 : 1,
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: "13px" }}>{k.title}</div>
+                        <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>{k.categoryRelation?.name || k.category || t("Document", { defaultValue: "Document" })}</div>
+                      </div>
+                      <div>
+                        {alreadyLinked ? (
+                          <span style={{ fontSize: "11px", color: "#16a34a", fontWeight: 600 }}>{t("Already Linked", { defaultValue: "Already Linked" })}</span>
+                        ) : isSelected ? (
+                          <Check size={16} color="#2563eb" />
+                        ) : (
+                          <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>{t("Select", { defaultValue: "Select" })}</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+            <div style={{ padding: "12px 20px", borderTop: "1px solid var(--border-color)", display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+              <button type="button" className="pd-btn-tx pd-btn-tx--outline" onClick={() => setShowLinkKbModal(false)}>{t("Cancel", { defaultValue: "Cancel" })}</button>
+              <button
+                type="button"
+                className="pd-btn-tx pd-btn-tx--primary"
+                disabled={!selectedKbToLink || linkingKb}
+                onClick={() => handleLinkKb(selectedKbToLink)}
+              >
+                {linkingKb ? t("Linking...", { defaultValue: "Linking..." }) : t("Link Document", { defaultValue: "Link Document" })}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showLinkEventModal && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 10000, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
+          onClick={() => setShowLinkEventModal(false)}
+        >
+          <div
+            style={{ background: "var(--bg-card, #ffffff)", borderRadius: "12px", width: "100%", maxWidth: "500px", maxHeight: "80vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)", overflow: "hidden" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 600, display: "flex", alignItems: "center", gap: "8px" }}>
+                <Calendar size={18} color="#2563eb" /> {t("Link Event to Project", { defaultValue: "Link Event to Project" })}
+              </h3>
+              <button onClick={() => setShowLinkEventModal(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)" }}>
+                <X size={18} />
+              </button>
+            </div>
+            <div style={{ padding: "12px 20px" }}>
+              <div className="pd-files-search" style={{ margin: 0, width: "100%" }}>
+                <input
+                  type="text"
+                  placeholder={t("Search events...", { defaultValue: "Search events..." })}
+                  value={linkEventSearch}
+                  onChange={(e) => setLinkEventSearch(e.target.value)}
+                />
+              </div>
+            </div>
+            <div style={{ padding: "0 20px 16px 20px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: "8px" }}>
+              {eventsList
+                .filter((e) => !linkEventSearch.trim() || e.title?.toLowerCase().includes(linkEventSearch.toLowerCase()))
+                .map((ev) => {
+                  const isSelected = selectedEventToLink === ev.id;
+                  const alreadyLinked = (Array.isArray(project?.event_ids) && project.event_ids.map(String).includes(String(ev.id))) || (Array.isArray(project?.events) && project.events.some((e) => String(e?.id) === String(ev.id)));
+                  return (
+                    <div
+                      key={ev.id}
+                      onClick={() => !alreadyLinked && setSelectedEventToLink(ev.id)}
+                      style={{
+                        padding: "10px 14px",
+                        borderRadius: "8px",
+                        border: isSelected ? "1px solid #2563eb" : "1px solid var(--border-color)",
+                        background: isSelected ? "#eff6ff" : (alreadyLinked ? "var(--bg-card-subtle)" : "var(--bg-card)"),
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        cursor: alreadyLinked ? "default" : "pointer",
+                        opacity: alreadyLinked ? 0.6 : 1,
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: "13px" }}>{ev.title}</div>
+                        <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>{ev.start_date ? new Date(ev.start_date).toLocaleDateString() : t("Event", { defaultValue: "Event" })}</div>
+                      </div>
+                      <div>
+                        {alreadyLinked ? (
+                          <span style={{ fontSize: "11px", color: "#16a34a", fontWeight: 600 }}>{t("Already Linked", { defaultValue: "Already Linked" })}</span>
+                        ) : isSelected ? (
+                          <Check size={16} color="#2563eb" />
+                        ) : (
+                          <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>{t("Select", { defaultValue: "Select" })}</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+            <div style={{ padding: "12px 20px", borderTop: "1px solid var(--border-color)", display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+              <button type="button" className="pd-btn-tx pd-btn-tx--outline" onClick={() => setShowLinkEventModal(false)}>{t("Cancel", { defaultValue: "Cancel" })}</button>
+              <button
+                type="button"
+                className="pd-btn-tx pd-btn-tx--primary"
+                disabled={!selectedEventToLink || linkingEvent}
+                onClick={() => handleLinkEvent(selectedEventToLink)}
+              >
+                {linkingEvent ? t("Linking...", { defaultValue: "Linking..." }) : t("Link Event", { defaultValue: "Link Event" })}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

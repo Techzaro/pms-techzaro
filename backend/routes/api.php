@@ -304,16 +304,19 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/feedback/{id}/messages', [FeedbackController::class, 'sendMessage']);
 
     /*
-    | Team Management Routes
+    | Team Management Routes (Read)
+    | All authenticated users can view teams and team details.
+    */
+    Route::get('/teams', [TeamController::class, 'index']);
+    Route::get('/teams/{team}', [TeamController::class, 'show']);
+
+    /*
+    | Team Management Routes (Write)
     | Admin and manager only: CRUD operations for managing teams and members.
     */
     Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager')->group(function () {
-        // List all teams
-        Route::get('/teams', [TeamController::class, 'index']);
         // Create new team
         Route::post('/teams', [TeamController::class, 'store']);
-        // View team details
-        Route::get('/teams/{team}', [TeamController::class, 'show']);
         // Update team information
         Route::put('/teams/{team}', [TeamController::class, 'update']);
         // Set team leader
@@ -508,6 +511,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/tasks/{task}/knowledge-bases', [TaskController::class, 'getKnowledgeBases']);
     Route::post('/tasks/{task}/knowledge-bases', [TaskController::class, 'linkKnowledgeBase']);
     Route::delete('/tasks/{task}/knowledge-bases/{knowledgeBase}', [TaskController::class, 'unlinkKnowledgeBase']);
+
+    // Project Events & Knowledge Base linking
+    Route::get('/projects/{project}/events', [ProjectController::class, 'getEvents']);
+    Route::post('/projects/{project}/events', [ProjectController::class, 'linkEvent']);
+    Route::delete('/projects/{project}/events/{event}', [ProjectController::class, 'unlinkEvent']);
+    Route::get('/projects/{project}/knowledge-bases', [ProjectController::class, 'getKnowledgeBases']);
+    Route::post('/projects/{project}/knowledge-bases', [ProjectController::class, 'linkKnowledgeBase']);
+    Route::delete('/projects/{project}/knowledge-bases/{knowledgeBase}', [ProjectController::class, 'unlinkKnowledgeBase']);
 
         // Task Saved Views Routes (SRS Section 11)
     Route::get('/task-saved-views', [\App\Http\Controllers\TaskSavedViewController::class, 'index']);

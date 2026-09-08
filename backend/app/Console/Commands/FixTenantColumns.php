@@ -118,6 +118,19 @@ class FixTenantColumns extends Command
             ['name' => 'sort_parameters',                'definition' => "JSON NULL AFTER `filters`"],
             ['name' => 'is_default',                     'definition' => "TINYINT(1) DEFAULT 0 AFTER `sort_parameters`"],
         ],
+        'task_comments' => [
+            ['name' => 'parent_id',                      'definition' => "BIGINT UNSIGNED NULL AFTER `deliverable_id`"],
+            ['name' => 'quoted_message_id',             'definition' => "BIGINT UNSIGNED NULL AFTER `parent_id`"],
+            ['name' => 'quoted_text',                   'definition' => "TEXT NULL AFTER `quoted_message_id`"],
+            ['name' => 'delegation_id',                 'definition' => "BIGINT UNSIGNED NULL AFTER `body`"],
+            ['name' => 'file_path',                     'definition' => "VARCHAR(1024) NULL AFTER `delegation_id`"],
+            ['name' => 'file_name',                     'definition' => "VARCHAR(255) NULL AFTER `file_path`"],
+            ['name' => 'file_size',                     'definition' => "BIGINT UNSIGNED NULL AFTER `file_name`"],
+            ['name' => 'is_edited',                     'definition' => "TINYINT(1) DEFAULT 0 AFTER `file_size`"],
+            ['name' => 'edited_at',                     'definition' => "TIMESTAMP NULL AFTER `is_edited`"],
+            ['name' => 'comment_type',                  'definition' => "VARCHAR(50) DEFAULT 'internal' AFTER `body`"],
+            ['name' => 'visible_to_organizations',      'definition' => "JSON NULL AFTER `comment_type`"],
+        ],
     ];
 
     protected array $tableCreates = [

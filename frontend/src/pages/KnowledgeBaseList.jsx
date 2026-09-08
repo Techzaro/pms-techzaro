@@ -5,6 +5,7 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import ConfirmModal from "../components/ConfirmModal";
 import ShareKnowledgeModal from "../components/ShareKnowledgeModal";
+import AttachResourceModal from "../components/AttachResourceModal";
 import API_URL from "../config/api";
 import { authToken, rolePath, getUser } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
@@ -40,6 +41,7 @@ import {
   Briefcase,
   Calendar,
   RotateCw,
+  Link2,
 } from "lucide-react";
 
 export default function KnowledgeBaseList() {
@@ -77,6 +79,7 @@ export default function KnowledgeBaseList() {
   const [archivingItem, setArchivingItem] = useState(null);
   const [restoringItem, setRestoringItem] = useState(null);
   const [sharingItem, setSharingItem] = useState(null);
+  const [attachingItem, setAttachingItem] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
 
   // ── New Category Modal State ──────────────────────────────
@@ -1087,6 +1090,16 @@ export default function KnowledgeBaseList() {
         article={sharingItem}
       />
 
+      {/* ATTACH TO PROJECT / TASK MODAL */}
+      <AttachResourceModal
+        isOpen={Boolean(attachingItem)}
+        onClose={() => setAttachingItem(null)}
+        resource={attachingItem ? { type: "knowledge_base", id: attachingItem.id, title: attachingItem.title } : null}
+        onSuccess={() => {
+          fetchItems();
+        }}
+      />
+
       {/* ARCHIVE CONFIRMATION MODAL */}
       <ConfirmModal
         isOpen={Boolean(archivingItem)}
@@ -1310,6 +1323,19 @@ export default function KnowledgeBaseList() {
                       <span>{t("Share Internally", { defaultValue: "Share Internally" })}</span>
                     </button>
                   )}
+
+                  {/* ATTACH TO PROJECT / TASK */}
+                  <button
+                    type="button"
+                    className="kb-action-menu-item"
+                    onClick={() => {
+                      setOpenMenuId(null);
+                      setAttachingItem(item);
+                    }}
+                  >
+                    <Link2 size={14} color="#2563eb" />
+                    <span>{t("Attach to Project / Task", { defaultValue: "Attach to Project / Task" })}</span>
+                  </button>
 
                   {/* DOWNLOAD ATTACHMENT */}
                   {canDownload && (
