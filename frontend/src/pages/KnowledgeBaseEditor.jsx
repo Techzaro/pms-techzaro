@@ -958,7 +958,18 @@ export default function KnowledgeBaseEditor() {
           <AttachResourceModal
             isOpen={attachModalOpen}
             onClose={() => setAttachModalOpen(false)}
-            resource={{ type: "knowledge_base", id: id, title: title || rawArticle?.title }}
+            resource={{
+              type: "knowledge_base",
+              id: id,
+              title: title || rawArticle?.title,
+              project_id: projectId || rawArticle?.project_id || rawArticle?.projectId || rawArticle?.project?.id,
+              task_id: rawArticle?.task_id || rawArticle?.taskId || rawArticle?.task?.id,
+              project: rawArticle?.project,
+              task: rawArticle?.task,
+              projects: rawArticle?.projects,
+              tasks: rawArticle?.tasks,
+              ...rawArticle,
+            }}
             onSuccess={() => {
               notify.success(t("Document attached successfully!", { defaultValue: "Document attached successfully!" }));
             }}

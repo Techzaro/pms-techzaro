@@ -12,6 +12,7 @@ import { authToken, getUser } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import draftService from "../services/draftService";
 import UserSelectDropdown from "./UserSelectDropdown";
+import ParentTaskSelectDropdown from "./ParentTaskSelectDropdown";
 import CustomSelect from "./CustomSelect";
 import MultiSelectDropdown from "./MultiSelectDropdown";
 import LoadingButton from "./LoadingButton";
@@ -172,12 +173,22 @@ export default function EditTaskModal({ task, onClose }) {
   const currentUser = getUser();
 
   const [projects, setProjects] = useState([]);
+  const [projectTasks, setProjectTasks] = useState([]);
   const [form, setForm] = useState({
     title: task.title || "",
     description: task.description || "",
     priority: task.priority || "Medium",
     task_type: task.task_type || "standard",
-    project_id: task.project?.id ? [task.project.id] : [],
+    project_id: task.project?.id ? [task.project.id] : (task.project_id ? [task.project_id] : []),
+    parent_id: (() => {
+      if (Array.isArray(task.parent_ids) && task.parent_ids.length > 0) return task.parent_ids.map(Number);
+      if (task.parent_id) return [Number(task.parent_id)];
+      if (task.parent?.id) return [Number(task.parent.id)];
+      if (task.parent_task_id) return [Number(task.parent_task_id)];
+      if (task.parent_task?.id) return [Number(task.parent_task.id)];
+      if (task.subtask_of) return [Number(task.subtask_of)];
+      return [];
+    })(),
     start_date: task.start_date ? toDatetimeLocal(task.start_date) : "",
     end_date: task.end_date ? toDatetimeLocal(task.end_date) : "",
     allow_transfer: task.allow_transfer !== false ? "allow" : "disallow",
@@ -336,6 +347,16 @@ export default function EditTaskModal({ task, onClose }) {
       } else if (task.event_id !== undefined || task.eventReferenceId !== undefined) {
         setEventIds(task.event_id || task.eventReferenceId ? [Number(task.event_id || task.eventReferenceId)] : []);
       }
+      const initialParentId = (() => {
+        if (Array.isArray(task.parent_ids) && task.parent_ids.length > 0) return task.parent_ids.map(Number);
+        if (task.parent_id) return [Number(task.parent_id)];
+        if (task.parent?.id) return [Number(task.parent.id)];
+        if (task.parent_task_id) return [Number(task.parent_task_id)];
+        if (task.parent_task?.id) return [Number(task.parent_task.id)];
+        if (task.subtask_of) return [Number(task.subtask_of)];
+        return [];
+      })();
+      setForm((prev) => ({ ...prev, parent_id: initialParentId }));
     }
   }, [task]);
 
@@ -352,6 +373,28 @@ export default function EditTaskModal({ task, onClose }) {
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const token = authToken();
+    const pids = Array.isArray(form.project_id)
+      ? form.project_id
+      : (form.project_id ? [form.project_id] : (task?.project_id ? [task.project_id] : []));
+    if (pids.length === 1) {
+      fetch(`${API_URL}/projects/${pids[0]}/tasks`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
+      })
+        .then((r) => (r.ok ? r.json() : []))
+        .then((d) => {
+          const items = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
+          const filtered = items.filter((item) => String(item.id) !== String(task?.id));
+          setProjectTasks(filtered);
+        })
+        .catch(() => setProjectTasks([]));
+    } else {
+      setProjectTasks([]);
+    }
+  }, [form.project_id, task?.id]);
 
   useEffect(() => {
     const token = authToken();
@@ -702,6 +745,9 @@ export default function EditTaskModal({ task, onClose }) {
             requirements: requirementsList,
             allow_transfer: form.allow_transfer === "allow",
             project_id: form.project_id?.[0] || null,
+            parent_id: Array.isArray(form.parent_id) ? (form.parent_id[0] || null) : (form.parent_id || null),
+            parent_ids: Array.isArray(form.parent_id) ? form.parent_id : (form.parent_id ? [form.parent_id] : []),
+            subtask_of: Array.isArray(form.parent_id) ? (form.parent_id[0] || null) : (form.parent_id || null),
             start_date: toUTCIso(form.start_date),
             end_date: toUTCIso(form.end_date),
             assigned_to: selectedAssigneeIds,
@@ -788,7 +834,7 @@ export default function EditTaskModal({ task, onClose }) {
                 <MultiSelectDropdown
                   name="project_id"
                   value={form.project_id}
-                  onChange={(val) => { setForm((prev) => ({ ...prev, project_id: val })); setSelectedAssigneeIds([]); markDirty(); }}
+                  onChange={(val) => { setForm((prev) => ({ ...prev, project_id: val, parent_id: [] })); setSelectedAssigneeIds([]); markDirty(); }}
                   placeholder={t("Select projects", { defaultValue: "Select projects" })}
                   searchPlaceholder={t("Search projects...")}
                   options={projects.map((p) => ({ value: p.id, label: p.title }))}
@@ -900,6 +946,29 @@ export default function EditTaskModal({ task, onClose }) {
                 placeholder={t("Enter task description...", { defaultValue: "Enter task description..." })}
               />
             </div>
+
+            {/* Sub-task Of */}
+            {(() => {
+              const selectedProjectIds = Array.isArray(form.project_id)
+                ? form.project_id
+                : (form.project_id ? [form.project_id] : (task?.project_id ? [task.project_id] : []));
+              const hasProjectSelected = selectedProjectIds.length > 0;
+
+              return (
+                <div className="task-field">
+                  <label>{t("Sub-task Of (Optional)", { defaultValue: "Sub-task Of" })}</label>
+                  <ParentTaskSelectDropdown
+                    name="parent_id"
+                    tasks={projectTasks}
+                    value={form.parent_id || []}
+                    onChange={(val) => { setForm((prev) => ({ ...prev, parent_id: val })); markDirty(); }}
+                    disabled={!hasProjectSelected}
+                    placeholder={!hasProjectSelected ? t("Select a project first", { defaultValue: "Select a project first" }) : t("None (Main Task)", { defaultValue: "None (Main Task)" })}
+                    showChips={true}
+                  />
+                </div>
+              );
+            })()}
 
             {/* ATTACHMENTS */}
             <div className="task-field">
@@ -1113,9 +1182,10 @@ export default function EditTaskModal({ task, onClose }) {
                 value={form.priority}
                 onChange={(val) => { setForm((prev) => ({ ...prev, priority: val })); markDirty(); }}
                 options={[
-                  { value: "Medium", label: t("Medium") },
-                  { value: "Low", label: t("Low") },
-                  { value: "High", label: t("High") },
+                  { value: "Urgent", label: t("Urgent", { defaultValue: "Urgent" }) },
+                  { value: "High", label: t("High", { defaultValue: "High" }) },
+                  { value: "Medium", label: t("Medium", { defaultValue: "Medium" }) },
+                  { value: "Low", label: t("Low", { defaultValue: "Low" }) },
                 ]}
               />
             </div>

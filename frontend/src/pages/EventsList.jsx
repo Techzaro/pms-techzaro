@@ -157,6 +157,27 @@ export default function EventsList() {
     }
   };
 
+  // Open Attach Modal with full relationship details
+  const handleOpenAttachModal = async (ev) => {
+    setAttachingEvent(ev);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/events/${ev.id}`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        skipLoader: true,
+      });
+      if (res.ok) {
+        const d = await res.json();
+        const fullData = d?.data || d?.event || d;
+        if (fullData) {
+          setAttachingEvent((prev) => (prev && prev.id === ev.id ? { ...prev, ...fullData } : prev));
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load event details for attach modal", err);
+    }
+  };
+
   // ── Unique organizers from events for Person filter ───
   const allEvents = useMemo(() => {
     return [
@@ -625,6 +646,13 @@ export default function EventsList() {
             type: "event",
             id: attachingEvent.id,
             title: attachingEvent.title,
+            project_id: attachingEvent.project_id || attachingEvent.projectId || attachingEvent.project?.id,
+            task_id: attachingEvent.task_id || attachingEvent.taskId || attachingEvent.task?.id,
+            project: attachingEvent.project,
+            task: attachingEvent.task,
+            projects: attachingEvent.projects,
+            tasks: attachingEvent.tasks,
+            ...attachingEvent,
           } : null}
           onSuccess={() => {
             fetchEvents();
@@ -688,7 +716,7 @@ export default function EventsList() {
             {canEditDelete && !ev.is_shared && (
               <div style={{ display: "flex", gap: "4px" }}>
                 <button
-                  onClick={() => setAttachingEvent(ev)}
+                  onClick={() => handleOpenAttachModal(ev)}
                   style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "2px" }}
                   title={t("Attach to Project / Task", { defaultValue: "Attach to Project / Task" })}
                 >

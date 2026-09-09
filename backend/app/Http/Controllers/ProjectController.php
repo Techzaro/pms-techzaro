@@ -325,14 +325,26 @@ class ProjectController extends Controller
      */
     public function getTasks(Project $project)
     {
+        $hasParentId = \Illuminate\Support\Facades\Schema::hasColumn('tasks', 'parent_id');
+        $columns = ['id', 'business_id', 'project_id', 'title', 'status', 'priority', 'end_date', 'assigned_to', 'assigned_by', 'current_owner'];
+        if ($hasParentId) {
+            $columns[] = 'parent_id';
+        }
+
+        $with = [
+            'assignee:id,name,email,role',
+            'assignees:id,name,email,role',
+            'assigner:id,name,email,role',
+            'currentOwner:id,name',
+        ];
+        if ($hasParentId) {
+            $with[] = 'parent:id,business_id,title';
+            $with[] = 'subtasks:id,parent_id,title,business_id';
+        }
+
         $tasks = $project->tasks()
-            ->select('id', 'business_id', 'title', 'status', 'priority', 'end_date', 'assigned_to', 'assigned_by', 'current_owner')
-            ->with([
-                'assignee:id,name,email,role',
-                'assignees:id,name,email,role',
-                'assigner:id,name,email,role',
-                'currentOwner:id,name',
-            ])
+            ->select($columns)
+            ->with($with)
             ->orderBy('sort_order')
             ->get();
 
@@ -578,6 +590,8 @@ class ProjectController extends Controller
             }
         }
 
+        $hasParentIdColumn = \Illuminate\Support\Facades\Schema::hasColumn('tasks', 'parent_id');
+
         $baseRelations = [
             'creator:id,name,email,role,department',
             'team.leader:id,name,email,role,department',
@@ -586,11 +600,28 @@ class ProjectController extends Controller
             'files',
             'followers:id,name,email,avatar,role',
             'deliverables' => fn ($q) => $q->with(['assignee:id,name,role', 'creator:id,name,role'])->orderBy('sort_order'),
-            'tasks' => fn ($q) => $q->with(['assignees:id,name', 'assigner:id,name,role'])->withCount([
-                'deliverables as total_deliverables',
-                'deliverables as approved_deliverables' => fn ($q) => $q->where('status', 'approved'),
-                'deliverables as pending_deliverables' => fn ($q) => $q->whereNotIn('status', ['approved']),
-            ])->orderBy('sort_order')->latest(),
+            'tasks' => function ($q) use ($hasParentIdColumn) {
+                $with = [
+                    'assignees:id,name,email,role',
+                    'assigner:id,name,email,role',
+                    'deliverables' => fn ($dq) => $dq->with(['assignee:id,name,role', 'creator:id,name,role']),
+                ];
+                if ($hasParentIdColumn) {
+                    $with[] = 'parent:id,business_id,title';
+                    $with['subtasks'] = fn ($sq) => $sq->with(['assignees:id,name,email,role', 'assigner:id,name,email,role']);
+                }
+
+                $withCount = [
+                    'deliverables as total_deliverables',
+                    'deliverables as approved_deliverables' => fn ($cq) => $cq->where('status', 'approved'),
+                    'deliverables as pending_deliverables' => fn ($cq) => $cq->whereNotIn('status', ['approved']),
+                ];
+                if ($hasParentIdColumn) {
+                    $withCount['subtasks as total_subtasks'] = fn ($sq) => $sq;
+                }
+
+                return $q->with($with)->withCount($withCount)->orderBy('sort_order')->latest();
+            },
         ];
 
         $optionalRelations = [
@@ -601,8 +632,12 @@ class ProjectController extends Controller
 
         try {
             $project->load(array_merge($baseRelations, $optionalRelations));
-        } catch (\Exception $e) {
-            $project->load($baseRelations);
+        } catch (\Throwable $e) {
+            try {
+                $project->load($baseRelations);
+            } catch (\Throwable $e2) {
+                $project->load(['milestones', 'files', 'deliverables', 'tasks']);
+            }
         }
 
         $org = request()->attributes->get('currentOrganization');

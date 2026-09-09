@@ -773,7 +773,7 @@ function TaskDetails() {
   const canMarkCompleted = (readOnly || isOnlyFollower)
     ? false
     : (isCreator || isSuperAdmin || isAdminOrManager || isAssignerOrCreator) &&
-      !["completed", "approved", "abandoned"].includes(taskStatus);
+      (taskStatus === "pending" || taskStatus === "in-progress" || taskStatus === "in_progress" || task?.status === "pending" || task?.status === "in-progress" || task?.status === "in_progress");
   const canAbandon = (readOnly || isOnlyFollower)
     ? false
     : (task && currentUser && (isAssignee || isCreator || isSuperAdmin || isAdminOrManager) && !["abandoned", "approved", "completed", "submitted", "submitted_late"].includes(taskStatus));
@@ -1836,7 +1836,7 @@ function TaskDetails() {
                     </>
                   )}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                   <h1 className="td-title">
                     {task.title}
                   </h1>
@@ -1853,9 +1853,37 @@ function TaskDetails() {
                     </span>
                   )}
                 </div>
+                {(task?.parent || task?.parent_id) && (
+                  <div style={{ marginTop: 6, marginBottom: 2 }}>
+                    <Link
+                      to={`/tasks/task-details/${task.parent?.id || task.parent_id}`}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: '#4F46E5',
+                        textDecoration: 'none',
+                        background: '#EEF2FF',
+                        padding: '3px 10px',
+                        borderRadius: 6,
+                        border: '1px solid #C7D2FE',
+                      }}
+                    >
+                      <span>↳ {t("Parent", { defaultValue: "Parent" })}: {task.parent?.business_id ? `[${task.parent.business_id}] ` : ''}{task.parent?.title || `Task #${task.parent_id}`}</span>
+                    </Link>
+                  </div>
+                )}
               </div>
 
               <div className="td-badges">
+                {Boolean(task?.parent_id || task?.parent) && (
+                  <span className="td-badge" style={{ background: "#F3E8FF", color: "#7E22CE", border: "1px solid #E9D5FF" }}>
+                    <span className="td-badge-dot" style={{ background: "#7E22CE" }} />
+                    {t("Subtask", { defaultValue: "Subtask" })}
+                  </span>
+                )}
                 {(() => {
                   const effectiveStatus = task?.assigner_paused ? "paused" : (task?.my_status || task?.status || "Pending");
                   return (
@@ -2028,7 +2056,7 @@ function TaskDetails() {
                   {tab === "subtasks" && currentUser?.role !== "guest" && (
                     <div>
                       <div className="td-section-header">
-                        <h2 className="td-section-title">{t("Subtasks", { defaultValue: "Subtasks" })} <span className="td-section-count">({(() => { const all = orderedSubtasks.length ? orderedSubtasks : (task.deliverables || []); const filtered = subtaskSearch ? all.filter((d) => { const q = subtaskSearch.toLowerCase(); return (d.title || "").toLowerCase().includes(q) || (d.description || "").toLowerCase().includes(q); }) : all; return filtered.length; })()})</span></h2>
+                        <h2 className="td-section-title">{t("Subtasks", { defaultValue: "Subtasks" })} <span className="td-section-count">({(() => { const all = orderedSubtasks.length ? orderedSubtasks : (task.subtasks && task.subtasks.length > 0 ? task.subtasks : (task.deliverables || [])); const filtered = subtaskSearch ? all.filter((d) => { const q = subtaskSearch.toLowerCase(); return (d.title || "").toLowerCase().includes(q) || (d.description || "").toLowerCase().includes(q); }) : all; return filtered.length; })()})</span></h2>
                         <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                           <input type="text" placeholder={t("Search subtasks...", { defaultValue: "Search subtasks..." })} value={subtaskSearch} onChange={(e) => setSubtaskSearch(e.target.value)} />
@@ -2046,7 +2074,7 @@ function TaskDetails() {
                         )}
                       </div>
                       {(() => {
-                        const allSubtasks = orderedSubtasks.length ? orderedSubtasks : (task.deliverables || []);
+                        const allSubtasks = orderedSubtasks.length ? orderedSubtasks : (task.subtasks && task.subtasks.length > 0 ? task.subtasks : (task.deliverables || []));
                         const buildHierarchicalSubtasks = (subtasks, search = "") => {
                           if (search) {
                             const q = search.toLowerCase();
@@ -2147,7 +2175,7 @@ function TaskDetails() {
                                       </button>
                                     }
                                     onTriggerClick={() => {
-                                      const deliverableIds = (orderedSubtasks.length ? orderedSubtasks : (task.deliverables || [])).map((s) => s.id);
+                                      const deliverableIds = (orderedSubtasks.length ? orderedSubtasks : (task.subtasks && task.subtasks.length > 0 ? task.subtasks : (task.deliverables || []))).map((s) => s.id);
                                       const subtaskFrom = isCreator && !isAssignee ? "deliveries-by-you" : isAssignee && !isCreator ? "deliveries" : "self-deliveries";
                                       const isGuest = currentUser?.role === "guest";
                                       navigate(rolePath(`deliveries/deliverable-details/${d.id}`), { state: { from: subtaskFrom, subtaskIds: deliverableIds, readOnly: isGuest } });

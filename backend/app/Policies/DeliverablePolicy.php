@@ -260,6 +260,44 @@ class DeliverablePolicy
     }
 
     /**
+     * Safely obtain the deliverable's parent task without triggering unloaded database queries.
+     */
+    protected function getDeliverableTask(Deliverable $deliverable): ?Task
+    {
+        if ($deliverable->relationLoaded('task')) {
+            return $deliverable->task;
+        }
+
+        if ($deliverable->task_id) {
+            try {
+                return Task::find($deliverable->task_id);
+            } catch (\Throwable $e) {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Determine whether the user is the creator of the deliverable or the assigner/creator of its parent task.
+     */
+    protected function isCreatorOrTaskAssigner(User $user, Deliverable $deliverable): bool
+    {
+        $userId = (int) $user->id;
+        if ((int) $deliverable->created_by === $userId) {
+            return true;
+        }
+
+        $task = $this->getDeliverableTask($deliverable);
+        if ($task && ((int) $task->assigned_by === $userId || (int) ($task->creator_id ?? 0) === $userId)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Determine whether the user can delete the deliverable.
      */
     public function delete(User $user, Deliverable $deliverable): bool
@@ -272,15 +310,7 @@ class DeliverablePolicy
             return true;
         }
 
-        if ((int) $deliverable->created_by === (int) $user->id) {
-            return true;
-        }
-
-        if ($deliverable->task && ((int) $deliverable->task->assigned_by === (int) $user->id || (int) ($deliverable->task->creator_id ?? 0) === (int) $user->id)) {
-            return true;
-        }
-
-        return false;
+        return $this->isCreatorOrTaskAssigner($user, $deliverable);
     }
 
     /**
@@ -288,7 +318,18 @@ class DeliverablePolicy
      */
     public function acknowledge(User $user, Deliverable $deliverable): bool
     {
-        return (int) $deliverable->assigned_to === (int) $user->id || (int) ($deliverable->current_owner ?? 0) === (int) $user->id;
+        if (! $this->belongsToSameTenant($user, $deliverable)) {
+            return false;
+        }
+
+        if (in_array($user->role, ['admin', 'manager', 'super_admin'])) {
+            return true;
+        }
+
+        $userId = (int) $user->id;
+        $isAssignee = (int) $deliverable->assigned_to === $userId || (int) ($deliverable->current_owner ?? 0) === $userId;
+
+        return $isAssignee || $this->isCreatorOrTaskAssigner($user, $deliverable);
     }
 
     /**
@@ -296,14 +337,18 @@ class DeliverablePolicy
      */
     public function startTimer(User $user, Deliverable $deliverable): bool
     {
+        if (! $this->belongsToSameTenant($user, $deliverable)) {
+            return false;
+        }
+
         if (in_array($user->role, ['admin', 'manager', 'super_admin'])) {
             return true;
         }
 
-        $isAssignee = (int) $deliverable->assigned_to === (int) $user->id || (int) ($deliverable->current_owner ?? 0) === (int) $user->id;
-        $isCreator = (int) $deliverable->created_by === (int) $user->id || ($deliverable->task && (int) $deliverable->task->assigned_by === (int) $user->id);
+        $userId = (int) $user->id;
+        $isAssignee = (int) $deliverable->assigned_to === $userId || (int) ($deliverable->current_owner ?? 0) === $userId;
 
-        return $isAssignee || $isCreator;
+        return $isAssignee || $this->isCreatorOrTaskAssigner($user, $deliverable);
     }
 
     /**
@@ -335,11 +380,15 @@ class DeliverablePolicy
      */
     public function assignerPause(User $user, Deliverable $deliverable): bool
     {
-        if (in_array($user->role, ['admin', 'super_admin'])) {
+        if (! $this->belongsToSameTenant($user, $deliverable)) {
+            return false;
+        }
+
+        if (in_array($user->role, ['admin', 'manager', 'super_admin'])) {
             return true;
         }
 
-        return (int) $deliverable->created_by === (int) $user->id || ($deliverable->task && (int) $deliverable->task->assigned_by === (int) $user->id);
+        return $this->isCreatorOrTaskAssigner($user, $deliverable);
     }
 
     /**
@@ -355,7 +404,18 @@ class DeliverablePolicy
      */
     public function submit(User $user, Deliverable $deliverable): bool
     {
-        return (int) $deliverable->assigned_to === (int) $user->id || (int) ($deliverable->current_owner ?? 0) === (int) $user->id;
+        if (! $this->belongsToSameTenant($user, $deliverable)) {
+            return false;
+        }
+
+        if (in_array($user->role, ['admin', 'manager', 'super_admin'])) {
+            return true;
+        }
+
+        $userId = (int) $user->id;
+        $isAssignee = (int) $deliverable->assigned_to === $userId || (int) ($deliverable->current_owner ?? 0) === $userId;
+
+        return $isAssignee || $this->isCreatorOrTaskAssigner($user, $deliverable);
     }
 
     /**
@@ -363,19 +423,15 @@ class DeliverablePolicy
      */
     public function approve(User $user, Deliverable $deliverable): bool
     {
-        if (in_array($user->role, ['admin', 'super_admin'])) {
+        if (! $this->belongsToSameTenant($user, $deliverable)) {
+            return false;
+        }
+
+        if (in_array($user->role, ['admin', 'manager', 'super_admin'])) {
             return true;
         }
 
-        if ((int) $deliverable->created_by === (int) $user->id) {
-            return true;
-        }
-
-        if ($deliverable->task && (int) $deliverable->task->assigned_by === (int) $user->id) {
-            return true;
-        }
-
-        return false;
+        return $this->isCreatorOrTaskAssigner($user, $deliverable);
     }
 
     /**
@@ -428,10 +484,10 @@ class DeliverablePolicy
             return false;
         }
 
-        if (in_array($user->role, ['admin', 'super_admin'])) {
+        if (in_array($user->role, ['admin', 'manager', 'super_admin'])) {
             return true;
         }
 
-        return (int) $deliverable->created_by === (int) $user->id || ($deliverable->task && (int) $deliverable->task->assigned_by === (int) $user->id);
+        return $this->isCreatorOrTaskAssigner($user, $deliverable);
     }
 }

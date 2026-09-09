@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class KnowledgeBase extends Model
@@ -71,5 +72,10 @@ class KnowledgeBase extends Model
     public function favorites(): HasMany
     {
         return $this->hasMany(KbFavorite::class, 'knowledge_base_id');
+    }
+
+    public function tasks(): BelongsToMany
+    {
+        return $this->belongsToMany(Task::class, 'knowledge_base_task')->withTimestamps();
     }
 }

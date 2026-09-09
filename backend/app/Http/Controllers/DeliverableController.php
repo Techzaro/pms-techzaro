@@ -1265,8 +1265,9 @@ class DeliverableController extends Controller
         $user = $request->user();
         $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
         $isCurrentOwner = $this->delegationService->isCurrentOwnerDeliverable($deliverable, $user);
-        $isAuthorizedRole = in_array($user->role, ['admin', 'manager', 'team_lead']);
-        if (! $isAssignee && ! $isCurrentOwner && ! $isAuthorizedRole) {
+        $isAuthorizedRole = in_array($user->role, ['admin', 'manager', 'team_lead', 'super_admin']);
+        $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id || ($deliverable->task && ((int) ($deliverable->task->assigned_by ?? 0) === (int) $user->id || (int) ($deliverable->task->creator_id ?? 0) === (int) $user->id));
+        if (! $isAssignee && ! $isCurrentOwner && ! $isAuthorizedRole && ! $isCreator) {
             return response()->json(['success' => false, 'message' => 'Only the assignee or current owner can submit this deliverable'], 403);
         }
         $currentStatus = strtolower(trim((string) $deliverable->status));
@@ -2530,8 +2531,9 @@ class DeliverableController extends Controller
         $this->authorize('acknowledge', $deliverable);
         $user = $request->user();
         $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
-        $isAuthorizedRole = in_array($user->role, ['admin', 'manager', 'team_lead']);
-        if (! $isAssignee && ! $isAuthorizedRole) {
+        $isAuthorizedRole = in_array($user->role, ['admin', 'manager', 'team_lead', 'super_admin']);
+        $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id || ($deliverable->task && ((int) ($deliverable->task->assigned_by ?? 0) === (int) $user->id || (int) ($deliverable->task->creator_id ?? 0) === (int) $user->id));
+        if (! $isAssignee && ! $isAuthorizedRole && ! $isCreator) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
         if (! in_array($deliverable->status, ['pending', 'reopened'])) {

@@ -22,6 +22,7 @@ import { showSuccessMessage, notify, toast } from "../utils/notify";
 import { publish } from "../utils/eventBus";
 import SubmitTaskModal from "../components/SubmitTaskModal";
 import ConfirmModal from "../components/ConfirmModal";
+import PauseReasonModal from "../components/PauseReasonModal";
 import SortableTableWrapper from "../components/SortableTableWrapper";
 import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
@@ -95,6 +96,16 @@ function GuestTasks() {
   const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState(null);
+  const [pauseModalOpen, setPauseModalOpen] = useState(false);
+  const [pauseModalTaskId, setPauseModalTaskId] = useState(null);
+  const [resumeConfirmOpen, setResumeConfirmOpen] = useState(false);
+  const [resumeTaskItem, setResumeTaskItem] = useState(null);
+  const [acknowledgeConfirmOpen, setAcknowledgeConfirmOpen] = useState(false);
+  const [acknowledgeTaskItem, setAcknowledgeTaskItem] = useState(null);
+  const [approveConfirmOpen, setApproveConfirmOpen] = useState(false);
+  const [approveTaskId, setApproveTaskId] = useState(null);
+  const [declineConfirmOpen, setDeclineConfirmOpen] = useState(false);
+  const [declineTaskItem, setDeclineTaskItem] = useState(null);
   const [reopenTask, setReopenTask] = useState(null);
   const [abandonTask, setAbandonTask] = useState(null);
   const [markCompletedTask, setMarkCompletedTask] = useState(null);
@@ -272,13 +283,14 @@ function GuestTasks() {
   };
 
   const handleAcknowledge = async (e, taskId) => {
+    const actualTaskId = (e && typeof e === 'object' && e.stopPropagation) ? taskId : (e || taskId);
     if (e && e.stopPropagation) {
       e.stopPropagation();
       e.preventDefault();
     }
     try {
       const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}/acknowledge`, {
+      const res = await fetch(`${API_URL}/tasks/${actualTaskId}/acknowledge`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         _notifHandled: true,
@@ -287,10 +299,10 @@ function GuestTasks() {
       if (res.ok) {
         setItems((prev) =>
           prev.map((item) =>
-            item.id === taskId ? { ...item, status: "in_progress", ...(data.task || {}) } : item
+            item.id === actualTaskId ? { ...item, status: "in_progress", ...(data.task || {}) } : item
           )
         );
-        publish('task:updated', { id: taskId, status: 'in_progress' });
+        publish('task:updated', { id: actualTaskId, status: 'in_progress' });
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage(t("Task acknowledged", { defaultValue: "Task acknowledged" }));
       } else {
@@ -332,13 +344,14 @@ function GuestTasks() {
   };
 
   const handleContinue = async (e, taskId) => {
+    const actualTaskId = (e && typeof e === 'object' && e.stopPropagation) ? taskId : (e || taskId);
     if (e && e.stopPropagation) {
       e.stopPropagation();
       e.preventDefault();
     }
     try {
       const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}/continue`, {
+      const res = await fetch(`${API_URL}/tasks/${actualTaskId}/continue`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         _notifHandled: true,
@@ -347,10 +360,10 @@ function GuestTasks() {
       if (res.ok) {
         setItems((prev) =>
           prev.map((item) =>
-            item.id === taskId ? { ...item, status: "in_progress", ...(data.task || {}) } : item
+            item.id === actualTaskId ? { ...item, status: "in_progress", ...(data.task || {}) } : item
           )
         );
-        publish('task:updated', { id: taskId, status: 'in_progress' });
+        publish('task:updated', { id: actualTaskId, status: 'in_progress' });
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage(t("Task resumed", { defaultValue: "Task resumed" }));
       } else {
@@ -361,31 +374,27 @@ function GuestTasks() {
     }
   };
 
-  const handlePause = async (e, taskId) => {
-    if (e && e.stopPropagation) {
-      e.stopPropagation();
-      e.preventDefault();
-    }
+  const handlePause = async (taskId, data = {}) => {
     try {
       const token = authToken();
       const res = await fetch(`${API_URL}/tasks/${taskId}/pause`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ reason: "other", reason_detail: "Paused from task list" }),
+        body: JSON.stringify({ reason: data.reason || "other", reason_detail: data.reason_detail || "Paused from task list" }),
         _notifHandled: true,
       });
-      const data = await res.json().catch(() => ({}));
+      const resData = await res.json().catch(() => ({}));
       if (res.ok) {
         setItems((prev) =>
           prev.map((item) =>
-            item.id === taskId ? { ...item, status: "paused", ...(data.task || {}) } : item
+            item.id === taskId ? { ...item, status: "paused", ...(resData.task || {}) } : item
           )
         );
         publish('task:updated', { id: taskId, status: 'paused' });
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage(t("Task paused", { defaultValue: "Task paused" }));
       } else {
-        notify.error(data?.message || data?.error || t("Failed to pause task."));
+        notify.error(resData?.message || resData?.error || t("Failed to pause task."));
       }
     } catch {
       notify.error(t("Failed to pause task."));
@@ -451,6 +460,22 @@ function GuestTasks() {
     } catch {
       notify.error(t("An error occurred while declining task.", { defaultValue: "An error occurred while declining task." }));
     }
+  };
+
+  const confirmDirectApprove = async () => {
+    if (!approveTaskId) return;
+    const id = approveTaskId;
+    setApproveConfirmOpen(false);
+    setApproveTaskId(null);
+    await handleDirectApprove(null, id);
+  };
+
+  const confirmDirectDecline = async () => {
+    if (!declineTaskItem) return;
+    const task = declineTaskItem;
+    setDeclineConfirmOpen(false);
+    setDeclineTaskItem(null);
+    await handleDirectDecline(null, task);
   };
 
   const handleDirectAbandonSubmit = async (reason) => {
@@ -833,7 +858,7 @@ function GuestTasks() {
                                 className="action-icon-btn"
                                 title={t("Approve Task", { defaultValue: "Approve Task" })}
                                 style={{ color: "#16A34A" }}
-                                onClick={(e) => handleDirectApprove(e, item.id)}
+                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setApproveTaskId(item.id); setApproveConfirmOpen(true); }}
                               >
                                 <CheckCircle2 size={16} />
                               </button>
@@ -843,7 +868,7 @@ function GuestTasks() {
                                 className="action-icon-btn"
                                 title={t("Decline Task", { defaultValue: "Decline Task" })}
                                 style={{ color: "#DC2626" }}
-                                onClick={(e) => handleDirectDecline(e, item)}
+                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setDeclineTaskItem(item); setDeclineConfirmOpen(true); }}
                               >
                                 <XCircle size={16} />
                               </button>
@@ -883,7 +908,17 @@ function GuestTasks() {
                         }
                         if (item.status === "pending") {
                           return (
-                            <button className="action-icon-btn action-submit" title={t("Acknowledge Task", { defaultValue: "Acknowledge Task" })} onClick={(e) => handleAcknowledge(e, item.id)}>
+                            <button
+                              className="action-icon-btn action-submit"
+                              title={t("Acknowledge Task", { defaultValue: "Acknowledge Task" })}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                setAcknowledgeTaskItem(item);
+                                setAcknowledgeConfirmOpen(true);
+                              }}
+                              style={{ color: "#2563EB" }}
+                            >
                               <CheckCircle2 size={16} />
                             </button>
                           );
@@ -897,14 +932,34 @@ function GuestTasks() {
                         }
                         if (["in_progress", "submitted"].includes(item.status?.toLowerCase()) && item.timer?.state === "running" && !item.assigner_paused) {
                           return (
-                            <button className="action-icon-btn action-submit" title={t("Pause Task", { defaultValue: "Pause Task" })} onClick={(e) => handlePause(e, item.id)} style={{ color: "#D97706" }}>
+                            <button
+                              className="action-icon-btn action-submit"
+                              title={t("Pause Task", { defaultValue: "Pause Task" })}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                setPauseModalTaskId(item.id);
+                                setPauseModalOpen(true);
+                              }}
+                              style={{ color: "#D97706" }}
+                            >
                               <Pause size={16} />
                             </button>
                           );
                         }
                         if (item.status === "paused" || item.timer?.state === "paused") {
                           return (
-                            <button className="action-icon-btn action-submit" title={t("Continue Task", { defaultValue: "Continue Task" })} onClick={(e) => handleContinue(e, item.id)}>
+                            <button
+                              className="action-icon-btn action-submit"
+                              title={t("Resume Task", { defaultValue: "Resume Task" })}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                setResumeTaskItem(item);
+                                setResumeConfirmOpen(true);
+                              }}
+                              style={{ color: "#059669" }}
+                            >
                               <Play size={16} />
                             </button>
                           );
@@ -967,6 +1022,70 @@ function GuestTasks() {
         confirmText={t("Delete", { defaultValue: "Delete" })}
         cancelText={t("Cancel", { defaultValue: "Cancel" })}
         danger
+      />
+
+      <ConfirmModal
+        isOpen={approveConfirmOpen}
+        onClose={() => { setApproveConfirmOpen(false); setApproveTaskId(null); }}
+        onConfirm={confirmDirectApprove}
+        title={t("Approve Task", { defaultValue: "Approve Task" })}
+        message={t("Are you sure you want to approve this task?", { defaultValue: "Are you sure you want to approve this task?" })}
+        confirmText={t("Approve", { defaultValue: "Approve" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        confirmColor="#16A34A"
+      />
+
+      <ConfirmModal
+        isOpen={declineConfirmOpen}
+        onClose={() => { setDeclineConfirmOpen(false); setDeclineTaskItem(null); }}
+        onConfirm={confirmDirectDecline}
+        title={t("Decline Task", { defaultValue: "Decline Task" })}
+        message={t("Are you sure you want to decline this task?", { defaultValue: "Are you sure you want to decline this task?" })}
+        confirmText={t("Decline", { defaultValue: "Decline" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        danger
+      />
+
+      <PauseReasonModal
+        isOpen={pauseModalOpen}
+        onClose={() => { setPauseModalOpen(false); setPauseModalTaskId(null); }}
+        onConfirm={async (data) => {
+          await handlePause(pauseModalTaskId, data);
+          setPauseModalOpen(false);
+          setPauseModalTaskId(null);
+        }}
+      />
+
+      <ConfirmModal
+        isOpen={resumeConfirmOpen}
+        onClose={() => { setResumeConfirmOpen(false); setResumeTaskItem(null); }}
+        onConfirm={async () => {
+          if (!resumeTaskItem) return;
+          await handleContinue(null, resumeTaskItem.id);
+          setResumeConfirmOpen(false);
+          setResumeTaskItem(null);
+        }}
+        title={t("Resume Task", { defaultValue: "Resume Task" })}
+        message={t("Are you sure you want to resume this task?", { defaultValue: "Are you sure you want to resume this task?" })}
+        confirmText={t("Resume", { defaultValue: "Resume" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        confirmColor="#059669"
+      />
+
+      <ConfirmModal
+        isOpen={acknowledgeConfirmOpen}
+        onClose={() => { setAcknowledgeConfirmOpen(false); setAcknowledgeTaskItem(null); }}
+        onConfirm={async () => {
+          if (!acknowledgeTaskItem) return;
+          await handleAcknowledge(null, acknowledgeTaskItem.id);
+          setAcknowledgeConfirmOpen(false);
+          setAcknowledgeTaskItem(null);
+        }}
+        title={t("Acknowledge Task", { defaultValue: "Acknowledge Task" })}
+        message={t("Are you sure you want to acknowledge this task?", { defaultValue: "Are you sure you want to acknowledge this task?" })}
+        confirmText={t("Acknowledge", { defaultValue: "Acknowledge" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        confirmColor="#2563EB"
       />
 
       <SubmitTaskModal

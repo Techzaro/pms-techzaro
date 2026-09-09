@@ -1,1 +1,0 @@
-import{J as e,xn as t}from"./index-DEVWJlMR.js";function n(n,r,i,a={}){return t({queryKey:Array.isArray(n)?n:[n,i],queryFn:()=>e.get(r,i),...a})}export{n as t};

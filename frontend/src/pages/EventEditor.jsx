@@ -1289,6 +1289,13 @@ export default function EventEditor() {
               type: "event",
               id: id,
               title: title || loadedEvent?.title,
+              project_id: loadedEvent?.project_id || loadedEvent?.projectId || loadedEvent?.project?.id,
+              task_id: loadedEvent?.task_id || loadedEvent?.taskId || loadedEvent?.task?.id,
+              project: loadedEvent?.project,
+              task: loadedEvent?.task,
+              projects: loadedEvent?.projects,
+              tasks: loadedEvent?.tasks,
+              ...loadedEvent,
             }}
             onSuccess={() => {
               notify.success(t("Event attached successfully!", { defaultValue: "Event attached successfully!" }));

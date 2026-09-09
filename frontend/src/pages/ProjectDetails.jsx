@@ -359,6 +359,11 @@ function ProjectDetails() {
   const [editingTask, setEditingTask] = useState(null);
   const [pauseModalOpen, setPauseModalOpen] = useState(false);
   const [pauseModalTaskId, setPauseModalTaskId] = useState(null);
+  const [pauseModalIsAssigner, setPauseModalIsAssigner] = useState(false);
+  const [resumeModalOpen, setResumeModalOpen] = useState(false);
+  const [resumeModalTask, setResumeModalTask] = useState(null);
+  const [acknowledgeModalOpen, setAcknowledgeModalOpen] = useState(false);
+  const [acknowledgeModalTask, setAcknowledgeModalTask] = useState(null);
   const [holdingTaskId, setHoldingTaskId] = useState(null);
   const [resumingTaskId, setResumingTaskId] = useState(null);
   const [reopenTask, setReopenTask] = useState(null);
@@ -397,6 +402,14 @@ function ProjectDetails() {
   const [showAddFileModal, setShowAddFileModal] = useState(false);
   const [orderedTasks, setOrderedTasks] = useState([]);
   const [orderedSubtasks, setOrderedSubtasks] = useState([]);
+  const [unlinkKbConfirmOpen, setUnlinkKbConfirmOpen] = useState(false);
+  const [unlinkKbId, setUnlinkKbId] = useState(null);
+  const [unlinkEventConfirmOpen, setUnlinkEventConfirmOpen] = useState(false);
+  const [unlinkEventId, setUnlinkEventId] = useState(null);
+  const [approveTaskConfirmOpen, setApproveTaskConfirmOpen] = useState(false);
+  const [approveTaskId, setApproveTaskId] = useState(null);
+  const [declineTaskConfirmOpen, setDeclineTaskConfirmOpen] = useState(false);
+  const [declineTaskItem, setDeclineTaskItem] = useState(null);
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [visibilityUsers, setVisibilityUsers] = useState([]);
   const [visibilitySelected, setVisibilitySelected] = useState({});
@@ -883,17 +896,18 @@ function ProjectDetails() {
       e.stopPropagation();
       e.preventDefault();
     }
+    const realTaskId = typeof e === "number" || typeof e === "string" ? e : taskId;
     try {
       const token = authToken();
-      const res = await fetch(`${API}/tasks/${taskId}/acknowledge`, {
+      const res = await fetch(`${API}/tasks/${realTaskId}/acknowledge`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         _notifHandled: true,
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "in_progress", ...(data.task || {}) } : t));
-        publish('task:updated', { id: taskId, status: 'in_progress' });
+        setOrderedTasks((prev) => prev.map((t) => t.id === realTaskId ? { ...t, status: "in_progress", ...(data.task || {}) } : t));
+        publish('task:updated', { id: realTaskId, status: 'in_progress' });
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage("Task", "acknowledged");
       } else {
@@ -909,17 +923,18 @@ function ProjectDetails() {
       e.stopPropagation();
       e.preventDefault();
     }
+    const realTaskId = typeof e === "number" || typeof e === "string" ? e : taskId;
     try {
       const token = authToken();
-      const res = await fetch(`${API}/tasks/${taskId}/start-timer`, {
+      const res = await fetch(`${API}/tasks/${realTaskId}/start-timer`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         _notifHandled: true,
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "in_progress", ...(data.task || {}) } : t));
-        publish('task:updated', { id: taskId, status: 'in_progress' });
+        setOrderedTasks((prev) => prev.map((t) => t.id === realTaskId ? { ...t, status: "in_progress", ...(data.task || {}) } : t));
+        publish('task:updated', { id: realTaskId, status: 'in_progress' });
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage("Task", "timer started");
       } else {
@@ -935,17 +950,19 @@ function ProjectDetails() {
       e.stopPropagation();
       e.preventDefault();
     }
+    const realTaskId = typeof e === "number" || typeof e === "string" ? e : taskId;
+    setResumingTaskId(realTaskId);
     try {
       const token = authToken();
-      const res = await fetch(`${API}/tasks/${taskId}/continue`, {
+      const res = await fetch(`${API}/tasks/${realTaskId}/continue`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         _notifHandled: true,
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "in_progress", ...(data.task || {}) } : t));
-        publish('task:updated', { id: taskId, status: 'in_progress' });
+        setOrderedTasks((prev) => prev.map((t) => t.id === realTaskId ? { ...t, status: "in_progress", ...(data.task || {}) } : t));
+        publish('task:updated', { id: realTaskId, status: 'in_progress' });
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage("Task", "resumed");
       } else {
@@ -953,26 +970,30 @@ function ProjectDetails() {
       }
     } catch {
       notify.error(t("Failed to continue task.", { defaultValue: "Failed to continue task." }));
+    } finally {
+      setResumingTaskId(null);
     }
   };
 
-  const handleTaskPause = async (e, taskId) => {
+  const handleTaskPause = async (e, taskId, reasonData = {}) => {
     if (e && e.stopPropagation) {
       e.stopPropagation();
       e.preventDefault();
     }
+    const realTaskId = typeof e === "number" || typeof e === "string" ? e : taskId;
+    const realReason = typeof e === "object" && !e?.stopPropagation ? e : reasonData;
     try {
       const token = authToken();
-      const res = await fetch(`${API}/tasks/${taskId}/pause`, {
+      const res = await fetch(`${API}/tasks/${realTaskId}/pause`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ reason: "other", reason_detail: "Paused from task list" }),
+        body: JSON.stringify({ reason: realReason?.reason || "other", reason_detail: realReason?.reason_detail || "Paused from task list" }),
         _notifHandled: true,
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "paused", ...(data.task || {}) } : t));
-        publish('task:updated', { id: taskId, status: 'paused' });
+        setOrderedTasks((prev) => prev.map((t) => t.id === realTaskId ? { ...t, status: "paused", ...(data.task || {}) } : t));
+        publish('task:updated', { id: realTaskId, status: 'paused' });
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage("Task", "paused");
       } else {
@@ -1002,8 +1023,9 @@ function ProjectDetails() {
       }
     } catch {
       notify.error(t("Failed to pause task.", { defaultValue: "Failed to pause task." }));
+    } finally {
+      setHoldingTaskId(null);
     }
-    setHoldingTaskId(null);
   };
 
   const handleTaskAssignerResume = async (taskId) => {
@@ -1024,8 +1046,9 @@ function ProjectDetails() {
       }
     } catch {
       notify.error(t("Failed to resume task.", { defaultValue: "Failed to resume task." }));
+    } finally {
+      setResumingTaskId(null);
     }
-    setResumingTaskId(null);
   };
 
   const handleProjectTaskDirectApprove = async (e, taskId) => {
@@ -1073,6 +1096,22 @@ function ProjectDetails() {
     } catch {
       notify.error(t("An error occurred while declining task.", { defaultValue: "An error occurred while declining task." }));
     }
+  };
+
+  const confirmDirectApproveTask = async () => {
+    if (!approveTaskId) return;
+    const id = approveTaskId;
+    setApproveTaskConfirmOpen(false);
+    setApproveTaskId(null);
+    await handleProjectTaskDirectApprove(null, id);
+  };
+
+  const confirmDirectDeclineTask = async () => {
+    if (!declineTaskItem) return;
+    const item = declineTaskItem;
+    setDeclineTaskConfirmOpen(false);
+    setDeclineTaskItem(null);
+    await handleProjectTaskDirectDecline(null, item);
   };
 
   const handleProjectTaskDirectAbandonSubmit = async (reason) => {
@@ -1221,6 +1260,14 @@ function ProjectDetails() {
     }
   };
 
+  const confirmUnlinkKb = async () => {
+    if (!unlinkKbId) return;
+    const id = unlinkKbId;
+    setUnlinkKbConfirmOpen(false);
+    setUnlinkKbId(null);
+    await handleUnlinkKb(id);
+  };
+
   const handleLinkEvent = async (eventId) => {
     if (!eventId || !project?.id) return;
     setLinkingEvent(true);
@@ -1271,6 +1318,14 @@ function ProjectDetails() {
     } catch {
       notify.error(t("Failed to unlink Event.", { defaultValue: "Failed to unlink Event." }));
     }
+  };
+
+  const confirmUnlinkEvent = async () => {
+    if (!unlinkEventId) return;
+    const id = unlinkEventId;
+    setUnlinkEventConfirmOpen(false);
+    setUnlinkEventId(null);
+    await handleUnlinkEvent(id);
   };
 
   const { submitting: milestoneToggling, run: runMilestoneToggle } = useSubmit();
@@ -1993,7 +2048,7 @@ function ProjectDetails() {
                                                 <StickyNote size={14} />
                                               </button>
                                               {(() => {
-                                                const isAssigner = tItem.assigner?.id && tItem.assigner.id === currentUserId;
+                                                const isAssigner = (tItem.assigner?.id && tItem.assigner.id === currentUserId) || (tItem.created_by && tItem.created_by === currentUserId) || isCreator || isAdminOrManager || ["admin", "manager"].includes(currentUser?.role);
                                                 const isAssignee = (tItem.assignees || []).some((a) => a.id === currentUserId);
 
                                                 if (isAssigner) {
@@ -2035,103 +2090,115 @@ function ProjectDetails() {
                                                       <Trash2 size={16} />
                                                     </button>
                                                   );
-                                                  if (tItem.assigner_paused) {
-                                                    buttons.push(
-                                                      <button
-                                                        key="resume"
-                                                        className="action-icon-btn"
-                                                        title={t("Resume", { defaultValue: "Resume" })}
-                                                        disabled={resumingTaskId === tItem.id}
-                                                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleTaskAssignerResume(tItem.id); }}
-                                                        style={{ color: "#059669", cursor: resumingTaskId === tItem.id ? "not-allowed" : "pointer" }}
-                                                      >
-                                                        <Lock size={16} />
-                                                      </button>
-                                                    );
-                                                  } else if (["pending", "in_progress", "reopened", "paused", "submitted"].includes(tItem.status?.toLowerCase())) {
-                                                    buttons.push(
-                                                      <button
-                                                        key="hold"
-                                                        className="action-icon-btn"
-                                                        title={t("Pause", { defaultValue: "Pause" })}
-                                                        disabled={holdingTaskId === tItem.id}
-                                                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); setPauseModalTaskId(tItem.id); setPauseModalOpen(true); }}
-                                                        style={{ color: "#7C3AED", cursor: holdingTaskId === tItem.id ? "not-allowed" : "pointer" }}
-                                                      >
-                                                        <Lock size={16} />
-                                                      </button>
-                                                    );
-                                                  }
-                                                  // Approve / Decline for submitted tasks
-                                                  const canApprove = isAssigner || ["admin", "manager"].includes(currentUser?.role) || tItem.is_next_approver;
-                                                  if (canApprove && (tItem.status === "submitted" || tItem.status === "reopened")) {
-                                                    buttons.push(
-                                                      <button
-                                                        key="approve"
-                                                        className="action-icon-btn"
-                                                        title={t("Approve Task", { defaultValue: "Approve Task" })}
-                                                        style={{ color: "#16A34A" }}
-                                                        onClick={(e) => handleProjectTaskDirectApprove(e, tItem.id)}
-                                                      >
-                                                        <CheckCircle2 size={16} />
-                                                      </button>
-                                                    );
-                                                    buttons.push(
-                                                      <button
-                                                        key="decline"
-                                                        className="action-icon-btn"
-                                                        title={t("Decline Task", { defaultValue: "Decline Task" })}
-                                                        style={{ color: "#DC2626" }}
-                                                        onClick={(e) => handleProjectTaskDirectDecline(e, tItem)}
-                                                      >
-                                                        <XCircle size={16} />
-                                                      </button>
-                                                    );
-                                                  }
-                                                  // Reopen
-                                                  if (canApprove && (tItem.status === "approved" || tItem.status === "submitted" || tItem.status === "reopened" || tItem.status === "abandoned")) {
-                                                    buttons.push(
-                                                      <button
-                                                        key="reopen"
-                                                        className="action-icon-btn"
-                                                        title={t("Reopen Task", { defaultValue: "Reopen Task" })}
-                                                        style={{ color: "#2563EB" }}
-                                                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); setReopenTask(tItem); }}
-                                                      >
-                                                        <RotateCcw size={16} />
-                                                      </button>
-                                                    );
-                                                  }
-                                                  // Abandon
-                                                  if (tItem.status !== "abandoned") {
-                                                    buttons.push(
-                                                      <button
-                                                        key="abandon"
-                                                        className="action-icon-btn"
-                                                        title={["admin", "manager"].includes(currentUser?.role) ? t("Abandon Task", { defaultValue: "Abandon Task" }) : t("Request Abandon", { defaultValue: "Request Abandon" })}
-                                                        style={{ color: "#F59E0B" }}
-                                                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); setAbandonTask(tItem); }}
-                                                      >
-                                                        <AlertOctagon size={16} />
-                                                      </button>
-                                                    );
-                                                  }
-                                                  // Mark as Completed
-                                                  if (canApprove && !["completed", "abandoned"].includes(tItem.status)) {
-                                                    buttons.push(
-                                                      <button
-                                                        key="complete"
-                                                        className="action-icon-btn"
-                                                        title={t("Mark as Completed", { defaultValue: "Mark as Completed" })}
-                                                        style={{ color: "#7C3AED" }}
-                                                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); setMarkCompletedTask(tItem); }}
-                                                      >
-                                                        <CheckCircle2 size={16} />
-                                                      </button>
-                                                    );
-                                                  }
-                                                  return buttons;
-                                                }
+                                                   const isTaskPaused = tItem.assigner_paused || tItem.status?.toLowerCase() === "paused" || tItem.timer?.state === "paused";
+                                                   if (isTaskPaused) {
+                                                     buttons.push(
+                                                       <button
+                                                         key="resume"
+                                                         className="action-icon-btn"
+                                                         title={t("Resume", { defaultValue: "Resume" })}
+                                                         disabled={resumingTaskId === tItem.id}
+                                                         onClick={(e) => {
+                                                           e.stopPropagation();
+                                                           e.preventDefault();
+                                                           setResumeModalTask(tItem);
+                                                           setResumeModalOpen(true);
+                                                         }}
+                                                         style={{ color: "#059669", cursor: resumingTaskId === tItem.id ? "not-allowed" : "pointer" }}
+                                                       >
+                                                         <Play size={16} />
+                                                       </button>
+                                                     );
+                                                   } else if (["pending", "in_progress", "reopened", "submitted", "in-progress"].includes(tItem.status?.toLowerCase())) {
+                                                     buttons.push(
+                                                       <button
+                                                         key="hold"
+                                                         className="action-icon-btn"
+                                                         title={t("Pause", { defaultValue: "Pause" })}
+                                                         disabled={holdingTaskId === tItem.id}
+                                                         onClick={(e) => {
+                                                           e.stopPropagation();
+                                                           e.preventDefault();
+                                                           setPauseModalTaskId(tItem.id);
+                                                           setPauseModalIsAssigner(true);
+                                                           setPauseModalOpen(true);
+                                                         }}
+                                                         style={{ color: "#7C3AED", cursor: holdingTaskId === tItem.id ? "not-allowed" : "pointer" }}
+                                                       >
+                                                         <Pause size={16} />
+                                                       </button>
+                                                     );
+                                                   }
+                                                   // Approve / Decline for submitted tasks
+                                                   const canApprove = isAssigner || ["admin", "manager"].includes(currentUser?.role) || tItem.is_next_approver;
+                                                   if (canApprove && (tItem.status === "submitted" || tItem.status === "reopened")) {
+                                                     buttons.push(
+                                                       <button
+                                                         key="approve"
+                                                         className="action-icon-btn"
+                                                         title={t("Approve Task", { defaultValue: "Approve Task" })}
+                                                         style={{ color: "#16A34A" }}
+                                                         onClick={(e) => { e.stopPropagation(); e.preventDefault(); setApproveTaskId(tItem.id); setApproveTaskConfirmOpen(true); }}
+                                                       >
+                                                         <CheckCircle2 size={16} />
+                                                       </button>
+                                                     );
+                                                     buttons.push(
+                                                       <button
+                                                         key="decline"
+                                                         className="action-icon-btn"
+                                                         title={t("Decline Task", { defaultValue: "Decline Task" })}
+                                                         style={{ color: "#DC2626" }}
+                                                         onClick={(e) => { e.stopPropagation(); e.preventDefault(); setDeclineTaskItem(tItem); setDeclineTaskConfirmOpen(true); }}
+                                                       >
+                                                         <XCircle size={16} />
+                                                       </button>
+                                                     );
+                                                   }
+                                                   // Reopen
+                                                   if (canApprove && (tItem.status === "approved" || tItem.status === "submitted" || tItem.status === "reopened" || tItem.status === "abandoned")) {
+                                                     buttons.push(
+                                                       <button
+                                                         key="reopen"
+                                                         className="action-icon-btn"
+                                                         title={t("Reopen Task", { defaultValue: "Reopen Task" })}
+                                                         style={{ color: "#2563EB" }}
+                                                         onClick={(e) => { e.stopPropagation(); e.preventDefault(); setReopenTask(tItem); }}
+                                                       >
+                                                         <RotateCcw size={16} />
+                                                       </button>
+                                                     );
+                                                   }
+                                                   // Abandon
+                                                   if (tItem.status !== "abandoned") {
+                                                     buttons.push(
+                                                       <button
+                                                         key="abandon"
+                                                         className="action-icon-btn"
+                                                         title={["admin", "manager"].includes(currentUser?.role) ? t("Abandon Task", { defaultValue: "Abandon Task" }) : t("Request Abandon", { defaultValue: "Request Abandon" })}
+                                                         style={{ color: "#F59E0B" }}
+                                                         onClick={(e) => { e.stopPropagation(); e.preventDefault(); setAbandonTask(tItem); }}
+                                                       >
+                                                         <AlertOctagon size={16} />
+                                                       </button>
+                                                     );
+                                                   }
+                                                   // Mark as Completed
+                                                   if (canApprove && (tItem.status === "pending" || tItem.status === "in-progress" || tItem.status === "in_progress" || tItem.status?.toLowerCase() === "pending" || tItem.status?.toLowerCase() === "in-progress" || tItem.status?.toLowerCase() === "in_progress")) {
+                                                     buttons.push(
+                                                       <button
+                                                         key="complete"
+                                                         className="action-icon-btn"
+                                                         title={t("Mark as Completed", { defaultValue: "Mark as Completed" })}
+                                                         style={{ color: "#7C3AED" }}
+                                                         onClick={(e) => { e.stopPropagation(); e.preventDefault(); setMarkCompletedTask(tItem); }}
+                                                       >
+                                                         <CheckCircle2 size={16} />
+                                                       </button>
+                                                     );
+                                                   }
+                                                   return buttons;
+                                                 }
 
                                                 if (isAssignee) {
                                                   if (tItem.assigner_paused) {
@@ -2142,13 +2209,23 @@ function ProjectDetails() {
                                                       </span>
                                                     );
                                                   }
-                                                  if (tItem.status === "pending") {
-                                                    return (
-                                                      <button className="action-icon-btn action-submit" title={t("Acknowledge", { defaultValue: "Acknowledge" })} onClick={(e) => handleTaskAcknowledge(e, tItem.id)}>
-                                                        <CheckCircle2 size={16} />
-                                                      </button>
-                                                    );
-                                                  }
+                                                   if (tItem.status === "pending") {
+                                                     return (
+                                                       <button
+                                                         className="action-icon-btn action-submit"
+                                                         title={t("Acknowledge", { defaultValue: "Acknowledge" })}
+                                                         onClick={(e) => {
+                                                           e.stopPropagation();
+                                                           e.preventDefault();
+                                                           setAcknowledgeModalTask(tItem);
+                                                           setAcknowledgeModalOpen(true);
+                                                         }}
+                                                         style={{ color: "#2563EB" }}
+                                                       >
+                                                         <CheckCircle2 size={16} />
+                                                       </button>
+                                                     );
+                                                   }
                                                   if (tItem.status === "in_progress" && (!tItem.timer || tItem.timer?.state === "idle" || !tItem.timer?.state)) {
                                                     return (
                                                       <button className="action-icon-btn action-submit" title={t("Start", { defaultValue: "Start" })} onClick={(e) => handleTaskStartTimer(e, tItem.id)} style={{ color: "#2563eb" }}>
@@ -2156,20 +2233,41 @@ function ProjectDetails() {
                                                       </button>
                                                     );
                                                   }
-                                                  if (["in_progress", "submitted"].includes(tItem.status?.toLowerCase()) && tItem.timer?.state === "running" && !tItem.assigner_paused) {
-                                                    return (
-                                                      <button className="action-icon-btn action-submit" title={t("Pause", { defaultValue: "Pause" })} onClick={(e) => handleTaskPause(e, tItem.id)} style={{ color: "#D97706" }}>
-                                                        <Pause size={16} />
-                                                      </button>
-                                                    );
-                                                  }
-                                                  if (tItem.status === "paused" || tItem.timer?.state === "paused") {
-                                                    return (
-                                                      <button className="action-icon-btn action-submit" title={t("Continue", { defaultValue: "Continue" })} onClick={(e) => handleTaskContinue(e, tItem.id)} style={{ color: "#059669" }}>
-                                                        <Play size={16} />
-                                                      </button>
-                                                    );
-                                                  }
+                                                   if (["in_progress", "submitted"].includes(tItem.status?.toLowerCase()) && tItem.timer?.state === "running" && !tItem.assigner_paused) {
+                                                     return (
+                                                       <button
+                                                         className="action-icon-btn action-submit"
+                                                         title={t("Pause", { defaultValue: "Pause" })}
+                                                         onClick={(e) => {
+                                                           e.stopPropagation();
+                                                           e.preventDefault();
+                                                           setPauseModalTaskId(tItem.id);
+                                                           setPauseModalIsAssigner(false);
+                                                           setPauseModalOpen(true);
+                                                         }}
+                                                         style={{ color: "#D97706" }}
+                                                       >
+                                                         <Pause size={16} />
+                                                       </button>
+                                                     );
+                                                   }
+                                                   if (tItem.status === "paused" || tItem.timer?.state === "paused") {
+                                                     return (
+                                                       <button
+                                                         className="action-icon-btn action-submit"
+                                                         title={t("Resume", { defaultValue: "Resume" })}
+                                                         onClick={(e) => {
+                                                           e.stopPropagation();
+                                                           e.preventDefault();
+                                                           setResumeModalTask(tItem);
+                                                           setResumeModalOpen(true);
+                                                         }}
+                                                         style={{ color: "#059669" }}
+                                                       >
+                                                         <Play size={16} />
+                                                       </button>
+                                                     );
+                                                   }
                                                   if ((tItem.status === "in_progress" || tItem.status === "reopened") && tItem.assigner_paused === false) {
                                                     return (
                                                       <button
@@ -2620,7 +2718,7 @@ function ProjectDetails() {
                                         {isLinked && !isShared && (
                                           <button
                                             type="button"
-                                            onClick={() => handleUnlinkKb(item.id)}
+                                            onClick={() => { setUnlinkKbId(item.id); setUnlinkKbConfirmOpen(true); }}
                                             style={{ padding: "5px 12px", borderRadius: "6px", background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
                                           >
                                             {t("Unlink", { defaultValue: "Unlink" })}
@@ -2801,7 +2899,7 @@ function ProjectDetails() {
                                         {isLinked && !isShared && (
                                           <button
                                             type="button"
-                                            onClick={() => handleUnlinkEvent(ev.id)}
+                                            onClick={() => { setUnlinkEventId(ev.id); setUnlinkEventConfirmOpen(true); }}
                                             style={{ padding: "5px 12px", borderRadius: "6px", background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
                                           >
                                             {t("Unlink", { defaultValue: "Unlink" })}
@@ -2925,6 +3023,50 @@ function ProjectDetails() {
         danger
       />
 
+      <ConfirmModal
+        isOpen={unlinkKbConfirmOpen}
+        onClose={() => { setUnlinkKbConfirmOpen(false); setUnlinkKbId(null); }}
+        onConfirm={confirmUnlinkKb}
+        title={t("Confirm Unlink", { defaultValue: "Confirm Unlink" })}
+        message={t("Are you sure you want to unlink this document?", { defaultValue: "Are you sure you want to unlink this document?" })}
+        confirmText={t("Unlink", { defaultValue: "Unlink" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        danger
+      />
+
+      <ConfirmModal
+        isOpen={unlinkEventConfirmOpen}
+        onClose={() => { setUnlinkEventConfirmOpen(false); setUnlinkEventId(null); }}
+        onConfirm={confirmUnlinkEvent}
+        title={t("Confirm Unlink", { defaultValue: "Confirm Unlink" })}
+        message={t("Are you sure you want to unlink this event?", { defaultValue: "Are you sure you want to unlink this event?" })}
+        confirmText={t("Unlink", { defaultValue: "Unlink" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        danger
+      />
+
+      <ConfirmModal
+        isOpen={approveTaskConfirmOpen}
+        onClose={() => { setApproveTaskConfirmOpen(false); setApproveTaskId(null); }}
+        onConfirm={confirmDirectApproveTask}
+        title={t("Approve Task", { defaultValue: "Approve Task" })}
+        message={t("Are you sure you want to approve this task?", { defaultValue: "Are you sure you want to approve this task?" })}
+        confirmText={t("Approve", { defaultValue: "Approve" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        confirmColor="#16A34A"
+      />
+
+      <ConfirmModal
+        isOpen={declineTaskConfirmOpen}
+        onClose={() => { setDeclineTaskConfirmOpen(false); setDeclineTaskItem(null); }}
+        onConfirm={confirmDirectDeclineTask}
+        title={t("Decline Task", { defaultValue: "Decline Task" })}
+        message={t("Are you sure you want to decline this task?", { defaultValue: "Are you sure you want to decline this task?" })}
+        confirmText={t("Decline", { defaultValue: "Decline" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        danger
+      />
+
       {editingTask && (
         <EditTaskModal
           task={editingTask}
@@ -2934,8 +3076,53 @@ function ProjectDetails() {
 
       <PauseReasonModal
         isOpen={pauseModalOpen}
-        onClose={() => { setPauseModalOpen(false); setPauseModalTaskId(null); }}
-        onConfirm={async (data) => { await handleTaskAssignerPause(pauseModalTaskId, data); setPauseModalOpen(false); setPauseModalTaskId(null); }}
+        onClose={() => { setPauseModalOpen(false); setPauseModalTaskId(null); setPauseModalIsAssigner(false); }}
+        onConfirm={async (data) => {
+          if (pauseModalIsAssigner) {
+            await handleTaskAssignerPause(pauseModalTaskId, data);
+          } else {
+            await handleTaskPause(pauseModalTaskId, data);
+          }
+          setPauseModalOpen(false);
+          setPauseModalTaskId(null);
+          setPauseModalIsAssigner(false);
+        }}
+      />
+
+      <ConfirmModal
+        isOpen={resumeModalOpen}
+        onClose={() => { setResumeModalOpen(false); setResumeModalTask(null); }}
+        onConfirm={async () => {
+          if (!resumeModalTask) return;
+          if (resumeModalTask.assigner_paused) {
+            await handleTaskAssignerResume(resumeModalTask.id);
+          } else {
+            await handleTaskContinue(resumeModalTask.id);
+          }
+          setResumeModalOpen(false);
+          setResumeModalTask(null);
+        }}
+        title={t("Resume Task", { defaultValue: "Resume Task" })}
+        message={t("Are you sure you want to resume this task?", { defaultValue: "Are you sure you want to resume this task?" })}
+        confirmText={t("Resume", { defaultValue: "Resume" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        confirmColor="#059669"
+      />
+
+      <ConfirmModal
+        isOpen={acknowledgeModalOpen}
+        onClose={() => { setAcknowledgeModalOpen(false); setAcknowledgeModalTask(null); }}
+        onConfirm={async () => {
+          if (!acknowledgeModalTask) return;
+          await handleTaskAcknowledge(acknowledgeModalTask.id);
+          setAcknowledgeModalOpen(false);
+          setAcknowledgeModalTask(null);
+        }}
+        title={t("Acknowledge Task", { defaultValue: "Acknowledge Task" })}
+        message={t("Are you sure you want to acknowledge this task?", { defaultValue: "Are you sure you want to acknowledge this task?" })}
+        confirmText={t("Acknowledge", { defaultValue: "Acknowledge" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        confirmColor="#2563EB"
       />
 
       <AddNoteModal

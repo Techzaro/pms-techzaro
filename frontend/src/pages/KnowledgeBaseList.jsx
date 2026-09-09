@@ -214,6 +214,28 @@ export default function KnowledgeBaseList() {
 
   // ── Action Handlers ────────────────────────────────────────
 
+  // Open Attach Modal with full relationship details
+  const handleOpenAttachModal = async (item) => {
+    setOpenMenuId(null);
+    setAttachingItem(item);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/knowledge-base/${item.id}`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        skipLoader: true,
+      });
+      if (res.ok) {
+        const d = await res.json();
+        const fullData = d?.data || d?.article || d;
+        if (fullData) {
+          setAttachingItem((prev) => (prev && prev.id === item.id ? { ...prev, ...fullData } : prev));
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load knowledge base details for attach modal", err);
+    }
+  };
+
   // Toggle Favorite
   const handleToggleFavorite = async (item, e) => {
     if (e) e.stopPropagation();
@@ -1094,7 +1116,18 @@ export default function KnowledgeBaseList() {
       <AttachResourceModal
         isOpen={Boolean(attachingItem)}
         onClose={() => setAttachingItem(null)}
-        resource={attachingItem ? { type: "knowledge_base", id: attachingItem.id, title: attachingItem.title } : null}
+        resource={attachingItem ? {
+          type: "knowledge_base",
+          id: attachingItem.id,
+          title: attachingItem.title,
+          project_id: attachingItem.project_id || attachingItem.projectId || attachingItem.project?.id,
+          task_id: attachingItem.task_id || attachingItem.taskId || attachingItem.task?.id,
+          project: attachingItem.project,
+          task: attachingItem.task,
+          projects: attachingItem.projects,
+          tasks: attachingItem.tasks,
+          ...attachingItem,
+        } : null}
         onSuccess={() => {
           fetchItems();
         }}
@@ -1328,10 +1361,7 @@ export default function KnowledgeBaseList() {
                   <button
                     type="button"
                     className="kb-action-menu-item"
-                    onClick={() => {
-                      setOpenMenuId(null);
-                      setAttachingItem(item);
-                    }}
+                    onClick={() => handleOpenAttachModal(item)}
                   >
                     <Link2 size={14} color="#2563eb" />
                     <span>{t("Attach to Project / Task", { defaultValue: "Attach to Project / Task" })}</span>

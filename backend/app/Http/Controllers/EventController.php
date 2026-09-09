@@ -159,6 +159,8 @@ class EventController extends Controller
             'visibilities.user:id,name',
             'reminders',
             'attachments.user:id,name',
+            'project:id,title',
+            'tasks:id,title,project_id',
         ]);
 
         if (!$isAdmin) {
@@ -1073,6 +1075,8 @@ class EventController extends Controller
             'visibilities.team:id,name',
             'reminders',
             'attachments.user:id,name',
+            'project:id,title',
+            'tasks:id,title,project_id',
         ]);
 
         $assignedArray = $event->assignedUsers ? $event->assignedUsers->map(fn ($u) => [
@@ -1131,6 +1135,28 @@ class EventController extends Controller
             'location' => $event->location,
             'meeting_link' => $event->meeting_link,
             'status' => $event->status ?? 'scheduled',
+            'project_id' => $event->project_id,
+            'project' => $event->project ? [
+                'id' => $event->project->id,
+                'title' => $event->project->title,
+            ] : null,
+            'projects' => $event->project ? [
+                [
+                    'id' => $event->project->id,
+                    'title' => $event->project->title,
+                ]
+            ] : [],
+            'task_id' => $event->tasks && $event->tasks->isNotEmpty() ? $event->tasks->first()->id : null,
+            'task' => $event->tasks && $event->tasks->isNotEmpty() ? [
+                'id' => $event->tasks->first()->id,
+                'title' => $event->tasks->first()->title,
+                'project_id' => $event->tasks->first()->project_id,
+            ] : null,
+            'tasks' => $event->tasks ? $event->tasks->map(fn ($t) => [
+                'id' => $t->id,
+                'title' => $t->title,
+                'project_id' => $t->project_id,
+            ])->toArray() : [],
             'user_id' => $event->user_id,
             'created_by' => $event->user_id,
             'organizer_id' => $event->organizer_id,

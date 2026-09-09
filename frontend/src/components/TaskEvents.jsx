@@ -5,6 +5,7 @@ import { Calendar, Clock, Plus, Search, Tag, Trash2, X, Check } from "lucide-rea
 import API_URL from "../config/api";
 import { authToken, rolePath } from "../utils/auth";
 import { publish } from "../utils/eventBus";
+import ConfirmModal from "./ConfirmModal";
 
 export default function TaskEvents({ task, taskId, initialEvents = [], readOnly = false, onUpdate }) {
   const { t } = useTranslation();
@@ -100,22 +101,29 @@ export default function TaskEvents({ task, taskId, initialEvents = [], readOnly 
     }
   };
 
-  const handleUnlink = async (eventId) => {
-    if (!window.confirm(t("Are you sure you want to unlink this event?", { defaultValue: "Are you sure you want to unlink this event?" }))) return;
+  // Unlink Modal state
+  const [unlinkConfirmOpen, setUnlinkConfirmOpen] = useState(false);
+  const [unlinkTargetId, setUnlinkTargetId] = useState(null);
+
+  const confirmUnlink = async () => {
+    if (!unlinkTargetId) return;
     try {
       const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}/events/${eventId}`, {
+      const res = await fetch(`${API_URL}/tasks/${taskId}/events/${unlinkTargetId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
       });
       if (res.ok) {
         const data = await res.json();
-        setEvents((prev) => (prev || []).filter((e) => e.id !== eventId));
+        setEvents((prev) => (prev || []).filter((e) => e.id !== unlinkTargetId));
         if (onUpdate) onUpdate(data?.task || data);
         publish("task:updated", { taskId, type: "event_unlinked" });
       }
     } catch (err) {
       console.error("Failed to unlink event", err);
+    } finally {
+      setUnlinkConfirmOpen(false);
+      setUnlinkTargetId(null);
     }
   };
 
@@ -289,7 +297,10 @@ export default function TaskEvents({ task, taskId, initialEvents = [], readOnly 
                 </span>
                 {!readOnly && (
                   <button
-                    onClick={() => handleUnlink(evt.id)}
+                    onClick={() => {
+                      setUnlinkTargetId(evt.id);
+                      setUnlinkConfirmOpen(true);
+                    }}
                     title={t("Unlink Event", { defaultValue: "Unlink Event" })}
                     style={{ background: "none", border: "none", color: "#9ca3af", cursor: "pointer", padding: "2px" }}
                   >
@@ -527,6 +538,20 @@ export default function TaskEvents({ task, taskId, initialEvents = [], readOnly 
           </div>
         </div>
       )}
+      {/* Confirm Unlink Modal */}
+      <ConfirmModal
+        isOpen={unlinkConfirmOpen}
+        onClose={() => {
+          setUnlinkConfirmOpen(false);
+          setUnlinkTargetId(null);
+        }}
+        onConfirm={confirmUnlink}
+        title={t("Confirm Unlink", { defaultValue: "Confirm Unlink" })}
+        message={t("Are you sure you want to unlink this event?", { defaultValue: "Are you sure you want to unlink this event?" })}
+        confirmText={t("Unlink", { defaultValue: "Unlink" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        danger
+      />
     </div>
   );
 }

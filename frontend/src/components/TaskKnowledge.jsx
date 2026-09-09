@@ -5,6 +5,7 @@ import { BookOpen, ExternalLink, FileText, Plus, Search, Trash2, X, Check, Eye }
 import API_URL from "../config/api";
 import { authToken, rolePath } from "../utils/auth";
 import { publish } from "../utils/eventBus";
+import ConfirmModal from "./ConfirmModal";
 
 export default function TaskKnowledge({ task, taskId, initialKnowledgeBases = [], readOnly = false, onUpdate }) {
   const { t } = useTranslation();
@@ -19,6 +20,8 @@ export default function TaskKnowledge({ task, taskId, initialKnowledgeBases = []
   const [modalSearch, setModalSearch] = useState("");
   const [modalLoading, setModalLoading] = useState(false);
   const [linkingId, setLinkingId] = useState(null);
+  const [unlinkConfirmOpen, setUnlinkConfirmOpen] = useState(false);
+  const [unlinkTargetId, setUnlinkTargetId] = useState(null);
 
   useEffect(() => {
     if (initialKnowledgeBases && initialKnowledgeBases.length > 0) {
@@ -41,7 +44,7 @@ export default function TaskKnowledge({ task, taskId, initialKnowledgeBases = []
         setItems(list);
       }
     } catch (err) {
-      console.error("Failed to load knowledge bases", err);
+      console.error("Failed to fetch knowledge bases", err);
     } finally {
       setLoading(false);
     }
@@ -76,22 +79,21 @@ export default function TaskKnowledge({ task, taskId, initialKnowledgeBases = []
       const res = await fetch(`${API_URL}/tasks/${taskId}/knowledge-bases`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
           Accept: "application/json",
         },
-        body: JSON.stringify({ knowledge_base_id: kbId }),
+        body: JSON.stringify({ knowledge_base_ids: [kbId] }),
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.knowledge_bases) {
-          setItems(data.knowledge_bases);
-        } else {
-          fetchKnowledgeBases();
+        const added = allArticles.find((a) => a.id === kbId);
+        if (added) {
+          setItems((prev) => [...(prev || []), added]);
         }
-        setShowLinkModal(false);
         if (onUpdate) onUpdate(data?.task || data);
         publish("task:updated", { taskId, type: "kb_linked" });
+        setShowLinkModal(false);
       }
     } catch (err) {
       console.error("Failed to link knowledge base article", err);
@@ -100,8 +102,11 @@ export default function TaskKnowledge({ task, taskId, initialKnowledgeBases = []
     }
   };
 
-  const handleUnlink = async (kbId) => {
-    if (!window.confirm(t("Are you sure you want to unlink this knowledge base article?", { defaultValue: "Are you sure you want to unlink this knowledge base article?" }))) return;
+  const confirmUnlink = async () => {
+    if (!unlinkTargetId) return;
+    const kbId = unlinkTargetId;
+    setUnlinkConfirmOpen(false);
+    setUnlinkTargetId(null);
     try {
       const token = authToken();
       const res = await fetch(`${API_URL}/tasks/${taskId}/knowledge-bases/${kbId}`, {
@@ -299,7 +304,7 @@ export default function TaskKnowledge({ task, taskId, initialKnowledgeBases = []
                 </Link>
                 {!readOnly && (
                   <button
-                    onClick={() => handleUnlink(k.id)}
+                    onClick={() => { setUnlinkTargetId(k.id); setUnlinkConfirmOpen(true); }}
                     title={t("Unlink Document", { defaultValue: "Unlink Document" })}
                     style={{ background: "none", border: "none", color: "#9ca3af", cursor: "pointer", padding: "2px" }}
                   >
@@ -531,6 +536,17 @@ export default function TaskKnowledge({ task, taskId, initialKnowledgeBases = []
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={unlinkConfirmOpen}
+        onClose={() => { setUnlinkConfirmOpen(false); setUnlinkTargetId(null); }}
+        onConfirm={confirmUnlink}
+        title={t("Confirm Unlink", { defaultValue: "Confirm Unlink" })}
+        message={t("Are you sure you want to unlink this knowledge base article?", { defaultValue: "Are you sure you want to unlink this knowledge base article?" })}
+        confirmText={t("Unlink", { defaultValue: "Unlink" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        danger
+      />
     </div>
   );
 }

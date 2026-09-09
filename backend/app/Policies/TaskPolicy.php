@@ -305,10 +305,16 @@ class TaskPolicy
             return false;
         }
 
-        $isAssignee = $this->isTaskAssignee($user, $task);
-        $isCurrentOwner = $task->current_owner && (int) $task->current_owner === (int) $user->id;
+        if (in_array($user->role, ['admin', 'manager', 'super_admin'])) {
+            return true;
+        }
 
-        return ($isAssignee || $isCurrentOwner) && in_array(strtolower($task->status ?? ''), ['pending', 'reopened']);
+        $userId = (int) $user->id;
+        $isAssignee = $this->isTaskAssignee($user, $task);
+        $isCurrentOwner = $task->current_owner && (int) $task->current_owner === $userId;
+        $isAssigner = (int) $task->assigned_by === $userId || (int) ($task->creator_id ?? 0) === $userId;
+
+        return ($isAssignee || $isCurrentOwner || $isAssigner) && in_array(strtolower($task->status ?? ''), ['pending', 'reopened']);
     }
 
     /**
@@ -324,9 +330,10 @@ class TaskPolicy
             return true;
         }
 
+        $userId = (int) $user->id;
         $isAssignee = $this->isTaskAssignee($user, $task);
-        $isCurrentOwner = $task->current_owner && (int) $task->current_owner === (int) $user->id;
-        $isAssigner = (int) $task->assigned_by === (int) $user->id || (int) ($task->creator_id ?? 0) === (int) $user->id;
+        $isCurrentOwner = $task->current_owner && (int) $task->current_owner === $userId;
+        $isAssigner = (int) $task->assigned_by === $userId || (int) ($task->creator_id ?? 0) === $userId;
 
         return $isAssignee || $isCurrentOwner || $isAssigner;
     }
@@ -352,11 +359,16 @@ class TaskPolicy
      */
     public function assignerPause(User $user, Task $task): bool
     {
-        if (in_array($user->role, ['admin', 'super_admin'])) {
+        if (! $this->belongsToSameTenant($user, $task)) {
+            return false;
+        }
+
+        if (in_array($user->role, ['admin', 'manager', 'super_admin'])) {
             return true;
         }
 
-        return (int) $task->assigned_by === (int) $user->id;
+        $userId = (int) $user->id;
+        return (int) $task->assigned_by === $userId || (int) ($task->creator_id ?? 0) === $userId;
     }
 
     /**
@@ -376,10 +388,16 @@ class TaskPolicy
             return false;
         }
 
-        $isAssignee = $this->isTaskAssignee($user, $task);
-        $isCurrentOwner = $task->current_owner && (int) $task->current_owner === (int) $user->id;
+        if (in_array($user->role, ['admin', 'manager', 'super_admin'])) {
+            return true;
+        }
 
-        return $isAssignee || $isCurrentOwner;
+        $userId = (int) $user->id;
+        $isAssignee = $this->isTaskAssignee($user, $task);
+        $isCurrentOwner = $task->current_owner && (int) $task->current_owner === $userId;
+        $isAssigner = (int) $task->assigned_by === $userId || (int) ($task->creator_id ?? 0) === $userId;
+
+        return $isAssignee || $isCurrentOwner || $isAssigner;
     }
 
     /**
@@ -399,7 +417,7 @@ class TaskPolicy
             return false;
         }
 
-        if (in_array($user->role, ['admin', 'super_admin'])) {
+        if (in_array($user->role, ['admin', 'manager', 'super_admin'])) {
             return true;
         }
 

@@ -18,7 +18,7 @@ import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { IoSearchOutline, IoEyeOutline, IoCheckmarkCircle } from "react-icons/io5";
-import { ArrowUpRight, Lock, Pencil, StickyNote, Trash2, Sliders, CheckCircle2, XCircle, RotateCcw, AlertOctagon } from "lucide-react";
+import { ArrowUpRight, Lock, Pencil, StickyNote, Trash2, Sliders, CheckCircle2, XCircle, RotateCcw, AlertOctagon, Pause, Play } from "lucide-react";
 import CreateTaskModal from "../components/CreateTaskModal";
 import EditTaskModal from "../components/EditTaskModal";
 import DeleteRecurrenceModal from "../components/DeleteRecurrenceModal";
@@ -114,9 +114,15 @@ const Taskby = () => {
   const [resumingTaskId, setResumingTaskId] = useState(null);
   const [pauseModalOpen, setPauseModalOpen] = useState(false);
   const [pauseModalTaskId, setPauseModalTaskId] = useState(null);
+  const [resumeModalOpen, setResumeModalOpen] = useState(false);
+  const [resumeModalTask, setResumeModalTask] = useState(null);
   const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState(null);
+  const [approveConfirmOpen, setApproveConfirmOpen] = useState(false);
+  const [approveTaskId, setApproveTaskId] = useState(null);
+  const [declineConfirmOpen, setDeclineConfirmOpen] = useState(false);
+  const [declineTaskItem, setDeclineTaskItem] = useState(null);
   const [deleteRecurrenceTask, setDeleteRecurrenceTask] = useState(null);
   const [reopenTask, setReopenTask] = useState(null);
   const [abandonTask, setAbandonTask] = useState(null);
@@ -570,6 +576,22 @@ const Taskby = () => {
     }
   };
 
+  const confirmDirectApprove = async () => {
+    if (!approveTaskId) return;
+    const id = approveTaskId;
+    setApproveConfirmOpen(false);
+    setApproveTaskId(null);
+    await handleDirectApprove(null, id);
+  };
+
+  const confirmDirectDecline = async () => {
+    if (!declineTaskItem) return;
+    const task = declineTaskItem;
+    setDeclineConfirmOpen(false);
+    setDeclineTaskItem(null);
+    await handleDirectDecline(null, task);
+  };
+
   const handleDirectAbandonSubmit = async (reason) => {
     if (!abandonTask) return;
     setAbandoning(true);
@@ -984,7 +1006,7 @@ const Taskby = () => {
                                   className="action-icon-btn"
                                   title={t("Approve Task", { defaultValue: "Approve Task" })}
                                   style={{ color: "#16A34A" }}
-                                  onClick={(e) => handleDirectApprove(e, item.id)}
+                                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setApproveTaskId(item.id); setApproveConfirmOpen(true); }}
                                 >
                                   <CheckCircle2 size={16} />
                                 </button>
@@ -994,7 +1016,7 @@ const Taskby = () => {
                                   className="action-icon-btn"
                                   title={t("Decline Task", { defaultValue: "Decline Task" })}
                                   style={{ color: "#DC2626" }}
-                                  onClick={(e) => handleDirectDecline(e, item)}
+                                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setDeclineTaskItem(item); setDeclineConfirmOpen(true); }}
                                 >
                                   <XCircle size={16} />
                                 </button>
@@ -1019,7 +1041,7 @@ const Taskby = () => {
                                   <AlertOctagon size={16} />
                                 </button>
                               )}
-                              {canUserApprove && !["approved", "completed", "abandoned"].includes(item.status?.toLowerCase()) && (
+                              {canUserApprove && (item.status === "pending" || item.status === "in-progress" || item.status === "in_progress" || item.status?.toLowerCase() === "pending" || item.status?.toLowerCase() === "in-progress" || item.status?.toLowerCase() === "in_progress") && (
                                 <button
                                   className="action-icon-btn"
                                   title={t("Mark as Completed", { defaultValue: "Mark as Completed" })}
@@ -1040,7 +1062,7 @@ const Taskby = () => {
                             onClick={(e) => { e.stopPropagation(); e.preventDefault(); setPauseModalTaskId(item.id); setPauseModalOpen(true); }}
                             style={{ color: "#7C3AED", cursor: holdingTaskId === item.id ? "not-allowed" : "pointer" }}
                           >
-                            <Lock size={16} />
+                            <Pause size={16} />
                           </button>
                         )}
                         {item.assigner_paused && (
@@ -1048,10 +1070,10 @@ const Taskby = () => {
                             className="action-icon-btn"
                             title={t("Resume", { defaultValue: "Resume" })}
                             disabled={resumingTaskId === item.id}
-                            onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleAssignerResume(item.id); }}
+                            onClick={(e) => { e.stopPropagation(); e.preventDefault(); setResumeModalTask(item); setResumeModalOpen(true); }}
                             style={{ color: "#059669", cursor: resumingTaskId === item.id ? "not-allowed" : "pointer" }}
                           >
-                            <Lock size={16} />
+                            <Play size={16} />
                           </button>
                         )}
                       </ActionPopover>
@@ -1088,6 +1110,22 @@ const Taskby = () => {
         isAssigner
       />
 
+      <ConfirmModal
+        isOpen={resumeModalOpen}
+        onClose={() => { setResumeModalOpen(false); setResumeModalTask(null); }}
+        onConfirm={async () => {
+          if (!resumeModalTask) return;
+          await handleAssignerResume(resumeModalTask.id);
+          setResumeModalOpen(false);
+          setResumeModalTask(null);
+        }}
+        title={t("Resume Task", { defaultValue: "Resume Task" })}
+        message={t("Are you sure you want to resume this task?", { defaultValue: "Are you sure you want to resume this task?" })}
+        confirmText={t("Resume", { defaultValue: "Resume" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        confirmColor="#059669"
+      />
+
       <AddNoteModal
         isOpen={noteModal.open}
         onClose={() => setNoteModal({ open: false, itemId: null })}
@@ -1103,6 +1141,28 @@ const Taskby = () => {
         title={t("Confirm Deletion", { defaultValue: "Confirm Deletion" })}
         message={t("Are you sure you want to delete this task? This action cannot be undone.", { defaultValue: "Are you sure you want to delete this task? This action cannot be undone." })}
         confirmText={t("Delete", { defaultValue: "Delete" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        danger
+      />
+
+      <ConfirmModal
+        isOpen={approveConfirmOpen}
+        onClose={() => { setApproveConfirmOpen(false); setApproveTaskId(null); }}
+        onConfirm={confirmDirectApprove}
+        title={t("Approve Task", { defaultValue: "Approve Task" })}
+        message={t("Are you sure you want to approve this task?", { defaultValue: "Are you sure you want to approve this task?" })}
+        confirmText={t("Approve", { defaultValue: "Approve" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        confirmColor="#16A34A"
+      />
+
+      <ConfirmModal
+        isOpen={declineConfirmOpen}
+        onClose={() => { setDeclineConfirmOpen(false); setDeclineTaskItem(null); }}
+        onConfirm={confirmDirectDecline}
+        title={t("Decline Task", { defaultValue: "Decline Task" })}
+        message={t("Are you sure you want to decline this task?", { defaultValue: "Are you sure you want to decline this task?" })}
+        confirmText={t("Decline", { defaultValue: "Decline" })}
         cancelText={t("Cancel", { defaultValue: "Cancel" })}
         danger
       />

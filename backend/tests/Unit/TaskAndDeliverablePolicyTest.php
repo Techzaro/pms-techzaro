@@ -331,4 +331,78 @@ class TaskAndDeliverablePolicyTest extends TestCase
         $this->assertFalse($this->taskPolicy->view($outsider, $task));
         $this->assertFalse($this->deliverablePolicy->view($outsider, $deliverable));
     }
+
+    public function test_acknowledge_and_submit_deliverable_authorization(): void
+    {
+        $admin = $this->user(1, 'admin');
+        $manager = $this->user(2, 'manager');
+        $creator = $this->user(3, 'member');
+        $assignee = $this->user(4, 'member');
+        $otherMember = $this->user(5, 'member');
+
+        $deliverable = new Deliverable();
+        $deliverable->forceFill([
+            'id' => 10,
+            'created_by' => 3,
+            'assigned_to' => 4,
+            'status' => 'pending',
+        ]);
+
+        // Admin, Manager, Creator, and Assignee can acknowledge
+        $this->assertTrue($this->deliverablePolicy->acknowledge($admin, $deliverable));
+        $this->assertTrue($this->deliverablePolicy->acknowledge($manager, $deliverable));
+        $this->assertTrue($this->deliverablePolicy->acknowledge($creator, $deliverable));
+        $this->assertTrue($this->deliverablePolicy->acknowledge($assignee, $deliverable));
+        $this->assertFalse($this->deliverablePolicy->acknowledge($otherMember, $deliverable));
+
+        // Admin, Manager, Creator, and Assignee can submit
+        $this->assertTrue($this->deliverablePolicy->submit($admin, $deliverable));
+        $this->assertTrue($this->deliverablePolicy->submit($manager, $deliverable));
+        $this->assertTrue($this->deliverablePolicy->submit($creator, $deliverable));
+        $this->assertTrue($this->deliverablePolicy->submit($assignee, $deliverable));
+        $this->assertFalse($this->deliverablePolicy->submit($otherMember, $deliverable));
+
+        // Admin and Manager can approve/reject/reopen
+        $this->assertTrue($this->deliverablePolicy->approve($admin, $deliverable));
+        $this->assertTrue($this->deliverablePolicy->approve($manager, $deliverable));
+        $this->assertTrue($this->deliverablePolicy->approve($creator, $deliverable));
+        $this->assertFalse($this->deliverablePolicy->approve($assignee, $deliverable));
+    }
+
+    public function test_acknowledge_and_submit_task_authorization(): void
+    {
+        $admin = $this->user(1, 'admin');
+        $manager = $this->user(2, 'manager');
+        $assigner = $this->user(3, 'member');
+        $assignee = $this->user(4, 'member');
+        $otherMember = $this->user(5, 'member');
+
+        $task = new Task();
+        $task->forceFill([
+            'id' => 20,
+            'assigned_by' => 3,
+            'assigned_to' => 4,
+            'status' => 'pending',
+        ]);
+
+        // Admin, Manager, Assigner, and Assignee can acknowledge pending task
+        $this->assertTrue($this->taskPolicy->acknowledge($admin, $task));
+        $this->assertTrue($this->taskPolicy->acknowledge($manager, $task));
+        $this->assertTrue($this->taskPolicy->acknowledge($assigner, $task));
+        $this->assertTrue($this->taskPolicy->acknowledge($assignee, $task));
+        $this->assertFalse($this->taskPolicy->acknowledge($otherMember, $task));
+
+        // Admin, Manager, Assigner, and Assignee can submit task
+        $this->assertTrue($this->taskPolicy->submit($admin, $task));
+        $this->assertTrue($this->taskPolicy->submit($manager, $task));
+        $this->assertTrue($this->taskPolicy->submit($assigner, $task));
+        $this->assertTrue($this->taskPolicy->submit($assignee, $task));
+        $this->assertFalse($this->taskPolicy->submit($otherMember, $task));
+
+        // Admin, Manager, Assigner can approve task
+        $this->assertTrue($this->taskPolicy->approve($admin, $task));
+        $this->assertTrue($this->taskPolicy->approve($manager, $task));
+        $this->assertTrue($this->taskPolicy->approve($assigner, $task));
+        $this->assertFalse($this->taskPolicy->approve($assignee, $task));
+    }
 }

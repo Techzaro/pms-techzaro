@@ -1101,9 +1101,10 @@ const EditProjectModal = ({ project, onClose, onProjectUpdated }) => {
                 value={form.priority}
                 onChange={(val) => handleChange({ target: { name: "priority", value: val } })}
                 options={[
-                  { value: "Medium", label: t("Medium") },
-                  { value: "Low", label: t("Low") },
-                  { value: "High", label: t("High") },
+                  { value: "Urgent", label: t("Urgent", { defaultValue: "Urgent" }) },
+                  { value: "High", label: t("High", { defaultValue: "High" }) },
+                  { value: "Medium", label: t("Medium", { defaultValue: "Medium" }) },
+                  { value: "Low", label: t("Low", { defaultValue: "Low" }) },
                 ]}
               />
             </div>

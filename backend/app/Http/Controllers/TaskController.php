@@ -741,7 +741,8 @@ class TaskController extends Controller
     {
         $this->authorize('view', $task);
         $user = request()->user();
-        $task->load([
+        $hasParentId = \Illuminate\Support\Facades\Schema::hasColumn('tasks', 'parent_id');
+        $relations = [
             'project:id,title,team_id,created_by,client_name,category,budget,priority,sidebar_notes,sheets_documents,website_link,website_name,status,start_date,end_date,guest_ids',
             'project.creator:id,name,email,role',
             'project.team:id,name,leader_id',
@@ -772,7 +773,21 @@ class TaskController extends Controller
             'events:id,title,start_date,end_date,type,color,all_day',
             'knowledgeBases:id,title,category,visibility_level,file_path,file_name,created_by',
             'accessCredentials',
-        ]);
+        ];
+        if ($hasParentId) {
+            $relations[] = 'parent:id,business_id,title,project_id';
+            $relations['subtasks'] = fn ($q) => $q->with(['assignees:id,name,email,role', 'assigner:id,name,email,role'])->orderBy('sort_order')->latest('id');
+        }
+
+        try {
+            $task->load($relations);
+        } catch (\Throwable $e) {
+            try {
+                $task->load(array_filter($relations, fn ($v, $k) => $k !== 'subtasks' && $v !== 'parent:id,business_id,title,project_id', ARRAY_FILTER_USE_BOTH));
+            } catch (\Throwable $e2) {
+                $task->load(['files', 'assignees', 'assigner']);
+            }
+        }
 
         $org = request()->attributes->get('currentOrganization');
         if ($org) {
@@ -905,6 +920,8 @@ class TaskController extends Controller
         }
 
         $payload['deliverables'] = $deliverables;
+        $payload['subtasks'] = $task->subtasks ?? [];
+        $payload['parent'] = $task->parent ?? null;
         $isTerminalStatus = in_array(strtolower($task->status ?? ''), ['completed', 'approved', 'done']);
         $totalDlv = (int) ($dlvStats->total ?? 0);
         $completedDlv = (int) ($dlvStats->completed ?? 0);
@@ -1090,8 +1107,21 @@ class TaskController extends Controller
             return response()->json(['success' => false, 'message' => 'View-only users cannot create or assign tasks.'], 403);
         }
 
+        if ($request->has('parent_id') || $request->has('subtask_of') || $request->has('parent_ids')) {
+            $parentId = $request->input('parent_id') ?? $request->input('subtask_of') ?? $request->input('parent_ids');
+            if (is_array($parentId)) {
+                $parentId = !empty($parentId) ? (int) $parentId[0] : null;
+            } elseif (!empty($parentId)) {
+                $parentId = (int) $parentId;
+            } else {
+                $parentId = null;
+            }
+            $request->merge(['parent_id' => $parentId]);
+        }
+
         $validated = $request->validate([
             'title' => 'required|string|max:255',
+            'parent_id' => 'nullable|integer|exists:tasks,id',
             'description' => 'nullable|string',
             'requirements' => 'nullable|array',
             'requirements.*' => 'required_with:requirements|string|max:500',
@@ -1266,6 +1296,7 @@ class TaskController extends Controller
         foreach ($validated['assigned_to'] as $userId) {
             $task = $project->tasks()->create([
                 'title' => $validated['title'],
+                'parent_id' => $validated['parent_id'] ?? null,
                 'description' => $validated['description'] ?? null,
                 'requirements' => $validated['requirements'] ?? null,
                 'start_date' => $validated['start_date'] ?? now()->toDateTimeString(),
@@ -1535,8 +1566,21 @@ class TaskController extends Controller
         $this->authorize('create', Task::class);
         $user = $request->user();
 
+        if ($request->has('parent_id') || $request->has('subtask_of') || $request->has('parent_ids')) {
+            $parentId = $request->input('parent_id') ?? $request->input('subtask_of') ?? $request->input('parent_ids');
+            if (is_array($parentId)) {
+                $parentId = !empty($parentId) ? (int) $parentId[0] : null;
+            } elseif (!empty($parentId)) {
+                $parentId = (int) $parentId;
+            } else {
+                $parentId = null;
+            }
+            $request->merge(['parent_id' => $parentId]);
+        }
+
         $validated = $request->validate([
             'title' => 'required|string|max:255',
+            'parent_id' => 'nullable|integer|exists:tasks,id',
             'description' => 'nullable|string',
             'requirements' => 'nullable|array',
             'requirements.*' => 'required_with:requirements|string|max:500',
@@ -1647,6 +1691,7 @@ class TaskController extends Controller
         foreach ($validated['assigned_to'] as $userId) {
             $task = Task::create([
                 'title' => $validated['title'],
+                'parent_id' => $validated['parent_id'] ?? null,
                 'description' => $validated['description'] ?? null,
                 'requirements' => $validated['requirements'] ?? null,
                 'start_date' => $validated['start_date'] ?? now()->toDateTimeString(),
@@ -1874,8 +1919,24 @@ class TaskController extends Controller
             }
         }
 
+        if ($request->has('parent_id') || $request->has('subtask_of') || $request->has('parent_ids')) {
+            $parentId = $request->input('parent_id') ?? $request->input('subtask_of') ?? $request->input('parent_ids');
+            if (is_array($parentId)) {
+                $parentId = !empty($parentId) ? (int) $parentId[0] : null;
+            } elseif (!empty($parentId)) {
+                $parentId = (int) $parentId;
+            } else {
+                $parentId = null;
+            }
+            if ($parentId && (int) $parentId === (int) $task->id) {
+                $parentId = null;
+            }
+            $request->merge(['parent_id' => $parentId]);
+        }
+
         $validated = $request->validate([
             'title' => 'sometimes|required|string|max:255',
+            'parent_id' => 'sometimes|nullable|integer|exists:tasks,id',
             'description' => 'sometimes|nullable|string',
             'requirements' => 'sometimes|nullable|array',
             'requirements.*' => 'required_with:requirements|string|max:500',
@@ -2001,7 +2062,7 @@ class TaskController extends Controller
         }
 
         $oldValues = [];
-        foreach (['title', 'description', 'requirements', 'project_id', 'start_date', 'end_date', 'priority', 'status'] as $f) {
+        foreach (['title', 'description', 'requirements', 'project_id', 'parent_id', 'start_date', 'end_date', 'priority', 'status'] as $f) {
             if (array_key_exists($f, $validated)) {
                 $oldValues[$f] = $task->{$f};
             }
@@ -3636,10 +3697,12 @@ class TaskController extends Controller
     {
         $this->authorize('submit', $task);
         $user = $request->user();
-        $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
+        $isAssignee = $task->assignees()->where('users.id', $user->id)->exists() || (int) ($task->assigned_to ?? 0) === (int) $user->id;
         $isCurrentOwner = $this->delegationService->isCurrentOwner($task, $user);
+        $isAuthorizedRole = in_array($user->role, ['admin', 'manager', 'team_lead', 'super_admin']);
+        $isCreator = (int) ($task->assigned_by ?? 0) === (int) $user->id || (int) ($task->creator_id ?? 0) === (int) $user->id;
 
-        if (! $isAssignee && ! $isCurrentOwner) {
+        if (! $isAssignee && ! $isCurrentOwner && ! $isAuthorizedRole && ! $isCreator) {
             return response()->json(['success' => false, 'message' => 'Only the assignee or current owner can submit this task'], 403);
         }
 

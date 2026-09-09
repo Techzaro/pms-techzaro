@@ -24,6 +24,7 @@ class Task extends Model
         'task_number',
         'business_id',
         'project_id',
+        'parent_id',
         'title',
         'description',
         'kb_ids',
@@ -207,6 +208,7 @@ class Task extends Model
     }
 
     protected $casts = [
+        'parent_id' => 'integer',
         'requirements' => 'array',
         'states' => 'array',
         'kb_ids' => 'array',
@@ -484,6 +486,18 @@ class Task extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    /** The parent task (if this is a subtask). */
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(Task::class, 'parent_id');
+    }
+
+    /** The child subtasks belonging to this task. */
+    public function subtasks(): HasMany
+    {
+        return $this->hasMany(Task::class, 'parent_id')->orderBy('sort_order')->latest('id');
     }
 
     /** The user assigned to complete this task. */

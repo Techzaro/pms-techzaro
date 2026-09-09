@@ -327,12 +327,20 @@ class KnowledgeBaseController extends Controller
         $knowledgeBase->load([
             'categoryRelation:id,name,slug,color,icon',
             'project:id,title',
+            'tasks:id,title,project_id',
             'creator:id,name,email,role',
             'updater:id,name',
             'visibilities.team:id,name',
             'visibilities.user:id,name',
             'versions' => fn ($q) => $q->with('creator:id,name')->orderByDesc('version_number'),
         ]);
+
+        $knowledgeBase->projects = $knowledgeBase->project ? [
+            [
+                'id' => $knowledgeBase->project->id,
+                'title' => $knowledgeBase->project->title,
+            ]
+        ] : [];
 
         $knowledgeBase->is_favorited = KbFavorite::where('knowledge_base_id', $knowledgeBase->id)
             ->where('user_id', $user->id)
