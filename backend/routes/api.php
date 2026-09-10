@@ -666,6 +666,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/tasks/{task}/unified-activity', [TaskController::class, 'unifiedActivity']);
     Route::get('/tasks/{task}/activity', [TaskController::class, 'activity']);
     Route::get('/projects/{project}/unified-activity', [ProjectController::class, 'unifiedActivity']);
+    Route::get('/deliverables/{deliverable}/activities', [DeliverableController::class, 'activities']);
+    Route::get('/deliverables/{deliverable}/unified-activity', [DeliverableController::class, 'activities']);
 
     /*
     | My Activity & Activity Logging (all authenticated users)
@@ -747,6 +749,7 @@ Route::middleware('auth:sanctum')->group(function () {
     | Template Management Routes
     | Universal template system with visibility categories (private, project_team, department_team, organization).
     */
+    Route::get('/template-categories', [\App\Http\Controllers\TemplateCategoryController::class, 'index']);
     Route::get('/templates', [\App\Http\Controllers\TemplateController::class, 'index']); // List visible templates
     Route::post('/templates', [\App\Http\Controllers\TemplateController::class, 'store'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Create/upload template
     Route::match(['put', 'post'], '/templates/{template}', [\App\Http\Controllers\TemplateController::class, 'update'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Update template

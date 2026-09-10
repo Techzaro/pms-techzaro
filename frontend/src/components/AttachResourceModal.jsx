@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { X, Search, Check, FolderKanban, CheckSquare, Plus, Link2 } from "lucide-react";
 import API_URL from "../config/api";
@@ -303,16 +304,21 @@ export default function AttachResourceModal({
     }
   };
 
-  return (
+  return createPortal(
     <div
+      className="modal-overlay"
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0,0,0,0.5)",
+        width: "100vw",
+        height: "100vh",
+        background: "rgba(15, 23, 42, 0.6)",
+        backdropFilter: "blur(4px)",
+        WebkitBackdropFilter: "blur(4px)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        zIndex: 10000,
+        zIndex: 99999,
         padding: "16px",
       }}
       onClick={(e) => {
@@ -640,6 +646,7 @@ export default function AttachResourceModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
@@ -94,7 +95,7 @@ export default function ShareResourceModal({ resourceType, resourceId, resourceN
     setSharing(false);
   };
 
-  return (
+  return createPortal(
     <div className="share-modal-overlay" onClick={onClose}>
       <div className="share-modal" onClick={(e) => e.stopPropagation()}>
         <div className="share-modal-header">
@@ -224,6 +225,7 @@ export default function ShareResourceModal({ resourceType, resourceId, resourceN
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

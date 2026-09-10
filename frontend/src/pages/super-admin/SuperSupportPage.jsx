@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { MessageSquare, Building2, Circle, Clock, CheckCircle, X, Loader2, Send, ArrowLeft, FileText, Star, ExternalLink, LayoutGrid, List } from 'lucide-react';
@@ -470,13 +471,13 @@ export default function SuperSupportPage() {
         </div>
 
         {/* Status Change Confirmation Modal */}
-        {confirmStatus && (
+        {confirmStatus && createPortal(
           <div style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex",
-            alignItems: "center", justifyContent: "center", zIndex: 9999,
+            position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)", display: "flex",
+            alignItems: "center", justifyContent: "center", zIndex: 100000,
           }}>
             <div style={{
-              background: "#fff", borderRadius: 12, padding: "28px 32px", minWidth: 380,
+              background: "var(--bg-card, #fff)", borderRadius: 12, padding: "28px 32px", minWidth: 380,
               boxShadow: "0 20px 60px rgba(0,0,0,0.2)", textAlign: "center",
             }}>
               <div style={{
@@ -484,10 +485,10 @@ export default function SuperSupportPage() {
                 background: STATUS_MAP[confirmStatus]?.bg || '#f1f5f9',
                 display: "flex", alignItems: "center", justifyContent: "center",
               }}>
-<Loader2 size={24} className="animate-spin" style={{ color: STATUS_MAP[confirmStatus]?.color || '#475569' }} />
+                <Loader2 size={24} className="animate-spin" style={{ color: STATUS_MAP[confirmStatus]?.color || '#475569' }} />
               </div>
-              <h4 style={{ margin: "0 0 8px", color: "#0f172a", fontSize: "1rem" }}>Confirm Status Change</h4>
-              <p style={{ margin: "0 0 20px", color: "#64748b", fontSize: "0.88rem", lineHeight: 1.5 }}>
+              <h4 style={{ margin: "0 0 8px", color: "var(--text-heading, #0f172a)", fontSize: "1rem" }}>Confirm Status Change</h4>
+              <p style={{ margin: "0 0 20px", color: "var(--text-secondary, #64748b)", fontSize: "0.88rem", lineHeight: 1.5 }}>
                 Are you sure you want to change status to<br />
                 <strong style={{ color: STATUS_MAP[confirmStatus]?.color || '#0f172a' }}>
                   {STATUS_MAP[confirmStatus]?.label || confirmStatus}
@@ -498,7 +499,7 @@ export default function SuperSupportPage() {
                   onClick={() => setConfirmStatus(null)}
                   style={{
                     padding: "8px 20px", borderRadius: 8, fontSize: "0.85rem", fontWeight: 600,
-                    border: "1px solid #e2e8f0", background: "#fff", color: "#475569", cursor: "pointer",
+                    border: "1px solid var(--border-light, #e2e8f0)", background: "var(--bg-hover, #fff)", color: "var(--text-secondary, #475569)", cursor: "pointer",
                   }}
                 >
                   Cancel
@@ -515,17 +516,18 @@ export default function SuperSupportPage() {
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
 
-{/* Close Ticket Confirmation Modal */}
-        {confirmClose && (
+        {/* Close Ticket Confirmation Modal */}
+        {confirmClose && createPortal(
           <div style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex",
-            alignItems: "center", justifyContent: "center", zIndex: 9999,
+            position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)", display: "flex",
+            alignItems: "center", justifyContent: "center", zIndex: 100000,
           }}>
             <div style={{
-              background: "#fff", borderRadius: 12, padding: "28px 32px", minWidth: 380,
+              background: "var(--bg-card, #fff)", borderRadius: 12, padding: "28px 32px", minWidth: 380,
               boxShadow: "0 20px 60px rgba(0,0,0,0.2)", textAlign: "center",
             }}>
               <div style={{
@@ -535,10 +537,10 @@ export default function SuperSupportPage() {
               }}>
                 <X size={24} style={{ color: "#3b82f6" }} />
               </div>
-              <h4 style={{ margin: "0 0 8px", color: "#0f172a", fontSize: "1rem" }}>
+              <h4 style={{ margin: "0 0 8px", color: "var(--text-heading, #0f172a)", fontSize: "1rem" }}>
                 {t('Close Ticket', { defaultValue: 'Close Ticket' })}
               </h4>
-              <p style={{ margin: "0 0 20px", color: "#64748b", fontSize: "0.88rem", lineHeight: 1.5 }}>
+              <p style={{ margin: "0 0 20px", color: "var(--text-secondary, #64748b)", fontSize: "0.88rem", lineHeight: 1.5 }}>
                 {t('Are you sure you want to close this feedback ticket?', { defaultValue: 'Are you sure you want to close this feedback ticket?' })}<br />
                 <strong style={{ color: "#3b82f6" }}>
                   {selectedTicket?.feedback_reference_number || selectedTicket?.ticket_number}
@@ -549,7 +551,7 @@ export default function SuperSupportPage() {
                   onClick={() => setConfirmClose(false)}
                   style={{
                     padding: "8px 20px", borderRadius: 8, fontSize: "0.85rem", fontWeight: 600,
-                    border: "1px solid #e2e8f0", background: "#fff", color: "#475569", cursor: "pointer",
+                    border: "1px solid var(--border-light, #e2e8f0)", background: "var(--bg-hover, #fff)", color: "var(--text-secondary, #475569)", cursor: "pointer",
                   }}
                 >
                   {t('Cancel', { defaultValue: 'Cancel' })}
@@ -566,7 +568,8 @@ export default function SuperSupportPage() {
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     );

@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import DashboardLayout from '../components/layout/DashboardLayout';
@@ -792,8 +793,8 @@ const { t } = useTranslation();
         </>:<div className="rounded-xl p-10 shadow-sm flex items-center justify-center gap-3" style={sc.card}><Loader2 className="w-5 h-5 animate-spin" style={{color:'var(--color-primary)'}}/><span style={{color:'var(--text-secondary)',fontSize:'14px'}}>{t('Loading history...', { defaultValue: 'Loading history...' })}</span></div>}
       </div>}
 
-      {delModal&&(
-        <div style={{position:'fixed',inset:0,zIndex:10000,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.5)',backdropFilter:'blur(4px)'}}>
+      {delModal && createPortal(
+        <div style={{position:'fixed',inset:0,zIndex:100000,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(15, 23, 42, 0.6)',backdropFilter:'blur(4px)',WebkitBackdropFilter:'blur(4px)'}}>
           <div className="rounded-2xl p-6 w-full max-w-md" style={{background:'var(--bg-card)',boxShadow:'var(--shadow-lg)'}}>
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{background:'var(--color-danger-bg)'}}>
@@ -813,11 +814,12 @@ const { t } = useTranslation();
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {viewInv&&(
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.5)',backdropFilter:'blur(4px)'}}>
+      {viewInv && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4" style={{background:'rgba(15, 23, 42, 0.6)',backdropFilter:'blur(4px)',WebkitBackdropFilter:'blur(4px)'}}>
           <div className="rounded-2xl w-full max-w-lg max-h-[90vh] overflow-hidden" style={{background:'var(--bg-card)',boxShadow:'var(--shadow-lg)'}}>
             <div className="flex items-center justify-between p-5" style={{borderBottom:'1px solid var(--border-light)'}}>
               <div>
@@ -885,7 +887,8 @@ const { t } = useTranslation();
               <button onClick={()=>setViewInv(null)} className="px-4 py-2 rounded-lg text-sm font-medium transition-colors" style={{background:'var(--bg-hover)',color:'var(--text-secondary)',border:'1px solid var(--border-light)'}}>{t('Close', { defaultValue: 'Close' })}</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       <ConfirmModal

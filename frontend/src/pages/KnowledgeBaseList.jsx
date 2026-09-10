@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
@@ -161,6 +162,29 @@ export default function KnowledgeBaseList() {
     });
     return Array.from(map.values());
   }, [authors, items]);
+
+  // Derive dynamic categories from fetched categories merged with unique categories on loaded articles
+  const dynamicCategories = useMemo(() => {
+    const list = [...categories];
+    items.forEach((item) => {
+      const catName = item.categoryRelation?.name || item.category;
+      if (
+        catName &&
+        !list.some(
+          (c) =>
+            (item.category_id && String(c.id) === String(item.category_id)) ||
+            (c.name && c.name.toLowerCase() === catName.toLowerCase())
+        )
+      ) {
+        list.push({
+          id: item.category_id || `cat-${catName}`,
+          name: catName,
+          color: item.categoryRelation?.color || "#3b82f6",
+        });
+      }
+    });
+    return list;
+  }, [categories, items]);
 
   // Fetch Articles from API
   const fetchItems = async () => {
@@ -503,8 +527,9 @@ export default function KnowledgeBaseList() {
       // Category filter
       const matchesCategory =
         selectedCategory === "all" ||
-        item.category_id === Number(selectedCategory) ||
+        String(item.category_id) === String(selectedCategory) ||
         item.category === selectedCategory ||
+        item.categoryRelation?.name === selectedCategory ||
         item.categoryRelation?.slug === selectedCategory;
 
       // Team filter
@@ -728,13 +753,20 @@ export default function KnowledgeBaseList() {
               </span>
             </button>
 
-            {categories.map((cat) => {
-              const count = cat.articles_count ?? items.filter((i) => i.category_id === cat.id || i.category === cat.name).length;
+            {dynamicCategories.map((cat) => {
+              const isSelected = selectedCategory === String(cat.id) || selectedCategory === cat.name || (cat.slug && selectedCategory === cat.slug);
+              const count = items.filter(
+                (i) =>
+                  String(i.category_id) === String(cat.id) ||
+                  i.category === cat.name ||
+                  i.categoryRelation?.name === cat.name ||
+                  (cat.slug && i.categoryRelation?.slug === cat.slug)
+              ).length;
               return (
                 <button
                   key={cat.id}
                   onClick={() => setSelectedCategory(String(cat.id))}
-                  className={`kb-category-item ${selectedCategory === String(cat.id) ? "active" : ""}`}
+                  className={`kb-category-item ${isSelected ? "active" : ""}`}
                 >
                   <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                     <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: cat.color || "#3b82f6" }} />
@@ -989,9 +1021,9 @@ export default function KnowledgeBaseList() {
       </div>
 
       {/* CREATE CATEGORY MODAL */}
-      {categoryModalOpen && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
-          <div style={{ background: "var(--bg-card)", borderRadius: "12px", width: "100%", maxWidth: "460px", border: "1px solid var(--border-color)", padding: "20px", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)" }}>
+      {categoryModalOpen && createPortal(
+        <div style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }} onClick={() => setCategoryModalOpen(false)}>
+          <div style={{ background: "var(--bg-card)", borderRadius: "12px", width: "100%", maxWidth: "460px", border: "1px solid var(--border-color)", padding: "20px", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)" }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
               <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 600 }}>{t("Create Knowledge Base Category", { defaultValue: "Create Knowledge Base Category" })}</h3>
               <button onClick={() => setCategoryModalOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)" }}>
@@ -1102,7 +1134,8 @@ export default function KnowledgeBaseList() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* SHARE MODAL */}

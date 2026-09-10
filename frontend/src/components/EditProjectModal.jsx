@@ -34,7 +34,7 @@ function isExternalLink(url) {
   return true;
 }
 
-const EditProjectModal = ({ project, onClose, onProjectUpdated }) => {
+const EditProjectModal = ({ project = {}, onClose, onProjectUpdated, restoreDraftId = null, draftData = null }) => {
   const { t } = useTranslation();
   const draftSaveRef = useRef(null);
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useDraftGuard(onClose, {
@@ -108,6 +108,64 @@ const EditProjectModal = ({ project, onClose, onProjectUpdated }) => {
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
   const categoryDropdownRef = useRef(null);
   const [catHighlightedIndex, setCatHighlightedIndex] = useState(-1);
+
+  // Restore draft data when opened from DraftCenter
+  useEffect(() => {
+    if (!restoreDraftId && !draftData) return;
+
+    const applyDraft = (d) => {
+      if (!d) return;
+      setForm((prev) => ({
+        ...prev,
+        title: d.title !== undefined ? d.title : prev.title,
+        description: d.description !== undefined ? d.description : prev.description,
+        end_date: d.end_date ? toDatetimeLocal(d.end_date) : prev.end_date,
+        team_id: d.team_id !== undefined ? d.team_id : prev.team_id,
+        team_ids: d.team_ids !== undefined ? d.team_ids : prev.team_ids,
+        assigned_users: d.assigned_users !== undefined ? d.assigned_users : prev.assigned_users,
+        followers: d.followers !== undefined ? d.followers : prev.followers,
+        guest_ids: d.guest_ids !== undefined ? d.guest_ids : prev.guest_ids,
+        priority: d.priority || prev.priority,
+        status: d.status || prev.status,
+        budget: d.budget !== undefined ? d.budget : prev.budget,
+        client_name: d.client_name !== undefined ? d.client_name : prev.client_name,
+      }));
+
+      if (d.categoriesList) setCategoriesList(d.categoriesList);
+      else if (d.category) {
+        try {
+          const parsed = JSON.parse(d.category);
+          if (Array.isArray(parsed)) setCategoriesList(parsed);
+          else setCategoriesList([d.category]);
+        } catch {
+          setCategoriesList([d.category]);
+        }
+      }
+      if (d.milestones) setMilestones(d.milestones);
+      if (d.links) setLinks(d.links);
+      if (d.kb_ids) setKbIds(Array.isArray(d.kb_ids) ? d.kb_ids.map(Number) : [Number(d.kb_ids)]);
+      else if (d.kb_id || d.kbReferenceId) setKbIds([Number(d.kb_id || d.kbReferenceId)]);
+      if (d.event_ids) setEventIds(Array.isArray(d.event_ids) ? d.event_ids.map(Number) : [Number(d.event_ids)]);
+      else if (d.event_id || d.eventReferenceId) setEventIds([Number(d.event_id || d.eventReferenceId)]);
+      if (restoreDraftId) setDraftId(restoreDraftId);
+    };
+
+    if (draftData) {
+      applyDraft(draftData);
+      return;
+    }
+
+    if (restoreDraftId) {
+      draftService.get(restoreDraftId)
+        .then((res) => {
+          const draft = res?.data || res;
+          if (draft?.draft_data) {
+            applyDraft(draft.draft_data);
+          }
+        })
+        .catch((err) => console.error("Failed to restore draft in EditProjectModal:", err));
+    }
+  }, [restoreDraftId, draftData]);
   const catListRef = useRef(null);
   const [teamRolesOpen, setTeamRolesOpen] = useState(false);
   const [teamRolesSearch, setTeamRolesSearch] = useState("");
@@ -1420,7 +1478,7 @@ const EditProjectModal = ({ project, onClose, onProjectUpdated }) => {
 
       {/* Edit Link Modal */}
       {editingLink && createPortal(
-        <div style={{ position: "fixed", inset: 0, zIndex: 10003, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => setEditingLink(null)}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 100000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }} onClick={() => setEditingLink(null)}>
           <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: "24px 28px", width: 400, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>{t("Edit File / Link", { defaultValue: "Edit File / Link" })}</h3>
             <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>{t("Rename or update the URL below.", { defaultValue: "Rename or update the URL below." })}</p>
@@ -1464,7 +1522,7 @@ const EditProjectModal = ({ project, onClose, onProjectUpdated }) => {
 
       {/* Edit File Modal */}
       {editingFile && createPortal(
-        <div style={{ position: "fixed", inset: 0, zIndex: 10003, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => { setEditingFile(null); setEditFileNewFile(null); setEditFileDeleted(false); setEditFileDeleteConfirm(false); }}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 100000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }} onClick={() => { setEditingFile(null); setEditFileNewFile(null); setEditFileDeleted(false); setEditFileDeleteConfirm(false); }}>
           <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: "24px 28px", width: 420, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>{t("Edit File", { defaultValue: "Edit File" })}</h3>
             <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>{t("Rename or replace this file.", { defaultValue: "Rename or replace this file." })}</p>

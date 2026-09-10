@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import { X, Upload, Link, FileUp } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import API_URL from "../config/api";
@@ -101,7 +102,7 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
 
   const canSubmit = files.length > 0 || links.length > 0;
 
-  return (
+  return createPortal(
     <>
     <div className="modal-overlay" onClick={handleClose}>
       <div className="modal-box" style={{ maxWidth: "520px", width: "95%" }} onClick={(e) => e.stopPropagation()}>
@@ -346,6 +347,7 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
       danger
     />
     {ConfirmDialog}
-    </>
+    </>,
+    document.body
   );
 }

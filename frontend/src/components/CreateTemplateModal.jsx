@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
@@ -177,8 +178,23 @@ export default function CreateTemplateModal({ isOpen, onClose, onSuccess, initia
 
   const hasAttachedFile = !deleteExistingFile && (file || (initialTemplate && (initialTemplate.file_path || initialTemplate.file_name)));
 
-  return (
-    <div className="modal-overlay" style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
+  return createPortal(
+    <div
+      className="modal-overlay"
+      style={{
+        position: "fixed",
+        inset: 0,
+        width: "100vw",
+        height: "100vh",
+        backgroundColor: "rgba(15, 23, 42, 0.6)",
+        backdropFilter: "blur(4px)",
+        WebkitBackdropFilter: "blur(4px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 99999,
+      }}
+    >
       <div className="modal-content" style={{ background: "var(--bg-card)", color: "var(--text-primary)", borderRadius: "12px", width: "100%", maxWidth: "680px", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)" }}>
         {/* HEADER */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid var(--border-color)" }}>
@@ -390,6 +406,7 @@ export default function CreateTemplateModal({ isOpen, onClose, onSuccess, initia
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -43,12 +43,35 @@ class Draft extends Model
     ];
 
     public const MODULE_TYPES = [
-        'project' => 'Project',
-        'task' => 'Task',
-        'deliverable' => 'Subtask',
-        'event' => 'Calendar Event',
-        'user' => 'User',
-        'team' => 'Team',
+        'dashboard' => 'Dashboard',
+        'project' => 'Projects',
+        'projects' => 'Projects',
+        'task' => 'Tasks',
+        'tasks' => 'Tasks',
+        'deliverable' => 'Subtasks',
+        'subtask' => 'Subtasks',
+        'subtasks' => 'Subtasks',
+        'template' => 'Templates',
+        'templates' => 'Templates',
+        'calendar' => 'Calendar',
+        'calender' => 'Calendar',
+        'event' => 'Events',
+        'events' => 'Events',
+        'announcement' => 'Events',
+        'user' => 'Users',
+        'users' => 'Users',
+        'team' => 'Teams',
+        'teams' => 'Teams',
+        'report' => 'Reports',
+        'reports' => 'Reports',
+        'knowledge_base' => 'Knowledge Base',
+        'knowledge-base' => 'Knowledge Base',
+        'document' => 'Knowledge Base',
+        'article' => 'Knowledge Base',
+        'kb' => 'Knowledge Base',
+        'sharing' => 'Sharing',
+        'setting' => 'Settings',
+        'settings' => 'Settings',
     ];
 
     public const STATUSES = [
@@ -107,6 +130,44 @@ class Draft extends Model
 
     public function scopeByModule($query, string $moduleType)
     {
+        $normalized = strtolower(trim($moduleType));
+
+        $moduleMap = [
+            'dashboard' => ['dashboard'],
+            'project' => ['project', 'projects'],
+            'projects' => ['project', 'projects'],
+            'task' => ['task', 'tasks'],
+            'tasks' => ['task', 'tasks'],
+            'deliverable' => ['deliverable', 'subtask', 'subtasks'],
+            'subtask' => ['deliverable', 'subtask', 'subtasks'],
+            'subtasks' => ['deliverable', 'subtask', 'subtasks'],
+            'template' => ['template', 'templates'],
+            'templates' => ['template', 'templates'],
+            'calendar' => ['calendar', 'calender'],
+            'calender' => ['calendar', 'calender'],
+            'event' => ['event', 'events', 'announcement'],
+            'events' => ['event', 'events', 'announcement'],
+            'announcement' => ['event', 'events', 'announcement'],
+            'knowledge_base' => ['knowledge_base', 'knowledge-base', 'document', 'article', 'kb'],
+            'knowledge-base' => ['knowledge_base', 'knowledge-base', 'document', 'article', 'kb'],
+            'document' => ['knowledge_base', 'knowledge-base', 'document', 'article', 'kb'],
+            'article' => ['knowledge_base', 'knowledge-base', 'document', 'article', 'kb'],
+            'kb' => ['knowledge_base', 'knowledge-base', 'document', 'article', 'kb'],
+            'user' => ['user', 'users'],
+            'users' => ['user', 'users'],
+            'team' => ['team', 'teams'],
+            'teams' => ['team', 'teams'],
+            'report' => ['report', 'reports'],
+            'reports' => ['report', 'reports'],
+            'sharing' => ['sharing'],
+            'setting' => ['setting', 'settings'],
+            'settings' => ['setting', 'settings'],
+        ];
+
+        if (isset($moduleMap[$normalized])) {
+            return $query->whereIn('module_type', $moduleMap[$normalized]);
+        }
+
         return $query->where('module_type', $moduleType);
     }
 
@@ -142,7 +203,7 @@ class Draft extends Model
     protected function moduleLabel(): Attribute
     {
         return Attribute::make(
-            get: fn () => self::MODULE_TYPES[$this->module_type] ?? $this->module_type,
+            get: fn () => self::MODULE_TYPES[strtolower($this->module_type ?? '')] ?? ucfirst($this->module_type ?? ''),
         );
     }
 

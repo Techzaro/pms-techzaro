@@ -11,11 +11,18 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import Pagination from "../components/Pagination";
 import ConfirmModal from "../components/ConfirmModal";
-import { getUser, rolePath } from "../utils/auth";
+import { getUser, rolePath, authToken } from "../utils/auth";
 import API_URL from "../config/api";
 import draftService from "../services/draftService";
 import { notify } from "../utils/notify";
 import { publish, subscribe } from "../utils/eventBus";
+import CreateTaskModal from "../components/CreateTaskModal";
+import EditTaskModal from "../components/EditTaskModal";
+import CreateProjectModal from "../components/CreateProjectModal";
+import EditProjectModal from "../components/EditProjectModal";
+import CreateDeliverableModel from "../components/layout/CreateDeliverableModel";
+import Event from "../components/Event";
+import CreateKnowledgeModal from "../components/CreateKnowledgeModal";
 import {
   MdEditNote,
   MdSearch,
@@ -28,12 +35,12 @@ import "./DraftCenter.css";
 
 const MODULE_TYPES = [
   { value: "", labelKey: "All Modules", defaultLabel: "All Modules" },
-  { value: "project", labelKey: "Project", defaultLabel: "Project" },
-  { value: "task", labelKey: "Task", defaultLabel: "Task" },
-  { value: "deliverable", labelKey: "Subtask", defaultLabel: "Subtask" },
-  { value: "event", labelKey: "Calendar Event", defaultLabel: "Calendar Event" },
-  { value: "user", labelKey: "User", defaultLabel: "User" },
-  { value: "team", labelKey: "Team", defaultLabel: "Team" },
+  { value: "project", labelKey: "Projects", defaultLabel: "Projects" },
+  { value: "task", labelKey: "Tasks", defaultLabel: "Tasks" },
+  { value: "deliverable", labelKey: "Subtasks", defaultLabel: "Subtasks" },
+  { value: "calendar", labelKey: "Calendar", defaultLabel: "Calendar" },
+  { value: "event", labelKey: "Events", defaultLabel: "Events" },
+  { value: "knowledge_base", labelKey: "Knowledge Base", defaultLabel: "Knowledge Base" },
 ];
 
 const STATUS_OPTIONS = [
@@ -55,26 +62,99 @@ const SORT_OPTIONS = [
 ];
 
 const MODULE_BADGE_COLORS = {
+  dashboard: "#6366f1",
   project: "#4f46e5",
+  projects: "#4f46e5",
   task: "#0891b2",
+  tasks: "#0891b2",
   deliverable: "#7c3aed",
+  subtask: "#7c3aed",
+  subtasks: "#7c3aed",
+  template: "#8b5cf6",
+  templates: "#8b5cf6",
+  calendar: "#0284c7",
+  calender: "#0284c7",
   event: "#059669",
+  events: "#059669",
+  announcement: "#059669",
   user: "#d97706",
+  users: "#d97706",
   team: "#dc2626",
+  teams: "#dc2626",
+  reports: "#10b981",
+  report: "#10b981",
+  knowledge_base: "#0284c7",
+  "knowledge-base": "#0284c7",
+  document: "#0284c7",
+  article: "#0284c7",
+  kb: "#0284c7",
+  sharing: "#3b82f6",
+  settings: "#64748b",
+  setting: "#64748b",
 };
 
 const MODULE_EDIT_LABELS = {
+  dashboard: "Edit Dashboard",
   project: "Edit Project",
+  projects: "Edit Project",
   task: "Edit Task",
+  tasks: "Edit Task",
   deliverable: "Edit Subtask",
+  subtask: "Edit Subtask",
+  subtasks: "Edit Subtask",
+  template: "Edit Template",
+  templates: "Edit Template",
+  calendar: "Edit Calendar",
+  calender: "Edit Calendar",
   event: "Edit Event",
+  events: "Edit Event",
+  announcement: "Edit Event",
+  user: "Edit User",
+  users: "Edit User",
+  team: "Edit Team",
+  teams: "Edit Team",
+  reports: "Edit Report",
+  report: "Edit Report",
+  knowledge_base: "Edit Document",
+  "knowledge-base": "Edit Document",
+  document: "Edit Document",
+  article: "Edit Document",
+  kb: "Edit Document",
+  sharing: "Edit Sharing",
+  settings: "Edit Settings",
+  setting: "Edit Settings",
 };
 
 const MODULE_CREATE_LABELS = {
+  dashboard: "Create Dashboard",
   project: "Create New Project",
+  projects: "Create New Project",
   task: "Create New Task",
+  tasks: "Create New Task",
   deliverable: "Create New Subtask",
+  subtask: "Create New Subtask",
+  subtasks: "Create New Subtask",
+  template: "Create New Template",
+  templates: "Create New Template",
+  calendar: "Create New Calendar Entry",
+  calender: "Create New Calendar Entry",
   event: "Create New Event",
+  events: "Create New Event",
+  announcement: "Create New Event",
+  user: "Create New User",
+  users: "Create New User",
+  team: "Create New Team",
+  teams: "Create New Team",
+  reports: "Create Report",
+  report: "Create Report",
+  knowledge_base: "Create New Document",
+  "knowledge-base": "Create New Document",
+  document: "Create New Document",
+  article: "Create New Document",
+  kb: "Create New Document",
+  sharing: "Create Sharing",
+  settings: "Create Setting",
+  setting: "Create Setting",
 };
 
 const STATUS_BADGE_CLASSES = {
@@ -188,16 +268,89 @@ function DraftCenter() {
     }
   };
 
-  const handleEdit = (draft) => {
-    const routeMap = {
-      project: rolePath("projects"),
-      task: rolePath("tasks"),
-      deliverable: rolePath("deliveries"),
-      event: rolePath("calender"),
-    };
-    navigate(routeMap[draft.module_type] || rolePath("dashboard"), {
-      state: { openDraft: draft.id, draftCode: draft.draft_code },
-    });
+  const [activeModal, setActiveModal] = useState(null);
+
+  const handleCloseModal = () => {
+    setActiveModal(null);
+    fetchDrafts(page);
+    publish("drafts:changed");
+  };
+
+  const handleEdit = async (draft) => {
+    if (!draft) return;
+    const rawMod = String(draft.module_type || "").toLowerCase();
+    let modType = rawMod;
+    if (rawMod === "subtask" || rawMod === "deliverable") modType = "deliverable";
+    else if (rawMod === "event" || rawMod === "calendar" || rawMod === "announcement") modType = "event";
+    else if (rawMod === "knowledge_base" || rawMod === "knowledge-base" || rawMod === "document" || rawMod === "article" || rawMod === "kb") modType = "knowledge_base";
+    else if (rawMod === "project") modType = "project";
+    else if (rawMod === "task") modType = "task";
+
+    // Fallback routing for user/team
+    if (modType === "user" || modType === "users") {
+      navigate(rolePath("manage-users"), {
+        state: {
+          openDraft: draft.id,
+          draftCode: draft.draft_code,
+          draftData: draft.draft_data || draft.data,
+          originalRecordId: draft.original_record_id,
+          draft,
+        },
+      });
+      return;
+    }
+    if (modType === "team" || modType === "teams") {
+      navigate(rolePath("manage-team"), {
+        state: {
+          openDraft: draft.id,
+          draftCode: draft.draft_code,
+          draftData: draft.draft_data || draft.data,
+          originalRecordId: draft.original_record_id,
+          draft,
+        },
+      });
+      return;
+    }
+
+    if (draft.original_record_id) {
+      const token = authToken();
+      let record = null;
+      try {
+        let endpoint = "";
+        if (modType === "task") endpoint = `/tasks/${draft.original_record_id}`;
+        else if (modType === "project") endpoint = `/projects/${draft.original_record_id}`;
+        else if (modType === "deliverable") endpoint = `/deliverables/${draft.original_record_id}`;
+        else if (modType === "event") endpoint = `/events/${draft.original_record_id}`;
+        else if (modType === "knowledge_base") endpoint = `/knowledge-base/${draft.original_record_id}`;
+
+        if (endpoint && token) {
+          const res = await fetch(`${API_URL}${endpoint}`, {
+            headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+            skipLoader: true,
+          });
+          if (res.ok) {
+            const data = await res.json();
+            record = data?.data || data?.task || data?.project || data?.deliverable || data?.event || data;
+          }
+        }
+      } catch (e) {
+        console.error("Failed to prefetch record for draft edit:", e);
+      }
+
+      setActiveModal({
+        type: modType,
+        isEdit: true,
+        draft,
+        record: record || { id: draft.original_record_id },
+      });
+    } else {
+      setActiveModal({
+        type: modType,
+        isEdit: false,
+        draft,
+        record: null,
+      });
+    }
   };
 
   const formatRelativeTime = (dateStr) => {
@@ -276,18 +429,6 @@ function DraftCenter() {
               {MODULE_TYPES.map((m) => (
                 <option key={m.value} value={m.value}>
                   {t(m.labelKey, { defaultValue: m.defaultLabel })}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="dc-select"
-            >
-              {STATUS_OPTIONS.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {t(s.labelKey, { defaultValue: s.defaultLabel })}
                 </option>
               ))}
             </select>
@@ -500,6 +641,80 @@ function DraftCenter() {
           confirmText={t("Delete", { defaultValue: "Delete" })}
           cancelText={t("Cancel", { defaultValue: "Cancel" })}
           danger
+        />
+      )}
+
+      {/* ===================== TASK MODALS ===================== */}
+      {activeModal?.type === "task" && !activeModal.isEdit && (
+        <CreateTaskModal
+          onClose={handleCloseModal}
+          onTaskCreated={handleCloseModal}
+          restoreDraftId={activeModal.draft?.id}
+          draftData={activeModal.draft?.draft_data || activeModal.draft?.data}
+        />
+      )}
+      {activeModal?.type === "task" && activeModal.isEdit && (
+        <EditTaskModal
+          task={activeModal.record || { id: activeModal.draft?.original_record_id }}
+          onClose={handleCloseModal}
+          onTaskUpdated={handleCloseModal}
+          restoreDraftId={activeModal.draft?.id}
+          draftData={activeModal.draft?.draft_data || activeModal.draft?.data}
+        />
+      )}
+
+      {/* ===================== PROJECT MODALS ===================== */}
+      {activeModal?.type === "project" && !activeModal.isEdit && (
+        <CreateProjectModal
+          onClose={handleCloseModal}
+          restoreDraftId={activeModal.draft?.id}
+          draftData={activeModal.draft?.draft_data || activeModal.draft?.data}
+        />
+      )}
+      {activeModal?.type === "project" && activeModal.isEdit && (
+        <EditProjectModal
+          project={activeModal.record || { id: activeModal.draft?.original_record_id }}
+          onClose={handleCloseModal}
+          onProjectUpdated={handleCloseModal}
+          restoreDraftId={activeModal.draft?.id}
+          draftData={activeModal.draft?.draft_data || activeModal.draft?.data}
+        />
+      )}
+
+      {/* ===================== DELIVERABLE / SUBTASK MODALS ===================== */}
+      {activeModal?.type === "deliverable" && (
+        <CreateDeliverableModel
+          editMode={activeModal.isEdit}
+          editData={activeModal.record || (activeModal.isEdit ? { id: activeModal.draft?.original_record_id } : null)}
+          onClose={handleCloseModal}
+          onCreated={handleCloseModal}
+          onUpdated={handleCloseModal}
+          restoreDraftId={activeModal.draft?.id}
+          draftData={activeModal.draft?.draft_data || activeModal.draft?.data}
+        />
+      )}
+
+      {/* ===================== EVENT MODAL ===================== */}
+      {activeModal?.type === "event" && (
+        <Event
+          isOpen={true}
+          editEvent={activeModal.record || (activeModal.isEdit ? { id: activeModal.draft?.original_record_id } : null)}
+          onClose={handleCloseModal}
+          onEventCreated={handleCloseModal}
+          restoreDraftId={activeModal.draft?.id}
+          draftData={activeModal.draft?.draft_data || activeModal.draft?.data}
+        />
+      )}
+
+      {/* ===================== KNOWLEDGE BASE MODAL ===================== */}
+      {activeModal?.type === "knowledge_base" && (
+        <CreateKnowledgeModal
+          isOpen={true}
+          initialItem={activeModal.record || (activeModal.isEdit ? { id: activeModal.draft?.original_record_id } : null)}
+          onClose={handleCloseModal}
+          onSuccess={handleCloseModal}
+          restoreDraftId={activeModal.draft?.id}
+          draftData={activeModal.draft?.draft_data || activeModal.draft?.data}
         />
       )}
     </DashboardLayout>

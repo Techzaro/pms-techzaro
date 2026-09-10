@@ -14,6 +14,7 @@ import { useTranslation } from "react-i18next";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage, toast } from "../utils/notify";
 import {
+  AlertOctagon,
   ArrowLeft,
   BarChart3,
   Calendar,
@@ -65,6 +66,7 @@ import "../components/ActionPopover.css";
 import SubmitTaskModal from "../components/SubmitTaskModal";
 import TaskSubmissionPanel from "../components/TaskSubmissionPanel";
 import TaskReopenDialog from "../components/TaskReopenDialog";
+import ReopenDialog from "../components/ReopenDialog";
 import TransferTaskDialog from "../components/TransferTaskDialog";
 import DelegationChain from "../components/DelegationChain";
 import AddAccessModal from "../components/AddAccessModal";
@@ -77,18 +79,10 @@ import TaskMembers from "../components/TaskMembers";
 import AbandonModal from "../components/AbandonModal";
 import MarkTaskCompletedModal from "../components/MarkTaskCompletedModal";
 import CreateDeliverableModel from "../components/layout/CreateDeliverableModel";
+import Pagination from "../components/Pagination";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import ShareResourceModal from "../components/ShareResourceModal";
-
-const API_BASE = API_URL.replace(/\/api\/?$/, "");
-
-/** Build a full URL for a relative file path, or return absolute URLs as-is. */
-function fileUrl(url) {
-  if (!url) return null;
-  if (/^https?:\/\//i.test(url)) return url;
-  return API_BASE + url;
-}
 import { publish } from "../utils/eventBus";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { useSubmit } from "../hooks/useSubmit";
@@ -99,6 +93,15 @@ import FileUploadSection from "../components/FileUploadSection";
 import "../components/layout/ActivityHighlight.css";
 import "./TaskDetails.css";
 import "./Deliveries.css";
+
+const API_BASE = API_URL.replace(/\/api\/?$/, "");
+
+/** Build a full URL for a relative file path, or return absolute URLs as-is. */
+function fileUrl(url) {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  return API_BASE + url;
+}
 
 /** Convert an ISO timestamp to a human-friendly "X time ago" string. */
 function timeAgo(iso, t) {
@@ -353,6 +356,8 @@ function TaskDetails() {
   const [pendingNoteId, setPendingNoteId] = useState(null);
   const [orderedSubtasks, setOrderedSubtasks] = useState([]);
   const [subtaskSearch, setSubtaskSearch] = useState("");
+  const [subtaskPage, setSubtaskPage] = useState(1);
+  const [subtaskRows, setSubtaskRows] = useState(10);
   const [overviewSearch, setOverviewSearch] = useState("");
   const [accessSearch, setAccessSearch] = useState("");
   const [showAddAccessModal, setShowAddAccessModal] = useState(false);
@@ -364,6 +369,13 @@ function TaskDetails() {
   const [actingSubtaskId, setActingSubtaskId] = useState(null);
   const [deleteSubtaskConfirmOpen, setDeleteSubtaskConfirmOpen] = useState(false);
   const [deleteSubtaskTargetId, setDeleteSubtaskTargetId] = useState(null);
+  const [editingSubtask, setEditingSubtask] = useState(null);
+  const [reopenSubtask, setReopenSubtask] = useState(null);
+  const [abandonSubtask, setAbandonSubtask] = useState(null);
+  const [abandonSubtaskLoading, setAbandonSubtaskLoading] = useState(false);
+  const [markCompletedSubtask, setMarkCompletedSubtask] = useState(null);
+  const [transferSubtask, setTransferSubtask] = useState(null);
+  const [assignerPauseSubtask, setAssignerPauseSubtask] = useState(null);
 
   const [followers, setFollowers] = useState(task?.followers || []);
   const [followerDropdownOpen, setFollowerDropdownOpen] = useState(false);
@@ -838,6 +850,10 @@ function TaskDetails() {
     }
   }, [tab, task, fetchAccessCredentials]);
 
+  useEffect(() => {
+    setSubtaskPage(1);
+  }, [subtaskSearch]);
+
   const goToTask = (id) => {
     if (!id) return;
     navigate(rolePath(`tasks/task-details/${id}`), {
@@ -1180,6 +1196,61 @@ function TaskDetails() {
       notify.error(t("Failed to delete subtask.", { defaultValue: "Failed to delete subtask." }));
     }
     setActingSubtaskId(null);
+  };
+
+  const handleSubtaskAbandon = async (reason) => {
+    if (!abandonSubtask?.id) return;
+    setAbandonSubtaskLoading(true);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/deliverables/${abandonSubtask.id}/abandon`, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ reason }),
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        handleSubtaskActionSuccess(data.deliverable || data);
+        showSuccessMessage("Subtask", "abandoned");
+        setAbandonSubtask(null);
+      } else {
+        notify.error(data.message || t("Failed to abandon subtask.", { defaultValue: "Failed to abandon subtask." }));
+      }
+    } catch {
+      notify.error(t("An error occurred. Please try again.", { defaultValue: "An error occurred. Please try again." }));
+    } finally {
+      setAbandonSubtaskLoading(false);
+    }
+  };
+
+  const handleSubtaskAssignerPauseSubmit = async (data) => {
+    if (!assignerPauseSubtask?.id) return;
+    const subtaskId = assignerPauseSubtask.id;
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/deliverables/${subtaskId}/assigner-pause`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ reason: data.reason_detail || data.reason }),
+        _notifHandled: true,
+      });
+      const resData = await res.json();
+      if (res.ok) {
+        const updated = resData.deliverable || resData.subtask || resData;
+        handleSubtaskActionSuccess(updated);
+        showSuccessMessage("Subtask", "paused");
+        setAssignerPauseSubtask(null);
+      } else {
+        notify.error(resData.message || t("Failed to pause subtask.", { defaultValue: "Failed to pause subtask." }));
+      }
+    } catch {
+      notify.error(t("Failed to pause subtask.", { defaultValue: "Failed to pause subtask." }));
+    }
   };
 
   const handleTaskActionSuccess = (updatedTask, options = {}) => {
@@ -2099,10 +2170,13 @@ function TaskDetails() {
                           return result;
                         };
                         const subtasksSearch = buildHierarchicalSubtasks(allSubtasks, subtaskSearch);
+                        const totalSubtaskPages = Math.ceil(subtasksSearch.length / subtaskRows) || 1;
+                        const paginatedSubtasks = subtasksSearch.slice((subtaskPage - 1) * subtaskRows, (subtaskPage - 1) * subtaskRows + subtaskRows);
                         return subtasksSearch.length === 0 ? (
                           <p className="td-empty">{subtaskSearch ? t("No subtasks match your search.", { defaultValue: "No subtasks match your search." }) : t("No subtasks linked to this task.", { defaultValue: "No subtasks linked to this task." })}</p>
                         ) : (
-                          <div className="pd-table-wrap">
+                          <>
+                            <div className="pd-table-wrap">
                             <div className="deliveries-table-header" style={{ gridTemplateColumns: "80px 2fr 1.2fr 110px 130px 50px", alignItems: "center" }}>
                               <div>{t("ID", { defaultValue: "ID" })}</div>
                               <div>{t("Subtask", { defaultValue: "Subtask" })}</div>
@@ -2112,7 +2186,7 @@ function TaskDetails() {
                               <div>{t("Action", { defaultValue: "Action" })}</div>
                             </div>
                               <SortableTableWrapper
-                                items={subtasksSearch}
+                                items={paginatedSubtasks}
                               onReorder={handleSubtaskReorder}
                             as="div"
                             handleOnly
@@ -2181,117 +2255,211 @@ function TaskDetails() {
                                       navigate(rolePath(`deliveries/deliverable-details/${d.id}`), { state: { from: subtaskFrom, subtaskIds: deliverableIds, readOnly: isGuest } });
                                     }}
                                   >
-                                    {!readOnly && (isCreator || isAdminOrManager) && (
-                                      <button
-                                        className="action-icon-btn"
-                                        title={t("Add Child Subtask", { defaultValue: "Add Child Subtask" })}
-                                        onClick={() => {
-                                          setParentDeliverableForCreate(d);
-                                          setShowCreateSubtaskModal(true);
-                                        }}
-                                        style={{ color: "#4F46E5" }}
-                                      >
-                                        <Plus size={16} />
-                                      </button>
-                                    )}
-                                    <button className="action-icon-btn action-note" title={t("Add Note", { defaultValue: "Add Note" })} onClick={() => setNoteModal({ open: true, itemId: d.id })}>
-                                      <StickyNote size={14} />
-                                    </button>
-                                    {isCreator ? (
-                                      <>
-                                        {d.status?.toLowerCase() !== "approved" && (
-                                          <button className="action-icon-btn action-edit" title={t("Edit Subtask", { defaultValue: "Edit Subtask" })}>
-                                            <Pencil size={16} />
+                                    {(() => {
+                                      const sStatus = (d.status || "").toLowerCase();
+                                      const isSubtaskCreator = Boolean(
+                                        d.is_creator === true ||
+                                        (currentUser && (
+                                          parseInt(d.created_by, 10) === parseInt(currentUser.id, 10) ||
+                                          parseInt(d.assigned_by, 10) === parseInt(currentUser.id, 10) ||
+                                          parseInt(d.user_id, 10) === parseInt(currentUser.id, 10) ||
+                                          parseInt(d.creator_id, 10) === parseInt(currentUser.id, 10)
+                                        ))
+                                      );
+                                      const isSubtaskAssignee = Boolean(
+                                        d.is_assignee ??
+                                        (currentUser && (
+                                          (d.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10)) ||
+                                          (d.assigned_to && parseInt(d.assigned_to, 10) === parseInt(currentUser.id, 10))
+                                        ))
+                                      );
+                                      const isSubtaskCurrentOwner = Boolean(
+                                        d.is_current_owner ??
+                                        (d.current_owner && currentUser && parseInt(d.current_owner, 10) === parseInt(currentUser.id, 10)) ??
+                                        isSubtaskAssignee
+                                      );
+                                      const isSubtaskFollower = (d.followers || []).some((f) => parseInt(f.id, 10) === parseInt(currentUser?.id, 10));
+                                      const isSubtaskOnlyFollower = isSubtaskFollower && !isAdminOrManager && !isSubtaskCreator && !isSubtaskAssignee;
+                                      const isSubtaskTransferor = d.is_transferor ?? false;
+                                      const subtaskTransferorHasApproved = d.transferor_has_approved ?? false;
+                                      const isSubtaskTransferorApproval = (isSubtaskTransferor || d.is_transferor) && !subtaskTransferorHasApproved && (d.submission_stage === "awaiting_checkpoint" || d.can_submit_to_next || ["submitted", "submitted_late"].includes(sStatus));
+                                      const isSubtaskAssignerOrCreator = isCreator || isSubtaskCreator || isAdminOrManager || isSuperAdmin || (currentUser && (
+                                        parseInt(d.assigned_by, 10) === parseInt(currentUser.id, 10) ||
+                                        parseInt(d.created_by, 10) === parseInt(currentUser.id, 10) ||
+                                        parseInt(d.creator_id, 10) === parseInt(currentUser.id, 10) ||
+                                        parseInt(d.user_id, 10) === parseInt(currentUser.id, 10) ||
+                                        parseInt(task?.assigned_by, 10) === parseInt(currentUser.id, 10) ||
+                                        parseInt(task?.creator_id, 10) === parseInt(currentUser.id, 10)
+                                      ));
+
+                                      const canSubtaskEdit = (readOnly || isSubtaskOnlyFollower) ? false : (isSubtaskAssignerOrCreator) && !["approved", "completed", "submitted", "submitted_late", "abandoned"].includes(sStatus);
+                                      const canSubtaskDelete = (readOnly || isSubtaskOnlyFollower) ? false : isSubtaskAssignerOrCreator;
+                                      const canSubtaskApprove = (readOnly || isSubtaskOnlyFollower) ? false : (isSubtaskTransferorApproval || ((isSubtaskAssignerOrCreator || d.can_approve === true || d.is_next_approver) && (!d.is_transferred || subtaskTransferorHasApproved || d.submission_stage === "awaiting_creator" || !d.has_delegation_chain)));
+                                      const canSubtaskDecline = (readOnly || isSubtaskOnlyFollower) ? false : (isSubtaskTransferorApproval || canSubtaskApprove || d.can_decline_submission || isSubtaskAssignerOrCreator) && ["submitted", "submitted_late"].includes(sStatus);
+                                      const canSubtaskReopen = (readOnly || isSubtaskOnlyFollower) ? false : ((isSubtaskAssignerOrCreator || d.can_decline_submission || isSubtaskTransferorApproval || canSubtaskApprove) && ["completed", "declined", "abandoned", "approved", "submitted", "submitted_late", "rejected"].includes(sStatus));
+                                      const canSubtaskAbandon = (readOnly || isSubtaskOnlyFollower) ? false : (isSubtaskAssignee || isSubtaskCurrentOwner || isSubtaskAssignerOrCreator) && !["abandoned", "approved", "completed", "submitted", "submitted_late"].includes(sStatus);
+                                      const canSubtaskMarkCompleted = (readOnly || isSubtaskOnlyFollower) ? false : isSubtaskAssignerOrCreator && ["pending", "in_progress", "in-progress", "reopened", "paused", "acknowledged"].includes(sStatus);
+                                      const canSubtaskTransfer = (readOnly || isSubtaskOnlyFollower) ? false : (d.can_delegate === true || (d.allow_transfer !== false && (isSubtaskAssignee || isSubtaskCurrentOwner) && !isSubtaskTransferor)) && !["approved", "rejected", "pending", "submitted"].includes(sStatus) && !d.active_outgoing_delegation && !isSubtaskTransferor;
+
+                                      const isSubtaskAssignerLocked = !!d.assigner_paused;
+                                      const canSubtaskAssignerPause = (readOnly || isSubtaskOnlyFollower) ? false : isSubtaskAssignerOrCreator && !isSubtaskAssignerLocked && ["pending", "in_progress", "reopened", "paused", "submitted"].includes(sStatus);
+                                      const canSubtaskAssignerResume = (readOnly || isSubtaskOnlyFollower) ? false : isSubtaskAssignerOrCreator && isSubtaskAssignerLocked;
+                                      const canSubtaskAcknowledge = (readOnly || isSubtaskOnlyFollower) ? false : (isSubtaskAssignee || isSubtaskCurrentOwner) && sStatus === "pending" && !isSubtaskAssignerLocked && !isSubtaskTransferor;
+                                      const canSubtaskStartTimer = (readOnly || isSubtaskOnlyFollower) ? false : (isSubtaskAssignee || isSubtaskCurrentOwner) && ["in_progress", "in-progress", "reopened"].includes(sStatus) && (!d.timer_state || d.timer_state === "idle" || !d.timer?.state || d.timer?.state === "idle") && !isSubtaskAssignerLocked && !isSubtaskTransferor;
+                                      const canSubtaskTimerPause = (readOnly || isSubtaskOnlyFollower) ? false : (isSubtaskAssignee || isSubtaskCurrentOwner) && ["in_progress", "submitted"].includes(sStatus) && (d.timer_state === "running" || d.timer?.state === "running") && !isSubtaskAssignerLocked;
+                                      const canSubtaskTimerResume = (readOnly || isSubtaskOnlyFollower) ? false : (isSubtaskAssignee || isSubtaskCurrentOwner) && (sStatus === "paused" || d.timer_state === "paused" || d.timer?.state === "paused") && !isSubtaskAssignerLocked;
+                                      const canSubtaskSubmit = (readOnly || isSubtaskOnlyFollower) ? false : (d.can_submit === true || (isSubtaskAssignee && ["in_progress", "reopened", "paused", "rejected", "rework_required", "pending"].includes(sStatus))) && !isSubtaskAssignerLocked && !isSubtaskTransferor;
+
+                                      return (
+                                        <>
+                                          {!readOnly && (isCreator || isAdminOrManager) && (
+                                            <button
+                                              className="action-icon-btn"
+                                              title={t("Add Child Subtask", { defaultValue: "Add Child Subtask" })}
+                                              onClick={() => {
+                                                setParentDeliverableForCreate(d);
+                                                setShowCreateSubtaskModal(true);
+                                              }}
+                                              style={{ color: "#4F46E5" }}
+                                            >
+                                              <Plus size={16} />
+                                            </button>
+                                          )}
+                                          <button className="action-icon-btn action-note" title={t("Add Note", { defaultValue: "Add Note" })} onClick={() => setNoteModal({ open: true, itemId: d.id })}>
+                                            <StickyNote size={14} />
                                           </button>
-                                        )}
-                                        <button
-                                          className="action-icon-btn action-delete"
-                                          title={t("Delete Subtask", { defaultValue: "Delete Subtask" })}
-                                          disabled={actingSubtaskId === d.id}
-                                          onClick={() => handleSubtaskDelete(d.id)}
-                                        >
-                                          <Trash2 size={16} />
-                                        </button>
-                                        {d.status === "submitted" && (
-                                          <button className="action-icon-btn action-submit" title={t("Approve", { defaultValue: "Approve" })} disabled={actingSubtaskId === d.id} onClick={() => handleSubtaskApprove(d.id)} style={{ color: "#16A34A" }}>
-                                            <CheckCircle2 size={16} />
-                                          </button>
-                                        )}
-                                        {d.status === "submitted" && (
-                                          <button className="action-icon-btn action-submit" title={t("Decline", { defaultValue: "Decline" })} disabled={actingSubtaskId === d.id} onClick={() => handleSubtaskReject(d.id)} style={{ color: "#DC2626" }}>
-                                            <XCircle size={16} />
-                                          </button>
-                                        )}
-                                        {["pending", "in_progress", "reopened", "paused", "submitted"].includes(d.status) && !d.assigner_paused && (
-                                          <button
-                                            className="action-icon-btn"
-                                            title={t("Pause", { defaultValue: "Pause" })}
-                                            disabled={actingSubtaskId === d.id}
-                                            onClick={() => handleSubtaskAssignerPause(d.id)}
-                                            style={{ color: "#7C3AED", cursor: actingSubtaskId === d.id ? "not-allowed" : "pointer" }}
-                                          >
-                                            <Lock size={16} />
-                                          </button>
-                                        )}
-                                        {d.assigner_paused && (
-                                          <button
-                                            className="action-icon-btn"
-                                            title={t("Resume", { defaultValue: "Resume" })}
-                                            disabled={actingSubtaskId === d.id}
-                                            onClick={() => handleSubtaskAssignerResume(d.id)}
-                                            style={{ color: "#059669", cursor: actingSubtaskId === d.id ? "not-allowed" : "pointer" }}
-                                          >
-                                            <Lock size={16} />
-                                          </button>
-                                        )}
-                                      </>
-                                    ) : (
-                                      <>
-                                        {d.assigner_paused && (
-                                          <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#92400E", fontSize: "11px", fontWeight: 600, border: "1px solid #F59E0B" }}>
-                                            <Lock size={12} />
-                                            {t("Paused by Assigner", { defaultValue: "Paused by Assigner" })}
-                                          </span>
-                                        )}
-                                        {!d.assigner_paused && d.status === "pending" && (
-                                          <button className="action-icon-btn action-submit" title={t("Acknowledge", { defaultValue: "Acknowledge" })} disabled={actingSubtaskId === d.id} onClick={() => handleSubtaskAcknowledge(d.id)}>
-                                            <CheckCircle2 size={16} />
-                                          </button>
-                                        )}
-                                        {!d.assigner_paused && ["in_progress", "reopened"].includes(d.status) && (!d.timer_state || d.timer_state === "idle") && (
-                                           <button className="action-icon-btn action-submit" title={t("Start Timer", { defaultValue: "Start Timer" })} disabled={actingSubtaskId === d.id} onClick={() => handleSubtaskStartTimer(d.id)} style={{ color: "#2563eb" }}>
-                                             <Play size={16} />
-                                           </button>
-                                         )}
-                                         {!d.assigner_paused && ["in_progress", "submitted"].includes(d.status) && d.timer_state === "running" && (
-                                           <button className="action-icon-btn action-submit" title={t("Pause", { defaultValue: "Pause" })} disabled={actingSubtaskId === d.id} onClick={() => handleSubtaskPause(d.id)} style={{ color: "#D97706" }}>
-                                             <Pause size={16} />
-                                           </button>
-                                         )}
-                                         {!d.assigner_paused && (d.status === "paused" || d.timer_state === "paused") && (
-                                           <button className="action-icon-btn action-submit" title={t("Resume", { defaultValue: "Resume" })} disabled={actingSubtaskId === d.id} onClick={() => handleSubtaskResume(d.id)} style={{ color: "#059669" }}>
-                                             <Play size={16} />
-                                           </button>
-                                         )}
-                                        {(d.status === "pending" || d.status === "rejected" || d.status === "reopened") && (
-                                          <button
-                                            className="action-icon-btn action-submit"
-                                            title={task?.status === "paused" ? t("Task is paused. Resume the task first.", { defaultValue: "Task is paused. Resume the task first." }) : task?.assigner_paused ? t("Task is paused by assigner.", { defaultValue: "Task is paused by assigner." }) : t("Submit", { defaultValue: "Submit" })}
-                                            disabled={task?.status === "paused" || task?.assigner_paused}
-                                            onClick={() => setSubmitModal({ open: true, subtask: d })}
-                                            style={task?.status === "paused" || task?.assigner_paused ? { opacity: 0.4, cursor: "not-allowed" } : {}}
-                                          >
-                                            <LuSend size={16} />
-                                          </button>
-                                        )}
-                                      </>
-                                    )}
+                                          {canSubtaskEdit && (
+                                            <button className="action-icon-btn action-edit" title={t("Edit Subtask", { defaultValue: "Edit Subtask" })} onClick={() => setEditingSubtask(d)}>
+                                              <Pencil size={16} />
+                                            </button>
+                                          )}
+                                          {canSubtaskDelete && (
+                                            <button
+                                              className="action-icon-btn action-delete"
+                                              title={t("Delete Subtask", { defaultValue: "Delete Subtask" })}
+                                              disabled={actingSubtaskId === d.id}
+                                              onClick={() => handleSubtaskDelete(d.id)}
+                                            >
+                                              <Trash2 size={16} />
+                                            </button>
+                                          )}
+                                          {canSubtaskApprove && (["submitted", "submitted_late", "reopened"].includes(sStatus)) && (
+                                            <button className="action-icon-btn action-submit" title={t("Approve", { defaultValue: "Approve" })} disabled={actingSubtaskId === d.id} onClick={() => handleSubtaskApprove(d.id)} style={{ color: "#16A34A" }}>
+                                              <CheckCircle2 size={16} />
+                                            </button>
+                                          )}
+                                          {canSubtaskDecline && (
+                                            <button className="action-icon-btn action-submit" title={t("Decline", { defaultValue: "Decline" })} disabled={actingSubtaskId === d.id} onClick={() => handleSubtaskReject(d.id)} style={{ color: "#DC2626" }}>
+                                              <XCircle size={16} />
+                                            </button>
+                                          )}
+                                          {canSubtaskReopen && (
+                                            <button className="action-icon-btn" title={t("Reopen Subtask", { defaultValue: "Reopen Subtask" })} onClick={() => setReopenSubtask(d)} style={{ color: "#2563EB" }}>
+                                              <RotateCcw size={16} />
+                                            </button>
+                                          )}
+                                          {canSubtaskAbandon && (
+                                            <button className="action-icon-btn" title={isAdminOrManager ? t("Abandon Subtask", { defaultValue: "Abandon Subtask" }) : t("Request Abandon", { defaultValue: "Request Abandon" })} onClick={() => setAbandonSubtask(d)} style={{ color: "#F59E0B" }}>
+                                              <AlertOctagon size={16} />
+                                            </button>
+                                          )}
+                                          {canSubtaskMarkCompleted && (
+                                            <button className="action-icon-btn" title={t("Mark as Completed", { defaultValue: "Mark as Completed" })} onClick={() => setMarkCompletedSubtask(d)} style={{ color: "#059669" }}>
+                                              <CheckCircle2 size={16} />
+                                            </button>
+                                          )}
+                                          {canSubtaskTransfer && (
+                                            <button className="action-icon-btn" title={t("Transfer Subtask", { defaultValue: "Transfer Subtask" })} onClick={() => setTransferSubtask(d)} style={{ color: "#2563EB" }}>
+                                              <Users size={16} />
+                                            </button>
+                                          )}
+                                          {isSubtaskTransferor && (
+                                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "6px", backgroundColor: "#EFF6FF", color: "#1D4ED8", fontSize: "11px", fontWeight: 600 }}>
+                                              {t("Transferred", { defaultValue: "Transferred" })}
+                                            </span>
+                                          )}
+                                          {isSubtaskAssignerLocked && !isSubtaskAssignerOrCreator && (
+                                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#92400E", fontSize: "11px", fontWeight: 600, border: "1px solid #F59E0B" }}>
+                                              <Lock size={12} />
+                                              {t("Paused by Assigner", { defaultValue: "Paused by Assigner" })}
+                                            </span>
+                                          )}
+                                          {canSubtaskAssignerPause && (
+                                            <button
+                                              className="action-icon-btn"
+                                              title={t("Pause", { defaultValue: "Pause" })}
+                                              disabled={actingSubtaskId === d.id}
+                                              onClick={() => setAssignerPauseSubtask(d)}
+                                              style={{ color: "#7C3AED", cursor: actingSubtaskId === d.id ? "not-allowed" : "pointer" }}
+                                            >
+                                              <Lock size={16} />
+                                            </button>
+                                          )}
+                                          {canSubtaskAssignerResume && (
+                                            <button
+                                              className="action-icon-btn"
+                                              title={t("Resume", { defaultValue: "Resume" })}
+                                              disabled={actingSubtaskId === d.id}
+                                              onClick={() => handleSubtaskAssignerResume(d.id)}
+                                              style={{ color: "#059669", cursor: actingSubtaskId === d.id ? "not-allowed" : "pointer" }}
+                                            >
+                                              <Lock size={16} />
+                                            </button>
+                                          )}
+                                          {canSubtaskAcknowledge && (
+                                            <button className="action-icon-btn action-submit" title={t("Acknowledge", { defaultValue: "Acknowledge" })} disabled={actingSubtaskId === d.id} onClick={() => handleSubtaskAcknowledge(d.id)} style={{ color: "#2563EB" }}>
+                                              <CheckCircle2 size={16} />
+                                            </button>
+                                          )}
+                                          {canSubtaskStartTimer && (
+                                            <button className="action-icon-btn action-submit" title={t("Start Timer", { defaultValue: "Start Timer" })} disabled={actingSubtaskId === d.id} onClick={() => handleSubtaskStartTimer(d.id)} style={{ color: "#2563eb" }}>
+                                              <Play size={16} />
+                                            </button>
+                                          )}
+                                          {canSubtaskTimerPause && (
+                                            <button className="action-icon-btn action-submit" title={t("Pause", { defaultValue: "Pause" })} disabled={actingSubtaskId === d.id} onClick={() => handleSubtaskPause(d.id)} style={{ color: "#D97706" }}>
+                                              <Pause size={16} />
+                                            </button>
+                                          )}
+                                          {canSubtaskTimerResume && (
+                                            <button className="action-icon-btn action-submit" title={t("Resume", { defaultValue: "Resume" })} disabled={actingSubtaskId === d.id} onClick={() => handleSubtaskResume(d.id)} style={{ color: "#059669" }}>
+                                              <Play size={16} />
+                                            </button>
+                                          )}
+                                          {canSubtaskSubmit && (
+                                            <button
+                                              className="action-icon-btn action-submit"
+                                              title={task?.status === "paused" ? t("Task is paused. Resume the task first.", { defaultValue: "Task is paused. Resume the task first." }) : isSubtaskAssignerLocked ? t("Task is paused by assigner.", { defaultValue: "Task is paused by assigner." }) : ["rework_required", "rejected", "reopened"].includes(sStatus) ? t("Resubmit Subtask", { defaultValue: "Resubmit Subtask" }) : t("Submit", { defaultValue: "Submit" })}
+                                              disabled={task?.status === "paused" || isSubtaskAssignerLocked}
+                                              onClick={() => setSubmitModal({ open: true, subtask: d })}
+                                              style={task?.status === "paused" || isSubtaskAssignerLocked ? { opacity: 0.4, cursor: "not-allowed" } : {}}
+                                            >
+                                              <LuSend size={16} />
+                                            </button>
+                                          )}
+                                        </>
+                                      );
+                                    })()}
                                   </ActionPopover>
                                 </div>
                               </div>
                             );}}
                           </SortableTableWrapper>
                         </div>
+                        {subtasksSearch.length > 0 && (
+                          <Pagination
+                            currentPage={subtaskPage}
+                            totalPages={totalSubtaskPages}
+                            onPageChange={setSubtaskPage}
+                            itemsPerPage={subtaskRows}
+                            onItemsPerPageChange={(val) => {
+                              setSubtaskRows(val);
+                              setSubtaskPage(1);
+                            }}
+                            itemsPerPageOptions={[10, 25, 50, 100]}
+                          />
+                        )}
+                      </>
                       );
                       })()}
                     </div>
@@ -2945,6 +3113,85 @@ function TaskDetails() {
         itemId={noteModal.itemId}
         onSaved={() => { setNoteModal({ open: false, itemId: null }); fetchTask(false); }}
       />
+
+      {editingSubtask && (
+        <CreateDeliverableModel
+          projectId={editingSubtask.project_id || task?.project_id || null}
+          taskId={editingSubtask.task_id || task?.id || null}
+          taskTitle={task?.title || null}
+          editMode={true}
+          editData={editingSubtask}
+          onClose={(refresh) => {
+            setEditingSubtask(null);
+            if (refresh) fetchTask(false);
+          }}
+          onUpdated={(updated) => {
+            setEditingSubtask(null);
+            handleSubtaskActionSuccess(updated);
+          }}
+        />
+      )}
+
+      {reopenSubtask && (
+        <ReopenDialog
+          isOpen={!!reopenSubtask}
+          onClose={() => setReopenSubtask(null)}
+          subtask={reopenSubtask}
+          onReopenSuccess={(updated) => {
+            setReopenSubtask(null);
+            handleSubtaskActionSuccess(updated);
+            showSuccessMessage("Subtask", "reopened");
+          }}
+        />
+      )}
+
+      {abandonSubtask && (
+        <AbandonModal
+          isOpen={!!abandonSubtask}
+          onClose={() => setAbandonSubtask(null)}
+          title={t("Abandon Subtask", { defaultValue: "Abandon Subtask" })}
+          subtitle={abandonSubtask?.title}
+          actionLabel={t("Abandon Subtask", { defaultValue: "Abandon Subtask" })}
+          onSubmit={handleSubtaskAbandon}
+          loading={abandonSubtaskLoading}
+        />
+      )}
+
+      {markCompletedSubtask && (
+        <MarkTaskCompletedModal
+          isOpen={!!markCompletedSubtask}
+          onClose={() => setMarkCompletedSubtask(null)}
+          task={markCompletedSubtask}
+          entityType="deliverable"
+          onCompleteSuccess={(updated) => {
+            setMarkCompletedSubtask(null);
+            handleSubtaskActionSuccess(updated);
+          }}
+        />
+      )}
+
+      {transferSubtask && (
+        <TransferTaskDialog
+          isOpen={!!transferSubtask}
+          onClose={() => setTransferSubtask(null)}
+          task={transferSubtask}
+          entityType="deliverable"
+          onTransferSuccess={(updated) => {
+            setTransferSubtask(null);
+            handleSubtaskActionSuccess(updated);
+            showSuccessMessage("Subtask", "transferred");
+          }}
+        />
+      )}
+
+      {assignerPauseSubtask && (
+        <PauseReasonModal
+          isOpen={!!assignerPauseSubtask}
+          onClose={() => setAssignerPauseSubtask(null)}
+          onConfirm={handleSubtaskAssignerPauseSubmit}
+          isAssigner
+        />
+      )}
 
       {!readOnly && (
         <MarkTaskCompletedModal

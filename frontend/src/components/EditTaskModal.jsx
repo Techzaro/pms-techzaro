@@ -143,7 +143,7 @@ function generatePreview(templates, settings, startDate, endDate) {
  * @param {Object} task - The task object to edit (pre-populates form fields)
  * @param {Function} onClose - Callback to close modal; receives boolean (true if saved)
  */
-export default function EditTaskModal({ task, onClose }) {
+export default function EditTaskModal({ task = {}, onClose, restoreDraftId = null, draftData = null }) {
   const { t } = useTranslation();
   const draftSaveRef = useRef(null);
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useDraftGuard(onClose, {
@@ -175,12 +175,13 @@ export default function EditTaskModal({ task, onClose }) {
   const [projects, setProjects] = useState([]);
   const [projectTasks, setProjectTasks] = useState([]);
   const [form, setForm] = useState({
-    title: task.title || "",
-    description: task.description || "",
-    priority: task.priority || "Medium",
-    task_type: task.task_type || "standard",
-    project_id: task.project?.id ? [task.project.id] : (task.project_id ? [task.project_id] : []),
+    title: task?.title || "",
+    description: task?.description || "",
+    priority: task?.priority || "Medium",
+    task_type: task?.task_type || "standard",
+    project_id: task?.project?.id ? [task.project.id] : (task?.project_id ? [task.project_id] : []),
     parent_id: (() => {
+      if (!task) return [];
       if (Array.isArray(task.parent_ids) && task.parent_ids.length > 0) return task.parent_ids.map(Number);
       if (task.parent_id) return [Number(task.parent_id)];
       if (task.parent?.id) return [Number(task.parent.id)];
@@ -189,21 +190,81 @@ export default function EditTaskModal({ task, onClose }) {
       if (task.subtask_of) return [Number(task.subtask_of)];
       return [];
     })(),
-    start_date: task.start_date ? toDatetimeLocal(task.start_date) : "",
-    end_date: task.end_date ? toDatetimeLocal(task.end_date) : "",
-    allow_transfer: task.allow_transfer !== false ? "allow" : "disallow",
+    start_date: task?.start_date ? toDatetimeLocal(task.start_date) : "",
+    end_date: task?.end_date ? toDatetimeLocal(task.end_date) : "",
+    allow_transfer: task?.allow_transfer !== false ? "allow" : "disallow",
   });
   const [recurrenceSettings, setRecurrenceSettings] = useState({
-    repeat: task.recurrence_settings?.repeat || "daily",
-    skip_weekends: task.recurrence_settings?.skip_weekends || false,
+    repeat: task?.recurrence_settings?.repeat || "daily",
+    skip_weekends: task?.recurrence_settings?.skip_weekends || false,
   });
   const [recurringTemplates, setRecurringTemplates] = useState(() => {
-    if (task.deliverable_templates && task.deliverable_templates.length > 0) {
+    if (task?.deliverable_templates && task.deliverable_templates.length > 0) {
       return task.deliverable_templates.map((t) => ({ title: t.title, description: t.description || "", quantity: t.quantity || 1, combined: t.combined || false }));
     }
-    return task.task_type === "recurring" ? [{ title: "", description: "", quantity: 1, combined: false }] : [];
+    return task?.task_type === "recurring" ? [{ title: "", description: "", quantity: 1, combined: false }] : [];
   });
   const [showVariablesHint, setShowVariablesHint] = useState(false);
+
+  // Restore draft data when opened from DraftCenter
+  useEffect(() => {
+    if (!restoreDraftId && !draftData) return;
+
+    const applyDraft = (d) => {
+      if (!d) return;
+      setForm((prev) => ({
+        ...prev,
+        title: d.title !== undefined ? d.title : prev.title,
+        description: d.description !== undefined ? d.description : prev.description,
+        priority: d.priority || prev.priority,
+        task_type: d.task_type || prev.task_type,
+        project_id: d.project_id ? (Array.isArray(d.project_id) ? d.project_id : [d.project_id]) : prev.project_id,
+        parent_id: d.parent_id ? (Array.isArray(d.parent_id) ? d.parent_id.map(Number) : [Number(d.parent_id)]) : prev.parent_id,
+        start_date: d.start_date ? toDatetimeLocal(d.start_date) : prev.start_date,
+        end_date: d.end_date ? toDatetimeLocal(d.end_date) : prev.end_date,
+        allow_transfer: d.allow_transfer !== undefined ? (d.allow_transfer !== false ? "allow" : "disallow") : prev.allow_transfer,
+      }));
+
+      if (d.assigned_to || d.assignees || d.selectedAssigneeIds) {
+        const assignees = d.assigned_to || d.assignees || d.selectedAssigneeIds;
+        setSelectedAssigneeIds(Array.isArray(assignees) ? assignees.map((a) => (typeof a === "object" ? a.id : Number(a))) : [Number(assignees)]);
+      }
+      if (d.followers || d.follower_ids || d.selectedFollowerIds) {
+        const followers = d.followers || d.follower_ids || d.selectedFollowerIds;
+        setSelectedFollowerIds(Array.isArray(followers) ? followers.map((f) => (typeof f === "object" ? f.id : Number(f))) : [Number(followers)]);
+      }
+      if (d.requirementsList) setRequirementsList(d.requirementsList);
+      else if (d.requirements) setRequirementsList(d.requirements);
+      if (d.subtasks) setSubtasks(d.subtasks);
+      else if (d.deliverables) setSubtasks(d.deliverables);
+      if (d.recurringTemplates) setRecurringTemplates(d.recurringTemplates);
+      else if (d.deliverable_templates) setRecurringTemplates(d.deliverable_templates);
+      if (d.recurrenceSettings) setRecurrenceSettings(d.recurrenceSettings);
+      else if (d.recurrence_settings) setRecurrenceSettings(d.recurrence_settings);
+      if (d.links) setLinks(d.links.map((l) => ({ url: l.url, name: l.name || l.title || "", title: l.title || l.name || "" })));
+      if (d.kb_ids) setKbIds(Array.isArray(d.kb_ids) ? d.kb_ids.map(Number) : [Number(d.kb_ids)]);
+      else if (d.kb_id || d.kbReferenceId) setKbIds([Number(d.kb_id || d.kbReferenceId)]);
+      if (d.event_ids) setEventIds(Array.isArray(d.event_ids) ? d.event_ids.map(Number) : [Number(d.event_ids)]);
+      else if (d.event_id || d.eventReferenceId) setEventIds([Number(d.event_id || d.eventReferenceId)]);
+      if (restoreDraftId) setDraftId(restoreDraftId);
+    };
+
+    if (draftData) {
+      applyDraft(draftData);
+      return;
+    }
+
+    if (restoreDraftId) {
+      draftService.get(restoreDraftId)
+        .then((res) => {
+          const draft = res?.data || res;
+          if (draft?.draft_data) {
+            applyDraft(draft.draft_data);
+          }
+        })
+        .catch((err) => console.error("Failed to restore draft in EditTaskModal:", err));
+    }
+  }, [restoreDraftId, draftData]);
 
   const preview = useMemo(() => {
     if (form.task_type !== "recurring") return null;
@@ -1455,7 +1516,7 @@ export default function EditTaskModal({ task, onClose }) {
 
       {/* Edit Link Modal */}
       {editingLink && createPortal(
-        <div style={{ position: "fixed", inset: 0, zIndex: 10003, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => setEditingLink(null)}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 100000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }} onClick={() => setEditingLink(null)}>
           <div style={{ background: "#fff", borderRadius: 12, padding: "24px 28px", width: 400, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#111827" }}>{t("Edit File / Link", { defaultValue: "Edit File / Link" })}</h3>
             <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>Rename or update the URL below.</p>
@@ -1499,7 +1560,7 @@ export default function EditTaskModal({ task, onClose }) {
 
       {/* Edit File Modal */}
       {editingFile && createPortal(
-        <div style={{ position: "fixed", inset: 0, zIndex: 10003, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => { setEditingFile(null); setEditFileNewFile(null); setEditFileDeleted(false); setEditFileDeleteConfirm(false); }}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 100000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }} onClick={() => { setEditingFile(null); setEditFileNewFile(null); setEditFileDeleted(false); setEditFileDeleteConfirm(false); }}>
           <div style={{ background: "#fff", borderRadius: 12, padding: "24px 28px", width: 420, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#111827" }}>{t("Edit File", { defaultValue: "Edit File" })}</h3>
             <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>Rename or replace this file.</p>

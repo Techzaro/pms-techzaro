@@ -6211,6 +6211,17 @@ class TaskController extends Controller
             };
         }
 
+        if ($request->filled('updated_since')) {
+            $threshold = Deliverable::calculateUpdatedSinceThreshold(
+                $request->input('updated_since'),
+                $request->input('updated_since_value'),
+                $request->input('updated_since_unit', 'hours')
+            );
+            if ($threshold) {
+                $query->where('deliverables.updated_at', '>=', $threshold);
+            }
+        }
+
         return $query;
     }
 
@@ -6590,6 +6601,18 @@ class TaskController extends Controller
             $query->whereDate('tasks.end_date', '>=', $dueDateFrom);
         } elseif ($dueDateTo) {
             $query->whereDate('tasks.end_date', '<=', $dueDateTo);
+        }
+
+        // Updated Since Filter
+        if ($request->filled('updated_since')) {
+            $threshold = Task::calculateUpdatedSinceThreshold(
+                $request->input('updated_since'),
+                $request->input('updated_since_value'),
+                $request->input('updated_since_unit', 'hours')
+            );
+            if ($threshold) {
+                $query->where('tasks.updated_at', '>=', $threshold);
+            }
         }
 
         // 2. ORDER BY

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { X, Globe, User, Lock, Users, ChevronDown, Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { authToken } from "../utils/auth";
@@ -157,7 +158,7 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={handleClose}>
       <div className="aam-modal" onClick={(e) => e.stopPropagation()}>
         <div className="aam-header">
@@ -349,6 +350,7 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
         </form>
       </div>
       {ConfirmDialog}
-    </div>
+    </div>,
+    document.body
   );
 }

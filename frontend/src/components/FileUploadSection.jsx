@@ -11,6 +11,7 @@
  *   readOnly    - Boolean
  */
 import { useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { FolderOpen, Upload, Link as LinkIcon, X } from "lucide-react";
 import SortableTableWrapper, { DragHandle } from "./SortableTableWrapper";
@@ -308,7 +309,7 @@ export default function FileUploadSection({ entityType, entityId, files, onReord
       )}
 
       {/* Edit/Rename Popup */}
-      {editItem && (
+      {editItem && createPortal(
         <div className="pd-edit-overlay" onClick={() => setEditItem(null)}>
           <div className="pd-edit-modal" onClick={(e) => e.stopPropagation()}>
             <h3 className="pd-edit-modal__title">{t("Rename File", { defaultValue: "Rename File" })}</h3>
@@ -342,7 +343,8 @@ export default function FileUploadSection({ entityType, entityId, files, onReord
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Delete Confirmation */}

@@ -21,6 +21,7 @@ import { usePinnedTasks, togglePinTask, isTaskPinned } from "../utils/pinnedTask
 import { showSuccessMessage, notify, toast } from "../utils/notify";
 import { publish } from "../utils/eventBus";
 import CreateTaskModal from "../components/CreateTaskModal";
+import EditTaskModal from "../components/EditTaskModal";
 import SubmitTaskModal from "../components/SubmitTaskModal";
 import ConfirmModal from "../components/ConfirmModal";
 import PauseReasonModal from "../components/PauseReasonModal";
@@ -43,6 +44,7 @@ import { usePersonalization } from "../context/PersonalizationContext";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import { renderDynamicDates } from "../utils/tableDateUtils";
 import { formatDateTimeInline } from "../utils/formatDateTime";
+import { getUpdatedSinceThreshold } from "../utils/filterUtils";
 import "../components/ActionPopover.css";
 import "../pages/Task.css";
 
@@ -139,6 +141,9 @@ function Tasks() {
   const [customEndDate, setCustomEndDate] = useState("");
   const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
   const [restoreDraftId, setRestoreDraftId] = useState(null);
+  const [draftDataPayload, setDraftDataPayload] = useState(null);
+  const [editingTask, setEditingTask] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
   const [transferDialog, setTransferDialog] = useState({ open: false, task: null });
   const [pinnedTasks] = usePinnedTasks();
@@ -181,6 +186,9 @@ function Tasks() {
     end_date: "",
     due_date_from: "",
     due_date_to: "",
+    updated_since: "",
+    updated_since_value: "",
+    updated_since_unit: "hours",
   });
 
   const handleSort = (column) => {
@@ -314,6 +322,13 @@ function Tasks() {
       if (advancedFilters.end_date) params.append("end_date", advancedFilters.end_date);
       if (advancedFilters.due_date_from) params.append("due_date_from", advancedFilters.due_date_from);
       if (advancedFilters.due_date_to) params.append("due_date_to", advancedFilters.due_date_to);
+      if (advancedFilters.updated_since) {
+        params.append("updated_since", advancedFilters.updated_since);
+        if (advancedFilters.updated_since === "custom") {
+          if (advancedFilters.updated_since_value) params.append("updated_since_value", advancedFilters.updated_since_value);
+          if (advancedFilters.updated_since_unit) params.append("updated_since_unit", advancedFilters.updated_since_unit);
+        }
+      }
       if (sortBy) {
         params.append("sort_by", sortBy);
         params.append("sort_direction", sortDirection);
@@ -362,6 +377,47 @@ function Tasks() {
     fetchTasks();
     fetchSharedTasks();
   }, [fetchTasks, page]);
+
+  // Handle draft restoration from DraftCenter
+  useEffect(() => {
+    const draftId = location.state?.openDraft;
+    if (!draftId) return;
+
+    const origId = location.state?.originalRecordId || location.state?.draft?.original_record_id;
+    const directDraftData = location.state?.draftData;
+
+    window.history.replaceState({}, document.title);
+
+    if (origId) {
+      setRestoreDraftId(draftId);
+      setDraftDataPayload(directDraftData || null);
+
+      const existingTask = items.find((t) => String(t.id) === String(origId));
+      if (existingTask) {
+        setEditingTask(existingTask);
+        setShowEditModal(true);
+      } else {
+        const token = authToken();
+        fetch(`${API_URL}/tasks/${origId}`, {
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        })
+          .then((r) => r.json())
+          .then((data) => {
+            const t = data?.data || data?.task || data;
+            setEditingTask(t || { id: origId, title: directDraftData?.title || "" });
+            setShowEditModal(true);
+          })
+          .catch(() => {
+            setEditingTask({ id: origId, title: directDraftData?.title || "" });
+            setShowEditModal(true);
+          });
+      }
+    } else {
+      setRestoreDraftId(draftId);
+      setDraftDataPayload(directDraftData || null);
+      setShowTaskModal(true);
+    }
+  }, [location.state, items]);
 
   useAutoRefresh(() => { fetchTasks(); fetchSharedTasks(); }, {
     events: ['task:created', 'task:updated', 'task:deleted', 'data:changed', 'sharing:changed'],
@@ -477,8 +533,24 @@ function Tasks() {
         return (item.status || "").toLowerCase() === sf;
       });
     }
+
+    // Updated Since filtering
+    const updatedSinceThreshold = getUpdatedSinceThreshold(
+      advancedFilters.updated_since,
+      advancedFilters.updated_since_value,
+      advancedFilters.updated_since_unit
+    );
+    if (updatedSinceThreshold) {
+      const thresholdTime = updatedSinceThreshold.getTime();
+      list = list.filter((item) => {
+        if (!item?.updated_at) return false;
+        const itemUpdated = new Date(item.updated_at).getTime();
+        return !isNaN(itemUpdated) && itemUpdated >= thresholdTime;
+      });
+    }
+
     return list;
-  }, [searchFilteredItems, statusFilter, advancedFilters.priority, advancedFilters.priorities, completedStatuses, pendingStatuses, inProgressStatuses, submittedStatuses, pausedStatuses, declinedStatuses, abandonedStatuses]);
+  }, [searchFilteredItems, statusFilter, advancedFilters.priority, advancedFilters.priorities, advancedFilters.updated_since, advancedFilters.updated_since_value, advancedFilters.updated_since_unit, completedStatuses, pendingStatuses, inProgressStatuses, submittedStatuses, pausedStatuses, declinedStatuses, abandonedStatuses]);
 
   const taskIdList = useMemo(() => filteredItems.map((i) => i.id), [filteredItems]);
 
@@ -849,9 +921,26 @@ function Tasks() {
       {showTaskModal && (
         <CreateTaskModal
           restoreDraftId={restoreDraftId}
+          draftData={draftDataPayload}
           onClose={(refresh) => {
             setShowTaskModal(false);
             setRestoreDraftId(null);
+            setDraftDataPayload(null);
+            if (refresh) fetchTasks();
+          }}
+        />
+      )}
+
+      {showEditModal && editingTask && (
+        <EditTaskModal
+          task={editingTask}
+          restoreDraftId={restoreDraftId}
+          draftData={draftDataPayload}
+          onClose={(refresh) => {
+            setShowEditModal(false);
+            setEditingTask(null);
+            setRestoreDraftId(null);
+            setDraftDataPayload(null);
             if (refresh) fetchTasks();
           }}
         />
@@ -918,6 +1007,9 @@ function Tasks() {
               end_date: appliedFilters?.end_date || "",
               due_date_from: appliedFilters?.due_date_from || "",
               due_date_to: appliedFilters?.due_date_to || "",
+              updated_since: appliedFilters?.updated_since || "",
+              updated_since_value: appliedFilters?.updated_since_value || "",
+              updated_since_unit: appliedFilters?.updated_since_unit || "hours",
             }));
             if (appliedSort && appliedSort.sort_by) {
               setSortBy(appliedSort.sort_by);
@@ -945,6 +1037,9 @@ function Tasks() {
               end_date: "",
               due_date_from: "",
               due_date_to: "",
+              updated_since: "",
+              updated_since_value: "",
+              updated_since_unit: "hours",
             });
             setPage(1);
           }}

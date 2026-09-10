@@ -41,6 +41,7 @@ import API_URL from "../config/api";
 import { authToken, rolePath, getUser } from "../utils/auth";
 import { renderDynamicDates } from "../utils/tableDateUtils";
 import { formatDateTimeInline } from "../utils/formatDateTime";
+import { getUpdatedSinceThreshold } from "../utils/filterUtils";
 import { showSuccessMessage, notify, toast } from "../utils/notify";
 import { useNotification } from "../context/NotificationContext";
 import "../components/ActionPopover.css";
@@ -144,6 +145,9 @@ const Taskby = () => {
     end_date: "",
     due_date_from: "",
     due_date_to: "",
+    updated_since: "",
+    updated_since_value: "",
+    updated_since_unit: "hours",
   });
 
   const [sortBy, setSortBy] = useState("");
@@ -275,6 +279,13 @@ const Taskby = () => {
       if (advancedFilters.end_date) params.append("end_date", advancedFilters.end_date);
       if (advancedFilters.due_date_from) params.append("due_date_from", advancedFilters.due_date_from);
       if (advancedFilters.due_date_to) params.append("due_date_to", advancedFilters.due_date_to);
+      if (advancedFilters.updated_since) {
+        params.append("updated_since", advancedFilters.updated_since);
+        if (advancedFilters.updated_since === "custom") {
+          if (advancedFilters.updated_since_value) params.append("updated_since_value", advancedFilters.updated_since_value);
+          if (advancedFilters.updated_since_unit) params.append("updated_since_unit", advancedFilters.updated_since_unit);
+        }
+      }
       if (sortBy) {
         params.append("sort_by", sortBy);
         params.append("sort_direction", sortDirection);
@@ -406,8 +417,24 @@ const Taskby = () => {
         list = list.filter((item) => String(item.status).toLowerCase() === sf);
       }
     }
+
+    // Updated Since filtering
+    const updatedSinceThreshold = getUpdatedSinceThreshold(
+      advancedFilters.updated_since,
+      advancedFilters.updated_since_value,
+      advancedFilters.updated_since_unit
+    );
+    if (updatedSinceThreshold) {
+      const thresholdTime = updatedSinceThreshold.getTime();
+      list = list.filter((item) => {
+        if (!item?.updated_at) return false;
+        const itemUpdated = new Date(item.updated_at).getTime();
+        return !isNaN(itemUpdated) && itemUpdated >= thresholdTime;
+      });
+    }
+
     return list;
-  }, [baseItems, statusFilter, advancedFilters.priority, advancedFilters.priorities, pendingStatuses, inProgressStatuses, submittedStatuses, completedStatuses, pausedStatuses, declinedStatuses, abandonedStatuses]);
+  }, [baseItems, statusFilter, advancedFilters.priority, advancedFilters.priorities, advancedFilters.updated_since, advancedFilters.updated_since_value, advancedFilters.updated_since_unit, pendingStatuses, inProgressStatuses, submittedStatuses, completedStatuses, pausedStatuses, declinedStatuses, abandonedStatuses]);
 
   const taskIdList = filteredItems.map((i) => i.id);
 
@@ -765,6 +792,9 @@ const Taskby = () => {
             end_date: appliedFilters?.end_date || "",
             due_date_from: appliedFilters?.due_date_from || "",
             due_date_to: appliedFilters?.due_date_to || "",
+            updated_since: appliedFilters?.updated_since || "",
+            updated_since_value: appliedFilters?.updated_since_value || "",
+            updated_since_unit: appliedFilters?.updated_since_unit || "hours",
           }));
           if (appliedSort && appliedSort.sort_by) {
             setSortBy(appliedSort.sort_by);
@@ -792,6 +822,9 @@ const Taskby = () => {
             end_date: "",
             due_date_from: "",
             due_date_to: "",
+            updated_since: "",
+            updated_since_value: "",
+            updated_since_unit: "hours",
           });
           setPage(1);
         }}

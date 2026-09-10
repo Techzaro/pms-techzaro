@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, Fragment } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Building2, Plus, Search, Filter, X, Hash, Eye, SlidersHorizontal, ExternalLink, Mail, User, Pencil, Trash2, Ban, CheckCircle, Loader2, Check, ArrowRight, ArrowLeft, Sliders } from 'lucide-react';
@@ -479,9 +480,9 @@ function EditOrganizationModal({ org, plans, saving, onSave, onClose }) {
     infoBox: { background: 'var(--color-primary-bg)', border: '1px solid var(--color-primary)' },
   };
 
-  return (
-    <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 9999 }}>
-      <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(4px)' }} onClick={onClose}></div>
+  return createPortal(
+    <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 99999 }}>
+      <div className="absolute inset-0" style={{ background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} onClick={onClose}></div>
       <div className="relative rounded-xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col" style={{ ...s.card, zIndex: 10000 }}>
         <div className="flex items-center justify-between p-6 pb-4" style={s.divider}>
           <div>
@@ -667,6 +668,7 @@ function EditOrganizationModal({ org, plans, saving, onSave, onClose }) {
           onClose={() => setShowPlanCustomModal(false)}
         />
       )}
-    </div>
+    </div>,
+    document.body
   );
 }

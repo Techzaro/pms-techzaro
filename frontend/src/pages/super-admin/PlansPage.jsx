@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { CreditCard, Check, X, Users, FolderKanban, HardDrive, Pencil, Loader2 } from 'lucide-react';
 import { LoadingState, ErrorState } from './components/LoadingState';
@@ -199,9 +200,9 @@ function EditPlanModal({ plan, allModules, saving, onSave, onClose }) {
     divider: { borderTop: '1px solid var(--border-light)' },
   };
 
-  return (
-    <div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: 9999 }}>
-      <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(4px)' }} />
+  return createPortal(
+    <div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: 99999 }}>
+      <div className="absolute inset-0" style={{ background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} onClick={handleClose} />
       <div className="relative rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" style={{ ...s.card, background: 'var(--bg-card)', zIndex: 10000 }}
         onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-5" style={s.divider}>
@@ -318,6 +319,7 @@ function EditPlanModal({ plan, allModules, saving, onSave, onClose }) {
         </form>
       </div>
       {ConfirmDialog}
-    </div>
+    </div>,
+    document.body
   );
 }

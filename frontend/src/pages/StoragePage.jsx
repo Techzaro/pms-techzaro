@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import Breadcrumb from '../components/Breadcrumb';
@@ -1178,16 +1179,16 @@ export default function StoragePage() {
       )}
 
       {/* Delete Confirmation Modal */}
-      {deleteModal && (
+      {deleteModal && createPortal(
         <div style={{
-          position: 'fixed', inset: 0, zIndex: 10000,
+          position: 'fixed', inset: 0, zIndex: 100000,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
-        }}>
+          background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
+        }} onClick={() => setDeleteModal(null)}>
           <div style={{
             background: 'var(--bg-card)', borderRadius: '20px', padding: '28px',
             boxShadow: 'var(--shadow-lg)', width: '90%', maxWidth: '420px',
-          }}>
+          }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
               <div style={{
                 width: '44px', height: '44px', borderRadius: '12px',
@@ -1231,7 +1232,8 @@ export default function StoragePage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       <ConfirmModal

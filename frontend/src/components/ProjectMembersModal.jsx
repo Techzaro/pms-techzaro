@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import UserSelectDropdown from "./UserSelectDropdown";
 import { authToken } from "../utils/auth";
@@ -119,7 +120,7 @@ export default function ProjectMembersModal({ isOpen, onClose, project, onSucces
     }
   };
 
-  return (
+  return createPortal(
     <div className="cp-overlay" onClick={onClose}>
       <div className="cp-modal" style={{ maxWidth: 540 }} onClick={(e) => e.stopPropagation()}>
         <div className="cp-header">
@@ -214,6 +215,7 @@ export default function ProjectMembersModal({ isOpen, onClose, project, onSucces
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

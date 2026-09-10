@@ -70,12 +70,15 @@ export default function UnifiedActivityFeed({ module = "task", entityId, initial
         endpoint = `${API_URL}/projects/${entityId}/unified-activity?${params.toString()}`;
       } else if (module === "task" && entityId) {
         endpoint = `${API_URL}/tasks/${entityId}/unified-activity?${params.toString()}`;
+      } else if ((module === "deliverable" || module === "deliverables") && entityId) {
+        endpoint = `${API_URL}/deliverables/${entityId}/activities?${params.toString()}`;
       } else if (module === "knowledge_base" && entityId) {
         endpoint = `${API_URL}/knowledge-base/${entityId}/activities?${params.toString()}`;
       } else if (module === "event" && entityId) {
         endpoint = `${API_URL}/events/${entityId}/activities?${params.toString()}`;
       } else if (entityId) {
-        endpoint = `${API_URL}/${module}/${entityId}/activities?${params.toString()}`;
+        const pluralModule = module === "deliverable" ? "deliverables" : (module.endsWith("s") ? module : `${module}s`);
+        endpoint = `${API_URL}/${pluralModule}/${entityId}/activities?${params.toString()}`;
       } else {
         endpoint = `${API_URL}/activity-logs?module=${module}&${params.toString()}`;
       }

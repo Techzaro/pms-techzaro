@@ -58,9 +58,9 @@ export default function SuperAdminChangePasswordModal({ org, onClose, onSuccess 
 
   return createPortal(
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 10010,
+      position: 'fixed', inset: 0, zIndex: 100000,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'rgba(0,0,0,0.4)',
+      background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
     }} onClick={onClose}>
       <div style={{
         background: '#fff', borderRadius: 16, padding: '28px 30px 24px',

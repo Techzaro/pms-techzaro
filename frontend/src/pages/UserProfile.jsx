@@ -2200,8 +2200,8 @@ if (!editUser.employee_code.trim()) errors.employee_code = t("Employee Code is r
       />
 
       {/* Edit Document Popup — same as ManageUsers edit file popup */}
-      {editDocItem && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 10003, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => { setEditDocItem(null); setEditDocNewFile(null); setEditDocDeleted(false); setEditDocDeleteConfirm(false); }}>
+      {editDocItem && createPortal(
+        <div style={{ position: "fixed", inset: 0, zIndex: 100000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }} onClick={() => { setEditDocItem(null); setEditDocNewFile(null); setEditDocDeleted(false); setEditDocDeleteConfirm(false); }}>
           <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: "24px 28px", width: 420, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>{t("Edit File", { defaultValue: "Edit File" })}</h3>
             <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--text-secondary)" }}>{t("Rename or replace this file.", { defaultValue: "Rename or replace this file." })}</p>
@@ -2247,7 +2247,8 @@ if (!editUser.employee_code.trim()) errors.employee_code = t("Employee Code is r
                 onMouseEnter={(e) => e.target.style.background = "var(--color-primary-dark)"} onMouseLeave={(e) => e.target.style.background = "var(--color-primary)"}>{t("Save", { defaultValue: "Save" })}</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Edit File Delete Confirmation (nested) */}

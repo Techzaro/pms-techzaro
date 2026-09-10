@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import DOMPurify from "dompurify";
@@ -400,7 +401,7 @@ export default function FeedbackCenter() {
         </div>
 
         {/* Feedback Detail Drawer */}
-        {selectedId && (
+        {selectedId && createPortal(
           <div className="fbc-drawer-overlay" onClick={() => setSelectedId(null)}>
             <div className="fbc-drawer" onClick={(e) => e.stopPropagation()}>
               <div className="fbc-drawer-header">
@@ -667,7 +668,8 @@ export default function FeedbackCenter() {
                 </div>
               )}
             </div>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
 

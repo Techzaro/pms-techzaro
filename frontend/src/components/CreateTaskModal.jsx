@@ -144,7 +144,7 @@ function generatePreview(templates, settings, startDate, endDate) {
   };
 }
 
-const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreDraftId = null, prefillData = null, onTaskCreated = null }) => {
+const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreDraftId = null, prefillData = null, draftData = null, onTaskCreated = null }) => {
   const { t } = useTranslation();
   const draftSaveRef = useRef(null);
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useDraftGuard(onClose, {
@@ -284,44 +284,57 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
 
   // Restore draft data when opened from DraftCenter
   useEffect(() => {
-    if (!restoreDraftId) return;
+    if (!restoreDraftId && !draftData) return;
 
-    const loadDraft = async () => {
-      try {
-        const data = await draftService.get(restoreDraftId);
-        const draft = data?.data;
-        if (!draft?.draft_data) return;
-
-        const d = draft.draft_data;
-        const restoredProjectId = d.project_id || projectId;
-        setForm({
-          project_id: Array.isArray(restoredProjectId) ? restoredProjectId : restoredProjectId ? [restoredProjectId] : [],
-          assigned_to: d.assigned_to || [],
-          title: d.title || "",
-          description: d.description || "",
-          priority: d.priority || "Medium",
-          task_type: d.task_type || "standard",
-          start_date: d.start_date || "",
-          end_date: d.end_date || "",
-          allow_transfer: d.allow_transfer ?? "allow",
-          parent_id: Array.isArray(d.parent_id) ? d.parent_id : (d.parent_id ? [d.parent_id] : []),
-        });
-        if (d.requirementsList) setRequirementsList(d.requirementsList);
-        if (d.deliverables) setSubtasks(d.deliverables);
-        if (d.recurringTemplates) setRecurringTemplates(d.recurringTemplates);
-        if (d.links) setLinks(d.links.map(l => ({ url: l.url, name: l.name || "", renaming: false })));
-        if (d.kb_ids) setKbIds(Array.isArray(d.kb_ids) ? d.kb_ids.map(Number) : [Number(d.kb_ids)]);
-        else if (d.kb_id || d.kbReferenceId) setKbIds([Number(d.kb_id || d.kbReferenceId)]);
-        if (d.event_ids) setEventIds(Array.isArray(d.event_ids) ? d.event_ids.map(Number) : [Number(d.event_ids)]);
-        else if (d.event_id || d.eventReferenceId) setEventIds([Number(d.event_id || d.eventReferenceId)]);
-        setDraftId(restoreDraftId);
-      } catch (err) {
-        console.error("Failed to restore draft:", err);
-      }
+    const applyDraft = (d) => {
+      if (!d) return;
+      const restoredProjectId = d.project_id || projectId;
+      setForm((prev) => ({
+        ...prev,
+        project_id: Array.isArray(restoredProjectId) ? restoredProjectId : restoredProjectId ? [restoredProjectId] : [],
+        assigned_to: d.assigned_to || d.assignees || [],
+        followers: d.followers || d.follower_ids || [],
+        title: d.title || "",
+        description: d.description || "",
+        priority: d.priority || "Medium",
+        task_type: d.task_type || "standard",
+        start_date: d.start_date || "",
+        end_date: d.end_date || "",
+        allow_transfer: d.allow_transfer ?? "allow",
+        parent_id: Array.isArray(d.parent_id) ? d.parent_id : (d.parent_id ? [d.parent_id] : []),
+      }));
+      if (d.requirementsList) setRequirementsList(d.requirementsList);
+      else if (d.requirements) setRequirementsList(d.requirements);
+      if (d.deliverables) setSubtasks(d.deliverables);
+      else if (d.subtasks) setSubtasks(d.subtasks);
+      if (d.recurringTemplates) setRecurringTemplates(d.recurringTemplates);
+      if (d.recurrenceSettings) setRecurrenceSettings(d.recurrenceSettings);
+      if (d.links) setLinks(d.links.map(l => ({ url: l.url, name: l.name || l.customName || "", renaming: false })));
+      if (d.kb_ids) setKbIds(Array.isArray(d.kb_ids) ? d.kb_ids.map(Number) : [Number(d.kb_ids)]);
+      else if (d.kb_id || d.kbReferenceId) setKbIds([Number(d.kb_id || d.kbReferenceId)]);
+      if (d.event_ids) setEventIds(Array.isArray(d.event_ids) ? d.event_ids.map(Number) : [Number(d.event_ids)]);
+      else if (d.event_id || d.eventReferenceId) setEventIds([Number(d.event_id || d.eventReferenceId)]);
+      if (restoreDraftId) setDraftId(restoreDraftId);
     };
 
-    loadDraft();
-  }, [restoreDraftId]);
+    if (draftData) {
+      applyDraft(draftData);
+      return;
+    }
+
+    if (restoreDraftId) {
+      const loadDraft = async () => {
+        try {
+          const data = await draftService.get(restoreDraftId);
+          const draft = data?.data;
+          if (draft?.draft_data) applyDraft(draft.draft_data);
+        } catch (err) {
+          console.error("Failed to restore draft:", err);
+        }
+      };
+      loadDraft();
+    }
+  }, [restoreDraftId, draftData, projectId]);
 
   const handleSaveDraftAndClose = async () => {
     try {
@@ -1469,7 +1482,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
 
       {/* Edit Link Modal */}
       {editingLink && createPortal(
-        <div style={{ position: "fixed", inset: 0, zIndex: 10003, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => setEditingLink(null)}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 100000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }} onClick={() => setEditingLink(null)}>
           <div style={{ background: "#fff", borderRadius: 12, padding: "24px 28px", width: 400, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#111827" }}>{t("Edit File / Link", { defaultValue: "Edit File / Link" })}</h3>
             <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>Rename or update the URL below.</p>
@@ -1511,7 +1524,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
 
       {/* Edit File Modal */}
       {editingFile && createPortal(
-        <div style={{ position: "fixed", inset: 0, zIndex: 10003, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => { setEditingFile(null); setEditFileNewFile(null); setEditFileDeleted(false); setEditFileDeleteConfirm(false); }}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 100000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }} onClick={() => { setEditingFile(null); setEditFileNewFile(null); setEditFileDeleted(false); setEditFileDeleteConfirm(false); }}>
           <div style={{ background: "#fff", borderRadius: 12, padding: "24px 28px", width: 420, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#111827" }}>{t("Edit File", { defaultValue: "Edit File" })}</h3>
             <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>Rename or replace this file.</p>
@@ -1578,7 +1591,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
 
       {/* Edit File Delete Confirm */}
       {editFileDeleteConfirm && createPortal(
-        <div style={{ position: "fixed", inset: 0, zIndex: 10004, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => setEditFileDeleteConfirm(false)}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 100000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }} onClick={() => setEditFileDeleteConfirm(false)}>
           <div style={{ background: "#fff", borderRadius: 12, padding: "24px 28px", width: 380, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 700, color: "#111827" }}>{t("Delete File", { defaultValue: "Delete File" })}</h3>
             <p style={{ margin: "0 0 20px", fontSize: 14, color: "#6b7280" }}>Are you sure you want to delete this file? You can upload a new file after.</p>

@@ -4016,4 +4016,191 @@ class DeliverableController extends Controller
                 ->orWhereJsonContains('assigned_users', (string) $user->id);
         })->pluck('id')->toArray();
     }
+
+    /**
+     * Get unified activity feed for a deliverable with date, user_id, and type filtering.
+     *
+     * @param Request $request
+     * @param Deliverable $deliverable
+     * @return JsonResponse
+     */
+    public function activities(Request $request, Deliverable $deliverable): JsonResponse
+    {
+        $startDate = $request->query('start_date') ?: $request->query('date_from');
+        $endDate = $request->query('end_date') ?: $request->query('date_to');
+        $dateFilter = $request->query('date');
+        $userFilter = $request->query('user_id');
+        $typeFilter = $request->query('type');
+
+        $feed = collect();
+
+        // 1. Deliverable Workflow Events (Timelines & Submissions)
+        $events = DeliverableWorkflowEvent::with('user:id,name,email,role')
+            ->where('deliverable_id', $deliverable->id)
+            ->get();
+
+        foreach ($events as $e) {
+            $action = $e->event_type ?: 'updated';
+            $category = in_array($action, ['submitted', 'resubmitted']) ? 'submissions' : 'timelines';
+            $feed->push([
+                'id' => 'evt-' . $e->id,
+                'type' => $category,
+                'category' => $category,
+                'action' => $action,
+                'title' => ucfirst(str_replace('_', ' ', $action)),
+                'description' => $e->comment ?: "Subtask status changed to {$action}",
+                'user_id' => $e->user_id,
+                'user_name' => $e->user?->name ?? 'System',
+                'created_at' => $e->created_at->toIso8601String(),
+                'details' => ['comment' => $e->comment, 'instructions' => $e->instructions],
+            ]);
+        }
+
+        // 2. Deliverable Changes (Field Changes)
+        $changes = DeliverableChange::with('modifiedBy:id,name,email,role')
+            ->where('deliverable_id', $deliverable->id)
+            ->get();
+
+        foreach ($changes as $c) {
+            $feed->push([
+                'id' => 'chg-' . $c->id,
+                'type' => 'changes',
+                'category' => 'changes',
+                'action' => 'field_updated',
+                'title' => 'Field Updated: ' . ucwords(str_replace('_', ' ', $c->field_name)),
+                'description' => "Changed from '" . ($c->old_value ?? 'none') . "' to '" . ($c->new_value ?? 'none') . "'",
+                'user_id' => $c->modified_by,
+                'user_name' => $c->modifiedBy?->name ?? 'System',
+                'created_at' => $c->created_at->toIso8601String(),
+                'details' => ['field' => $c->field_name, 'old' => $c->old_value, 'new' => $c->new_value],
+            ]);
+        }
+
+        // 3. Deliverable Submissions
+        $submissions = DeliverableSubmission::with('submittedBy:id,name,email,role')
+            ->where('deliverable_id', $deliverable->id)
+            ->get();
+
+        foreach ($submissions as $s) {
+            $feed->push([
+                'id' => 'sub-' . $s->id,
+                'type' => 'submissions',
+                'category' => 'submissions',
+                'action' => 'submitted',
+                'title' => 'Submission #' . ($s->version_number ?? 1),
+                'description' => $s->comment ?: 'Subtask submission',
+                'user_id' => $s->submitted_by,
+                'user_name' => $s->submittedBy?->name ?? 'User',
+                'created_at' => $s->created_at->toIso8601String(),
+                'details' => ['reopen_reason' => $s->reopen_reason, 'status' => $s->status],
+            ]);
+        }
+
+        // 4. Delegations / Transfers
+        $delegations = TaskDelegation::with(['delegatedBy:id,name,role', 'delegatedTo:id,name,role'])
+            ->where('deliverable_id', $deliverable->id)
+            ->get();
+
+        foreach ($delegations as $d) {
+            $feed->push([
+                'id' => 'dlg-' . $d->id,
+                'type' => 'transfers',
+                'category' => 'transfers',
+                'action' => 'transferred',
+                'title' => 'Subtask Transferred / Delegated',
+                'description' => 'Transferred to ' . ($d->delegatedTo?->name ?? 'User') . ($d->reason ? ". Reason: {$d->reason}" : ''),
+                'user_id' => $d->delegated_by,
+                'user_name' => $d->delegatedBy?->name ?? 'User',
+                'created_at' => $d->created_at->toIso8601String(),
+                'details' => ['reason' => $d->reason, 'to' => $d->delegatedTo?->name],
+            ]);
+        }
+
+        // 5. General Activity Logs for deliverable
+        $activities = \App\Models\Activity::with('user:id,name,email,role')
+            ->where('related_module', 'deliverable')
+            ->where('related_id', $deliverable->id)
+            ->get();
+
+        foreach ($activities as $a) {
+            $cat = str_contains($a->action, 'transfer') ? 'transfers' : (str_contains($a->action, 'submit') ? 'submissions' : 'timelines');
+            $feed->push([
+                'id' => 'act-' . $a->id,
+                'type' => $cat,
+                'category' => $cat,
+                'action' => $a->action,
+                'title' => ucfirst(str_replace('_', ' ', $a->action)),
+                'description' => $a->description,
+                'user_id' => $a->user_id,
+                'user_name' => $a->user?->name ?? 'System',
+                'created_at' => $a->created_at->toIso8601String(),
+                'details' => [],
+            ]);
+        }
+
+        // Filter by Date Range or Single Date
+        if ($startDate) {
+            $formattedStart = ActivityService::parseQueryDate($startDate);
+            if ($formattedStart) {
+                $feed = $feed->filter(function ($item) use ($formattedStart) {
+                    $d = substr($item['created_at'], 0, 10);
+                    return $d >= $formattedStart;
+                });
+            }
+        }
+        if ($endDate) {
+            $formattedEnd = ActivityService::parseQueryDate($endDate);
+            if ($formattedEnd) {
+                $feed = $feed->filter(function ($item) use ($formattedEnd) {
+                    $d = substr($item['created_at'], 0, 10);
+                    return $d <= $formattedEnd;
+                });
+            }
+        }
+        if ($dateFilter && !$startDate && !$endDate) {
+            $targetDate = ActivityService::parseQueryDate($dateFilter);
+            if ($targetDate) {
+                $feed = $feed->filter(function ($item) use ($targetDate) {
+                    $d1 = substr($item['created_at'], 0, 10);
+                    if ($d1 === $targetDate) return true;
+                    $ts = strtotime($item['created_at']);
+                    return $ts !== false && date('Y-m-d', $ts) === $targetDate;
+                });
+            }
+        }
+
+        // Filter by User / Person
+        if ($userFilter) {
+            $feed = $feed->filter(fn ($item) => (string) $item['user_id'] === (string) $userFilter);
+        }
+
+        // Filter by Type
+        if ($typeFilter && $typeFilter !== 'all') {
+            $feed = $feed->filter(fn ($item) => $item['type'] === $typeFilter);
+        }
+
+        // Sort DESC
+        $sorted = $feed->sortByDesc('created_at')->values();
+
+        // Extract list of unique users for dropdown
+        $users = collect([$deliverable->assignee, $deliverable->creator, $deliverable->currentOwner])
+            ->filter()
+            ->unique('id')
+            ->values()
+            ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name]);
+
+        return response()->json([
+            'success' => true,
+            'data' => $sorted,
+            'users' => $users,
+        ]);
+    }
+
+    /**
+     * Alias for activities feed.
+     */
+    public function unifiedActivity(Request $request, Deliverable $deliverable): JsonResponse
+    {
+        return $this->activities($request, $deliverable);
+    }
 }

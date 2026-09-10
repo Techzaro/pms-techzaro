@@ -28,7 +28,7 @@ import { useTranslation } from "react-i18next";
 import RichTextEditor from "./RichTextEditor";
 import "./layout/CreateProjectModal.css";
 
-const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = null }) => {
+const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = null, draftData = null }) => {
   const { t } = useTranslation();
   const draftSaveRef = useRef(null);
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useDraftGuard(onClose, {
@@ -302,42 +302,59 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
 
   // Restore draft data when opened from DraftCenter
   useEffect(() => {
-    if (!restoreDraftId) return;
+    if (!restoreDraftId && !draftData) return;
 
-    const loadDraft = async () => {
-      try {
-        const data = await draftService.get(restoreDraftId);
-        const draft = data?.data;
-        if (!draft?.draft_data) return;
-
-        const d = draft.draft_data;
-        setForm({
-          title: d.title || "",
-          description: d.description || "",
-          team_id: d.team_id || "",
-          team_ids: d.team_ids || [],
-          assigned_users: d.assigned_users || [],
-          guest_ids: d.guest_ids || [],
-          priority: d.priority || "Medium",
-          status: d.status || "Planning",
-          budget: d.budget || "",
-          team_roles: d.team_roles || [],
-        });
-        if (d.categoriesList) setCategoriesList(d.categoriesList);
-        if (d.milestones) setMilestones(d.milestones);
-        if (d.links) setLinks(d.links);
-        if (d.kb_ids) setKbIds(Array.isArray(d.kb_ids) ? d.kb_ids.map(Number) : [Number(d.kb_ids)]);
-        else if (d.kb_id || d.kbReferenceId) setKbIds([Number(d.kb_id || d.kbReferenceId)]);
-        if (d.event_ids) setEventIds(Array.isArray(d.event_ids) ? d.event_ids.map(Number) : [Number(d.event_ids)]);
-        else if (d.event_id || d.eventReferenceId) setEventIds([Number(d.event_id || d.eventReferenceId)]);
-        setDraftId(restoreDraftId);
-      } catch (err) {
-        console.error("Failed to restore draft:", err);
+    const applyDraft = (d) => {
+      if (!d) return;
+      setForm({
+        title: d.title || "",
+        description: d.description || "",
+        team_id: d.team_id || "",
+        team_ids: d.team_ids || [],
+        assigned_users: d.assigned_users || [],
+        guest_ids: d.guest_ids || [],
+        priority: d.priority || "Medium",
+        status: d.status || "Planning",
+        budget: d.budget || "",
+        team_roles: d.team_roles || [],
+      });
+      if (d.categoriesList) setCategoriesList(d.categoriesList);
+      else if (d.category) {
+        try {
+          const parsed = JSON.parse(d.category);
+          if (Array.isArray(parsed)) setCategoriesList(parsed);
+          else setCategoriesList([d.category]);
+        } catch {
+          setCategoriesList([d.category]);
+        }
       }
+      if (d.milestones) setMilestones(d.milestones);
+      if (d.links) setLinks(d.links);
+      if (d.kb_ids) setKbIds(Array.isArray(d.kb_ids) ? d.kb_ids.map(Number) : [Number(d.kb_ids)]);
+      else if (d.kb_id || d.kbReferenceId) setKbIds([Number(d.kb_id || d.kbReferenceId)]);
+      if (d.event_ids) setEventIds(Array.isArray(d.event_ids) ? d.event_ids.map(Number) : [Number(d.event_ids)]);
+      else if (d.event_id || d.eventReferenceId) setEventIds([Number(d.event_id || d.eventReferenceId)]);
+      if (restoreDraftId) setDraftId(restoreDraftId);
     };
 
-    loadDraft();
-  }, [restoreDraftId]);
+    if (draftData) {
+      applyDraft(draftData);
+      return;
+    }
+
+    if (restoreDraftId) {
+      const loadDraft = async () => {
+        try {
+          const data = await draftService.get(restoreDraftId);
+          const draft = data?.data;
+          if (draft?.draft_data) applyDraft(draft.draft_data);
+        } catch (err) {
+          console.error("Failed to restore draft:", err);
+        }
+      };
+      loadDraft();
+    }
+  }, [restoreDraftId, draftData]);
 
   const displayUsers = (() => {
     if (form.team_id) {
@@ -1401,7 +1418,7 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
 
       {/* Edit Link Modal */}
       {editingLink && createPortal(
-        <div style={{ position: "fixed", inset: 0, zIndex: 10003, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => setEditingLink(null)}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 100000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }} onClick={() => setEditingLink(null)}>
           <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: "24px 28px", width: 400, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>{t("Edit File / Link", { defaultValue: "Edit File / Link" })}</h3>
             <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>{t("Rename or update the URL below.", { defaultValue: "Rename or update the URL below." })}</p>
@@ -1443,7 +1460,7 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
 
       {/* Edit File Modal */}
       {editingFile && createPortal(
-        <div style={{ position: "fixed", inset: 0, zIndex: 10003, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => { setEditingFile(null); setEditFileNewFile(null); }}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 100000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }} onClick={() => { setEditingFile(null); setEditFileNewFile(null); }}>
           <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: "24px 28px", width: 420, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>{t("Edit File", { defaultValue: "Edit File" })}</h3>
             <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>{t("Rename or replace this file.", { defaultValue: "Rename or replace this file." })}</p>

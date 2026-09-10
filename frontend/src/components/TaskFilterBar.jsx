@@ -5,7 +5,9 @@ import { useTranslation } from "react-i18next";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { notify } from "../utils/notify";
+import { formatForDatetimeLocal } from "../utils/filterUtils";
 import MultiSelectDropdown from "./MultiSelectDropdown";
+import ConfirmModal from "./ConfirmModal";
 
 /**
  * TaskFilterBar.jsx
@@ -38,9 +40,13 @@ export default function TaskFilterBar({
   const [showViewsDropdown, setShowViewsDropdown] = useState(false);
   const [editingView, setEditingView] = useState(null);
   const [editViewName, setEditViewName] = useState("");
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [viewToDelete, setViewToDelete] = useState(null);
-  const [deletingView, setDeletingView] = useState(false);
+  const [confirmModalConfig, setConfirmModalConfig] = useState({
+    isOpen: false,
+    actionType: null,
+    viewData: null,
+    title: "",
+    message: "",
+  });
   const dropdownRef = useRef(null);
 
   // Fetch users & projects for dropdowns
@@ -177,6 +183,8 @@ export default function TaskFilterBar({
     filters?.end_date ||
     filters?.due_date_from ||
     filters?.due_date_to ||
+    filters?.updated_since ||
+    filters?.updated_since_value ||
     (activeStatus && activeStatus !== "" && activeStatus !== "all")
   );
 
@@ -226,6 +234,9 @@ export default function TaskFilterBar({
       end_date: filters?.end_date || "",
       due_date_from: filters?.due_date_from || "",
       due_date_to: filters?.due_date_to || "",
+      updated_since: filters?.updated_since || "",
+      updated_since_value: filters?.updated_since_value || "",
+      updated_since_unit: filters?.updated_since_unit || "hours",
     };
   };
 
@@ -283,48 +294,77 @@ export default function TaskFilterBar({
     }
   };
 
-  // Update / Overwrite an existing saved view with current active filters
-  const handleOverwriteView = async (e, view) => {
-    if (e && e.stopPropagation) e.stopPropagation();
-    if (e && e.preventDefault) e.preventDefault();
-
-    if (!window.confirm('Overwrite "' + view.name + '" with your currently active filters and sorting?')) {
+  // Execute confirmed modal action (overwrite or delete saved view)
+  const handleModalConfirm = async () => {
+    const { actionType, viewData } = confirmModalConfig;
+    if (!actionType || !viewData?.id) {
+      setConfirmModalConfig({ isOpen: false, actionType: null, viewData: null, title: "", message: "" });
       return;
     }
 
     const token = authToken();
-    const currentFiltersPayload = buildCurrentFilterPayload();
-    const sortPayload = sortBy ? { sort_by: sortBy, sort_direction: sortDirection } : null;
 
-    try {
-      const res = await fetch(`${API_URL}/task-saved-views/${view.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          name: view.name,
-          view_name: view.name,
-          filters: currentFiltersPayload,
-          filter_payload: currentFiltersPayload,
-          sort_parameters: sortPayload,
-        }),
-      });
+    if (actionType === "overwrite") {
+      const currentFiltersPayload = buildCurrentFilterPayload();
+      const sortPayload = sortBy ? { sort_by: sortBy, sort_direction: sortDirection } : null;
 
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data?.success) {
-        if (notify?.success) notify.success(t("Saved view updated with current filters.", { defaultValue: "Saved view updated with current filters." }));
-        fetchSavedViews();
-        setActiveViewId(view.id);
-      } else {
-        if (notify?.error) notify.error(data?.message || t("Failed to update view.", { defaultValue: "Failed to update view." }));
+      try {
+        const res = await fetch(`${API_URL}/task-saved-views/${viewData.id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            name: viewData.name,
+            view_name: viewData.name,
+            filters: currentFiltersPayload,
+            filter_payload: currentFiltersPayload,
+            sort_parameters: sortPayload,
+          }),
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data?.success) {
+          if (notify?.success) notify.success(t("Saved view updated with current filters.", { defaultValue: "Saved view updated with current filters." }));
+          fetchSavedViews();
+          setActiveViewId(viewData.id);
+        } else {
+          if (notify?.error) notify.error(data?.message || t("Failed to update view.", { defaultValue: "Failed to update view." }));
+        }
+      } catch (err) {
+        console.error("Error updating saved view filters:", err);
+        if (notify?.error) notify.error(t("Error updating view.", { defaultValue: "Error updating view." }));
       }
-    } catch (err) {
-      console.error("Error updating saved view filters:", err);
-      if (notify?.error) notify.error(t("Error updating view.", { defaultValue: "Error updating view." }));
+    } else if (actionType === "delete") {
+      try {
+        const res = await fetch(`${API_URL}/task-saved-views/${viewData.id}`, {
+          method: "DELETE",
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (res.ok) {
+          if (notify?.success) notify.success(t("Saved view deleted.", { defaultValue: "Saved view deleted." }));
+          fetchSavedViews();
+          if (activeViewId === viewData.id || activeViewId === `custom-${viewData.id}`) {
+            setActiveViewId(null);
+            if (onReset) onReset();
+          }
+        } else {
+          const data = await res.json().catch(() => ({}));
+          if (notify?.error) notify.error(data?.message || t("Failed to delete view.", { defaultValue: "Failed to delete view." }));
+        }
+      } catch (err) {
+        console.error("Error deleting saved view:", err);
+        if (notify?.error) notify.error(t("Error deleting view.", { defaultValue: "Error deleting view." }));
+      }
     }
+
+    setConfirmModalConfig({ isOpen: false, actionType: null, viewData: null, title: "", message: "" });
   };
 
   // Update / Rename an existing saved view
@@ -359,41 +399,6 @@ export default function TaskFilterBar({
     } catch (err) {
       console.error("Error renaming saved view:", err);
       if (notify?.error) notify.error(t("Error renaming view.", { defaultValue: "Error renaming view." }));
-    }
-  };
-
-  // Execute delete request from modal
-  const handleConfirmDelete = async () => {
-    if (!viewToDelete?.id) return;
-    setDeletingView(true);
-    const token = authToken();
-    try {
-      const res = await fetch(`${API_URL}/task-saved-views/${viewToDelete.id}`, {
-        method: "DELETE",
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (res.ok) {
-        if (notify?.success) notify.success(t("Saved view deleted.", { defaultValue: "Saved view deleted." }));
-        fetchSavedViews();
-        if (activeViewId === viewToDelete.id || activeViewId === `custom-${viewToDelete.id}`) {
-          setActiveViewId(null);
-          if (onReset) onReset();
-        }
-      } else {
-        const data = await res.json().catch(() => ({}));
-        if (notify?.error) notify.error(data?.message || t("Failed to delete view.", { defaultValue: "Failed to delete view." }));
-      }
-    } catch (err) {
-      console.error("Error deleting saved view:", err);
-      if (notify?.error) notify.error(t("Error deleting view.", { defaultValue: "Error deleting view." }));
-    } finally {
-      setDeletingView(false);
-      setShowDeleteModal(false);
-      setViewToDelete(null);
     }
   };
 
@@ -600,7 +605,17 @@ export default function TaskFilterBar({
                             {isSelected && <Check size={14} color="#2563eb" />}
                             <button
                               type="button"
-                              onClick={(e) => handleOverwriteView(e, sv)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                setConfirmModalConfig({
+                                  isOpen: true,
+                                  actionType: "overwrite",
+                                  viewData: sv,
+                                  title: "Overwrite Saved View",
+                                  message: `Overwrite "${sv.name}" with your currently active filters and sorting?`,
+                                });
+                              }}
                               style={{
                                 background: "transparent",
                                 border: "none",
@@ -618,6 +633,7 @@ export default function TaskFilterBar({
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
+                                e.preventDefault();
                                 setEditingView(sv.id);
                                 setEditViewName(sv.name);
                               }}
@@ -638,9 +654,14 @@ export default function TaskFilterBar({
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setViewToDelete(sv);
-                                setShowDeleteModal(true);
-                                setShowViewsDropdown(false);
+                                e.preventDefault();
+                                setConfirmModalConfig({
+                                  isOpen: true,
+                                  actionType: "delete",
+                                  viewData: sv,
+                                  title: "Delete Saved View",
+                                  message: `Are you sure you want to delete the view "${sv.name}"? This action cannot be undone.`,
+                                });
                               }}
                               style={{
                                 background: "transparent",
@@ -852,13 +873,13 @@ export default function TaskFilterBar({
 
           {toArray(filters?.due_states || filters?.due_state).includes("Custom Date") && (
             <>
-              <div style={{ flex: "1 1 130px", minWidth: 120 }}>
+              <div style={{ flex: "1 1 160px", minWidth: 150 }}>
                 <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
                   {t("Due From", { defaultValue: "Due From" })}
                 </label>
                 <input
-                  type="date"
-                  value={filters?.due_date_from || ""}
+                  type="datetime-local"
+                  value={formatForDatetimeLocal(filters?.due_date_from)}
                   onChange={(e) => onFilterChange && onFilterChange("due_date_from", e.target.value)}
                   style={{
                     width: "100%",
@@ -874,13 +895,13 @@ export default function TaskFilterBar({
                   }}
                 />
               </div>
-              <div style={{ flex: "1 1 130px", minWidth: 120 }}>
+              <div style={{ flex: "1 1 160px", minWidth: 150 }}>
                 <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
                   {t("Due To", { defaultValue: "Due To" })}
                 </label>
                 <input
-                  type="date"
-                  value={filters?.due_date_to || ""}
+                  type="datetime-local"
+                  value={formatForDatetimeLocal(filters?.due_date_to)}
                   onChange={(e) => onFilterChange && onFilterChange("due_date_to", e.target.value)}
                   style={{
                     width: "100%",
@@ -945,13 +966,13 @@ export default function TaskFilterBar({
           </div>
 
           {/* 8. Start Date */}
-          <div style={{ flex: "1 1 120px", minWidth: 110 }}>
+          <div style={{ flex: "1 1 160px", minWidth: 150 }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
               {t("Start Date", { defaultValue: "Start Date" })}
             </label>
             <input
-              type="date"
-              value={filters?.start_date || ""}
+              type="datetime-local"
+              value={formatForDatetimeLocal(filters?.start_date)}
               onChange={(e) => onFilterChange && onFilterChange("start_date", e.target.value)}
               style={{
                 width: "100%",
@@ -969,13 +990,13 @@ export default function TaskFilterBar({
           </div>
 
           {/* 9. End Date */}
-          <div style={{ flex: "1 1 120px", minWidth: 110 }}>
+          <div style={{ flex: "1 1 160px", minWidth: 150 }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
               {t("End Date", { defaultValue: "End Date" })}
             </label>
             <input
-              type="date"
-              value={filters?.end_date || ""}
+              type="datetime-local"
+              value={formatForDatetimeLocal(filters?.end_date)}
               onChange={(e) => onFilterChange && onFilterChange("end_date", e.target.value)}
               style={{
                 width: "100%",
@@ -992,7 +1013,101 @@ export default function TaskFilterBar({
             />
           </div>
 
-          {/* 10. Save Filter Button at the end of the filter menu */}
+          {/* 10. Updated Since Filter */}
+          <div style={{ flex: "1 1 150px", minWidth: 140 }}>
+            <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
+              {t("Updated Since", { defaultValue: "Updated Since" })}
+            </label>
+            <select
+              value={filters?.updated_since || ""}
+              onChange={(e) => {
+                if (onFilterChange) {
+                  onFilterChange("updated_since", e.target.value);
+                  if (e.target.value === "custom" && !filters?.updated_since_unit) {
+                    onFilterChange("updated_since_unit", "hours");
+                  }
+                }
+              }}
+              style={{
+                width: "100%",
+                height: "36px",
+                padding: "4px 8px",
+                borderRadius: "8px",
+                border: "1px solid var(--border-color, #cbd5e1)",
+                background: "var(--bg-card, #ffffff)",
+                color: "var(--text-primary, #0f172a)",
+                fontSize: "12px",
+                outline: "none",
+                boxSizing: "border-box",
+              }}
+            >
+              <option value="">{t("Any Time", { defaultValue: "Any Time" })}</option>
+              <option value="15m">{t("Last 15 Mins", { defaultValue: "Last 15 Mins" })}</option>
+              <option value="1h">{t("Last 1 Hour", { defaultValue: "Last 1 Hour" })}</option>
+              <option value="24h">{t("Last 24 Hours", { defaultValue: "Last 24 Hours" })}</option>
+              <option value="7d">{t("Last 7 Days", { defaultValue: "Last 7 Days" })}</option>
+              <option value="1mo">{t("Last 1 Month", { defaultValue: "Last 1 Month" })}</option>
+              <option value="custom">{t("Custom", { defaultValue: "Custom" })}</option>
+            </select>
+          </div>
+
+          {/* Conditional Custom Value and Unit for Updated Since */}
+          {filters?.updated_since === "custom" && (
+            <div style={{ display: "flex", gap: "6px", flex: "1 1 180px", minWidth: 170, alignItems: "flex-end" }}>
+              <div style={{ flex: "1 1 70px", minWidth: 60 }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
+                  {t("Value", { defaultValue: "Value" })}
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="e.g. 5"
+                  value={filters?.updated_since_value || ""}
+                  onChange={(e) => onFilterChange && onFilterChange("updated_since_value", e.target.value)}
+                  style={{
+                    width: "100%",
+                    height: "36px",
+                    padding: "4px 8px",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border-color, #cbd5e1)",
+                    background: "var(--bg-card, #ffffff)",
+                    color: "var(--text-primary, #0f172a)",
+                    fontSize: "12px",
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+              <div style={{ flex: "1 1 95px", minWidth: 85 }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
+                  {t("Unit", { defaultValue: "Unit" })}
+                </label>
+                <select
+                  value={filters?.updated_since_unit || "hours"}
+                  onChange={(e) => onFilterChange && onFilterChange("updated_since_unit", e.target.value)}
+                  style={{
+                    width: "100%",
+                    height: "36px",
+                    padding: "4px 8px",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border-color, #cbd5e1)",
+                    background: "var(--bg-card, #ffffff)",
+                    color: "var(--text-primary, #0f172a)",
+                    fontSize: "12px",
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <option value="minutes">{t("Mins", { defaultValue: "Mins" })}</option>
+                  <option value="hours">{t("Hours", { defaultValue: "Hours" })}</option>
+                  <option value="days">{t("Days", { defaultValue: "Days" })}</option>
+                  <option value="months">{t("Months", { defaultValue: "Months" })}</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          {/* 11. Save Filter Button at the end of the filter menu */}
           <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center" }}>
             <button
               type="button"
@@ -1133,130 +1248,28 @@ export default function TaskFilterBar({
         </div>
       )}
 
-      {/* Delete Confirmation Modal Dialog */}
-      {showDeleteModal && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0,0,0,0.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 9999,
-          }}
-          onClick={() => {
-            if (!deletingView) {
-              setShowDeleteModal(false);
-              setViewToDelete(null);
-            }
-          }}
-        >
-          <div
-            style={{
-              background: "var(--bg-card, #ffffff)",
-              borderRadius: "12px",
-              padding: "20px",
-              width: "100%",
-              maxWidth: "400px",
-              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.15)",
-              border: "1px solid var(--border-color, #e2e8f0)",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <div
-                  style={{
-                    width: "32px",
-                    height: "32px",
-                    borderRadius: "50%",
-                    backgroundColor: "#fee2e2",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Trash2 size={16} color="#ef4444" />
-                </div>
-                <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>
-                  {t("Delete Saved View", { defaultValue: "Delete Saved View" })}
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!deletingView) {
-                    setShowDeleteModal(false);
-                    setViewToDelete(null);
-                  }
-                }}
-                style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer" }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <p style={{ margin: "0 0 20px", fontSize: "13px", color: "var(--text-muted, #64748b)", lineHeight: "1.5" }}>
-              {t("Are you sure you want to delete the view", { defaultValue: "Are you sure you want to delete the view" })}{" "}
-              <strong style={{ color: "var(--text-primary, #1e293b)" }}>"{viewToDelete?.name}"</strong>?{" "}
-              {t("This action cannot be undone.", { defaultValue: "This action cannot be undone." })}
-            </p>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-              <button
-                type="button"
-                disabled={deletingView}
-                onClick={() => {
-                  setShowDeleteModal(false);
-                  setViewToDelete(null);
-                }}
-                style={{
-                  padding: "8px 14px",
-                  borderRadius: "8px",
-                  border: "1px solid var(--border-color, #cbd5e1)",
-                  background: "var(--bg-card, #ffffff)",
-                  color: "var(--text-primary, #64748b)",
-                  fontSize: "13px",
-                  fontWeight: 600,
-                  cursor: deletingView ? "not-allowed" : "pointer",
-                }}
-              >
-                {t("Cancel", { defaultValue: "Cancel" })}
-              </button>
-              <button
-                type="button"
-                disabled={deletingView}
-                onClick={handleConfirmDelete}
-                style={{
-                  padding: "8px 16px",
-                  borderRadius: "8px",
-                  border: "none",
-                  background: "#ef4444",
-                  color: "#ffffff",
-                  fontSize: "13px",
-                  fontWeight: 600,
-                  cursor: deletingView ? "not-allowed" : "pointer",
-                  opacity: deletingView ? 0.7 : 1,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                }}
-              >
-                {deletingView ? (
-                  <span>{t("Deleting...", { defaultValue: "Deleting..." })}</span>
-                ) : (
-                  <>
-                    <Trash2 size={14} />
-                    <span>{t("Delete", { defaultValue: "Delete" })}</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Custom Confirmation Modal for Overwrite & Delete actions */}
+      <ConfirmModal
+        isOpen={confirmModalConfig.isOpen}
+        onClose={() =>
+          setConfirmModalConfig({
+            isOpen: false,
+            actionType: null,
+            viewData: null,
+            title: "",
+            message: "",
+          })
+        }
+        onConfirm={handleModalConfirm}
+        title={confirmModalConfig.title}
+        message={confirmModalConfig.message}
+        confirmText={
+          confirmModalConfig.actionType === "delete"
+            ? t("Delete", { defaultValue: "Delete" })
+            : t("Overwrite", { defaultValue: "Overwrite" })
+        }
+        danger={confirmModalConfig.actionType === "delete"}
+      />
     </div>
   );
 }

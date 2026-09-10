@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { MdClose, MdNotifications, MdEmail, MdDesktopWindows, MdCheck } from 'react-icons/md';
 import axios from 'axios';
@@ -95,7 +96,7 @@ const NotificationPreferencesModal = ({ isOpen, onClose, currentUser, onUserUpda
     }
   };
 
-  return (
+  return createPortal(
     <div className="profile-overlay modal-overlay">
       <div className="profile-modal modal-content" style={{ maxWidth: '480px' }}>
         
@@ -265,7 +266,8 @@ const NotificationPreferencesModal = ({ isOpen, onClose, currentUser, onUserUpda
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

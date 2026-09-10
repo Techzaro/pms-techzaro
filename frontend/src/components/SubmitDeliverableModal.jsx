@@ -5,16 +5,16 @@
  * resubmissions for rework-required status.
  */
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { FileText, Upload, X, Image } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
-import useUnsavedChanges from "../hooks/useUnsavedChanges";
+import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import { formatDateTimeShort } from "../utils/formatDateTime";
-import { notify, showSuccessMessage } from "../utils/notify";
+import { notify } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
 import SubmissionLinkSection from "./SubmissionLinkSection";
 import LoadingButton from "./LoadingButton";
@@ -26,11 +26,25 @@ import "./layout/CreateTaskModal.css";
  * Modal form for submitting or resubmitting a subtask.
  * @param {boolean} isOpen - Whether the modal is visible.
  * @param {Function} onClose - Callback to close the modal.
- * @param {Object} subtask - The subtask being submitted.
- * @param {Function} onSubmitSuccess - Callback after successful submission, receives updated subtask.
+ * @param {Object} [subtask] - The subtask being submitted.
+ * @param {Object} [deliverable] - Alternative prop alias for subtask.
+ * @param {Function} [onSubmitSuccess] - Callback after successful submission, receives updated subtask.
+ * @param {Object} [submissionToEdit] - Existing submission object when editing.
  */
-function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess, submissionToEdit = null }) {
+function SubmitDeliverableModal({
+  isOpen,
+  onClose,
+  subtask: subtaskProp,
+  deliverable,
+  onSubmitSuccess,
+  submissionToEdit = null,
+}) {
   const { t } = useTranslation();
+  const subtask = subtaskProp || deliverable;
+
+  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
+  useEscapeKey(isOpen, handleClose);
+
   const [comment, setComment] = useState("");
   const [files, setFiles] = useState([]);
   const [links, setLinks] = useState([]);
@@ -38,23 +52,30 @@ function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess, sub
   const [fileRemoveConfirmOpen, setFileRemoveConfirmOpen] = useState(false);
   const [pendingFileIndex, setPendingFileIndex] = useState(-1);
 
-  const initialValues = useMemo(() => ({ comment: "", files: [], links: [] }), []);
-  const currentValues = useMemo(() => ({ comment, files, links }), [comment, files, links]);
-  const { isDirty, handleClose, markSaved, resetBaseline, ConfirmDialog } = useUnsavedChanges(initialValues, currentValues, onClose);
-  useEscapeKey(isOpen, handleClose);
-
   // Lock body scroll and reset form state when modal opens/closes
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
-      setComment(submissionToEdit ? submissionToEdit.comment || "" : "");
-      setFiles([]);
-      setLinks([]);
+      if (submissionToEdit) {
+        setComment(submissionToEdit.comment || "");
+        const prevLinks = (submissionToEdit.attachments || [])
+          .filter((a) => a.attachment_type === "link")
+          .map((a) => ({ url: a.url || a.file_name }));
+        setLinks(prevLinks);
+        setFiles([]);
+      } else {
+        setComment("");
+        setFiles([]);
+        setLinks([]);
+      }
+      setIsDirty(false);
     } else {
       document.body.style.overflow = "";
     }
-    return () => { document.body.style.overflow = ""; };
-  }, [isOpen, submissionToEdit]);
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isOpen, submissionToEdit, setIsDirty]);
 
   // Handle Ctrl+V (Clipboard Paste) for files/screenshots when modal is open
   useEffect(() => {
@@ -64,8 +85,14 @@ function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess, sub
       const clipboardFiles = e.clipboardData?.files;
       if (clipboardFiles && clipboardFiles.length > 0) {
         const newFiles = Array.from(clipboardFiles);
+        setIsDirty(true);
         setFiles((prev) => [...prev, ...newFiles]);
-        notify.success(t("Pasted {{count}} file(s) from clipboard", { defaultValue: `Pasted ${newFiles.length} file(s) from clipboard`, count: newFiles.length }));
+        notify.success(
+          t("Pasted {{count}} file(s) from clipboard", {
+            defaultValue: `Pasted ${newFiles.length} file(s) from clipboard`,
+            count: newFiles.length,
+          })
+        );
       }
     };
 
@@ -73,19 +100,24 @@ function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess, sub
     return () => {
       window.removeEventListener("paste", handlePaste);
     };
-  }, [isOpen, t]);
+  }, [isOpen, setIsDirty, t]);
 
   /** Appends newly selected files to the existing file list */
   const handleFileSelect = (e) => {
     const selected = Array.from(e.target.files || []);
+    setIsDirty(true);
     setFiles((prev) => [...prev, ...selected]);
     e.target.value = "";
   };
 
-  const removeFile = (index) => { setFiles((prev) => prev.filter((_, i) => i !== index)); };
+  const removeFile = (index) => {
+    setIsDirty(true);
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+  };
 
   const handleDrop = (e) => {
     e.preventDefault();
+    setIsDirty(true);
     setFiles((prev) => [...prev, ...Array.from(e.dataTransfer.files || [])]);
   };
 
@@ -93,45 +125,88 @@ function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess, sub
    * Validates form data and submits or edits the subtask submission.
    */
   const handleSubmit = async () => {
-    const validLinks = links.map((l) => l.url);
+    const validLinks = (links || [])
+      .map((l) => (typeof l === "string" ? l.trim() : l?.url ? l.url.trim() : ""))
+      .filter(Boolean);
+
     if (!comment.trim() && files.length === 0 && validLinks.length === 0 && !submissionToEdit) {
-      notify.error(t("Please add a comment, attach files, or add links.", { defaultValue: "Please add a comment, attach files, or add links." }));
+      notify.error(
+        t("Please add a comment, attach files, or add links.", {
+          defaultValue: "Please add a comment, attach files, or add links.",
+        })
+      );
       return;
     }
+
+    const subtaskId = subtask?.id || subtask?.deliverable_id || subtask?.deliverable?.id;
+    if (!subtaskId && !submissionToEdit) {
+      notify.error(t("Subtask ID is missing.", { defaultValue: "Subtask ID is missing." }));
+      return;
+    }
+
     await run(async () => {
       try {
         const token = authToken();
         const formData = new FormData();
         if (comment.trim()) formData.append("comment", comment.trim());
         files.forEach((f) => formData.append("files[]", f));
+        if (files.length === 1) formData.append("file", files[0]);
         validLinks.forEach((l) => formData.append("links[]", l));
 
         const endpoint = submissionToEdit
           ? `${API_URL}/deliveries/submissions/${submissionToEdit.id}`
-          : `${API_URL}/deliverables/${subtask.id}/submit`;
+          : `${API_URL}/deliverables/${subtaskId}/submit`;
 
         const res = await fetch(endpoint, {
           method: "POST",
-          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          headers: {
+            Accept: "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
           body: formData,
           _notifHandled: true,
         });
 
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (res.ok) {
-          if (data.file_skipped) {
-            notify.warning(data.message || "Deliverable submitted, but file could not be uploaded due to storage limit.");
+          if (data.file_skipped || data.files_skipped) {
+            notify.warning(
+              data.message ||
+                t("Subtask submitted, but file could not be uploaded due to storage limit.", {
+                  defaultValue: "Subtask submitted, but file could not be uploaded due to storage limit.",
+                })
+            );
           } else {
-            showSuccessMessage("Submission", submissionToEdit ? "updated" : "submitted");
+            notify.success(
+              data.message ||
+                (submissionToEdit
+                  ? t("Submission updated successfully!", { defaultValue: "Submission updated successfully!" })
+                  : t("Subtask submitted successfully!", { defaultValue: "Subtask submitted successfully!" }))
+            );
           }
-          markSaved();
-          onSubmitSuccess(data.deliverable || subtask);
-          onClose();
+          setIsDirty(false);
+          if (onSubmitSuccess) {
+            onSubmitSuccess(data.deliverable || data.task || data || subtask);
+          }
+          if (onClose) {
+            onClose();
+          }
         } else {
-          notify.error(data.message || t("Failed to submit.", { defaultValue: "Failed to submit." }));
+          // Extract backend validation error (422) or generic message
+          let errorMsg = data.message;
+          if (data.errors && typeof data.errors === "object") {
+            const errorEntries = Object.entries(data.errors);
+            if (errorEntries.length > 0) {
+              const [, msgs] = errorEntries[0];
+              const msg = Array.isArray(msgs) ? msgs[0] : msgs;
+              if (msg) errorMsg = msg;
+            }
+          }
+          notify.error(errorMsg || t("Failed to submit.", { defaultValue: "Failed to submit." }));
         }
-      } catch {
-        notify.error(t("An error occurred. Please try again.", { defaultValue: "An error occurred. Please try again." }));
+      } catch (err) {
+        console.error("Submit deliverable error:", err);
+        notify.error(err?.message || t("An error occurred. Please try again.", { defaultValue: "An error occurred. Please try again." }));
       }
     });
   };
@@ -155,10 +230,13 @@ function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess, sub
               )}
             </div>
           </div>
+          <button className="sd-close-btn" onClick={handleClose} title={t("Close", { defaultValue: "Close" })}>
+            <X size={18} />
+          </button>
         </div>
 
         <div className="sd-body">
-          <h3 className="sd-section-title">{t("Submit Subtask", { defaultValue: "Submit Subtask" })}</h3>
+          <h3 className="sd-section-title">{submissionToEdit ? t("Edit Submission", { defaultValue: "Edit Submission" }) : ["rework_required", "rejected", "reopened"].includes(subtask.status) ? t("Resubmit Subtask", { defaultValue: "Resubmit Subtask" }) : t("Submit Subtask", { defaultValue: "Submit Subtask" })}</h3>
 
           <div className="sd-field">
             <label className="sd-label">{t("Submission Notes", { defaultValue: "Submission Notes" })}</label>
@@ -220,7 +298,7 @@ function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess, sub
         <div className="sd-footer">
           <button className="sd-cancel-btn" onClick={handleClose} disabled={submitting}>{t("Cancel")}</button>
           <LoadingButton className="sd-submit-btn" onClick={handleSubmit} loading={submitting}>
-            {subtask.status === "rework_required" ? t("Resubmit Subtask", { defaultValue: "Resubmit Subtask" }) : t("Submit Subtask", { defaultValue: "Submit Subtask" })}
+            {submissionToEdit ? t("Edit Submission", { defaultValue: "Edit Submission" }) : ["rework_required", "rejected", "reopened"].includes(subtask.status) ? t("Resubmit Subtask", { defaultValue: "Resubmit Subtask" }) : t("Submit Subtask", { defaultValue: "Submit Subtask" })}
           </LoadingButton>
         </div>
       </div>

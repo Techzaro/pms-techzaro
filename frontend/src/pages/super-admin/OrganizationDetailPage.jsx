@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -1920,11 +1921,11 @@ export default function OrganizationDetailPage() {
         confirmText={confirmConfig.confirmText} cancelText={t("Cancel", { defaultValue: "Cancel" })} danger={confirmConfig.danger}
       />
 
-      {deleteModal && (
+      {deleteModal && createPortal(
         <div style={{
-          position: 'fixed', inset: 0, zIndex: 10000,
+          position: 'fixed', inset: 0, zIndex: 100000,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
+          background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
         }}>
           <div className="rounded-2xl p-6 w-full max-w-md" style={{ background: 'var(--bg-card)', boxShadow: 'var(--shadow-lg)' }}>
             <div className="flex items-center gap-3 mb-4">
@@ -1954,11 +1955,12 @@ export default function OrganizationDetailPage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {approveModal && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}>
+      {approveModal && createPortal(
+        <div style={{ position: 'fixed', inset: 0, zIndex: 100000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}>
           <div className="rounded-2xl p-6 w-full max-w-md" style={{ background: 'var(--bg-card)', boxShadow: 'var(--shadow-lg)' }}>
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'rgba(16,185,129,0.1)' }}>
@@ -1985,11 +1987,12 @@ export default function OrganizationDetailPage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {rejectModal && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}>
+      {rejectModal && createPortal(
+        <div style={{ position: 'fixed', inset: 0, zIndex: 100000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}>
           <div className="rounded-2xl p-6 w-full max-w-md" style={{ background: 'var(--bg-card)', boxShadow: 'var(--shadow-lg)' }}>
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'rgba(239,68,68,0.1)' }}>
@@ -2014,11 +2017,12 @@ export default function OrganizationDetailPage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {viewInvoiceModal && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}>
+      {viewInvoiceModal && createPortal(
+        <div style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}>
           <div className="rounded-2xl w-full max-w-lg overflow-hidden" style={{ background: 'var(--bg-card)', boxShadow: 'var(--shadow-lg)' }}>
             {/* Header with TechXaro branding */}
             <div className="px-6 py-4 flex items-center justify-between" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
@@ -2155,7 +2159,8 @@ export default function OrganizationDetailPage() {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {editOpen && (
@@ -2314,9 +2319,9 @@ function EditOrganizationModal({ org, plans, saving, onSave, onClose }) {
     infoBox: { background: 'var(--color-primary-bg)', border: '1px solid var(--color-primary)' },
   };
 
-  return (
-    <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 9999 }}>
-      <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(4px)' }} onClick={handleClose}></div>
+  return createPortal(
+    <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 99999 }}>
+      <div className="absolute inset-0" style={{ background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} onClick={handleClose}></div>
       <div className="relative rounded-xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col" style={{ ...s.card, zIndex: 10000 }}>
         <div className="flex items-center justify-between p-6 pb-4" style={s.divider}>
           <div>
@@ -2558,6 +2563,7 @@ function EditOrganizationModal({ org, plans, saving, onSave, onClose }) {
       )}
 
       {ConfirmDialog}
-    </div>
+    </div>,
+    document.body
   );
 }

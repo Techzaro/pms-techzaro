@@ -4,6 +4,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { IoEyeOutline } from "react-icons/io5";
@@ -70,6 +71,7 @@ import TaskReopenDialog from "../components/TaskReopenDialog";
 import AbandonModal from "../components/AbandonModal";
 import MarkTaskCompletedModal from "../components/MarkTaskCompletedModal";
 import ActionPopover from "../components/ActionPopover";
+import Pagination from "../components/Pagination";
 import UnifiedActivityFeed from "../components/UnifiedActivityFeed";
 import ProjectMembersModal from "../components/ProjectMembersModal";
 import "../components/ActionPopover.css";
@@ -372,6 +374,8 @@ function ProjectDetails() {
   const [abandoning, setAbandoning] = useState(false);
   const [fileSearch, setFileSearch] = useState("");
   const [taskSearch, setTaskSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [subtaskSearch, setSubtaskSearch] = useState("");
   const [memberSearch, setMemberSearch] = useState("");
   const [viewAccessSearch, setViewAccessSearch] = useState("");
@@ -447,6 +451,10 @@ function ProjectDetails() {
   useEffect(() => {
     setOrderedTasks(project?.tasks || []);
   }, [project?.tasks]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [taskSearch]);
 
   useEffect(() => {
     setOrderedSubtasks(project?.deliverables || []);
@@ -1357,6 +1365,8 @@ function ProjectDetails() {
     const assigneeMatch = (t.assignees || []).some(a => (a.name || "").toLowerCase().includes(q));
     return titleMatch || assigneeMatch;
   }) : tasks;
+  const totalPages = Math.ceil(filteredTasks.length / rowsPerPage) || 1;
+  const paginatedTasks = filteredTasks.slice((page - 1) * rowsPerPage, (page - 1) * rowsPerPage + rowsPerPage);
   const progress = typeof project.progress_percent === "number" ? project.progress_percent : calculateProjectProgress(project.tasks || []);
 
   const subtasksList = orderedSubtasks.length ? orderedSubtasks : (project.deliverables || []);
@@ -1962,7 +1972,6 @@ function ProjectDetails() {
                                 {currentUser?.role !== "guest" && <div>{isShared || isCreator || isAdminOrManager ? t("Assigned To", { defaultValue: "Assigned To" }) : t("Assigned By", { defaultValue: "Assigned By" })}</div>}
                                 <div className="ptt-col-name">{t("Task Name", { defaultValue: "Task Name" })}</div>
                                 <div>{t("Status", { defaultValue: "Status" })}</div>
-                                <div>{t("Progress", { defaultValue: "Progress" })}</div>
                                 <div>{t("Priority", { defaultValue: "Priority" })}</div>
                                 <div>{t("Start & Due Date", { defaultValue: "Start & Due Date" })}</div>
                                 <div>{t("Action", { defaultValue: "Action" })}</div>
@@ -1970,7 +1979,7 @@ function ProjectDetails() {
                               {filteredTasks.length === 0 ? (
                                 <div className="pd-muted pd-table-empty" style={{ padding: "20px", textAlign: "center" }}>{taskSearch ? t("No tasks match your search.", { defaultValue: "No tasks match your search." }) : t("No tasks yet.", { defaultValue: "No tasks yet." })}</div>
                               ) : (
-                                <SortableTableWrapper items={filteredTasks} onReorder={handleTaskReorder} as="div" handleOnly>
+                                <SortableTableWrapper items={paginatedTasks} onReorder={handleTaskReorder} as="div" handleOnly>
                                   {(tItem, idx, dndProps) => {
                                     const statusKey = (tItem.status || "").toLowerCase();
                                       return (
@@ -1981,6 +1990,14 @@ function ProjectDetails() {
                                            <Link to={rolePath(`tasks/task-details/${tItem.id}`)} state={{ from: "project", projectId: project?.id || projectId, projectTitle: project?.title, returnUrl: location.pathname + (location.search || "?tab=tasks") }} className="ptt-task-link">
                                              {tItem.title}
                                            </Link>
+                                           {(() => {
+                                             const subtaskCount = tItem.total_subtasks || tItem.subtasks_count || tItem.subtasks?.length || tItem.total_deliverables || tItem.deliverables?.length || 0;
+                                             return subtaskCount > 0 ? (
+                                               <div className="text-xs text-gray-500 mt-1" style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>
+                                                 subtask ({subtaskCount})
+                                               </div>
+                                             ) : null;
+                                           })()}
                                          </div>
                                         <div>
                                           <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", alignItems: "center" }}>
@@ -2002,25 +2019,6 @@ function ProjectDetails() {
                                             )}
                                           </div>
                                         </div>
-                                        {(() => {
-                                          const isTerminal = ["completed", "approved", "submitted", "submitted_late", "done"].includes((tItem.status || "").toLowerCase());
-                                          const prog = isTerminal ? 100 : (tItem.deliverables_progress || 0);
-                                          return (
-                                            <div>
-                                              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", marginBottom: "4px" }}>
-                                                <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-dark)" }}>
-                                                  {prog}%
-                                                </span>
-                                              </div>
-                                              <div className="progress-bar-track">
-                                                <div className="progress-bar-fill" style={{ width: `${prog}%` }}></div>
-                                              </div>
-                                              <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "4px" }}>
-                                                {t("{{approved}}/{{total}} Del. Approved", { approved: tItem.approved_deliverables || 0, total: tItem.total_deliverables || 0, defaultValue: `${tItem.approved_deliverables || 0}/${tItem.total_deliverables || 0} Del. Approved` })}
-                                              </div>
-                                            </div>
-                                          );
-                                        })()}
                                         <div>
                                           <span className="badge" style={{ background: PRIORITY_COLORS[tItem.priority] || "var(--bg-hover)", color: PRIORITY_TEXT_COLORS[tItem.priority] || "var(--text-dark)" }}>
                                             <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[tItem.priority] || "var(--text-dark)" }}></span>
@@ -2298,6 +2296,19 @@ function ProjectDetails() {
                               )}
                             </div>
                           </div>
+                          {filteredTasks.length > 0 && (
+                            <Pagination
+                              currentPage={page}
+                              totalPages={totalPages}
+                              onPageChange={setPage}
+                              itemsPerPage={rowsPerPage}
+                              onItemsPerPageChange={(val) => {
+                                setRowsPerPage(val);
+                                setPage(1);
+                              }}
+                              itemsPerPageOptions={[10, 25, 50, 100]}
+                            />
+                          )}
                         </section>
                       </div>
                     )}
@@ -3158,7 +3169,7 @@ function ProjectDetails() {
         onCompleteSuccess={handleProjectTaskDirectCompleteSuccess}
       />
 
-      {visibilityOpen && (
+      {visibilityOpen && createPortal(
         <div className="modal-overlay" onClick={handleVisClose}>
           <div className="sv-modal" onClick={(e) => e.stopPropagation()}>
             <div className="sv-modal-header">
@@ -3213,14 +3224,15 @@ function ProjectDetails() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {VisConfirmDialog}
 
       {/* Edit File/Link Popup */}
-      {editFileItem && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }} onClick={() => setEditFileItem(null)}>
+      {editFileItem && createPortal(
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100000 }} onClick={() => setEditFileItem(null)}>
           <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: "24px 28px", width: 460, maxWidth: "90vw", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--text-heading)" }}>{t("Edit File / Link", { defaultValue: "Edit File / Link" })}</h3>
             <p style={{ margin: "6px 0 0", fontSize: 13, color: "var(--text-muted)" }}>{t("Rename or update the URL below.", { defaultValue: "Rename or update the URL below." })}</p>
@@ -3253,7 +3265,8 @@ function ProjectDetails() {
               <button type="button" onClick={handleRenameFile} disabled={!editFileName.trim()} style={{ padding: "8px 18px", borderRadius: 8, border: "none", background: editFileName.trim() ? "var(--color-primary)" : "var(--bg-hover)", color: editFileName.trim() ? "#fff" : "var(--text-muted)", fontSize: 13, fontWeight: 600, cursor: editFileName.trim() ? "pointer" : "not-allowed" }}>{t("Save", { defaultValue: "Save" })}</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Delete Confirmation */}
@@ -3423,9 +3436,9 @@ function ProjectDetails() {
         onSuccess={loadProject}
       />
 
-      {showLinkKbModal && (
+      {showLinkKbModal && createPortal(
         <div
-          style={{ position: "fixed", inset: 0, zIndex: 10000, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
+          style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
           onClick={() => setShowLinkKbModal(false)}
         >
           <div
@@ -3501,12 +3514,13 @@ function ProjectDetails() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {showLinkEventModal && (
+      {showLinkEventModal && createPortal(
         <div
-          style={{ position: "fixed", inset: 0, zIndex: 10000, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
+          style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
           onClick={() => setShowLinkEventModal(false)}
         >
           <div
@@ -3582,7 +3596,8 @@ function ProjectDetails() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

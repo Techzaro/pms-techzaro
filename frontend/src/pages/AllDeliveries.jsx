@@ -33,6 +33,7 @@ import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import { renderDynamicDates } from "../utils/tableDateUtils";
 import { formatDateOnly } from "../utils/formatDateTime";
+import { getUpdatedSinceThreshold } from "../utils/filterUtils";
 import "../components/ActionPopover.css";
 import "../pages/Deliveries.css";
 
@@ -105,6 +106,9 @@ function AllDeliveries() {
     end_date: "",
     due_date_from: "",
     due_date_to: "",
+    updated_since: "",
+    updated_since_value: "",
+    updated_since_unit: "hours",
   });
   const [orderedItems, setOrderedItems] = useState([]);
   const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
@@ -151,6 +155,13 @@ function AllDeliveries() {
     if (advancedFilters.end_date) params.append("end_date", advancedFilters.end_date);
     if (advancedFilters.due_date_from) params.append("due_date_from", advancedFilters.due_date_from);
     if (advancedFilters.due_date_to) params.append("due_date_to", advancedFilters.due_date_to);
+    if (advancedFilters.updated_since) {
+      params.append("updated_since", advancedFilters.updated_since);
+      if (advancedFilters.updated_since === "custom") {
+        if (advancedFilters.updated_since_value) params.append("updated_since_value", advancedFilters.updated_since_value);
+        if (advancedFilters.updated_since_unit) params.append("updated_since_unit", advancedFilters.updated_since_unit);
+      }
+    }
 
     fetch(`${API_URL}/all-deliverables?${params.toString()}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -334,6 +345,19 @@ function AllDeliveries() {
         return d <= new Date(advancedFilters.end_date);
       });
     }
+    const updatedSinceThreshold = getUpdatedSinceThreshold(
+      advancedFilters.updated_since,
+      advancedFilters.updated_since_value,
+      advancedFilters.updated_since_unit
+    );
+    if (updatedSinceThreshold) {
+      const thresholdTime = updatedSinceThreshold.getTime();
+      list = list.filter((item) => {
+        if (!item?.updated_at) return false;
+        const itemUpdated = new Date(item.updated_at).getTime();
+        return !isNaN(itemUpdated) && itemUpdated >= thresholdTime;
+      });
+    }
     return list;
   }, [safeBaseItems, debouncedSearch, advancedFilters]);
 
@@ -457,6 +481,9 @@ function AllDeliveries() {
               end_date: appliedFilters?.end_date || "",
               due_date_from: appliedFilters?.due_date_from || "",
               due_date_to: appliedFilters?.due_date_to || "",
+              updated_since: appliedFilters?.updated_since || "",
+              updated_since_value: appliedFilters?.updated_since_value || "",
+              updated_since_unit: appliedFilters?.updated_since_unit || "hours",
             }));
             setPage(1);
           }}
@@ -480,6 +507,9 @@ function AllDeliveries() {
               end_date: "",
               due_date_from: "",
               due_date_to: "",
+              updated_since: "",
+              updated_since_value: "",
+              updated_since_unit: "hours",
             });
             setPage(1);
           }}

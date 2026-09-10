@@ -3103,8 +3103,8 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
     />
 
     {/* Edit Document Modal — same as EditProjectModal edit file popup */}
-    {editDocItem && (
-      <div style={{ position: "fixed", inset: 0, zIndex: 10003, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => { setEditDocItem(null); setEditDocNewFile(null); setEditDocDeleted(false); setEditDocDeleteConfirm(false); }}>
+    {editDocItem && createPortal(
+      <div style={{ position: "fixed", inset: 0, zIndex: 100000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }} onClick={() => { setEditDocItem(null); setEditDocNewFile(null); setEditDocDeleted(false); setEditDocDeleteConfirm(false); }}>
         <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: "24px 28px", width: 420, maxWidth: "90vw", boxShadow: "var(--shadow-xl)" }} onClick={(e) => e.stopPropagation()}>
           <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>{t("Edit File", { defaultValue: "Edit File" })}</h3>
           <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--text-secondary)" }}>{t("Rename or replace this file.", { defaultValue: "Rename or replace this file." })}</p>
@@ -3150,7 +3150,8 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
               onMouseEnter={(e) => e.target.style.background = "var(--color-primary-dark)"} onMouseLeave={(e) => e.target.style.background = "var(--color-primary)"}>{t("Save", { defaultValue: "Save" })}</button>
           </div>
         </div>
-      </div>
+      </div>,
+      document.body
     )}
 
     {/* Edit File Delete Confirmation (nested) */}
@@ -3316,7 +3317,7 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
 
     {/* Project Involvement Reassign Choice Modal */}
     {reassignConfirmOpen && createPortal(
-      <div style={{ position: "fixed", inset: 0, zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)" }}>
+      <div style={{ position: "fixed", inset: 0, zIndex: 99999, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }}>
         <div style={{ background: "var(--bg-card, #fff)", borderRadius: 16, padding: "28px 32px", width: 480, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }}>
           <h3 style={{ margin: "0 0 8px", fontSize: 20, fontWeight: 700, color: "var(--text-heading, #111827)" }}>
             {t("User is Project Manager", { defaultValue: "User is Project Manager" })}
@@ -3359,7 +3360,7 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
 
     {/* Reassign User Select Modal */}
     {reassignSelectOpen && createPortal(
-      <div style={{ position: "fixed", inset: 0, zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)" }}>
+      <div style={{ position: "fixed", inset: 0, zIndex: 99999, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }}>
         <div style={{ background: "var(--bg-card, #fff)", borderRadius: 16, padding: "28px 32px", width: 480, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }}>
           <h3 style={{ margin: "0 0 8px", fontSize: 20, fontWeight: 700, color: "var(--text-heading, #111827)" }}>
             {t("Select New Manager", { defaultValue: "Select New Manager" })}

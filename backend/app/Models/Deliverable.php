@@ -342,7 +342,75 @@ class Deliverable extends Model
             $query->whereDate('end_date', '<=', $filters['end_date']);
         }
 
+        if (!empty($filters['due_date_from'])) {
+            $query->whereDate('due_date', '>=', $filters['due_date_from']);
+        }
+
+        if (!empty($filters['due_date_to'])) {
+            $query->whereDate('due_date', '<=', $filters['due_date_to']);
+        }
+
+        if (!empty($filters['updated_since'])) {
+            $threshold = self::calculateUpdatedSinceThreshold(
+                $filters['updated_since'],
+                $filters['updated_since_value'] ?? null,
+                $filters['updated_since_unit'] ?? 'hours'
+            );
+            if ($threshold) {
+                $query->where('updated_at', '>=', $threshold);
+            }
+        }
+
         return $query;
+    }
+
+    /**
+     * Calculate threshold timestamp for updated_since filter.
+     */
+    public static function calculateUpdatedSinceThreshold($preset, $value = null, $unit = 'hours'): ?\Carbon\Carbon
+    {
+        if (empty($preset)) {
+            return null;
+        }
+        $preset = strtolower(trim((string) $preset));
+        if (in_array($preset, ['15m', '15mins', '15min'])) {
+            return \Carbon\Carbon::now()->subMinutes(15);
+        }
+        if (in_array($preset, ['1h', '1hour'])) {
+            return \Carbon\Carbon::now()->subHour();
+        }
+        if (in_array($preset, ['24h', '24hours', '1d'])) {
+            return \Carbon\Carbon::now()->subHours(24);
+        }
+        if (in_array($preset, ['7d', '7days'])) {
+            return \Carbon\Carbon::now()->subDays(7);
+        }
+        if (in_array($preset, ['1mo', '1month', '30d'])) {
+            return \Carbon\Carbon::now()->subMonth();
+        }
+        if ($preset === 'custom') {
+            $val = is_numeric($value) ? (float) $value : 0;
+            if ($val <= 0) {
+                return null;
+            }
+            $unit = strtolower(trim((string) $unit));
+            if (str_starts_with($unit, 'min')) {
+                return \Carbon\Carbon::now()->subMinutes($val);
+            }
+            if (str_starts_with($unit, 'hour') || str_starts_with($unit, 'hr')) {
+                return \Carbon\Carbon::now()->subHours($val);
+            }
+            if (str_starts_with($unit, 'day')) {
+                return \Carbon\Carbon::now()->subDays($val);
+            }
+            if (str_starts_with($unit, 'month') || str_starts_with($unit, 'mo')) {
+                return \Carbon\Carbon::now()->subMonths($val);
+            }
+
+            return \Carbon\Carbon::now()->subHours($val);
+        }
+
+        return null;
     }
 
     /** The project this deliverable belongs to. */
