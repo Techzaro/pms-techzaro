@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { getProjectDisplayName } from "../utils/projectUtils";
 import "./MultiSelectDropdown.css";
 
 const MultiSelectDropdown = ({ value = [], onChange, options = [], placeholder = "Select...", searchPlaceholder = "Search...", name, size = "md", className = "", showChips = false }) => {
@@ -119,7 +120,11 @@ const MultiSelectDropdown = ({ value = [], onChange, options = [], placeholder =
     if (value.length === 0) return null;
     if (value.length === 1) {
       const opt = options.find((o) => String(o.value) === String(value[0]));
-      return opt?.label || String(value[0]);
+      if (opt?.label) return opt.label;
+      if (typeof value[0] === "object" && value[0] !== null) {
+        return getProjectDisplayName(value[0]);
+      }
+      return null;
     }
     return `${value.length} ${t("selected", { defaultValue: "selected" })}`;
   }, [value, options, t]);
@@ -159,10 +164,14 @@ const MultiSelectDropdown = ({ value = [], onChange, options = [], placeholder =
         <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "8px" }}>
           {value.map((v) => {
             const opt = options.find((o) => String(o.value) === String(v));
-            const chipName = opt?.label || String(v);
+            let chipName = opt?.label;
+            if (!chipName && typeof v === "object" && v !== null) {
+              chipName = getProjectDisplayName(v);
+            }
+            if (!chipName) return null;
             return (
               <span
-                key={v}
+                key={typeof v === "object" ? (v?.id || v?.value) : v}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",

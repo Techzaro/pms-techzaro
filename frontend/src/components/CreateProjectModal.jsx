@@ -309,16 +309,19 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
       setForm({
         title: d.title || "",
         description: d.description || "",
+        end_date: d.end_date ? toDatetimeLocal(d.end_date) : "",
         team_id: d.team_id || "",
         team_ids: d.team_ids || [],
         assigned_users: d.assigned_users || [],
+        followers: d.followers || [],
         guest_ids: d.guest_ids || [],
         priority: d.priority || "Medium",
         status: d.status || "Planning",
         budget: d.budget || "",
+        client_name: d.client_name || "",
         team_roles: d.team_roles || [],
       });
-      if (d.categoriesList) setCategoriesList(d.categoriesList);
+      if (d.categoriesList && Array.isArray(d.categoriesList)) setCategoriesList(d.categoriesList);
       else if (d.category) {
         try {
           const parsed = JSON.parse(d.category);
@@ -328,8 +331,8 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
           setCategoriesList([d.category]);
         }
       }
-      if (d.milestones) setMilestones(d.milestones);
-      if (d.links) setLinks(d.links);
+      if (d.milestones && Array.isArray(d.milestones)) setMilestones(d.milestones);
+      if (d.links && Array.isArray(d.links)) setLinks(d.links);
       if (d.kb_ids) setKbIds(Array.isArray(d.kb_ids) ? d.kb_ids.map(Number) : [Number(d.kb_ids)]);
       else if (d.kb_id || d.kbReferenceId) setKbIds([Number(d.kb_id || d.kbReferenceId)]);
       if (d.event_ids) setEventIds(Array.isArray(d.event_ids) ? d.event_ids.map(Number) : [Number(d.event_ids)]);
@@ -586,11 +589,17 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
    */
   const validateForm = () => {
     const errors = {};
-    if (!form.title.trim()) {
-      errors.title = "Project Name is required.";
+    const titleVal = (form.title || "").trim();
+    if (!titleVal) {
+      errors.title = t("Project Name is required.", { defaultValue: "Project Name is required." });
     }
     setFormErrors(errors);
-    return Object.keys(errors).length === 0;
+    const errorKeys = Object.keys(errors);
+    if (errorKeys.length > 0) {
+      notify.error(errors[errorKeys[0]]);
+      return false;
+    }
+    return true;
   };
 
   /**
@@ -598,7 +607,7 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
    * uploads attachments, and publishes events on success.
    */
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e?.preventDefault) e.preventDefault();
 
     if (!validateForm()) return;
 
@@ -608,7 +617,7 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
 
         // Build the request payload from form state
         const body = {
-          title: form.title.trim(),
+          title: (form.title || "").trim(),
           description: form.description || null,
           end_date: form.end_date ? toUTCIso(form.end_date) : null,
           project_deadline: form.end_date ? toUTCIso(form.end_date) : null,
@@ -618,9 +627,9 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
           assigned_users: form.assigned_users.length > 0 ? form.assigned_users : [],
           followers: form.followers || [],
           guest_ids: form.guest_ids.length > 0 ? form.guest_ids : [],
-          client_name: form.client_name.trim() || null,
-          priority: form.priority,
-          status: form.status,
+          client_name: (form.client_name || "").trim() || null,
+          priority: form.priority || "Medium",
+          status: form.status || "Planning",
           budget: form.budget ? parseFloat(form.budget) : null,
           milestones: milestones.map((m) => ({
             title: m.title,
@@ -644,10 +653,10 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
           _notifHandled: true,
         });
 
-        const data = await response.json();
+        const data = await response.json().catch(() => ({}));
 
         if (!response.ok) {
-          const msg = data.message || "Failed to create project";
+          const msg = data.message || `Failed to create project (Status ${response.status})`;
           const errors = data.errors ? Object.values(data.errors).flat().join(". ") : "";
           throw new Error(errors || msg);
         }
@@ -663,7 +672,8 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
         if (restoreDraftId) draftService.delete(restoreDraftId).catch(() => {});
         onClose(true);
       } catch (err) {
-        notify.error(err.message);
+        console.error("Create project error:", err);
+        notify.error(err.message || "Failed to create project");
       }
     });
   };
@@ -683,7 +693,7 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
             <AutoSaveIndicator isSaving={isSaving} lastSaved={lastSaved} />
           </div>
           <div className="cp-header-actions">
-            <button className="cp-save-draft-btn" onClick={handleSaveDraft} type="button" disabled={!form.title.trim()}>
+            <button className="cp-save-draft-btn" onClick={handleSaveDraft} type="button" disabled={!(form.title || "").trim()}>
               {t("Save Draft", { defaultValue: "Save Draft" })}
             </button>
             <LoadingButton className="cp-create-btn" onClick={handleSubmit} loading={submitting}>
@@ -705,7 +715,7 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
                 type="text"
                 name="title"
                 placeholder={t("Enter project name...", { defaultValue: "Enter project name..." })}
-                value={form.title}
+                value={form.title || ""}
                 onChange={handleChange}
                 className={formErrors.title ? "field-error" : ""}
               />
@@ -715,7 +725,7 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
             <div className="cp-field">
               <label>{t("Description", { defaultValue: "Description" })}</label>
               <RichTextEditor
-                value={form.description}
+                value={form.description || ""}
                 onChange={(val) => { markDirty(); setForm((prev) => ({ ...prev, description: val })); }}
                 placeholder={t("Enter project description...", { defaultValue: "Enter project description..." })}
               />
@@ -1375,11 +1385,11 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
               </div>
               <div className="cp-field">
                 <label style={{ fontSize: "13px" }}>{t("Client Name", { defaultValue: "Client Name" })}</label>
-                <input type="text" name="client_name" placeholder={t("Enter client name", { defaultValue: "Enter client name" })} value={form.client_name} onChange={handleChange} />
+                <input type="text" name="client_name" placeholder={t("Enter client name", { defaultValue: "Enter client name" })} value={form.client_name || ""} onChange={handleChange} />
               </div>
               <div className="cp-field">
                 <label style={{ fontSize: "13px" }}>{t("Budget", { defaultValue: "Budget" })}</label>
-                <input type="number" name="budget" placeholder={t("Budget amount (PKR)", { defaultValue: "Budget amount (PKR)" })} min="0" step="0.01" value={form.budget} onChange={handleChange} />
+                <input type="number" name="budget" placeholder={t("Budget amount (PKR)", { defaultValue: "Budget amount (PKR)" })} min="0" step="0.01" value={form.budget || ""} onChange={handleChange} />
               </div>
             </div>
 
@@ -1426,7 +1436,7 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
               <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-dark)", marginBottom: 6 }}>{t("Title", { defaultValue: "Title" })}</label>
               <input
                 type="text"
-                value={editLinkForm.title}
+                value={editLinkForm.title || ""}
                 onChange={(e) => setEditLinkForm((p) => ({ ...p, title: e.target.value }))}
                 style={{ width: "100%", padding: "10px 12px", border: "var(--border-color)", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "var(--text-heading)" }}
               />
@@ -1435,7 +1445,7 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
               <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-dark)", marginBottom: 6 }}>{t("URL", { defaultValue: "URL" })}</label>
               <input
                 type="url"
-                value={editLinkForm.url}
+                value={editLinkForm.url || ""}
                 onChange={(e) => setEditLinkForm((p) => ({ ...p, url: e.target.value }))}
                 style={{ width: "100%", padding: "10px 12px", border: "var(--border-color)", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "var(--text-heading)" }}
               />

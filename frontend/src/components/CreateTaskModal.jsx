@@ -16,6 +16,7 @@ import ConfirmModal from "./ConfirmModal";
 
 import { formatDateTime, toDatetimeLocal, toUTCIso, getNowDatetimeLocal } from "../utils/formatDateTime";
 import { convertToLocal, convertToUTC, formatLocalTime, getTimezoneOffsetDisplay, formatWorkingHoursSummary } from "../utils/timezoneUtils";
+import { getProjectDisplayName } from "../utils/projectUtils";
 import { Clock } from "lucide-react";
 import { publish } from "../utils/eventBus";
 import { notify, showSuccessMessage } from "../utils/notify";
@@ -189,6 +190,8 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
       task_type: "standard",
       start_date: "",
       end_date: "",
+      recurrence_start_date: "",
+      recurrence_end_date: "",
       allow_transfer: defaultTransfer,
       parent_id: [],
     };
@@ -258,11 +261,15 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
     if (!prefillData) return;
     setForm((prev) => ({
       ...prev,
-      title: prefillData.title || prev.title,
-      description: prefillData.description || prev.description,
-      priority: prefillData.priority || prev.priority,
-      task_type: prefillData.task_type || prev.task_type,
-      project_id: prefillData.project_id || prev.project_id,
+      title: prefillData.title || prev.title || "",
+      description: prefillData.description || prev.description || "",
+      priority: prefillData.priority || prev.priority || "High",
+      task_type: prefillData.task_type || prev.task_type || "standard",
+      project_id: prefillData.project_id || prev.project_id || [],
+      start_date: prefillData.start_date ? toDatetimeLocal(prefillData.start_date) : prev.start_date || "",
+      end_date: prefillData.end_date ? toDatetimeLocal(prefillData.end_date) : prev.end_date || "",
+      recurrence_start_date: prefillData.recurrence_start_date ? toDatetimeLocal(prefillData.recurrence_start_date) : prev.recurrence_start_date || "",
+      recurrence_end_date: prefillData.recurrence_end_date ? toDatetimeLocal(prefillData.recurrence_end_date) : prev.recurrence_end_date || "",
     }));
     if (prefillData.kb_ids) {
       setKbIds(Array.isArray(prefillData.kb_ids) ? prefillData.kb_ids.map(Number) : [Number(prefillData.kb_ids)]);
@@ -282,38 +289,88 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
     }
   }, [prefillData]);
 
+  const normalizeIds = (val) => {
+    if (!val) return [];
+    if (Array.isArray(val)) {
+      return val
+        .map((item) => (typeof item === "object" && item !== null ? Number(item.id) : Number(item)))
+        .filter((id) => !isNaN(id) && id > 0);
+    }
+    if (typeof val === "object" && val !== null) {
+      const id = Number(val.id);
+      return !isNaN(id) && id > 0 ? [id] : [];
+    }
+    const num = Number(val);
+    return !isNaN(num) && num > 0 ? [num] : [];
+  };
+
   // Restore draft data when opened from DraftCenter
   useEffect(() => {
     if (!restoreDraftId && !draftData) return;
 
     const applyDraft = (d) => {
       if (!d) return;
-      const restoredProjectId = d.project_id || projectId;
+      const restoredProjectId = d.project_id ?? d.projectId ?? (projectId ? [projectId] : []);
+      const normalizedPids = normalizeIds(restoredProjectId);
+      const rawAssignees = d.assigned_to ?? d.assignees ?? d.assigned_users ?? d.selectedAssigneeIds ?? [];
+      const rawFollowers = d.followers ?? d.follower_ids ?? d.selectedFollowerIds ?? [];
+
+      const formattedStartDate = d.start_date ? toDatetimeLocal(d.start_date) : (d.recurrence_start_date ? toDatetimeLocal(d.recurrence_start_date) : "");
+      const formattedEndDate = d.end_date ? toDatetimeLocal(d.end_date) : (d.recurrence_end_date ? toDatetimeLocal(d.recurrence_end_date) : "");
+      const formattedRecStart = d.recurrence_start_date ? toDatetimeLocal(d.recurrence_start_date) : (d.start_date ? toDatetimeLocal(d.start_date) : "");
+      const formattedRecEnd = d.recurrence_end_date ? toDatetimeLocal(d.recurrence_end_date) : (d.end_date ? toDatetimeLocal(d.end_date) : "");
+
       setForm((prev) => ({
         ...prev,
-        project_id: Array.isArray(restoredProjectId) ? restoredProjectId : restoredProjectId ? [restoredProjectId] : [],
-        assigned_to: d.assigned_to || d.assignees || [],
-        followers: d.followers || d.follower_ids || [],
+        project_id: normalizedPids.length > 0 ? normalizedPids : (projectId ? [projectId] : []),
+        assigned_to: normalizeIds(rawAssignees),
+        followers: normalizeIds(rawFollowers),
         title: d.title || "",
         description: d.description || "",
-        priority: d.priority || "Medium",
+        priority: d.priority || "High",
         task_type: d.task_type || "standard",
-        start_date: d.start_date || "",
-        end_date: d.end_date || "",
+        start_date: formattedStartDate,
+        end_date: formattedEndDate,
+        recurrence_start_date: formattedRecStart,
+        recurrence_end_date: formattedRecEnd,
         allow_transfer: d.allow_transfer ?? "allow",
-        parent_id: Array.isArray(d.parent_id) ? d.parent_id : (d.parent_id ? [d.parent_id] : []),
+        parent_id: normalizeIds(d.parent_id),
       }));
-      if (d.requirementsList) setRequirementsList(d.requirementsList);
-      else if (d.requirements) setRequirementsList(d.requirements);
-      if (d.deliverables) setSubtasks(d.deliverables);
-      else if (d.subtasks) setSubtasks(d.subtasks);
-      if (d.recurringTemplates) setRecurringTemplates(d.recurringTemplates);
-      if (d.recurrenceSettings) setRecurrenceSettings(d.recurrenceSettings);
-      if (d.links) setLinks(d.links.map(l => ({ url: l.url, name: l.name || l.customName || "", renaming: false })));
-      if (d.kb_ids) setKbIds(Array.isArray(d.kb_ids) ? d.kb_ids.map(Number) : [Number(d.kb_ids)]);
-      else if (d.kb_id || d.kbReferenceId) setKbIds([Number(d.kb_id || d.kbReferenceId)]);
-      if (d.event_ids) setEventIds(Array.isArray(d.event_ids) ? d.event_ids.map(Number) : [Number(d.event_ids)]);
-      else if (d.event_id || d.eventReferenceId) setEventIds([Number(d.event_id || d.eventReferenceId)]);
+      if (d.requirementsList && Array.isArray(d.requirementsList)) setRequirementsList(d.requirementsList);
+      else if (d.requirements && Array.isArray(d.requirements)) setRequirementsList(d.requirements);
+      if (d.deliverables && Array.isArray(d.deliverables)) setSubtasks(d.deliverables);
+      else if (d.subtasks && Array.isArray(d.subtasks)) setSubtasks(d.subtasks);
+      if (d.recurringTemplates && Array.isArray(d.recurringTemplates)) {
+        setRecurringTemplates(d.recurringTemplates.map(t => ({
+          title: t?.title || "",
+          description: t?.description || "",
+          quantity: t?.quantity ?? 1,
+          combined: !!t?.combined
+        })));
+      } else if (d.deliverable_templates && Array.isArray(d.deliverable_templates)) {
+        setRecurringTemplates(d.deliverable_templates.map(t => ({
+          title: t?.title || "",
+          description: t?.description || "",
+          quantity: t?.quantity ?? 1,
+          combined: !!t?.combined
+        })));
+      }
+      if (d.recurrenceSettings) {
+        setRecurrenceSettings({
+          repeat: d.recurrenceSettings.repeat || "daily",
+          skip_weekends: !!d.recurrenceSettings.skip_weekends,
+        });
+      } else if (d.recurrence_settings) {
+        setRecurrenceSettings({
+          repeat: d.recurrence_settings.repeat || "daily",
+          skip_weekends: !!d.recurrence_settings.skip_weekends,
+        });
+      }
+      if (d.links && Array.isArray(d.links)) setLinks(d.links.map(l => ({ url: l.url || "", name: l.name || l.customName || l.title || "", renaming: false })));
+      if (d.kb_ids) setKbIds(normalizeIds(d.kb_ids));
+      else if (d.kb_id || d.kbReferenceId) setKbIds(normalizeIds(d.kb_id || d.kbReferenceId));
+      if (d.event_ids) setEventIds(normalizeIds(d.event_ids));
+      else if (d.event_id || d.eventReferenceId) setEventIds(normalizeIds(d.event_id || d.eventReferenceId));
       if (restoreDraftId) setDraftId(restoreDraftId);
     };
 
@@ -391,11 +448,19 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
     draftSaveRef.current = handleAutoSaveDraft;
   });
 
+  const activeProjectIds = useMemo(() => {
+    const pids = projectId ? [projectId] : form.project_id;
+    if (!pids) return [];
+    const arr = Array.isArray(pids) ? pids : [pids];
+    return arr
+      .map((p) => (typeof p === "object" && p !== null ? Number(p.id) : Number(p)))
+      .filter((id) => !isNaN(id) && id > 0);
+  }, [projectId, form.project_id]);
+
   useEffect(() => {
     const token = authToken();
-    const pids = projectId ? [projectId] : (Array.isArray(form.project_id) ? form.project_id : (form.project_id ? [form.project_id] : []));
-    if (pids.length === 1) {
-      fetch(`${API_URL}/projects/${pids[0]}/tasks`, {
+    if (activeProjectIds.length === 1) {
+      fetch(`${API_URL}/projects/${activeProjectIds[0]}/tasks`, {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         skipLoader: true,
       })
@@ -408,7 +473,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
     } else {
       setProjectTasks([]);
     }
-  }, [projectId, form.project_id]);
+  }, [activeProjectIds]);
 
   const preview = useMemo(() => {
     if (form.task_type !== "recurring") return null;
@@ -441,37 +506,76 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
     }
   }, [subtaskAssigneeHighlightedIndex]);
 
+  const fetchMembersForProjects = useCallback((projectIds) => {
+    const token = authToken();
+    const currentUser = getUser();
+    const ids = (Array.isArray(projectIds) ? projectIds : (projectIds ? [projectIds] : []))
+      .map((pid) => (typeof pid === "object" && pid !== null ? Number(pid.id) : Number(pid)))
+      .filter((id) => !isNaN(id) && id > 0);
+
+    if (!ids || ids.length === 0) {
+      setDisplayUsers([]);
+      return;
+    }
+    Promise.all(
+      ids.map((pid) =>
+        fetch(`${API_URL}/projects/${pid}/members`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+          .then((r) => (r.ok ? r.json() : [])).catch(() => [])
+      )
+    ).then((results) => {
+      const memberSets = results.map((members) => {
+        const map = new Map();
+        (Array.isArray(members) ? members : []).forEach((u) => {
+          if (u && u.id) map.set(Number(u.id), u);
+        });
+        return map;
+      });
+      let users = [];
+      if (memberSets.length === 1) {
+        users = Array.from(memberSets[0].values());
+      } else if (memberSets.length > 1) {
+        const smallest = memberSets.reduce((a, b) => (a.size <= b.size ? a : b));
+        users = [];
+        smallest.forEach((u, id) => {
+          if (memberSets.every((s) => s.has(id))) users.push(u);
+        });
+      }
+      if (currentUser && !users.some((u) => Number(u.id) === Number(currentUser.id))) {
+        users = [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: currentUser.role, department: currentUser.department, timezone: currentUser.timezone, working_hours: currentUser.working_hours }, ...users];
+      }
+      setDisplayUsers(users);
+    }).catch(() => setDisplayUsers([]));
+  }, []);
+
+  // Hydrate project members immediately when activeProjectIds changes (including on draft restore)
+  useEffect(() => {
+    fetchMembersForProjects(activeProjectIds);
+  }, [activeProjectIds, fetchMembersForProjects]);
+
   useEffect(() => {
     const token = authToken();
     const currentUser = getUser();
     const ensureCurrentUser = (users) => {
       if (!currentUser) return users;
-      return users.some((u) => u.id === currentUser.id) ? users : [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: currentUser.role, department: currentUser.department }, ...users];
+      return users.some((u) => Number(u.id) === Number(currentUser.id))
+        ? users
+        : [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: currentUser.role, department: currentUser.department, timezone: currentUser.timezone, working_hours: currentUser.working_hours }, ...users];
     };
 
+    Promise.all([
+      fetch(`${API_URL}/projects`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+        .then((r) => (r.ok ? r.json() : [])).then((d) => { const l = d?.data || d; setProjects(Array.isArray(l) ? l : []); }).catch(() => {}),
+      fetch(`${API_URL}/team-users`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+        .then((r) => (r.ok ? r.json() : { users: [] })).then((d) => { const u = ensureCurrentUser(Array.isArray(d) ? d : (d.users || [])); setAllUsers(u); }).catch(() => {}),
+      fetch(`${API_URL}/knowledge-base?all=true`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+        .then((r) => (r.ok ? r.json() : [])).then((d) => { const items = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : []; setKbArticles(items); }).catch(() => {}),
+      fetch(`${API_URL}/events?all=true`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+        .then((r) => (r.ok ? r.json() : [])).then((d) => { const items = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : []; setEventsList(items); }).catch(() => {}),
+    ]);
+
     if (projectId) {
-      // Fetch project members from lightweight endpoint + project end_date
-      Promise.all([
-        fetch(`${API_URL}/projects/${projectId}/members`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
-          .then((r) => (r.ok ? r.json() : [])).then((d) => { setDisplayUsers(ensureCurrentUser(Array.isArray(d) ? d : [])); }).catch(() => {}),
-        fetch(`${API_URL}/projects/${projectId}`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
-          .then((r) => (r.ok ? r.json() : null)).then((data) => { if (data?.project?.end_date) setProjectEndDate(data.project.end_date); }).catch(() => {}),
-        fetch(`${API_URL}/knowledge-base?all=true`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
-          .then((r) => (r.ok ? r.json() : [])).then((d) => { const items = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : []; setKbArticles(items); }).catch(() => {}),
-        fetch(`${API_URL}/events?all=true`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
-          .then((r) => (r.ok ? r.json() : [])).then((d) => { const items = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : []; setEventsList(items); }).catch(() => {}),
-      ]);
-    } else {
-      Promise.all([
-        fetch(`${API_URL}/projects`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
-          .then((r) => (r.ok ? r.json() : [])).then((d) => { const l = d?.data || d; setProjects(Array.isArray(l) ? l : []); }).catch(() => {}),
-        fetch(`${API_URL}/team-users`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
-          .then((r) => (r.ok ? r.json() : { users: [] })).then((d) => { const u = ensureCurrentUser(Array.isArray(d) ? d : (d.users || [])); setAllUsers(u); }).catch(() => {}),
-        fetch(`${API_URL}/knowledge-base?all=true`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
-          .then((r) => (r.ok ? r.json() : [])).then((d) => { const items = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : []; setKbArticles(items); }).catch(() => {}),
-        fetch(`${API_URL}/events?all=true`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
-          .then((r) => (r.ok ? r.json() : [])).then((d) => { const items = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : []; setEventsList(items); }).catch(() => {}),
-      ]);
+      fetch(`${API_URL}/projects/${projectId}`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+        .then((r) => (r.ok ? r.json() : null)).then((data) => { if (data?.project?.end_date) setProjectEndDate(data.project.end_date); }).catch(() => {});
     }
   }, [projectId]);
 
@@ -487,47 +591,10 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
   }, []);
   const markDirty = useCallback(() => { if (userInteractedRef.current) setIsDirty(true); }, []);
 
-  const fetchMembersForProjects = useCallback((projectIds) => {
-    const token = authToken();
-    const currentUser = getUser();
-    const ids = Array.isArray(projectIds) ? projectIds : (projectIds ? [projectIds] : []);
-    if (!ids || ids.length === 0) {
-      setDisplayUsers([]);
-      return;
-    }
-    Promise.all(
-      ids.map((pid) =>
-        fetch(`${API_URL}/projects/${pid}/members`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
-          .then((r) => (r.ok ? r.json() : [])).catch(() => [])
-      )
-    ).then((results) => {
-      const memberSets = results.map((members) => {
-        const map = new Map();
-        (Array.isArray(members) ? members : []).forEach((u) => map.set(u.id, u));
-        return map;
-      });
-      let users = [];
-      if (memberSets.length === 1) {
-        users = Array.from(memberSets[0].values());
-      } else if (memberSets.length > 1) {
-        const smallest = memberSets.reduce((a, b) => a.size <= b.size ? a : b);
-        users = [];
-        smallest.forEach((u, id) => {
-          if (memberSets.every((s) => s.has(id))) users.push(u);
-        });
-      }
-      if (currentUser && !users.some((u) => u.id === currentUser.id)) {
-        users = [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: currentUser.role, department: currentUser.department }, ...users];
-      }
-      setDisplayUsers(users);
-    }).catch(() => setDisplayUsers([]));
-  }, []);
-
   const handleChange = (e) => {
     const { name, value } = e.target;
     if (name === "project_id") {
       setForm((prev) => ({ ...prev, project_id: value, assigned_to: [], followers: [] }));
-      fetchMembersForProjects(value);
     } else {
       setForm((prev) => ({ ...prev, [name]: value }));
     }
@@ -655,35 +722,40 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
 
   const validateForm = () => {
     const errors = {};
-    if (!form.title.trim()) errors.title = "Task Name is required.";
-    if (!projectId && (!form.project_id || (Array.isArray(form.project_id) && form.project_id.length === 0))) {
-      errors.project_id = "Project selection is required.";
+    const titleVal = (form.title || "").trim();
+    if (!titleVal) errors.title = t("Task Name is required.", { defaultValue: "Task Name is required." });
+    
+    const currentProjectIds = projectId ? [projectId] : (Array.isArray(form.project_id) ? form.project_id : (form.project_id ? [form.project_id] : []));
+    if (!currentProjectIds || currentProjectIds.length === 0) {
+      errors.project_id = t("Project selection is required.", { defaultValue: "Project selection is required." });
     }
-    if (!form.assigned_to || form.assigned_to.length === 0) errors.assigned_to = "Select at least one user.";
-    if (!form.priority) errors.priority = "Priority is required.";
+    if (!form.assigned_to || (Array.isArray(form.assigned_to) && form.assigned_to.length === 0)) {
+      errors.assigned_to = t("Select at least one user.", { defaultValue: "Select at least one user." });
+    }
+    if (!form.priority) errors.priority = t("Priority is required.", { defaultValue: "Priority is required." });
 
     const recStart = form.recurrence_start_date || form.start_date;
     const recEnd = form.recurrence_end_date || form.end_date;
 
     if (recStart && recEnd && new Date(recStart) > new Date(recEnd)) {
-      errors.start_date = "Start date cannot be later than the due date.";
-      errors.end_date = "Due date cannot be earlier than the start date.";
+      errors.start_date = t("Start date cannot be later than the due date.", { defaultValue: "Start date cannot be later than the due date." });
+      errors.end_date = t("Due date cannot be earlier than the start date.", { defaultValue: "Due date cannot be earlier than the start date." });
     }
 
     if (form.task_type === "recurring") {
-      const validTemplates = recurringTemplates.filter((t) => t.title.trim());
-      if (validTemplates.length === 0) errors.recurring_templates = "Add at least one subtask template.";
-      if (!recStart) errors.start_date = "Start date is required for recurring tasks.";
-      if (!recEnd) errors.end_date = "End date (due date) is required for recurring tasks.";
+      const validTemplates = (recurringTemplates || []).filter((t) => (t?.title || "").trim());
+      if (validTemplates.length === 0) errors.recurring_templates = t("Add at least one subtask template.", { defaultValue: "Add at least one subtask template." });
+      if (!recStart) errors.start_date = t("Start date is required for recurring tasks.", { defaultValue: "Start date is required for recurring tasks." });
+      if (!recEnd) errors.end_date = t("End date (due date) is required for recurring tasks.", { defaultValue: "End date (due date) is required for recurring tasks." });
       if (recStart && recEnd && new Date(recEnd) < new Date(recStart)) {
-        errors.recurrence_end_date = "Recurrence End date cannot be before Start date.";
+        errors.recurrence_end_date = t("Recurrence End date cannot be before Start date.", { defaultValue: "Recurrence End date cannot be before Start date." });
       }
     }
     if (recEnd && projectEndDate) {
       const taskEnd = new Date(recEnd);
       const projEnd = new Date(projectEndDate);
       if (taskEnd > projEnd) {
-        errors.end_date = "Task deadline cannot exceed the project deadline.";
+        errors.end_date = t("Task deadline cannot exceed the project deadline.", { defaultValue: "Task deadline cannot exceed the project deadline." });
       }
     }
     setFormErrors(errors);
@@ -700,9 +772,9 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
     await run(async () => {
       try {
         const token = authToken();
-        const validTemplates = recurringTemplates.filter((t) => t.title.trim());
+        const validTemplates = (recurringTemplates || []).filter((t) => (t?.title || "").trim());
         const settings = form.task_type === "recurring" ? {
-          repeat: recurrenceSettings.repeat,
+          repeat: recurrenceSettings.repeat || "daily",
           skip_weekends: recurrenceSettings.skip_weekends || false,
         } : undefined;
 
@@ -710,18 +782,18 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
         const endDateVal = form.recurrence_end_date || form.end_date;
 
         const body = {
-          title: form.title.trim(),
+          title: (form.title || "").trim(),
           description: form.description || null,
           requirements: requirementsList.length > 0 ? requirementsList : null,
-          start_date: toUTCIso(startDateVal),
-          end_date: toUTCIso(endDateVal),
-          assigned_to: form.assigned_to,
-          priority: form.priority,
-          task_type: form.task_type,
+          start_date: startDateVal ? toUTCIso(startDateVal) : null,
+          end_date: endDateVal ? toUTCIso(endDateVal) : null,
+          assigned_to: form.assigned_to || [],
+          priority: form.priority || "High",
+          task_type: form.task_type || "standard",
           recurrence_settings: settings,
-          recurrence_start_date: form.task_type === "recurring" ? toUTCIso(startDateVal) : undefined,
-          recurrence_end_date: form.task_type === "recurring" ? toUTCIso(endDateVal) : undefined,
-          deliverable_templates: validTemplates.length > 0 ? validTemplates.map((t) => ({ title: t.title.trim(), description: t.description || null, quantity: t.quantity || 1, combined: t.combined || false })) : undefined,
+          recurrence_start_date: form.task_type === "recurring" && startDateVal ? toUTCIso(startDateVal) : undefined,
+          recurrence_end_date: form.task_type === "recurring" && endDateVal ? toUTCIso(endDateVal) : undefined,
+          deliverable_templates: validTemplates.length > 0 ? validTemplates.map((t) => ({ title: (t?.title || "").trim(), description: t?.description || null, quantity: t?.quantity || 1, combined: t?.combined || false })) : undefined,
           deliverables: subtasks.length > 0 ? subtasks.map((d) => ({ title: d.title, start_date: d.start_date || null, due_date: d.due_date || null, assigned_to: d.assigned_to || null })) : undefined,
           allow_transfer: form.allow_transfer === "allow",
           followers: form.followers || [],
@@ -731,7 +803,11 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
           parent_ids: Array.isArray(form.parent_id) ? form.parent_id : (form.parent_id ? [form.parent_id] : []),
         };
 
-        const projectIds = projectId ? [projectId] : form.project_id;
+        const rawProjectIds = projectId ? [projectId] : form.project_id;
+        const projectIds = (Array.isArray(rawProjectIds) ? rawProjectIds : (rawProjectIds ? [rawProjectIds] : []))
+          .map((p) => (typeof p === "object" && p !== null ? Number(p.id) : Number(p)))
+          .filter((id) => !isNaN(id) && id > 0);
+
         const allTaskIds = [];
 
         if (projectIds && projectIds.length > 0) {
@@ -743,9 +819,9 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                 body: JSON.stringify(body),
                 _notifHandled: true,
               }).then(async (r) => {
-                const data = await r.json();
+                const data = await r.json().catch(() => ({}));
                 if (!r.ok) {
-                  const msg = data.message || "Failed to create task";
+                  const msg = data.message || `Failed to create task (Status ${r.status})`;
                   const errors = data.errors ? Object.values(data.errors).flat().join(". ") : "";
                   throw new Error(errors || msg);
                 }
@@ -764,9 +840,9 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
             body: JSON.stringify(body),
             _notifHandled: true,
           });
-          const data = await response.json();
+          const data = await response.json().catch(() => ({}));
           if (!response.ok) {
-            const msg = data.message || "Failed to create task";
+            const msg = data.message || `Failed to create task (Status ${response.status})`;
             const errors = data.errors ? Object.values(data.errors).flat().join(". ") : "";
             throw new Error(errors || msg);
           }
@@ -793,6 +869,8 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
             description: "",
             start_date: "",
             end_date: "",
+            recurrence_start_date: "",
+            recurrence_end_date: "",
             parent_id: [],
             assigned_to: [],
             followers: [],
@@ -817,12 +895,13 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
           onClose(true);
         }
       } catch (err) {
-        notify.error(err.message);
+        console.error("Create task error:", err);
+        notify.error(err.message || "Failed to create task");
       }
     });
   };
 
-  const templateErrors = formErrors.recurring_templates && recurringTemplates.filter((t) => t.title.trim()).length === 0;
+  const templateErrors = formErrors.recurring_templates && recurringTemplates.filter((t) => (t?.title || "").trim()).length === 0;
 
   return createPortal(
     <>
@@ -839,7 +918,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
               <AutoSaveIndicator isSaving={isSaving} lastSaved={lastSaved} />
             </div>
             <div className="task-header-actions">
-              <button className="task-save-draft-btn" onClick={handleSaveDraftAndClose} type="button" disabled={!form.title.trim()}>
+              <button className="task-save-draft-btn" onClick={handleSaveDraftAndClose} type="button" disabled={!(form.title || "").trim()}>
                 {t("Save as Draft", { defaultValue: "Save as Draft" })}
               </button>
               <button className="task-create-more-btn" onClick={() => submitTask(true)} type="button" disabled={submitting}>
@@ -862,11 +941,11 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                     <label>{t("Projects")} <span style={{ color: "#ef4444" }}>*</span></label>
                     <MultiSelectDropdown
                       name="project_id"
-                      value={form.project_id}
+                      value={form.project_id || []}
                       onChange={(val) => handleChange({ target: { name: "project_id", value: val } })}
                       placeholder={t("Select projects", { defaultValue: "Select projects" })}
                       searchPlaceholder={t("Search projects...")}
-                      options={projects.map((p) => ({ value: p.id, label: p.title }))}
+                      options={projects.map((p) => ({ value: p.id, label: getProjectDisplayName(p) }))}
                       showChips={true}
                     />
                     {formErrors.project_id && <span className="field-error-text">{formErrors.project_id}</span>}
@@ -874,7 +953,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                 ) : (
                   <div className="task-field">
                     <label>{t("Project", { defaultValue: "Project" })} <span style={{ color: "#ef4444" }}>*</span></label>
-                    <div className="task-project-name">{projectName || t("Current Project", { defaultValue: "Current Project" })}</div>
+                    <div className="task-project-name">{getProjectDisplayName(projectName) || t("Current Project", { defaultValue: "Current Project" })}</div>
                   </div>
                 )}
                 {(() => {
@@ -890,7 +969,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                       <label>{t("Assign To", { defaultValue: "Assign To" })} <span style={{ color: "#ef4444" }}>*</span></label>
                       <UserSelectDropdown
                         users={displayUsers}
-                        selectedIds={form.assigned_to}
+                        selectedIds={form.assigned_to || []}
                         onChange={handleAssignedToChange}
                         disabled={!hasProjectSelected}
                         placeholder={!hasProjectSelected ? t("Select a project first", { defaultValue: "Select a project first" }) : t("Click to select members", { defaultValue: "Click to select members" })}
@@ -902,7 +981,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                       {form.assigned_to && form.assigned_to.length > 0 && (
                         <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "6px" }}>
                           {displayUsers
-                            .filter((u) => form.assigned_to.includes(u.id))
+                            .filter((u) => form.assigned_to.some((aid) => Number(aid) === Number(u.id)))
                             .map((u) => {
                               const tz = u.timezone || "UTC";
                               const uTime = formatLocalTime(new Date().toISOString(), tz);
@@ -950,7 +1029,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                   type="text"
                   name="title"
                   placeholder={t("Enter task name..", { defaultValue: "Enter task name.." })}
-                  value={form.title}
+                  value={form.title || ""}
                   onChange={handleChange}
                   className={formErrors.title ? "field-error" : ""}
                 />
@@ -961,7 +1040,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
               <div className="task-field">
                 <label>{t("Description", { defaultValue: "Description" })}</label>
                 <RichTextEditor
-                  value={form.description}
+                  value={form.description || ""}
                   onChange={(val) => { setForm((prev) => ({ ...prev, description: val })); markDirty(); }}
                   placeholder={t("Enter task description...", { defaultValue: "Enter task description..." })}
                 />
@@ -1166,7 +1245,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                 <label>{t("Priority")} <span style={{ color: "#ef4444" }}>*</span></label>
                 <CustomSelect
                   name="priority"
-                  value={form.priority}
+                  value={form.priority || "High"}
                   onChange={(val) => { setForm((prev) => ({ ...prev, priority: val })); markDirty(); }}
                   options={[
                     { value: "Urgent", label: t("Urgent", { defaultValue: "Urgent" }) },
@@ -1213,7 +1292,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                       <Clock size={13} /> {t("Assignee Deadline Equivalent", { defaultValue: "Assignee Deadline Equivalent" })}
                     </div>
                     {displayUsers
-                      .filter((u) => form.assigned_to.includes(u.id))
+                      .filter((u) => (form.assigned_to || []).some((aid) => Number(aid) === Number(u.id)))
                       .map((u) => {
                         const tz = u.timezone || "UTC";
                         const targetDate = form.end_date || form.recurrence_end_date;
@@ -1241,7 +1320,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                   <div className="task-field">
                     <label>{t("Followers (Optional)", { defaultValue: "Followers (Optional)" })}</label>
                     <UserSelectDropdown
-                      users={displayUsers.filter((u) => !form.assigned_to.includes(u.id))}
+                      users={displayUsers.filter((u) => !(form.assigned_to || []).some((aid) => Number(aid) === Number(u.id)))}
                       selectedIds={form.followers || []}
                       onChange={handleFollowersChange}
                       disabled={!hasProjectSelected}
@@ -1258,11 +1337,11 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                   <input
                     type="text"
                     placeholder={t("Enter a requirement", { defaultValue: "Enter a requirement" })}
-                    value={reqInput}
+                    value={reqInput || ""}
                     onChange={(e) => { setReqInput(e.target.value); markDirty(); }}
                     onKeyDown={handleReqKeyDown}
                   />
-                  <button type="button" className="cp-goals-add-btn" onClick={handleAddRequirement} disabled={!reqInput.trim()}>
+                  <button type="button" className="cp-goals-add-btn" onClick={handleAddRequirement} disabled={!(reqInput || "").trim()}>
                     {t("Add", { defaultValue: "Add" })}
                   </button>
                 </div>
@@ -1283,7 +1362,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                 <label>{t("Reference Event", { defaultValue: "Reference Event" })}</label>
                 <MultiSelectDropdown
                   name="event_ids"
-                  value={eventIds}
+                  value={eventIds || []}
                   onChange={(vals) => { setEventIds(vals.map(Number)); markDirty(); }}
                   placeholder={t("Select Event", { defaultValue: "Select Event" })}
                   searchPlaceholder={t("Search Events...", { defaultValue: "Search Events..." })}
@@ -1300,7 +1379,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                 <label>{t("Reference Knowledge Base", { defaultValue: "Reference Knowledge Base" })}</label>
                 <MultiSelectDropdown
                   name="kb_ids"
-                  value={kbIds}
+                  value={kbIds || []}
                   onChange={(vals) => { setKbIds(vals.map(Number)); markDirty(); }}
                   placeholder={t("Select Knowledge Base", { defaultValue: "Select Knowledge Base" })}
                   searchPlaceholder={t("Search Knowledge Base...", { defaultValue: "Search Knowledge Base..." })}
@@ -1317,11 +1396,11 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                 <label>{t("Task Type", { defaultValue: "Task Type" })}</label>
                 <CustomSelect
                   name="task_type"
-                  value={form.task_type}
+                  value={form.task_type || "standard"}
                   onChange={(val) => {
                     setForm((prev) => ({ ...prev, task_type: val })); markDirty();
                     if (val === "recurring") {
-                      if (recurringTemplates.length === 0 || !recurringTemplates.some((t) => t.title.trim())) {
+                      if (recurringTemplates.length === 0 || !recurringTemplates.some((t) => (t?.title || "").trim())) {
                         setRecurringTemplates([{ title: "{{number}} - Task Deliverable", description: "", quantity: 1, combined: false }]);
                       }
                     }
@@ -1342,7 +1421,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                       <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>{t("Repeat", { defaultValue: "Repeat" })}</label>
                       <CustomSelect
                         name="repeat"
-                        value={recurrenceSettings.repeat}
+                        value={recurrenceSettings.repeat || "daily"}
                         onChange={(val) => handleRecurringSettingChange("repeat", val)}
                         options={REPEAT_OPTIONS}
                       />
@@ -1380,7 +1459,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                         <label style={{ fontSize: 13, color: "#6b7280", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
                           <input
                             type="checkbox"
-                            checked={recurrenceSettings.skip_weekends}
+                            checked={!!recurrenceSettings.skip_weekends}
                             onChange={(e) => handleRecurringSettingChange("skip_weekends", e.target.checked)}
                             style={{ width: 16, height: 16, accentColor: "#6366f1" }}
                           />
@@ -1422,23 +1501,23 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                       <div key={index} className="task-template-item" style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 10, marginBottom: 8, background: "#fafafa" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
                           <span style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", minWidth: 40 }}>#{index + 1}</span>
-                          <input type="text" placeholder="Template title (use {{day}}, {{date}}...)" value={tmpl.title}
+                          <input type="text" placeholder="Template title (use {{day}}, {{date}}...)" value={tmpl.title || ""}
                             onChange={(e) => handleTemplateChange(index, "title", e.target.value)}
                             style={{ flex: 1, fontSize: 13, padding: "6px 8px", border: "1px solid #d1d5db", borderRadius: 4 }} />
                           <div style={{ display: "flex", alignItems: "center", gap: 4, border: "1px solid #d1d5db", borderRadius: 4, padding: "2px 6px", background: "#fff" }}>
                             <span style={{ fontSize: 11, color: "#6b7280" }}>Qty:</span>
-                            <input type="number" min="1" max="100" value={tmpl.quantity}
+                            <input type="number" min="1" max="100" value={tmpl.quantity ?? 1}
                               onChange={(e) => handleTemplateChange(index, "quantity", Math.max(1, parseInt(e.target.value) || 1))}
                               style={{ width: 40, fontSize: 12, border: "none", outline: "none", textAlign: "center" }} />
                           </div>
                           <button type="button" className="task-phase-item-remove" onClick={() => { setPendingRemoveItem({ type: "template", index }); setRemoveConfirmOpen(true); }} style={{ fontSize: 14 }}>✕</button>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                          <input type="text" placeholder={t("Description (optional)", { defaultValue: "Description (optional)" })} value={tmpl.description}
+                          <input type="text" placeholder={t("Description (optional)", { defaultValue: "Description (optional)" })} value={tmpl.description || ""}
                             onChange={(e) => handleTemplateChange(index, "description", e.target.value)}
                             style={{ flex: 1, fontSize: 12, padding: "5px 8px", border: "1px solid #e5e7eb", borderRadius: 4, color: "#6b7280" }} />
                           <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontSize: 11, color: "#6b7280", whiteSpace: "nowrap" }}>
-                            <input type="checkbox" checked={tmpl.combined}
+                            <input type="checkbox" checked={!!tmpl.combined}
                               onChange={(e) => handleTemplateChange(index, "combined", e.target.checked)}
                               style={{ width: 14, height: 14, accentColor: "#6366f1" }} />
                             Combined
@@ -1490,7 +1569,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
               <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Title</label>
               <input
                 type="text"
-                value={editLinkForm.title}
+                value={editLinkForm.title || ""}
                 onChange={(e) => setEditLinkForm((p) => ({ ...p, title: e.target.value }))}
                 style={{ width: "100%", padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "#111827" }}
               />
@@ -1499,7 +1578,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
               <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>URL</label>
               <input
                 type="url"
-                value={editLinkForm.url}
+                value={editLinkForm.url || ""}
                 onChange={(e) => setEditLinkForm((p) => ({ ...p, url: e.target.value }))}
                 style={{ width: "100%", padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "#111827" }}
               />
@@ -1532,7 +1611,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
               <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Title</label>
               <input
                 type="text"
-                value={editFileForm.title}
+                value={editFileForm.title || ""}
                 onChange={(e) => setEditFileForm({ title: e.target.value })}
                 autoFocus
                 style={{ width: "100%", padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "#111827" }}

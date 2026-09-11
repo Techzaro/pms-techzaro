@@ -19,6 +19,7 @@ import LoadingButton from "./LoadingButton";
 import ConfirmModal from "./ConfirmModal";
 import { convertToLocal, convertToUTC, formatLocalTime, getTimezoneOffsetDisplay, formatWorkingHoursSummary } from "../utils/timezoneUtils";
 import { toDatetimeLocal, toUTCIso, getNowDatetimeLocal } from "../utils/formatDateTime";
+import { getProjectDisplayName } from "../utils/projectUtils";
 import { Clock } from "lucide-react";
 import { publish } from "../utils/eventBus";
 import { notify, showSuccessMessage } from "../utils/notify";
@@ -206,32 +207,50 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
   });
   const [showVariablesHint, setShowVariablesHint] = useState(false);
 
+  const normalizeIds = (val) => {
+    if (!val) return [];
+    if (Array.isArray(val)) {
+      return val
+        .map((item) => (typeof item === "object" && item !== null ? Number(item.id) : Number(item)))
+        .filter((id) => !isNaN(id) && id > 0);
+    }
+    if (typeof val === "object" && val !== null) {
+      const id = Number(val.id);
+      return !isNaN(id) && id > 0 ? [id] : [];
+    }
+    const num = Number(val);
+    return !isNaN(num) && num > 0 ? [num] : [];
+  };
+
   // Restore draft data when opened from DraftCenter
   useEffect(() => {
     if (!restoreDraftId && !draftData) return;
 
     const applyDraft = (d) => {
       if (!d) return;
+      const restoredProjectId = d.project_id ?? d.projectId ?? (task?.project?.id ? [task.project.id] : (task?.project_id ? [task.project_id] : []));
+      const normalizedPids = normalizeIds(restoredProjectId);
+      const rawAssignees = d.assigned_to ?? d.assignees ?? d.assigned_users ?? d.selectedAssigneeIds ?? null;
+      const rawFollowers = d.followers ?? d.follower_ids ?? d.selectedFollowerIds ?? null;
+
       setForm((prev) => ({
         ...prev,
         title: d.title !== undefined ? d.title : prev.title,
         description: d.description !== undefined ? d.description : prev.description,
         priority: d.priority || prev.priority,
         task_type: d.task_type || prev.task_type,
-        project_id: d.project_id ? (Array.isArray(d.project_id) ? d.project_id : [d.project_id]) : prev.project_id,
-        parent_id: d.parent_id ? (Array.isArray(d.parent_id) ? d.parent_id.map(Number) : [Number(d.parent_id)]) : prev.parent_id,
+        project_id: normalizedPids.length > 0 ? normalizedPids : prev.project_id,
+        parent_id: normalizeIds(d.parent_id),
         start_date: d.start_date ? toDatetimeLocal(d.start_date) : prev.start_date,
         end_date: d.end_date ? toDatetimeLocal(d.end_date) : prev.end_date,
         allow_transfer: d.allow_transfer !== undefined ? (d.allow_transfer !== false ? "allow" : "disallow") : prev.allow_transfer,
       }));
 
-      if (d.assigned_to || d.assignees || d.selectedAssigneeIds) {
-        const assignees = d.assigned_to || d.assignees || d.selectedAssigneeIds;
-        setSelectedAssigneeIds(Array.isArray(assignees) ? assignees.map((a) => (typeof a === "object" ? a.id : Number(a))) : [Number(assignees)]);
+      if (rawAssignees !== null && rawAssignees !== undefined) {
+        setSelectedAssigneeIds(normalizeIds(rawAssignees));
       }
-      if (d.followers || d.follower_ids || d.selectedFollowerIds) {
-        const followers = d.followers || d.follower_ids || d.selectedFollowerIds;
-        setSelectedFollowerIds(Array.isArray(followers) ? followers.map((f) => (typeof f === "object" ? f.id : Number(f))) : [Number(followers)]);
+      if (rawFollowers !== null && rawFollowers !== undefined) {
+        setSelectedFollowerIds(normalizeIds(rawFollowers));
       }
       if (d.requirementsList) setRequirementsList(d.requirementsList);
       else if (d.requirements) setRequirementsList(d.requirements);
@@ -242,10 +261,10 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
       if (d.recurrenceSettings) setRecurrenceSettings(d.recurrenceSettings);
       else if (d.recurrence_settings) setRecurrenceSettings(d.recurrence_settings);
       if (d.links) setLinks(d.links.map((l) => ({ url: l.url, name: l.name || l.title || "", title: l.title || l.name || "" })));
-      if (d.kb_ids) setKbIds(Array.isArray(d.kb_ids) ? d.kb_ids.map(Number) : [Number(d.kb_ids)]);
-      else if (d.kb_id || d.kbReferenceId) setKbIds([Number(d.kb_id || d.kbReferenceId)]);
-      if (d.event_ids) setEventIds(Array.isArray(d.event_ids) ? d.event_ids.map(Number) : [Number(d.event_ids)]);
-      else if (d.event_id || d.eventReferenceId) setEventIds([Number(d.event_id || d.eventReferenceId)]);
+      if (d.kb_ids) setKbIds(normalizeIds(d.kb_ids));
+      else if (d.kb_id || d.kbReferenceId) setKbIds(normalizeIds(d.kb_id || d.kbReferenceId));
+      if (d.event_ids) setEventIds(normalizeIds(d.event_ids));
+      else if (d.event_id || d.eventReferenceId) setEventIds(normalizeIds(d.event_id || d.eventReferenceId));
       if (restoreDraftId) setDraftId(restoreDraftId);
     };
 
@@ -264,7 +283,7 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
         })
         .catch((err) => console.error("Failed to restore draft in EditTaskModal:", err));
     }
-  }, [restoreDraftId, draftData]);
+  }, [restoreDraftId, draftData, task]);
 
   const preview = useMemo(() => {
     if (form.task_type !== "recurring") return null;
@@ -287,10 +306,10 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
   const [kbArticles, setKbArticles] = useState([]);
   const [eventsList, setEventsList] = useState([]);
   const [selectedAssigneeIds, setSelectedAssigneeIds] = useState(
-    task.assignees?.map((a) => a.id) || []
+    task.assignees?.map((a) => (typeof a === "object" ? Number(a.id) : Number(a))) || []
   );
   const [selectedFollowerIds, setSelectedFollowerIds] = useState(
-    task.followers?.map((f) => f.id || f) || []
+    task.followers?.map((f) => (typeof f === "object" ? Number(f.id) : Number(f))) || []
   );
   const [requirementsList, setRequirementsList] = useState(task.requirements || []);
   const [reqInput, setReqInput] = useState("");
@@ -318,12 +337,24 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
   const [editFileDeleteConfirm, setEditFileDeleteConfirm] = useState(false);
   const [openSubtaskCreator, setOpenSubtaskCreator] = useState(false);
 
+  const autoSaveData = useMemo(() => ({
+    ...form,
+    assigned_to: selectedAssigneeIds,
+    followers: selectedFollowerIds,
+    kb_ids: kbIds,
+    event_ids: eventIds,
+    deliverables: subtasks,
+    recurringTemplates,
+    requirementsList,
+    links: links.map((l) => ({ url: l.url, name: l.name || l.title || l.customName })),
+  }), [form, selectedAssigneeIds, selectedFollowerIds, kbIds, eventIds, subtasks, recurringTemplates, requirementsList, links]);
+
   const { lastSaved, isSaving, draftId: autoSaveDraftId } = useAutoSave({
     draftId,
-    formData: form,
+    formData: autoSaveData,
     moduleType: "task",
     enabled: isDirty,
-    project_id: form.project_id || task?.project_id,
+    project_id: form.project_id?.[0] || task?.project_id,
   });
 
   useEffect(() => {
@@ -338,8 +369,8 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
         module_type: "task",
         original_record_id: task?.id,
         title: form.title || "Untitled Task Draft",
-        draft_data: { ...form, subtasks: subtasks },
-        project_id: form.project_id || task?.project_id,
+        draft_data: autoSaveData,
+        project_id: form.project_id?.[0] || task?.project_id || null,
       };
       if (draftId) {
         await draftService.update(draftId, { title: payload.title, draft_data: payload.draft_data }, { skipNotify: true });
@@ -348,8 +379,11 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
         if (data?.data?.id) setDraftId(data.data.id);
       }
       setIsDirty(false);
+      showSuccessMessage("Draft", "saved");
+      publish("draft:created", {});
     } catch (err) {
       console.error("Save draft failed:", err);
+      notify.error(err.message || "Failed to save draft");
     }
   };
 
@@ -435,13 +469,21 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    const token = authToken();
+  const activeProjectIds = useMemo(() => {
     const pids = Array.isArray(form.project_id)
       ? form.project_id
-      : (form.project_id ? [form.project_id] : (task?.project_id ? [task.project_id] : []));
-    if (pids.length === 1) {
-      fetch(`${API_URL}/projects/${pids[0]}/tasks`, {
+      : (form.project_id ? [form.project_id] : (task?.project?.id ? [task.project.id] : (task?.project_id ? [task.project_id] : [])));
+    if (!pids) return [];
+    const arr = Array.isArray(pids) ? pids : [pids];
+    return arr
+      .map((p) => (typeof p === "object" && p !== null ? Number(p.id) : Number(p)))
+      .filter((id) => !isNaN(id) && id > 0);
+  }, [form.project_id, task?.project, task?.project_id]);
+
+  useEffect(() => {
+    const token = authToken();
+    if (activeProjectIds.length === 1) {
+      fetch(`${API_URL}/projects/${activeProjectIds[0]}/tasks`, {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         skipLoader: true,
       })
@@ -455,48 +497,48 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
     } else {
       setProjectTasks([]);
     }
-  }, [form.project_id, task?.id]);
+  }, [activeProjectIds, task?.id]);
 
   useEffect(() => {
     const token = authToken();
-    const pids = Array.isArray(form.project_id)
-      ? form.project_id
-      : (form.project_id ? [form.project_id] : []);
-    if (!pids || pids.length === 0) {
+    if (!activeProjectIds || activeProjectIds.length === 0) {
       setDisplayUsers([]);
       return;
     }
     const currentUser = getUser();
     Promise.all(
-      pids.map((pid) =>
+      activeProjectIds.map((pid) =>
         fetch(`${API_URL}/projects/${pid}/members`, {
           headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
           skipLoader: true,
         })
-          .then((res) => (res.ok ? res.json() : [])).catch(() => [])
+          .then((res) => (res.ok ? res.json() : []))
+          .catch(() => [])
       )
     ).then((results) => {
       const memberSets = results.map((members) => {
         const map = new Map();
-        (Array.isArray(members) ? members : []).forEach((u) => map.set(u.id, u));
+        (Array.isArray(members) ? members : []).forEach((u) => {
+          if (u && u.id) map.set(Number(u.id), u);
+        });
         return map;
       });
       let users = [];
       if (memberSets.length === 1) {
         users = Array.from(memberSets[0].values());
       } else if (memberSets.length > 1) {
-        const smallest = memberSets.reduce((a, b) => a.size <= b.size ? a : b);
+        const smallest = memberSets.reduce((a, b) => (a.size <= b.size ? a : b));
         users = [];
         smallest.forEach((u, id) => {
           if (memberSets.every((s) => s.has(id))) users.push(u);
         });
       }
-      if (currentUser && !users.some((u) => u.id === currentUser.id)) {
-        users = [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: currentUser.role, department: currentUser.department }, ...users];
+      if (currentUser && !users.some((u) => Number(u.id) === Number(currentUser.id))) {
+        users = [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: currentUser.role, department: currentUser.department, timezone: currentUser.timezone, working_hours: currentUser.working_hours }, ...users];
       }
       setDisplayUsers(users);
     }).catch(() => { setDisplayUsers([]); });
-  }, [form.project_id]);
+  }, [activeProjectIds]);
 
   useEffect(() => {
     if (openSubtaskDropdown === null) return;
@@ -753,6 +795,10 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
       notify.error(t("Project selection is required.", { defaultValue: "Project selection is required." }));
       return;
     }
+    if (!(form.title || "").trim()) {
+      notify.error(t("Task Name is required.", { defaultValue: "Task Name is required." }));
+      return;
+    }
     if (form.task_type !== "recurring" && (!selectedAssigneeIds || selectedAssigneeIds.length === 0)) {
       notify.error(t("Please select a person to assign this task to.", { defaultValue: "Please select a person to assign this task to." }));
       return;
@@ -788,31 +834,33 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
             notify.error(t("Recurrence End date cannot be before Start date.", { defaultValue: "Recurrence End date cannot be before Start date." }));
             return;
           }
-          const validTemplates = recurringTemplates.filter((t) => t.title.trim());
+          const validTemplates = recurringTemplates.filter((t) => (t?.title || "").trim());
           body = {
             recurrence_settings: {
-              repeat: recurrenceSettings.repeat,
+              repeat: recurrenceSettings.repeat || "daily",
               skip_weekends: recurrenceSettings.skip_weekends || false,
             },
-            recurrence_start_date: toUTCIso(recStart),
-            recurrence_end_date: toUTCIso(recEnd),
-            deliverable_templates: validTemplates.length > 0 ? validTemplates.map((t) => ({ title: t.title.trim(), description: t.description || null, quantity: t.quantity || 1, combined: t.combined || false })) : undefined,
+            recurrence_start_date: recStart ? toUTCIso(recStart) : undefined,
+            recurrence_end_date: recEnd ? toUTCIso(recEnd) : undefined,
+            deliverable_templates: validTemplates.length > 0 ? validTemplates.map((t) => ({ title: (t?.title || "").trim(), description: t?.description || null, quantity: t?.quantity || 1, combined: t?.combined || false })) : undefined,
             regenerate: true,
           };
           url = `${API_URL}/tasks/${task.id}/update-recurring`;
         } else {
           body = {
             ...form,
+            title: (form.title || "").trim(),
+            description: form.description || null,
             requirements: requirementsList,
             allow_transfer: form.allow_transfer === "allow",
             project_id: form.project_id?.[0] || null,
             parent_id: Array.isArray(form.parent_id) ? (form.parent_id[0] || null) : (form.parent_id || null),
             parent_ids: Array.isArray(form.parent_id) ? form.parent_id : (form.parent_id ? [form.parent_id] : []),
             subtask_of: Array.isArray(form.parent_id) ? (form.parent_id[0] || null) : (form.parent_id || null),
-            start_date: toUTCIso(form.start_date),
-            end_date: toUTCIso(form.end_date),
-            assigned_to: selectedAssigneeIds,
-            followers: selectedFollowerIds,
+            start_date: form.start_date ? toUTCIso(form.start_date) : null,
+            end_date: form.end_date ? toUTCIso(form.end_date) : null,
+            assigned_to: selectedAssigneeIds || [],
+            followers: selectedFollowerIds || [],
             existing_file_names: existingFiles.reduce((acc, f) => {
               const nameChanged = f.customName && f.customName !== f.name;
               const urlChanged = f.customUrl && f.customUrl !== f.url;
@@ -843,15 +891,20 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
           body: JSON.stringify(body),
           _notifHandled: true,
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || "Failed to update task");
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const msg = data.message || `Failed to update task (Status ${res.status})`;
+          const errors = data.errors ? Object.values(data.errors).flat().join(". ") : "";
+          throw new Error(errors || msg);
+        }
         await uploadAttachments();
         showSuccessMessage("Task", "updated");
         publish('task:updated', data.task || data);
         publish('data:changed', { type: 'task', action: 'updated' });
         onClose(true);
       } catch (err) {
-        notify.error(err.message);
+        console.error("Update task error:", err);
+        notify.error(err.message || "Failed to update task");
       }
     });
   };
@@ -895,10 +948,11 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
                 <MultiSelectDropdown
                   name="project_id"
                   value={form.project_id}
-                  onChange={(val) => { setForm((prev) => ({ ...prev, project_id: val, parent_id: [] })); setSelectedAssigneeIds([]); markDirty(); }}
+                  onChange={(val) => { setForm((prev) => ({ ...prev, project_id: val, parent_id: [] })); setSelectedAssigneeIds([]); setSelectedFollowerIds([]); markDirty(); }}
                   placeholder={t("Select projects", { defaultValue: "Select projects" })}
                   searchPlaceholder={t("Search projects...")}
-                  options={projects.map((p) => ({ value: p.id, label: p.title }))}
+                  options={projects.map((p) => ({ value: p.id, label: getProjectDisplayName(p) }))}
+                  showChips={true}
                 />
               </div>
               <div className="task-field">
@@ -930,7 +984,7 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
                 {!isSelfTask && selectedAssigneeIds && selectedAssigneeIds.length > 0 && (
                   <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "6px" }}>
                     {displayUsers
-                      .filter((u) => selectedAssigneeIds.includes(u.id))
+                      .filter((u) => selectedAssigneeIds.some((aid) => Number(aid) === Number(u.id)))
                       .map((u) => {
                         const tz = u.timezone || "UTC";
                         const uTime = formatLocalTime(new Date().toISOString(), tz);
@@ -978,7 +1032,7 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
                 <div className="task-field">
                   <label>{t("Followers (Optional)", { defaultValue: "Followers (Optional)" })}</label>
                   <UserSelectDropdown
-                    users={displayUsers.filter((u) => !selectedAssigneeIds.includes(u.id))}
+                    users={displayUsers.filter((u) => !selectedAssigneeIds.some((aid) => Number(aid) === Number(u.id)))}
                     selectedIds={selectedFollowerIds}
                     onChange={(ids) => { setSelectedFollowerIds(ids); markDirty(); }}
                     disabled={!hasProjectSelected}
@@ -994,7 +1048,7 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
                 type="text"
                 name="title"
                 placeholder={t("Enter task name..", { defaultValue: "Enter task name" })}
-                value={form.title}
+                value={form.title || ""}
                 onChange={handleChange}
               />
             </div>
@@ -1002,7 +1056,7 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
             <div className="task-field">
               <label>{t("Description", { defaultValue: "Description" })}</label>
               <RichTextEditor
-                value={form.description}
+                value={form.description || ""}
                 onChange={(val) => { const clean = (s) => (s || "").replace(/<[^>]*>/g, "").trim(); setForm((prev) => ({ ...prev, description: val })); markDirty(); }}
                 placeholder={t("Enter task description...", { defaultValue: "Enter task description..." })}
               />
@@ -1057,50 +1111,12 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
                   type="file"
                   multiple
                   style={{ display: "none" }}
-                  onChange={(e) => { console.log("[EditTaskModal] file input onChange, files:", e.target.files.length); if (e.target.files.length > 0) handleFiles(e.target.files); e.target.value = ""; }}
+                  onChange={(e) => {
+                    if (e.target.files.length > 0) handleFiles(e.target.files);
+                    e.target.value = "";
+                  }}
                 />
               </div>
-
-              {(() => {
-                const existingAttachments = existingFiles.filter(
-                  (f) => !isExternalLink(f.url)
-                );
-                return existingAttachments.length > 0 && (
-                  <div className="cp-attachments-list">
-                    {existingAttachments.map((file) => {
-                      const fileUrl = file.url
-                        ? (file.url.startsWith("http") ? file.url : API_URL.replace(/\/api\/?$/, "") + file.url)
-                        : "#";
-                      return (
-                        <div key={file.id} className="cp-attachment-item">
-                          <span className="cp-attachment-drag" title={t("Drag to reorder", { defaultValue: "Drag to reorder" })}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
-                          </span>
-                          <span className="cp-attachment-icon">📄</span>
-                          <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-                            <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="cp-attachment-name cp-attachment-link" style={{ fontWeight: 600, fontSize: "13px" }}>
-                              {file.customName || file.name}
-                            </a>
-                          </div>
-                          <div className="cp-attachment-actions">
-                            <button type="button" className="cp-action-btn cp-action-btn-edit" title={t("Edit Name", { defaultValue: "Edit Name" })} onClick={() => {
-                              setEditingFile({ type: "existing", id: file.id, currentName: file.customName || file.name });
-                              setEditFileForm({ title: file.customName || file.name.replace(/\.[^.]+$/, "") });
-                              setEditFileNewFile(null);
-                              setEditFileDeleted(false);
-                            }}>
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
-                            </button>
-                            <button type="button" className="cp-action-btn cp-action-btn-delete" title={t("Delete File", { defaultValue: "Delete File" })} onClick={() => { setPendingRemoveItem({ type: "existing-file", index: -1, id: file.id }); setRemoveConfirmOpen(true); }}>
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
 
               {pendingFiles.length > 0 && (
                 <div className="cp-attachments-list">
@@ -1109,10 +1125,10 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
                       <span className="cp-attachment-drag" title={t("Drag to reorder", { defaultValue: "Drag to reorder" })}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
                       </span>
-                      <span className="cp-attachment-icon">📄</span>
+                      <span className="task-attachment-icon">📄</span>
                       <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
                         <span className="task-attachment-name" style={{ fontWeight: 600, fontSize: "13px" }}>{file.customName || file.name}</span>
-                        <span className="cp-attachment-size">{(file.size / 1024).toFixed(1)} KB</span>
+                        <span className="task-attachment-size">{(file.size / 1024).toFixed(1)} KB</span>
                       </div>
                       <div className="cp-attachment-actions">
                         <button type="button" className="cp-action-btn cp-action-btn-edit" title={t("Edit Name", { defaultValue: "Edit Name" })} onClick={() => {
@@ -1120,6 +1136,7 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
                           setEditFileForm({ title: file.customName || file.name.replace(/\.[^.]+$/, "") });
                           setEditFileNewFile(null);
                           setEditFileDeleted(false);
+                          setEditFileDeleteConfirm(false);
                         }}>
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                         </button>
@@ -1132,24 +1149,69 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
                 </div>
               )}
 
-              <div className="cp-or-divider">
-                <span className="cp-or-line"></span>
-                <span className="cp-or-text">{t("OR", { defaultValue: "OR" })}</span>
-                <span className="cp-or-line"></span>
+              {/* Existing non-link files */}
+              {(() => {
+                const nonLinkFiles = existingFiles.filter(
+                  (f) => !isExternalLink(f.url)
+                );
+                return nonLinkFiles.length > 0 && (
+                  <div className="cp-attachments-list" style={{ marginTop: "8px" }}>
+                    {nonLinkFiles.map((file) => (
+                      <div key={file.id} className="cp-attachment-item">
+                        <span className="cp-attachment-drag" title={t("Drag to reorder", { defaultValue: "Drag to reorder" })}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+                        </span>
+                        <span className="task-attachment-icon">📄</span>
+                        <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+                          <span className="task-attachment-name" style={{ fontWeight: 600, fontSize: "13px" }}>{file.customName || file.name}</span>
+                          <span className="task-attachment-size">
+                            {file.size ? (file.size / 1024).toFixed(1) + " KB" : (
+                              file.url ? (
+                                <a href={file.url} target="_blank" rel="noopener noreferrer" style={{ color: "#6366f1", fontSize: "12px", textDecoration: "underline" }}>
+                                  View File
+                                </a>
+                              ) : "Existing"
+                            )}
+                          </span>
+                        </div>
+                        <div className="cp-attachment-actions">
+                          <button type="button" className="cp-action-btn cp-action-btn-edit" title={t("Edit Name / Replace", { defaultValue: "Edit Name / Replace" })} onClick={() => {
+                            setEditingFile({ type: "existing", id: file.id, currentName: file.customName || file.name });
+                            setEditFileForm({ title: file.customName || file.name.replace(/\.[^.]+$/, "") });
+                            setEditFileNewFile(null);
+                            setEditFileDeleted(false);
+                            setEditFileDeleteConfirm(false);
+                          }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                          </button>
+                          <button type="button" className="cp-action-btn cp-action-btn-delete" title={t("Delete File", { defaultValue: "Delete File" })} onClick={() => { setPendingRemoveItem({ type: "existing-file", index: -1, id: file.id }); setRemoveConfirmOpen(true); }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              <div className="task-or-divider">
+                <span className="task-or-line"></span>
+                <span className="task-or-text">{t("OR", { defaultValue: "OR" })}</span>
+                <span className="task-or-line"></span>
               </div>
 
-              <div className="cp-link-input-row" style={{ flexDirection: "column", gap: "8px" }}>
+              <div className="task-link-input-row" style={{ flexDirection: "column", gap: "8px" }}>
                 <input
                   type="text"
                   placeholder={t("Link title (e.g. Figma Design, Drive Folder)", { defaultValue: "Link title (e.g. Figma Design, Drive Folder)" })}
-                  value={linkTitleInput}
+                  value={linkTitleInput || ""}
                   onChange={(e) => { setLinkTitleInput(e.target.value); markDirty(); }}
                 />
                 <div style={{ display: "flex", gap: "8px" }}>
                   <input
                     type="text"
                     placeholder={t("Paste link (Drive, Figma, Website, etc.)", { defaultValue: "Paste link (Drive, Figma, Website, etc.)" })}
-                    value={linkInput}
+                    value={linkInput || ""}
                     onChange={(e) => { setLinkInput(e.target.value); markDirty(); }}
                     onKeyDown={handleLinkKeyDown}
                     style={{ flex: 1 }}
@@ -1158,7 +1220,7 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
                     type="button"
                     className="cp-link-add-btn"
                     onClick={handleAddLink}
-                    disabled={!linkInput.trim()}
+                    disabled={!(linkInput || "").trim()}
                   >
                     {t("Add Link", { defaultValue: "Add Link" })}
                   </button>
@@ -1240,7 +1302,7 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
               <label>{t("Priority")} <span style={{ color: "#ef4444" }}>*</span></label>
               <CustomSelect
                 name="priority"
-                value={form.priority}
+                value={form.priority || "High"}
                 onChange={(val) => { setForm((prev) => ({ ...prev, priority: val })); markDirty(); }}
                 options={[
                   { value: "Urgent", label: t("Urgent", { defaultValue: "Urgent" }) },
@@ -1256,7 +1318,7 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
               <label>{t("Reference Knowledge Base", { defaultValue: "Reference Knowledge Base" })}</label>
               <MultiSelectDropdown
                 name="kb_ids"
-                value={kbIds}
+                value={kbIds || []}
                 onChange={(vals) => { setKbIds(vals.map(Number)); markDirty(); }}
                 placeholder={t("Select Knowledge Base", { defaultValue: "Select Knowledge Base" })}
                 searchPlaceholder={t("Search Knowledge Base...", { defaultValue: "Search Knowledge Base..." })}
@@ -1272,7 +1334,7 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
               <label>{t("Reference Event", { defaultValue: "Reference Event" })}</label>
               <MultiSelectDropdown
                 name="event_ids"
-                value={eventIds}
+                value={eventIds || []}
                 onChange={(vals) => { setEventIds(vals.map(Number)); markDirty(); }}
                 placeholder={t("Select Event", { defaultValue: "Select Event" })}
                 searchPlaceholder={t("Search Events...", { defaultValue: "Search Events..." })}
@@ -1289,7 +1351,7 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
                 <input
                   type="text"
                   placeholder={t("Enter a requirement", { defaultValue: "Enter a requirement" })}
-                  value={reqInput}
+                  value={reqInput || ""}
                   onChange={(e) => { setReqInput(e.target.value); markDirty(); }}
                   onKeyDown={handleReqKeyDown}
                 />
@@ -1297,7 +1359,7 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
                   type="button"
                   className="cp-goals-add-btn"
                   onClick={handleAddRequirement}
-                  disabled={!reqInput.trim()}
+                  disabled={!(reqInput || "").trim()}
                 >
                   {t("Add", { defaultValue: "Add" })}
                 </button>
@@ -1327,14 +1389,14 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
               <div className="task-deadline-grid">
                 <div>
                   <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>{t("Start", { defaultValue: "Start" })}</label>
-                    <input type="datetime-local" value={form.start_date}
-                      onChange={(e) => { setForm((prev) => ({ ...prev, start_date: e.target.value })); markDirty(); }}
+                    <input type="datetime-local" value={form.start_date || form.recurrence_start_date || ""}
+                      onChange={(e) => { setForm((prev) => ({ ...prev, start_date: e.target.value, recurrence_start_date: e.target.value })); markDirty(); }}
                     min={getNowDatetimeLocal()} />
                 </div>
                 <div>
                   <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>{t("End", { defaultValue: "End" })}</label>
-                    <input type="datetime-local" value={form.end_date}
-                      onChange={(e) => { setForm((prev) => ({ ...prev, end_date: e.target.value })); markDirty(); }}
+                    <input type="datetime-local" value={form.end_date || form.recurrence_end_date || ""}
+                      onChange={(e) => { setForm((prev) => ({ ...prev, end_date: e.target.value, recurrence_end_date: e.target.value })); markDirty(); }}
                     min={getNowDatetimeLocal()}
                     max={task.project?.end_date ? toDatetimeLocal(task.project.end_date) : undefined} />
                   {task.project?.end_date && <span style={{ fontSize: 11, color: "#9ca3af", marginTop: 2, display: "block" }}>{t("Max", { defaultValue: "Max" })}: {new Date(task.project.end_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>}
@@ -1348,7 +1410,7 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
                     <Clock size={13} /> {t("Assignee Deadline Equivalent", { defaultValue: "Assignee Deadline Equivalent" })}
                   </div>
                   {displayUsers
-                    .filter((u) => selectedAssigneeIds.includes(u.id))
+                    .filter((u) => (selectedAssigneeIds || []).includes(u.id))
                     .map((u) => {
                       const tz = u.timezone || "UTC";
                       const assigneeDeadline = convertToLocal(convertToUTC(form.end_date), tz);
@@ -1365,7 +1427,7 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
             {/* TASK TYPE */}
             <div className="task-card">
               <label>{t("Task Type", { defaultValue: "Task Type" })}</label>
-              <CustomSelect name="task_type" value={form.task_type}
+              <CustomSelect name="task_type" value={form.task_type || "standard"}
                 onChange={(val) => {
                   setForm((prev) => ({ ...prev, task_type: val })); markDirty();
                   if (val === "recurring" && recurringTemplates.length === 0) {

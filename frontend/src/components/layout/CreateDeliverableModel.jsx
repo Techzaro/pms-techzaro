@@ -18,6 +18,7 @@ import { authToken, getUser } from "../../utils/auth";
 import { publish } from "../../utils/eventBus";
 import { notify, showSuccessMessage } from "../../utils/notify";
 import { getNowDatetimeLocal } from "../../utils/formatDateTime";
+import { getProjectDisplayName } from "../../utils/projectUtils";
 import API_URL from "../../config/api";
 import useProjectContext from "../../hooks/useProjectContext";
 import CustomSelect from "../CustomSelect";
@@ -575,7 +576,7 @@ const CreateSubtaskModal = ({
                   value={form.project_id}
                   onChange={(val) => { updateForm("project_id", val); updateForm("task_id", ""); updateForm("assigned_to", []); }}
                   placeholder={t("Select project", { defaultValue: "Select project" })}
-                  options={projects.map((p) => ({ value: p.id, label: `${p.business_id ? p.business_id + " — " : ""}${p.title}` }))}
+                  options={projects.map((p) => ({ value: p.id, label: getProjectDisplayName(p) }))}
                   isDisabled={!!initialProjectId}
                 />
                 {formErrors.project_id && <small style={{ color: "#dc2626" }}>{formErrors.project_id}</small>}
