@@ -360,7 +360,7 @@ function Admin() {
   const { isWidgetEnabled } = usePersonalization();
   const [greeting, setGreeting] = useState("Welcome");
   const [modalOpen, setModalOpen] = useState(false);
-  const currentRole = getCurrentRole() || "member";
+  const currentRole = getCurrentRole() || getUser()?.role || "member";
   const isAdminManager = currentRole === "admin" || currentRole === "manager";
 
   const isWidgetActive = (id) => isWidgetEnabled("dashboard", id);

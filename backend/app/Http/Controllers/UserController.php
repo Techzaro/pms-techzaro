@@ -70,6 +70,9 @@ class UserController extends Controller
         $role = $request->query('role');
         $status = $request->query('status');
         $search = $request->query('search');
+        $days = $request->query('days') ?? $request->query('time_filter');
+        $startDate = $request->query('start_date') ?? $request->query('date_from');
+        $endDate = $request->query('end_date') ?? $request->query('date_to');
 
         $selectColumns = [
             'id', 'name', 'avatar', 'email', 'role', 'active',
@@ -112,6 +115,12 @@ class UserController extends Controller
             });
         }
 
+        if ($startDate || $endDate) {
+            $query->filterByDateRange($startDate, $endDate);
+        } elseif ($days) {
+            $query->filterByDays($days);
+        }
+
         $users = $query->with('projects:id,title,business_id')->orderBy('sort_order')->latest('updated_at')->get();
 
         return response()->json([
@@ -150,7 +159,53 @@ class UserController extends Controller
     {
         $this->normalizeEmptyStrings($request);
 
-        $isDraft = strtolower($request->input('status', '')) === 'draft' || $request->boolean('is_draft');
+        $isDraft = $request->boolean('is_draft')
+            || $request->input('is_draft') === 'true'
+            || $request->input('is_draft') === '1'
+            || $request->input('is_draft') === 1
+            || strtolower($request->input('status', '')) === 'draft';
+
+        if ($isDraft) {
+            $title = $request->input('name') ?: ($request->input('personal_email') ?: ($request->input('email') ?: 'Untitled User Draft'));
+            $draftData = $request->except(['employment_contract', 'offer_letter', 'techxaro_regulations', 'other_document', 'avatar']);
+
+            $draftService = app(\App\Services\DraftService::class);
+            $draftId = $request->input('draft_id');
+
+            if ($draftId) {
+                $draft = \App\Models\Draft::find($draftId);
+                if ($draft && $draftService->canUserAccess($draft, $request->user())) {
+                    $draft = $draftService->update($draft, [
+                        'title' => $title,
+                        'draft_data' => $draftData,
+                        'status' => 'draft',
+                    ], $request->user());
+
+                    return response()->json([
+                        'success' => true,
+                        'is_draft' => true,
+                        'message' => 'Draft updated successfully',
+                        'draft' => $draft,
+                        'data' => $draft,
+                    ], 200);
+                }
+            }
+
+            $draft = $draftService->create([
+                'module_type' => 'user',
+                'title' => $title,
+                'draft_data' => $draftData,
+                'status' => 'draft',
+            ], $request->user());
+
+            return response()->json([
+                'success' => true,
+                'is_draft' => true,
+                'message' => 'Draft saved successfully',
+                'draft' => $draft,
+                'data' => $draft,
+            ], 201);
+        }
 
         try {
             // Per-user email mode: single or two_emails
@@ -567,6 +622,55 @@ class UserController extends Controller
     public function update(Request $request, User $user)
     {
         $this->normalizeEmptyStrings($request);
+
+        $isDraft = $request->boolean('is_draft')
+            || $request->input('is_draft') === 'true'
+            || $request->input('is_draft') === '1'
+            || $request->input('is_draft') === 1
+            || strtolower($request->input('status', '')) === 'draft';
+
+        if ($isDraft) {
+            $title = $request->input('name') ?: ($request->input('personal_email') ?: ($user->name ?: 'User Draft'));
+            $draftData = $request->except(['employment_contract', 'offer_letter', 'techxaro_regulations', 'other_document', 'avatar']);
+
+            $draftService = app(\App\Services\DraftService::class);
+            $draftId = $request->input('draft_id');
+
+            if ($draftId) {
+                $draft = \App\Models\Draft::find($draftId);
+                if ($draft && $draftService->canUserAccess($draft, $request->user())) {
+                    $draft = $draftService->update($draft, [
+                        'title' => $title,
+                        'draft_data' => $draftData,
+                        'status' => 'draft',
+                    ], $request->user());
+
+                    return response()->json([
+                        'success' => true,
+                        'is_draft' => true,
+                        'message' => 'Draft updated successfully',
+                        'draft' => $draft,
+                        'data' => $draft,
+                    ], 200);
+                }
+            }
+
+            $draft = $draftService->create([
+                'module_type' => 'user',
+                'original_record_id' => $user->id,
+                'title' => $title,
+                'draft_data' => $draftData,
+                'status' => 'draft',
+            ], $request->user());
+
+            return response()->json([
+                'success' => true,
+                'is_draft' => true,
+                'message' => 'Draft saved successfully',
+                'draft' => $draft,
+                'data' => $draft,
+            ], 201);
+        }
 
         $request->validate([
             'name' => 'sometimes|required|string|max:255',

@@ -99,11 +99,18 @@ function CompanyDocuments({ isOpen, onClose }) {
 
   const handleView = (pathOrUrl) => {
     if (!pathOrUrl) return;
-    const fileUrl = pathOrUrl.startsWith("http")
-      ? pathOrUrl
-      : `${API_URL.replace("/api", "")}/storage/${pathOrUrl}`;
+    let fileUrl = "";
+    if (typeof pathOrUrl === "object") {
+      fileUrl = pathOrUrl.url || (pathOrUrl.path ? (pathOrUrl.path.startsWith("http") ? pathOrUrl.path : `${API_URL.replace("/api", "")}/storage/${pathOrUrl.path.replace(/^\/?storage\/?/, "")}`) : "");
+    } else if (typeof pathOrUrl === "string") {
+      fileUrl = pathOrUrl.startsWith("http")
+        ? pathOrUrl
+        : `${API_URL.replace("/api", "")}/storage/${pathOrUrl.replace(/^\/?storage\/?/, "")}`;
+    }
 
-    window.open(fileUrl, "_blank", "noopener,noreferrer");
+    if (fileUrl) {
+      window.open(fileUrl, "_blank", "noopener,noreferrer");
+    }
   };
 
   const handleDelete = async (type, filename) => {
@@ -204,7 +211,7 @@ function CompanyDocuments({ isOpen, onClose }) {
                               <button
                                 type="button"
                                 className="cd-view-btn"
-                                onClick={() => handleView(doc.path || doc.url)}
+                                onClick={() => handleView(doc.url || doc.path)}
                               >
                                 {t("View", { defaultValue: "View" })}
                               </button>
@@ -266,7 +273,7 @@ function CompanyDocuments({ isOpen, onClose }) {
                           <button
                             type="button"
                             className="cd-other-file-name"
-                            onClick={() => handleView(file.path || file.url)}
+                            onClick={() => handleView(file.url || file.path)}
                           >
                             {file.filename}
                           </button>

@@ -100,13 +100,30 @@ function Sidebar() {
 
   /** Current user info – initialised from local storage. */
   const [user, setUserState] = useState(() => {
-    const stored = getUser();
+    const role = getCurrentRole();
+    const stored = getUser(role);
     return {
       name: stored?.name || "User",
       email: stored?.email || "user@example.com",
-      role: stored?.role || "Member",
+      role: role || stored?.role || "Member",
     };
   });
+
+  useEffect(() => {
+    const handleAuthChange = () => {
+      const role = getCurrentRole();
+      const stored = getUser(role);
+      if (stored) {
+        setUserState({
+          name: stored.name || "User",
+          email: stored.email || "user@example.com",
+          role: role || stored.role || "Member",
+        });
+      }
+    };
+    window.addEventListener("auth-state-change", handleAuthChange);
+    return () => window.removeEventListener("auth-state-change", handleAuthChange);
+  }, []);
 
   const location = useLocation();
   const { slug } = useParams();

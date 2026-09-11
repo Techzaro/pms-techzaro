@@ -402,4 +402,33 @@ class User extends Authenticatable
         }
         return array_unique($emails);
     }
+
+    /**
+     * Scope a query to filter users created within the last N days.
+     */
+    public function scopeFilterByDays($query, $days)
+    {
+        if ($days && is_numeric($days) && (int) $days > 0) {
+            return $query->where('created_at', '>=', now()->subDays((int) $days)->startOfDay());
+        }
+        return $query;
+    }
+
+    /**
+     * Scope a query to filter users created within a custom date range.
+     */
+    public function scopeFilterByDateRange($query, ?string $startDate, ?string $endDate)
+    {
+        if ($startDate && $endDate) {
+            return $query->whereBetween('created_at', [
+                \Carbon\Carbon::parse($startDate)->startOfDay(),
+                \Carbon\Carbon::parse($endDate)->endOfDay(),
+            ]);
+        } elseif ($startDate) {
+            return $query->where('created_at', '>=', \Carbon\Carbon::parse($startDate)->startOfDay());
+        } elseif ($endDate) {
+            return $query->where('created_at', '<=', \Carbon\Carbon::parse($endDate)->endOfDay());
+        }
+        return $query;
+    }
 }

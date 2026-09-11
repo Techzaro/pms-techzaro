@@ -396,6 +396,8 @@ class ProjectController extends Controller
             'assigned_users' => 'nullable|array',
             'followers' => 'nullable|array',
             'followers.*' => 'exists:users,id',
+            'view_only_users' => 'nullable|array',
+            'view_only_users.*' => 'exists:users,id',
             'status' => 'nullable|string|max:64',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date',
@@ -415,6 +417,8 @@ class ProjectController extends Controller
         unset($validated['milestones']);
         $followers = $validated['followers'] ?? null;
         unset($validated['followers']);
+        $viewOnlyUsers = $validated['view_only_users'] ?? null;
+        unset($validated['view_only_users']);
         $existingFileNames = $validated['existing_file_names'] ?? null;
         unset($validated['existing_file_names']);
 
@@ -448,6 +452,47 @@ class ProjectController extends Controller
         $project = Project::create($validated);
         if (! empty($followers)) {
             $project->followers()->sync($followers);
+        }
+        if (! empty($viewOnlyUsers)) {
+            $viewUserIds = collect($viewOnlyUsers)
+                ->map(fn ($item) => is_array($item) && isset($item['id']) ? (int) $item['id'] : (is_numeric($item) ? (int) $item : null))
+                ->filter(fn ($id) => ! is_null($id) && $id > 0)
+                ->unique()
+                ->values();
+
+            if ($viewUserIds->isNotEmpty()) {
+                $visRecords = $viewUserIds->map(fn ($uid) => [
+                    'project_id' => $project->id,
+                    'user_id' => $uid,
+                    'is_visible' => true,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ])->toArray();
+                ProjectVisibility::insert($visRecords);
+
+                $visNotifications = [];
+                foreach ($viewUserIds as $uid) {
+                    if ((int) $uid !== (int) $request->user()->id) {
+                        $visNotifications[] = [
+                            'user_id' => $uid,
+                            'sender_user_id' => $request->user()->id,
+                            'type' => 'project_access_granted',
+                            'related_module' => 'project',
+                            'related_id' => $project->id,
+                            'title' => 'Project View Access Granted',
+                            'message' => $request->user()->name.' granted you view access to project "'.$project->title.'".',
+                            'link' => '/projects/project-details/'.$project->id,
+                        ];
+                    }
+                }
+                if (! empty($visNotifications)) {
+                    try {
+                        $this->notificationService->createBulk($visNotifications);
+                    } catch (\Throwable $e) {
+                        \Log::error('Failed to dispatch visibility notifications on store', ['error' => $e->getMessage()]);
+                    }
+                }
+            }
         }
         $this->replaceProjectMilestones($project, $milestones);
 
@@ -825,6 +870,9 @@ class ProjectController extends Controller
         unset($validated['milestones']);
         $followers = $validated['followers'] ?? null;
         unset($validated['followers']);
+        $hasViewOnlyUsers = $request->has('view_only_users');
+        $viewOnlyUsers = $validated['view_only_users'] ?? null;
+        unset($validated['view_only_users']);
         $existingFileNames = $validated['existing_file_names'] ?? null;
         unset($validated['existing_file_names']);
         $newLinks = $validated['links'] ?? null;
@@ -855,6 +903,12 @@ class ProjectController extends Controller
 
         $oldAssignedUsers = $project->assigned_users ?? [];
         $oldTeamId = $project->team_id;
+        $oldViewOnlyUserIds = $project->visibility()
+            ->where('is_visible', true)
+            ->pluck('user_id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->toArray();
         $validated['updated_by'] = $user->id;
         $project->update($validated);
 
@@ -950,6 +1004,103 @@ class ProjectController extends Controller
                 $oldNames = User::whereIn('id', $oldAssignedUsers)->pluck('name')->implode(', ');
                 $newNames = User::whereIn('id', $newAssignedUsers)->pluck('name')->implode(', ');
                 $changes[] = ['field_name' => 'assigned_users', 'label' => 'Assigned Users', 'old_value' => $oldNames ?: 'None', 'new_value' => $newNames ?: 'None'];
+            }
+        }
+
+        if ($hasViewOnlyUsers) {
+            $newViewOnlyIds = collect(is_array($viewOnlyUsers) ? $viewOnlyUsers : [])
+                ->map(fn ($item) => is_array($item) && isset($item['id']) ? (int) $item['id'] : (is_numeric($item) ? (int) $item : null))
+                ->filter(fn ($id) => ! is_null($id) && $id > 0)
+                ->unique()
+                ->values();
+
+            $existingVis = $project->visibility()->get()->keyBy('user_id');
+            $newVisRecords = [];
+            $grantedUserIds = [];
+
+            foreach ($newViewOnlyIds as $uid) {
+                if ($existingVis->has($uid)) {
+                    $existingVis->forget($uid);
+                } else {
+                    $newVisRecords[] = [
+                        'project_id' => $project->id,
+                        'user_id' => $uid,
+                        'is_visible' => true,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+                }
+                $grantedUserIds[] = $uid;
+            }
+
+            if (! empty($newVisRecords)) {
+                ProjectVisibility::insert($newVisRecords);
+            }
+            if ($newViewOnlyIds->isNotEmpty()) {
+                ProjectVisibility::where('project_id', $project->id)
+                    ->whereIn('user_id', $newViewOnlyIds->toArray())
+                    ->update(['is_visible' => true]);
+            }
+            $removedUserIds = $existingVis->pluck('user_id')->toArray();
+            if (! empty($removedUserIds)) {
+                ProjectVisibility::where('project_id', $project->id)
+                    ->whereIn('user_id', $removedUserIds)
+                    ->update(['is_visible' => false]);
+            }
+
+            $sortedOldView = $oldViewOnlyUserIds;
+            $sortedNewView = $newViewOnlyIds->toArray();
+            sort($sortedOldView);
+            sort($sortedNewView);
+
+            if ($sortedOldView !== $sortedNewView) {
+                $oldViewNames = User::whereIn('id', $sortedOldView)->pluck('name')->implode(', ');
+                $newViewNames = User::whereIn('id', $sortedNewView)->pluck('name')->implode(', ');
+                $changes[] = [
+                    'field_name' => 'view_only_users',
+                    'label' => 'View-Only Users',
+                    'old_value' => $oldViewNames ?: 'None',
+                    'new_value' => $newViewNames ?: 'None',
+                ];
+
+                $newlyGranted = array_values(array_diff($sortedNewView, $sortedOldView));
+                $visNotifications = [];
+                foreach ($newlyGranted as $uid) {
+                    if ((int) $uid !== (int) $user->id) {
+                        $visNotifications[] = [
+                            'user_id' => $uid,
+                            'sender_user_id' => $user->id,
+                            'type' => 'project_access_granted',
+                            'related_module' => 'project',
+                            'related_id' => $project->id,
+                            'title' => 'Project View Access Granted',
+                            'message' => $user->name.' granted you view access to project "'.$project->title.'".',
+                            'link' => '/projects/project-details/'.$project->id,
+                        ];
+                    }
+                }
+                $newlyRemoved = array_values(array_diff($sortedOldView, $sortedNewView));
+                foreach ($newlyRemoved as $uid) {
+                    if ((int) $uid !== (int) $user->id) {
+                        $visNotifications[] = [
+                            'user_id' => $uid,
+                            'sender_user_id' => $user->id,
+                            'type' => 'project_access_removed',
+                            'related_module' => 'project',
+                            'related_id' => $project->id,
+                            'title' => 'Project View Access Removed',
+                            'message' => $user->name.' removed your view access to project "'.$project->title.'".',
+                            'link' => '/projects/project-details/'.$project->id,
+                        ];
+                    }
+                }
+                if (! empty($visNotifications)) {
+                    try {
+                        $this->notificationService->createBulk($visNotifications);
+                    } catch (\Throwable $e) {
+                        \Log::error('Failed to dispatch visibility notifications on update', ['error' => $e->getMessage()]);
+                    }
+                }
             }
         }
 
@@ -1067,6 +1218,16 @@ class ProjectController extends Controller
             'deliverables',
             'workflowEvents' => fn ($q) => $q->with('user:id,name'),
         ]);
+
+        $freshViewOnlyUserIds = $project->visibility()
+            ->where('is_visible', true)
+            ->pluck('user_id')
+            ->filter(fn ($id) => (int) $id !== (int) $project->created_by)
+            ->values()
+            ->toArray();
+        $project->view_only_users = ! empty($freshViewOnlyUserIds)
+            ? User::whereIn('id', $freshViewOnlyUserIds)->where('active', true)->get(['id', 'name', 'email', 'role', 'department'])
+            : [];
 
         $projectMessage = $changeCount > 0 ? 'Project updated — '.$changeCount.' change(s) made' : 'Project updated successfully';
         if ($filesSkipped) {

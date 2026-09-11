@@ -16,7 +16,7 @@ import CustomSelect from "./CustomSelect";
 import MultiSelectDropdown from "./MultiSelectDropdown";
 import LoadingButton from "./LoadingButton";
 import ConfirmModal from "./ConfirmModal";
-import { formatDateTime, toDatetimeLocal, toUTCIso, getNowDatetimeLocal } from "../utils/formatDateTime";
+import { formatDateTime, toDatetimeLocal, toUTCIso, formatForMySQL, getNowDatetimeLocal } from "../utils/formatDateTime";
 import { publish } from "../utils/eventBus";
 import { notify, showSuccessMessage } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
@@ -697,8 +697,8 @@ const EditProjectModal = ({ project = {}, onClose, onProjectUpdated, restoreDraf
         const body = {
           title: form.title.trim(),
           description: form.description || null,
-          end_date: form.end_date ? toUTCIso(form.end_date) : null,
-          project_deadline: form.end_date ? toUTCIso(form.end_date) : null,
+          end_date: form.end_date ? formatForMySQL(form.end_date) : null,
+          project_deadline: form.end_date ? formatForMySQL(form.end_date) : null,
           category: categoriesList.length > 0 ? JSON.stringify(categoriesList) : null,
           team_id: form.team_id ? parseInt(form.team_id) : null,
           team_ids: form.team_ids,
@@ -711,8 +711,8 @@ const EditProjectModal = ({ project = {}, onClose, onProjectUpdated, restoreDraf
           budget: form.budget ? parseFloat(form.budget) : null,
           milestones: milestones.map((m) => ({
             title: m.title,
-            due_date: m.due_date ? toUTCIso(m.due_date) : null,
-            milestone_deadline: m.due_date ? toUTCIso(m.due_date) : null,
+            due_date: m.due_date ? formatForMySQL(m.due_date) : null,
+            milestone_deadline: m.due_date ? formatForMySQL(m.due_date) : null,
             status: m.status || "planned",
           })),
           existing_file_names: (existingFiles || [])

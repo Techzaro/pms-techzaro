@@ -24,7 +24,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { IoSearchOutline } from "react-icons/io5";
 import { CiCirclePlus } from "react-icons/ci";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { DndContext, DragOverlay, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -182,18 +182,40 @@ const { canCreateUser, maxUsers, currentUsers, usersRemaining, getLimitMessage, 
   const [editDocDeleted, setEditDocDeleted] = useState(false);
   const [editDocDeleteConfirm, setEditDocDeleteConfirm] = useState(false);
   const [companyDocsOpen, setCompanyDocsOpen] = useState(false);
-  const [page, setPage] = useState(1);
+
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const initialPage = useMemo(() => {
+    const p = parseInt(searchParams.get("page"), 10) || location.state?.fromPage || location.state?.page || 1;
+    return p > 0 ? p : 1;
+  }, []);
+
+  const initialGuestPage = useMemo(() => {
+    const gp = parseInt(searchParams.get("guest_page"), 10) || location.state?.fromGuestPage || location.state?.guestPage || 1;
+    return gp > 0 ? gp : 1;
+  }, []);
+
+  const initialTab = useMemo(() => {
+    return searchParams.get("tab") || location.state?.fromTab || location.state?.tab || "members";
+  }, []);
+
+  const [page, setPage] = useState(initialPage);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
+  const [activeDraftId, setActiveDraftId] = useState(null);
 
   // Tab management: main tab ("members" vs "guests") and status sub-tabs ("active" | "inactive" | "resigned")
-  const [mainTab, setMainTab] = useState("members");
+  const [mainTab, setMainTab] = useState(initialTab);
   const [statusSubTab, setStatusSubTab] = useState("active");
 
   // Guest management state
   const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
   const [editingGuest, setEditingGuest] = useState(null);
   const [guestSubmitting, setGuestSubmitting] = useState(false);
-  const [guestPage, setGuestPage] = useState(1);
+  const [guestPage, setGuestPage] = useState(initialGuestPage);
   const [guestItemsPerPage, setGuestItemsPerPage] = useState(10);
   const [guestConfirmModal, setGuestConfirmModal] = useState({ open: false, type: "", guest: null });
   const [newGuest, setNewGuest] = useState({ name: "", personal_email: "", phone_number: "", company_name: "", avatar: null, _existingAvatar: null });
@@ -284,10 +306,18 @@ const { canCreateUser, maxUsers, currentUsers, usersRemaining, getLimitMessage, 
   };
 
   // Fetch all users from API and normalize active status
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/users`, {
+      const params = new URLSearchParams();
+      if (timeFilter && timeFilter !== "custom") {
+        params.append("days", timeFilter);
+      } else if (timeFilter === "custom") {
+        if (customStartDate) params.append("start_date", customStartDate);
+        if (customEndDate) params.append("end_date", customEndDate);
+      }
+      const queryStr = params.toString() ? `?${params.toString()}` : "";
+      const res = await fetch(`${API_URL}/users${queryStr}`, {
         headers: { Accept: "application/json", ...authHeaders() },
         skipLoader: true,
         _notifHandled: true,
@@ -305,7 +335,7 @@ const { canCreateUser, maxUsers, currentUsers, usersRemaining, getLimitMessage, 
     } finally {
       setLoading(false);
     }
-  };
+  }, [timeFilter, customStartDate, customEndDate, t, notify]);
 
   // Fetch current user data to ensure local session info is up-to-date
   const fetchCurrentUser = async () => {
@@ -346,9 +376,6 @@ const { canCreateUser, maxUsers, currentUsers, usersRemaining, getLimitMessage, 
     }
   };
 
-  const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-
   useEffect(() => {
     const role = getCurrentRole();
     const token = authToken();
@@ -364,13 +391,85 @@ const { canCreateUser, maxUsers, currentUsers, usersRemaining, getLimitMessage, 
     }
     fetchUsers();
     fetchProjects();
-  }, [navigate]);
+  }, [navigate, fetchUsers]);
 
   useAutoRefresh(fetchUsers, { events: ["data:changed"] });
 
   useEffect(() => {
     setLocalUsers(users);
   }, [users]);
+
+  // Sync page state and tab to URL search parameters
+  useEffect(() => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (page > 1) {
+        next.set("page", String(page));
+      } else {
+        next.delete("page");
+      }
+      if (guestPage > 1) {
+        next.set("guest_page", String(guestPage));
+      } else {
+        next.delete("guest_page");
+      }
+      if (mainTab && mainTab !== "members") {
+        next.set("tab", mainTab);
+      } else {
+        next.delete("tab");
+      }
+      return next;
+    }, { replace: true });
+  }, [page, guestPage, mainTab, setSearchParams]);
+
+  // Handle openDraft from navigation state
+  useEffect(() => {
+    if (location.state?.openDraft) {
+      const draftId = location.state.openDraft;
+      const draftData = location.state.draftData || {};
+      setActiveDraftId(draftId);
+      setEditingUser(null);
+      setAddErrors({});
+      setNewUser({
+        fullName: draftData.name || draftData.full_name || draftData.fullName || "",
+        fatherName: draftData.father_name || draftData.fatherName || "",
+        idCardNumber: draftData.id_card_number || draftData.idCardNumber || "",
+        presentAddress: draftData.present_address || draftData.presentAddress || draftData.address || "",
+        permanentAddress: draftData.permanent_address || draftData.permanentAddress || "",
+        phoneNumber: draftData.phone_number || draftData.phoneNumber || draftData.contact_no || "",
+        emergencyContactName: draftData.emergency_contact_name || draftData.emergencyContactName || "",
+        emergencyContactRelation: draftData.emergency_contact_relation || draftData.emergencyContactRelation || "",
+        emergencyContactPhone: draftData.emergency_contact_phone || draftData.emergencyContactPhone || "",
+        email: draftData.email || "",
+        personalEmail: draftData.personal_email || draftData.personalEmail || "",
+        professionalEmail: draftData.professional_email || draftData.professionalEmail || "",
+        professionalEmailPassword: draftData.professional_email_password || draftData.professionalEmailPassword || "",
+        department: draftData.department || "",
+        departmentCustom: draftData.departmentCustom || "",
+        designation: draftData.designation || "",
+        designationCustom: draftData.designationCustom || "",
+        hiredFor: draftData.hired_for || draftData.hiredFor || "",
+        employeeCode: draftData.employee_code || draftData.employeeCode || "",
+        jobStartedDate: draftData.job_started_date || draftData.jobStartedDate || "",
+        jobEndedDate: draftData.job_ended_date || draftData.jobEndedDate || "",
+        role: draftData.role || "member",
+        project_ids: draftData.project_ids || [],
+        grossSalary: draftData.gross_salary || draftData.grossSalary || "",
+        appliedVia: draftData.applied_via || draftData.appliedVia || "",
+        bankName: draftData.bank_name || draftData.bankName || "",
+        bankAccountNumber: draftData.bank_account_number || draftData.bankAccountNumber || "",
+        bankAccountTitle: draftData.bank_account_title || draftData.bankAccountTitle || "",
+        employmentContract: null,
+        offerLetter: null,
+        techxaroRegulations: null,
+        otherDocument: [],
+        avatar: null,
+        passwordType: draftData.password_type || "auto",
+        password: draftData.password || "",
+      });
+      setIsAddModalOpen(true);
+    }
+  }, [location.state]);
 
   useEffect(() => {
     const tab = searchParams.get("tab");
@@ -394,7 +493,7 @@ const { canCreateUser, maxUsers, currentUsers, usersRemaining, getLimitMessage, 
         setSearchParams({}, { replace: true });
       }
     }
-  }, [searchParams, localUsers]);
+  }, [searchParams, localUsers, setSearchParams]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -458,6 +557,7 @@ const { canCreateUser, maxUsers, currentUsers, usersRemaining, getLimitMessage, 
   const openModal = () => {
     fetchProjects();
     setEditingUser(null);
+    setActiveDraftId(null);
     setAddErrors({});
     setShowProfPassword(false);
     setExistingOtherDocs([]);
@@ -581,6 +681,7 @@ const { canCreateUser, maxUsers, currentUsers, usersRemaining, getLimitMessage, 
   const closeModal = () => {
     setIsAddModalOpen(false);
     setEditingUser(null);
+    setActiveDraftId(null);
     setAddErrors({});
     setExistingOtherDocs([]);
     setNewUser({
@@ -658,7 +759,7 @@ const { canCreateUser, maxUsers, currentUsers, usersRemaining, getLimitMessage, 
   }), [newUser]);
 
   const { lastSaved: userLastSaved, isSaving: userSaving, saveNow: userSaveNow } = useAutoSave({
-    draftId: null,
+    draftId: activeDraftId,
     formData: buildDraftBody(),
     moduleType: "user",
     enabled: addIsDirty,
@@ -1234,7 +1335,7 @@ if (!newUser.employeeCode.trim()) errors.employeeCode = t("Employee Code is requ
           <div className="action-buttons">
             <button
               className="btn-view"
-              onClick={() => navigate(rolePath(`manage-users/user-profile/${user.id}`))}
+              onClick={() => navigate(rolePath(`manage-users/user-profile/${user.id}`), { state: { fromPage: page, fromGuestPage: guestPage, fromTab: mainTab, returnUrl: `${location.pathname}${location.search}` } })}
               aria-label={t("View user profile", { defaultValue: "View user profile" })}
             >
               <MdVisibility size={24} />
@@ -1360,7 +1461,31 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
       (statusFilter === "inactive" && isUserInactive(user)) ||
       (statusFilter === "resigned" && isUserResigned(user));
 
-    return matchesSearch && matchesRole && matchesStatus;
+    let matchesTime = true;
+    if (timeFilter && timeFilter !== "custom" && user.created_at) {
+      const days = parseInt(timeFilter, 10);
+      if (!isNaN(days)) {
+        const userDate = new Date(user.created_at);
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - days);
+        cutoffDate.setHours(0, 0, 0, 0);
+        matchesTime = userDate >= cutoffDate;
+      }
+    } else if (timeFilter === "custom" && user.created_at) {
+      const userDate = new Date(user.created_at);
+      if (customStartDate) {
+        const start = new Date(customStartDate);
+        start.setHours(0, 0, 0, 0);
+        if (userDate < start) matchesTime = false;
+      }
+      if (customEndDate) {
+        const end = new Date(customEndDate);
+        end.setHours(23, 59, 59, 999);
+        if (userDate > end) matchesTime = false;
+      }
+    }
+
+    return matchesSearch && matchesRole && matchesStatus && matchesTime;
   });
 
   const sortedUsers = sortOrder
@@ -1428,7 +1553,7 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
         {selectedColumns.includes("present_address") && <td><span style={{ fontSize: 13, color: "var(--text-dark)" }}>{user.present_address || "—"}</span></td>}
         <td>
           <div className="action-buttons">
-            <button className="btn-view" onClick={() => navigate(rolePath(`manage-users/user-profile/${user.id}`))} aria-label={t("View user profile", { defaultValue: "View user profile" })}><MdVisibility size={24} /></button>
+            <button className="btn-view" onClick={() => navigate(rolePath(`manage-users/user-profile/${user.id}`), { state: { fromPage: page, fromGuestPage: guestPage, fromTab: mainTab, returnUrl: `${location.pathname}${location.search}` } })} aria-label={t("View user profile", { defaultValue: "View user profile" })}><MdVisibility size={24} /></button>
             <button className="btn-view" onClick={() => openEditModal(user)} disabled={!canModifyUser} aria-label={t("Edit user", { defaultValue: "Edit user" })}><MdEdit size={20} /></button>
             {user.active === false && user.status !== "Resigned" && user.status !== "resigned" && (
               <button className="btn-view" style={{ color: "#10b981" }} onClick={() => handleActivateUser(user)} title={t("Activate User", { defaultValue: "Activate User" })}>
@@ -1689,6 +1814,12 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
     }
 
     const formData = new FormData();
+    if (isDraft) {
+      formData.append("is_draft", "true");
+      if (activeDraftId) {
+        formData.append("draft_id", activeDraftId);
+      }
+    }
     formData.append("name", (newUser.fullName || "").trim() || "Draft User");
     formData.append("email_mode", emailMode);
     if (emailMode === "single") {
@@ -1840,6 +1971,12 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
       }
 
       setAddErrors({});
+      if (data.is_draft || isDraft) {
+        notify.success(t("Draft saved successfully", { defaultValue: "Draft saved successfully" }));
+        publish('data:changed', { type: 'draft', action: isEdit ? 'updated' : 'created' });
+        closeModal();
+        return;
+      }
       if (isEdit) {
         setUsers((prev) => prev.map((item) => item.id === editingUser.id ? { ...item, ...data.user } : item));
         showSuccessMessage("User", "updated");
@@ -1892,7 +2029,31 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
       (statusFilter === "inactive" && isGuestInactive(g)) ||
       (statusFilter === "resigned" && isGuestResigned(g));
 
-    return matchesSearch && matchesStatus;
+    let matchesTime = true;
+    if (timeFilter && timeFilter !== "custom" && g.created_at) {
+      const days = parseInt(timeFilter, 10);
+      if (!isNaN(days)) {
+        const guestDate = new Date(g.created_at);
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - days);
+        cutoffDate.setHours(0, 0, 0, 0);
+        matchesTime = guestDate >= cutoffDate;
+      }
+    } else if (timeFilter === "custom" && g.created_at) {
+      const guestDate = new Date(g.created_at);
+      if (customStartDate) {
+        const start = new Date(customStartDate);
+        start.setHours(0, 0, 0, 0);
+        if (guestDate < start) matchesTime = false;
+      }
+      if (customEndDate) {
+        const end = new Date(customEndDate);
+        end.setHours(23, 59, 59, 999);
+        if (guestDate > end) matchesTime = false;
+      }
+    }
+
+    return matchesSearch && matchesStatus && matchesTime;
   });
   const sortedGuests = sortOrder
     ? [...filteredGuests].sort((a, b) =>
@@ -2137,21 +2298,43 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
                 <option value="inactive">{t("Inactive", { defaultValue: "Inactive" })}</option>
                 <option value="resigned">{t("Resigned", { defaultValue: "Resigned" })}</option>
               </select>
-              <select className="reports-filter" value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}>
+              <select className="bar-role bar-time" value={timeFilter} onChange={(e) => { setTimeFilter(e.target.value); setPage(1); setGuestPage(1); }}>
                 <option value="">{t("All Time", { defaultValue: "All Time" })}</option>
                 <option value="7">{t("Last 7 Days", { defaultValue: "Last 7 Days" })}</option>
                 <option value="30">{t("Last 30 Days", { defaultValue: "Last 30 Days" })}</option>
                 <option value="180">{t("Last 6 Months", { defaultValue: "Last 6 Months" })}</option>
+                <option value="custom">{t("Custom Date", { defaultValue: "Custom Date" })}</option>
               </select>
+              {timeFilter === "custom" && (
+                <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                  <input
+                    type="date"
+                    className="custom-date-input"
+                    value={customStartDate}
+                    onChange={(e) => { setCustomStartDate(e.target.value); setPage(1); setGuestPage(1); }}
+                    placeholder={t("Start Date", { defaultValue: "Start Date" })}
+                    title={t("Start Date", { defaultValue: "Start Date" })}
+                  />
+                  <span style={{ fontSize: "12px", color: "var(--text-muted, #64748b)" }}>{t("to", { defaultValue: "to" })}</span>
+                  <input
+                    type="date"
+                    className="custom-date-input"
+                    value={customEndDate}
+                    onChange={(e) => { setCustomEndDate(e.target.value); setPage(1); setGuestPage(1); }}
+                    placeholder={t("End Date", { defaultValue: "End Date" })}
+                    title={t("End Date", { defaultValue: "End Date" })}
+                  />
+                </div>
+              )}
               <select className="bar-sort" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}>
                 <option value="">{t("Sort By", { defaultValue: "Sort By" })}</option>
                 <option value="asc">{t("Ascending", { defaultValue: "Ascending" })}</option>
                 <option value="desc">{t("Descending", { defaultValue: "Descending" })}</option>
               </select>
-              {(roleFilter || statusFilter || searchQuery || timeFilter || sortOrder) && (
+              {(roleFilter || statusFilter || searchQuery || timeFilter || customStartDate || customEndDate || sortOrder) && (
                 <button
                   type="button"
-                  onClick={() => { setRoleFilter(""); setStatusFilter(""); setSearchQuery(""); setTimeFilter(""); setSortOrder(""); setPage(1); setGuestPage(1); }}
+                  onClick={() => { setRoleFilter(""); setStatusFilter(""); setSearchQuery(""); setTimeFilter(""); setCustomStartDate(""); setCustomEndDate(""); setSortOrder(""); setPage(1); setGuestPage(1); }}
                   style={{ padding: "6px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", background: "#ffffff", color: "#dc2626", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
                 >
                   {t("Clear Filters", { defaultValue: "Clear Filters" })}
@@ -2344,7 +2527,7 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
                       {selectedColumns.includes("present_address") && <td><span style={{ fontSize: 14, color: "var(--text-dark)" }}>{g.present_address || "—"}</span></td>}
                       <td>
                         <div className="action-buttons">
-                          <button className="btn-view" title={t("View Profile", { defaultValue: "View Profile" })} onClick={() => navigate(rolePath(`manage-users/user-profile/${g.id}`))} aria-label={t("View guest profile", { defaultValue: "View guest profile" })}>
+                          <button className="btn-view" title={t("View Profile", { defaultValue: "View Profile" })} onClick={() => navigate(rolePath(`manage-users/user-profile/${g.id}`), { state: { fromPage: page, fromGuestPage: guestPage, fromTab: mainTab, returnUrl: `${location.pathname}${location.search}` } })} aria-label={t("View guest profile", { defaultValue: "View guest profile" })}>
                             <MdVisibility size={24} />
                           </button>
                           <button className="btn-view" title={t("Edit", { defaultValue: "Edit" })} onClick={() => openGuestModal(g)} aria-label={t("Edit guest", { defaultValue: "Edit guest" })}>
@@ -2401,7 +2584,7 @@ style={{ color: foundingAdminId && user.id === foundingAdminId ? "#9ca3af" : "#e
                   <AutoSaveIndicator isSaving={userSaving} lastSaved={userLastSaved} />
                 </div>
                 <div className="user-header-actions">
-                  <button type="button" className="task-save-draft-btn" onClick={handleSaveDraft} disabled={!newUser.fullName.trim() && !newUser.email.trim()}>
+                  <button type="button" className="task-save-draft-btn" onClick={handleSaveDraft} disabled={submitting}>
                     {t("Save Draft", { defaultValue: "Save Draft" })}
                   </button>
                   <LoadingButton type="button" className="primary-button" loading={submitting} onClick={handleSubmit}>

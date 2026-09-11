@@ -90,7 +90,8 @@
 
 .bar-role,
 .bar-status,
-.bar-sort {
+.bar-sort,
+.bar-time {
   border: 1px solid var(--border-color);
   background-color: var(--bg-card);
   padding: 10px 14px;
@@ -101,6 +102,23 @@
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-dark, #1e293b);
+}
+
+.custom-date-input {
+  border: 1px solid var(--border-color, #cbd5e1);
+  background-color: var(--bg-card, #ffffff);
+  padding: 8px 12px;
+  border-radius: 8px;
+  outline: 0;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-dark, #1e293b);
+  height: 38px;
 }
 
 .search-bar input {
@@ -905,7 +923,8 @@
   }
   .bar-role,
   .bar-status,
-  .bar-sort {
+  .bar-sort,
+  .bar-time {
     width: 100%;
   }
 }
@@ -940,7 +959,8 @@
   }
   .bar-role,
   .bar-status,
-  .bar-sort {
+  .bar-sort,
+  .bar-time {
     width: auto;
     flex: 1;
     min-width: 0;

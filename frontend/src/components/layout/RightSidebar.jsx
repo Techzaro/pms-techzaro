@@ -99,7 +99,7 @@ function RightSidebar({ isOpen, onClose }) {
     navigate(rolePath("calender"));
   };
 
-  const currentRole = getCurrentRole() || "admin";
+  const currentRole = getCurrentRole() || getUser()?.role || "";
   const { today: widgetToday, upcoming: widgetUpcoming } = useUnifiedSummary();
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [selectedPopupDay, setSelectedPopupDay] = useState(null);

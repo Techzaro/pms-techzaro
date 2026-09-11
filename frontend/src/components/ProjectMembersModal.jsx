@@ -20,30 +20,35 @@ export default function ProjectMembersModal({ isOpen, onClose, project, onSucces
 
     // Pre-fill state
     const currentTeams = Array.isArray(project.team_ids)
-      ? project.team_ids.map(Number)
+      ? project.team_ids.map((t) => Number(typeof t === "object" && t !== null ? t.id : t))
       : project.team_id
       ? [Number(project.team_id)]
       : [];
-    setSelectedTeamIds(currentTeams);
+    setSelectedTeamIds(currentTeams.filter((id) => !isNaN(id) && id > 0));
 
     const currentAssigned = Array.isArray(project.assigned_users)
-      ? project.assigned_users.map(Number)
-      : (project.members || []).map((m) => Number(m.id));
-    setAssignedUsers(currentAssigned);
+      ? project.assigned_users.map((u) => Number(typeof u === "object" && u !== null ? u.id : u))
+      : (project.members || []).map((m) => Number(typeof m === "object" && m !== null ? m.id : m));
+    setAssignedUsers(currentAssigned.filter((id) => !isNaN(id) && id > 0));
 
     const currentViewOnly = Array.isArray(project.view_only_users)
-      ? project.view_only_users.map(Number)
+      ? project.view_only_users.map((u) => Number(typeof u === "object" && u !== null ? u.id : u))
       : [];
-    setViewOnlyUsers(currentViewOnly);
+    setViewOnlyUsers(currentViewOnly.filter((id) => !isNaN(id) && id > 0));
 
     // Pre-populate users from project if available
     const existingUsers = [
       ...(Array.isArray(project.members) ? project.members : []),
       ...(Array.isArray(project.view_only_users) ? project.view_only_users : []),
       ...(project.creator ? [project.creator] : []),
-    ];
+    ].filter((u) => typeof u === "object" && u !== null && u.id);
     if (existingUsers.length > 0) {
-      setUsers((prev) => (prev.length === 0 ? existingUsers : prev));
+      setUsers((prev) => {
+        const map = new Map();
+        existingUsers.forEach((u) => map.set(Number(u.id), u));
+        prev.forEach((u) => { if (u && u.id && !map.has(Number(u.id))) map.set(Number(u.id), u); });
+        return Array.from(map.values());
+      });
     }
 
     // Fetch teams and users
@@ -65,7 +70,12 @@ export default function ProjectMembersModal({ isOpen, onClose, project, onSucces
       .then((data) => {
         const list = Array.isArray(data) ? data : (data.users || data.data || []);
         if (Array.isArray(list) && list.length > 0) {
-          setUsers(list);
+          setUsers((prev) => {
+            const map = new Map();
+            list.forEach((u) => { if (u && u.id) map.set(Number(u.id), u); });
+            prev.forEach((u) => { if (u && u.id && !map.has(Number(u.id))) map.set(Number(u.id), u); });
+            return Array.from(map.values());
+          });
         }
       })
       .catch(() => {});

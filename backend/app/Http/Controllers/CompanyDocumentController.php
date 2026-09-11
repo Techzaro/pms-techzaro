@@ -13,6 +13,16 @@ class CompanyDocumentController extends Controller
         return $org ? \App\Services\StorageDiskResolver::getDisk($org) : config('company.disk', 'public');
     }
 
+    private function getFileUrl(?string $path, Request $request): ?string
+    {
+        if (!$path) return null;
+        $org = $request->attributes->get('currentOrganization');
+        if ($org && \App\Services\StorageDiskResolver::isS3($org)) {
+            return \App\Services\StorageDiskResolver::getUrl($org, $path);
+        }
+        return asset('storage/' . ltrim($path, '/'));
+    }
+
     private function findExistingFile(string $type, ?string $disk = null): ?string
     {
         $disk = $disk ?? config('company.disk', 'public');
@@ -32,9 +42,9 @@ class CompanyDocumentController extends Controller
         return null;
     }
 
-    private function findOtherDocumentFiles(): array
+    private function findOtherDocumentFiles(Request $request): array
     {
-        $disk = config('company.disk', 'public');
+        $disk = $this->resolveDisk($request);
         $uploadDir = config('company.upload_dir', 'company_docs');
         $validExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];
         $prefix = 'other_document_';
@@ -48,7 +58,7 @@ class CompanyDocumentController extends Controller
                     if (str_ends_with($basename, '.'.$ext)) {
                         $result[] = [
                             'path' => $file,
-                            'url' => Storage::disk($disk)->url($file),
+                            'url' => $this->getFileUrl($file, $request),
                             'filename' => $basename,
                         ];
                         break;
@@ -74,11 +84,11 @@ class CompanyDocumentController extends Controller
                 'label' => $labels[$key] ?? ucfirst(str_replace('_', ' ', $key)),
                 'path' => $path,
                 'exists' => $exists,
-                'url' => $exists ? Storage::disk($disk)->url($path) : null,
+                'url' => $exists ? $this->getFileUrl($path, $request) : null,
             ];
         }
 
-        $otherDocs = $this->findOtherDocumentFiles();
+        $otherDocs = $this->findOtherDocumentFiles($request);
         $result['other_documents'] = [
             'label' => $labels['other_documents'] ?? 'Other Documents',
             'files' => $otherDocs,
@@ -115,13 +125,13 @@ class CompanyDocumentController extends Controller
                 'document' => [
                     'type' => $type,
                     'path' => $path,
-                    'url' => Storage::disk($disk)->url($path),
+                    'url' => $this->getFileUrl($path, $request),
                     'filename' => $filename,
                 ],
             ]);
         }
 
-        $existing = $this->findExistingFile($type);
+        $existing = $this->findExistingFile($type, $disk);
         if ($existing) {
             Storage::disk($disk)->delete($existing);
         }
@@ -137,7 +147,7 @@ class CompanyDocumentController extends Controller
             'document' => [
                 'type' => $type,
                 'path' => $path,
-                'url' => Storage::disk($disk)->url($path),
+                'url' => $this->getFileUrl($path, $request),
             ],
         ]);
     }
@@ -175,9 +185,9 @@ class CompanyDocumentController extends Controller
             return response()->json(['success' => false, 'message' => 'Invalid document type'], 422);
         }
 
-        $existing = $this->findExistingFile($type, $this->resolveDisk($request));
+        $existing = $this->findExistingFile($type, $disk);
         if ($existing) {
-            Storage::disk($this->resolveDisk($request))->delete($existing);
+            Storage::disk($disk)->delete($existing);
         }
 
         return response()->json([

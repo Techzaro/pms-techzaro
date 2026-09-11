@@ -23,7 +23,7 @@ function CompanyHeader() {
       skipLoader: true,
     }).then(r => r.ok ? r.json() : null).then(d => {
       if (d?.company_logo?.exists) {
-        setLogo(`${API_URL.replace("/api", "")}/storage/${d.company_logo.path}`);
+        setLogo(d.company_logo.url || (d.company_logo.path?.startsWith("http") ? d.company_logo.path : `${API_URL.replace("/api", "")}/storage/${d.company_logo.path?.replace(/^\/?storage\/?/, "")}`));
       }
     }).catch(() => { });
   }, []);

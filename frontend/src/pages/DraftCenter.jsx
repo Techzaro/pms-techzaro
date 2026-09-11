@@ -23,6 +23,8 @@ import EditProjectModal from "../components/EditProjectModal";
 import CreateDeliverableModel from "../components/layout/CreateDeliverableModel";
 import Event from "../components/Event";
 import CreateKnowledgeModal from "../components/CreateKnowledgeModal";
+import CreateUserModal from "../components/CreateUserModal";
+import CreateTeamModal from "../components/CreateTeamModal";
 import {
   MdEditNote,
   MdSearch,
@@ -40,6 +42,8 @@ const MODULE_TYPES = [
   { value: "deliverable", labelKey: "Subtasks", defaultLabel: "Subtasks" },
   { value: "calendar", labelKey: "Calendar", defaultLabel: "Calendar" },
   { value: "event", labelKey: "Events", defaultLabel: "Events" },
+  { value: "user", labelKey: "Users", defaultLabel: "Users" },
+  { value: "team", labelKey: "Teams", defaultLabel: "Teams" },
   { value: "knowledge_base", labelKey: "Knowledge Base", defaultLabel: "Knowledge Base" },
 ];
 
@@ -285,32 +289,8 @@ function DraftCenter() {
     else if (rawMod === "knowledge_base" || rawMod === "knowledge-base" || rawMod === "document" || rawMod === "article" || rawMod === "kb") modType = "knowledge_base";
     else if (rawMod === "project") modType = "project";
     else if (rawMod === "task") modType = "task";
-
-    // Fallback routing for user/team
-    if (modType === "user" || modType === "users") {
-      navigate(rolePath("manage-users"), {
-        state: {
-          openDraft: draft.id,
-          draftCode: draft.draft_code,
-          draftData: draft.draft_data || draft.data,
-          originalRecordId: draft.original_record_id,
-          draft,
-        },
-      });
-      return;
-    }
-    if (modType === "team" || modType === "teams") {
-      navigate(rolePath("manage-team"), {
-        state: {
-          openDraft: draft.id,
-          draftCode: draft.draft_code,
-          draftData: draft.draft_data || draft.data,
-          originalRecordId: draft.original_record_id,
-          draft,
-        },
-      });
-      return;
-    }
+    else if (rawMod === "user" || rawMod === "users") modType = "user";
+    else if (rawMod === "team" || rawMod === "teams") modType = "team";
 
     if (draft.original_record_id) {
       const token = authToken();
@@ -322,6 +302,8 @@ function DraftCenter() {
         else if (modType === "deliverable") endpoint = `/deliverables/${draft.original_record_id}`;
         else if (modType === "event") endpoint = `/events/${draft.original_record_id}`;
         else if (modType === "knowledge_base") endpoint = `/knowledge-base/${draft.original_record_id}`;
+        else if (modType === "user") endpoint = `/users/${draft.original_record_id}`;
+        else if (modType === "team") endpoint = `/teams/${draft.original_record_id}`;
 
         if (endpoint && token) {
           const res = await fetch(`${API_URL}${endpoint}`, {
@@ -330,7 +312,7 @@ function DraftCenter() {
           });
           if (res.ok) {
             const data = await res.json();
-            record = data?.data || data?.task || data?.project || data?.deliverable || data?.event || data;
+            record = data?.data || data?.team || data?.user || data?.task || data?.project || data?.deliverable || data?.event || data;
           }
         }
       } catch (e) {
@@ -711,6 +693,30 @@ function DraftCenter() {
         <CreateKnowledgeModal
           isOpen={true}
           initialItem={activeModal.record || (activeModal.isEdit ? { id: activeModal.draft?.original_record_id } : null)}
+          onClose={handleCloseModal}
+          onSuccess={handleCloseModal}
+          restoreDraftId={activeModal.draft?.id}
+          draftData={activeModal.draft?.draft_data || activeModal.draft?.data}
+        />
+      )}
+
+      {/* ===================== USER MODAL ===================== */}
+      {activeModal?.type === "user" && (
+        <CreateUserModal
+          isOpen={true}
+          editingUser={activeModal.isEdit ? (activeModal.record || { id: activeModal.draft?.original_record_id }) : null}
+          onClose={handleCloseModal}
+          onSuccess={handleCloseModal}
+          restoreDraftId={activeModal.draft?.id}
+          draftData={activeModal.draft?.draft_data || activeModal.draft?.data}
+        />
+      )}
+
+      {/* ===================== TEAM MODAL ===================== */}
+      {activeModal?.type === "team" && (
+        <CreateTeamModal
+          isOpen={true}
+          editingTeam={activeModal.isEdit ? (activeModal.record || { id: activeModal.draft?.original_record_id }) : null}
           onClose={handleCloseModal}
           onSuccess={handleCloseModal}
           restoreDraftId={activeModal.draft?.id}

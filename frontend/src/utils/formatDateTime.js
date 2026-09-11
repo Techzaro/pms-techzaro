@@ -75,6 +75,29 @@ export function toUTCIso(localDatetimeLocal) {
 }
 
 /**
+ * Formats a date string or Date object to standard MySQL datetime string format (YYYY-MM-DD HH:mm:ss).
+ * Converts local datetime strings to UTC before formatting.
+ * @param {string|Date} dateVal - Date string or Date object
+ * @returns {string|null} Format: "YYYY-MM-DD HH:mm:ss" or null if invalid
+ */
+export function formatForMySQL(dateVal) {
+  if (!dateVal) return null;
+  try {
+    const utcIso = toUTCIso(dateVal);
+    if (utcIso && typeof utcIso === "string") {
+      return utcIso.slice(0, 19).replace("T", " ");
+    }
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return String(dateVal);
+    return d.toISOString().slice(0, 19).replace("T", " ");
+  } catch {
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return String(dateVal);
+    return d.toISOString().slice(0, 19).replace("T", " ");
+  }
+}
+
+/**
  * Converts an ISO string to HTML datetime-local format.
  * @param {string} utcStr - ISO date string
  * @returns {string} Format: "YYYY-MM-DDTHH:MM" or empty string if invalid

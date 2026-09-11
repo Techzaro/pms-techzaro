@@ -88,7 +88,7 @@ import "./ProjectDetails.css";
 import "./TaskDetails.css";
 import "./Deliveries.css";
 
-import { authToken, rolePath, getUser } from "../utils/auth";
+import { authToken, rolePath, getUser, getCurrentRole } from "../utils/auth";
 import API_URL from "../config/api";
 import { publish } from "../utils/eventBus";
 import { parseUtcToEpochMs } from "../utils/formatDateTime";
@@ -209,10 +209,11 @@ function sanitizeHtml(html) {
   return String(html || "").replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
 }
 
-function CredentialRow({ credential, onDelete, onEdit, isGuest, isShared }) {
+function CredentialRow({ credential, onDelete, onEdit, isGuest, isShared, currentUserRole }) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const [copiedUser, setCopiedUser] = useState(false);
+  const role = currentUserRole || getCurrentRole() || getUser()?.role || "";
 
   const copyPassword = async () => {
     try {
@@ -270,7 +271,7 @@ function CredentialRow({ credential, onDelete, onEdit, isGuest, isShared }) {
           )}
         </div>
         <div className="pd-cred-actions">
-          {!isGuest && !isShared && (
+          {!isGuest && !isShared && (role === "admin" || role === "manager") && (
             <>
               <button className="pd-cred-edit" onClick={() => onEdit?.(credential)} title={t("Edit credential", { defaultValue: "Edit credential" })}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
@@ -1378,6 +1379,7 @@ function ProjectDetails() {
 
   const currentUser = getUser();
   const currentUserId = currentUser?.id;
+  const currentUserRole = getCurrentRole() || currentUser?.role || "";
 
   const getTaskFrom = (task) => {
     if (!currentUserId) return "tasks";
@@ -2535,7 +2537,7 @@ function ProjectDetails() {
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                               <input type="text" placeholder={t("Search by title, username, or URL...", { defaultValue: "Search by title, username, or URL..." })} value={accessSearch} onChange={(e) => setAccessSearch(e.target.value)} />
                             </div>
-                            {!isShared && isAdminOrManager && !isViewOnlyUser && (
+                            {!isShared && (currentUserRole === 'admin' || currentUserRole === 'manager') && !isViewOnlyUser && (
                               <button type="button" className="pd-btn-tx pd-btn-tx--primary" onClick={() => setShowAddAccessModal(true)} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                                 <Plus size={16} /> {t("Add Access", { defaultValue: "Add Access" })}
                               </button>
@@ -2569,6 +2571,7 @@ function ProjectDetails() {
                                    onEdit={(c) => setEditingCredential(c)}
                                    isGuest={currentUser?.role === "guest"}
                                    isShared={isShared}
+                                   currentUserRole={currentUserRole}
                                  />
                               ))}
                             </div>

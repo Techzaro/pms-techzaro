@@ -312,6 +312,31 @@ class Project extends Model
         return $this->_cachedMembers;
     }
 
+    /**
+     * Get view-only users for this project.
+     * Returns a Collection of User models that have view-only access (via ProjectVisibility).
+     */
+    public function getViewOnlyUsers()
+    {
+        $allMembers = $this->getMembers();
+        $allMemberIds = $allMembers->pluck('id')->toArray();
+        $viewOnlyUserIds = $this->visibility()
+            ->where('is_visible', true)
+            ->pluck('user_id')
+            ->filter(fn ($id) => ! in_array((int) $id, array_map('intval', $allMemberIds)) && (int) $id !== (int) $this->created_by)
+            ->values()
+            ->toArray();
+
+        return ! empty($viewOnlyUserIds)
+            ? User::whereIn('id', $viewOnlyUserIds)->where('active', true)->select('id', 'name', 'email', 'role', 'department')->orderBy('name')->get()
+            : collect();
+    }
+
+    public function getViewOnlyUsersAttribute()
+    {
+        return $this->getViewOnlyUsers();
+    }
+
     /** All users assigned to this project (many-to-many). */
     public function users(): BelongsToMany
     {

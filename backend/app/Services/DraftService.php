@@ -237,6 +237,7 @@ class DraftService
             'task' => $this->publishTask($draft, $draftData, $user),
             'deliverable' => $this->publishDeliverable($draft, $draftData, $user),
             'event' => $this->publishEvent($draft, $draftData, $user),
+            'user', 'users' => $this->publishUser($draft, $draftData, $user),
             default => null,
         };
 
@@ -477,6 +478,43 @@ class DraftService
         }
 
         return $event;
+    }
+
+    private function publishUser(Draft $draft, array $data, User $user): User
+    {
+        $name = $data['name'] ?? $data['fullName'] ?? $draft->title ?? 'User';
+        $email = $data['email'] ?? $data['personal_email'] ?? $data['personalEmail'] ?? null;
+        if (!$email) {
+            $email = 'user_' . \Illuminate\Support\Str::random(8) . '@company.local';
+        }
+
+        $userData = [
+            'name' => $name,
+            'email' => $email,
+            'role' => $data['role'] ?? 'member',
+            'department' => $data['department'] ?? null,
+            'designation' => $data['designation'] ?? null,
+            'employee_code' => $data['employee_code'] ?? $data['employeeCode'] ?? null,
+            'contact_no' => $data['contact_no'] ?? $data['phone_number'] ?? $data['phoneNumber'] ?? null,
+            'phone_number' => $data['phone_number'] ?? $data['phoneNumber'] ?? null,
+            'personal_email' => $data['personal_email'] ?? $data['personalEmail'] ?? null,
+            'professional_email' => $data['professional_email'] ?? $data['professionalEmail'] ?? null,
+            'company_name' => $data['company_name'] ?? null,
+            'status' => 'Active',
+            'active' => true,
+        ];
+
+        if ($draft->original_record_id) {
+            $userRecord = User::findOrFail($draft->original_record_id);
+            $userRecord->update($userData);
+            return $userRecord;
+        }
+
+        if (empty($userData['password'])) {
+            $userData['password'] = \Illuminate\Support\Facades\Hash::make(\Illuminate\Support\Str::random(12));
+        }
+
+        return User::create($userData);
     }
 
     // ── Listing ──
