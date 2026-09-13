@@ -8,10 +8,10 @@
  * non-admin roles unless editing their own profile.
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { MdEdit, MdArrowBack } from "react-icons/md";
 import { Pencil, Trash2, Eye, Download } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
@@ -32,6 +32,7 @@ import "./UserProfile.css";
 import { useSubmit } from "../hooks/useSubmit";
 import LoadingButton from "../components/LoadingButton";
 import AdminChangePasswordModal from "../components/AdminChangePasswordModal";
+import MultiSelectDropdown from "../components/MultiSelectDropdown";
 import "./ManageUsers.css";
 import "./TaskDetails.css";
 
@@ -84,7 +85,33 @@ function UserProfile() {
   const { t } = useTranslation();
   const { userId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const notify = useNotification();
+
+  const returnUrl = useMemo(() => {
+    if (location.state?.returnUrl) return location.state.returnUrl;
+    const params = new URLSearchParams();
+    if (location.state?.fromPage && location.state.fromPage > 1) {
+      params.append("page", location.state.fromPage);
+    }
+    if (location.state?.fromGuestPage && location.state.fromGuestPage > 1) {
+      params.append("guest_page", location.state.fromGuestPage);
+    }
+    if (location.state?.fromTab && location.state.fromTab !== "members") {
+      params.append("tab", location.state.fromTab);
+    }
+    const query = params.toString() ? `?${params.toString()}` : "";
+    return `${rolePath("manage-users")}${query}`;
+  }, [location.state]);
+
+  const handleBack = () => {
+    if (location.state?.fromPage || location.state?.fromGuestPage || location.state?.fromTab || location.state?.returnUrl) {
+      navigate(returnUrl);
+    } else {
+      navigate(rolePath("manage-users"));
+    }
+  };
+
   const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showProfPassword, setShowProfPassword] = useState(false);
@@ -123,12 +150,14 @@ function UserProfile() {
     job_started_date: "",
     job_ended_date: "",
     role: "member",
+    project_ids: [],
     gross_salary: "",
     applied_via: "",
     bank_name: "",
     bank_account_number: "",
     bank_account_title: "",
   });
+  const [projectsList, setProjectsList] = useState([]);
   const [editErrors, setEditErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const { submitting, run } = useSubmit();
@@ -494,13 +523,35 @@ function UserProfile() {
       .join("");
   };
 
+  const fetchProjects = async () => {
+    try {
+      const token = authToken();
+      if (!token) return;
+      const res = await fetch(`${API_URL}/projects`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : (data?.projects || []);
+      setProjectsList(list);
+    } catch {
+      // ignore
+    }
+  };
+
   /** Populate the edit form with current user data and open the modal. */
   const openEditModal = () => {
+    fetchProjects();
     const u = profileData.user;
     const deptVal = u.department || "";
     const isCustomDept = !departments.includes(deptVal) && deptVal !== "";
     const desgVal = u.designation || "";
     const isCustomDesg = !designations.includes(desgVal) && desgVal !== "";
+
+    const existingProjectIds = u.projects
+      ? u.projects.map((p) => (typeof p === "object" ? p.id : p))
+      : (u.project_ids || []);
 
     setEditUser({
       name: u.name || "",
@@ -524,6 +575,7 @@ function UserProfile() {
       job_started_date: u.job_started_date ? u.job_started_date.substring(0, 10) : "",
       job_ended_date: u.job_ended_date ? u.job_ended_date.substring(0, 10) : "",
       role: u.role || "member",
+      project_ids: existingProjectIds,
       gross_salary: u.gross_salary || "",
       applied_via: u.applied_via || "",
       bank_name: u.bank_name || "",
@@ -939,6 +991,16 @@ if (!editUser.employee_code.trim()) errors.employee_code = t("Employee Code is r
       formData.append("bank_account_number", editUser.bank_account_number);
       formData.append("bank_account_title", editUser.bank_account_title);
 
+      if (editUser.project_ids && Array.isArray(editUser.project_ids)) {
+        if (editUser.project_ids.length > 0) {
+          editUser.project_ids.forEach((pid) => {
+            formData.append("project_ids[]", pid);
+          });
+        } else {
+          formData.append("project_ids", "");
+        }
+      }
+
       const fileFields = [
         "employment_contract", "offer_letter", "techxaro_regulations",
       ];
@@ -1043,7 +1105,7 @@ if (!editUser.employee_code.trim()) errors.employee_code = t("Employee Code is r
         <div className="user-profile-page">
           <div className="profile-error">
             <p>{error}</p>
-            <button className="primary-button" onClick={() => navigate(rolePath("manage-users"))}>
+            <button className="primary-button" onClick={handleBack}>
               {t("Go Back", { defaultValue: "Go Back" })}
             </button>
           </div>
@@ -1058,7 +1120,7 @@ if (!editUser.employee_code.trim()) errors.employee_code = t("Employee Code is r
   const isOwnProfile = String(getUser()?.id) === String(userId);
 
   const breadcrumbs = [
-    { label: t("Users", { defaultValue: "Users" }), path: rolePath("manage-users") },
+    { label: t("Users", { defaultValue: "Users" }), path: returnUrl },
     { label: user?.name || t("User Profile", { defaultValue: "User Profile" }) },
   ];
 
@@ -1072,28 +1134,39 @@ if (!editUser.employee_code.trim()) errors.employee_code = t("Employee Code is r
         <div className="profile">
           <div className="profile-layout">
         <Breadcrumb items={breadcrumbs} />
-            <div className="profile-header-profile" style={{ display: "flex", alignItems: "center",gap: 310, }}>
+            <div className="profile-header-profile" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
               <div>
                 <h1>{user?.role === "guest" ? t("Guest Profile", { defaultValue: "Guest Profile" }) : t("User Profile", { defaultValue: "User Profile" })}</h1>
                 <p>{user?.role === "guest" ? t("View and manage guest information and account settings.", { defaultValue: "View and manage guest information and account settings." }) : t("View and manage your personal information and account settings.", { defaultValue: "View and manage your personal information and account settings." })}</p>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
                 <button
+                  type="button"
+                  onClick={handleBack}
+                  style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid var(--border-medium)", background: "var(--bg-card)", color: "var(--text-dark)", fontWeight: 600, fontSize: 13, cursor: "pointer", transition: "all 0.15s", whiteSpace: "nowrap" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--border-light)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "var(--bg-card)"; }}
+                  aria-label={t("Back to Users", { defaultValue: "Back to Users" })}
+                >
+                  <MdArrowBack size={16} />
+                  {t("Back", { defaultValue: "Back" })}
+                </button>
+                <button
                   disabled={!hasPrev}
-                  onClick={() => { if (hasPrev) navigate(rolePath(`manage-users/user-profile/${allUsers[currentUserIndex - 1].id}`)); }}
+                  onClick={() => { if (hasPrev) navigate(rolePath(`manage-users/user-profile/${allUsers[currentUserIndex - 1].id}`), { state: location.state }); }}
                   style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid var(--border-medium)", background: hasPrev ? "var(--bg-card)" : "var(--bg-card-alt)", color: hasPrev ? "var(--text-dark)" : "var(--text-muted)", fontWeight: 600, fontSize: 13, cursor: hasPrev ? "pointer" : "not-allowed", transition: "all 0.15s", whiteSpace: "nowrap" }}
-                  onMouseEnter={(e) => { if (hasPrev) e.target.style.background = "var(--border-light)"; }}
-                  onMouseLeave={(e) => { if (hasPrev) e.target.style.background = "var(--bg-card)"; }}
+                  onMouseEnter={(e) => { if (hasPrev) e.currentTarget.style.background = "var(--border-light)"; }}
+                  onMouseLeave={(e) => { if (hasPrev) e.currentTarget.style.background = "var(--bg-card)"; }}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
                   {t("Previous", { defaultValue: "Previous" })}
                 </button>
                 <button
                   disabled={!hasNext}
-                  onClick={() => { if (hasNext) navigate(rolePath(`manage-users/user-profile/${allUsers[currentUserIndex + 1].id}`)); }}
+                  onClick={() => { if (hasNext) navigate(rolePath(`manage-users/user-profile/${allUsers[currentUserIndex + 1].id}`), { state: location.state }); }}
                   style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid var(--border-medium)", background: hasNext ? "var(--bg-card)" : "var(--bg-card-alt)", color: hasNext ? "var(--text-dark)" : "var(--text-muted)", fontWeight: 600, fontSize: 13, cursor: hasNext ? "pointer" : "not-allowed", transition: "all 0.15s", whiteSpace: "nowrap" }}
-                  onMouseEnter={(e) => { if (hasNext) e.target.style.background = "var(--border-light)"; }}
-                  onMouseLeave={(e) => { if (hasNext) e.target.style.background = "var(--bg-card)"; }}
+                  onMouseEnter={(e) => { if (hasNext) e.currentTarget.style.background = "var(--border-light)"; }}
+                  onMouseLeave={(e) => { if (hasNext) e.currentTarget.style.background = "var(--bg-card)"; }}
                 >
                   {t("Next", { defaultValue: "Next" })}
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
@@ -1528,9 +1601,41 @@ if (!editUser.employee_code.trim()) errors.employee_code = t("Employee Code is r
                       );
                     });
                   })()}
+                  {companyDocs?.company_logo?.exists && (
+                    <div className="info-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span className="info-label">{t("Company Logo", { defaultValue: "Company Logo" })}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end", flex: 1 }}>
+                        <a
+                          href={companyDocs.company_logo.url || (companyDocs.company_logo.path?.startsWith("http") ? companyDocs.company_logo.path : `${API_URL.replace("/api", "")}/storage/${companyDocs.company_logo.path?.replace(/^\/?storage\/?/, "")}`)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ background: "var(--color-primary)", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
+                          title={t("View", { defaultValue: "View" })}
+                        >
+                          <Eye size={16} />
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                  {companyDocs?.qr_code?.exists && (
+                    <div className="info-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span className="info-label">{t("QR Code", { defaultValue: "QR Code" })}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end", flex: 1 }}>
+                        <a
+                          href={companyDocs.qr_code.url || (companyDocs.qr_code.path?.startsWith("http") ? companyDocs.qr_code.path : `${API_URL.replace("/api", "")}/storage/${companyDocs.qr_code.path?.replace(/^\/?storage\/?/, "")}`)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ background: "var(--color-primary)", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
+                          title={t("View", { defaultValue: "View" })}
+                        >
+                          <Eye size={16} />
+                        </a>
+                      </div>
+                    </div>
+                  )}
                   {companyDocs?.other_documents?.files?.map((file, i) => {
                     const fileName = file.filename.replace(/^other_document_\d+_/, "").replace(/\.[^.]+$/, "");
-                    const storageUrl = `${API_URL.replace("/api", "")}/storage/${file.path}`;
+                    const storageUrl = file.url || (file.path?.startsWith("http") ? file.path : `${API_URL.replace("/api", "")}/storage/${file.path?.replace(/^\/?storage\/?/, "")}`);
                     return (
                       <div className="info-row" key={`company-${i}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <span className="info-label">{fileName}</span>
@@ -1916,6 +2021,23 @@ if (!editUser.employee_code.trim()) errors.employee_code = t("Employee Code is r
                   <label htmlFor="edit-applied_via">{t("Applied Via", { defaultValue: "Applied Via" })}</label>
                   <input type="text" id="edit-applied_via" name="applied_via" value={editUser.applied_via} onChange={handleEditChange} placeholder={t("e.g. Website, Referral, LinkedIn", { defaultValue: "e.g. Website, Referral, LinkedIn" })} />
                 </div>
+                <div className="form-row" style={{ gridColumn: "1 / -1" }}>
+                  <label>{t("Projects", { defaultValue: "Projects" })}</label>
+                  <MultiSelectDropdown
+                    value={editUser.project_ids || []}
+                    onChange={(val) => {
+                      setEditUser((prev) => ({ ...prev, project_ids: val }));
+                      setEditIsDirty(true);
+                    }}
+                    options={projectsList.map((p) => ({
+                      value: p.id,
+                      label: p.title + (p.business_id ? ` (${p.business_id})` : ""),
+                    }))}
+                    placeholder={t("Select projects to assign...", { defaultValue: "Select projects to assign..." })}
+                    searchPlaceholder={t("Search projects...", { defaultValue: "Search projects..." })}
+                    showChips={true}
+                  />
+                </div>
               </div>
 
               {/* ===== Salary & Bank ===== */}
@@ -2147,8 +2269,8 @@ if (!editUser.employee_code.trim()) errors.employee_code = t("Employee Code is r
       />
 
       {/* Edit Document Popup — same as ManageUsers edit file popup */}
-      {editDocItem && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 10003, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => { setEditDocItem(null); setEditDocNewFile(null); setEditDocDeleted(false); setEditDocDeleteConfirm(false); }}>
+      {editDocItem && createPortal(
+        <div style={{ position: "fixed", inset: 0, zIndex: 100000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }} onClick={() => { setEditDocItem(null); setEditDocNewFile(null); setEditDocDeleted(false); setEditDocDeleteConfirm(false); }}>
           <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: "24px 28px", width: 420, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>{t("Edit File", { defaultValue: "Edit File" })}</h3>
             <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--text-secondary)" }}>{t("Rename or replace this file.", { defaultValue: "Rename or replace this file." })}</p>
@@ -2194,7 +2316,8 @@ if (!editUser.employee_code.trim()) errors.employee_code = t("Employee Code is r
                 onMouseEnter={(e) => e.target.style.background = "var(--color-primary-dark)"} onMouseLeave={(e) => e.target.style.background = "var(--color-primary)"}>{t("Save", { defaultValue: "Save" })}</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Edit File Delete Confirmation (nested) */}

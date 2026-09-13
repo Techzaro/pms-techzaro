@@ -5,24 +5,55 @@ namespace App\Policies;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
+use App\Services\DelegationService;
 use Illuminate\Auth\Access\HandlesAuthorization;
 
 class TaskPolicy
 {
     use HandlesAuthorization;
 
+    public function __construct(private ?DelegationService $delegationService = null)
+    {
+        $this->delegationService ??= app(DelegationService::class);
+    }
+
     /**
      * Check if user and task belong to the same organization/tenant.
      */
     protected function belongsToSameTenant(User $user, Task $task): bool
     {
-        $org = request()->attributes->get('currentOrganization');
-        if ($org && isset($org->id) && isset($user->organization_id)) {
-            if ((int) $org->id !== (int) $user->organization_id) {
-                return false;
+        try {
+            if (function_exists('app') && app()->bound('request')) {
+                $org = request()->attributes->get('currentOrganization');
+                if ($org && isset($org->id) && isset($user->organization_id)) {
+                    if ((int) $org->id !== (int) $user->organization_id) {
+                        return false;
+                    }
+                }
             }
+        } catch (\Throwable $e) {
+            // Container or request not bound (CLI / Unit tests)
         }
         return true;
+    }
+
+    /**
+     * Safe helper to check if user is a direct assignee of the task.
+     */
+    protected function isTaskAssignee(User $user, Task $task): bool
+    {
+        $userId = (int) $user->id;
+        if ((int) $task->assigned_to === $userId) {
+            return true;
+        }
+        if ($task->relationLoaded('assignees')) {
+            return $task->assignees ? $task->assignees->contains('id', $userId) : false;
+        }
+        try {
+            return $task->assignees()->where('users.id', $userId)->exists();
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 
     /**
@@ -47,85 +78,78 @@ class TaskPolicy
             return true;
         }
 
+        $userId = (int) $user->id;
+
         // Assigner / Creator
-        if ((int) $task->assigned_by === (int) $user->id) {
+        if ((int) $task->assigned_by === $userId || (int) ($task->creator_id ?? 0) === $userId) {
             return true;
         }
 
         // Direct Assignee
-        if ((int) $task->assigned_to === (int) $user->id || $task->assignees()->where('users.id', $user->id)->exists()) {
+        if ($this->isTaskAssignee($user, $task)) {
             return true;
         }
 
         // Current Owner
-        if ($task->current_owner && (int) $task->current_owner === (int) $user->id) {
+        if ($task->current_owner && (int) $task->current_owner === $userId) {
             return true;
         }
 
         // Current Reviewer
-        if ($task->current_reviewer_id && (int) $task->current_reviewer_id === (int) $user->id) {
+        if ($task->current_reviewer_id && (int) $task->current_reviewer_id === $userId) {
             return true;
         }
 
         // Follower
-        if ($task->followers()->where('users.id', $user->id)->exists()) {
-            return true;
+        if ($task->relationLoaded('followers')) {
+            if ($task->followers && $task->followers->contains('id', $userId)) {
+                return true;
+            }
+        } else {
+            try {
+                if ($task->followers()->where('users.id', $userId)->exists()) {
+                    return true;
+                }
+            } catch (\Throwable $e) {
+            }
         }
 
         // Transferee or Transferor in Delegation Chain
-        if (! empty($task->delegation_chain)) {
+        if (! empty($task->delegation_chain) && is_iterable($task->delegation_chain)) {
             foreach ($task->delegation_chain as $entry) {
-                if ((int) ($entry['delegated_by'] ?? 0) === (int) $user->id || (int) ($entry['delegated_to'] ?? 0) === (int) $user->id) {
+                if ((int) ($entry['delegated_by'] ?? 0) === $userId || (int) ($entry['delegated_to'] ?? 0) === $userId) {
                     return true;
                 }
             }
         }
 
         // Deliverable Assignee or Creator
-        if ($task->deliverables()->where(fn ($q) => $q->where('assigned_to', $user->id)->orWhere('created_by', $user->id))->exists()) {
-            return true;
+        if ($task->relationLoaded('deliverables')) {
+            if ($task->deliverables && $task->deliverables->contains(fn ($d) => (int) $d->assigned_to === $userId || (int) $d->created_by === $userId)) {
+                return true;
+            }
+        } else {
+            try {
+                if ($task->deliverables()->where(fn ($q) => $q->where('assigned_to', $userId)->orWhere('created_by', $userId))->exists()) {
+                    return true;
+                }
+            } catch (\Throwable $e) {
+            }
         }
 
-        // Project Team Leader, Member, or Creator
-        if ($task->project) {
-            if ((int) $task->project->created_by === (int) $user->id) {
-                return true;
+        // Project Member / Participant (Safe relationship check)
+        $project = null;
+        if ($task->relationLoaded('project')) {
+            $project = $task->project;
+        } elseif ($task->project_id) {
+            try {
+                $project = Project::find($task->project_id);
+            } catch (\Throwable $e) {
             }
+        }
 
-            if ($task->project->team) {
-                if ((int) $task->project->team->leader_id === (int) $user->id) {
-                    return true;
-                }
-                if ($task->project->team->members()->where('users.id', $user->id)->exists()) {
-                    return true;
-                }
-            }
-
-            // Multiple project teams (team_ids)
-            if (!empty($task->project->team_ids)) {
-                $teamIds = array_map('intval', $task->project->team_ids);
-                $isTeamMember = $user->teams()->whereIn('teams.id', $teamIds)->exists()
-                    || $user->ledTeams()->whereIn('teams.id', $teamIds)->exists();
-                if ($isTeamMember) {
-                    return true;
-                }
-            }
-
-            // Project Assigned Users
-            $projectAssigned = array_map('intval', $task->project->assigned_users ?? []);
-            if (in_array((int) $user->id, $projectAssigned, true)) {
-                return true;
-            }
-
-            // Explicit Manual Visibility
-            if ($task->project->manuallyVisibleTo()->where('user_id', $user->id)->exists()) {
-                return true;
-            }
-
-            // Guest of Project
-            if ($user->role === 'guest' && $task->project->isAccessibleByGuest($user)) {
-                return true;
-            }
+        if ($project && $project->isMemberOrParticipant($user)) {
+            return true;
         }
 
         return false;
@@ -144,31 +168,12 @@ class TaskPolicy
             return $user->role !== 'guest';
         }
 
-        // Project creator
-        if ((int) $project->created_by === (int) $user->id) {
-            return true;
-        }
-
-        // Team leader or member
-        if ($project->team) {
-            if ((int) $project->team->leader_id === (int) $user->id) {
-                return true;
-            }
-            if ($project->team->members()->where('users.id', $user->id)->exists()) {
-                return true;
-            }
-        }
-
-        $projectAssigned = array_map('intval', $project->assigned_users ?? []);
-        if (in_array((int) $user->id, $projectAssigned, true)) {
-            return true;
-        }
-
-        return false;
+        return $project->isMemberOrParticipant($user);
     }
 
     /**
      * Determine whether the user can update the task.
+     * Strictly restricted to Assignees, Creators, and authorized roles (Admins/Managers).
      */
     public function update(User $user, Task $task): bool
     {
@@ -180,18 +185,51 @@ class TaskPolicy
             return true;
         }
 
+        $userId = (int) $user->id;
+
+        $project = null;
+        if ($task->relationLoaded('project')) {
+            $project = $task->project;
+        } elseif ($task->project_id) {
+            try {
+                $project = Project::find($task->project_id);
+            } catch (\Throwable $e) {
+            }
+        }
+
         // Project Creator
-        if ($task->project && (int) $task->project->created_by === (int) $user->id) {
+        if ($project && (int) $project->created_by === $userId) {
             return true;
         }
 
         // Team Lead
-        if ($task->project && $task->project->team && (int) $task->project->team->leader_id === (int) $user->id) {
-            return true;
+        if ($project) {
+            $team = null;
+            if ($project->relationLoaded('team')) {
+                $team = $project->team;
+            } elseif (!empty($project->team_id)) {
+                try {
+                    $team = Team::find($project->team_id);
+                } catch (\Throwable $e) {
+                }
+            }
+            if ($team && (int) $team->leader_id === $userId) {
+                return true;
+            }
         }
 
         // Assigner / Creator
-        if ((int) $task->assigned_by === (int) $user->id || (int) ($task->creator_id ?? 0) === (int) $user->id) {
+        if ((int) $task->assigned_by === $userId || (int) ($task->creator_id ?? 0) === $userId) {
+            return true;
+        }
+
+        // Assignee
+        if ($this->isTaskAssignee($user, $task)) {
+            return true;
+        }
+
+        // Current Owner
+        if ($task->current_owner && (int) $task->current_owner === $userId) {
             return true;
         }
 
@@ -211,13 +249,25 @@ class TaskPolicy
             return true;
         }
 
+        $userId = (int) $user->id;
+
         // Assigner / Creator
-        if ((int) $task->assigned_by === (int) $user->id || (int) ($task->creator_id ?? 0) === (int) $user->id) {
+        if ((int) $task->assigned_by === $userId || (int) ($task->creator_id ?? 0) === $userId) {
             return true;
         }
 
         // Project Creator
-        if ($task->project && (int) $task->project->created_by === (int) $user->id) {
+        $project = null;
+        if ($task->relationLoaded('project')) {
+            $project = $task->project;
+        } elseif ($task->project_id) {
+            try {
+                $project = Project::find($task->project_id);
+            } catch (\Throwable $e) {
+            }
+        }
+
+        if ($project && (int) $project->created_by === $userId) {
             return true;
         }
 
@@ -229,7 +279,21 @@ class TaskPolicy
      */
     public function updateStatus(User $user, Task $task): bool
     {
-        return $this->view($user, $task);
+        if (! $this->belongsToSameTenant($user, $task)) {
+            return false;
+        }
+
+        if (in_array($user->role, ['admin', 'super_admin', 'manager'])) {
+            return true;
+        }
+
+        $userId = (int) $user->id;
+
+        $isAssigner = (int) $task->assigned_by === $userId || (int) ($task->creator_id ?? 0) === $userId;
+        $isAssignee = $this->isTaskAssignee($user, $task);
+        $isCurrentOwner = $task->current_owner && (int) $task->current_owner === $userId;
+
+        return $isAssigner || $isAssignee || $isCurrentOwner;
     }
 
     /**
@@ -241,10 +305,16 @@ class TaskPolicy
             return false;
         }
 
-        $isAssignee = (int) $task->assigned_to === (int) $user->id || $task->assignees()->where('users.id', $user->id)->exists();
-        $isCurrentOwner = $task->current_owner && (int) $task->current_owner === (int) $user->id;
+        if (in_array($user->role, ['admin', 'manager', 'super_admin'])) {
+            return true;
+        }
 
-        return ($isAssignee || $isCurrentOwner) && in_array(strtolower($task->status ?? ''), ['pending', 'reopened']);
+        $userId = (int) $user->id;
+        $isAssignee = $this->isTaskAssignee($user, $task);
+        $isCurrentOwner = $task->current_owner && (int) $task->current_owner === $userId;
+        $isAssigner = (int) $task->assigned_by === $userId || (int) ($task->creator_id ?? 0) === $userId;
+
+        return ($isAssignee || $isCurrentOwner || $isAssigner) && in_array(strtolower($task->status ?? ''), ['pending', 'reopened']);
     }
 
     /**
@@ -260,9 +330,10 @@ class TaskPolicy
             return true;
         }
 
-        $isAssignee = (int) $task->assigned_to === (int) $user->id || $task->assignees()->where('users.id', $user->id)->exists();
-        $isCurrentOwner = $task->current_owner && (int) $task->current_owner === (int) $user->id;
-        $isAssigner = (int) $task->assigned_by === (int) $user->id || (int) ($task->creator_id ?? 0) === (int) $user->id;
+        $userId = (int) $user->id;
+        $isAssignee = $this->isTaskAssignee($user, $task);
+        $isCurrentOwner = $task->current_owner && (int) $task->current_owner === $userId;
+        $isAssigner = (int) $task->assigned_by === $userId || (int) ($task->creator_id ?? 0) === $userId;
 
         return $isAssignee || $isCurrentOwner || $isAssigner;
     }
@@ -288,11 +359,16 @@ class TaskPolicy
      */
     public function assignerPause(User $user, Task $task): bool
     {
-        if (in_array($user->role, ['admin', 'super_admin'])) {
+        if (! $this->belongsToSameTenant($user, $task)) {
+            return false;
+        }
+
+        if (in_array($user->role, ['admin', 'manager', 'super_admin'])) {
             return true;
         }
 
-        return (int) $task->assigned_by === (int) $user->id;
+        $userId = (int) $user->id;
+        return (int) $task->assigned_by === $userId || (int) ($task->creator_id ?? 0) === $userId;
     }
 
     /**
@@ -312,10 +388,16 @@ class TaskPolicy
             return false;
         }
 
-        $isAssignee = (int) $task->assigned_to === (int) $user->id || $task->assignees()->where('users.id', $user->id)->exists();
-        $isCurrentOwner = $task->current_owner && (int) $task->current_owner === (int) $user->id;
+        if (in_array($user->role, ['admin', 'manager', 'super_admin'])) {
+            return true;
+        }
 
-        return $isAssignee || $isCurrentOwner;
+        $userId = (int) $user->id;
+        $isAssignee = $this->isTaskAssignee($user, $task);
+        $isCurrentOwner = $task->current_owner && (int) $task->current_owner === $userId;
+        $isAssigner = (int) $task->assigned_by === $userId || (int) ($task->creator_id ?? 0) === $userId;
+
+        return $isAssignee || $isCurrentOwner || $isAssigner;
     }
 
     /**
@@ -331,17 +413,36 @@ class TaskPolicy
      */
     public function approve(User $user, Task $task): bool
     {
-        if (in_array($user->role, ['admin', 'super_admin'])) {
+        if (! $this->belongsToSameTenant($user, $task)) {
+            return false;
+        }
+
+        if (in_array($user->role, ['admin', 'manager', 'super_admin'])) {
             return true;
         }
 
+        $userId = (int) $user->id;
+        $creatorId = (int) ($task->creator_id ?: $task->assigned_by);
+        $nextApprover = $this->delegationService?->getNextApprover($task);
+
+        // If in awaiting_checkpoint stage or next approver is a transferor
+        if ($task->submission_stage === 'awaiting_checkpoint' || ($nextApprover && (int) $nextApprover !== $creatorId)) {
+            $checkpointReviewer = (int) ($task->current_reviewer_id ?: $nextApprover ?: 0);
+            return $checkpointReviewer === $userId;
+        }
+
+        // If in awaiting_creator stage
+        if ($task->submission_stage === 'awaiting_creator') {
+            return $creatorId === $userId;
+        }
+
         // Active routing reviewer
-        if ((int) ($task->current_reviewer_id ?? 0) === (int) $user->id) {
+        if ((int) ($task->current_reviewer_id ?? 0) === $userId) {
             return true;
         }
 
         // Assigner / Creator
-        return (int) $task->assigned_by === (int) $user->id || (int) ($task->creator_id ?? 0) === (int) $user->id;
+        return $creatorId === $userId;
     }
 
     /**
@@ -369,7 +470,7 @@ class TaskPolicy
             return false;
         }
 
-        $isAssignee = (int) $task->assigned_to === (int) $user->id || $task->assignees()->where('users.id', $user->id)->exists();
+        $isAssignee = $this->isTaskAssignee($user, $task);
         $isCurrentOwner = $task->current_owner && (int) $task->current_owner === (int) $user->id;
 
         return ($isAssignee || $isCurrentOwner) && $task->allow_transfer !== false;
@@ -432,7 +533,7 @@ class TaskPolicy
      */
     public function requestAbandon(User $user, Task $task): bool
     {
-        $isAssignee = (int) $task->assigned_to === (int) $user->id || $task->assignees()->where('users.id', $user->id)->exists();
+        $isAssignee = $this->isTaskAssignee($user, $task);
         $isCurrentOwner = $task->current_owner && (int) $task->current_owner === (int) $user->id;
 
         return $isAssignee || $isCurrentOwner;
@@ -459,11 +560,18 @@ class TaskPolicy
      */
     public function completeTask(User $user, Task $task): bool
     {
-        if (in_array($user->role, ['admin', 'super_admin'])) {
+        if (! $this->belongsToSameTenant($user, $task)) {
+            return false;
+        }
+
+        if (in_array($user->role, ['admin', 'manager', 'super_admin'])) {
             return true;
         }
 
-        return (int) $task->assigned_by === (int) $user->id;
+        $userId = (int) $user->id;
+        $creatorId = (int) ($task->creator_id ?: $task->assigned_by);
+
+        return $creatorId === $userId || (int) $task->assigned_by === $userId || (int) ($task->original_assigner ?? 0) === $userId;
     }
 
     /**
@@ -475,10 +583,13 @@ class TaskPolicy
             return false;
         }
 
-        if (in_array($user->role, ['admin', 'super_admin'])) {
+        if (in_array($user->role, ['admin', 'manager', 'super_admin'])) {
             return true;
         }
 
-        return (int) $task->assigned_by === (int) $user->id;
+        $userId = (int) $user->id;
+        $creatorId = (int) ($task->creator_id ?: $task->assigned_by);
+
+        return $creatorId === $userId || (int) $task->assigned_by === $userId || (int) ($task->original_assigner ?? 0) === $userId;
     }
 }

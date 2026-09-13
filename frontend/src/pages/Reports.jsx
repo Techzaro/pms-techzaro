@@ -18,7 +18,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { IoSearchOutline } from "react-icons/io5";
 import CompanyEmployeeReport from "./CompanyEmployeeReport";
 import TeamExportReport from "./TeamExportReport";
-import { getUser, rolePath } from "../utils/auth";
+import { getUser, getCurrentRole, rolePath } from "../utils/auth";
 import { useApiQuery } from "../hooks/useApi";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
@@ -142,7 +142,7 @@ function Reports() {
   const period = timeFilter || "all";
   const queryClient = useQueryClient();
   const stored = getUser();
-  const currentRole = stored?.role || "member";
+  const currentRole = getCurrentRole() || stored?.role || "";
   const isAdminOrManager = currentRole === "admin" || currentRole === "manager";
   const isTeamLead = currentRole === "team_lead" || currentRole === "teamlead";
 

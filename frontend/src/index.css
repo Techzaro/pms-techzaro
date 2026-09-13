@@ -18,7 +18,7 @@
   --bg-badge-yellow: #fffbeb;
   --bg-badge-green: #ecfdf5;
   --bg-badge-red: #fef2f2;
-  --bg-modal-overlay: rgba(15, 23, 42, 0.45);
+  --bg-modal-overlay: rgba(15, 23, 42, 0.6);
   --text-primary: #111827;
   --text-secondary: #6b7280;
   --text-muted: #9ca3af;
@@ -86,7 +86,7 @@ html.dark {
   --bg-badge-yellow: #422006;
   --bg-badge-green: #14532d;
   --bg-badge-red: #450a0a;
-  --bg-modal-overlay: rgba(0, 0, 0, 0.6);
+  --bg-modal-overlay: rgba(0, 0, 0, 0.7);
   --text-primary: #f1f5f9;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
@@ -353,5 +353,70 @@ input, button, select, textarea {
   .hover-popup {
     display: none !important;
   }
+}
+
+/* ==========================================================================
+   UNIVERSAL MODAL OVERLAYS & PORTAL STYLING
+   Enforces fixed full-viewport coverage, backdrop blur, and high z-index
+   above Header (1000) and Sidebar (900/10005) across all portal modals.
+   ========================================================================== */
+.modal-overlay,
+.task-overlay,
+.cp-overlay,
+.confirm-modal-overlay,
+.cm-overlay,
+.cd-overlay,
+.dgd-overlay,
+.ddm-overlay,
+.abm-overlay,
+.anm-overlay,
+.avm-overlay,
+.ald-overlay,
+.ael-overlay,
+.fb-modal-overlay,
+.share-modal-overlay,
+.profile-overlay,
+.user-modal-overlay,
+.er-overlay,
+.add-note-overlay,
+.assigner-view-overlay,
+.audit-log-modal-overlay,
+.draft-detail-overlay,
+.mtc-overlay,
+.sd-overlay,
+.sdvm-overlay,
+.vd-overlay,
+.rcm-overlay,
+.event-overlay,
+.rd-overlay,
+.tt-overlay,
+.mt-modal-overlay,
+.pd-edit-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background: var(--bg-modal-overlay, rgba(15, 23, 42, 0.6)) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+  z-index: 99999 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-sizing: border-box !important;
+}
+
+/* Nested Alert / Confirmation Dialog Overlays */
+.confirm-modal-overlay,
+.cm-overlay,
+.cd-overlay,
+.dgd-overlay,
+.rcm-overlay,
+.confirmation-dialog-overlay {
+  z-index: 100000 !important;
 }
 

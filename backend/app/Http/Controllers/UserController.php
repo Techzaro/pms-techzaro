@@ -70,6 +70,9 @@ class UserController extends Controller
         $role = $request->query('role');
         $status = $request->query('status');
         $search = $request->query('search');
+        $days = $request->query('days') ?? $request->query('time_filter');
+        $startDate = $request->query('start_date') ?? $request->query('date_from');
+        $endDate = $request->query('end_date') ?? $request->query('date_to');
 
         $selectColumns = [
             'id', 'name', 'avatar', 'email', 'role', 'active',
@@ -112,7 +115,13 @@ class UserController extends Controller
             });
         }
 
-        $users = $query->orderBy('sort_order')->latest('updated_at')->get();
+        if ($startDate || $endDate) {
+            $query->filterByDateRange($startDate, $endDate);
+        } elseif ($days) {
+            $query->filterByDays($days);
+        }
+
+        $users = $query->with('projects:id,title,business_id')->orderBy('sort_order')->latest('updated_at')->get();
 
         return response()->json([
             'success' => true,
@@ -129,6 +138,8 @@ class UserController extends Controller
      */
     public function show(User $user)
     {
+        $user->load('projects:id,title,business_id');
+
         return response()->json([
             'success' => true,
             'user' => $user,
@@ -148,7 +159,53 @@ class UserController extends Controller
     {
         $this->normalizeEmptyStrings($request);
 
-        $isDraft = strtolower($request->input('status', '')) === 'draft' || $request->boolean('is_draft');
+        $isDraft = $request->boolean('is_draft')
+            || $request->input('is_draft') === 'true'
+            || $request->input('is_draft') === '1'
+            || $request->input('is_draft') === 1
+            || strtolower($request->input('status', '')) === 'draft';
+
+        if ($isDraft) {
+            $title = $request->input('name') ?: ($request->input('personal_email') ?: ($request->input('email') ?: 'Untitled User Draft'));
+            $draftData = $request->except(['employment_contract', 'offer_letter', 'techxaro_regulations', 'other_document', 'avatar']);
+
+            $draftService = app(\App\Services\DraftService::class);
+            $draftId = $request->input('draft_id');
+
+            if ($draftId) {
+                $draft = \App\Models\Draft::find($draftId);
+                if ($draft && $draftService->canUserAccess($draft, $request->user())) {
+                    $draft = $draftService->update($draft, [
+                        'title' => $title,
+                        'draft_data' => $draftData,
+                        'status' => 'draft',
+                    ], $request->user());
+
+                    return response()->json([
+                        'success' => true,
+                        'is_draft' => true,
+                        'message' => 'Draft updated successfully',
+                        'draft' => $draft,
+                        'data' => $draft,
+                    ], 200);
+                }
+            }
+
+            $draft = $draftService->create([
+                'module_type' => 'user',
+                'title' => $title,
+                'draft_data' => $draftData,
+                'status' => 'draft',
+            ], $request->user());
+
+            return response()->json([
+                'success' => true,
+                'is_draft' => true,
+                'message' => 'Draft saved successfully',
+                'draft' => $draft,
+                'data' => $draft,
+            ], 201);
+        }
 
         try {
             // Per-user email mode: single or two_emails
@@ -407,10 +464,15 @@ class UserController extends Controller
         // Attach user to selected projects immediately upon creation
         $projectIds = $request->input('project_ids', $request->input('projects', []));
         if (is_string($projectIds)) {
-            $projectIds = json_decode($projectIds, true) ?: explode(',', $projectIds);
+            $projectIds = json_decode($projectIds, true) ?: array_filter(explode(',', $projectIds));
         }
         if (! empty($projectIds) && is_array($projectIds)) {
             $projectIds = array_values(array_filter(array_map('intval', $projectIds)));
+            try {
+                $user->projects()->sync($projectIds);
+            } catch (\Throwable $e) {
+                Log::warning('Failed to sync projects pivot on create', ['user_id' => $user->id, 'error' => $e->getMessage()]);
+            }
             $projects = Project::whereIn('id', $projectIds)->get();
             foreach ($projects as $proj) {
                 $assignedUsers = (array) ($proj->assigned_users ?? []);
@@ -561,6 +623,55 @@ class UserController extends Controller
     {
         $this->normalizeEmptyStrings($request);
 
+        $isDraft = $request->boolean('is_draft')
+            || $request->input('is_draft') === 'true'
+            || $request->input('is_draft') === '1'
+            || $request->input('is_draft') === 1
+            || strtolower($request->input('status', '')) === 'draft';
+
+        if ($isDraft) {
+            $title = $request->input('name') ?: ($request->input('personal_email') ?: ($user->name ?: 'User Draft'));
+            $draftData = $request->except(['employment_contract', 'offer_letter', 'techxaro_regulations', 'other_document', 'avatar']);
+
+            $draftService = app(\App\Services\DraftService::class);
+            $draftId = $request->input('draft_id');
+
+            if ($draftId) {
+                $draft = \App\Models\Draft::find($draftId);
+                if ($draft && $draftService->canUserAccess($draft, $request->user())) {
+                    $draft = $draftService->update($draft, [
+                        'title' => $title,
+                        'draft_data' => $draftData,
+                        'status' => 'draft',
+                    ], $request->user());
+
+                    return response()->json([
+                        'success' => true,
+                        'is_draft' => true,
+                        'message' => 'Draft updated successfully',
+                        'draft' => $draft,
+                        'data' => $draft,
+                    ], 200);
+                }
+            }
+
+            $draft = $draftService->create([
+                'module_type' => 'user',
+                'original_record_id' => $user->id,
+                'title' => $title,
+                'draft_data' => $draftData,
+                'status' => 'draft',
+            ], $request->user());
+
+            return response()->json([
+                'success' => true,
+                'is_draft' => true,
+                'message' => 'Draft saved successfully',
+                'draft' => $draft,
+                'data' => $draft,
+            ], 201);
+        }
+
         $request->validate([
             'name' => 'sometimes|required|string|max:255',
             'email' => ['sometimes', 'required', 'string', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
@@ -604,6 +715,8 @@ class UserController extends Controller
             'existing_other_docs' => 'nullable|string',
             'avatar' => 'nullable|image|mimes:jpeg,jpg,png,webp|max:5120',
             'avatar_remove' => 'nullable|in:1',
+            'project_ids' => 'nullable|array',
+            'project_ids.*' => 'integer|exists:projects,id',
         ]);
 
         // Validate email_mode specific requirements on update
@@ -905,6 +1018,20 @@ class UserController extends Controller
                 $user->name,
                 ['message' => "You updated the profile of {$user->name}."]
             );
+        }
+
+        // Sync projects if provided in request
+        if ($request->has('project_ids') || $request->has('projects')) {
+            $rawProjects = $request->input('project_ids', $request->input('projects', []));
+            if (is_string($rawProjects)) {
+                $rawProjects = json_decode($rawProjects, true) ?: array_filter(explode(',', $rawProjects));
+            }
+            $projectIds = array_values(array_filter(array_map('intval', (array) $rawProjects)));
+            try {
+                $user->projects()->sync($projectIds);
+            } catch (\Throwable $e) {
+                Log::warning('Failed to sync projects pivot on update', ['user_id' => $user->id, 'error' => $e->getMessage()]);
+            }
         }
 
         // Handle file uploads

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { CreditCard, Check, X, Users, FolderKanban, HardDrive, Calendar, Clock, Shield, Zap, Star, ArrowUpCircle, ArrowDownCircle, RotateCcw, Play, Pause, Ban, CheckCircle, TrendingUp, Loader2, ChevronDown } from 'lucide-react';
 import { api } from './api/superAdminApi';
@@ -334,8 +335,8 @@ function LimitCard({ icon, label, value, suffix = '', color }) {
 
 function PlanChangeModal({ plans, selectedPlanId, setSelectedPlanId, selectedBilling, setSelectedBilling, onChange, changing, onClose, currentPlanId }) {
   const { t } = useTranslation();
-  return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)' }}>
+  return createPortal(
+    <div style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}>
       <div style={{ background: 'var(--bg-card)', borderRadius: 20, width: '100%', maxWidth: 520, maxHeight: '80vh', overflow: 'auto', margin: 16 }}>
         <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-heading)', margin: 0 }}>{t('Change Plan', { defaultValue: 'Change Plan' })}</h3>
@@ -388,6 +389,7 @@ function PlanChangeModal({ plans, selectedPlanId, setSelectedPlanId, selectedBil
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

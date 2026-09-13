@@ -4,6 +4,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { IoEyeOutline } from "react-icons/io5";
@@ -30,6 +31,8 @@ import {
   Pencil,
   Play,
   Plus,
+  RotateCcw,
+  AlertOctagon,
   Shield,
   Share2,
   StickyNote,
@@ -64,7 +67,11 @@ import AddNoteModal from "../components/AddNoteModal";
 import ShareResourceModal from "../components/ShareResourceModal";
 import EditTaskModal from "../components/EditTaskModal";
 import PauseReasonModal from "../components/PauseReasonModal";
+import TaskReopenDialog from "../components/TaskReopenDialog";
+import AbandonModal from "../components/AbandonModal";
+import MarkTaskCompletedModal from "../components/MarkTaskCompletedModal";
 import ActionPopover from "../components/ActionPopover";
+import Pagination from "../components/Pagination";
 import UnifiedActivityFeed from "../components/UnifiedActivityFeed";
 import ProjectMembersModal from "../components/ProjectMembersModal";
 import "../components/ActionPopover.css";
@@ -81,7 +88,7 @@ import "./ProjectDetails.css";
 import "./TaskDetails.css";
 import "./Deliveries.css";
 
-import { authToken, rolePath, getUser } from "../utils/auth";
+import { authToken, rolePath, getUser, getCurrentRole } from "../utils/auth";
 import API_URL from "../config/api";
 import { publish } from "../utils/eventBus";
 import { parseUtcToEpochMs } from "../utils/formatDateTime";
@@ -202,10 +209,11 @@ function sanitizeHtml(html) {
   return String(html || "").replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
 }
 
-function CredentialRow({ credential, onDelete, onEdit, isGuest, isShared }) {
+function CredentialRow({ credential, onDelete, onEdit, isGuest, isShared, currentUserRole }) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const [copiedUser, setCopiedUser] = useState(false);
+  const role = currentUserRole || getCurrentRole() || getUser()?.role || "";
 
   const copyPassword = async () => {
     try {
@@ -263,7 +271,7 @@ function CredentialRow({ credential, onDelete, onEdit, isGuest, isShared }) {
           )}
         </div>
         <div className="pd-cred-actions">
-          {!isGuest && !isShared && (
+          {!isGuest && !isShared && (role === "admin" || role === "manager") && (
             <>
               <button className="pd-cred-edit" onClick={() => onEdit?.(credential)} title={t("Edit credential", { defaultValue: "Edit credential" })}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
@@ -318,6 +326,10 @@ function ProjectDetails() {
   const { projectId } = useParams();
   const navigate = useNavigate();
   const notify = useNotification();
+
+  const isShared = Boolean(projectId && String(projectId).startsWith('shared_'));
+  const sharedResourceId = isShared ? String(projectId).replace('shared_', '') : null;
+
   const [projectIds, setProjectIds] = useState(() => {
     try { return JSON.parse(sessionStorage.getItem('projectIds') || '[]'); } catch { return []; }
   });
@@ -351,10 +363,21 @@ function ProjectDetails() {
   const [editingTask, setEditingTask] = useState(null);
   const [pauseModalOpen, setPauseModalOpen] = useState(false);
   const [pauseModalTaskId, setPauseModalTaskId] = useState(null);
+  const [pauseModalIsAssigner, setPauseModalIsAssigner] = useState(false);
+  const [resumeModalOpen, setResumeModalOpen] = useState(false);
+  const [resumeModalTask, setResumeModalTask] = useState(null);
+  const [acknowledgeModalOpen, setAcknowledgeModalOpen] = useState(false);
+  const [acknowledgeModalTask, setAcknowledgeModalTask] = useState(null);
   const [holdingTaskId, setHoldingTaskId] = useState(null);
   const [resumingTaskId, setResumingTaskId] = useState(null);
+  const [reopenTask, setReopenTask] = useState(null);
+  const [abandonTask, setAbandonTask] = useState(null);
+  const [markCompletedTask, setMarkCompletedTask] = useState(null);
+  const [abandoning, setAbandoning] = useState(false);
   const [fileSearch, setFileSearch] = useState("");
   const [taskSearch, setTaskSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [subtaskSearch, setSubtaskSearch] = useState("");
   const [memberSearch, setMemberSearch] = useState("");
   const [viewAccessSearch, setViewAccessSearch] = useState("");
@@ -367,6 +390,14 @@ function ProjectDetails() {
   const [loadingProjectEvents, setLoadingProjectEvents] = useState(false);
   const [eventSearch, setEventSearch] = useState("");
   const [eventsList, setEventsList] = useState([]);
+  const [showLinkKbModal, setShowLinkKbModal] = useState(false);
+  const [showLinkEventModal, setShowLinkEventModal] = useState(false);
+  const [selectedKbToLink, setSelectedKbToLink] = useState("");
+  const [selectedEventToLink, setSelectedEventToLink] = useState("");
+  const [linkingKb, setLinkingKb] = useState(false);
+  const [linkingEvent, setLinkingEvent] = useState(false);
+  const [linkKbSearch, setLinkKbSearch] = useState("");
+  const [linkEventSearch, setLinkEventSearch] = useState("");
   const [editFileItem, setEditFileItem] = useState(null);
   const [editFileName, setEditFileName] = useState("");
   const [editFileUrl, setEditFileUrl] = useState("");
@@ -377,6 +408,14 @@ function ProjectDetails() {
   const [showAddFileModal, setShowAddFileModal] = useState(false);
   const [orderedTasks, setOrderedTasks] = useState([]);
   const [orderedSubtasks, setOrderedSubtasks] = useState([]);
+  const [unlinkKbConfirmOpen, setUnlinkKbConfirmOpen] = useState(false);
+  const [unlinkKbId, setUnlinkKbId] = useState(null);
+  const [unlinkEventConfirmOpen, setUnlinkEventConfirmOpen] = useState(false);
+  const [unlinkEventId, setUnlinkEventId] = useState(null);
+  const [approveTaskConfirmOpen, setApproveTaskConfirmOpen] = useState(false);
+  const [approveTaskId, setApproveTaskId] = useState(null);
+  const [declineTaskConfirmOpen, setDeclineTaskConfirmOpen] = useState(false);
+  const [declineTaskItem, setDeclineTaskItem] = useState(null);
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [visibilityUsers, setVisibilityUsers] = useState([]);
   const [visibilitySelected, setVisibilitySelected] = useState({});
@@ -417,6 +456,10 @@ function ProjectDetails() {
   }, [project?.tasks]);
 
   useEffect(() => {
+    setPage(1);
+  }, [taskSearch]);
+
+  useEffect(() => {
     setOrderedSubtasks(project?.deliverables || []);
   }, [project?.deliverables]);
 
@@ -445,33 +488,36 @@ function ProjectDetails() {
         .then((r) => r.json())
         .then((d) => {
           const list = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
-          const directKbId = project?.kb_id || project?.knowledge_base?.id || project?.knowledgeBase?.id;
+          const directKbIds = [
+            ...(Array.isArray(project?.kb_ids) ? project.kb_ids : (project?.kb_id ? [project.kb_id] : [])),
+            ...(Array.isArray(project?.knowledge_bases) ? project.knowledge_bases.map((k) => k?.id) : (project?.knowledge_base?.id ? [project.knowledge_base.id] : [])),
+          ].filter(Boolean).map(String);
+
           const taskKbIds = Array.isArray(project?.tasks)
-            ? project.tasks.map((t) => t.kb_id).filter(Boolean)
+            ? project.tasks.flatMap((t) => Array.isArray(t?.kb_ids) ? t.kb_ids : (t?.kb_id ? [t.kb_id] : [])).filter(Boolean).map(String)
             : [];
 
           let filtered = list.filter((a) =>
             String(a.project_id) === String(pId) ||
-            (directKbId && String(a.id) === String(directKbId)) ||
-            taskKbIds.map(String).includes(String(a.id))
+            directKbIds.includes(String(a.id)) ||
+            taskKbIds.includes(String(a.id))
           );
 
-          const linkedKbObj = project?.knowledge_base || project?.knowledgeBase;
-          if (linkedKbObj && linkedKbObj.id && !filtered.some((a) => String(a.id) === String(linkedKbObj.id))) {
-            filtered.unshift({
-              ...linkedKbObj,
-              isDirectLinked: true,
-            });
-          } else if (directKbId) {
-            filtered = filtered.map((a) => String(a.id) === String(directKbId) ? { ...a, isDirectLinked: true } : a);
-          }
+          const loadedKbs = Array.isArray(project?.knowledge_bases) ? project.knowledge_bases : (project?.knowledge_base ? [project.knowledge_base] : []);
+          loadedKbs.forEach((kObj) => {
+            if (kObj?.id && !filtered.some((a) => String(a.id) === String(kObj.id))) {
+              filtered.unshift({ ...kObj, isDirectLinked: true });
+            }
+          });
+
+          filtered = filtered.map((a) => directKbIds.includes(String(a.id)) ? { ...a, isDirectLinked: true } : a);
 
           setProjectKbArticles(filtered);
         })
         .catch((err) => console.error("Error fetching project KB", err))
         .finally(() => setLoadingKb(false));
     }
-  }, [tab, project?.id, project?.kb_id, project?.knowledge_base, project?.knowledgeBase, project?.tasks, projectId]);
+  }, [tab, project?.id, project?.kb_id, project?.kb_ids, project?.knowledge_base, project?.knowledge_bases, project?.tasks, projectId, isShared, project?.projectKbArticles]);
 
   useEffect(() => {
     if (tab === "events" && (project?.id || projectId)) {
@@ -492,34 +538,37 @@ function ProjectDetails() {
         .then((r) => r.json())
         .then((d) => {
           const list = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
-          const directEventId = project?.event_id || project?.event?.id;
+          const directEventIds = [
+            ...(Array.isArray(project?.event_ids) ? project.event_ids : (project?.event_id ? [project.event_id] : [])),
+            ...(Array.isArray(project?.events) ? project.events.map((e) => e?.id) : (project?.event?.id ? [project.event.id] : [])),
+          ].filter(Boolean).map(String);
+
           const taskEventIds = Array.isArray(project?.tasks)
-            ? project.tasks.map((t) => t.event_id).filter(Boolean)
+            ? project.tasks.flatMap((t) => Array.isArray(t?.event_ids) ? t.event_ids : (t?.event_id ? [t.event_id] : [])).filter(Boolean).map(String)
             : [];
 
           let filtered = list.filter((e) =>
             String(e.project_id) === String(pId) ||
             (e.visibility_level === "project_team" && String(e.project_id) === String(pId)) ||
-            (directEventId && String(e.id) === String(directEventId)) ||
-            taskEventIds.map(String).includes(String(e.id))
+            directEventIds.includes(String(e.id)) ||
+            taskEventIds.includes(String(e.id))
           );
 
-          const linkedEventObj = project?.event;
-          if (linkedEventObj && linkedEventObj.id && !filtered.some((e) => String(e.id) === String(linkedEventObj.id))) {
-            filtered.unshift({
-              ...linkedEventObj,
-              isDirectLinked: true,
-            });
-          } else if (directEventId) {
-            filtered = filtered.map((e) => String(e.id) === String(directEventId) ? { ...e, isDirectLinked: true } : e);
-          }
+          const loadedEvents = Array.isArray(project?.events) ? project.events : (project?.event ? [project.event] : []);
+          loadedEvents.forEach((eObj) => {
+            if (eObj?.id && !filtered.some((e) => String(e.id) === String(eObj.id))) {
+              filtered.unshift({ ...eObj, isDirectLinked: true });
+            }
+          });
+
+          filtered = filtered.map((e) => directEventIds.includes(String(e.id)) ? { ...e, isDirectLinked: true } : e);
 
           setProjectEvents(filtered);
         })
         .catch((err) => console.error("Error fetching project events", err))
         .finally(() => setLoadingProjectEvents(false));
     }
-  }, [tab, project?.id, project?.event_id, project?.event, project?.tasks, projectId]);
+  }, [tab, project?.id, project?.event_id, project?.event_ids, project?.event, project?.events, project?.tasks, projectId, isShared, project?.projectEvents]);
 
   // KB and Events are fetched lazily when their tabs are opened (see tab useEffects above)
   // Removed redundant mount fetch to improve initial page load time
@@ -656,9 +705,6 @@ function ProjectDetails() {
   const notifyRef = useRef(notify);
   notifyRef.current = notify;
   const loadErrorRef = useRef(false);
-
-  const isShared = projectId && String(projectId).startsWith('shared_');
-  const sharedResourceId = isShared ? String(projectId).replace('shared_', '') : null;
 
   const loadProject = useCallback(async () => {
     const token = authToken();
@@ -863,17 +909,18 @@ function ProjectDetails() {
       e.stopPropagation();
       e.preventDefault();
     }
+    const realTaskId = typeof e === "number" || typeof e === "string" ? e : taskId;
     try {
       const token = authToken();
-      const res = await fetch(`${API}/tasks/${taskId}/acknowledge`, {
+      const res = await fetch(`${API}/tasks/${realTaskId}/acknowledge`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         _notifHandled: true,
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "in_progress", ...(data.task || {}) } : t));
-        publish('task:updated', { id: taskId, status: 'in_progress' });
+        setOrderedTasks((prev) => prev.map((t) => t.id === realTaskId ? { ...t, status: "in_progress", ...(data.task || {}) } : t));
+        publish('task:updated', { id: realTaskId, status: 'in_progress' });
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage("Task", "acknowledged");
       } else {
@@ -889,17 +936,18 @@ function ProjectDetails() {
       e.stopPropagation();
       e.preventDefault();
     }
+    const realTaskId = typeof e === "number" || typeof e === "string" ? e : taskId;
     try {
       const token = authToken();
-      const res = await fetch(`${API}/tasks/${taskId}/start-timer`, {
+      const res = await fetch(`${API}/tasks/${realTaskId}/start-timer`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         _notifHandled: true,
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "in_progress", ...(data.task || {}) } : t));
-        publish('task:updated', { id: taskId, status: 'in_progress' });
+        setOrderedTasks((prev) => prev.map((t) => t.id === realTaskId ? { ...t, status: "in_progress", ...(data.task || {}) } : t));
+        publish('task:updated', { id: realTaskId, status: 'in_progress' });
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage("Task", "timer started");
       } else {
@@ -915,17 +963,19 @@ function ProjectDetails() {
       e.stopPropagation();
       e.preventDefault();
     }
+    const realTaskId = typeof e === "number" || typeof e === "string" ? e : taskId;
+    setResumingTaskId(realTaskId);
     try {
       const token = authToken();
-      const res = await fetch(`${API}/tasks/${taskId}/continue`, {
+      const res = await fetch(`${API}/tasks/${realTaskId}/continue`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         _notifHandled: true,
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "in_progress", ...(data.task || {}) } : t));
-        publish('task:updated', { id: taskId, status: 'in_progress' });
+        setOrderedTasks((prev) => prev.map((t) => t.id === realTaskId ? { ...t, status: "in_progress", ...(data.task || {}) } : t));
+        publish('task:updated', { id: realTaskId, status: 'in_progress' });
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage("Task", "resumed");
       } else {
@@ -933,26 +983,30 @@ function ProjectDetails() {
       }
     } catch {
       notify.error(t("Failed to continue task.", { defaultValue: "Failed to continue task." }));
+    } finally {
+      setResumingTaskId(null);
     }
   };
 
-  const handleTaskPause = async (e, taskId) => {
+  const handleTaskPause = async (e, taskId, reasonData = {}) => {
     if (e && e.stopPropagation) {
       e.stopPropagation();
       e.preventDefault();
     }
+    const realTaskId = typeof e === "number" || typeof e === "string" ? e : taskId;
+    const realReason = typeof e === "object" && !e?.stopPropagation ? e : reasonData;
     try {
       const token = authToken();
-      const res = await fetch(`${API}/tasks/${taskId}/pause`, {
+      const res = await fetch(`${API}/tasks/${realTaskId}/pause`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ reason: "other", reason_detail: "Paused from task list" }),
+        body: JSON.stringify({ reason: realReason?.reason || "other", reason_detail: realReason?.reason_detail || "Paused from task list" }),
         _notifHandled: true,
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "paused", ...(data.task || {}) } : t));
-        publish('task:updated', { id: taskId, status: 'paused' });
+        setOrderedTasks((prev) => prev.map((t) => t.id === realTaskId ? { ...t, status: "paused", ...(data.task || {}) } : t));
+        publish('task:updated', { id: realTaskId, status: 'paused' });
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage("Task", "paused");
       } else {
@@ -982,8 +1036,9 @@ function ProjectDetails() {
       }
     } catch {
       notify.error(t("Failed to pause task.", { defaultValue: "Failed to pause task." }));
+    } finally {
+      setHoldingTaskId(null);
     }
-    setHoldingTaskId(null);
   };
 
   const handleTaskAssignerResume = async (taskId) => {
@@ -1004,8 +1059,123 @@ function ProjectDetails() {
       }
     } catch {
       notify.error(t("Failed to resume task.", { defaultValue: "Failed to resume task." }));
+    } finally {
+      setResumingTaskId(null);
     }
-    setResumingTaskId(null);
+  };
+
+  const handleProjectTaskDirectApprove = async (e, taskId) => {
+    if (e && e.stopPropagation) { e.stopPropagation(); e.preventDefault(); }
+    try {
+      const token = authToken();
+      const res = await fetch(`${API}/tasks/${taskId}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "approved", ...(data.task || {}) } : t));
+        publish("task:updated", { id: taskId, status: "approved" });
+        publish("data:changed", { type: "task", action: "updated" });
+        showSuccessMessage(t("Task", { defaultValue: "Task" }), t("approved", { defaultValue: "approved" }));
+      } else {
+        notify.error(data.message || t("Failed to approve task.", { defaultValue: "Failed to approve task." }));
+      }
+    } catch {
+      notify.error(t("An error occurred while approving task.", { defaultValue: "An error occurred while approving task." }));
+    }
+  };
+
+  const handleProjectTaskDirectDecline = async (e, task) => {
+    if (e && e.stopPropagation) { e.stopPropagation(); e.preventDefault(); }
+    const taskId = task.id;
+    try {
+      const token = authToken();
+      const res = await fetch(`${API}/tasks/${taskId}/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "rejected", ...(data.task || {}) } : t));
+        publish("task:updated", { id: taskId, status: "rejected" });
+        publish("data:changed", { type: "task", action: "updated" });
+        showSuccessMessage(t("Task", { defaultValue: "Task" }), t("declined", { defaultValue: "declined" }));
+      } else {
+        notify.error(data.message || t("Failed to decline task.", { defaultValue: "Failed to decline task." }));
+      }
+    } catch {
+      notify.error(t("An error occurred while declining task.", { defaultValue: "An error occurred while declining task." }));
+    }
+  };
+
+  const confirmDirectApproveTask = async () => {
+    if (!approveTaskId) return;
+    const id = approveTaskId;
+    setApproveTaskConfirmOpen(false);
+    setApproveTaskId(null);
+    await handleProjectTaskDirectApprove(null, id);
+  };
+
+  const confirmDirectDeclineTask = async () => {
+    if (!declineTaskItem) return;
+    const item = declineTaskItem;
+    setDeclineTaskConfirmOpen(false);
+    setDeclineTaskItem(null);
+    await handleProjectTaskDirectDecline(null, item);
+  };
+
+  const handleProjectTaskDirectAbandonSubmit = async (reason) => {
+    if (!abandonTask) return;
+    setAbandoning(true);
+    const taskId = abandonTask.id;
+    const isUserAdminOrManager = ["admin", "manager"].includes(currentUser?.role);
+    const endpoint = isUserAdminOrManager ? `${API}/tasks/${taskId}/abandon` : `${API}/tasks/${taskId}/request-abandon`;
+    try {
+      const token = authToken();
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        body: JSON.stringify({ reason }),
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "abandoned", ...(data.task || {}) } : t));
+        publish("task:updated", { id: taskId, status: "abandoned" });
+        publish("data:changed", { type: "task", action: "updated" });
+        showSuccessMessage(t("Task", { defaultValue: "Task" }), isUserAdminOrManager ? t("abandoned", { defaultValue: "abandoned" }) : t("abandon requested", { defaultValue: "abandon requested" }));
+        setAbandonTask(null);
+      } else {
+        notify.error(data.message || t("Failed to abandon task.", { defaultValue: "Failed to abandon task." }));
+      }
+    } catch {
+      notify.error(t("Failed to abandon task.", { defaultValue: "Failed to abandon task." }));
+    } finally {
+      setAbandoning(false);
+    }
+  };
+
+  const handleProjectTaskDirectReopenSuccess = (updatedTask) => {
+    if (!updatedTask && !reopenTask) return;
+    const taskId = updatedTask?.id || reopenTask?.id;
+    setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "pending", ...(updatedTask || {}) } : t));
+    publish("task:updated", { id: taskId, status: "pending" });
+    publish("data:changed", { type: "task", action: "updated" });
+    showSuccessMessage(t("Task", { defaultValue: "Task" }), t("reopened", { defaultValue: "reopened" }));
+    setReopenTask(null);
+  };
+
+  const handleProjectTaskDirectCompleteSuccess = (updatedTask) => {
+    if (!updatedTask && !markCompletedTask) return;
+    const taskId = updatedTask?.id || markCompletedTask?.id;
+    setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "completed", ...(updatedTask || {}) } : t));
+    publish("task:updated", { id: taskId, status: "completed" });
+    publish("data:changed", { type: "task", action: "updated" });
+    showSuccessMessage(t("Task", { defaultValue: "Task" }), t("marked as completed", { defaultValue: "marked as completed" }));
+    setMarkCompletedTask(null);
   };
 
   const handleDeleteProject = async () => {
@@ -1051,6 +1221,126 @@ function ProjectDetails() {
 
   const { isDirty: mgrIsDirty, setIsDirty: setMgrIsDirty, handleClose: handleMgrClose, ConfirmDialog:MgrConfirmDialog } = useConfirmOnClose(() => setShowManagerModal(false));
 
+  const handleLinkKb = async (kbId) => {
+    if (!kbId || !project?.id) return;
+    setLinkingKb(true);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/projects/${project.id}/knowledge-bases`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ knowledge_base_id: kbId }),
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showSuccessMessage("Knowledge Base", "linked successfully");
+        setShowLinkKbModal(false);
+        setSelectedKbToLink("");
+        loadProject();
+        publish('project:updated', { id: project.id });
+        publish('data:changed', { type: 'project', action: 'updated' });
+      } else {
+        notify.error(data.message || t("Failed to link Knowledge Base article.", { defaultValue: "Failed to link Knowledge Base article." }));
+      }
+    } catch {
+      notify.error(t("Failed to link Knowledge Base article.", { defaultValue: "Failed to link Knowledge Base article." }));
+    } finally {
+      setLinkingKb(false);
+    }
+  };
+
+  const handleUnlinkKb = async (kbId) => {
+    if (!kbId || !project?.id) return;
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/projects/${project.id}/knowledge-bases/${kbId}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showSuccessMessage("Knowledge Base", "unlinked successfully");
+        loadProject();
+        publish('project:updated', { id: project.id });
+        publish('data:changed', { type: 'project', action: 'updated' });
+      } else {
+        notify.error(data.message || t("Failed to unlink Knowledge Base article.", { defaultValue: "Failed to unlink Knowledge Base article." }));
+      }
+    } catch {
+      notify.error(t("Failed to unlink Knowledge Base article.", { defaultValue: "Failed to unlink Knowledge Base article." }));
+    }
+  };
+
+  const confirmUnlinkKb = async () => {
+    if (!unlinkKbId) return;
+    const id = unlinkKbId;
+    setUnlinkKbConfirmOpen(false);
+    setUnlinkKbId(null);
+    await handleUnlinkKb(id);
+  };
+
+  const handleLinkEvent = async (eventId) => {
+    if (!eventId || !project?.id) return;
+    setLinkingEvent(true);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/projects/${project.id}/events`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ event_id: eventId }),
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showSuccessMessage("Event", "linked successfully");
+        setShowLinkEventModal(false);
+        setSelectedEventToLink("");
+        loadProject();
+        publish('project:updated', { id: project.id });
+        publish('data:changed', { type: 'project', action: 'updated' });
+      } else {
+        notify.error(data.message || t("Failed to link Event.", { defaultValue: "Failed to link Event." }));
+      }
+    } catch {
+      notify.error(t("Failed to link Event.", { defaultValue: "Failed to link Event." }));
+    } finally {
+      setLinkingEvent(false);
+    }
+  };
+
+  const handleUnlinkEvent = async (eventId) => {
+    if (!eventId || !project?.id) return;
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/projects/${project.id}/events/${eventId}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showSuccessMessage("Event", "unlinked successfully");
+        loadProject();
+        publish('project:updated', { id: project.id });
+        publish('data:changed', { type: 'project', action: 'updated' });
+      } else {
+        notify.error(data.message || t("Failed to unlink Event.", { defaultValue: "Failed to unlink Event." }));
+      }
+    } catch {
+      notify.error(t("Failed to unlink Event.", { defaultValue: "Failed to unlink Event." }));
+    }
+  };
+
+  const confirmUnlinkEvent = async () => {
+    if (!unlinkEventId) return;
+    const id = unlinkEventId;
+    setUnlinkEventConfirmOpen(false);
+    setUnlinkEventId(null);
+    await handleUnlinkEvent(id);
+  };
+
   const { submitting: milestoneToggling, run: runMilestoneToggle } = useSubmit();
 
   if (loading) {
@@ -1080,6 +1370,8 @@ function ProjectDetails() {
     const assigneeMatch = (t.assignees || []).some(a => (a.name || "").toLowerCase().includes(q));
     return titleMatch || assigneeMatch;
   }) : tasks;
+  const totalPages = Math.ceil(filteredTasks.length / rowsPerPage) || 1;
+  const paginatedTasks = filteredTasks.slice((page - 1) * rowsPerPage, (page - 1) * rowsPerPage + rowsPerPage);
   const progress = typeof project.progress_percent === "number" ? project.progress_percent : calculateProjectProgress(project.tasks || []);
 
   const subtasksList = orderedSubtasks.length ? orderedSubtasks : (project.deliverables || []);
@@ -1091,6 +1383,7 @@ function ProjectDetails() {
 
   const currentUser = getUser();
   const currentUserId = currentUser?.id;
+  const currentUserRole = getCurrentRole() || currentUser?.role || "";
 
   const getTaskFrom = (task) => {
     if (!currentUserId) return "tasks";
@@ -1465,11 +1758,11 @@ function ProjectDetails() {
               </li>
             )}
             {(() => {
-              const kbIds = Array.isArray(project?.kb_ids)
-                ? project.kb_ids
-                : project?.kb_id
-                ? [project.kb_id]
-                : [];
+              const directKbIds = [
+                ...(Array.isArray(project?.kb_ids) ? project.kb_ids : (project?.kb_id ? [project.kb_id] : [])),
+                ...(Array.isArray(project?.knowledge_bases) ? project.knowledge_bases.map((k) => k?.id) : (project?.knowledge_base?.id ? [project.knowledge_base.id] : [])),
+              ];
+              const kbIds = Array.from(new Set(directKbIds.filter(Boolean).map(String)));
               return (
                 <li>
                   <span className="pd-meta-rows__ic">
@@ -1481,7 +1774,10 @@ function ProjectDetails() {
                       {kbIds && kbIds.length > 0 ? (
                         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                           {kbIds.map((kId) => {
-                            const foundKb = kbArticles.find((k) => String(k.id) === String(kId)) || projectKbArticles.find((k) => String(k.id) === String(kId));
+                            const foundKb =
+                              (Array.isArray(project?.knowledge_bases) ? project.knowledge_bases.find((k) => String(k?.id) === String(kId)) : null) ||
+                              kbArticles.find((k) => String(k?.id) === String(kId)) ||
+                              projectKbArticles.find((k) => String(k?.id) === String(kId));
                             const kbTitle = foundKb?.title || `Article #${kId}`;
                             return (
                               <Link
@@ -1502,11 +1798,11 @@ function ProjectDetails() {
               );
             })()}
             {(() => {
-              const eventIds = Array.isArray(project?.event_ids)
-                ? project.event_ids
-                : project?.event_id
-                ? [project.event_id]
-                : [];
+              const directEventIds = [
+                ...(Array.isArray(project?.event_ids) ? project.event_ids : (project?.event_id ? [project.event_id] : [])),
+                ...(Array.isArray(project?.events) ? project.events.map((e) => e?.id) : (project?.event?.id ? [project.event.id] : [])),
+              ];
+              const eventIds = Array.from(new Set(directEventIds.filter(Boolean).map(String)));
               return (
                 <li>
                   <span className="pd-meta-rows__ic">
@@ -1518,7 +1814,10 @@ function ProjectDetails() {
                       {eventIds && eventIds.length > 0 ? (
                         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                           {eventIds.map((eId) => {
-                            const foundEv = eventsList.find((e) => String(e.id) === String(eId)) || projectEvents.find((e) => String(e.id) === String(eId));
+                            const foundEv =
+                              (Array.isArray(project?.events) ? project.events.find((e) => String(e?.id) === String(eId)) : null) ||
+                              eventsList.find((e) => String(e?.id) === String(eId)) ||
+                              projectEvents.find((e) => String(e?.id) === String(eId));
                             const eventTitle = foundEv?.title || `Event #${eId}`;
                             return (
                               <Link
@@ -1696,7 +1995,6 @@ function ProjectDetails() {
                                 {currentUser?.role !== "guest" && <div>{isShared || isCreator || isAdminOrManager ? t("Assigned To", { defaultValue: "Assigned To" }) : t("Assigned By", { defaultValue: "Assigned By" })}</div>}
                                 <div className="ptt-col-name">{t("Task Name", { defaultValue: "Task Name" })}</div>
                                 <div>{t("Status", { defaultValue: "Status" })}</div>
-                                <div>{t("Progress", { defaultValue: "Progress" })}</div>
                                 <div>{t("Priority", { defaultValue: "Priority" })}</div>
                                 <div>{t("Start & Due Date", { defaultValue: "Start & Due Date" })}</div>
                                 <div>{t("Action", { defaultValue: "Action" })}</div>
@@ -1704,7 +2002,7 @@ function ProjectDetails() {
                               {filteredTasks.length === 0 ? (
                                 <div className="pd-muted pd-table-empty" style={{ padding: "20px", textAlign: "center" }}>{taskSearch ? t("No tasks match your search.", { defaultValue: "No tasks match your search." }) : t("No tasks yet.", { defaultValue: "No tasks yet." })}</div>
                               ) : (
-                                <SortableTableWrapper items={filteredTasks} onReorder={handleTaskReorder} as="div" handleOnly>
+                                <SortableTableWrapper items={paginatedTasks} onReorder={handleTaskReorder} as="div" handleOnly>
                                   {(tItem, idx, dndProps) => {
                                     const statusKey = (tItem.status || "").toLowerCase();
                                       return (
@@ -1715,6 +2013,14 @@ function ProjectDetails() {
                                             <Link to={rolePath(`tasks/task-details/${isShared ? `shared_${tItem.shared_resource_id || tItem.id}` : tItem.id}`)} state={{ from: "project", projectId: project?.id || projectId, projectTitle: project?.title, returnUrl: location.pathname + (location.search || "?tab=tasks") }} className="ptt-task-link">
                                              {tItem.title}
                                            </Link>
+                                           {(() => {
+                                             const subtaskCount = tItem.total_subtasks || tItem.subtasks_count || tItem.subtasks?.length || tItem.total_deliverables || tItem.deliverables?.length || 0;
+                                             return subtaskCount > 0 ? (
+                                               <div className="text-xs text-gray-500 mt-1" style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>
+                                                 subtask ({subtaskCount})
+                                               </div>
+                                             ) : null;
+                                           })()}
                                          </div>
                                         <div>
                                           <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", alignItems: "center" }}>
@@ -1736,25 +2042,6 @@ function ProjectDetails() {
                                             )}
                                           </div>
                                         </div>
-                                        {(() => {
-                                          const isTerminal = ["completed", "approved", "submitted", "submitted_late", "done"].includes((tItem.status || "").toLowerCase());
-                                          const prog = isTerminal ? 100 : (tItem.deliverables_progress || 0);
-                                          return (
-                                            <div>
-                                              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", marginBottom: "4px" }}>
-                                                <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-dark)" }}>
-                                                  {prog}%
-                                                </span>
-                                              </div>
-                                              <div className="progress-bar-track">
-                                                <div className="progress-bar-fill" style={{ width: `${prog}%` }}></div>
-                                              </div>
-                                              <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "4px" }}>
-                                                {t("{{approved}}/{{total}} Del. Approved", { approved: tItem.approved_deliverables || 0, total: tItem.total_deliverables || 0, defaultValue: `${tItem.approved_deliverables || 0}/${tItem.total_deliverables || 0} Del. Approved` })}
-                                              </div>
-                                            </div>
-                                          );
-                                        })()}
                                         <div>
                                           <span className="badge" style={{ background: PRIORITY_COLORS[tItem.priority] || "var(--bg-hover)", color: PRIORITY_TEXT_COLORS[tItem.priority] || "var(--text-dark)" }}>
                                             <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[tItem.priority] || "var(--text-dark)" }}></span>
@@ -1782,7 +2069,7 @@ function ProjectDetails() {
                                                 <StickyNote size={14} />
                                               </button>
                                               {(() => {
-                                                const isAssigner = tItem.assigner?.id && tItem.assigner.id === currentUserId;
+                                                const isAssigner = (tItem.assigner?.id && tItem.assigner.id === currentUserId) || (tItem.created_by && tItem.created_by === currentUserId) || isCreator || isAdminOrManager || ["admin", "manager"].includes(currentUser?.role);
                                                 const isAssignee = (tItem.assignees || []).some((a) => a.id === currentUserId);
 
                                                 if (isAssigner) {
@@ -1824,35 +2111,115 @@ function ProjectDetails() {
                                                       <Trash2 size={16} />
                                                     </button>
                                                   );
-                                                  if (tItem.assigner_paused) {
-                                                    buttons.push(
-                                                      <button
-                                                        key="resume"
-                                                        className="action-icon-btn"
-                                                        title={t("Resume", { defaultValue: "Resume" })}
-                                                        disabled={resumingTaskId === tItem.id}
-                                                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleTaskAssignerResume(tItem.id); }}
-                                                        style={{ color: "#059669", cursor: resumingTaskId === tItem.id ? "not-allowed" : "pointer" }}
-                                                      >
-                                                        <Lock size={16} />
-                                                      </button>
-                                                    );
-                                                  } else if (["pending", "in_progress", "reopened", "paused", "submitted"].includes(tItem.status?.toLowerCase())) {
-                                                    buttons.push(
-                                                      <button
-                                                        key="hold"
-                                                        className="action-icon-btn"
-                                                        title={t("Pause", { defaultValue: "Pause" })}
-                                                        disabled={holdingTaskId === tItem.id}
-                                                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); setPauseModalTaskId(tItem.id); setPauseModalOpen(true); }}
-                                                        style={{ color: "#7C3AED", cursor: holdingTaskId === tItem.id ? "not-allowed" : "pointer" }}
-                                                      >
-                                                        <Lock size={16} />
-                                                      </button>
-                                                    );
-                                                  }
-                                                  return buttons;
-                                                }
+                                                   const isTaskPaused = tItem.assigner_paused || tItem.status?.toLowerCase() === "paused" || tItem.timer?.state === "paused";
+                                                   if (isTaskPaused) {
+                                                     buttons.push(
+                                                       <button
+                                                         key="resume"
+                                                         className="action-icon-btn"
+                                                         title={t("Resume", { defaultValue: "Resume" })}
+                                                         disabled={resumingTaskId === tItem.id}
+                                                         onClick={(e) => {
+                                                           e.stopPropagation();
+                                                           e.preventDefault();
+                                                           setResumeModalTask(tItem);
+                                                           setResumeModalOpen(true);
+                                                         }}
+                                                         style={{ color: "#059669", cursor: resumingTaskId === tItem.id ? "not-allowed" : "pointer" }}
+                                                       >
+                                                         <Play size={16} />
+                                                       </button>
+                                                     );
+                                                   } else if (["pending", "in_progress", "reopened", "submitted", "in-progress"].includes(tItem.status?.toLowerCase())) {
+                                                     buttons.push(
+                                                       <button
+                                                         key="hold"
+                                                         className="action-icon-btn"
+                                                         title={t("Pause", { defaultValue: "Pause" })}
+                                                         disabled={holdingTaskId === tItem.id}
+                                                         onClick={(e) => {
+                                                           e.stopPropagation();
+                                                           e.preventDefault();
+                                                           setPauseModalTaskId(tItem.id);
+                                                           setPauseModalIsAssigner(true);
+                                                           setPauseModalOpen(true);
+                                                         }}
+                                                         style={{ color: "#7C3AED", cursor: holdingTaskId === tItem.id ? "not-allowed" : "pointer" }}
+                                                       >
+                                                         <Pause size={16} />
+                                                       </button>
+                                                     );
+                                                   }
+                                                   // Approve / Decline for submitted tasks
+                                                   const canApprove = isAssigner || ["admin", "manager"].includes(currentUser?.role) || tItem.is_next_approver;
+                                                   if (canApprove && (tItem.status === "submitted" || tItem.status === "reopened")) {
+                                                     buttons.push(
+                                                       <button
+                                                         key="approve"
+                                                         className="action-icon-btn"
+                                                         title={t("Approve Task", { defaultValue: "Approve Task" })}
+                                                         style={{ color: "#16A34A" }}
+                                                         onClick={(e) => { e.stopPropagation(); e.preventDefault(); setApproveTaskId(tItem.id); setApproveTaskConfirmOpen(true); }}
+                                                       >
+                                                         <CheckCircle2 size={16} />
+                                                       </button>
+                                                     );
+                                                     buttons.push(
+                                                       <button
+                                                         key="decline"
+                                                         className="action-icon-btn"
+                                                         title={t("Decline Task", { defaultValue: "Decline Task" })}
+                                                         style={{ color: "#DC2626" }}
+                                                         onClick={(e) => { e.stopPropagation(); e.preventDefault(); setDeclineTaskItem(tItem); setDeclineTaskConfirmOpen(true); }}
+                                                       >
+                                                         <XCircle size={16} />
+                                                       </button>
+                                                     );
+                                                   }
+                                                   // Reopen
+                                                   if (canApprove && (tItem.status === "approved" || tItem.status === "submitted" || tItem.status === "reopened" || tItem.status === "abandoned")) {
+                                                     buttons.push(
+                                                       <button
+                                                         key="reopen"
+                                                         className="action-icon-btn"
+                                                         title={t("Reopen Task", { defaultValue: "Reopen Task" })}
+                                                         style={{ color: "#2563EB" }}
+                                                         onClick={(e) => { e.stopPropagation(); e.preventDefault(); setReopenTask(tItem); }}
+                                                       >
+                                                         <RotateCcw size={16} />
+                                                       </button>
+                                                     );
+                                                   }
+                                                   // Abandon
+                                                   if (tItem.status !== "abandoned") {
+                                                     buttons.push(
+                                                       <button
+                                                         key="abandon"
+                                                         className="action-icon-btn"
+                                                         title={["admin", "manager"].includes(currentUser?.role) ? t("Abandon Task", { defaultValue: "Abandon Task" }) : t("Request Abandon", { defaultValue: "Request Abandon" })}
+                                                         style={{ color: "#F59E0B" }}
+                                                         onClick={(e) => { e.stopPropagation(); e.preventDefault(); setAbandonTask(tItem); }}
+                                                       >
+                                                         <AlertOctagon size={16} />
+                                                       </button>
+                                                     );
+                                                   }
+                                                   // Mark as Completed
+                                                   if (canApprove && (tItem.status === "pending" || tItem.status === "in-progress" || tItem.status === "in_progress" || tItem.status?.toLowerCase() === "pending" || tItem.status?.toLowerCase() === "in-progress" || tItem.status?.toLowerCase() === "in_progress")) {
+                                                     buttons.push(
+                                                       <button
+                                                         key="complete"
+                                                         className="action-icon-btn"
+                                                         title={t("Mark as Completed", { defaultValue: "Mark as Completed" })}
+                                                         style={{ color: "#7C3AED" }}
+                                                         onClick={(e) => { e.stopPropagation(); e.preventDefault(); setMarkCompletedTask(tItem); }}
+                                                       >
+                                                         <CheckCircle2 size={16} />
+                                                       </button>
+                                                     );
+                                                   }
+                                                   return buttons;
+                                                 }
 
                                                 if (isAssignee) {
                                                   if (tItem.assigner_paused) {
@@ -1863,13 +2230,23 @@ function ProjectDetails() {
                                                       </span>
                                                     );
                                                   }
-                                                  if (tItem.status === "pending") {
-                                                    return (
-                                                      <button className="action-icon-btn action-submit" title={t("Acknowledge", { defaultValue: "Acknowledge" })} onClick={(e) => handleTaskAcknowledge(e, tItem.id)}>
-                                                        <CheckCircle2 size={16} />
-                                                      </button>
-                                                    );
-                                                  }
+                                                   if (tItem.status === "pending") {
+                                                     return (
+                                                       <button
+                                                         className="action-icon-btn action-submit"
+                                                         title={t("Acknowledge", { defaultValue: "Acknowledge" })}
+                                                         onClick={(e) => {
+                                                           e.stopPropagation();
+                                                           e.preventDefault();
+                                                           setAcknowledgeModalTask(tItem);
+                                                           setAcknowledgeModalOpen(true);
+                                                         }}
+                                                         style={{ color: "#2563EB" }}
+                                                       >
+                                                         <CheckCircle2 size={16} />
+                                                       </button>
+                                                     );
+                                                   }
                                                   if (tItem.status === "in_progress" && (!tItem.timer || tItem.timer?.state === "idle" || !tItem.timer?.state)) {
                                                     return (
                                                       <button className="action-icon-btn action-submit" title={t("Start", { defaultValue: "Start" })} onClick={(e) => handleTaskStartTimer(e, tItem.id)} style={{ color: "#2563eb" }}>
@@ -1877,20 +2254,41 @@ function ProjectDetails() {
                                                       </button>
                                                     );
                                                   }
-                                                  if (["in_progress", "submitted"].includes(tItem.status?.toLowerCase()) && tItem.timer?.state === "running" && !tItem.assigner_paused) {
-                                                    return (
-                                                      <button className="action-icon-btn action-submit" title={t("Pause", { defaultValue: "Pause" })} onClick={(e) => handleTaskPause(e, tItem.id)} style={{ color: "#D97706" }}>
-                                                        <Pause size={16} />
-                                                      </button>
-                                                    );
-                                                  }
-                                                  if (tItem.status === "paused" || tItem.timer?.state === "paused") {
-                                                    return (
-                                                      <button className="action-icon-btn action-submit" title={t("Continue", { defaultValue: "Continue" })} onClick={(e) => handleTaskContinue(e, tItem.id)} style={{ color: "#059669" }}>
-                                                        <Play size={16} />
-                                                      </button>
-                                                    );
-                                                  }
+                                                   if (["in_progress", "submitted"].includes(tItem.status?.toLowerCase()) && tItem.timer?.state === "running" && !tItem.assigner_paused) {
+                                                     return (
+                                                       <button
+                                                         className="action-icon-btn action-submit"
+                                                         title={t("Pause", { defaultValue: "Pause" })}
+                                                         onClick={(e) => {
+                                                           e.stopPropagation();
+                                                           e.preventDefault();
+                                                           setPauseModalTaskId(tItem.id);
+                                                           setPauseModalIsAssigner(false);
+                                                           setPauseModalOpen(true);
+                                                         }}
+                                                         style={{ color: "#D97706" }}
+                                                       >
+                                                         <Pause size={16} />
+                                                       </button>
+                                                     );
+                                                   }
+                                                   if (tItem.status === "paused" || tItem.timer?.state === "paused") {
+                                                     return (
+                                                       <button
+                                                         className="action-icon-btn action-submit"
+                                                         title={t("Resume", { defaultValue: "Resume" })}
+                                                         onClick={(e) => {
+                                                           e.stopPropagation();
+                                                           e.preventDefault();
+                                                           setResumeModalTask(tItem);
+                                                           setResumeModalOpen(true);
+                                                         }}
+                                                         style={{ color: "#059669" }}
+                                                       >
+                                                         <Play size={16} />
+                                                       </button>
+                                                     );
+                                                   }
                                                   if ((tItem.status === "in_progress" || tItem.status === "reopened") && tItem.assigner_paused === false) {
                                                     return (
                                                       <button
@@ -1921,6 +2319,19 @@ function ProjectDetails() {
                               )}
                             </div>
                           </div>
+                          {filteredTasks.length > 0 && (
+                            <Pagination
+                              currentPage={page}
+                              totalPages={totalPages}
+                              onPageChange={setPage}
+                              itemsPerPage={rowsPerPage}
+                              onItemsPerPageChange={(val) => {
+                                setRowsPerPage(val);
+                                setPage(1);
+                              }}
+                              itemsPerPageOptions={[10, 25, 50, 100]}
+                            />
+                          )}
                         </section>
                       </div>
                     )}
@@ -2162,7 +2573,7 @@ function ProjectDetails() {
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                               <input type="text" placeholder={t("Search by title, username, or URL...", { defaultValue: "Search by title, username, or URL..." })} value={accessSearch} onChange={(e) => setAccessSearch(e.target.value)} />
                             </div>
-                            {!isShared && isAdminOrManager && !isViewOnlyUser && (
+                            {!isShared && (currentUserRole === 'admin' || currentUserRole === 'manager') && !isViewOnlyUser && (
                               <button type="button" className="pd-btn-tx pd-btn-tx--primary" onClick={() => setShowAddAccessModal(true)} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                                 <Plus size={16} /> {t("Add Access", { defaultValue: "Add Access" })}
                               </button>
@@ -2196,6 +2607,7 @@ function ProjectDetails() {
                                    onEdit={(c) => setEditingCredential(c)}
                                    isGuest={currentUser?.role === "guest"}
                                    isShared={isShared}
+                                   currentUserRole={currentUserRole}
                                  />
                               ))}
                             </div>
@@ -2226,14 +2638,28 @@ function ProjectDetails() {
                                 />
                               </div>
                               {!isShared && (
-                              <button
-                                type="button"
-                                className="pd-btn-tx pd-btn-tx--primary"
-                                onClick={() => navigate(rolePath("knowledge-base/create"), { state: { projectId: project?.id || projectId, projectTitle: project?.title } })}
-                                style={{ display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap" }}
-                              >
-                                <Plus size={16} /> {t("Add Document", { defaultValue: "Add Document" })}
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  className="pd-btn-tx pd-btn-tx--outline"
+                                  onClick={() => {
+                                    setLinkKbSearch("");
+                                    setSelectedKbToLink("");
+                                    setShowLinkKbModal(true);
+                                  }}
+                                  style={{ display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap" }}
+                                >
+                                  <BookOpen size={15} /> {t("Link Document", { defaultValue: "Link Document" })}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="pd-btn-tx pd-btn-tx--primary"
+                                  onClick={() => navigate(rolePath("knowledge-base/create"), { state: { projectId: project?.id || projectId, projectTitle: project?.title } })}
+                                  style={{ display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap" }}
+                                >
+                                  <Plus size={16} /> {t("Add Document", { defaultValue: "Add Document" })}
+                                </button>
+                              </>
                               )}
                             </div>
                           </div>
@@ -2263,13 +2689,26 @@ function ProjectDetails() {
                                     {t("Create and share SOPs, architectural guidelines, or deliverable checklists for this project.", { defaultValue: "Create and share SOPs, architectural guidelines, or deliverable checklists for this project." })}
                                   </p>
                                   {!isShared && (
-                                  <button
-                                    type="button"
-                                    onClick={() => navigate(rolePath("knowledge-base/create"), { state: { projectId: project?.id || projectId, projectTitle: project?.title } })}
-                                    style={{ padding: "7px 16px", borderRadius: "6px", background: "#2563eb", color: "#ffffff", border: "none", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
-                                  >
-                                    <Plus size={14} style={{ display: "inline", verticalAlign: "-2px", marginRight: "4px" }} /> {t("Add Document", { defaultValue: "Add Document" })}
-                                  </button>
+                                  <div style={{ display: "flex", justifyContent: "center", gap: "10px" }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setLinkKbSearch("");
+                                        setSelectedKbToLink("");
+                                        setShowLinkKbModal(true);
+                                      }}
+                                      style={{ padding: "7px 16px", borderRadius: "6px", background: "var(--bg-card)", color: "var(--color-primary)", border: "1px solid var(--border-color)", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                                    >
+                                      <BookOpen size={14} style={{ display: "inline", verticalAlign: "-2px", marginRight: "4px" }} /> {t("Link Existing Document", { defaultValue: "Link Existing Document" })}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => navigate(rolePath("knowledge-base/create"), { state: { projectId: project?.id || projectId, projectTitle: project?.title } })}
+                                      style={{ padding: "7px 16px", borderRadius: "6px", background: "#2563eb", color: "#ffffff", border: "none", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                                    >
+                                      <Plus size={14} style={{ display: "inline", verticalAlign: "-2px", marginRight: "4px" }} /> {t("Add Document", { defaultValue: "Add Document" })}
+                                    </button>
+                                  </div>
                                   )}
                                 </div>
                               );
@@ -2278,7 +2717,7 @@ function ProjectDetails() {
                             return (
                               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "14px", marginTop: "18px" }}>
                                 {filteredKb.map((item) => {
-                                  const isLinked = item.isDirectLinked || String(item.id) === String(project?.kb_id || project?.knowledge_base?.id || project?.knowledgeBase?.id);
+                                  const isLinked = item.isDirectLinked || String(item.id) === String(project?.kb_id || project?.knowledge_base?.id || project?.knowledgeBase?.id) || (Array.isArray(project?.kb_ids) && project.kb_ids.map(String).includes(String(item.id))) || (Array.isArray(project?.knowledge_bases) && project.knowledge_bases.some((k) => String(k?.id) === String(item.id)));
                                   return (
                                     <div
                                       key={item.id}
@@ -2326,6 +2765,15 @@ function ProjectDetails() {
                                         </div>
                                       </div>
                                       <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", borderTop: "1px solid var(--border-color)", paddingTop: "10px" }}>
+                                        {isLinked && !isShared && (
+                                          <button
+                                            type="button"
+                                            onClick={() => { setUnlinkKbId(item.id); setUnlinkKbConfirmOpen(true); }}
+                                            style={{ padding: "5px 12px", borderRadius: "6px", background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                                          >
+                                            {t("Unlink", { defaultValue: "Unlink" })}
+                                          </button>
+                                        )}
                                         <button
                                           type="button"
                                           onClick={() => navigate(rolePath(`knowledge-base/${item.id}`))}
@@ -2366,14 +2814,28 @@ function ProjectDetails() {
                                 />
                               </div>
                               {!isShared && (
-                              <button
-                                type="button"
-                                className="pd-btn-tx pd-btn-tx--primary"
-                                onClick={() => navigate(rolePath("events/create"), { state: { projectId: project?.id || projectId, projectTitle: project?.title } })}
-                                style={{ display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap" }}
-                              >
-                                <Plus size={16} /> {t("Add Event", { defaultValue: "Add Event" })}
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  className="pd-btn-tx pd-btn-tx--outline"
+                                  onClick={() => {
+                                    setLinkEventSearch("");
+                                    setSelectedEventToLink("");
+                                    setShowLinkEventModal(true);
+                                  }}
+                                  style={{ display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap" }}
+                                >
+                                  <Calendar size={15} /> {t("Link Event", { defaultValue: "Link Event" })}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="pd-btn-tx pd-btn-tx--primary"
+                                  onClick={() => navigate(rolePath("events/create"), { state: { projectId: project?.id || projectId, projectTitle: project?.title } })}
+                                  style={{ display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap" }}
+                                >
+                                  <Plus size={16} /> {t("Add Event", { defaultValue: "Add Event" })}
+                                </button>
+                              </>
                               )}
                             </div>
                           </div>
@@ -2402,13 +2864,26 @@ function ProjectDetails() {
                                     {t("Schedule sprint meetings, demo sessions, and release deadlines for this project.", { defaultValue: "Schedule sprint meetings, demo sessions, and release deadlines for this project." })}
                                   </p>
                                   {!isShared && (
-                                  <button
-                                    type="button"
-                                    onClick={() => navigate(rolePath("events/create"), { state: { projectId: project?.id || projectId, projectTitle: project?.title } })}
-                                    style={{ padding: "7px 16px", borderRadius: "6px", background: "#2563eb", color: "#ffffff", border: "none", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
-                                  >
-                                    <Plus size={14} style={{ display: "inline", verticalAlign: "-2px", marginRight: "4px" }} /> {t("Add Event", { defaultValue: "Add Event" })}
-                                  </button>
+                                  <div style={{ display: "flex", justifyContent: "center", gap: "10px" }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setLinkEventSearch("");
+                                        setSelectedEventToLink("");
+                                        setShowLinkEventModal(true);
+                                      }}
+                                      style={{ padding: "7px 16px", borderRadius: "6px", background: "var(--bg-card)", color: "var(--color-primary)", border: "1px solid var(--border-color)", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                                    >
+                                      <Calendar size={14} style={{ display: "inline", verticalAlign: "-2px", marginRight: "4px" }} /> {t("Link Existing Event", { defaultValue: "Link Existing Event" })}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => navigate(rolePath("events/create"), { state: { projectId: project?.id || projectId, projectTitle: project?.title } })}
+                                      style={{ padding: "7px 16px", borderRadius: "6px", background: "#2563eb", color: "#ffffff", border: "none", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                                    >
+                                      <Plus size={14} style={{ display: "inline", verticalAlign: "-2px", marginRight: "4px" }} /> {t("Add Event", { defaultValue: "Add Event" })}
+                                    </button>
+                                  </div>
                                   )}
                                 </div>
                               );
@@ -2419,7 +2894,7 @@ function ProjectDetails() {
                                 {filteredEv.map((ev) => {
                                   const dateStr = ev.start_date ? new Date(ev.start_date).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) : t("Scheduled", { defaultValue: "Scheduled" });
                                   const timeStr = ev.start_date && !ev.all_day ? new Date(ev.start_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : (ev.all_day ? t("All Day", { defaultValue: "All Day" }) : "");
-                                  const isLinked = ev.isDirectLinked || String(ev.id) === String(project?.event_id || project?.event?.id);
+                                  const isLinked = ev.isDirectLinked || String(ev.id) === String(project?.event_id || project?.event?.id) || (Array.isArray(project?.event_ids) && project.event_ids.map(String).includes(String(ev.id))) || (Array.isArray(project?.events) && project.events.some((e) => String(e?.id) === String(ev.id)));
 
                                   return (
                                     <div
@@ -2471,6 +2946,15 @@ function ProjectDetails() {
                                         )}
                                       </div>
                                       <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", borderTop: "1px solid var(--border-color)", paddingTop: "10px" }}>
+                                        {isLinked && !isShared && (
+                                          <button
+                                            type="button"
+                                            onClick={() => { setUnlinkEventId(ev.id); setUnlinkEventConfirmOpen(true); }}
+                                            style={{ padding: "5px 12px", borderRadius: "6px", background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                                          >
+                                            {t("Unlink", { defaultValue: "Unlink" })}
+                                          </button>
+                                        )}
                                         <button
                                           type="button"
                                           onClick={() => navigate(rolePath(`events/${ev.id}`))}
@@ -2610,6 +3094,50 @@ function ProjectDetails() {
         danger
       />
 
+      <ConfirmModal
+        isOpen={unlinkKbConfirmOpen}
+        onClose={() => { setUnlinkKbConfirmOpen(false); setUnlinkKbId(null); }}
+        onConfirm={confirmUnlinkKb}
+        title={t("Confirm Unlink", { defaultValue: "Confirm Unlink" })}
+        message={t("Are you sure you want to unlink this document?", { defaultValue: "Are you sure you want to unlink this document?" })}
+        confirmText={t("Unlink", { defaultValue: "Unlink" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        danger
+      />
+
+      <ConfirmModal
+        isOpen={unlinkEventConfirmOpen}
+        onClose={() => { setUnlinkEventConfirmOpen(false); setUnlinkEventId(null); }}
+        onConfirm={confirmUnlinkEvent}
+        title={t("Confirm Unlink", { defaultValue: "Confirm Unlink" })}
+        message={t("Are you sure you want to unlink this event?", { defaultValue: "Are you sure you want to unlink this event?" })}
+        confirmText={t("Unlink", { defaultValue: "Unlink" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        danger
+      />
+
+      <ConfirmModal
+        isOpen={approveTaskConfirmOpen}
+        onClose={() => { setApproveTaskConfirmOpen(false); setApproveTaskId(null); }}
+        onConfirm={confirmDirectApproveTask}
+        title={t("Approve Task", { defaultValue: "Approve Task" })}
+        message={t("Are you sure you want to approve this task?", { defaultValue: "Are you sure you want to approve this task?" })}
+        confirmText={t("Approve", { defaultValue: "Approve" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        confirmColor="#16A34A"
+      />
+
+      <ConfirmModal
+        isOpen={declineTaskConfirmOpen}
+        onClose={() => { setDeclineTaskConfirmOpen(false); setDeclineTaskItem(null); }}
+        onConfirm={confirmDirectDeclineTask}
+        title={t("Decline Task", { defaultValue: "Decline Task" })}
+        message={t("Are you sure you want to decline this task?", { defaultValue: "Are you sure you want to decline this task?" })}
+        confirmText={t("Decline", { defaultValue: "Decline" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        danger
+      />
+
       {editingTask && (
         <EditTaskModal
           task={editingTask}
@@ -2619,8 +3147,53 @@ function ProjectDetails() {
 
       <PauseReasonModal
         isOpen={pauseModalOpen}
-        onClose={() => { setPauseModalOpen(false); setPauseModalTaskId(null); }}
-        onConfirm={async (data) => { await handleTaskAssignerPause(pauseModalTaskId, data); setPauseModalOpen(false); setPauseModalTaskId(null); }}
+        onClose={() => { setPauseModalOpen(false); setPauseModalTaskId(null); setPauseModalIsAssigner(false); }}
+        onConfirm={async (data) => {
+          if (pauseModalIsAssigner) {
+            await handleTaskAssignerPause(pauseModalTaskId, data);
+          } else {
+            await handleTaskPause(pauseModalTaskId, data);
+          }
+          setPauseModalOpen(false);
+          setPauseModalTaskId(null);
+          setPauseModalIsAssigner(false);
+        }}
+      />
+
+      <ConfirmModal
+        isOpen={resumeModalOpen}
+        onClose={() => { setResumeModalOpen(false); setResumeModalTask(null); }}
+        onConfirm={async () => {
+          if (!resumeModalTask) return;
+          if (resumeModalTask.assigner_paused) {
+            await handleTaskAssignerResume(resumeModalTask.id);
+          } else {
+            await handleTaskContinue(resumeModalTask.id);
+          }
+          setResumeModalOpen(false);
+          setResumeModalTask(null);
+        }}
+        title={t("Resume Task", { defaultValue: "Resume Task" })}
+        message={t("Are you sure you want to resume this task?", { defaultValue: "Are you sure you want to resume this task?" })}
+        confirmText={t("Resume", { defaultValue: "Resume" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        confirmColor="#059669"
+      />
+
+      <ConfirmModal
+        isOpen={acknowledgeModalOpen}
+        onClose={() => { setAcknowledgeModalOpen(false); setAcknowledgeModalTask(null); }}
+        onConfirm={async () => {
+          if (!acknowledgeModalTask) return;
+          await handleTaskAcknowledge(acknowledgeModalTask.id);
+          setAcknowledgeModalOpen(false);
+          setAcknowledgeModalTask(null);
+        }}
+        title={t("Acknowledge Task", { defaultValue: "Acknowledge Task" })}
+        message={t("Are you sure you want to acknowledge this task?", { defaultValue: "Are you sure you want to acknowledge this task?" })}
+        confirmText={t("Acknowledge", { defaultValue: "Acknowledge" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        confirmColor="#2563EB"
       />
 
       <AddNoteModal
@@ -2631,7 +3204,32 @@ function ProjectDetails() {
         onSaved={() => { setNoteModal({ open: false, itemId: null }); loadProject(); }}
       />
 
-      {visibilityOpen && (
+      <TaskReopenDialog
+        isOpen={!!reopenTask}
+        onClose={() => setReopenTask(null)}
+        task={reopenTask}
+        onReopenSuccess={handleProjectTaskDirectReopenSuccess}
+      />
+
+      <AbandonModal
+        isOpen={!!abandonTask}
+        onClose={() => setAbandonTask(null)}
+        title={t("Abandon Task", { defaultValue: "Abandon Task" })}
+        subtitle={t("Please provide a reason for abandoning this task.", { defaultValue: "Please provide a reason for abandoning this task." })}
+        actionLabel={["admin", "manager"].includes(currentUser?.role) ? t("Abandon", { defaultValue: "Abandon" }) : t("Request Abandon", { defaultValue: "Request Abandon" })}
+        onSubmit={handleProjectTaskDirectAbandonSubmit}
+        loading={abandoning}
+      />
+
+      <MarkTaskCompletedModal
+        isOpen={!!markCompletedTask}
+        onClose={() => setMarkCompletedTask(null)}
+        task={markCompletedTask}
+        entityType="task"
+        onCompleteSuccess={handleProjectTaskDirectCompleteSuccess}
+      />
+
+      {visibilityOpen && createPortal(
         <div className="modal-overlay" onClick={handleVisClose}>
           <div className="sv-modal" onClick={(e) => e.stopPropagation()}>
             <div className="sv-modal-header">
@@ -2686,14 +3284,15 @@ function ProjectDetails() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {VisConfirmDialog}
 
       {/* Edit File/Link Popup */}
-      {editFileItem && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }} onClick={() => setEditFileItem(null)}>
+      {editFileItem && createPortal(
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100000 }} onClick={() => setEditFileItem(null)}>
           <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: "24px 28px", width: 460, maxWidth: "90vw", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--text-heading)" }}>{t("Edit File / Link", { defaultValue: "Edit File / Link" })}</h3>
             <p style={{ margin: "6px 0 0", fontSize: 13, color: "var(--text-muted)" }}>{t("Rename or update the URL below.", { defaultValue: "Rename or update the URL below." })}</p>
@@ -2726,7 +3325,8 @@ function ProjectDetails() {
               <button type="button" onClick={handleRenameFile} disabled={!editFileName.trim()} style={{ padding: "8px 18px", borderRadius: 8, border: "none", background: editFileName.trim() ? "var(--color-primary)" : "var(--bg-hover)", color: editFileName.trim() ? "#fff" : "var(--text-muted)", fontSize: 13, fontWeight: 600, cursor: editFileName.trim() ? "pointer" : "not-allowed" }}>{t("Save", { defaultValue: "Save" })}</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Delete Confirmation */}
@@ -2895,6 +3495,170 @@ function ProjectDetails() {
         project={project}
         onSuccess={loadProject}
       />
+
+      {showLinkKbModal && createPortal(
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
+          onClick={() => setShowLinkKbModal(false)}
+        >
+          <div
+            style={{ background: "var(--bg-card, #ffffff)", borderRadius: "12px", width: "100%", maxWidth: "500px", maxHeight: "80vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)", overflow: "hidden" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 600, display: "flex", alignItems: "center", gap: "8px" }}>
+                <BookOpen size={18} color="#2563eb" /> {t("Link Knowledge Base Document", { defaultValue: "Link Knowledge Base Document" })}
+              </h3>
+              <button onClick={() => setShowLinkKbModal(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)" }}>
+                <X size={18} />
+              </button>
+            </div>
+            <div style={{ padding: "12px 20px" }}>
+              <div className="pd-files-search" style={{ margin: 0, width: "100%" }}>
+                <input
+                  type="text"
+                  placeholder={t("Search documents...", { defaultValue: "Search documents..." })}
+                  value={linkKbSearch}
+                  onChange={(e) => setLinkKbSearch(e.target.value)}
+                />
+              </div>
+            </div>
+            <div style={{ padding: "0 20px 16px 20px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: "8px" }}>
+              {kbArticles
+                .filter((k) => !linkKbSearch.trim() || k.title?.toLowerCase().includes(linkKbSearch.toLowerCase()))
+                .map((k) => {
+                  const isSelected = selectedKbToLink === k.id;
+                  const alreadyLinked = (Array.isArray(project?.kb_ids) && project.kb_ids.map(String).includes(String(k.id))) || (Array.isArray(project?.knowledge_bases) && project.knowledge_bases.some((kb) => String(kb?.id) === String(k.id)));
+                  return (
+                    <div
+                      key={k.id}
+                      onClick={() => !alreadyLinked && setSelectedKbToLink(k.id)}
+                      style={{
+                        padding: "10px 14px",
+                        borderRadius: "8px",
+                        border: isSelected ? "1px solid #2563eb" : "1px solid var(--border-color)",
+                        background: isSelected ? "#eff6ff" : (alreadyLinked ? "var(--bg-card-subtle)" : "var(--bg-card)"),
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        cursor: alreadyLinked ? "default" : "pointer",
+                        opacity: alreadyLinked ? 0.6 : 1,
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: "13px" }}>{k.title}</div>
+                        <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>{k.categoryRelation?.name || k.category || t("Document", { defaultValue: "Document" })}</div>
+                      </div>
+                      <div>
+                        {alreadyLinked ? (
+                          <span style={{ fontSize: "11px", color: "#16a34a", fontWeight: 600 }}>{t("Already Linked", { defaultValue: "Already Linked" })}</span>
+                        ) : isSelected ? (
+                          <Check size={16} color="#2563eb" />
+                        ) : (
+                          <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>{t("Select", { defaultValue: "Select" })}</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+            <div style={{ padding: "12px 20px", borderTop: "1px solid var(--border-color)", display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+              <button type="button" className="pd-btn-tx pd-btn-tx--outline" onClick={() => setShowLinkKbModal(false)}>{t("Cancel", { defaultValue: "Cancel" })}</button>
+              <button
+                type="button"
+                className="pd-btn-tx pd-btn-tx--primary"
+                disabled={!selectedKbToLink || linkingKb}
+                onClick={() => handleLinkKb(selectedKbToLink)}
+              >
+                {linkingKb ? t("Linking...", { defaultValue: "Linking..." }) : t("Link Document", { defaultValue: "Link Document" })}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {showLinkEventModal && createPortal(
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
+          onClick={() => setShowLinkEventModal(false)}
+        >
+          <div
+            style={{ background: "var(--bg-card, #ffffff)", borderRadius: "12px", width: "100%", maxWidth: "500px", maxHeight: "80vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)", overflow: "hidden" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 600, display: "flex", alignItems: "center", gap: "8px" }}>
+                <Calendar size={18} color="#2563eb" /> {t("Link Event to Project", { defaultValue: "Link Event to Project" })}
+              </h3>
+              <button onClick={() => setShowLinkEventModal(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)" }}>
+                <X size={18} />
+              </button>
+            </div>
+            <div style={{ padding: "12px 20px" }}>
+              <div className="pd-files-search" style={{ margin: 0, width: "100%" }}>
+                <input
+                  type="text"
+                  placeholder={t("Search events...", { defaultValue: "Search events..." })}
+                  value={linkEventSearch}
+                  onChange={(e) => setLinkEventSearch(e.target.value)}
+                />
+              </div>
+            </div>
+            <div style={{ padding: "0 20px 16px 20px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: "8px" }}>
+              {eventsList
+                .filter((e) => !linkEventSearch.trim() || e.title?.toLowerCase().includes(linkEventSearch.toLowerCase()))
+                .map((ev) => {
+                  const isSelected = selectedEventToLink === ev.id;
+                  const alreadyLinked = (Array.isArray(project?.event_ids) && project.event_ids.map(String).includes(String(ev.id))) || (Array.isArray(project?.events) && project.events.some((e) => String(e?.id) === String(ev.id)));
+                  return (
+                    <div
+                      key={ev.id}
+                      onClick={() => !alreadyLinked && setSelectedEventToLink(ev.id)}
+                      style={{
+                        padding: "10px 14px",
+                        borderRadius: "8px",
+                        border: isSelected ? "1px solid #2563eb" : "1px solid var(--border-color)",
+                        background: isSelected ? "#eff6ff" : (alreadyLinked ? "var(--bg-card-subtle)" : "var(--bg-card)"),
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        cursor: alreadyLinked ? "default" : "pointer",
+                        opacity: alreadyLinked ? 0.6 : 1,
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: "13px" }}>{ev.title}</div>
+                        <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>{ev.start_date ? new Date(ev.start_date).toLocaleDateString() : t("Event", { defaultValue: "Event" })}</div>
+                      </div>
+                      <div>
+                        {alreadyLinked ? (
+                          <span style={{ fontSize: "11px", color: "#16a34a", fontWeight: 600 }}>{t("Already Linked", { defaultValue: "Already Linked" })}</span>
+                        ) : isSelected ? (
+                          <Check size={16} color="#2563eb" />
+                        ) : (
+                          <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>{t("Select", { defaultValue: "Select" })}</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+            <div style={{ padding: "12px 20px", borderTop: "1px solid var(--border-color)", display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+              <button type="button" className="pd-btn-tx pd-btn-tx--outline" onClick={() => setShowLinkEventModal(false)}>{t("Cancel", { defaultValue: "Cancel" })}</button>
+              <button
+                type="button"
+                className="pd-btn-tx pd-btn-tx--primary"
+                disabled={!selectedEventToLink || linkingEvent}
+                onClick={() => handleLinkEvent(selectedEventToLink)}
+              >
+                {linkingEvent ? t("Linking...", { defaultValue: "Linking..." }) : t("Link Event", { defaultValue: "Link Event" })}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </>
   );
 }

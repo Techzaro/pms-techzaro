@@ -76,7 +76,7 @@ const COLOR_MAP = {
  * @param {Function} [onEventCreated] - Callback when an event is created or updated
  * @param {Object|null} [editEvent=null] - Event object to edit (null for creation mode)
  */
-function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraftId = null }) {
+function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraftId = null, draftData = null }) {
   const { t } = useTranslation();
   const draftSaveRef = useRef(null);
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useDraftGuard(onClose, {
@@ -295,37 +295,48 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
 
   // Restore draft data when opened from DraftCenter
   useEffect(() => {
-    if (!isOpen || !restoreDraftId) return;
+    if (!isOpen) return;
 
-    const loadDraft = async () => {
-      try {
-        const data = await draftService.get(restoreDraftId);
-        const draft = data?.data;
-        if (!draft?.draft_data) return;
-
-        const d = draft.draft_data;
-        setFormData({
-          title: d.title || "",
-          description: d.description || "",
-          startDate: d.start_date || getLocalDateStr(new Date()),
-          startTime: d.start_time || "10:00",
-          endDate: d.end_date || getLocalDateStr(new Date()),
-          endTime: d.end_time || "11:00",
-          hasEndDate: d.has_end_date || false,
-          eventType: d.event_type ? (TYPE_MAP_REVERSE[d.event_type] || "__custom__") : "Meeting",
-          eventTypeCustom: d.event_type_custom || "",
-          allDay: d.all_day || false,
-        });
-        setAssignedUserIds(d.assigned_user_ids || []);
-        setIsGlobal(Boolean(d.is_global));
-        setDraftId(restoreDraftId);
-      } catch (err) {
-        console.error("Failed to restore draft:", err);
-      }
+    const applyDraft = (d, idToSet) => {
+      if (!d) return;
+      setFormData({
+        title: d.title || "",
+        description: d.description || "",
+        startDate: d.start_date || getLocalDateStr(new Date()),
+        startTime: d.start_time || "10:00",
+        endDate: d.end_date || getLocalDateStr(new Date()),
+        endTime: d.end_time || "11:00",
+        hasEndDate: d.has_end_date || false,
+        eventType: d.event_type ? (TYPE_MAP_REVERSE[d.event_type] || "__custom__") : "Meeting",
+        eventTypeCustom: d.event_type_custom || "",
+        allDay: d.all_day || false,
+        eventTimezone: d.event_timezone || d.timezone || getUser()?.timezone || "UTC",
+      });
+      setAssignedUserIds(d.assigned_user_ids || []);
+      setIsGlobal(Boolean(d.is_global));
+      if (idToSet) setDraftId(idToSet);
     };
 
-    loadDraft();
-  }, [isOpen, restoreDraftId]);
+    if (draftData) {
+      applyDraft(draftData, restoreDraftId);
+      return;
+    }
+
+    if (restoreDraftId) {
+      const loadDraft = async () => {
+        try {
+          const data = await draftService.get(restoreDraftId);
+          const draft = data?.data;
+          if (!draft?.draft_data) return;
+          applyDraft(draft.draft_data, restoreDraftId);
+        } catch (err) {
+          console.error("Failed to restore draft:", err);
+        }
+      };
+
+      loadDraft();
+    }
+  }, [isOpen, restoreDraftId, draftData]);
 
   useEffect(() => {
     if (isOpen) {

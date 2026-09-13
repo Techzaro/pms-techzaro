@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
@@ -240,7 +241,7 @@ export default function ShareResourceModal({
     setError("");
   };
 
-  const isExpired = (expiresAt) => {
+const isExpired = (expiresAt) => {
     if (!expiresAt) return false;
     let isoStr = expiresAt;
     if (!isoStr.endsWith("Z") && !isoStr.includes("+")) {
@@ -573,8 +574,7 @@ export default function ShareResourceModal({
           )}
         </div>
       </div>
-
-      {/* Revoke Confirmation Modal */}
+{/* Revoke Confirmation Modal */}
       {confirmRevoke && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.4)' }} onClick={() => setConfirmRevoke(null)}>
           <div style={{ background: '#fff', borderRadius: 12, padding: '24px 28px', maxWidth: 380, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }} onClick={(e) => e.stopPropagation()}>
@@ -602,6 +602,7 @@ export default function ShareResourceModal({
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 }

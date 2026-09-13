@@ -10,7 +10,7 @@ class FixTenantColumns extends Command
 {
     protected $signature = 'tenants:fix-columns
         {--database= : Fix a specific tenant database}
-        {--all : Fix all tenant databases}';
+        {--all : Fix all tenant databases including unregistered ones}';
 
     protected $description = 'Detect and add missing columns to tenant databases';
 
@@ -35,8 +35,10 @@ class FixTenantColumns extends Command
             ['name' => 'email_verified_at',             'definition' => "TIMESTAMP NULL AFTER `email_skip_until`"],
             ['name' => 'personal_email_verified_at',    'definition' => "TIMESTAMP NULL AFTER `personal_email`"],
             ['name' => 'professional_email_verified_at', 'definition' => "TIMESTAMP NULL AFTER `professional_email`"],
+            ['name' => 'email_verification_exempt',      'definition' => "TINYINT(1) DEFAULT 0 AFTER `email_verified_at`"],
         ],
         'tasks' => [
+            ['name' => 'deleted_at',                      'definition' => "TIMESTAMP NULL AFTER `updated_at`"],
             ['name' => 'recurrence_start_date',         'definition' => "TIMESTAMP NULL AFTER `recurrence_settings`"],
             ['name' => 'recurrence_end_date',           'definition' => "TIMESTAMP NULL AFTER `recurrence_start_date`"],
             ['name' => 'has_edited_submission',         'definition' => "TINYINT(1) DEFAULT 0 AFTER `status`"],
@@ -47,9 +49,29 @@ class FixTenantColumns extends Command
             ['name' => 'current_reviewer_id',           'definition' => "BIGINT UNSIGNED NULL AFTER `current_submitter_id`"],
             ['name' => 'submission_stage',              'definition' => "VARCHAR(64) NULL AFTER `current_reviewer_id`"],
             ['name' => 'submission_forwarded_by',       'definition' => "JSON NULL AFTER `submission_stage`"],
+            ['name' => 'is_reopened',                   'definition' => "TINYINT(1) DEFAULT 0 AFTER `allow_transfer`"],
+            ['name' => 'is_transferred',                'definition' => "TINYINT(1) DEFAULT 0 AFTER `is_reopened`"],
+            ['name' => 'completion_reason',             'definition' => "VARCHAR(255) NULL AFTER `description`"],
+            ['name' => 'completion_notes',              'definition' => "TEXT NULL AFTER `completion_reason`"],
+            ['name' => 'kb_ids',                        'definition' => "JSON NULL AFTER `description`"],
+            ['name' => 'event_ids',                     'definition' => "JSON NULL AFTER `kb_ids`"],
         ],
         'deliverables' => [
+            ['name' => 'deleted_at',                    'definition' => "TIMESTAMP NULL AFTER `updated_at`"],
             ['name' => 'has_edited_submission',         'definition' => "TINYINT(1) DEFAULT 0 AFTER `status`"],
+            ['name' => 'parent_deliverable_id',         'definition' => "BIGINT UNSIGNED NULL AFTER `task_id`"],
+            ['name' => 'is_reopened',                   'definition' => "TINYINT(1) DEFAULT 0 AFTER `allow_transfer`"],
+            ['name' => 'is_transferred',                'definition' => "TINYINT(1) DEFAULT 0 AFTER `is_reopened`"],
+            ['name' => 'completion_reason',             'definition' => "VARCHAR(255) NULL AFTER `description`"],
+            ['name' => 'completion_notes',              'definition' => "TEXT NULL AFTER `completion_reason`"],
+            ['name' => 'kb_ids',                        'definition' => "JSON NULL AFTER `description`"],
+            ['name' => 'event_ids',                     'definition' => "JSON NULL AFTER `kb_ids`"],
+        ],
+        'projects' => [
+            ['name' => 'kb_ids',                        'definition' => "JSON NULL AFTER `sidebar_notes`"],
+            ['name' => 'event_ids',                     'definition' => "JSON NULL AFTER `kb_ids`"],
+            ['name' => 'guest_ids',                     'definition' => "JSON NULL AFTER `assigned_users`"],
+            ['name' => 'team_ids',                      'definition' => "JSON NULL AFTER `team_id`"],
         ],
         'teams' => [
             ['name' => 'status',                        'definition' => "VARCHAR(255) DEFAULT 'active' AFTER `description`"],
@@ -83,9 +105,326 @@ class FixTenantColumns extends Command
             ['name' => 'event_start_time',              'definition' => "TIME NULL AFTER `event_date`"],
             ['name' => 'event_end_time',                'definition' => "TIME NULL AFTER `event_start_time`"],
         ],
+        'task_saved_views' => [
+            ['name' => 'view_name',                      'definition' => "VARCHAR(255) NULL AFTER `name`"],
+            ['name' => 'filter_payload',                 'definition' => "JSON NULL AFTER `filters`"],
+            ['name' => 'sort_parameters',                'definition' => "JSON NULL AFTER `filter_payload`"],
+        ],
+        'saved_views' => [
+            ['name' => 'view_name',                      'definition' => "VARCHAR(255) NOT NULL AFTER `user_id`"],
+            ['name' => 'name',                           'definition' => "VARCHAR(255) NULL AFTER `view_name`"],
+            ['name' => 'filter_payload',                 'definition' => "JSON NULL AFTER `name`"],
+            ['name' => 'filters',                        'definition' => "JSON NULL AFTER `filter_payload`"],
+            ['name' => 'sort_parameters',                'definition' => "JSON NULL AFTER `filters`"],
+            ['name' => 'is_default',                     'definition' => "TINYINT(1) DEFAULT 0 AFTER `sort_parameters`"],
+        ],
+        'task_comments' => [
+            ['name' => 'parent_id',                      'definition' => "BIGINT UNSIGNED NULL AFTER `deliverable_id`"],
+            ['name' => 'quoted_message_id',             'definition' => "BIGINT UNSIGNED NULL AFTER `parent_id`"],
+            ['name' => 'quoted_text',                   'definition' => "TEXT NULL AFTER `quoted_message_id`"],
+            ['name' => 'delegation_id',                 'definition' => "BIGINT UNSIGNED NULL AFTER `body`"],
+            ['name' => 'file_path',                     'definition' => "VARCHAR(1024) NULL AFTER `delegation_id`"],
+            ['name' => 'file_name',                     'definition' => "VARCHAR(255) NULL AFTER `file_path`"],
+            ['name' => 'file_size',                     'definition' => "BIGINT UNSIGNED NULL AFTER `file_name`"],
+            ['name' => 'is_edited',                     'definition' => "TINYINT(1) DEFAULT 0 AFTER `file_size`"],
+            ['name' => 'edited_at',                     'definition' => "TIMESTAMP NULL AFTER `is_edited`"],
+            ['name' => 'comment_type',                  'definition' => "VARCHAR(50) DEFAULT 'internal' AFTER `body`"],
+            ['name' => 'visible_to_organizations',      'definition' => "JSON NULL AFTER `comment_type`"],
+        ],
+        'audit_logs' => [
+            ['name' => 'user_name',                      'definition' => "VARCHAR(255) NULL AFTER `user_id`"],
+        ],
     ];
 
     protected array $tableCreates = [
+        'project_user' => "CREATE TABLE IF NOT EXISTS `project_user` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `project_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `project_user_project_id_user_id_unique` (`project_id`, `user_id`),
+            FOREIGN KEY (`project_id`) REFERENCES `projects`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+        'event_task' => "CREATE TABLE IF NOT EXISTS `event_task` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `event_id` BIGINT UNSIGNED NOT NULL,
+            `task_id` BIGINT UNSIGNED NOT NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `event_task_event_id_task_id_unique` (`event_id`, `task_id`),
+            FOREIGN KEY (`event_id`) REFERENCES `events`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`task_id`) REFERENCES `tasks`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'knowledge_base_task' => "CREATE TABLE IF NOT EXISTS `knowledge_base_task` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `knowledge_base_id` BIGINT UNSIGNED NOT NULL,
+            `task_id` BIGINT UNSIGNED NOT NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `knowledge_base_task_kb_id_task_id_unique` (`knowledge_base_id`, `task_id`),
+            FOREIGN KEY (`knowledge_base_id`) REFERENCES `knowledge_bases`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`task_id`) REFERENCES `tasks`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'task_personal_notes' => "CREATE TABLE IF NOT EXISTS `task_personal_notes` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `task_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `note` TEXT NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            INDEX `task_personal_notes_task_id_user_id_index` (`task_id`, `user_id`),
+            FOREIGN KEY (`task_id`) REFERENCES `tasks`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'task_user_notes' => "CREATE TABLE IF NOT EXISTS `task_user_notes` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `task_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `note` TEXT NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            INDEX `task_user_notes_task_id_user_id_index` (`task_id`, `user_id`),
+            FOREIGN KEY (`task_id`) REFERENCES `tasks`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'task_user' => "CREATE TABLE IF NOT EXISTS `task_user` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `task_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `due_date` TIMESTAMP NULL,
+            `status` VARCHAR(64) DEFAULT 'pending',
+            `submitted_at` TIMESTAMP NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `task_user_task_id_user_id_unique` (`task_id`, `user_id`),
+            FOREIGN KEY (`task_id`) REFERENCES `tasks`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'team_user' => "CREATE TABLE IF NOT EXISTS `team_user` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `team_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `team_user_team_id_user_id_unique` (`team_id`, `user_id`),
+            FOREIGN KEY (`team_id`) REFERENCES `teams`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'deliverable_user' => "CREATE TABLE IF NOT EXISTS `deliverable_user` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `deliverable_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `deliverable_user_deliverable_id_user_id_unique` (`deliverable_id`, `user_id`),
+            FOREIGN KEY (`deliverable_id`) REFERENCES `deliverables`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'deliverable_submissions' => "CREATE TABLE IF NOT EXISTS `deliverable_submissions` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `deliverable_id` BIGINT UNSIGNED NOT NULL,
+            `submitted_by` BIGINT UNSIGNED NOT NULL,
+            `status` VARCHAR(32) DEFAULT 'submitted',
+            `notes` TEXT NULL,
+            `file_path` VARCHAR(1024) NULL,
+            `reviewed_by` BIGINT UNSIGNED NULL,
+            `reviewed_at` TIMESTAMP NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            INDEX `deliverable_submissions_deliverable_id_index` (`deliverable_id`),
+            FOREIGN KEY (`deliverable_id`) REFERENCES `deliverables`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`submitted_by`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'task_workflow_events' => "CREATE TABLE IF NOT EXISTS `task_workflow_events` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `task_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `action` VARCHAR(64) NOT NULL,
+            `notes` TEXT NULL,
+            `from_status` VARCHAR(64) NULL,
+            `to_status` VARCHAR(64) NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            INDEX `task_workflow_events_task_id_index` (`task_id`),
+            FOREIGN KEY (`task_id`) REFERENCES `tasks`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'project_workflow_events' => "CREATE TABLE IF NOT EXISTS `project_workflow_events` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `project_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `action` VARCHAR(64) NOT NULL,
+            `notes` TEXT NULL,
+            `from_status` VARCHAR(64) NULL,
+            `to_status` VARCHAR(64) NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            INDEX `project_workflow_events_project_id_index` (`project_id`),
+            FOREIGN KEY (`project_id`) REFERENCES `projects`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'deliverable_workflow_events' => "CREATE TABLE IF NOT EXISTS `deliverable_workflow_events` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `deliverable_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `action` VARCHAR(64) NOT NULL,
+            `notes` TEXT NULL,
+            `from_status` VARCHAR(64) NULL,
+            `to_status` VARCHAR(64) NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            INDEX `deliverable_workflow_events_deliverable_id_index` (`deliverable_id`),
+            FOREIGN KEY (`deliverable_id`) REFERENCES `deliverables`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'task_pause_sessions' => "CREATE TABLE IF NOT EXISTS `task_pause_sessions` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `task_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NULL,
+            `paused_at` TIMESTAMP NULL,
+            `resumed_at` TIMESTAMP NULL,
+            `duration_seconds` INT DEFAULT 0,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            INDEX `task_pause_sessions_task_id_index` (`task_id`),
+            FOREIGN KEY (`task_id`) REFERENCES `tasks`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'deliverable_pause_sessions' => "CREATE TABLE IF NOT EXISTS `deliverable_pause_sessions` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `deliverable_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NULL,
+            `paused_at` TIMESTAMP NULL,
+            `resumed_at` TIMESTAMP NULL,
+            `duration_seconds` INT DEFAULT 0,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            INDEX `deliverable_pause_sessions_deliverable_id_index` (`deliverable_id`),
+            FOREIGN KEY (`deliverable_id`) REFERENCES `deliverables`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'activities' => "CREATE TABLE IF NOT EXISTS `activities` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `user_id` BIGINT UNSIGNED NULL,
+            `type` VARCHAR(64) NULL,
+            `description` TEXT NULL,
+            `subject_type` VARCHAR(255) NULL,
+            `subject_id` BIGINT UNSIGNED NULL,
+            `properties` JSON NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            INDEX `activities_subject_type_subject_id_index` (`subject_type`, `subject_id`),
+            INDEX `activities_user_id_index` (`user_id`),
+            INDEX `activities_created_at_index` (`created_at`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'project_visibility' => "CREATE TABLE IF NOT EXISTS `project_visibility` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `project_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `project_visibility_project_id_user_id_unique` (`project_id`, `user_id`),
+            FOREIGN KEY (`project_id`) REFERENCES `projects`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'shared_resources' => "CREATE TABLE IF NOT EXISTS `shared_resources` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `shareable_type` VARCHAR(255) NOT NULL,
+            `shareable_id` BIGINT UNSIGNED NOT NULL,
+            `shared_by` BIGINT UNSIGNED NOT NULL,
+            `permission` VARCHAR(32) DEFAULT 'view',
+            `notes` TEXT NULL,
+            `expires_at` TIMESTAMP NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            INDEX `shared_resources_shareable_type_shareable_id_index` (`shareable_type`, `shareable_id`),
+            FOREIGN KEY (`shared_by`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'shared_resource_users' => "CREATE TABLE IF NOT EXISTS `shared_resource_users` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `shared_resource_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `permission` VARCHAR(32) DEFAULT 'view',
+            `viewed_at` TIMESTAMP NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `shared_resource_users_resource_user_unique` (`shared_resource_id`, `user_id`),
+            FOREIGN KEY (`shared_resource_id`) REFERENCES `shared_resources`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'event_users' => "CREATE TABLE IF NOT EXISTS `event_users` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `event_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `event_users_event_id_user_id_unique` (`event_id`, `user_id`),
+            FOREIGN KEY (`event_id`) REFERENCES `events`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'conversation_participants' => "CREATE TABLE IF NOT EXISTS `conversation_participants` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `conversation_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `last_read_at` TIMESTAMP NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `conversation_participants_conv_user_unique` (`conversation_id`, `user_id`),
+            FOREIGN KEY (`conversation_id`) REFERENCES `conversations`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'messages' => "CREATE TABLE IF NOT EXISTS `messages` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `conversation_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `body` TEXT NOT NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            INDEX `messages_conversation_id_index` (`conversation_id`),
+            FOREIGN KEY (`conversation_id`) REFERENCES `conversations`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
         'notification_comments' => "CREATE TABLE IF NOT EXISTS `notification_comments` (
             `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             `notification_id` BIGINT UNSIGNED NOT NULL,
@@ -341,12 +680,31 @@ class FixTenantColumns extends Command
             `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             `user_id` BIGINT UNSIGNED NOT NULL,
             `name` VARCHAR(255) NOT NULL,
+            `view_name` VARCHAR(255) NULL AFTER `name`,
             `filters` JSON NULL,
+            `filter_payload` JSON NULL AFTER `filters`,
+            `sort_parameters` JSON NULL AFTER `filter_payload`,
             `is_default` TINYINT(1) DEFAULT 0,
             `created_at` TIMESTAMP NULL,
             `updated_at` TIMESTAMP NULL,
             PRIMARY KEY (`id`),
             INDEX `task_saved_views_user_id_is_default_index` (`user_id`, `is_default`),
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'saved_views' => "CREATE TABLE IF NOT EXISTS `saved_views` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `view_name` VARCHAR(255) NOT NULL,
+            `name` VARCHAR(255) NULL,
+            `filter_payload` JSON NULL,
+            `filters` JSON NULL,
+            `sort_parameters` JSON NULL,
+            `is_default` TINYINT(1) DEFAULT 0,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            INDEX `saved_views_user_id_is_default_index` (`user_id`, `is_default`),
             FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 
@@ -399,6 +757,11 @@ class FixTenantColumns extends Command
             INDEX `email_identities_type_index` (`type`),
             FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'shared_resources' => [
+            ['name' => 'resource_name', 'definition' => "VARCHAR(255) NULL AFTER `resource_id`"],
+            ['name' => 'parent_resource_id', 'definition' => "BIGINT UNSIGNED NULL AFTER `resource_name`"],
+        ],
     ];
 
     protected array $tableSizeFixes = [
@@ -428,12 +791,26 @@ class FixTenantColumns extends Command
             $databases[] = $database;
         } elseif ($runAll) {
             $organizations = Organization::whereIn('status', ['active', 'trial'])->get();
-            if ($organizations->isEmpty()) {
-                $this->warn('No active/trial organizations found.');
-                return Command::SUCCESS;
-            }
             foreach ($organizations as $org) {
                 $databases[] = $org->database_name;
+            }
+
+            $masterConfig = config("database.connections." . config('tenancy.master_connection', 'mysql_master'));
+            $pdo = DB::connection(config('tenancy.master_connection', 'mysql_master'))->getPdo();
+
+            $prefix = config('tenancy.database_prefix', 'pms_tenant_');
+            $results = $pdo->query("SHOW DATABASES LIKE '{$prefix}%'")->fetchAll(\PDO::FETCH_COLUMN);
+            foreach ($results as $dbName) {
+                if (!in_array($dbName, $databases)) {
+                    $databases[] = $dbName;
+                }
+            }
+
+            $results2 = $pdo->query("SHOW DATABASES LIKE 'techxaro_%'")->fetchAll(\PDO::FETCH_COLUMN);
+            foreach ($results2 as $dbName) {
+                if (!in_array($dbName, $databases)) {
+                    $databases[] = $dbName;
+                }
             }
         }
 
@@ -472,13 +849,15 @@ class FixTenantColumns extends Command
 
         $masterConfig = config("database.connections." . config('tenancy.master_connection', 'mysql_master'));
 
+        $org = Organization::where('database_name', $databaseName)->first();
+
         config()->set('database.connections.tenant_fix', [
             'driver'    => 'mysql',
-            'host'      => $masterConfig['host'],
-            'port'      => $masterConfig['port'],
+            'host'      => $org->database_host ?? $masterConfig['host'],
+            'port'      => $org->database_port ?? $masterConfig['port'],
             'database'  => $databaseName,
-            'username'  => $masterConfig['username'],
-            'password'  => $masterConfig['password'] ?? '',
+            'username'  => $org->database_username ?? $masterConfig['username'],
+            'password'  => $org->database_password ?? $masterConfig['password'] ?? '',
             'charset'   => 'utf8mb4',
             'collation' => 'utf8mb4_unicode_ci',
             'prefix'    => '',

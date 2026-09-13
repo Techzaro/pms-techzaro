@@ -4,8 +4,10 @@ import { useTranslation } from "react-i18next";
 import { Calendar, Clock, Plus, Search, Tag, Trash2, X, Check } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken, rolePath } from "../utils/auth";
+import { publish } from "../utils/eventBus";
+import ConfirmModal from "./ConfirmModal";
 
-export default function TaskEvents({ taskId, initialEvents = [], readOnly = false }) {
+export default function TaskEvents({ task, taskId, initialEvents = [], readOnly = false, onUpdate }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [events, setEvents] = useState(initialEvents);
@@ -36,7 +38,8 @@ export default function TaskEvents({ taskId, initialEvents = [], readOnly = fals
       });
       if (res.ok) {
         const data = await res.json();
-        setEvents(data.events || []);
+        const list = Array.isArray(data.events) ? data.events : [];
+        setEvents(list);
       }
     } catch (err) {
       console.error("Failed to load task events", err);
@@ -88,6 +91,8 @@ export default function TaskEvents({ taskId, initialEvents = [], readOnly = fals
           fetchEvents();
         }
         setShowLinkModal(false);
+        if (onUpdate) onUpdate(data?.task || data);
+        publish("task:updated", { taskId, type: "event_linked" });
       }
     } catch (err) {
       console.error("Failed to link event", err);
@@ -96,19 +101,29 @@ export default function TaskEvents({ taskId, initialEvents = [], readOnly = fals
     }
   };
 
-  const handleUnlink = async (eventId) => {
-    if (!window.confirm(t("Are you sure you want to unlink this event?", { defaultValue: "Are you sure you want to unlink this event?" }))) return;
+  // Unlink Modal state
+  const [unlinkConfirmOpen, setUnlinkConfirmOpen] = useState(false);
+  const [unlinkTargetId, setUnlinkTargetId] = useState(null);
+
+  const confirmUnlink = async () => {
+    if (!unlinkTargetId) return;
     try {
       const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}/events/${eventId}`, {
+      const res = await fetch(`${API_URL}/tasks/${taskId}/events/${unlinkTargetId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
       });
       if (res.ok) {
-        setEvents((prev) => prev.filter((e) => e.id !== eventId));
+        const data = await res.json();
+        setEvents((prev) => (prev || []).filter((e) => e.id !== unlinkTargetId));
+        if (onUpdate) onUpdate(data?.task || data);
+        publish("task:updated", { taskId, type: "event_unlinked" });
       }
     } catch (err) {
       console.error("Failed to unlink event", err);
+    } finally {
+      setUnlinkConfirmOpen(false);
+      setUnlinkTargetId(null);
     }
   };
 
@@ -130,7 +145,7 @@ export default function TaskEvents({ taskId, initialEvents = [], readOnly = fals
     <div className="td-overview" style={{ padding: "20px" }}>
       <div className="td-section-header" style={{ marginBottom: "16px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
         <h2 className="td-section-title" style={{ display: "flex", alignItems: "center", gap: "8px", margin: 0 }}>
-          <Calendar size={18} />
+          <Calendar size={18} color="#2563eb" />
           {t("Linked Events & Announcements", { defaultValue: "Linked Events & Announcements" })}
           <span className="td-section-count">({events.length})</span>
         </h2>
@@ -145,27 +160,59 @@ export default function TaskEvents({ taskId, initialEvents = [], readOnly = fals
             />
           </div>
           {!readOnly && (
-            <button
-              type="button"
-              onClick={openLinkModal}
-              className="td-btn-primary"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                padding: "7px 14px",
-                fontSize: "13px",
-                fontWeight: 600,
-                borderRadius: "6px",
-                background: "var(--color-primary, #2563eb)",
-                color: "#ffffff",
-                border: "none",
-                cursor: "pointer",
-              }}
-            >
-              <Plus size={15} />
-              {t("Link Event", { defaultValue: "Link Event" })}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={openLinkModal}
+                className="pd-btn-tx pd-btn-tx--outline"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "7px 14px",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  borderRadius: "6px",
+                  border: "1px solid var(--border-color, #e2e8f0)",
+                  background: "var(--bg-card, #ffffff)",
+                  color: "var(--text-primary, #1e293b)",
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <Calendar size={15} />
+                {t("Link Event", { defaultValue: "Link Event" })}
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate(rolePath("events/create"), {
+                  state: {
+                    taskId: task?.id || taskId,
+                    taskTitle: task?.title,
+                    projectId: task?.project?.id || task?.project_id,
+                    projectTitle: task?.project?.title,
+                  }
+                })}
+                className="pd-btn-tx pd-btn-tx--primary"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "7px 14px",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  borderRadius: "6px",
+                  background: "var(--color-primary, #2563eb)",
+                  color: "#ffffff",
+                  border: "none",
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <Plus size={16} />
+                {t("Add Event", { defaultValue: "Add Event" })}
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -179,25 +226,53 @@ export default function TaskEvents({ taskId, initialEvents = [], readOnly = fals
             {search ? t("No events match your search.", { defaultValue: "No events match your search." }) : t("No events or announcements linked to this task yet.", { defaultValue: "No events or announcements linked to this task yet." })}
           </p>
           {!readOnly && !search && (
-            <button
-              type="button"
-              onClick={openLinkModal}
-              style={{
-                padding: "7px 16px",
-                borderRadius: "6px",
-                background: "var(--color-primary, #2563eb)",
-                color: "#ffffff",
-                border: "none",
-                fontSize: "13px",
-                fontWeight: 600,
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-              }}
-            >
-              <Plus size={14} /> {t("Link Event", { defaultValue: "Link Event" })}
-            </button>
+            <div style={{ display: "flex", justifyContent: "center", gap: "10px", flexWrap: "wrap", marginTop: "14px" }}>
+              <button
+                type="button"
+                onClick={openLinkModal}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "7px 16px",
+                  borderRadius: "6px",
+                  background: "var(--bg-card, #fff)",
+                  color: "var(--color-primary, #2563eb)",
+                  border: "1px solid var(--border-color, #d1d5db)",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                <Calendar size={14} /> {t("Link Existing Event", { defaultValue: "Link Existing Event" })}
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate(rolePath("events/create"), {
+                  state: {
+                    taskId: task?.id || taskId,
+                    taskTitle: task?.title,
+                    projectId: task?.project?.id || task?.project_id,
+                    projectTitle: task?.project?.title,
+                  }
+                })}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "7px 16px",
+                  borderRadius: "6px",
+                  background: "var(--color-primary, #2563eb)",
+                  color: "#ffffff",
+                  border: "none",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                <Plus size={14} /> {t("Add Event", { defaultValue: "Add Event" })}
+              </button>
+            </div>
           )}
         </div>
       ) : (
@@ -222,7 +297,10 @@ export default function TaskEvents({ taskId, initialEvents = [], readOnly = fals
                 </span>
                 {!readOnly && (
                   <button
-                    onClick={() => handleUnlink(evt.id)}
+                    onClick={() => {
+                      setUnlinkTargetId(evt.id);
+                      setUnlinkConfirmOpen(true);
+                    }}
                     title={t("Unlink Event", { defaultValue: "Unlink Event" })}
                     style={{ background: "none", border: "none", color: "#9ca3af", cursor: "pointer", padding: "2px" }}
                   >
@@ -460,6 +538,20 @@ export default function TaskEvents({ taskId, initialEvents = [], readOnly = fals
           </div>
         </div>
       )}
+      {/* Confirm Unlink Modal */}
+      <ConfirmModal
+        isOpen={unlinkConfirmOpen}
+        onClose={() => {
+          setUnlinkConfirmOpen(false);
+          setUnlinkTargetId(null);
+        }}
+        onConfirm={confirmUnlink}
+        title={t("Confirm Unlink", { defaultValue: "Confirm Unlink" })}
+        message={t("Are you sure you want to unlink this event?", { defaultValue: "Are you sure you want to unlink this event?" })}
+        confirmText={t("Unlink", { defaultValue: "Unlink" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        danger
+      />
     </div>
   );
 }

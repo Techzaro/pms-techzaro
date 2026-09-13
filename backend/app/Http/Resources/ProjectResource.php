@@ -43,6 +43,7 @@ class ProjectResource extends JsonResource
             'team_id' => $this->team_id,
             'team_ids' => $this->team_ids ?? [],
             'assigned_users' => $this->assigned_users,
+            'view_only_users' => $this->getViewOnlyUsers(),
             'sidebar_notes' => $this->sidebar_notes,
             'created_at' => $this->created_at?->format('Y-m-d\TH:i:s'),
             'updated_at' => $this->updated_at?->format('Y-m-d\TH:i:s'),

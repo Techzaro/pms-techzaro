@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { X, Loader2, Clock, Users, FolderKanban, HardDrive, RotateCcw } from 'lucide-react';
 import { api } from '../api/superAdminApi';
@@ -109,9 +110,9 @@ export default function TrialConfigurationModal({ mode = 'global', orgId, localO
     divider: { borderTop: '1px solid var(--border-light)' },
   };
 
-  return (
-    <div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: 11000 }}>
-      <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(4px)' }} />
+  return createPortal(
+    <div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: 100000 }}>
+      <div className="absolute inset-0" style={{ background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} />
       <div className="relative rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
         style={{ background: 'var(--bg-card)', border: '1px solid var(--border-light)', zIndex: 11001 }}
         onClick={(e) => e.stopPropagation()}>
@@ -240,9 +241,9 @@ export default function TrialConfigurationModal({ mode = 'global', orgId, localO
 
         {/* Close Confirm */}
         {showCloseConfirm && (
-          <div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: 11002 }}>
-            <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(4px)' }} onClick={() => setShowCloseConfirm(false)} />
-            <div className="relative rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center" style={{ background: 'var(--bg-card)', zIndex: 11003 }}>
+          <div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: 100001 }}>
+            <div className="absolute inset-0" style={{ background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} onClick={() => setShowCloseConfirm(false)} />
+            <div className="relative rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center" style={{ background: 'var(--bg-card)', zIndex: 100002 }}>
               <div className="mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4" style={{ background: 'rgba(220,38,38,0.1)' }}>
                 <X className="w-6 h-6 text-red-600" />
               </div>
@@ -259,8 +260,8 @@ export default function TrialConfigurationModal({ mode = 'global', orgId, localO
 
         {/* Reset Confirm */}
         {showResetConfirm && (
-          <div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: 11002 }}>
-            <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(4px)' }} onClick={() => setShowResetConfirm(false)} />
+          <div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: 100001 }}>
+            <div className="absolute inset-0" style={{ background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} onClick={() => setShowResetConfirm(false)} />
             <div className="relative rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center" style={{ background: 'var(--bg-card)', zIndex: 11003 }}>
               <div className="mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4" style={{ background: 'rgba(147,51,234,0.1)' }}>
                 <RotateCcw className="w-6 h-6" style={{ color: '#9333ea' }} />
@@ -281,6 +282,7 @@ export default function TrialConfigurationModal({ mode = 'global', orgId, localO
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

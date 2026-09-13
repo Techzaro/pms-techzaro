@@ -20,7 +20,7 @@ import MultiSelectDropdown from "./MultiSelectDropdown";
 import LoadingButton from "./LoadingButton";
 import ConfirmModal from "./ConfirmModal";
 
-import { formatDateTime, toUTCIso, getNowDatetimeLocal } from "../utils/formatDateTime";
+import { formatDateTime, toUTCIso, formatForMySQL, getNowDatetimeLocal } from "../utils/formatDateTime";
 import { publish } from "../utils/eventBus";
 import { notify, showSuccessMessage } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
@@ -28,7 +28,7 @@ import { useTranslation } from "react-i18next";
 import RichTextEditor from "./RichTextEditor";
 import "./layout/CreateProjectModal.css";
 
-const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = null }) => {
+const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = null, draftData = null }) => {
   const { t } = useTranslation();
   const draftSaveRef = useRef(null);
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useDraftGuard(onClose, {
@@ -302,42 +302,62 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
 
   // Restore draft data when opened from DraftCenter
   useEffect(() => {
-    if (!restoreDraftId) return;
+    if (!restoreDraftId && !draftData) return;
 
-    const loadDraft = async () => {
-      try {
-        const data = await draftService.get(restoreDraftId);
-        const draft = data?.data;
-        if (!draft?.draft_data) return;
-
-        const d = draft.draft_data;
-        setForm({
-          title: d.title || "",
-          description: d.description || "",
-          team_id: d.team_id || "",
-          team_ids: d.team_ids || [],
-          assigned_users: d.assigned_users || [],
-          guest_ids: d.guest_ids || [],
-          priority: d.priority || "Medium",
-          status: d.status || "Planning",
-          budget: d.budget || "",
-          team_roles: d.team_roles || [],
-        });
-        if (d.categoriesList) setCategoriesList(d.categoriesList);
-        if (d.milestones) setMilestones(d.milestones);
-        if (d.links) setLinks(d.links);
-        if (d.kb_ids) setKbIds(Array.isArray(d.kb_ids) ? d.kb_ids.map(Number) : [Number(d.kb_ids)]);
-        else if (d.kb_id || d.kbReferenceId) setKbIds([Number(d.kb_id || d.kbReferenceId)]);
-        if (d.event_ids) setEventIds(Array.isArray(d.event_ids) ? d.event_ids.map(Number) : [Number(d.event_ids)]);
-        else if (d.event_id || d.eventReferenceId) setEventIds([Number(d.event_id || d.eventReferenceId)]);
-        setDraftId(restoreDraftId);
-      } catch (err) {
-        console.error("Failed to restore draft:", err);
+    const applyDraft = (d) => {
+      if (!d) return;
+      setForm({
+        title: d.title || "",
+        description: d.description || "",
+        end_date: d.end_date ? toDatetimeLocal(d.end_date) : "",
+        team_id: d.team_id || "",
+        team_ids: d.team_ids || [],
+        assigned_users: d.assigned_users || [],
+        followers: d.followers || [],
+        guest_ids: d.guest_ids || [],
+        priority: d.priority || "Medium",
+        status: d.status || "Planning",
+        budget: d.budget || "",
+        client_name: d.client_name || "",
+        team_roles: d.team_roles || [],
+      });
+      if (d.categoriesList && Array.isArray(d.categoriesList)) setCategoriesList(d.categoriesList);
+      else if (d.category) {
+        try {
+          const parsed = JSON.parse(d.category);
+          if (Array.isArray(parsed)) setCategoriesList(parsed);
+          else setCategoriesList([d.category]);
+        } catch {
+          setCategoriesList([d.category]);
+        }
       }
+      if (d.milestones && Array.isArray(d.milestones)) setMilestones(d.milestones);
+      if (d.links && Array.isArray(d.links)) setLinks(d.links);
+      if (d.kb_ids) setKbIds(Array.isArray(d.kb_ids) ? d.kb_ids.map(Number) : [Number(d.kb_ids)]);
+      else if (d.kb_id || d.kbReferenceId) setKbIds([Number(d.kb_id || d.kbReferenceId)]);
+      if (d.event_ids) setEventIds(Array.isArray(d.event_ids) ? d.event_ids.map(Number) : [Number(d.event_ids)]);
+      else if (d.event_id || d.eventReferenceId) setEventIds([Number(d.event_id || d.eventReferenceId)]);
+      if (restoreDraftId) setDraftId(restoreDraftId);
     };
 
-    loadDraft();
-  }, [restoreDraftId]);
+    if (draftData) {
+      applyDraft(draftData);
+      return;
+    }
+
+    if (restoreDraftId) {
+      const loadDraft = async () => {
+        try {
+          const data = await draftService.get(restoreDraftId);
+          const draft = data?.data;
+          if (draft?.draft_data) applyDraft(draft.draft_data);
+        } catch (err) {
+          console.error("Failed to restore draft:", err);
+        }
+      };
+      loadDraft();
+    }
+  }, [restoreDraftId, draftData]);
 
   const displayUsers = (() => {
     if (form.team_id) {
@@ -569,11 +589,17 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
    */
   const validateForm = () => {
     const errors = {};
-    if (!form.title.trim()) {
-      errors.title = "Project Name is required.";
+    const titleVal = (form.title || "").trim();
+    if (!titleVal) {
+      errors.title = t("Project Name is required.", { defaultValue: "Project Name is required." });
     }
     setFormErrors(errors);
-    return Object.keys(errors).length === 0;
+    const errorKeys = Object.keys(errors);
+    if (errorKeys.length > 0) {
+      notify.error(errors[errorKeys[0]]);
+      return false;
+    }
+    return true;
   };
 
   /**
@@ -581,7 +607,7 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
    * uploads attachments, and publishes events on success.
    */
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e?.preventDefault) e.preventDefault();
 
     if (!validateForm()) return;
 
@@ -591,24 +617,24 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
 
         // Build the request payload from form state
         const body = {
-          title: form.title.trim(),
+          title: (form.title || "").trim(),
           description: form.description || null,
-          end_date: form.end_date ? toUTCIso(form.end_date) : null,
-          project_deadline: form.end_date ? toUTCIso(form.end_date) : null,
+          end_date: form.end_date ? formatForMySQL(form.end_date) : null,
+          project_deadline: form.end_date ? formatForMySQL(form.end_date) : null,
           category: categoriesList.length > 0 ? JSON.stringify(categoriesList) : null,
           team_id: form.team_id ? parseInt(form.team_id) : null,
           team_ids: form.team_ids,
           assigned_users: form.assigned_users.length > 0 ? form.assigned_users : [],
           followers: form.followers || [],
           guest_ids: form.guest_ids.length > 0 ? form.guest_ids : [],
-          client_name: form.client_name.trim() || null,
-          priority: form.priority,
-          status: form.status,
+          client_name: (form.client_name || "").trim() || null,
+          priority: form.priority || "Medium",
+          status: form.status || "Planning",
           budget: form.budget ? parseFloat(form.budget) : null,
           milestones: milestones.map((m) => ({
             title: m.title,
-            due_date: m.due_date ? toUTCIso(m.due_date) : null,
-            milestone_deadline: m.due_date ? toUTCIso(m.due_date) : null,
+            due_date: m.due_date ? formatForMySQL(m.due_date) : null,
+            milestone_deadline: m.due_date ? formatForMySQL(m.due_date) : null,
             status: m.status || "planned",
           })),
           team_roles: form.team_roles,
@@ -627,10 +653,10 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
           _notifHandled: true,
         });
 
-        const data = await response.json();
+        const data = await response.json().catch(() => ({}));
 
         if (!response.ok) {
-          const msg = data.message || "Failed to create project";
+          const msg = data.message || `Failed to create project (Status ${response.status})`;
           const errors = data.errors ? Object.values(data.errors).flat().join(". ") : "";
           throw new Error(errors || msg);
         }
@@ -646,7 +672,8 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
         if (restoreDraftId) draftService.delete(restoreDraftId).catch(() => {});
         onClose(true);
       } catch (err) {
-        notify.error(err.message);
+        console.error("Create project error:", err);
+        notify.error(err.message || "Failed to create project");
       }
     });
   };
@@ -666,7 +693,7 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
             <AutoSaveIndicator isSaving={isSaving} lastSaved={lastSaved} />
           </div>
           <div className="cp-header-actions">
-            <button className="cp-save-draft-btn" onClick={handleSaveDraft} type="button" disabled={!form.title.trim()}>
+            <button className="cp-save-draft-btn" onClick={handleSaveDraft} type="button" disabled={!(form.title || "").trim()}>
               {t("Save Draft", { defaultValue: "Save Draft" })}
             </button>
             <LoadingButton className="cp-create-btn" onClick={handleSubmit} loading={submitting}>
@@ -688,7 +715,7 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
                 type="text"
                 name="title"
                 placeholder={t("Enter project name...", { defaultValue: "Enter project name..." })}
-                value={form.title}
+                value={form.title || ""}
                 onChange={handleChange}
                 className={formErrors.title ? "field-error" : ""}
               />
@@ -698,7 +725,7 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
             <div className="cp-field">
               <label>{t("Description", { defaultValue: "Description" })}</label>
               <RichTextEditor
-                value={form.description}
+                value={form.description || ""}
                 onChange={(val) => { markDirty(); setForm((prev) => ({ ...prev, description: val })); }}
                 placeholder={t("Enter project description...", { defaultValue: "Enter project description..." })}
               />
@@ -723,6 +750,7 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
                 name="end_date"
                 value={form.end_date || ""}
                 onChange={(e) => { markDirty(); setForm((prev) => ({ ...prev, end_date: e.target.value })); }}
+                min={getNowDatetimeLocal()}
               />
             </div>
 
@@ -973,9 +1001,10 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
                 value={form.priority}
                 onChange={(val) => handleChange({ target: { name: "priority", value: val } })}
                 options={[
-                  { value: "Medium", label: t("Medium") },
-                  { value: "Low", label: t("Low") },
-                  { value: "High", label: t("High") },
+                  { value: "Urgent", label: t("Urgent", { defaultValue: "Urgent" }) },
+                  { value: "High", label: t("High", { defaultValue: "High" }) },
+                  { value: "Medium", label: t("Medium", { defaultValue: "Medium" }) },
+                  { value: "Low", label: t("Low", { defaultValue: "Low" }) },
                 ]}
               />
             </div>
@@ -1357,11 +1386,11 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
               </div>
               <div className="cp-field">
                 <label style={{ fontSize: "13px" }}>{t("Client Name", { defaultValue: "Client Name" })}</label>
-                <input type="text" name="client_name" placeholder={t("Enter client name", { defaultValue: "Enter client name" })} value={form.client_name} onChange={handleChange} />
+                <input type="text" name="client_name" placeholder={t("Enter client name", { defaultValue: "Enter client name" })} value={form.client_name || ""} onChange={handleChange} />
               </div>
               <div className="cp-field">
                 <label style={{ fontSize: "13px" }}>{t("Budget", { defaultValue: "Budget" })}</label>
-                <input type="number" name="budget" placeholder={t("Budget amount (PKR)", { defaultValue: "Budget amount (PKR)" })} min="0" step="0.01" value={form.budget} onChange={handleChange} />
+                <input type="number" name="budget" placeholder={t("Budget amount (PKR)", { defaultValue: "Budget amount (PKR)" })} min="0" step="0.01" value={form.budget || ""} onChange={handleChange} />
               </div>
             </div>
 
@@ -1400,7 +1429,7 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
 
       {/* Edit Link Modal */}
       {editingLink && createPortal(
-        <div style={{ position: "fixed", inset: 0, zIndex: 10003, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => setEditingLink(null)}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 100000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }} onClick={() => setEditingLink(null)}>
           <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: "24px 28px", width: 400, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>{t("Edit File / Link", { defaultValue: "Edit File / Link" })}</h3>
             <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>{t("Rename or update the URL below.", { defaultValue: "Rename or update the URL below." })}</p>
@@ -1408,7 +1437,7 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
               <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-dark)", marginBottom: 6 }}>{t("Title", { defaultValue: "Title" })}</label>
               <input
                 type="text"
-                value={editLinkForm.title}
+                value={editLinkForm.title || ""}
                 onChange={(e) => setEditLinkForm((p) => ({ ...p, title: e.target.value }))}
                 style={{ width: "100%", padding: "10px 12px", border: "var(--border-color)", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "var(--text-heading)" }}
               />
@@ -1417,7 +1446,7 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
               <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-dark)", marginBottom: 6 }}>{t("URL", { defaultValue: "URL" })}</label>
               <input
                 type="url"
-                value={editLinkForm.url}
+                value={editLinkForm.url || ""}
                 onChange={(e) => setEditLinkForm((p) => ({ ...p, url: e.target.value }))}
                 style={{ width: "100%", padding: "10px 12px", border: "var(--border-color)", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "var(--text-heading)" }}
               />
@@ -1442,7 +1471,7 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null, initialTeamId = nu
 
       {/* Edit File Modal */}
       {editingFile && createPortal(
-        <div style={{ position: "fixed", inset: 0, zIndex: 10003, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => { setEditingFile(null); setEditFileNewFile(null); }}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 100000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }} onClick={() => { setEditingFile(null); setEditFileNewFile(null); }}>
           <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: "24px 28px", width: 420, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>{t("Edit File", { defaultValue: "Edit File" })}</h3>
             <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>{t("Rename or replace this file.", { defaultValue: "Rename or replace this file." })}</p>

@@ -21,12 +21,17 @@ import { usePinnedTasks, togglePinTask, isTaskPinned } from "../utils/pinnedTask
 import { showSuccessMessage, notify, toast } from "../utils/notify";
 import { publish } from "../utils/eventBus";
 import CreateTaskModal from "../components/CreateTaskModal";
+import EditTaskModal from "../components/EditTaskModal";
 import SubmitTaskModal from "../components/SubmitTaskModal";
 import ConfirmModal from "../components/ConfirmModal";
+import PauseReasonModal from "../components/PauseReasonModal";
 import SortableTableWrapper from "../components/SortableTableWrapper";
 import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
 import ActionPopover from "../components/ActionPopover";
+import TaskReopenDialog from "../components/TaskReopenDialog";
+import AbandonModal from "../components/AbandonModal";
+import MarkTaskCompletedModal from "../components/MarkTaskCompletedModal";
 import TaskNotesPopover from "../components/TaskNotesPopover";
 import AddNoteModal from "../components/AddNoteModal";
 import TransferTaskDialog from "../components/TransferTaskDialog";
@@ -39,6 +44,7 @@ import { usePersonalization } from "../context/PersonalizationContext";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import { renderDynamicDates } from "../utils/tableDateUtils";
 import { formatDateTimeInline } from "../utils/formatDateTime";
+import { getUpdatedSinceThreshold } from "../utils/filterUtils";
 import "../components/ActionPopover.css";
 import "../pages/Task.css";
 
@@ -129,13 +135,32 @@ function Tasks() {
     return filterParam || "";
   });
   const [timeFilter, setTimeFilter] = useState("");
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
   const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
   const [restoreDraftId, setRestoreDraftId] = useState(null);
+  const [draftDataPayload, setDraftDataPayload] = useState(null);
+  const [editingTask, setEditingTask] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
   const [transferDialog, setTransferDialog] = useState({ open: false, task: null });
   const [pinnedTasks] = usePinnedTasks();
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState(null);
+  const [pauseModalOpen, setPauseModalOpen] = useState(false);
+  const [pauseModalTaskId, setPauseModalTaskId] = useState(null);
+  const [resumeConfirmOpen, setResumeConfirmOpen] = useState(false);
+  const [resumeTaskItem, setResumeTaskItem] = useState(null);
+  const [acknowledgeConfirmOpen, setAcknowledgeConfirmOpen] = useState(false);
+  const [acknowledgeTaskItem, setAcknowledgeTaskItem] = useState(null);
+  const [approveConfirmOpen, setApproveConfirmOpen] = useState(false);
+  const [approveTaskId, setApproveTaskId] = useState(null);
+  const [declineConfirmOpen, setDeclineConfirmOpen] = useState(false);
+  const [declineTaskItem, setDeclineTaskItem] = useState(null);
+  const [reopenTask, setReopenTask] = useState(null);
+  const [abandonTask, setAbandonTask] = useState(null);
+  const [markCompletedTask, setMarkCompletedTask] = useState(null);
+  const [abandoning, setAbandoning] = useState(false);
 
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
@@ -152,8 +177,16 @@ function Tasks() {
     status: [],
     states: [],
     due_states: [],
+    priority: [],
+    created_by: [],
+    follower_id: [],
     start_date: "",
     end_date: "",
+    due_date_from: "",
+    due_date_to: "",
+    updated_since: "",
+    updated_since_value: "",
+    updated_since_unit: "hours",
   });
 
   const handleSort = (column) => {
@@ -224,7 +257,13 @@ function Tasks() {
       setLoading(true);
       const token = authToken();
       const params = new URLSearchParams();
-      if (timeFilter) params.append("time_filter", timeFilter);
+      if (timeFilter && timeFilter !== "custom") {
+        params.append("time_filter", timeFilter);
+      } else if (timeFilter === "custom") {
+        params.append("time_filter", "custom");
+        if (customStartDate) params.append("start_date", customStartDate);
+        if (customEndDate) params.append("end_date", customEndDate);
+      }
       if (debouncedSearch) params.append("search", debouncedSearch);
 
       const stList = Array.isArray(advancedFilters.statuses)
@@ -279,6 +318,15 @@ function Tasks() {
 
       if (advancedFilters.start_date) params.append("start_date", advancedFilters.start_date);
       if (advancedFilters.end_date) params.append("end_date", advancedFilters.end_date);
+      if (advancedFilters.due_date_from) params.append("due_date_from", advancedFilters.due_date_from);
+      if (advancedFilters.due_date_to) params.append("due_date_to", advancedFilters.due_date_to);
+      if (advancedFilters.updated_since) {
+        params.append("updated_since", advancedFilters.updated_since);
+        if (advancedFilters.updated_since === "custom") {
+          if (advancedFilters.updated_since_value) params.append("updated_since_value", advancedFilters.updated_since_value);
+          if (advancedFilters.updated_since_unit) params.append("updated_since_unit", advancedFilters.updated_since_unit);
+        }
+      }
       if (sortBy) {
         params.append("sort_by", sortBy);
         params.append("sort_direction", sortDirection);
@@ -305,14 +353,55 @@ function Tasks() {
       setLoading(false);
       setItems([]);
     }
-  }, [timeFilter, debouncedSearch, statusFilter, advancedFilters, sortBy, sortDirection]);
+  }, [timeFilter, customStartDate, customEndDate, debouncedSearch, statusFilter, advancedFilters, sortBy, sortDirection]);
 
   useEffect(() => {
     fetchTasks();
   }, [fetchTasks, page]);
 
-  useAutoRefresh(() => { fetchTasks(); }, {
-    events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
+// Handle draft restoration from DraftCenter
+  useEffect(() => {
+    const draftId = location.state?.openDraft;
+    if (!draftId) return;
+
+    const origId = location.state?.originalRecordId || location.state?.draft?.original_record_id;
+    const directDraftData = location.state?.draftData;
+
+    window.history.replaceState({}, document.title);
+
+    if (origId) {
+      setRestoreDraftId(draftId);
+      setDraftDataPayload(directDraftData || null);
+
+      const existingTask = items.find((t) => String(t.id) === String(origId));
+      if (existingTask) {
+        setEditingTask(existingTask);
+        setShowEditModal(true);
+      } else {
+        const token = authToken();
+        fetch(`${API_URL}/tasks/${origId}`, {
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        })
+          .then((r) => r.json())
+          .then((data) => {
+            const t = data?.data || data?.task || data;
+            setEditingTask(t || { id: origId, title: directDraftData?.title || "" });
+            setShowEditModal(true);
+          })
+          .catch(() => {
+            setEditingTask({ id: origId, title: directDraftData?.title || "" });
+            setShowEditModal(true);
+          });
+      }
+    } else {
+      setRestoreDraftId(draftId);
+      setDraftDataPayload(directDraftData || null);
+      setShowTaskModal(true);
+    }
+  }, [location.state, items]);
+
+  useAutoRefresh(() => { fetchTasks(); fetchSharedTasks(); }, {
+    events: ['task:created', 'task:updated', 'task:deleted', 'data:changed', 'sharing:changed'],
   });
 
   useEffect(() => {
@@ -368,46 +457,77 @@ function Tasks() {
   }, [baseItems]);
 
   const filteredItems = useMemo(() => {
-    return statusFilter
-      ? searchFilteredItems.filter((item) => {
-          const sf = String(statusFilter).toLowerCase();
-          if (sf === "due_today") {
-            const dateVal = item.end_date || item.due_date || item.start_date;
-            if (!dateVal) return false;
-            const d = new Date(dateVal);
-            const now = new Date();
-            const isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
-            const isCompleted = completedStatuses.includes(item.status);
-            return isToday && !isCompleted;
-          }
-          if (sf === "pending") {
-            return pendingStatuses.includes(item.status);
-          }
-          if (sf === "in_progress") {
-            return inProgressStatuses.includes(item.status);
-          }
-          if (sf === "submitted") {
-            return submittedStatuses.includes(item.status);
-          }
-          if (sf === "completed" || sf === "approved") {
-            return completedStatuses.includes(item.status);
-          }
-          if (sf === "paused") {
-            return pausedStatuses.includes(item.status);
-          }
-          if (sf === "declined" || sf === "rejected") {
-            return declinedStatuses.includes(item.status);
-          }
-          if (sf === "abandoned") {
-            return abandonedStatuses.includes(item.status);
-          }
-          if (sf === "transferred") {
-            return item.delegation_chain && item.delegation_chain.length > 0;
-          }
-          return (item.status || "").toLowerCase() === sf;
-        })
-      : searchFilteredItems;
-  }, [searchFilteredItems, statusFilter, completedStatuses, pendingStatuses, inProgressStatuses, submittedStatuses, pausedStatuses, declinedStatuses, abandonedStatuses]);
+    let list = searchFilteredItems;
+    const selectedPriorities = Array.isArray(advancedFilters.priority) && advancedFilters.priority.length > 0
+      ? advancedFilters.priority
+      : (Array.isArray(advancedFilters.priorities) && advancedFilters.priorities.length > 0 ? advancedFilters.priorities : []);
+
+    if (selectedPriorities.length > 0) {
+      const prioLower = selectedPriorities.map((p) => String(p).toLowerCase());
+      list = list.filter((item) => {
+        if (!item) return false;
+        const itemPrio = String(item.priority || "medium").toLowerCase();
+        return prioLower.includes(itemPrio);
+      });
+    }
+
+    if (statusFilter) {
+      list = list.filter((item) => {
+        const sf = String(statusFilter).toLowerCase();
+        if (sf === "due_today") {
+          const dateVal = item.end_date || item.due_date || item.start_date;
+          if (!dateVal) return false;
+          const d = new Date(dateVal);
+          const now = new Date();
+          const isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+          const isCompleted = completedStatuses.includes(item.status);
+          return isToday && !isCompleted;
+        }
+        if (sf === "pending") {
+          return pendingStatuses.includes(item.status);
+        }
+        if (sf === "in_progress") {
+          return inProgressStatuses.includes(item.status);
+        }
+        if (sf === "submitted") {
+          return submittedStatuses.includes(item.status);
+        }
+        if (sf === "completed" || sf === "approved") {
+          return completedStatuses.includes(item.status);
+        }
+        if (sf === "paused") {
+          return pausedStatuses.includes(item.status);
+        }
+        if (sf === "declined" || sf === "rejected") {
+          return declinedStatuses.includes(item.status);
+        }
+        if (sf === "abandoned") {
+          return abandonedStatuses.includes(item.status);
+        }
+        if (sf === "transferred") {
+          return item.delegation_chain && item.delegation_chain.length > 0;
+        }
+        return (item.status || "").toLowerCase() === sf;
+      });
+    }
+
+    // Updated Since filtering
+    const updatedSinceThreshold = getUpdatedSinceThreshold(
+      advancedFilters.updated_since,
+      advancedFilters.updated_since_value,
+      advancedFilters.updated_since_unit
+    );
+    if (updatedSinceThreshold) {
+      const thresholdTime = updatedSinceThreshold.getTime();
+      list = list.filter((item) => {
+        if (!item?.updated_at) return false;
+        const itemUpdated = new Date(item.updated_at).getTime();
+        return !isNaN(itemUpdated) && itemUpdated >= thresholdTime;
+      });
+    }
+
+    return list;
+  }, [searchFilteredItems, statusFilter, advancedFilters.priority, advancedFilters.priorities, advancedFilters.updated_since, advancedFilters.updated_since_value, advancedFilters.updated_since_unit, completedStatuses, pendingStatuses, inProgressStatuses, submittedStatuses, pausedStatuses, declinedStatuses, abandonedStatuses]);
 
   const taskIdList = useMemo(() => filteredItems.map((i) => i.id), [filteredItems]);
 
@@ -460,14 +580,15 @@ function Tasks() {
     }
   };
 
-  const handleAcknowledge = async (e, taskId) => {
+  const handleDirectDecline = async (e, task) => {
     if (e && e.stopPropagation) {
       e.stopPropagation();
       e.preventDefault();
     }
+    const taskId = task.id;
     try {
       const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}/acknowledge`, {
+      const res = await fetch(`${API_URL}/tasks/${taskId}/reject`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
         _notifHandled: true,
@@ -476,10 +597,120 @@ function Tasks() {
       if (res.ok) {
         setItems((prev) =>
           prev.map((item) =>
-            item.id === taskId ? { ...item, status: "in_progress", ...(data.task || {}) } : item
+            item.id === taskId ? { ...item, status: "rejected", ...(data.task || {}) } : item
           )
         );
-        publish('task:updated', { id: taskId, status: 'in_progress' });
+        publish('task:updated', { id: taskId, status: 'rejected' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage(t("Task", { defaultValue: "Task" }), t("declined", { defaultValue: "declined" }));
+      } else {
+        notify.error(data.message || t("Failed to decline task.", { defaultValue: "Failed to decline task." }));
+      }
+    } catch {
+      notify.error(t("An error occurred while declining task.", { defaultValue: "An error occurred while declining task." }));
+    }
+  };
+
+  const confirmDirectApprove = async () => {
+    if (!approveTaskId) return;
+    const id = approveTaskId;
+    setApproveConfirmOpen(false);
+    setApproveTaskId(null);
+    await handleDirectApprove(null, id);
+  };
+
+  const confirmDirectDecline = async () => {
+    if (!declineTaskItem) return;
+    const task = declineTaskItem;
+    setDeclineConfirmOpen(false);
+    setDeclineTaskItem(null);
+    await handleDirectDecline(null, task);
+  };
+
+  const handleDirectAbandonSubmit = async (reason) => {
+    if (!abandonTask) return;
+    setAbandoning(true);
+    const taskId = abandonTask.id;
+    const isUserAdminOrManager = ["admin", "manager"].includes(currentUser?.role);
+    const endpoint = isUserAdminOrManager ? `${API_URL}/tasks/${taskId}/abandon` : `${API_URL}/tasks/${taskId}/request-abandon`;
+    try {
+      const token = authToken();
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        body: JSON.stringify({ reason }),
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === taskId ? { ...item, status: "abandoned", ...(data.task || {}) } : item
+          )
+        );
+        publish('task:updated', { id: taskId, status: 'abandoned' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage(t("Task", { defaultValue: "Task" }), isUserAdminOrManager ? t("abandoned", { defaultValue: "abandoned" }) : t("abandon requested", { defaultValue: "abandon requested" }));
+        setAbandonTask(null);
+      } else {
+        notify.error(data.message || t("Failed to abandon task.", { defaultValue: "Failed to abandon task." }));
+      }
+    } catch {
+      notify.error(t("Failed to abandon task.", { defaultValue: "Failed to abandon task." }));
+    } finally {
+      setAbandoning(false);
+    }
+  };
+
+  const handleDirectReopenSuccess = (updatedTask) => {
+    if (!updatedTask && !reopenTask) return;
+    const taskId = updatedTask?.id || reopenTask?.id;
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === taskId ? { ...item, status: "pending", ...(updatedTask || {}) } : item
+      )
+    );
+    publish('task:updated', { id: taskId, status: 'pending' });
+    publish('data:changed', { type: 'task', action: 'updated' });
+    showSuccessMessage(t("Task", { defaultValue: "Task" }), t("reopened", { defaultValue: "reopened" }));
+    setReopenTask(null);
+  };
+
+  const handleDirectCompleteSuccess = (updatedTask) => {
+    if (!updatedTask && !markCompletedTask) return;
+    const taskId = updatedTask?.id || markCompletedTask?.id;
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === taskId ? { ...item, status: "completed", ...(updatedTask || {}) } : item
+      )
+    );
+    publish('task:updated', { id: taskId, status: 'completed' });
+    publish('data:changed', { type: 'task', action: 'updated' });
+    showSuccessMessage(t("Task", { defaultValue: "Task" }), t("marked as completed", { defaultValue: "marked as completed" }));
+    setMarkCompletedTask(null);
+  };
+
+  const handleAcknowledge = async (e, taskId) => {
+    const actualTaskId = (e && typeof e === 'object' && e.stopPropagation) ? taskId : (e || taskId);
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${actualTaskId}/acknowledge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === actualTaskId ? { ...item, status: "in_progress", ...(data.task || {}) } : item
+          )
+        );
+        publish('task:updated', { id: actualTaskId, status: 'in_progress' });
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage(t("Task", { defaultValue: "Task" }), t("acknowledged", { defaultValue: "acknowledged" }));
       } else {
@@ -529,13 +760,14 @@ function Tasks() {
   };
 
   const handleContinue = async (e, taskId) => {
+    const actualTaskId = (e && typeof e === 'object' && e.stopPropagation) ? taskId : (e || taskId);
     if (e && e.stopPropagation) {
       e.stopPropagation();
       e.preventDefault();
     }
     try {
       const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}/continue`, {
+      const res = await fetch(`${API_URL}/tasks/${actualTaskId}/continue`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
         _notifHandled: true,
@@ -544,10 +776,10 @@ function Tasks() {
       if (res.ok) {
         setItems((prev) =>
           prev.map((item) =>
-            item.id === taskId ? { ...item, status: "in_progress", ...(data.task || {}) } : item
+            item.id === actualTaskId ? { ...item, status: "in_progress", ...(data.task || {}) } : item
           )
         );
-        publish('task:updated', { id: taskId, status: 'in_progress' });
+        publish('task:updated', { id: actualTaskId, status: 'in_progress' });
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage(t("Task", { defaultValue: "Task" }), t("resumed", { defaultValue: "resumed" }));
       } else {
@@ -560,31 +792,27 @@ function Tasks() {
     }
   };
 
-  const handlePause = async (e, taskId) => {
-    if (e && e.stopPropagation) {
-      e.stopPropagation();
-      e.preventDefault();
-    }
+  const handlePause = async (taskId, data = {}) => {
     try {
       const token = authToken();
       const res = await fetch(`${API_URL}/tasks/${taskId}/pause`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
-        body: JSON.stringify({ reason: "other", reason_detail: "Paused from task list" }),
+        body: JSON.stringify({ reason: data.reason || "other", reason_detail: data.reason_detail || "Paused from task list" }),
         _notifHandled: true,
       });
-      const data = await res.json().catch(() => ({}));
+      const resData = await res.json().catch(() => ({}));
       if (res.ok) {
         setItems((prev) =>
           prev.map((item) =>
-            item.id === taskId ? { ...item, status: "paused", ...(data.task || {}) } : item
+            item.id === taskId ? { ...item, status: "paused", ...(resData.task || {}) } : item
           )
         );
         publish('task:updated', { id: taskId, status: 'paused' });
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage(t("Task", { defaultValue: "Task" }), t("paused", { defaultValue: "paused" }));
       } else {
-        notify.error(data?.message || data?.error || t("Failed to pause task.", { defaultValue: "Failed to pause task." }));
+        notify.error(resData?.message || resData?.error || t("Failed to pause task.", { defaultValue: "Failed to pause task." }));
       }
     } catch {
       notify.error(t("Failed to pause task.", { defaultValue: "Failed to pause task." }));
@@ -637,14 +865,32 @@ function Tasks() {
         </div>
 
         <div className="task-btns">
-          <div className="all-time">
+          <div className="all-time" style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
             <select value={timeFilter} onChange={(e) => { setTimeFilter(e.target.value); setPage(1); }}>
               <option value="">{t("All Time", { defaultValue: "All Time" })}</option>
               <option value="today">{t("Today", { defaultValue: "Today" })}</option>
               <option value="7">{t("Last 7 Days", { defaultValue: "Last 7 Days" })}</option>
               <option value="30">{t("Last 30 Days", { defaultValue: "Last 30 Days" })}</option>
               <option value="180">{t("Last 6 Months", { defaultValue: "Last 6 Months" })}</option>
+              <option value="custom">{t("Custom Date", { defaultValue: "Custom Date" })}</option>
             </select>
+            {timeFilter === "custom" && (
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => { setCustomStartDate(e.target.value); setPage(1); }}
+                  style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-color, #cbd5e1)', fontSize: '13px' }}
+                />
+                <span style={{ fontSize: '12px', color: '#64748b' }}>{t("to", { defaultValue: "to" })}</span>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => { setCustomEndDate(e.target.value); setPage(1); }}
+                  style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-color, #cbd5e1)', fontSize: '13px' }}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -652,9 +898,26 @@ function Tasks() {
       {showTaskModal && (
         <CreateTaskModal
           restoreDraftId={restoreDraftId}
+          draftData={draftDataPayload}
           onClose={(refresh) => {
             setShowTaskModal(false);
             setRestoreDraftId(null);
+            setDraftDataPayload(null);
+            if (refresh) fetchTasks();
+          }}
+        />
+      )}
+
+      {showEditModal && editingTask && (
+        <EditTaskModal
+          task={editingTask}
+          restoreDraftId={restoreDraftId}
+          draftData={draftDataPayload}
+          onClose={(refresh) => {
+            setShowEditModal(false);
+            setEditingTask(null);
+            setRestoreDraftId(null);
+            setDraftDataPayload(null);
             if (refresh) fetchTasks();
           }}
         />
@@ -694,7 +957,14 @@ function Tasks() {
             setPage(1);
           }}
           onFilterChange={(key, val) => {
-            setAdvancedFilters((prev) => ({ ...prev, [key]: val }));
+            setAdvancedFilters((prev) => {
+              const updated = { ...prev, [key]: val };
+              if (key === "priority" || key === "priorities") {
+                updated.priority = val;
+                updated.priorities = val;
+              }
+              return updated;
+            });
             setPage(1);
           }}
           onApplyFilters={(appliedFilters, appliedSort) => {
@@ -712,6 +982,11 @@ function Tasks() {
               follower_id: appliedFilters?.follower_id || [],
               start_date: appliedFilters?.start_date || "",
               end_date: appliedFilters?.end_date || "",
+              due_date_from: appliedFilters?.due_date_from || "",
+              due_date_to: appliedFilters?.due_date_to || "",
+              updated_since: appliedFilters?.updated_since || "",
+              updated_since_value: appliedFilters?.updated_since_value || "",
+              updated_since_unit: appliedFilters?.updated_since_unit || "hours",
             }));
             if (appliedSort && appliedSort.sort_by) {
               setSortBy(appliedSort.sort_by);
@@ -723,6 +998,8 @@ function Tasks() {
             setSearch("");
             setStatusFilter("");
             setSearchParams({});
+            setCustomStartDate("");
+            setCustomEndDate("");
             setAdvancedFilters({
               user_id: [],
               project_id: [],
@@ -735,6 +1012,11 @@ function Tasks() {
               follower_id: [],
               start_date: "",
               end_date: "",
+              due_date_from: "",
+              due_date_to: "",
+              updated_since: "",
+              updated_since_value: "",
+              updated_since_unit: "hours",
             });
             setPage(1);
           }}
@@ -884,7 +1166,7 @@ function Tasks() {
                                 className="action-icon-btn"
                                 title={t("Approve Task", { defaultValue: "Approve Task" })}
                                 style={{ color: "#16A34A", fontWeight: "bold" }}
-                                onClick={(e) => handleDirectApprove(e, item.id)}
+                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setApproveTaskId(item.id); setApproveConfirmOpen(true); }}
                               >
                                 <CheckCircle2 size={16} />
                               </button>
@@ -894,7 +1176,7 @@ function Tasks() {
                                 className="action-icon-btn"
                                 title={t("Decline Task", { defaultValue: "Decline Task" })}
                                 style={{ color: "#DC2626" }}
-                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } }); }}
+                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setDeclineTaskItem(item); setDeclineConfirmOpen(true); }}
                               >
                                 <XCircle size={16} />
                               </button>
@@ -904,7 +1186,7 @@ function Tasks() {
                                 className="action-icon-btn"
                                 title={t("Reopen Task", { defaultValue: "Reopen Task" })}
                                 style={{ color: "#2563EB" }}
-                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } }); }}
+                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setReopenTask(item); }}
                               >
                                 <RotateCcw size={16} />
                               </button>
@@ -914,9 +1196,19 @@ function Tasks() {
                                 className="action-icon-btn"
                                 title={isUserAdminOrManager ? t("Abandon Task", { defaultValue: "Abandon Task" }) : t("Request Abandon", { defaultValue: "Request Abandon" })}
                                 style={{ color: "#F59E0B" }}
-                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } }); }}
+                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setAbandonTask(item); }}
                               >
                                 <AlertOctagon size={16} />
+                              </button>
+                            )}
+                            {canUserApprove && (item.status === "pending" || item.status === "in-progress" || item.status === "in_progress" || item.status?.toLowerCase() === "pending" || item.status?.toLowerCase() === "in-progress" || item.status?.toLowerCase() === "in_progress") && (
+                              <button
+                                className="action-icon-btn"
+                                title={t("Mark as Completed", { defaultValue: "Mark as Completed" })}
+                                style={{ color: "#059669" }}
+                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setMarkCompletedTask(item); }}
+                              >
+                                <CheckCircle2 size={16} />
                               </button>
                             )}
                           </>
@@ -942,7 +1234,17 @@ function Tasks() {
                         }
                         if (item.status === "pending") {
                           return (
-                            <button className="action-icon-btn action-submit" title={t("Acknowledge Task", { defaultValue: "Acknowledge Task" })} onClick={(e) => handleAcknowledge(e, item.id)}>
+                            <button
+                              className="action-icon-btn action-submit"
+                              title={t("Acknowledge Task", { defaultValue: "Acknowledge Task" })}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                setAcknowledgeTaskItem(item);
+                                setAcknowledgeConfirmOpen(true);
+                              }}
+                              style={{ color: "#2563EB" }}
+                            >
                               <CheckCircle2 size={16} />
                             </button>
                           );
@@ -956,14 +1258,34 @@ function Tasks() {
                         }
                         if (["in_progress", "submitted"].includes(item.status?.toLowerCase()) && item.timer?.state === "running" && !item.assigner_paused && canUserPauseResume(item, currentUser)) {
                           return (
-                            <button className="action-icon-btn action-submit" title={t("Pause Task", { defaultValue: "Pause Task" })} onClick={(e) => handlePause(e, item.id)} style={{ color: "#D97706" }}>
+                            <button
+                              className="action-icon-btn action-submit"
+                              title={t("Pause Task", { defaultValue: "Pause Task" })}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                setPauseModalTaskId(item.id);
+                                setPauseModalOpen(true);
+                              }}
+                              style={{ color: "#D97706" }}
+                            >
                               <Pause size={16} />
                             </button>
                           );
                         }
                         if ((item.status === "paused" || item.timer?.state === "paused") && canUserPauseResume(item, currentUser)) {
                           return (
-                            <button className="action-icon-btn action-submit" title={t("Continue Task", { defaultValue: "Continue Task" })} onClick={(e) => handleContinue(e, item.id)}>
+                            <button
+                              className="action-icon-btn action-submit"
+                              title={t("Resume Task", { defaultValue: "Resume Task" })}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                setResumeTaskItem(item);
+                                setResumeConfirmOpen(true);
+                              }}
+                              style={{ color: "#059669" }}
+                            >
                               <Play size={16} />
                             </button>
                           );
@@ -1039,6 +1361,70 @@ function Tasks() {
         danger
       />
 
+      <ConfirmModal
+        isOpen={approveConfirmOpen}
+        onClose={() => { setApproveConfirmOpen(false); setApproveTaskId(null); }}
+        onConfirm={confirmDirectApprove}
+        title={t("Approve Task", { defaultValue: "Approve Task" })}
+        message={t("Are you sure you want to approve this task?", { defaultValue: "Are you sure you want to approve this task?" })}
+        confirmText={t("Approve", { defaultValue: "Approve" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        confirmColor="#16A34A"
+      />
+
+      <ConfirmModal
+        isOpen={declineConfirmOpen}
+        onClose={() => { setDeclineConfirmOpen(false); setDeclineTaskItem(null); }}
+        onConfirm={confirmDirectDecline}
+        title={t("Decline Task", { defaultValue: "Decline Task" })}
+        message={t("Are you sure you want to decline this task?", { defaultValue: "Are you sure you want to decline this task?" })}
+        confirmText={t("Decline", { defaultValue: "Decline" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        danger
+      />
+
+      <PauseReasonModal
+        isOpen={pauseModalOpen}
+        onClose={() => { setPauseModalOpen(false); setPauseModalTaskId(null); }}
+        onConfirm={async (data) => {
+          await handlePause(pauseModalTaskId, data);
+          setPauseModalOpen(false);
+          setPauseModalTaskId(null);
+        }}
+      />
+
+      <ConfirmModal
+        isOpen={resumeConfirmOpen}
+        onClose={() => { setResumeConfirmOpen(false); setResumeTaskItem(null); }}
+        onConfirm={async () => {
+          if (!resumeTaskItem) return;
+          await handleContinue(null, resumeTaskItem.id);
+          setResumeConfirmOpen(false);
+          setResumeTaskItem(null);
+        }}
+        title={t("Resume Task", { defaultValue: "Resume Task" })}
+        message={t("Are you sure you want to resume this task?", { defaultValue: "Are you sure you want to resume this task?" })}
+        confirmText={t("Resume", { defaultValue: "Resume" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        confirmColor="#059669"
+      />
+
+      <ConfirmModal
+        isOpen={acknowledgeConfirmOpen}
+        onClose={() => { setAcknowledgeConfirmOpen(false); setAcknowledgeTaskItem(null); }}
+        onConfirm={async () => {
+          if (!acknowledgeTaskItem) return;
+          await handleAcknowledge(null, acknowledgeTaskItem.id);
+          setAcknowledgeConfirmOpen(false);
+          setAcknowledgeTaskItem(null);
+        }}
+        title={t("Acknowledge Task", { defaultValue: "Acknowledge Task" })}
+        message={t("Are you sure you want to acknowledge this task?", { defaultValue: "Are you sure you want to acknowledge this task?" })}
+        confirmText={t("Acknowledge", { defaultValue: "Acknowledge" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        confirmColor="#2563EB"
+      />
+
       <SubmitTaskModal
         key={`tasks-submit-${submitTaskModal.task?.id || "none"}`}
         isOpen={submitTaskModal.open}
@@ -1061,6 +1447,37 @@ function Tasks() {
           onClose={() => setTransferDialog({ open: false, task: null })}
           task={transferDialog.task}
           onTransferSuccess={() => { setTransferDialog({ open: false, task: null }); fetchTasks(); showSuccessMessage(t("Task", { defaultValue: "Task" }), t("transferred", { defaultValue: "transferred" })); }}
+        />
+      )}
+
+      {reopenTask && (
+        <TaskReopenDialog
+          isOpen={!!reopenTask}
+          onClose={() => setReopenTask(null)}
+          task={reopenTask}
+          onReopenSuccess={handleDirectReopenSuccess}
+        />
+      )}
+
+      {abandonTask && (
+        <AbandonModal
+          isOpen={!!abandonTask}
+          onClose={() => setAbandonTask(null)}
+          title={["admin", "manager"].includes(currentUser?.role) ? t("Abandon Task", { defaultValue: "Abandon Task" }) : t("Request Abandon", { defaultValue: "Request Abandon" })}
+          subtitle={t("Provide justification for abandoning this task.", { defaultValue: "Provide justification for abandoning this task." })}
+          actionLabel={["admin", "manager"].includes(currentUser?.role) ? t("Abandon", { defaultValue: "Abandon" }) : t("Submit Request", { defaultValue: "Submit Request" })}
+          onSubmit={handleDirectAbandonSubmit}
+          loading={abandoning}
+        />
+      )}
+
+      {markCompletedTask && (
+        <MarkTaskCompletedModal
+          isOpen={!!markCompletedTask}
+          onClose={() => setMarkCompletedTask(null)}
+          task={markCompletedTask}
+          entityType="task"
+          onCompleteSuccess={handleDirectCompleteSuccess}
         />
       )}
 

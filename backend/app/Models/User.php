@@ -189,6 +189,12 @@ class User extends Authenticatable
         return $this->hasMany(Project::class, 'created_by');
     }
 
+    /** Projects assigned to this user (many-to-many). */
+    public function projects(): BelongsToMany
+    {
+        return $this->belongsToMany(Project::class, 'project_user')->withTimestamps();
+    }
+
     /** Teams this user belongs to. */
     public function teams(): BelongsToMany
     {
@@ -395,5 +401,34 @@ class User extends Authenticatable
             $emails[] = $this->professional_email;
         }
         return array_unique($emails);
+    }
+
+    /**
+     * Scope a query to filter users created within the last N days.
+     */
+    public function scopeFilterByDays($query, $days)
+    {
+        if ($days && is_numeric($days) && (int) $days > 0) {
+            return $query->where('created_at', '>=', now()->subDays((int) $days)->startOfDay());
+        }
+        return $query;
+    }
+
+    /**
+     * Scope a query to filter users created within a custom date range.
+     */
+    public function scopeFilterByDateRange($query, ?string $startDate, ?string $endDate)
+    {
+        if ($startDate && $endDate) {
+            return $query->whereBetween('created_at', [
+                \Carbon\Carbon::parse($startDate)->startOfDay(),
+                \Carbon\Carbon::parse($endDate)->endOfDay(),
+            ]);
+        } elseif ($startDate) {
+            return $query->where('created_at', '>=', \Carbon\Carbon::parse($startDate)->startOfDay());
+        } elseif ($endDate) {
+            return $query->where('created_at', '<=', \Carbon\Carbon::parse($endDate)->endOfDay());
+        }
+        return $query;
     }
 }

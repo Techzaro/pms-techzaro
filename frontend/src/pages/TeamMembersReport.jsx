@@ -7,7 +7,7 @@ import Breadcrumb from "../components/Breadcrumb";
 import TeamExportReport from "./TeamExportReport";
 import DonutChart from "../components/DonutChart";
 import PriorityBarChart from "../components/PriorityBarChart";
-import { getUser, rolePath } from "../utils/auth";
+import { getUser, getCurrentRole, rolePath } from "../utils/auth";
 import { useApiQuery } from "../hooks/useApi";
 import "../pages/UserPerformance.css";
 import "../components/Charts.css";
@@ -19,7 +19,7 @@ function TeamMembersReport() {
   const { teamId } = useParams();
   const navigate = useNavigate();
   const stored = getUser();
-  const currentRole = stored?.role || "member";
+  const currentRole = getCurrentRole() || stored?.role || "";
   const isAdminOrManager = currentRole === "admin" || currentRole === "manager";
   const isTeamLead = currentRole === "team_lead" || currentRole === "teamlead";
   const canExport = isAdminOrManager || isTeamLead;

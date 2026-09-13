@@ -1,15 +1,20 @@
 import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import CustomSelect from "../components/CustomSelect";
+import ConfirmModal from "../components/ConfirmModal";
 import RichTextEditor from "../components/RichTextEditor";
+import { components } from "react-select";
 import CreatableSelect from "react-select/creatable";
 import UnifiedActivityFeed from "../components/UnifiedActivityFeed";
 import ShareResourceModal from "../components/ShareResourceModal";
+import AttachResourceModal from "../components/AttachResourceModal";
 import DOMPurify from "dompurify";
 import API_URL from "../config/api";
+import draftService from "../services/draftService";
 import { authToken, rolePath, getUser } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
 import "./EventsPage.css";
@@ -45,6 +50,7 @@ import {
   UserPlus,
   X,
   Share2,
+  Link2,
 } from "lucide-react";
 import {
   convertToLocal,
@@ -84,6 +90,7 @@ export default function EventEditor() {
 
   // Share state (for view mode)
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showAttachModal, setShowAttachModal] = useState(false);
   const [hasActiveConnections, setHasActiveConnections] = useState(false);
   const [existingShares, setExistingShares] = useState([]);
 
@@ -126,6 +133,8 @@ export default function EventEditor() {
 
   // Inline Category Creation State
   const [savingNewCat, setSavingNewCat] = useState(false);
+  const [categoryToDelete, setCategoryToDelete] = useState(null);
+  const [isCategoryDeleteModalOpen, setIsCategoryDeleteModalOpen] = useState(false);
   const colorInputRef = useRef(null);
 
   // Dynamic Options from API
@@ -184,6 +193,84 @@ export default function EventEditor() {
       setVisibilityLevel("project_team");
     }
   }, [isEditMode, locationState.state]);
+
+  const applyDraftData = React.useCallback((d) => {
+    if (!d) return;
+    if (d.title !== undefined) setTitle(d.title || "");
+    if (d.description !== undefined) setDescription(d.description || "");
+    if (d.type !== undefined || d.formType !== undefined) {
+      const isAnnounce = d.type === "announcement" || d.formType === "announcement" || d.is_announcement;
+      setFormType(isAnnounce ? "announcement" : "event");
+    }
+    if (d.category_id || d.category) {
+      const catVal = String(d.category_id || d.category);
+      const catName = d.category_name || catVal;
+      setSelectedCategoryOption({ value: catVal, label: catName });
+    }
+    if (d.event_timezone || d.timezone) setEventTimezone(d.event_timezone || d.timezone);
+    if (d.start_date) {
+      const parts = String(d.start_date).split("T");
+      setStartDate(parts[0] || "");
+      if (parts[1]) setStartTime(parts[1].substring(0, 5));
+    } else if (d.startDate) {
+      setStartDate(d.startDate);
+    }
+    if (d.start_time) setStartTime(d.start_time);
+    if (d.end_date) {
+      const parts = String(d.end_date).split("T");
+      setEndDate(parts[0] || "");
+      if (parts[1]) setEndTime(parts[1].substring(0, 5));
+    } else if (d.endDate) {
+      setEndDate(d.endDate);
+    }
+    if (d.end_time) setEndTime(d.end_time);
+    if (d.all_day !== undefined || d.allDay !== undefined) setAllDay(Boolean(d.all_day ?? d.allDay));
+    if (d.location !== undefined) setLocation(d.location || "");
+    if (d.meeting_link !== undefined || d.meetingLink !== undefined) setMeetingLink(d.meeting_link || d.meetingLink || "");
+    if (d.color !== undefined) setColor(d.color || "#3b82f6");
+    if (d.reminders && Array.isArray(d.reminders) && d.reminders.length > 0) {
+      setReminders(d.reminders.map((r, idx) => ({ id: r.id || `rem-${idx}`, value: r.value, unit: r.unit })));
+    }
+    if (d.visibility_level !== undefined || d.visibilityLevel !== undefined) {
+      setVisibilityLevel(d.visibility_level || d.visibilityLevel || "organization");
+    }
+    if (d.project_id !== undefined || d.projectId !== undefined) {
+      setProjectId(String(d.project_id || d.projectId || ""));
+    }
+    if (d.team_ids && Array.isArray(d.team_ids)) setSelectedTeamIds(d.team_ids);
+    if (d.assigned_user_ids && Array.isArray(d.assigned_user_ids)) setSelectedUserIds(d.assigned_user_ids);
+    else if (d.participant_user_ids && Array.isArray(d.participant_user_ids)) setSelectedUserIds(d.participant_user_ids);
+    else if (d.selectedUserIds && Array.isArray(d.selectedUserIds)) setSelectedUserIds(d.selectedUserIds);
+  }, []);
+
+  // Handle draft restoration from DraftCenter for create mode
+  useEffect(() => {
+    if (isEditMode) return;
+    const draftId = locationState.state?.openDraft;
+    const directDraftData = locationState.state?.draftData;
+
+    if (!draftId && !directDraftData) return;
+
+    window.history.replaceState({}, document.title);
+
+    if (directDraftData) {
+      applyDraftData(directDraftData);
+      return;
+    }
+
+    if (draftId) {
+      draftService.get(draftId)
+        .then((res) => {
+          const draftObj = res?.data || res;
+          if (draftObj?.draft_data) {
+            applyDraftData(draftObj.draft_data);
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to restore Event draft:", err);
+        });
+    }
+  }, [locationState.state, isEditMode, applyDraftData]);
 
   // Load existing event if editing or viewing
   useEffect(() => {
@@ -258,6 +345,17 @@ export default function EventEditor() {
           if (Array.isArray(ev.attachments)) {
             setExistingAttachments(ev.attachments);
           }
+
+          // Overlay draft data if opened with draft state
+          const directDraft = locationState.state?.draftData;
+          const draftId = locationState.state?.openDraft;
+          if (directDraft) {
+            applyDraftData(directDraft);
+          } else if (draftId) {
+            draftService.get(draftId).then((resDraft) => {
+              if (resDraft?.data?.draft_data) applyDraftData(resDraft.data.draft_data);
+            }).catch(() => {});
+          }
         } else {
           notify.error(t("Event not found.", { defaultValue: "Event not found." }));
           navigate(rolePath("events"));
@@ -267,7 +365,7 @@ export default function EventEditor() {
         notify.error(t("Failed to load event details.", { defaultValue: "Failed to load event details." }));
       })
       .finally(() => setLoading(false));
-  }, [id, isEditMode, t]);
+  }, [id, isEditMode, t, applyDraftData]);
 
   // Resolve pending category once categories list arrives
   useEffect(() => {
@@ -414,6 +512,37 @@ export default function EventEditor() {
       notify.error(t("Network error while creating category", { defaultValue: "Network error while creating category" }));
     } finally {
       setSavingNewCat(false);
+    }
+  };
+
+  // Category Deletion via ConfirmModal
+  const confirmDeleteCategory = async () => {
+    if (!categoryToDelete?.value) return;
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/event-categories/${categoryToDelete.value}`, {
+        method: "DELETE",
+        headers: {
+          Accept: "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setCategories((prev) => prev.filter((c) => String(c.id) !== String(categoryToDelete.value)));
+        if (selectedCategoryOption?.value === String(categoryToDelete.value)) {
+          setSelectedCategoryOption(null);
+        }
+        notify.success(t("Event category deleted successfully", { defaultValue: "Event category deleted successfully" }));
+      } else {
+        notify.error(data?.message || t("Failed to delete category", { defaultValue: "Failed to delete category" }));
+      }
+    } catch (err) {
+      console.error("Delete category error:", err);
+      notify.error(t("Network error while deleting category", { defaultValue: "Network error while deleting category" }));
+    } finally {
+      setIsCategoryDeleteModalOpen(false);
+      setCategoryToDelete(null);
     }
   };
 
@@ -644,6 +773,30 @@ export default function EventEditor() {
 
       const data = await res.json();
       if (res.ok && data?.success) {
+        const createdEventId = data?.data?.id || data?.event?.id;
+        if (!isEditMode && createdEventId && locationState.state?.taskId) {
+          fetch(`${API_URL}/tasks/${locationState.state.taskId}/events`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+              Accept: "application/json",
+            },
+            body: JSON.stringify({ event_id: createdEventId }),
+          }).catch(() => {});
+        }
+        if (!isEditMode && createdEventId && locationState.state?.projectId) {
+          fetch(`${API_URL}/projects/${locationState.state.projectId}/events`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+              Accept: "application/json",
+            },
+            body: JSON.stringify({ event_id: createdEventId }),
+          }).catch(() => {});
+        }
+
         notify.success(
           isEditMode
             ? t("Event updated successfully!", { defaultValue: "Event updated successfully!" })
@@ -651,7 +804,14 @@ export default function EventEditor() {
             ? t("Company Announcement published!", { defaultValue: "Company Announcement published!" })
             : t("Event created successfully!", { defaultValue: "Event created successfully!" })
         );
-        navigate(rolePath("events"));
+
+        if (!isEditMode && locationState.state?.taskId) {
+          navigate(rolePath(`tasks/task-details/${locationState.state.taskId}`));
+        } else if (!isEditMode && locationState.state?.projectId) {
+          navigate(rolePath(`projects/project-details/${locationState.state.projectId}`));
+        } else {
+          navigate(rolePath("events"));
+        }
       } else {
         notify.error(data?.message || t("Failed to save event.", { defaultValue: "Failed to save event." }));
       }
@@ -679,6 +839,51 @@ export default function EventEditor() {
     value: String(c.id),
     label: c.name,
   }));
+
+  const CustomOption = (props) => {
+    const { data, isSelected } = props;
+    const isCreatable = data.__isNew__;
+
+    return (
+      <components.Option {...props}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {props.children}
+          </span>
+          {!isCreatable && data.value && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                setCategoryToDelete(data);
+                setIsCategoryDeleteModalOpen(true);
+              }}
+              title={t("Delete Category", { defaultValue: "Delete Category" })}
+              style={{
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                padding: "2px 4px",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: isSelected ? "#ffffff" : "#ef4444",
+                borderRadius: "4px",
+                marginLeft: "8px",
+                flexShrink: 0,
+                opacity: 0.85,
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+              onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.85")}
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      </components.Option>
+    );
+  };
 
   const PRESET_COLORS = ["#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#06b6d4", "#ec4899", "#ef4444"];
 
@@ -880,6 +1085,17 @@ export default function EventEditor() {
                   }}
                 >
                   {t("Edit", { defaultValue: "Edit" })}
+                </button>
+              )}
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => setShowAttachModal(true)}
+                  style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 14px", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--bg-hover)", color: "var(--text-primary)", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
+                  title={t("Attach to Project / Task", { defaultValue: "Attach to Project / Task" })}
+                >
+                  <Link2 size={15} color="#2563eb" />
+                  {t("Attach", { defaultValue: "Attach" })}
                 </button>
               )}
               {canEdit && hasActiveConnections && (
@@ -1187,9 +1403,9 @@ export default function EventEditor() {
         </div>
 
         {/* Add Participants Modal (View Mode) */}
-        {showAddParticipantModal && (
-          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: "16px" }}>
-            <div style={{ background: "var(--bg-card, #ffffff)", borderRadius: "12px", maxWidth: "480px", width: "100%", padding: "20px", boxShadow: "0 10px 25px rgba(0,0,0,0.2)" }}>
+        {showAddParticipantModal && createPortal(
+          <div style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 99999, padding: "16px" }} onClick={() => setShowAddParticipantModal(false)}>
+            <div style={{ background: "var(--bg-card, #ffffff)", borderRadius: "12px", maxWidth: "480px", width: "100%", padding: "20px", boxShadow: "0 10px 25px rgba(0,0,0,0.2)" }} onClick={(e) => e.stopPropagation()}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
                 <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>
                   {t("Add Event Participants", { defaultValue: "Add Event Participants" })}
@@ -1256,7 +1472,49 @@ export default function EventEditor() {
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
+        )}
+
+        {showAttachModal && (
+          <AttachResourceModal
+            isOpen={showAttachModal}
+            onClose={() => setShowAttachModal(false)}
+            resource={{
+              type: "event",
+              id: id,
+              title: title || loadedEvent?.title,
+              project_id: loadedEvent?.project_id || loadedEvent?.projectId || loadedEvent?.project?.id,
+              task_id: loadedEvent?.task_id || loadedEvent?.taskId || loadedEvent?.task?.id,
+              project: loadedEvent?.project,
+              task: loadedEvent?.task,
+              projects: loadedEvent?.projects,
+              tasks: loadedEvent?.tasks,
+              ...loadedEvent,
+            }}
+            onSuccess={() => {
+              notify.success(t("Event attached successfully!", { defaultValue: "Event attached successfully!" }));
+            }}
+          />
+        )}
+
+        {showShareModal && loadedEvent && (
+          <ShareResourceModal
+            resourceType="event"
+            resourceId={loadedEvent.id}
+            resourceName={loadedEvent.title}
+            onClose={() => setShowShareModal(false)}
+            onShared={() => {
+              setShowShareModal(false);
+              const token = authToken();
+              fetch(`${API_URL}/events/${id}`, {
+                headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+              }).then(r => r.json()).then(d => {
+                const ev = d?.data || d?.event;
+                if (ev) setLoadedEvent(ev);
+              }).catch(() => {});
+            }}
+          />
         )}
       </DashboardLayout>
     );
@@ -1336,6 +1594,7 @@ export default function EventEditor() {
                   isClearable
                   isDisabled={savingNewCat}
                   isLoading={savingNewCat}
+                  components={{ Option: CustomOption }}
                   onChange={(option) => setSelectedCategoryOption(option || null)}
                   onCreateOption={handleCreateCategory}
                   options={categoryOptions}
@@ -1877,6 +2136,24 @@ export default function EventEditor() {
           existingShares={existingShares}
         />
       )}
+
+      {/* CATEGORY DELETE CONFIRM MODAL */}
+      <ConfirmModal
+        isOpen={isCategoryDeleteModalOpen}
+        onClose={() => {
+          setIsCategoryDeleteModalOpen(false);
+          setCategoryToDelete(null);
+        }}
+        onConfirm={confirmDeleteCategory}
+        title={t("Delete Category", { defaultValue: "Delete Category" })}
+        message={t('Are you sure you want to delete category "{{name}}"?', {
+          name: categoryToDelete?.label || "",
+          defaultValue: `Are you sure you want to delete category "${categoryToDelete?.label || ""}"?`,
+        })}
+        confirmText={t("Delete", { defaultValue: "Delete" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        danger={true}
+      />
     </DashboardLayout>
   );
 }

@@ -633,7 +633,7 @@ function MyProfile() {
                       <span className="info-label">{t("Company Logo", { defaultValue: "Company Logo" })}</span>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: 1 }}>
                         <a
-                          href={`${API_URL.replace("/api", "")}/storage/${companyDocs.company_logo.path}`}
+                          href={companyDocs.company_logo.url || (companyDocs.company_logo.path?.startsWith("http") ? companyDocs.company_logo.path : `${API_URL.replace("/api", "")}/storage/${companyDocs.company_logo.path?.replace(/^\/?storage\/?/, "")}`)}
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{ background: "var(--color-primary)", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
@@ -649,7 +649,7 @@ function MyProfile() {
                       <span className="info-label">{t("QR Code", { defaultValue: "QR Code" })}</span>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: 1 }}>
                         <a
-                          href={`${API_URL.replace("/api", "")}/storage/${companyDocs.qr_code.path}`}
+                          href={companyDocs.qr_code.url || (companyDocs.qr_code.path?.startsWith("http") ? companyDocs.qr_code.path : `${API_URL.replace("/api", "")}/storage/${companyDocs.qr_code.path?.replace(/^\/?storage\/?/, "")}`)}
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{ background: "var(--color-primary)", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
@@ -662,12 +662,13 @@ function MyProfile() {
                   )}
                   {companyDocs?.other_documents?.files?.map((file, i) => {
                     const fileName = file.filename.replace(/^other_document_\d+_/, "").replace(/\.[^.]+$/, "");
+                    const docUrl = file.url || (file.path?.startsWith("http") ? file.path : `${API_URL.replace("/api", "")}/storage/${file.path?.replace(/^\/?storage\/?/, "")}`);
                     return (
                       <div className="info-row" key={`company-${i}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <span className="info-label">{fileName}</span>
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: 1 }}>
                           <a
-                            href={`${API_URL.replace("/api", "")}/storage/${file.path}`}
+                            href={docUrl}
                             target="_blank"
                             rel="noopener noreferrer"
                             style={{ background: "var(--color-primary)", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}

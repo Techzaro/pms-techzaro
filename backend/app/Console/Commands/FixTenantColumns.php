@@ -38,6 +38,7 @@ class FixTenantColumns extends Command
             ['name' => 'email_verification_exempt',      'definition' => "TINYINT(1) DEFAULT 0 AFTER `email_verified_at`"],
         ],
         'tasks' => [
+            ['name' => 'parent_id',                     'definition' => "BIGINT UNSIGNED NULL AFTER `project_id`"],
             ['name' => 'deleted_at',                      'definition' => "TIMESTAMP NULL AFTER `updated_at`"],
             ['name' => 'recurrence_start_date',         'definition' => "TIMESTAMP NULL"],
             ['name' => 'recurrence_end_date',           'definition' => "TIMESTAMP NULL"],
@@ -120,9 +121,36 @@ class FixTenantColumns extends Command
             ['name' => 'sort_parameters',                'definition' => "JSON NULL AFTER `filters`"],
             ['name' => 'is_default',                     'definition' => "TINYINT(1) DEFAULT 0 AFTER `sort_parameters`"],
         ],
+        'task_comments' => [
+            ['name' => 'parent_id',                      'definition' => "BIGINT UNSIGNED NULL AFTER `deliverable_id`"],
+            ['name' => 'quoted_message_id',             'definition' => "BIGINT UNSIGNED NULL AFTER `parent_id`"],
+            ['name' => 'quoted_text',                   'definition' => "TEXT NULL AFTER `quoted_message_id`"],
+            ['name' => 'delegation_id',                 'definition' => "BIGINT UNSIGNED NULL AFTER `body`"],
+            ['name' => 'file_path',                     'definition' => "VARCHAR(1024) NULL AFTER `delegation_id`"],
+            ['name' => 'file_name',                     'definition' => "VARCHAR(255) NULL AFTER `file_path`"],
+            ['name' => 'file_size',                     'definition' => "BIGINT UNSIGNED NULL AFTER `file_name`"],
+            ['name' => 'is_edited',                     'definition' => "TINYINT(1) DEFAULT 0 AFTER `file_size`"],
+            ['name' => 'edited_at',                     'definition' => "TIMESTAMP NULL AFTER `is_edited`"],
+            ['name' => 'comment_type',                  'definition' => "VARCHAR(50) DEFAULT 'internal' AFTER `body`"],
+            ['name' => 'visible_to_organizations',      'definition' => "JSON NULL AFTER `comment_type`"],
+        ],
+        'audit_logs' => [
+            ['name' => 'user_name',                      'definition' => "VARCHAR(255) NULL AFTER `user_id`"],
+        ],
     ];
 
     protected array $tableCreates = [
+        'project_user' => "CREATE TABLE IF NOT EXISTS `project_user` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `project_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `project_user_project_id_user_id_unique` (`project_id`, `user_id`),
+            FOREIGN KEY (`project_id`) REFERENCES `projects`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
         'event_task' => "CREATE TABLE IF NOT EXISTS `event_task` (
             `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             `event_id` BIGINT UNSIGNED NOT NULL,
@@ -647,6 +675,18 @@ class FixTenantColumns extends Command
             `updated_at` TIMESTAMP NULL,
             PRIMARY KEY (`id`),
             UNIQUE KEY `project_followers_project_id_user_id_unique` (`project_id`, `user_id`),
+            FOREIGN KEY (`project_id`) REFERENCES `projects`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'project_user' => "CREATE TABLE IF NOT EXISTS `project_user` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `project_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `project_user_project_id_user_id_unique` (`project_id`, `user_id`),
             FOREIGN KEY (`project_id`) REFERENCES `projects`(`id`) ON DELETE CASCADE,
             FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",

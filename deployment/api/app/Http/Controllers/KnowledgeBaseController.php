@@ -567,13 +567,35 @@ class KnowledgeBaseController extends Controller
 
         // Match category name
         $categoryName = $knowledgeBase->category;
-        if (isset($validated['category_id'])) {
-            $catObj = KbCategory::find($validated['category_id']);
-            if ($catObj) {
-                $categoryName = $catObj->name;
+        $categoryId = $knowledgeBase->category_id;
+
+        if (array_key_exists('category_id', $validated)) {
+            $categoryId = $validated['category_id'];
+            if ($categoryId) {
+                $catObj = KbCategory::find($categoryId);
+                if ($catObj) {
+                    $categoryName = $catObj->name;
+                }
+            } else {
+                $categoryName = $validated['category'] ?? $categoryName;
             }
-        } elseif (!empty($validated['category'])) {
+        } elseif (array_key_exists('category', $validated)) {
             $categoryName = $validated['category'];
+            if (!empty($categoryName)) {
+                $catObj = KbCategory::firstOrCreate(
+                    ['name' => $categoryName],
+                    [
+                        'slug' => Str::slug($categoryName),
+                        'color' => '#3b82f6',
+                        'icon' => 'BookOpen',
+                        'created_by' => $user->id,
+                    ]
+                );
+                $categoryId = $catObj->id;
+                $categoryName = $catObj->name;
+            } else {
+                $categoryId = null;
+            }
         }
 
         $newTitle = $validated['title'] ?? $knowledgeBase->title;
@@ -600,7 +622,7 @@ class KnowledgeBaseController extends Controller
             'title' => $newTitle,
             'content' => $newContent,
             'category' => $categoryName ?? 'General',
-            'category_id' => $validated['category_id'] ?? $knowledgeBase->category_id,
+            'category_id' => $categoryId,
             'visibility_level' => $validated['visibility_level'] ?? $knowledgeBase->visibility_level ?? 'organization',
             'project_id' => array_key_exists('project_id', $validated) ? $validated['project_id'] : $knowledgeBase->project_id,
             'department' => $validated['department'] ?? $knowledgeBase->department,

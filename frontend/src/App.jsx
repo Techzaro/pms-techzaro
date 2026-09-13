@@ -197,9 +197,32 @@ function AuthSecurityGuard({ children }) {
       }
     };
 
+    // 4. Cross-tab storage synchronization (active_role, token, user)
+    const handleStorageChange = (e) => {
+      if (!e.key) return;
+
+      if (e.key === "active_role" || e.key === "currentRole" || e.key === "token" || e.key === "user") {
+        if (!e.newValue) {
+          verifySession();
+        } else {
+          if (e.key === "active_role" || e.key === "currentRole") {
+            try {
+              sessionStorage.setItem("active_role", e.newValue);
+              sessionStorage.setItem("currentRole", e.newValue);
+            } catch {}
+          }
+          verifySession();
+          try {
+            window.dispatchEvent(new CustomEvent("auth-state-change", { detail: { key: e.key, value: e.newValue } }));
+          } catch {}
+        }
+      }
+    };
+
     window.addEventListener("pageshow", handlePageShow);
     window.addEventListener("popstate", handlePopState);
     document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("storage", handleStorageChange);
 
     // Initial route check
     verifySession();
@@ -208,6 +231,7 @@ function AuthSecurityGuard({ children }) {
       window.removeEventListener("pageshow", handlePageShow);
       window.removeEventListener("popstate", handlePopState);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("storage", handleStorageChange);
     };
   }, [location.pathname]);
 
@@ -228,6 +252,30 @@ function App() {
   useInactivityTimeout();
   const onAdmin = isAdminDomain();
   const onOrg = isOrgDomain();
+
+  // Synchronize the current tab's active role and auth identity to localStorage on any user interaction
+  // (e.g. middle-clicking or clicking links to open in a new tab) so new tabs hydrate the exact active role.
+  useEffect(() => {
+    const syncRoleOnAction = () => {
+      const currentSessionRole = sessionStorage.getItem("active_role") || sessionStorage.getItem("currentRole");
+      if (currentSessionRole) {
+        try {
+          localStorage.setItem("active_role", currentSessionRole);
+          localStorage.setItem("currentRole", currentSessionRole);
+          const roleToken = localStorage.getItem(`token_${currentSessionRole}`);
+          if (roleToken) localStorage.setItem("token", roleToken);
+          const roleUser = localStorage.getItem(`user_${currentSessionRole}`);
+          if (roleUser) localStorage.setItem("user", roleUser);
+        } catch {}
+      }
+    };
+    document.addEventListener("mousedown", syncRoleOnAction);
+    document.addEventListener("keydown", syncRoleOnAction);
+    return () => {
+      document.removeEventListener("mousedown", syncRoleOnAction);
+      document.removeEventListener("keydown", syncRoleOnAction);
+    };
+  }, []);
 
   return (
     <BrowserRouter>

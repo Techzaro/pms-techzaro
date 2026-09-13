@@ -12,6 +12,7 @@ use App\Models\Project;
 use App\Models\SubmissionAttachment;
 use App\Models\Task;
 use App\Models\TaskDelegation;
+use App\Models\Team;
 use App\Models\User;
 use App\Services\ActivityService;
 use App\Services\AuditService;
@@ -289,20 +290,9 @@ class DeliverableController extends Controller
     {
         $deliverable = Deliverable::findOrFail($id);
         $this->authorize('view', $deliverable);
-        $user = request()->user();
-        $isCreator = (int) $deliverable->created_by === (int) $user->id;
-        $isAssignee = (int) $deliverable->assigned_to === (int) $user->id;
-        $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
-
-        $isGuestOfProject = false;
-        if ($user->role === 'guest') {
-            $project = $deliverable->project ?? ($deliverable->task ? $deliverable->task->project : null);
-            $isGuestOfProject = $project && $project->isAccessibleByGuest($user);
-        }
-
-        if (! $isCreator && ! $isAssignee && ! $isAdminOrManager && ! $isGuestOfProject) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        }
+        $user = $request->user();
+        $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) ($user?->id ?? 0);
+        $isCreator = (int) ($deliverable->created_by ?? 0) === (int) ($user?->id ?? 0);
 
         // Ensure project_id is inferred from task for old subtasks
         if (empty($deliverable->project_id) && $deliverable->task_id && $deliverable->task) {
@@ -1275,8 +1265,9 @@ class DeliverableController extends Controller
         $user = $request->user();
         $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
         $isCurrentOwner = $this->delegationService->isCurrentOwnerDeliverable($deliverable, $user);
-        $isAuthorizedRole = in_array($user->role, ['admin', 'manager', 'team_lead']);
-        if (! $isAssignee && ! $isCurrentOwner && ! $isAuthorizedRole) {
+        $isAuthorizedRole = in_array($user->role, ['admin', 'manager', 'team_lead', 'super_admin']);
+        $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id || ($deliverable->task && ((int) ($deliverable->task->assigned_by ?? 0) === (int) $user->id || (int) ($deliverable->task->creator_id ?? 0) === (int) $user->id));
+        if (! $isAssignee && ! $isCurrentOwner && ! $isAuthorizedRole && ! $isCreator) {
             return response()->json(['success' => false, 'message' => 'Only the assignee or current owner can submit this deliverable'], 403);
         }
         $currentStatus = strtolower(trim((string) $deliverable->status));
@@ -1898,20 +1889,16 @@ class DeliverableController extends Controller
 
         $deliverable->update($updateData);
 
-        // Update/Attach only target assignee in pivot table without modifying others
+        // Exclusively sync target assignee in pivot table so previous assignee is removed
         try {
             if ($targetAssigneeId && method_exists($deliverable, 'assignees')) {
-                if ($deliverable->assignees()->where('users.id', $targetAssigneeId)->exists()) {
-                    $deliverable->assignees()->updateExistingPivot($targetAssigneeId, [
-                        'status' => 'pending',
-                        'submitted_at' => null,
-                    ]);
-                } else {
-                    $deliverable->assignees()->attach($targetAssigneeId, [
+                $deliverable->assignees()->sync([
+                    $targetAssigneeId => [
                         'status' => 'pending',
                         'due_date' => $deliverable->due_date ?? null,
-                    ]);
-                }
+                        'submitted_at' => null,
+                    ],
+                ]);
             }
         } catch (\Throwable $e) {
             \Log::warning('Deliverable assignees pivot update warning: '.$e->getMessage());
@@ -2544,8 +2531,9 @@ class DeliverableController extends Controller
         $this->authorize('acknowledge', $deliverable);
         $user = $request->user();
         $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
-        $isAuthorizedRole = in_array($user->role, ['admin', 'manager', 'team_lead']);
-        if (! $isAssignee && ! $isAuthorizedRole) {
+        $isAuthorizedRole = in_array($user->role, ['admin', 'manager', 'team_lead', 'super_admin']);
+        $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id || ($deliverable->task && ((int) ($deliverable->task->assigned_by ?? 0) === (int) $user->id || (int) ($deliverable->task->creator_id ?? 0) === (int) $user->id));
+        if (! $isAssignee && ! $isAuthorizedRole && ! $isCreator) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
         if (! in_array($deliverable->status, ['pending', 'reopened'])) {
@@ -3296,50 +3284,64 @@ class DeliverableController extends Controller
         $timeFilter = $request->input('time_filter');
 
         $query = Deliverable::query();
+        $permittedProjectIds = $this->getPermittedProjectIds($user);
 
         // ── Role-based visibility ──
         switch ($role) {
             case 'admin':
             case 'manager':
+            case 'super_admin':
                 // Admin and Manager see everything — no scope filter
                 break;
 
             case 'team_lead':
             case 'teamlead':
-                // Team Lead sees deliverables within their team scope
+                // Team Lead sees deliverables within their team scope + deliverables in permitted projects
                 $ledTeamIds = $user->ledTeams()->pluck('teams.id');
                 $memberTeamIds = $user->teams()->pluck('teams.id');
                 $allTeamIds = $ledTeamIds->merge($memberTeamIds)->unique();
 
+                $scopeUserIds = collect([$user->id]);
                 if ($allTeamIds->isNotEmpty()) {
-                    $scopeUserIds = DB::table('team_user')
+                    $teamUserIds = DB::table('team_user')
                         ->whereIn('team_id', $allTeamIds)
-                        ->pluck('user_id')
-                        ->push($user->id)
-                        ->unique();
-
-                    $query->where(function ($q) use ($scopeUserIds) {
-                        $q->whereIn('assigned_to', $scopeUserIds)
-                            ->orWhereIn('created_by', $scopeUserIds);
-                    });
-                } else {
-                    // No teams — only own deliverables
-                    $query->where(function ($q) use ($user) {
-                        $q->where('assigned_to', $user->id)
-                            ->orWhere('created_by', $user->id);
-                    });
+                        ->pluck('user_id');
+                    $scopeUserIds = $scopeUserIds->merge($teamUserIds)->unique();
                 }
+
+                $query->where(function ($q) use ($scopeUserIds, $user, $permittedProjectIds) {
+                    $q->whereIn('assigned_to', $scopeUserIds)
+                        ->orWhereIn('created_by', $scopeUserIds);
+
+                    if (!empty($permittedProjectIds)) {
+                        $q->orWhereIn('project_id', $permittedProjectIds)
+                            ->orWhereHas('task', fn ($tq) => $tq->whereIn('project_id', $permittedProjectIds));
+                    }
+                });
                 break;
 
             case 'guest':
-                // Guests cannot access All Sub-Tasks
-                return response()->json(['data' => collect(), 'total' => 0]);
+                if (empty($permittedProjectIds)) {
+                    return response()->json(['data' => collect(), 'total' => 0]);
+                }
+                $query->where(function ($q) use ($user, $permittedProjectIds) {
+                    $q->where('assigned_to', $user->id)
+                        ->orWhere('created_by', $user->id)
+                        ->orWhereIn('project_id', $permittedProjectIds)
+                        ->orWhereHas('task', fn ($tq) => $tq->whereIn('project_id', $permittedProjectIds));
+                });
+                break;
 
             default:
-                // Member: only deliverables directly assigned to or created by the member
-                $query->where(function ($q) use ($user) {
+                // Member: Deliverables directly assigned to or created by member + ALL deliverables within permitted projects
+                $query->where(function ($q) use ($user, $permittedProjectIds) {
                     $q->where('assigned_to', $user->id)
                         ->orWhere('created_by', $user->id);
+
+                    if (!empty($permittedProjectIds)) {
+                        $q->orWhereIn('project_id', $permittedProjectIds)
+                            ->orWhereHas('task', fn ($tq) => $tq->whereIn('project_id', $permittedProjectIds));
+                    }
                 });
                 break;
         }
@@ -3467,8 +3469,12 @@ class DeliverableController extends Controller
             });
         }
 
-        if ($timeFilter) {
-            $query->where('updated_at', '>=', now()->subDays((int) $timeFilter));
+        if ($timeFilter && $timeFilter !== 'custom' && $timeFilter !== 'all') {
+            if ($timeFilter === 'today') {
+                $query->whereDate('created_at', today());
+            } elseif (is_numeric($timeFilter) && (int) $timeFilter > 0) {
+                $query->where('created_at', '>=', now()->subDays((int) $timeFilter));
+            }
         }
 
         if ($request->filled('start_date')) {
@@ -3477,6 +3483,39 @@ class DeliverableController extends Controller
 
         if ($request->filled('end_date')) {
             $query->whereDate('end_date', '<=', $request->input('end_date'));
+        }
+
+        // Priority filter
+        $priorities = $request->input('priority', $request->input('priorities', []));
+        if (is_string($priorities) && str_contains($priorities, ',')) {
+            $priorities = explode(',', $priorities);
+        }
+        if (! is_array($priorities) && ! empty($priorities)) {
+            $priorities = [$priorities];
+        }
+        if (! empty($priorities) && is_array($priorities)) {
+            $priorities = array_values(array_filter(array_map('trim', $priorities)));
+            if (! empty($priorities)) {
+                $expandedPriorities = [];
+                foreach ($priorities as $p) {
+                    $expandedPriorities[] = $p;
+                    $expandedPriorities[] = ucfirst(strtolower($p));
+                    $expandedPriorities[] = strtolower($p);
+                    $expandedPriorities[] = strtoupper($p);
+                }
+                $query->whereIn('priority', array_values(array_unique($expandedPriorities)));
+            }
+        }
+
+        // Due date range
+        $dueDateFrom = $request->input('due_date_from') ?: $request->input('end_date_from');
+        $dueDateTo = $request->input('due_date_to') ?: $request->input('end_date_to');
+        if ($dueDateFrom && $dueDateTo) {
+            $query->whereDate('due_date', '>=', $dueDateFrom)->whereDate('due_date', '<=', $dueDateTo);
+        } elseif ($dueDateFrom) {
+            $query->whereDate('due_date', '>=', $dueDateFrom);
+        } elseif ($dueDateTo) {
+            $query->whereDate('due_date', '<=', $dueDateTo);
         }
 
         $query->with([
@@ -3932,5 +3971,236 @@ class DeliverableController extends Controller
             'message' => 'Subtask abandoned successfully',
             'deliverable' => $deliverable->fresh()->load(['assignee:id,name,email,role', 'creator:id,name', 'abandonRequestedBy:id,name', 'abandonedBy:id,name', 'abandonDeclinedBy:id,name']),
         ]);
+    }
+
+    /**
+     * Get IDs of all projects permitted/accessible to the given user based on their role,
+     * team memberships/leadership, assigned_users, manual visibility, and guest access.
+     */
+    protected function getPermittedProjectIds(User $user): array
+    {
+        if (in_array($user->role, ['admin', 'manager', 'super_admin'])) {
+            return Project::pluck('id')->toArray();
+        }
+
+        if ($user->role === 'guest') {
+            return Project::where(function ($q) use ($user) {
+                $q->whereJsonContains('guest_ids', (int) $user->id)
+                    ->orWhereJsonContains('guest_ids', (string) $user->id);
+            })->pluck('id')->toArray();
+        }
+
+        $userTeamIds = Team::where('leader_id', $user->id)
+            ->orWhereHas('members', fn ($q) => $q->where('users.id', $user->id))
+            ->pluck('id')
+            ->toArray();
+
+        return Project::where(function ($q) use ($user, $userTeamIds) {
+            $q->whereHas('manuallyVisibleTo', fn ($mq) => $mq->where('user_id', $user->id))
+                ->orWhere(function ($sq) use ($user, $userTeamIds) {
+                    $sq->where(function ($sub) use ($user, $userTeamIds) {
+                        $sub->where('created_by', $user->id)
+                            ->orWhereIn('team_id', $userTeamIds)
+                            ->orWhereHas('team.members', fn ($tq) => $tq->where('users.id', $user->id))
+                            ->orWhereHas('team', fn ($tq) => $tq->where('leader_id', $user->id));
+
+                        if (!empty($userTeamIds)) {
+                            foreach ($userTeamIds as $tid) {
+                                $sub->orWhereJsonContains('team_ids', (int) $tid)
+                                    ->orWhereJsonContains('team_ids', (string) $tid);
+                            }
+                        }
+                    })->whereDoesntHave('visibility', fn ($vq) => $vq->where('user_id', $user->id)->where('is_visible', false));
+                })
+                ->orWhereJsonContains('assigned_users', (int) $user->id)
+                ->orWhereJsonContains('assigned_users', (string) $user->id);
+        })->pluck('id')->toArray();
+    }
+
+    /**
+     * Get unified activity feed for a deliverable with date, user_id, and type filtering.
+     *
+     * @param Request $request
+     * @param Deliverable $deliverable
+     * @return JsonResponse
+     */
+    public function activities(Request $request, Deliverable $deliverable): JsonResponse
+    {
+        $startDate = $request->query('start_date') ?: $request->query('date_from');
+        $endDate = $request->query('end_date') ?: $request->query('date_to');
+        $dateFilter = $request->query('date');
+        $userFilter = $request->query('user_id');
+        $typeFilter = $request->query('type');
+
+        $feed = collect();
+
+        // 1. Deliverable Workflow Events (Timelines & Submissions)
+        $events = DeliverableWorkflowEvent::with('user:id,name,email,role')
+            ->where('deliverable_id', $deliverable->id)
+            ->get();
+
+        foreach ($events as $e) {
+            $action = $e->event_type ?: 'updated';
+            $category = in_array($action, ['submitted', 'resubmitted']) ? 'submissions' : 'timelines';
+            $feed->push([
+                'id' => 'evt-' . $e->id,
+                'type' => $category,
+                'category' => $category,
+                'action' => $action,
+                'title' => ucfirst(str_replace('_', ' ', $action)),
+                'description' => $e->comment ?: "Subtask status changed to {$action}",
+                'user_id' => $e->user_id,
+                'user_name' => $e->user?->name ?? 'System',
+                'created_at' => $e->created_at->toIso8601String(),
+                'details' => ['comment' => $e->comment, 'instructions' => $e->instructions],
+            ]);
+        }
+
+        // 2. Deliverable Changes (Field Changes)
+        $changes = DeliverableChange::with('modifiedBy:id,name,email,role')
+            ->where('deliverable_id', $deliverable->id)
+            ->get();
+
+        foreach ($changes as $c) {
+            $feed->push([
+                'id' => 'chg-' . $c->id,
+                'type' => 'changes',
+                'category' => 'changes',
+                'action' => 'field_updated',
+                'title' => 'Field Updated: ' . ucwords(str_replace('_', ' ', $c->field_name)),
+                'description' => "Changed from '" . ($c->old_value ?? 'none') . "' to '" . ($c->new_value ?? 'none') . "'",
+                'user_id' => $c->modified_by,
+                'user_name' => $c->modifiedBy?->name ?? 'System',
+                'created_at' => $c->created_at->toIso8601String(),
+                'details' => ['field' => $c->field_name, 'old' => $c->old_value, 'new' => $c->new_value],
+            ]);
+        }
+
+        // 3. Deliverable Submissions
+        $submissions = DeliverableSubmission::with('submittedBy:id,name,email,role')
+            ->where('deliverable_id', $deliverable->id)
+            ->get();
+
+        foreach ($submissions as $s) {
+            $feed->push([
+                'id' => 'sub-' . $s->id,
+                'type' => 'submissions',
+                'category' => 'submissions',
+                'action' => 'submitted',
+                'title' => 'Submission #' . ($s->version_number ?? 1),
+                'description' => $s->comment ?: 'Subtask submission',
+                'user_id' => $s->submitted_by,
+                'user_name' => $s->submittedBy?->name ?? 'User',
+                'created_at' => $s->created_at->toIso8601String(),
+                'details' => ['reopen_reason' => $s->reopen_reason, 'status' => $s->status],
+            ]);
+        }
+
+        // 4. Delegations / Transfers
+        $delegations = TaskDelegation::with(['delegatedBy:id,name,role', 'delegatedTo:id,name,role'])
+            ->where('deliverable_id', $deliverable->id)
+            ->get();
+
+        foreach ($delegations as $d) {
+            $feed->push([
+                'id' => 'dlg-' . $d->id,
+                'type' => 'transfers',
+                'category' => 'transfers',
+                'action' => 'transferred',
+                'title' => 'Subtask Transferred / Delegated',
+                'description' => 'Transferred to ' . ($d->delegatedTo?->name ?? 'User') . ($d->reason ? ". Reason: {$d->reason}" : ''),
+                'user_id' => $d->delegated_by,
+                'user_name' => $d->delegatedBy?->name ?? 'User',
+                'created_at' => $d->created_at->toIso8601String(),
+                'details' => ['reason' => $d->reason, 'to' => $d->delegatedTo?->name],
+            ]);
+        }
+
+        // 5. General Activity Logs for deliverable
+        $activities = \App\Models\Activity::with('user:id,name,email,role')
+            ->where('related_module', 'deliverable')
+            ->where('related_id', $deliverable->id)
+            ->get();
+
+        foreach ($activities as $a) {
+            $cat = str_contains($a->action, 'transfer') ? 'transfers' : (str_contains($a->action, 'submit') ? 'submissions' : 'timelines');
+            $feed->push([
+                'id' => 'act-' . $a->id,
+                'type' => $cat,
+                'category' => $cat,
+                'action' => $a->action,
+                'title' => ucfirst(str_replace('_', ' ', $a->action)),
+                'description' => $a->description,
+                'user_id' => $a->user_id,
+                'user_name' => $a->user?->name ?? 'System',
+                'created_at' => $a->created_at->toIso8601String(),
+                'details' => [],
+            ]);
+        }
+
+        // Filter by Date Range or Single Date
+        if ($startDate) {
+            $formattedStart = ActivityService::parseQueryDate($startDate);
+            if ($formattedStart) {
+                $feed = $feed->filter(function ($item) use ($formattedStart) {
+                    $d = substr($item['created_at'], 0, 10);
+                    return $d >= $formattedStart;
+                });
+            }
+        }
+        if ($endDate) {
+            $formattedEnd = ActivityService::parseQueryDate($endDate);
+            if ($formattedEnd) {
+                $feed = $feed->filter(function ($item) use ($formattedEnd) {
+                    $d = substr($item['created_at'], 0, 10);
+                    return $d <= $formattedEnd;
+                });
+            }
+        }
+        if ($dateFilter && !$startDate && !$endDate) {
+            $targetDate = ActivityService::parseQueryDate($dateFilter);
+            if ($targetDate) {
+                $feed = $feed->filter(function ($item) use ($targetDate) {
+                    $d1 = substr($item['created_at'], 0, 10);
+                    if ($d1 === $targetDate) return true;
+                    $ts = strtotime($item['created_at']);
+                    return $ts !== false && date('Y-m-d', $ts) === $targetDate;
+                });
+            }
+        }
+
+        // Filter by User / Person
+        if ($userFilter) {
+            $feed = $feed->filter(fn ($item) => (string) $item['user_id'] === (string) $userFilter);
+        }
+
+        // Filter by Type
+        if ($typeFilter && $typeFilter !== 'all') {
+            $feed = $feed->filter(fn ($item) => $item['type'] === $typeFilter);
+        }
+
+        // Sort DESC
+        $sorted = $feed->sortByDesc('created_at')->values();
+
+        // Extract list of unique users for dropdown
+        $users = collect([$deliverable->assignee, $deliverable->creator, $deliverable->currentOwner])
+            ->filter()
+            ->unique('id')
+            ->values()
+            ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name]);
+
+        return response()->json([
+            'success' => true,
+            'data' => $sorted,
+            'users' => $users,
+        ]);
+    }
+
+    /**
+     * Alias for activities feed.
+     */
+    public function unifiedActivity(Request $request, Deliverable $deliverable): JsonResponse
+    {
+        return $this->activities($request, $deliverable);
     }
 }

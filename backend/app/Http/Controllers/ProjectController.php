@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Http\Resources\ProjectResource;
 use App\Models\Deliverable;
+use App\Models\Event;
+use App\Models\KnowledgeBase;
 use App\Models\Project;
 use App\Models\ProjectChange;
 use App\Models\ProjectFile;
@@ -328,14 +330,26 @@ class ProjectController extends Controller
      */
     public function getTasks(Project $project)
     {
+        $hasParentId = \Illuminate\Support\Facades\Schema::hasColumn('tasks', 'parent_id');
+        $columns = ['id', 'business_id', 'project_id', 'title', 'status', 'priority', 'end_date', 'assigned_to', 'assigned_by', 'current_owner'];
+        if ($hasParentId) {
+            $columns[] = 'parent_id';
+        }
+
+        $with = [
+            'assignee:id,name,email,role',
+            'assignees:id,name,email,role',
+            'assigner:id,name,email,role',
+            'currentOwner:id,name',
+        ];
+        if ($hasParentId) {
+            $with[] = 'parent:id,business_id,title';
+            $with[] = 'subtasks:id,parent_id,title,business_id';
+        }
+
         $tasks = $project->tasks()
-            ->select('id', 'business_id', 'title', 'status', 'priority', 'end_date', 'assigned_to', 'assigned_by', 'current_owner')
-            ->with([
-                'assignee:id,name,email,role',
-                'assignees:id,name,email,role',
-                'assigner:id,name,email,role',
-                'currentOwner:id,name',
-            ])
+            ->select($columns)
+            ->with($with)
             ->orderBy('sort_order')
             ->get();
 
@@ -387,6 +401,8 @@ class ProjectController extends Controller
             'assigned_users' => 'nullable|array',
             'followers' => 'nullable|array',
             'followers.*' => 'exists:users,id',
+            'view_only_users' => 'nullable|array',
+            'view_only_users.*' => 'exists:users,id',
             'status' => 'nullable|string|max:64',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date',
@@ -406,6 +422,8 @@ class ProjectController extends Controller
         unset($validated['milestones']);
         $followers = $validated['followers'] ?? null;
         unset($validated['followers']);
+        $viewOnlyUsers = $validated['view_only_users'] ?? null;
+        unset($validated['view_only_users']);
         $existingFileNames = $validated['existing_file_names'] ?? null;
         unset($validated['existing_file_names']);
 
@@ -439,6 +457,47 @@ class ProjectController extends Controller
         $project = Project::create($validated);
         if (! empty($followers)) {
             $project->followers()->sync($followers);
+        }
+        if (! empty($viewOnlyUsers)) {
+            $viewUserIds = collect($viewOnlyUsers)
+                ->map(fn ($item) => is_array($item) && isset($item['id']) ? (int) $item['id'] : (is_numeric($item) ? (int) $item : null))
+                ->filter(fn ($id) => ! is_null($id) && $id > 0)
+                ->unique()
+                ->values();
+
+            if ($viewUserIds->isNotEmpty()) {
+                $visRecords = $viewUserIds->map(fn ($uid) => [
+                    'project_id' => $project->id,
+                    'user_id' => $uid,
+                    'is_visible' => true,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ])->toArray();
+                ProjectVisibility::insert($visRecords);
+
+                $visNotifications = [];
+                foreach ($viewUserIds as $uid) {
+                    if ((int) $uid !== (int) $request->user()->id) {
+                        $visNotifications[] = [
+                            'user_id' => $uid,
+                            'sender_user_id' => $request->user()->id,
+                            'type' => 'project_access_granted',
+                            'related_module' => 'project',
+                            'related_id' => $project->id,
+                            'title' => 'Project View Access Granted',
+                            'message' => $request->user()->name.' granted you view access to project "'.$project->title.'".',
+                            'link' => '/projects/project-details/'.$project->id,
+                        ];
+                    }
+                }
+                if (! empty($visNotifications)) {
+                    try {
+                        $this->notificationService->createBulk($visNotifications);
+                    } catch (\Throwable $e) {
+                        \Log::error('Failed to dispatch visibility notifications on store', ['error' => $e->getMessage()]);
+                    }
+                }
+            }
         }
         $this->replaceProjectMilestones($project, $milestones);
 
@@ -584,8 +643,10 @@ class ProjectController extends Controller
             }
         }
 
-        // ── Eager load only essential relations for initial render ──
-        $relations = [
+$hasParentIdColumn = \Illuminate\Support\Facades\Schema::hasColumn('tasks', 'parent_id');
+
+// -- Eager load only essential relations for initial render --
+$baseRelations = [
             'creator:id,name,email,role,department',
             'team.leader:id,name,email,role,department',
             'team.members:id,name,email,role,department',
@@ -593,18 +654,38 @@ class ProjectController extends Controller
             'files',
             'followers:id,name,email,avatar,role',
             'deliverables' => fn ($q) => $q->with(['assignee:id,name,role', 'creator:id,name,role'])->orderBy('sort_order'),
-            'tasks' => fn ($q) => $q->with(['assignees:id,name', 'assigner:id,name,role'])->withCount([
+'tasks' => function ($q) use ($hasParentIdColumn) {
+            $with = [
+                'assignees:id,name,email,role',
+                'assigner:id,name,email,role',
+                'deliverables' => fn ($q) => $q->with(['assignee:id,name,email,role', 'creator:id,name,email,role']),
+            ];
+            if ($hasParentIdColumn) {
+                $with[] = 'parent:id,business_id,title';
+                $with['subtasks'] = fn ($sq) => $sq->with(['assignees:id,name,email,role', 'assigner:id,name,email,role']);
+            }
+
+            $withCount = [
                 'deliverables as total_deliverables',
-                'deliverables as approved_deliverables' => fn ($q) => $q->where('status', 'approved'),
-                'deliverables as pending_deliverables' => fn ($q) => $q->whereNotIn('status', ['approved']),
-            ])->orderBy('sort_order')->latest(),
-            'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
+                'deliverables as approved_deliverables' => fn ($cq) => $cq->where('status', 'approved'),
+                'deliverables as pending_deliverables' => fn ($cq) => $cq->whereNotIn('status', ['approved']),
+            ];
+            if ($hasParentIdColumn) {
+                $withCount['subtasks as total_subtasks'] = fn ($sq) => $sq;
+            }
+
+            return $q->with($with)->withCount($withCount)->orderBy('sort_order')->latest();
+        },
+        'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
         ];
 
         try {
-            $project->load($relations);
-        } catch (\Exception $e) {
-            $project->load(array_filter($relations, fn ($k) => in_array($k, ['creator', 'team', 'milestones', 'files', 'tasks']), ARRAY_FILTER_USE_KEY));
+$project->load(array_merge($baseRelations, $optionalRelations));
+    } catch (\Throwable $e) {
+        try {
+            $project->load($baseRelations);
+        } catch (\Throwable $e2) {
+            $project->load(['milestones', 'files', 'deliverables', 'tasks']);
         }
 
         // Resolve cross-org assignees — eager-loaded assignees only search the local DB,
@@ -832,6 +913,9 @@ class ProjectController extends Controller
         unset($validated['milestones']);
         $followers = $validated['followers'] ?? null;
         unset($validated['followers']);
+        $hasViewOnlyUsers = $request->has('view_only_users');
+        $viewOnlyUsers = $validated['view_only_users'] ?? null;
+        unset($validated['view_only_users']);
         $existingFileNames = $validated['existing_file_names'] ?? null;
         unset($validated['existing_file_names']);
         $newLinks = $validated['links'] ?? null;
@@ -862,6 +946,12 @@ class ProjectController extends Controller
 
         $oldAssignedUsers = $project->assigned_users ?? [];
         $oldTeamId = $project->team_id;
+        $oldViewOnlyUserIds = $project->visibility()
+            ->where('is_visible', true)
+            ->pluck('user_id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->toArray();
         $validated['updated_by'] = $user->id;
         $project->update($validated);
 
@@ -957,6 +1047,103 @@ class ProjectController extends Controller
                 $oldNames = User::whereIn('id', $oldAssignedUsers)->pluck('name')->implode(', ');
                 $newNames = User::whereIn('id', $newAssignedUsers)->pluck('name')->implode(', ');
                 $changes[] = ['field_name' => 'assigned_users', 'label' => 'Assigned Users', 'old_value' => $oldNames ?: 'None', 'new_value' => $newNames ?: 'None'];
+            }
+        }
+
+        if ($hasViewOnlyUsers) {
+            $newViewOnlyIds = collect(is_array($viewOnlyUsers) ? $viewOnlyUsers : [])
+                ->map(fn ($item) => is_array($item) && isset($item['id']) ? (int) $item['id'] : (is_numeric($item) ? (int) $item : null))
+                ->filter(fn ($id) => ! is_null($id) && $id > 0)
+                ->unique()
+                ->values();
+
+            $existingVis = $project->visibility()->get()->keyBy('user_id');
+            $newVisRecords = [];
+            $grantedUserIds = [];
+
+            foreach ($newViewOnlyIds as $uid) {
+                if ($existingVis->has($uid)) {
+                    $existingVis->forget($uid);
+                } else {
+                    $newVisRecords[] = [
+                        'project_id' => $project->id,
+                        'user_id' => $uid,
+                        'is_visible' => true,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+                }
+                $grantedUserIds[] = $uid;
+            }
+
+            if (! empty($newVisRecords)) {
+                ProjectVisibility::insert($newVisRecords);
+            }
+            if ($newViewOnlyIds->isNotEmpty()) {
+                ProjectVisibility::where('project_id', $project->id)
+                    ->whereIn('user_id', $newViewOnlyIds->toArray())
+                    ->update(['is_visible' => true]);
+            }
+            $removedUserIds = $existingVis->pluck('user_id')->toArray();
+            if (! empty($removedUserIds)) {
+                ProjectVisibility::where('project_id', $project->id)
+                    ->whereIn('user_id', $removedUserIds)
+                    ->update(['is_visible' => false]);
+            }
+
+            $sortedOldView = $oldViewOnlyUserIds;
+            $sortedNewView = $newViewOnlyIds->toArray();
+            sort($sortedOldView);
+            sort($sortedNewView);
+
+            if ($sortedOldView !== $sortedNewView) {
+                $oldViewNames = User::whereIn('id', $sortedOldView)->pluck('name')->implode(', ');
+                $newViewNames = User::whereIn('id', $sortedNewView)->pluck('name')->implode(', ');
+                $changes[] = [
+                    'field_name' => 'view_only_users',
+                    'label' => 'View-Only Users',
+                    'old_value' => $oldViewNames ?: 'None',
+                    'new_value' => $newViewNames ?: 'None',
+                ];
+
+                $newlyGranted = array_values(array_diff($sortedNewView, $sortedOldView));
+                $visNotifications = [];
+                foreach ($newlyGranted as $uid) {
+                    if ((int) $uid !== (int) $user->id) {
+                        $visNotifications[] = [
+                            'user_id' => $uid,
+                            'sender_user_id' => $user->id,
+                            'type' => 'project_access_granted',
+                            'related_module' => 'project',
+                            'related_id' => $project->id,
+                            'title' => 'Project View Access Granted',
+                            'message' => $user->name.' granted you view access to project "'.$project->title.'".',
+                            'link' => '/projects/project-details/'.$project->id,
+                        ];
+                    }
+                }
+                $newlyRemoved = array_values(array_diff($sortedOldView, $sortedNewView));
+                foreach ($newlyRemoved as $uid) {
+                    if ((int) $uid !== (int) $user->id) {
+                        $visNotifications[] = [
+                            'user_id' => $uid,
+                            'sender_user_id' => $user->id,
+                            'type' => 'project_access_removed',
+                            'related_module' => 'project',
+                            'related_id' => $project->id,
+                            'title' => 'Project View Access Removed',
+                            'message' => $user->name.' removed your view access to project "'.$project->title.'".',
+                            'link' => '/projects/project-details/'.$project->id,
+                        ];
+                    }
+                }
+                if (! empty($visNotifications)) {
+                    try {
+                        $this->notificationService->createBulk($visNotifications);
+                    } catch (\Throwable $e) {
+                        \Log::error('Failed to dispatch visibility notifications on update', ['error' => $e->getMessage()]);
+                    }
+                }
             }
         }
 
@@ -1074,6 +1261,16 @@ class ProjectController extends Controller
             'deliverables',
             'workflowEvents' => fn ($q) => $q->with('user:id,name'),
         ]);
+
+        $freshViewOnlyUserIds = $project->visibility()
+            ->where('is_visible', true)
+            ->pluck('user_id')
+            ->filter(fn ($id) => (int) $id !== (int) $project->created_by)
+            ->values()
+            ->toArray();
+        $project->view_only_users = ! empty($freshViewOnlyUserIds)
+            ? User::whereIn('id', $freshViewOnlyUserIds)->where('active', true)->get(['id', 'name', 'email', 'role', 'department'])
+            : [];
 
         $projectMessage = $changeCount > 0 ? 'Project updated — '.$changeCount.' change(s) made' : 'Project updated successfully';
         if ($filesSkipped) {
@@ -2409,6 +2606,124 @@ class ProjectController extends Controller
         ]);
     }
 
+public function getEvents(Project $project): JsonResponse
+    {
+        $eventIds = array_map('intval', is_array($project->event_ids) ? $project->event_ids : []);
+        $events = Event::whereIn('id', $eventIds)
+            ->orWhere('project_id', $project->id)
+            ->orderBy('start_date', 'asc')
+            ->get();
+        return response()->json(['success' => true, 'events' => $events]);
+    }
+
+    public function linkEvent(Request $request, Project $project): JsonResponse
+    {
+        $validated = $request->validate([
+            'event_id' => 'required|exists:events,id',
+        ]);
+
+        $eventId = (int) $validated['event_id'];
+        $currentEventIds = array_map('intval', is_array($project->event_ids) ? $project->event_ids : []);
+        if (!in_array($eventId, $currentEventIds, true)) {
+            $currentEventIds[] = $eventId;
+            $project->update(['event_ids' => array_values(array_unique($currentEventIds))]);
+        }
+
+        $events = Event::whereIn('id', $currentEventIds)
+            ->orWhere('project_id', $project->id)
+            ->orderBy('start_date', 'asc')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Event linked to project successfully.',
+            'events' => $events,
+            'project' => $project->fresh(),
+        ]);
+    }
+
+    public function unlinkEvent(Project $project, Event $event): JsonResponse
+    {
+        $currentEventIds = array_map('intval', is_array($project->event_ids) ? $project->event_ids : []);
+        $currentEventIds = array_values(array_filter($currentEventIds, fn($id) => (int)$id !== (int)$event->id));
+        $project->update(['event_ids' => $currentEventIds]);
+
+        if ((int)$event->project_id === (int)$project->id) {
+            $event->update(['project_id' => null]);
+        }
+
+        $events = Event::whereIn('id', $currentEventIds)
+            ->orWhere('project_id', $project->id)
+            ->orderBy('start_date', 'asc')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Event unlinked from project successfully.',
+            'events' => $events,
+            'project' => $project->fresh(),
+        ]);
+    }
+
+    public function getKnowledgeBases(Project $project): JsonResponse
+    {
+        $kbIds = array_map('intval', is_array($project->kb_ids) ? $project->kb_ids : []);
+        $kbs = KnowledgeBase::whereIn('id', $kbIds)
+            ->orWhere('project_id', $project->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+        return response()->json(['success' => true, 'knowledge_bases' => $kbs]);
+    }
+
+    public function linkKnowledgeBase(Request $request, Project $project): JsonResponse
+    {
+        $validated = $request->validate([
+            'knowledge_base_id' => 'required|exists:knowledge_bases,id',
+        ]);
+
+        $kbId = (int) $validated['knowledge_base_id'];
+        $currentKbIds = array_map('intval', is_array($project->kb_ids) ? $project->kb_ids : []);
+        if (!in_array($kbId, $currentKbIds, true)) {
+            $currentKbIds[] = $kbId;
+            $project->update(['kb_ids' => array_values(array_unique($currentKbIds))]);
+        }
+
+        $kbs = KnowledgeBase::whereIn('id', $currentKbIds)
+            ->orWhere('project_id', $project->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Knowledge base linked to project successfully.',
+            'knowledge_bases' => $kbs,
+            'project' => $project->fresh(),
+        ]);
+    }
+
+    public function unlinkKnowledgeBase(Project $project, KnowledgeBase $knowledgeBase): JsonResponse
+    {
+        $currentKbIds = array_map('intval', is_array($project->kb_ids) ? $project->kb_ids : []);
+        $currentKbIds = array_values(array_filter($currentKbIds, fn($id) => (int)$id !== (int)$knowledgeBase->id));
+        $project->update(['kb_ids' => $currentKbIds]);
+
+        if ((int)$knowledgeBase->project_id === (int)$project->id) {
+            $knowledgeBase->update(['project_id' => null]);
+        }
+
+        $kbs = KnowledgeBase::whereIn('id', $currentKbIds)
+            ->orWhere('project_id', $project->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Knowledge base unlinked from project successfully.',
+            'knowledge_bases' => $kbs,
+            'project' => $project->fresh(),
+        ]);
+    }
+
     /**
      * Merge shared_project_members from partner orgs into a members collection.
      * Used by show() and getMembers() for shared collaborate projects.
@@ -2507,7 +2822,6 @@ class ProjectController extends Controller
 
                         $partnerSpm = collect();
                         if ($hasSrTable) {
-                            // Use ALL matching mirror IDs (not just first) to handle duplicate shared_resources records
                             $partnerMirrorIds = $conn->table('shared_resources')
                                 ->where('resource_type', 'project')
                                 ->where('resource_id', $project->id)

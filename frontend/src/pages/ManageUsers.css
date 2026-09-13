@@ -90,7 +90,8 @@
 
 .bar-role,
 .bar-status,
-.bar-sort {
+.bar-sort,
+.bar-time {
   border: 1px solid var(--border-color);
   background-color: var(--bg-card);
   padding: 10px 14px;
@@ -101,6 +102,23 @@
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-dark, #1e293b);
+}
+
+.custom-date-input {
+  border: 1px solid var(--border-color, #cbd5e1);
+  background-color: var(--bg-card, #ffffff);
+  padding: 8px 12px;
+  border-radius: 8px;
+  outline: 0;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-dark, #1e293b);
+  height: 38px;
 }
 
 .search-bar input {
@@ -905,7 +923,8 @@
   }
   .bar-role,
   .bar-status,
-  .bar-sort {
+  .bar-sort,
+  .bar-time {
     width: 100%;
   }
 }
@@ -940,7 +959,8 @@
   }
   .bar-role,
   .bar-status,
-  .bar-sort {
+  .bar-sort,
+  .bar-time {
     width: auto;
     flex: 1;
     min-width: 0;
@@ -1362,7 +1382,59 @@
   color: #6366f1;
 }
 
+/* ── Status Sub-Tabs ── */
+.manage-users-subtabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.subtab-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.subtab-button:hover {
+  border-color: #cbd5e1;
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.subtab-button.subtab-active {
+  border-color: var(--color-primary, #6366f1);
+  background: var(--color-primary-bg, #eef2ff);
+  color: var(--color-primary, #6366f1);
+}
+
+.subtab-button .tab-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+  border-radius: 10px;
+  padding: 0 6px;
+  min-width: 18px;
+}
+
+.subtab-button.subtab-active .tab-count {
+  background: #ffffff;
+  color: var(--color-primary, #6366f1);
+}
+
 .role-badge.role-guest {
   background: var(--color-orange-light);
   color: #ea580c;
 }
+

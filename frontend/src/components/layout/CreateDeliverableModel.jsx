@@ -18,6 +18,7 @@ import { authToken, getUser } from "../../utils/auth";
 import { publish } from "../../utils/eventBus";
 import { notify, showSuccessMessage } from "../../utils/notify";
 import { getNowDatetimeLocal } from "../../utils/formatDateTime";
+import { getProjectDisplayName } from "../../utils/projectUtils";
 import API_URL from "../../config/api";
 import useProjectContext from "../../hooks/useProjectContext";
 import CustomSelect from "../CustomSelect";
@@ -42,6 +43,7 @@ const CreateSubtaskModal = ({
   parentDeliverable = null,
   onCreated = null,
   restoreDraftId = null,
+  draftData = null,
   editMode = false,
   editData = null,
   onUpdated = null,
@@ -184,36 +186,48 @@ const CreateSubtaskModal = ({
 
   // Restore draft data when opened from DraftCenter
   useEffect(() => {
-    if (!restoreDraftId) return;
-    const loadDraft = async () => {
-      try {
-        const data = await draftService.get(restoreDraftId);
-        const draft = data?.data;
-        if (!draft?.draft_data) return;
-        const d = draft.draft_data;
-        setForm({
-          title: d.title || "",
-          description: d.description || "",
-          project_id: d.project_id || initialProjectId || "",
-          task_id: d.task_id || initialTaskId || "",
-          assigned_to: d.assigned_to || [],
-          priority: d.priority || "Medium",
-          start_date: d.start_date || "",
-          due_date: d.due_date || "",
-          allow_transfer: d.allow_transfer ?? "allow",
-        });
-        if (d.links) setLinks(d.links.map(l => ({ url: l.url, customName: l.name || "", name: l.name || "" })));
-        if (d.kb_ids) setKbIds(Array.isArray(d.kb_ids) ? d.kb_ids.map(Number) : [Number(d.kb_ids)]);
-        else if (d.kb_id || d.kbReferenceId) setKbIds([Number(d.kb_id || d.kbReferenceId)]);
-        if (d.event_ids) setEventIds(Array.isArray(d.event_ids) ? d.event_ids.map(Number) : [Number(d.event_ids)]);
-        else if (d.event_id || d.eventReferenceId) setEventIds([Number(d.event_id || d.eventReferenceId)]);
-        setDraftId(restoreDraftId);
-      } catch (err) {
-        console.error("Failed to restore draft:", err);
-      }
+    if (!restoreDraftId && !draftData) return;
+
+    const applyDraft = (d) => {
+      if (!d) return;
+      setForm((prev) => ({
+        ...prev,
+        title: d.title || prev.title || "",
+        description: d.description || prev.description || "",
+        project_id: d.project_id || prev.project_id || initialProjectId || "",
+        task_id: d.task_id || prev.task_id || initialTaskId || "",
+        assigned_to: d.assigned_to || (d.assignees ? d.assignees.map(a => a.id || a) : prev.assigned_to) || [],
+        priority: d.priority || prev.priority || "Medium",
+        start_date: d.start_date || prev.start_date || "",
+        due_date: d.due_date || prev.due_date || "",
+        allow_transfer: d.allow_transfer !== undefined ? (d.allow_transfer ? "allow" : "disallow") : prev.allow_transfer,
+      }));
+      if (d.links) setLinks(d.links.map(l => ({ url: l.url, customName: l.name || l.customName || "", name: l.name || l.customName || "" })));
+      if (d.kb_ids) setKbIds(Array.isArray(d.kb_ids) ? d.kb_ids.map(Number) : [Number(d.kb_ids)]);
+      else if (d.kb_id || d.kbReferenceId) setKbIds([Number(d.kb_id || d.kbReferenceId)]);
+      if (d.event_ids) setEventIds(Array.isArray(d.event_ids) ? d.event_ids.map(Number) : [Number(d.event_ids)]);
+      else if (d.event_id || d.eventReferenceId) setEventIds([Number(d.event_id || d.eventReferenceId)]);
+      if (restoreDraftId) setDraftId(restoreDraftId);
     };
-    loadDraft();
-  }, [restoreDraftId]);
+
+    if (draftData) {
+      applyDraft(draftData);
+      return;
+    }
+
+    if (restoreDraftId) {
+      const loadDraft = async () => {
+        try {
+          const data = await draftService.get(restoreDraftId);
+          const draft = data?.data;
+          if (draft?.draft_data) applyDraft(draft.draft_data);
+        } catch (err) {
+          console.error("Failed to restore draft:", err);
+        }
+      };
+      loadDraft();
+    }
+  }, [restoreDraftId, draftData, initialProjectId, initialTaskId]);
 
   useEffect(() => {
     if (editData) {
@@ -519,7 +533,7 @@ const CreateSubtaskModal = ({
   }, [parentDeliverable, form.task_id, initialTaskId, displayTasks, taskTitle]);
 
   return createPortal(
-    <div className="task-overlay" style={{ zIndex: 10002 }}>
+    <div className="task-overlay">
       <div className="task-modal" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="task-header">
@@ -562,7 +576,7 @@ const CreateSubtaskModal = ({
                   value={form.project_id}
                   onChange={(val) => { updateForm("project_id", val); updateForm("task_id", ""); updateForm("assigned_to", []); }}
                   placeholder={t("Select project", { defaultValue: "Select project" })}
-                  options={projects.map((p) => ({ value: p.id, label: `${p.business_id ? p.business_id + " — " : ""}${p.title}` }))}
+                  options={projects.map((p) => ({ value: p.id, label: getProjectDisplayName(p) }))}
                   isDisabled={!!initialProjectId}
                 />
                 {formErrors.project_id && <small style={{ color: "#dc2626" }}>{formErrors.project_id}</small>}
@@ -875,7 +889,7 @@ const CreateSubtaskModal = ({
 
       {/* Remove confirmation */}
       {removeConfirmOpen && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 10010, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => setRemoveConfirmOpen(false)}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 100000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }} onClick={() => setRemoveConfirmOpen(false)}>
           <div style={{ background: "var(--bg-card)", borderRadius: 16, padding: 28, maxWidth: 400, width: "90%", textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
             <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>{t("Are you sure you want to remove this item?", { defaultValue: "Are you sure you want to remove this item?" })}</p>
             <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>

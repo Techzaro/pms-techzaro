@@ -22,10 +22,14 @@ import { showSuccessMessage, notify, toast } from "../utils/notify";
 import { publish } from "../utils/eventBus";
 import SubmitTaskModal from "../components/SubmitTaskModal";
 import ConfirmModal from "../components/ConfirmModal";
+import PauseReasonModal from "../components/PauseReasonModal";
 import SortableTableWrapper from "../components/SortableTableWrapper";
 import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
 import ActionPopover from "../components/ActionPopover";
+import TaskReopenDialog from "../components/TaskReopenDialog";
+import AbandonModal from "../components/AbandonModal";
+import MarkTaskCompletedModal from "../components/MarkTaskCompletedModal";
 import TaskNotesPopover from "../components/TaskNotesPopover";
 import AddNoteModal from "../components/AddNoteModal";
 import TaskMultiStatusBadges from "../components/TaskMultiStatusBadges";
@@ -86,10 +90,26 @@ function GuestTasks() {
     return "";
   });
   const [timeFilter, setTimeFilter] = useState("");
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
   const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
   const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState(null);
+  const [pauseModalOpen, setPauseModalOpen] = useState(false);
+  const [pauseModalTaskId, setPauseModalTaskId] = useState(null);
+  const [resumeConfirmOpen, setResumeConfirmOpen] = useState(false);
+  const [resumeTaskItem, setResumeTaskItem] = useState(null);
+  const [acknowledgeConfirmOpen, setAcknowledgeConfirmOpen] = useState(false);
+  const [acknowledgeTaskItem, setAcknowledgeTaskItem] = useState(null);
+  const [approveConfirmOpen, setApproveConfirmOpen] = useState(false);
+  const [approveTaskId, setApproveTaskId] = useState(null);
+  const [declineConfirmOpen, setDeclineConfirmOpen] = useState(false);
+  const [declineTaskItem, setDeclineTaskItem] = useState(null);
+  const [reopenTask, setReopenTask] = useState(null);
+  const [abandonTask, setAbandonTask] = useState(null);
+  const [markCompletedTask, setMarkCompletedTask] = useState(null);
+  const [abandoning, setAbandoning] = useState(false);
 
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
@@ -119,7 +139,13 @@ function GuestTasks() {
       setLoading(true);
       const token = authToken();
       const params = new URLSearchParams();
-      if (timeFilter) params.append("time_filter", timeFilter);
+      if (timeFilter && timeFilter !== "custom") {
+        params.append("time_filter", timeFilter);
+      } else if (timeFilter === "custom") {
+        params.append("time_filter", "custom");
+        if (customStartDate) params.append("start_date", customStartDate);
+        if (customEndDate) params.append("end_date", customEndDate);
+      }
       if (debouncedSearch) params.append("search", debouncedSearch);
       
       // Kept from feature/time-zone
@@ -153,7 +179,7 @@ function GuestTasks() {
       setLoading(false);
       setItems([]);
     }
-  }, [timeFilter, debouncedSearch, statusFilter, sortBy, sortDirection]);
+  }, [timeFilter, customStartDate, customEndDate, debouncedSearch, statusFilter, sortBy, sortDirection]);
 
   // Merged dependencies from feature/time-zone and feature-Tasks-setup-backup
   useEffect(() => {
@@ -257,13 +283,14 @@ function GuestTasks() {
   };
 
   const handleAcknowledge = async (e, taskId) => {
+    const actualTaskId = (e && typeof e === 'object' && e.stopPropagation) ? taskId : (e || taskId);
     if (e && e.stopPropagation) {
       e.stopPropagation();
       e.preventDefault();
     }
     try {
       const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}/acknowledge`, {
+      const res = await fetch(`${API_URL}/tasks/${actualTaskId}/acknowledge`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         _notifHandled: true,
@@ -272,10 +299,10 @@ function GuestTasks() {
       if (res.ok) {
         setItems((prev) =>
           prev.map((item) =>
-            item.id === taskId ? { ...item, status: "in_progress", ...(data.task || {}) } : item
+            item.id === actualTaskId ? { ...item, status: "in_progress", ...(data.task || {}) } : item
           )
         );
-        publish('task:updated', { id: taskId, status: 'in_progress' });
+        publish('task:updated', { id: actualTaskId, status: 'in_progress' });
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage(t("Task acknowledged", { defaultValue: "Task acknowledged" }));
       } else {
@@ -317,13 +344,14 @@ function GuestTasks() {
   };
 
   const handleContinue = async (e, taskId) => {
+    const actualTaskId = (e && typeof e === 'object' && e.stopPropagation) ? taskId : (e || taskId);
     if (e && e.stopPropagation) {
       e.stopPropagation();
       e.preventDefault();
     }
     try {
       const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}/continue`, {
+      const res = await fetch(`${API_URL}/tasks/${actualTaskId}/continue`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         _notifHandled: true,
@@ -332,10 +360,10 @@ function GuestTasks() {
       if (res.ok) {
         setItems((prev) =>
           prev.map((item) =>
-            item.id === taskId ? { ...item, status: "in_progress", ...(data.task || {}) } : item
+            item.id === actualTaskId ? { ...item, status: "in_progress", ...(data.task || {}) } : item
           )
         );
-        publish('task:updated', { id: taskId, status: 'in_progress' });
+        publish('task:updated', { id: actualTaskId, status: 'in_progress' });
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage(t("Task resumed", { defaultValue: "Task resumed" }));
       } else {
@@ -346,35 +374,171 @@ function GuestTasks() {
     }
   };
 
-  const handlePause = async (e, taskId) => {
-    if (e && e.stopPropagation) {
-      e.stopPropagation();
-      e.preventDefault();
-    }
+  const handlePause = async (taskId, data = {}) => {
     try {
       const token = authToken();
       const res = await fetch(`${API_URL}/tasks/${taskId}/pause`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ reason: "other", reason_detail: "Paused from task list" }),
+        body: JSON.stringify({ reason: data.reason || "other", reason_detail: data.reason_detail || "Paused from task list" }),
         _notifHandled: true,
       });
-      const data = await res.json().catch(() => ({}));
+      const resData = await res.json().catch(() => ({}));
       if (res.ok) {
         setItems((prev) =>
           prev.map((item) =>
-            item.id === taskId ? { ...item, status: "paused", ...(data.task || {}) } : item
+            item.id === taskId ? { ...item, status: "paused", ...(resData.task || {}) } : item
           )
         );
         publish('task:updated', { id: taskId, status: 'paused' });
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage(t("Task paused", { defaultValue: "Task paused" }));
       } else {
-        notify.error(data?.message || data?.error || t("Failed to pause task."));
+        notify.error(resData?.message || resData?.error || t("Failed to pause task."));
       }
     } catch {
       notify.error(t("Failed to pause task."));
     }
+  };
+
+  const handleDirectApprove = async (e, taskId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === taskId ? { ...item, status: "approved", ...(data.task || {}) } : item
+          )
+        );
+        publish('task:updated', { id: taskId, status: 'approved' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage(t("Task", { defaultValue: "Task" }), t("approved", { defaultValue: "approved" }));
+      } else {
+        notify.error(data.message || t("Failed to approve task.", { defaultValue: "Failed to approve task." }));
+      }
+    } catch {
+      notify.error(t("An error occurred while approving task.", { defaultValue: "An error occurred while approving task." }));
+    }
+  };
+
+  const handleDirectDecline = async (e, task) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    const taskId = task.id;
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === taskId ? { ...item, status: "rejected", ...(data.task || {}) } : item
+          )
+        );
+        publish('task:updated', { id: taskId, status: 'rejected' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage(t("Task", { defaultValue: "Task" }), t("declined", { defaultValue: "declined" }));
+      } else {
+        notify.error(data.message || t("Failed to decline task.", { defaultValue: "Failed to decline task." }));
+      }
+    } catch {
+      notify.error(t("An error occurred while declining task.", { defaultValue: "An error occurred while declining task." }));
+    }
+  };
+
+  const confirmDirectApprove = async () => {
+    if (!approveTaskId) return;
+    const id = approveTaskId;
+    setApproveConfirmOpen(false);
+    setApproveTaskId(null);
+    await handleDirectApprove(null, id);
+  };
+
+  const confirmDirectDecline = async () => {
+    if (!declineTaskItem) return;
+    const task = declineTaskItem;
+    setDeclineConfirmOpen(false);
+    setDeclineTaskItem(null);
+    await handleDirectDecline(null, task);
+  };
+
+  const handleDirectAbandonSubmit = async (reason) => {
+    if (!abandonTask) return;
+    setAbandoning(true);
+    const taskId = abandonTask.id;
+    const isUserAdminOrManager = ["admin", "manager"].includes(currentUser?.role);
+    const endpoint = isUserAdminOrManager ? `${API_URL}/tasks/${taskId}/abandon` : `${API_URL}/tasks/${taskId}/request-abandon`;
+    try {
+      const token = authToken();
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        body: JSON.stringify({ reason }),
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === taskId ? { ...item, status: "abandoned", ...(data.task || {}) } : item
+          )
+        );
+        publish('task:updated', { id: taskId, status: 'abandoned' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage(t("Task", { defaultValue: "Task" }), isUserAdminOrManager ? t("abandoned", { defaultValue: "abandoned" }) : t("abandon requested", { defaultValue: "abandon requested" }));
+        setAbandonTask(null);
+      } else {
+        notify.error(data.message || t("Failed to abandon task.", { defaultValue: "Failed to abandon task." }));
+      }
+    } catch {
+      notify.error(t("Failed to abandon task.", { defaultValue: "Failed to abandon task." }));
+    } finally {
+      setAbandoning(false);
+    }
+  };
+
+  const handleDirectReopenSuccess = (updatedTask) => {
+    if (!updatedTask && !reopenTask) return;
+    const taskId = updatedTask?.id || reopenTask?.id;
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === taskId ? { ...item, status: "pending", ...(updatedTask || {}) } : item
+      )
+    );
+    publish('task:updated', { id: taskId, status: 'pending' });
+    publish('data:changed', { type: 'task', action: 'updated' });
+    showSuccessMessage(t("Task", { defaultValue: "Task" }), t("reopened", { defaultValue: "reopened" }));
+    setReopenTask(null);
+  };
+
+  const handleDirectCompleteSuccess = (updatedTask) => {
+    if (!updatedTask && !markCompletedTask) return;
+    const taskId = updatedTask?.id || markCompletedTask?.id;
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === taskId ? { ...item, status: "completed", ...(updatedTask || {}) } : item
+      )
+    );
+    publish('task:updated', { id: taskId, status: 'completed' });
+    publish('data:changed', { type: 'task', action: 'updated' });
+    showSuccessMessage(t("Task", { defaultValue: "Task" }), t("marked as completed", { defaultValue: "marked as completed" }));
+    setMarkCompletedTask(null);
   };
 
   const handleDelete = (e, taskId) => {
@@ -508,13 +672,32 @@ function GuestTasks() {
         </div>
 
         <div className="task-btns">
-          <div className="all-time">
+          <div className="all-time" style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
             <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}>
               <option value="">{t("All Time", { defaultValue: "All Time" })}</option>
+              <option value="today">{t("Today", { defaultValue: "Today" })}</option>
               <option value="7">{t("Last 7 Days", { defaultValue: "Last 7 Days" })}</option>
               <option value="30">{t("Last 30 Days", { defaultValue: "Last 30 Days" })}</option>
               <option value="180">{t("Last 6 Months", { defaultValue: "Last 6 Months" })}</option>
+              <option value="custom">{t("Custom Date", { defaultValue: "Custom Date" })}</option>
             </select>
+            {timeFilter === "custom" && (
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-color, #cbd5e1)', fontSize: '13px' }}
+                />
+                <span style={{ fontSize: '12px', color: '#64748b' }}>{t("to", { defaultValue: "to" })}</span>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-color, #cbd5e1)', fontSize: '13px' }}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -675,7 +858,7 @@ function GuestTasks() {
                                 className="action-icon-btn"
                                 title={t("Approve Task", { defaultValue: "Approve Task" })}
                                 style={{ color: "#16A34A" }}
-                                onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'guest-tasks' } })}
+                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setApproveTaskId(item.id); setApproveConfirmOpen(true); }}
                               >
                                 <CheckCircle2 size={16} />
                               </button>
@@ -685,7 +868,7 @@ function GuestTasks() {
                                 className="action-icon-btn"
                                 title={t("Decline Task", { defaultValue: "Decline Task" })}
                                 style={{ color: "#DC2626" }}
-                                onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'guest-tasks' } })}
+                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setDeclineTaskItem(item); setDeclineConfirmOpen(true); }}
                               >
                                 <XCircle size={16} />
                               </button>
@@ -695,7 +878,7 @@ function GuestTasks() {
                                 className="action-icon-btn"
                                 title={t("Reopen Task", { defaultValue: "Reopen Task" })}
                                 style={{ color: "#2563EB" }}
-                                onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'guest-tasks' } })}
+                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setReopenTask(item); }}
                               >
                                 <RotateCcw size={16} />
                               </button>
@@ -705,7 +888,7 @@ function GuestTasks() {
                                 className="action-icon-btn"
                                 title={isUserAdminOrManager ? t("Abandon Task", { defaultValue: "Abandon Task" }) : t("Request Abandon", { defaultValue: "Request Abandon" })}
                                 style={{ color: "#F59E0B" }}
-                                onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'guest-tasks' } })}
+                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setAbandonTask(item); }}
                               >
                                 <AlertOctagon size={16} />
                               </button>
@@ -725,7 +908,17 @@ function GuestTasks() {
                         }
                         if (item.status === "pending") {
                           return (
-                            <button className="action-icon-btn action-submit" title={t("Acknowledge Task", { defaultValue: "Acknowledge Task" })} onClick={(e) => handleAcknowledge(e, item.id)}>
+                            <button
+                              className="action-icon-btn action-submit"
+                              title={t("Acknowledge Task", { defaultValue: "Acknowledge Task" })}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                setAcknowledgeTaskItem(item);
+                                setAcknowledgeConfirmOpen(true);
+                              }}
+                              style={{ color: "#2563EB" }}
+                            >
                               <CheckCircle2 size={16} />
                             </button>
                           );
@@ -739,14 +932,34 @@ function GuestTasks() {
                         }
                         if (["in_progress", "submitted"].includes(item.status?.toLowerCase()) && item.timer?.state === "running" && !item.assigner_paused) {
                           return (
-                            <button className="action-icon-btn action-submit" title={t("Pause Task", { defaultValue: "Pause Task" })} onClick={(e) => handlePause(e, item.id)} style={{ color: "#D97706" }}>
+                            <button
+                              className="action-icon-btn action-submit"
+                              title={t("Pause Task", { defaultValue: "Pause Task" })}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                setPauseModalTaskId(item.id);
+                                setPauseModalOpen(true);
+                              }}
+                              style={{ color: "#D97706" }}
+                            >
                               <Pause size={16} />
                             </button>
                           );
                         }
                         if (item.status === "paused" || item.timer?.state === "paused") {
                           return (
-                            <button className="action-icon-btn action-submit" title={t("Continue Task", { defaultValue: "Continue Task" })} onClick={(e) => handleContinue(e, item.id)}>
+                            <button
+                              className="action-icon-btn action-submit"
+                              title={t("Resume Task", { defaultValue: "Resume Task" })}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                setResumeTaskItem(item);
+                                setResumeConfirmOpen(true);
+                              }}
+                              style={{ color: "#059669" }}
+                            >
                               <Play size={16} />
                             </button>
                           );
@@ -811,6 +1024,70 @@ function GuestTasks() {
         danger
       />
 
+      <ConfirmModal
+        isOpen={approveConfirmOpen}
+        onClose={() => { setApproveConfirmOpen(false); setApproveTaskId(null); }}
+        onConfirm={confirmDirectApprove}
+        title={t("Approve Task", { defaultValue: "Approve Task" })}
+        message={t("Are you sure you want to approve this task?", { defaultValue: "Are you sure you want to approve this task?" })}
+        confirmText={t("Approve", { defaultValue: "Approve" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        confirmColor="#16A34A"
+      />
+
+      <ConfirmModal
+        isOpen={declineConfirmOpen}
+        onClose={() => { setDeclineConfirmOpen(false); setDeclineTaskItem(null); }}
+        onConfirm={confirmDirectDecline}
+        title={t("Decline Task", { defaultValue: "Decline Task" })}
+        message={t("Are you sure you want to decline this task?", { defaultValue: "Are you sure you want to decline this task?" })}
+        confirmText={t("Decline", { defaultValue: "Decline" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        danger
+      />
+
+      <PauseReasonModal
+        isOpen={pauseModalOpen}
+        onClose={() => { setPauseModalOpen(false); setPauseModalTaskId(null); }}
+        onConfirm={async (data) => {
+          await handlePause(pauseModalTaskId, data);
+          setPauseModalOpen(false);
+          setPauseModalTaskId(null);
+        }}
+      />
+
+      <ConfirmModal
+        isOpen={resumeConfirmOpen}
+        onClose={() => { setResumeConfirmOpen(false); setResumeTaskItem(null); }}
+        onConfirm={async () => {
+          if (!resumeTaskItem) return;
+          await handleContinue(null, resumeTaskItem.id);
+          setResumeConfirmOpen(false);
+          setResumeTaskItem(null);
+        }}
+        title={t("Resume Task", { defaultValue: "Resume Task" })}
+        message={t("Are you sure you want to resume this task?", { defaultValue: "Are you sure you want to resume this task?" })}
+        confirmText={t("Resume", { defaultValue: "Resume" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        confirmColor="#059669"
+      />
+
+      <ConfirmModal
+        isOpen={acknowledgeConfirmOpen}
+        onClose={() => { setAcknowledgeConfirmOpen(false); setAcknowledgeTaskItem(null); }}
+        onConfirm={async () => {
+          if (!acknowledgeTaskItem) return;
+          await handleAcknowledge(null, acknowledgeTaskItem.id);
+          setAcknowledgeConfirmOpen(false);
+          setAcknowledgeTaskItem(null);
+        }}
+        title={t("Acknowledge Task", { defaultValue: "Acknowledge Task" })}
+        message={t("Are you sure you want to acknowledge this task?", { defaultValue: "Are you sure you want to acknowledge this task?" })}
+        confirmText={t("Acknowledge", { defaultValue: "Acknowledge" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        confirmColor="#2563EB"
+      />
+
       <SubmitTaskModal
         key={`guest-tasks-submit-${submitTaskModal.task?.id || "none"}`}
         isOpen={submitTaskModal.open}
@@ -825,6 +1102,31 @@ function GuestTasks() {
         itemType="task"
         itemId={noteModal.itemId}
         onSaved={fetchTasks}
+      />
+
+      <TaskReopenDialog
+        isOpen={!!reopenTask}
+        onClose={() => setReopenTask(null)}
+        task={reopenTask}
+        onReopenSuccess={handleDirectReopenSuccess}
+      />
+
+      <AbandonModal
+        isOpen={!!abandonTask}
+        onClose={() => setAbandonTask(null)}
+        title={t("Abandon Task", { defaultValue: "Abandon Task" })}
+        subtitle={t("Please provide a reason for abandoning this task.", { defaultValue: "Please provide a reason for abandoning this task." })}
+        actionLabel={["admin", "manager"].includes(currentUser?.role) ? t("Abandon", { defaultValue: "Abandon" }) : t("Request Abandon", { defaultValue: "Request Abandon" })}
+        onSubmit={handleDirectAbandonSubmit}
+        loading={abandoning}
+      />
+
+      <MarkTaskCompletedModal
+        isOpen={!!markCompletedTask}
+        onClose={() => setMarkCompletedTask(null)}
+        task={markCompletedTask}
+        entityType="task"
+        onCompleteSuccess={handleDirectCompleteSuccess}
       />
 
     </DashboardLayout>

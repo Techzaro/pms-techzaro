@@ -13,7 +13,7 @@ import { useTranslation } from "react-i18next";
  * @param {number} totalPages - Total number of pages.
  * @param {Function} onPageChange - Callback invoked with the target page number.
  */
-export default function Pagination({ currentPage, totalPages, onPageChange, itemsPerPage, onItemsPerPageChange }) {
+export default function Pagination({ currentPage, totalPages, onPageChange, itemsPerPage, onItemsPerPageChange, itemsPerPageOptions = [10, 25, 50, 100] }) {
   const { t } = useTranslation();
   const [jumpIdx, setJumpIdx] = useState(null);
   const [jumpValue, setJumpValue] = useState("");
@@ -83,7 +83,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange, item
     >
       {onItemsPerPageChange ? (
         <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "var(--text-secondary)" }}>
-          <span>{t("Per page")}:</span>
+          <span>{t("Rows per page", { defaultValue: "Rows per page" })}:</span>
           <select
             value={itemsPerPage || 10}
             onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
@@ -97,7 +97,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange, item
               cursor: "pointer",
             }}
           >
-            {[10, 20, 50, 100].map((size) => (
+            {itemsPerPageOptions.map((size) => (
               <option key={size} value={size}>
                 {size}
               </option>

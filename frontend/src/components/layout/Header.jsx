@@ -120,14 +120,34 @@ function Header() {
 
   /** User info loaded from local storage on first render. */
   const [user, setUserState] = useState(() => {
-    const stored = getUser();
+    const role = getCurrentRole();
+    const stored = getUser(role);
     return {
       name: stored?.name || "User",
       email: stored?.email || "user@example.com",
-      role: stored?.role || "Member",
+      role: role || stored?.role || "Member",
       avatar: stored?.avatar || null,
+      professional_email: stored?.professional_email || "",
     };
   });
+
+  useEffect(() => {
+    const handleAuthChange = () => {
+      const role = getCurrentRole();
+      const stored = getUser(role);
+      if (stored) {
+        setUserState({
+          name: stored.name || "User",
+          email: stored.email || "user@example.com",
+          role: role || stored.role || "Member",
+          avatar: stored.avatar || null,
+          professional_email: stored.professional_email || "",
+        });
+      }
+    };
+    window.addEventListener("auth-state-change", handleAuthChange);
+    return () => window.removeEventListener("auth-state-change", handleAuthChange);
+  }, []);
 
   const toggleProfileModal = () =>
     setIsProfileOpen((prev) => !prev);
@@ -898,13 +918,11 @@ function Header() {
       {/* Project creation modal – admin/manager only */}
 
       {showProjectModal && (
-        <div className="modal-overlay">
-          <CreateProjectModal
-            onClose={(created) => {
-              setShowProjectModal(false);
-            }}
-          />
-        </div>
+        <CreateProjectModal
+          onClose={(created) => {
+            setShowProjectModal(false);
+          }}
+        />
       )}
 
     </>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Building2, Loader2, X, Check, ArrowRight, ArrowLeft, Sliders, Globe } from 'lucide-react';
 import { api } from './api/superAdminApi';
@@ -167,9 +168,9 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
     errorBg: { background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.25)' },
   };
 
-  return (
-    <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 9999 }}>
-      <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(4px)' }} onClick={handleClose}></div>
+  return createPortal(
+    <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 99999 }}>
+      <div className="absolute inset-0" style={{ background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} onClick={handleClose}></div>
       <div className="relative rounded-xl shadow-2xl w-full max-w-3xl mx-4 max-h-[90vh] flex flex-col" style={{ ...s.card, zIndex: 10000 }}>
         <div className="flex items-center justify-between p-6 pb-4" style={s.divider}>
           <div>
@@ -463,6 +464,7 @@ export default function CreateOrganizationModal({ onClose, onSuccess }) {
         />
       )}
       {ConfirmDialog}
-    </div>
+    </div>,
+    document.body
   );
 }

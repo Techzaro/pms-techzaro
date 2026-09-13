@@ -47,23 +47,38 @@ function _migrateIfNeeded() {
   if (!role) return true;
   if (sid) return true;
 
-  const legacyToken = localStorage.getItem(`token_${role}`);
+  const legacyToken = localStorage.getItem(`token_${role}`) || localStorage.getItem("token");
   let legacyUser = null;
   try {
-    legacyUser = JSON.parse(localStorage.getItem(`user_${role}`)) || null;
+    legacyUser = JSON.parse(localStorage.getItem(`user_${role}`)) || JSON.parse(localStorage.getItem("user")) || null;
   } catch {}
+
+  const sessions = _getSessions(role);
+
+  if (legacyToken) {
+    const existingSid = Object.keys(sessions).find(k => {
+      const s = sessions[k];
+      return s && s.token === legacyToken && (!s.expiresAt || Date.now() <= s.expiresAt);
+    });
+    if (existingSid) {
+      setSessionId(existingSid);
+      return true;
+    }
+  } else {
+    const activeSid = Object.keys(sessions).find(k => {
+      const s = sessions[k];
+      return s && s.token && (!s.expiresAt || Date.now() <= s.expiresAt);
+    });
+    if (activeSid) {
+      setSessionId(activeSid);
+      return true;
+    }
+  }
 
   if (!legacyToken) return true;
 
-  const sessions = _getSessions(role);
-  const existingSid = Object.keys(sessions).find(k => sessions[k].token === legacyToken);
-  if (existingSid) {
-    setSessionId(existingSid);
-    return true;
-  }
-
   const newSid = _generateSessionId();
-  sessions[newSid] = { token: legacyToken, user: legacyUser };
+  sessions[newSid] = { token: legacyToken, user: legacyUser, createdAt: Date.now() };
   _setSessions(role, sessions);
   setSessionId(newSid);
   return true;
@@ -72,11 +87,14 @@ function _migrateIfNeeded() {
 /* ───── current role (persisted across tabs via localStorage) ───── */
 
 export function getCurrentRole() {
-  const fromSession = sessionStorage.getItem("currentRole");
+  const fromSession = sessionStorage.getItem("active_role") || sessionStorage.getItem("currentRole");
   if (fromSession) return fromSession;
-  const fromLocal = localStorage.getItem("currentRole") || localStorage.getItem("lastActiveRole") || "";
+  const fromLocal = localStorage.getItem("active_role") || localStorage.getItem("currentRole") || localStorage.getItem("lastActiveRole") || "";
   if (fromLocal) {
-    try { sessionStorage.setItem("currentRole", fromLocal); } catch {}
+    try {
+      sessionStorage.setItem("active_role", fromLocal);
+      sessionStorage.setItem("currentRole", fromLocal);
+    } catch {}
     return fromLocal;
   }
   // Try to find any active session role in localStorage
@@ -87,8 +105,12 @@ export function getCurrentRole() {
       return s && s.token && (!s.expiresAt || Date.now() <= s.expiresAt);
     });
     if (validSid) {
-      try { sessionStorage.setItem("currentRole", r); } catch {}
-      try { localStorage.setItem("currentRole", r); } catch {}
+      try {
+        sessionStorage.setItem("active_role", r);
+        sessionStorage.setItem("currentRole", r);
+        localStorage.setItem("active_role", r);
+        localStorage.setItem("currentRole", r);
+      } catch {}
       return r;
     }
   }
@@ -98,11 +120,15 @@ export function getCurrentRole() {
 export function setCurrentRole(role) {
   try {
     if (role) {
+      sessionStorage.setItem("active_role", role);
       sessionStorage.setItem("currentRole", role);
+      localStorage.setItem("active_role", role);
       localStorage.setItem("currentRole", role);
       localStorage.setItem("lastActiveRole", role);
     } else {
+      sessionStorage.removeItem("active_role");
       sessionStorage.removeItem("currentRole");
+      localStorage.removeItem("active_role");
       localStorage.removeItem("currentRole");
     }
   } catch {}
@@ -129,43 +155,43 @@ export function setSessionId(id) {
 /* ───── token ───── */
 
 export function getToken(role) {
-  let r = role || getCurrentRole();
-  if (!r) {
-    const fallbackToken = localStorage.getItem("token");
-    if (fallbackToken) return fallbackToken;
-    return "";
+  const r = role || getCurrentRole();
+  // 1. Direct role-specific token from localStorage (guarantees cross-tab and new-tab consistency)
+  if (r) {
+    const roleToken = localStorage.getItem(`token_${r}`);
+    if (roleToken) return roleToken;
   }
+  // 2. Global token fallback
+  const globalToken = localStorage.getItem("token");
+  if (globalToken) return globalToken;
 
-  let sid = getSessionId();
-
-  // Try to migrate old tabs on first access
-  if (!sid && r) {
-    const migrated = _migrateIfNeeded();
-    if (!migrated) return "";
-    sid = getSessionId();
-  }
-
-  let sessions = _getSessions(r);
-  let sess = sid ? sessions[sid] : null;
-
-  if (!sess || (sess.expiresAt && Date.now() > sess.expiresAt)) {
-    if (sess && sess.expiresAt && Date.now() > sess.expiresAt) {
-      delete sessions[sid];
-      _setSessions(r, sessions);
+  // 3. Check session pool if present
+  if (r) {
+    let sid = getSessionId();
+    if (!sid) {
+      _migrateIfNeeded();
+      sid = getSessionId();
     }
-    const fallbackToken = localStorage.getItem("token");
-    if (fallbackToken) return fallbackToken;
-    return "";
+    const sessions = _getSessions(r);
+    const sess = sid ? sessions[sid] : null;
+    if (sess && (!sess.expiresAt || Date.now() <= sess.expiresAt)) {
+      return sess.token || "";
+    }
+    const validSid = Object.keys(sessions).find(k => {
+      const s = sessions[k];
+      return s && s.token && (!s.expiresAt || Date.now() <= s.expiresAt);
+    });
+    if (validSid) return sessions[validSid].token || "";
   }
 
-  return sess.token || "";
+  return "";
 }
 
 export function setToken(role, token) {
   const r = role || getCurrentRole();
   const sid = getSessionId();
 
-  if (sid) {
+  if (sid && r) {
     const sessions = _getSessions(r);
     if (sessions[sid]) {
       sessions[sid].token = token;
@@ -182,7 +208,7 @@ export function removeToken(role) {
   const r = role || getCurrentRole();
   const sid = getSessionId();
 
-  if (sid) {
+  if (sid && r) {
     const sessions = _getSessions(r);
     if (sessions[sid]) {
       delete sessions[sid];
@@ -198,47 +224,51 @@ export function removeToken(role) {
 /* ───── user object ───── */
 
 export function getUser(role) {
-  let r = role || getCurrentRole();
-  if (!r) {
+  const r = role || getCurrentRole();
+  // 1. Direct role-specific user from localStorage (guarantees cross-tab and new-tab consistency)
+  if (r) {
     try {
-      const fallbackUser = JSON.parse(localStorage.getItem("user")) || null;
-      if (fallbackUser) return fallbackUser;
+      const roleUser = JSON.parse(localStorage.getItem(`user_${r}`));
+      if (roleUser && typeof roleUser === "object" && (roleUser.id || roleUser.name || roleUser.email)) {
+        return roleUser;
+      }
     } catch {}
-    return null;
   }
-
-  let sid = getSessionId();
-
-  // Try to migrate old tabs on first access
-  if (!sid && r) {
-    const migrated = _migrateIfNeeded();
-    if (!migrated) return null;
-    sid = getSessionId();
-  }
-
-  let sessions = _getSessions(r);
-  let sess = sid ? sessions[sid] : null;
-
-  if (!sess || (sess.expiresAt && Date.now() > sess.expiresAt)) {
-    if (sess && sess.expiresAt && Date.now() > sess.expiresAt) {
-      delete sessions[sid];
-      _setSessions(r, sessions);
+  // 2. Global user fallback
+  try {
+    const globalUser = JSON.parse(localStorage.getItem("user"));
+    if (globalUser && typeof globalUser === "object" && (globalUser.id || globalUser.name || globalUser.email)) {
+      return globalUser;
     }
-    try {
-      const fallbackUser = JSON.parse(localStorage.getItem("user")) || null;
-      if (fallbackUser) return fallbackUser;
-    } catch {}
-    return null;
+  } catch {}
+
+  // 3. Check session pool if present
+  if (r) {
+    let sid = getSessionId();
+    if (!sid) {
+      _migrateIfNeeded();
+      sid = getSessionId();
+    }
+    const sessions = _getSessions(r);
+    const sess = sid ? sessions[sid] : null;
+    if (sess && (!sess.expiresAt || Date.now() <= sess.expiresAt) && sess.user) {
+      return sess.user;
+    }
+    const validSid = Object.keys(sessions).find(k => {
+      const s = sessions[k];
+      return s && s.user && (!s.expiresAt || Date.now() <= s.expiresAt);
+    });
+    if (validSid) return sessions[validSid].user || null;
   }
 
-  return sess.user || null;
+  return null;
 }
 
 export function setUser(role, user) {
   const r = role || getCurrentRole();
   const sid = getSessionId();
 
-  if (sid) {
+  if (sid && r) {
     const sessions = _getSessions(r);
     if (sessions[sid]) {
       if (user && typeof user === "object") {
@@ -272,13 +302,17 @@ export function removeUser(role) {
   const r = role || getCurrentRole();
   const sid = getSessionId();
 
-  if (sid) {
+  if (sid && r) {
     const sessions = _getSessions(r);
     if (sessions[sid]) {
       sessions[sid].user = null;
       _setSessions(r, sessions);
     }
   }
+  try {
+    localStorage.removeItem("user");
+    if (r) localStorage.removeItem(`user_${r}`);
+  } catch {}
 }
 
 /* ───── convenience shortcuts ───── */
@@ -301,6 +335,7 @@ export function authHeaders() {
 /**
  * Saves a complete session (role, token, user) for this tab.
  * Stores token in localStorage with 24-hour expiration if rememberMe is true.
+ * Clears any old/stale role sessions from localStorage to guarantee single source of truth.
  * @param {string} role
  * @param {string} token
  * @param {object} user
@@ -309,7 +344,23 @@ export function authHeaders() {
  * @returns {boolean} always true
  */
 export function saveSession(role, token, user, rememberMe = false, expiresAt = null) {
-  const sessions = _getSessions(role);
+  // 1. Wipe previous stale sessions across all roles to prevent split-brain on new tabs
+  for (const r of ROLES) {
+    try {
+      localStorage.removeItem(`sessions_${r}`);
+      localStorage.removeItem(`token_${r}`);
+      localStorage.removeItem(`user_${r}`);
+    } catch {}
+  }
+  try {
+    localStorage.removeItem("active_role");
+    localStorage.removeItem("currentRole");
+    localStorage.removeItem("lastActiveRole");
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+  } catch {}
+
+  const sessions = {};
   const sid = _generateSessionId();
 
   // 24 hours (1 day) expiration if rememberMe, else default 3 hours
@@ -329,6 +380,7 @@ export function saveSession(role, token, user, rememberMe = false, expiresAt = n
   setSessionId(sid);
 
   try {
+    localStorage.setItem("active_role", role);
     localStorage.setItem("currentRole", role);
     localStorage.setItem("lastActiveRole", role);
     localStorage.setItem("token", token);
@@ -340,54 +392,49 @@ export function saveSession(role, token, user, rememberMe = false, expiresAt = n
     }
   } catch {}
 
+  try {
+    window.dispatchEvent(new CustomEvent("auth-state-change", { detail: { role, token, user } }));
+  } catch {}
+
   return true;
 }
 
 /**
- * Clears the session for this tab only.
- * Other tabs with the same role remain unaffected.
+ * Clears the session and resets auth state.
  */
 export function clearSession(role) {
-  const r = role || getCurrentRole();
-  const sid = getSessionId();
-
-  if (sid) {
-    const sessions = _getSessions(r);
-    if (sessions[sid]) {
-      delete sessions[sid];
-      _setSessions(r, sessions);
-    }
-  }
-
-  sessionStorage.removeItem("sessionId");
-
-  if (getCurrentRole() === r) {
-    sessionStorage.removeItem("currentRole");
-  }
+  clearAllSessions();
 }
 
 /**
- * Clears sessions and resets auth state.
+ * Clears sessions and resets auth state across all roles.
  */
 export function clearAllSessions() {
-  const r = getCurrentRole();
-  const sid = getSessionId();
-
-  // Only remove THIS tab's session from the current role's pool.
-  // Other tabs with different roles remain unaffected.
-  if (r && sid) {
-    const sessions = _getSessions(r);
-    if (sessions[sid]) {
-      delete sessions[sid];
-      _setSessions(r, sessions);
-    }
+  for (const r of ROLES) {
+    try {
+      localStorage.removeItem(`sessions_${r}`);
+      localStorage.removeItem(`token_${r}`);
+      localStorage.removeItem(`user_${r}`);
+    } catch {}
   }
 
-  // Clear tab sessionStorage
   sessionStorage.removeItem("sessionId");
+  sessionStorage.removeItem("active_role");
   sessionStorage.removeItem("currentRole");
   sessionStorage.removeItem("tenant_slug");
   sessionStorage.removeItem("vb_dismissed");
+
+  try {
+    localStorage.removeItem("active_role");
+    localStorage.removeItem("currentRole");
+    localStorage.removeItem("lastActiveRole");
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+  } catch {}
+
+  try {
+    window.dispatchEvent(new CustomEvent("auth-state-change", { detail: { role: null, token: null, user: null } }));
+  } catch {}
 }
 
 export function getTenantSlug() {

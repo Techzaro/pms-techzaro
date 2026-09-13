@@ -88,6 +88,54 @@ class TeamController extends Controller
      */
     public function store(Request $request)
     {
+        $isDraft = $request->boolean('is_draft')
+            || $request->input('is_draft') === 'true'
+            || $request->input('is_draft') === '1'
+            || $request->input('is_draft') === 1
+            || strtolower($request->input('status', '')) === 'draft';
+
+        if ($isDraft) {
+            $title = $request->input('name') ?: 'Untitled Team Draft';
+            $draftData = $request->all();
+
+            $draftService = app(\App\Services\DraftService::class);
+            $draftId = $request->input('draft_id');
+
+            if ($draftId) {
+                $draft = \App\Models\Draft::find($draftId);
+                if ($draft && $draftService->canUserAccess($draft, $request->user())) {
+                    $draft = $draftService->update($draft, [
+                        'title' => $title,
+                        'draft_data' => $draftData,
+                        'status' => 'draft',
+                    ], $request->user());
+
+                    return response()->json([
+                        'success' => true,
+                        'is_draft' => true,
+                        'message' => 'Draft updated successfully',
+                        'draft' => $draft,
+                        'data' => $draft,
+                    ], 200);
+                }
+            }
+
+            $draft = $draftService->create([
+                'module_type' => 'team',
+                'title' => $title,
+                'draft_data' => $draftData,
+                'status' => 'draft',
+            ], $request->user());
+
+            return response()->json([
+                'success' => true,
+                'is_draft' => true,
+                'message' => 'Draft saved successfully',
+                'draft' => $draft,
+                'data' => $draft,
+            ], 201);
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string|max:1000',
@@ -96,7 +144,6 @@ class TeamController extends Controller
             'leader_id' => 'nullable|integer|exists:users,id',
             'team_lead_id' => 'nullable|integer|exists:users,id',
             'status' => 'nullable|string|max:50',
-            'is_draft' => 'nullable|boolean',
             'working_hours' => 'nullable|array',
         ], [
             'member_ids.required' => 'At least one team member is required.',
@@ -109,8 +156,6 @@ class TeamController extends Controller
         if ($leaderId && !empty($validated['member_ids']) && !in_array((int) $leaderId, array_map('intval', $validated['member_ids']))) {
             return response()->json(['message' => 'Team leader must be one of the team members.'], 422);
         }
-
-        $isDraft = (isset($validated['status']) && strtolower($validated['status']) === 'draft') || !empty($validated['is_draft']);
 
         $team = Team::create([
             'name' => $validated['name'],
@@ -212,6 +257,56 @@ class TeamController extends Controller
      */
     public function update(Request $request, Team $team)
     {
+        $isDraft = $request->boolean('is_draft')
+            || $request->input('is_draft') === 'true'
+            || $request->input('is_draft') === '1'
+            || $request->input('is_draft') === 1
+            || strtolower($request->input('status', '')) === 'draft';
+
+        if ($isDraft) {
+            $title = $request->input('name') ?: ($team->name ?: 'Team Draft');
+            $draftData = $request->all();
+
+            $draftService = app(\App\Services\DraftService::class);
+            $draftId = $request->input('draft_id');
+
+            if ($draftId) {
+                $draft = \App\Models\Draft::find($draftId);
+                if ($draft && $draftService->canUserAccess($draft, $request->user())) {
+                    $draft = $draftService->update($draft, [
+                        'title' => $title,
+                        'draft_data' => $draftData,
+                        'status' => 'draft',
+                        'original_record_id' => $team->id,
+                    ], $request->user());
+
+                    return response()->json([
+                        'success' => true,
+                        'is_draft' => true,
+                        'message' => 'Draft updated successfully',
+                        'draft' => $draft,
+                        'data' => $draft,
+                    ], 200);
+                }
+            }
+
+            $draft = $draftService->create([
+                'module_type' => 'team',
+                'original_record_id' => $team->id,
+                'title' => $title,
+                'draft_data' => $draftData,
+                'status' => 'draft',
+            ], $request->user());
+
+            return response()->json([
+                'success' => true,
+                'is_draft' => true,
+                'message' => 'Draft saved successfully',
+                'draft' => $draft,
+                'data' => $draft,
+            ], 201);
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string|max:1000',

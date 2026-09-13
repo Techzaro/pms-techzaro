@@ -4,8 +4,10 @@ import { useTranslation } from "react-i18next";
 import { BookOpen, ExternalLink, FileText, Plus, Search, Trash2, X, Check, Eye } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken, rolePath } from "../utils/auth";
+import { publish } from "../utils/eventBus";
+import ConfirmModal from "./ConfirmModal";
 
-export default function TaskKnowledge({ taskId, initialKnowledgeBases = [], readOnly = false }) {
+export default function TaskKnowledge({ task, taskId, initialKnowledgeBases = [], readOnly = false, onUpdate }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [items, setItems] = useState(initialKnowledgeBases);
@@ -18,6 +20,8 @@ export default function TaskKnowledge({ taskId, initialKnowledgeBases = [], read
   const [modalSearch, setModalSearch] = useState("");
   const [modalLoading, setModalLoading] = useState(false);
   const [linkingId, setLinkingId] = useState(null);
+  const [unlinkConfirmOpen, setUnlinkConfirmOpen] = useState(false);
+  const [unlinkTargetId, setUnlinkTargetId] = useState(null);
 
   useEffect(() => {
     if (initialKnowledgeBases && initialKnowledgeBases.length > 0) {
@@ -36,10 +40,11 @@ export default function TaskKnowledge({ taskId, initialKnowledgeBases = [], read
       });
       if (res.ok) {
         const data = await res.json();
-        setItems(data.knowledge_bases || []);
+        const list = Array.isArray(data.knowledge_bases) ? data.knowledge_bases : [];
+        setItems(list);
       }
     } catch (err) {
-      console.error("Failed to load knowledge bases", err);
+      console.error("Failed to fetch knowledge bases", err);
     } finally {
       setLoading(false);
     }
@@ -74,19 +79,20 @@ export default function TaskKnowledge({ taskId, initialKnowledgeBases = [], read
       const res = await fetch(`${API_URL}/tasks/${taskId}/knowledge-bases`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
           Accept: "application/json",
         },
-        body: JSON.stringify({ knowledge_base_id: kbId }),
+        body: JSON.stringify({ knowledge_base_ids: [kbId] }),
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.knowledge_bases) {
-          setItems(data.knowledge_bases);
-        } else {
-          fetchKnowledgeBases();
+        const added = allArticles.find((a) => a.id === kbId);
+        if (added) {
+          setItems((prev) => [...(prev || []), added]);
         }
+        if (onUpdate) onUpdate(data?.task || data);
+        publish("task:updated", { taskId, type: "kb_linked" });
         setShowLinkModal(false);
       }
     } catch (err) {
@@ -96,8 +102,11 @@ export default function TaskKnowledge({ taskId, initialKnowledgeBases = [], read
     }
   };
 
-  const handleUnlink = async (kbId) => {
-    if (!window.confirm(t("Are you sure you want to unlink this knowledge base article?", { defaultValue: "Are you sure you want to unlink this knowledge base article?" }))) return;
+  const confirmUnlink = async () => {
+    if (!unlinkTargetId) return;
+    const kbId = unlinkTargetId;
+    setUnlinkConfirmOpen(false);
+    setUnlinkTargetId(null);
     try {
       const token = authToken();
       const res = await fetch(`${API_URL}/tasks/${taskId}/knowledge-bases/${kbId}`, {
@@ -105,7 +114,10 @@ export default function TaskKnowledge({ taskId, initialKnowledgeBases = [], read
         headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
       });
       if (res.ok) {
-        setItems((prev) => prev.filter((k) => k.id !== kbId));
+        const data = await res.json();
+        setItems((prev) => (prev || []).filter((k) => k.id !== kbId));
+        if (onUpdate) onUpdate(data?.task || data);
+        publish("task:updated", { taskId, type: "kb_unlinked" });
       }
     } catch (err) {
       console.error("Failed to unlink knowledge base", err);
@@ -130,7 +142,7 @@ export default function TaskKnowledge({ taskId, initialKnowledgeBases = [], read
     <div className="td-overview" style={{ padding: "20px" }}>
       <div className="td-section-header" style={{ marginBottom: "16px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
         <h2 className="td-section-title" style={{ display: "flex", alignItems: "center", gap: "8px", margin: 0 }}>
-          <BookOpen size={18} />
+          <BookOpen size={18} color="#2563eb" />
           {t("Knowledge Base", { defaultValue: "Knowledge Base" })}
           <span className="td-section-count">({items.length})</span>
         </h2>
@@ -145,27 +157,59 @@ export default function TaskKnowledge({ taskId, initialKnowledgeBases = [], read
             />
           </div>
           {!readOnly && (
-            <button
-              type="button"
-              onClick={openLinkModal}
-              className="td-btn-primary"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                padding: "7px 14px",
-                fontSize: "13px",
-                fontWeight: 600,
-                borderRadius: "6px",
-                background: "var(--color-primary, #2563eb)",
-                color: "#ffffff",
-                border: "none",
-                cursor: "pointer",
-              }}
-            >
-              <Plus size={15} />
-              {t("Link Document", { defaultValue: "Link Document" })}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={openLinkModal}
+                className="pd-btn-tx pd-btn-tx--outline"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "7px 14px",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  borderRadius: "6px",
+                  border: "1px solid var(--border-color, #e2e8f0)",
+                  background: "var(--bg-card, #ffffff)",
+                  color: "var(--text-primary, #1e293b)",
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <BookOpen size={15} />
+                {t("Link Document", { defaultValue: "Link Document" })}
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate(rolePath("knowledge-base/create"), {
+                  state: {
+                    taskId: task?.id || taskId,
+                    taskTitle: task?.title,
+                    projectId: task?.project?.id || task?.project_id,
+                    projectTitle: task?.project?.title,
+                  }
+                })}
+                className="pd-btn-tx pd-btn-tx--primary"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "7px 14px",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  borderRadius: "6px",
+                  background: "var(--color-primary, #2563eb)",
+                  color: "#ffffff",
+                  border: "none",
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <Plus size={16} />
+                {t("Add Document", { defaultValue: "Add Document" })}
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -179,25 +223,53 @@ export default function TaskKnowledge({ taskId, initialKnowledgeBases = [], read
             {search ? t("No articles match your search.", { defaultValue: "No articles match your search." }) : t("No knowledge base articles linked to this task yet.", { defaultValue: "No knowledge base articles linked to this task yet." })}
           </p>
           {!readOnly && !search && (
-            <button
-              type="button"
-              onClick={openLinkModal}
-              style={{
-                padding: "7px 16px",
-                borderRadius: "6px",
-                background: "var(--color-primary, #2563eb)",
-                color: "#ffffff",
-                border: "none",
-                fontSize: "13px",
-                fontWeight: 600,
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-              }}
-            >
-              <Plus size={14} /> {t("Link Document", { defaultValue: "Link Document" })}
-            </button>
+            <div style={{ display: "flex", justifyContent: "center", gap: "10px", flexWrap: "wrap", marginTop: "14px" }}>
+              <button
+                type="button"
+                onClick={openLinkModal}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "7px 16px",
+                  borderRadius: "6px",
+                  background: "var(--bg-card, #fff)",
+                  color: "var(--color-primary, #2563eb)",
+                  border: "1px solid var(--border-color, #d1d5db)",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                <BookOpen size={14} /> {t("Link Existing Document", { defaultValue: "Link Existing Document" })}
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate(rolePath("knowledge-base/create"), {
+                  state: {
+                    taskId: task?.id || taskId,
+                    taskTitle: task?.title,
+                    projectId: task?.project?.id || task?.project_id,
+                    projectTitle: task?.project?.title,
+                  }
+                })}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "7px 16px",
+                  borderRadius: "6px",
+                  background: "var(--color-primary, #2563eb)",
+                  color: "#ffffff",
+                  border: "none",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                <Plus size={14} /> {t("Add Document", { defaultValue: "Add Document" })}
+              </button>
+            </div>
           )}
         </div>
       ) : (
@@ -232,7 +304,7 @@ export default function TaskKnowledge({ taskId, initialKnowledgeBases = [], read
                 </Link>
                 {!readOnly && (
                   <button
-                    onClick={() => handleUnlink(k.id)}
+                    onClick={() => { setUnlinkTargetId(k.id); setUnlinkConfirmOpen(true); }}
                     title={t("Unlink Document", { defaultValue: "Unlink Document" })}
                     style={{ background: "none", border: "none", color: "#9ca3af", cursor: "pointer", padding: "2px" }}
                   >
@@ -464,6 +536,17 @@ export default function TaskKnowledge({ taskId, initialKnowledgeBases = [], read
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={unlinkConfirmOpen}
+        onClose={() => { setUnlinkConfirmOpen(false); setUnlinkTargetId(null); }}
+        onConfirm={confirmUnlink}
+        title={t("Confirm Unlink", { defaultValue: "Confirm Unlink" })}
+        message={t("Are you sure you want to unlink this knowledge base article?", { defaultValue: "Are you sure you want to unlink this knowledge base article?" })}
+        confirmText={t("Unlink", { defaultValue: "Unlink" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        danger
+      />
     </div>
   );
 }

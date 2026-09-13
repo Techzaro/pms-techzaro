@@ -26,22 +26,14 @@ class TaskCommentController extends Controller
 
     public function index(Request $request, Task $task): JsonResponse
     {
-        $user = $request->user();
-
-        if (! $this->canAccessTask($user, $task)) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
-        }
+        $this->authorize('view', $task);
 
         return $this->getComments($request, null, $task->id);
     }
 
     public function indexByDeliverable(Request $request, Deliverable $deliverable): JsonResponse
     {
-        $user = $request->user();
-
-        if (! $this->canAccessDeliverable($user, $deliverable)) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
-        }
+        $this->authorize('view', $deliverable);
 
         return $this->getComments($request, $deliverable->id, null);
     }
@@ -184,67 +176,75 @@ class TaskCommentController extends Controller
             $commentData['file_size'] = $file->getSize();
         }
 
-        $comment = TaskComment::create($commentData);
-        $comment->load([
-            'user:id,name,role,avatar',
-            'quotedComment:id,user_id,body,file_name',
-            'quotedComment.user:id,name,avatar',
-        ]);
-
-        // Mention notifications
-        if (! empty($validated['mentioned_user_ids'])) {
-            $this->notifyMentionedUsers($validated['mentioned_user_ids'], $user, $comment, $taskId, $deliverableId, $deliverable);
-        }
-
-        if ($deliverableId && $deliverable) {
-            $this->notifyDeliverableParticipants($deliverable, $user, $comment);
-        } elseif ($taskId) {
-            $task = Task::find($taskId);
-            if ($task) {
-                $this->notifyTaskParticipants($task, $user, $comment);
-            }
-        }
-
-        $targetTaskId = $taskId ?: ($deliverable ? $deliverable->task_id : null);
-        $moduleName = $deliverableId ? 'Subtask Management' : 'Task Management';
-        $entityType = $deliverableId ? 'deliverable' : 'task';
-        $entityId = $deliverableId ?: $targetTaskId;
-        $commentDesc = $deliverableId ? 'Added a comment to subtask' : 'Added a comment to task';
-
-        if ($targetTaskId) {
-            $this->activityService->log(
-                $user->id,
-                'task_comment_added',
-                $commentDesc,
-                'task',
-                $targetTaskId,
-                'comment_added',
-                null,
-                null,
-                ['comment_id' => $comment->id, 'deliverable_id' => $deliverableId]
-            );
-        }
-
         try {
-            $this->auditService->log(
-                module: $moduleName,
-                action: 'Comment Added',
-                description: $commentDesc,
-                user: $user,
-                entityType: $entityType,
-                entityId: $entityId,
-                newValues: ['comment_id' => $comment->id, 'task_id' => $targetTaskId, 'deliverable_id' => $deliverableId],
-                status: 'success'
-            );
-        } catch (\Throwable $e) {
-            \Log::error('Failed to log audit for comment', ['error' => $e->getMessage()]);
-        }
+            $comment = TaskComment::create($commentData);
+            $comment->load([
+                'user:id,name,role,avatar',
+                'quotedComment:id,user_id,body,file_name',
+                'quotedComment.user:id,name,avatar',
+            ]);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Comment posted successfully.',
-            'comment' => $comment,
-        ], 201);
+            // Mention notifications
+            if (! empty($validated['mentioned_user_ids'])) {
+                $this->notifyMentionedUsers($validated['mentioned_user_ids'], $user, $comment, $taskId, $deliverableId, $deliverable);
+            }
+
+            if ($deliverableId && $deliverable) {
+                $this->notifyDeliverableParticipants($deliverable, $user, $comment);
+            } elseif ($taskId) {
+                $task = Task::find($taskId);
+                if ($task) {
+                    $this->notifyTaskParticipants($task, $user, $comment);
+                }
+            }
+
+            $targetTaskId = $taskId ?: ($deliverable ? $deliverable->task_id : null);
+            $moduleName = $deliverableId ? 'Subtask Management' : 'Task Management';
+            $entityType = $deliverableId ? 'deliverable' : 'task';
+            $entityId = $deliverableId ?: $targetTaskId;
+            $commentDesc = $deliverableId ? 'Added a comment to subtask' : 'Added a comment to task';
+
+            if ($targetTaskId) {
+                $this->activityService->log(
+                    $user->id,
+                    'task_comment_added',
+                    $commentDesc,
+                    'task',
+                    $targetTaskId,
+                    'comment_added',
+                    null,
+                    null,
+                    ['comment_id' => $comment->id, 'deliverable_id' => $deliverableId]
+                );
+            }
+
+            try {
+                $this->auditService->log(
+                    module: $moduleName,
+                    action: 'Comment Added',
+                    description: $commentDesc,
+                    user: $user,
+                    entityType: $entityType,
+                    entityId: $entityId,
+                    newValues: ['comment_id' => $comment->id, 'task_id' => $targetTaskId, 'deliverable_id' => $deliverableId],
+                    status: 'success'
+                );
+            } catch (\Throwable $e) {
+                \Log::error('Failed to log audit for comment', ['error' => $e->getMessage()]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Comment posted successfully.',
+                'comment' => $comment,
+            ], 201);
+        } catch (\Throwable $e) {
+            \Log::error('Failed to create comment: ' . $e->getMessage(), ['exception' => $e]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to post comment: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     public function update(Request $request, TaskComment $comment): JsonResponse
@@ -383,11 +383,7 @@ class TaskCommentController extends Controller
 
     public function count(Request $request, Task $task): JsonResponse
     {
-        $user = $request->user();
-
-        if (! $this->canAccessTask($user, $task)) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
-        }
+        $this->authorize('view', $task);
 
         $total = TaskComment::where('task_id', $task->id)->whereNull('deliverable_id')->count();
 
@@ -399,11 +395,7 @@ class TaskCommentController extends Controller
 
     public function countByDeliverable(Request $request, Deliverable $deliverable): JsonResponse
     {
-        $user = $request->user();
-
-        if (! $this->canAccessDeliverable($user, $deliverable)) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
-        }
+        $this->authorize('view', $deliverable);
 
         $total = TaskComment::where('deliverable_id', $deliverable->id)->count();
 
@@ -415,11 +407,7 @@ class TaskCommentController extends Controller
 
     public function participants(Request $request, Task $task): JsonResponse
     {
-        $user = $request->user();
-
-        if (! $this->canAccessTask($user, $task)) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
-        }
+        $this->authorize('view', $task);
 
         return response()->json([
             'success' => true,
@@ -429,13 +417,9 @@ class TaskCommentController extends Controller
 
     public function participantsByDeliverable(Request $request, Deliverable $deliverable): JsonResponse
     {
-        $user = $request->user();
+        $this->authorize('view', $deliverable);
 
-        if (! $this->canAccessDeliverable($user, $deliverable)) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
-        }
-
-        $deliverable->load(['assignees:id,name,role,avatar', 'creator:id,name,role,avatar', 'task:id,title,assigned_by']);
+        $deliverable->loadMissing(['assignees:id,name,role,avatar', 'creator:id,name,role,avatar', 'task:id,title,assigned_by,project_id', 'project.team']);
 
         $participants = collect();
 
@@ -443,9 +427,11 @@ class TaskCommentController extends Controller
             $participants->push($deliverable->creator);
         }
 
-        foreach ($deliverable->assignees as $assignee) {
-            if (! $participants->contains('id', $assignee->id)) {
-                $participants->push($assignee);
+        if ($deliverable->assignees) {
+            foreach ($deliverable->assignees as $assignee) {
+                if (! $participants->contains('id', $assignee->id)) {
+                    $participants->push($assignee);
+                }
             }
         }
 
@@ -456,9 +442,10 @@ class TaskCommentController extends Controller
             }
         }
 
-        if ($deliverable->project && $deliverable->project->team_id) {
-            $teamMembers = User::whereHas('teams', function ($q) use ($deliverable) {
-                $q->where('teams.id', $deliverable->project->team_id);
+        $teamId = $deliverable->project?->team_id ?? $deliverable->task?->project?->team_id;
+        if ($teamId) {
+            $teamMembers = User::whereHas('teams', function ($q) use ($teamId) {
+                $q->where('teams.id', $teamId);
             })->get(['id', 'name', 'role', 'avatar']);
 
             foreach ($teamMembers as $member) {
@@ -468,7 +455,7 @@ class TaskCommentController extends Controller
             }
         }
 
-        $admins = User::whereIn('role', ['admin', 'manager'])->get(['id', 'name', 'role', 'avatar']);
+        $admins = User::whereIn('role', ['admin', 'manager', 'super_admin'])->get(['id', 'name', 'role', 'avatar']);
         foreach ($admins as $admin) {
             if (! $participants->contains('id', $admin->id)) {
                 $participants->push($admin);
@@ -487,12 +474,12 @@ class TaskCommentController extends Controller
 
         if ($comment->task_id) {
             $task = Task::find($comment->task_id);
-            if (! $task || ! $this->canAccessTask($user, $task)) {
+            if (! $task || ! $user?->can('view', $task)) {
                 return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
             }
         } elseif ($comment->deliverable_id) {
             $deliverable = Deliverable::find($comment->deliverable_id);
-            if (! $deliverable || ! $this->canAccessDeliverable($user, $deliverable)) {
+            if (! $deliverable || ! $user?->can('view', $deliverable)) {
                 return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
             }
         }
@@ -526,7 +513,7 @@ class TaskCommentController extends Controller
 
     private function getTaskParticipants(Task $task): Collection
     {
-        $task->load(['assignees:id,name,role,avatar', 'assigner:id,name,role,avatar', 'followers:id,name,role,avatar']);
+        $task->loadMissing(['assignees:id,name,role,avatar', 'assigner:id,name,role,avatar', 'followers:id,name,role,avatar', 'project.team']);
 
         $participants = collect();
 
@@ -534,15 +521,19 @@ class TaskCommentController extends Controller
             $participants->push($task->assigner);
         }
 
-        foreach ($task->assignees as $assignee) {
-            if (! $participants->contains('id', $assignee->id)) {
-                $participants->push($assignee);
+        if ($task->assignees) {
+            foreach ($task->assignees as $assignee) {
+                if (! $participants->contains('id', $assignee->id)) {
+                    $participants->push($assignee);
+                }
             }
         }
 
-        foreach ($task->followers as $follower) {
-            if (! $participants->contains('id', $follower->id)) {
-                $participants->push($follower);
+        if ($task->followers) {
+            foreach ($task->followers as $follower) {
+                if (! $participants->contains('id', $follower->id)) {
+                    $participants->push($follower);
+                }
             }
         }
 
@@ -558,7 +549,7 @@ class TaskCommentController extends Controller
             }
         }
 
-        $admins = User::whereIn('role', ['admin', 'manager'])->get(['id', 'name', 'role', 'avatar']);
+        $admins = User::whereIn('role', ['admin', 'manager', 'super_admin'])->get(['id', 'name', 'role', 'avatar']);
         foreach ($admins as $admin) {
             if (! $participants->contains('id', $admin->id)) {
                 $participants->push($admin);
@@ -570,7 +561,7 @@ class TaskCommentController extends Controller
 
     private function canAccessTask(User $user, Task $task): bool
     {
-        if (in_array($user->role, ['admin', 'manager'])) {
+        if (in_array($user->role, ['admin', 'manager', 'super_admin'])) {
             return true;
         }
 
@@ -578,11 +569,11 @@ class TaskCommentController extends Controller
             return true;
         }
 
-        if ($task->assignees()->where('users.id', $user->id)->exists()) {
+        if ($task->assignees && $task->assignees()->where('users.id', $user->id)->exists()) {
             return true;
         }
 
-        if ($task->followers()->where('users.id', $user->id)->exists()) {
+        if ($task->followers && $task->followers()->where('users.id', $user->id)->exists()) {
             return true;
         }
 
@@ -591,6 +582,10 @@ class TaskCommentController extends Controller
         }
 
         if ($task->project) {
+            if ($task->project->isMemberOrParticipant($user)) {
+                return true;
+            }
+
             if ((int) $task->project->created_by === (int) $user->id) {
                 return true;
             }
@@ -625,7 +620,7 @@ class TaskCommentController extends Controller
 
     private function canAccessDeliverable(User $user, Deliverable $deliverable): bool
     {
-        if (in_array($user->role, ['admin', 'manager'])) {
+        if (in_array($user->role, ['admin', 'manager', 'super_admin'])) {
             return true;
         }
 
@@ -637,7 +632,7 @@ class TaskCommentController extends Controller
             return true;
         }
 
-        if ($deliverable->assignees()->where('users.id', $user->id)->exists()) {
+        if ($deliverable->assignees && $deliverable->assignees()->where('users.id', $user->id)->exists()) {
             return true;
         }
 
@@ -646,6 +641,10 @@ class TaskCommentController extends Controller
         }
 
         if ($deliverable->project) {
+            if ($deliverable->project->isMemberOrParticipant($user)) {
+                return true;
+            }
+
             if ((int) $deliverable->project->created_by === (int) $user->id) {
                 return true;
             }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { getAutoCapturedMetadata } from "../utils/feedbackAutoCapture";
@@ -168,7 +169,7 @@ export default function FeedbackModal({ isOpen, onClose }) {
     }
   };
 
-  return (
+  return createPortal(
     <div className="fb-modal-overlay" onClick={onClose}>
       <div className="fb-modal-container" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
@@ -433,6 +434,7 @@ export default function FeedbackModal({ isOpen, onClose }) {
           </form>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

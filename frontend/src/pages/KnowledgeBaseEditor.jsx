@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import ReactQuill from "react-quill-new";
 import "react-quill-new/dist/quill.snow.css";
+import { components } from "react-select";
 import CreatableSelect from "react-select/creatable";
 import DOMPurify from "dompurify";
 import DashboardLayout from "../components/layout/DashboardLayout";
@@ -11,7 +13,9 @@ import CustomSelect from "../components/CustomSelect";
 import ConfirmModal from "../components/ConfirmModal";
 import ShareKnowledgeModal from "../components/ShareKnowledgeModal";
 import UnifiedActivityFeed from "../components/UnifiedActivityFeed";
+import AttachResourceModal from "../components/AttachResourceModal";
 import API_URL from "../config/api";
+import draftService from "../services/draftService";
 import { authToken, rolePath, getUser } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
 import "./KnowledgeBase.css";
@@ -51,6 +55,7 @@ import {
   Copy,
   Archive,
   Share2,
+  Link2,
 } from "lucide-react";
 
 // Register Font Whitelist for Quill
@@ -149,10 +154,13 @@ export default function KnowledgeBaseEditor() {
 
   // Category Creation Loading State
   const [savingNewCat, setSavingNewCat] = useState(false);
+  const [categoryToDelete, setCategoryToDelete] = useState(null);
+  const [isCategoryDeleteModalOpen, setIsCategoryDeleteModalOpen] = useState(false);
 
   // Actions & Favorites State
   const [isFavorited, setIsFavorited] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [attachModalOpen, setAttachModalOpen] = useState(false);
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
   const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
@@ -260,6 +268,58 @@ export default function KnowledgeBaseEditor() {
     }
   }, [location.state]);
 
+  const applyDraftData = useCallback((d) => {
+    if (!d) return;
+    if (d.title !== undefined) setTitle(d.title || "");
+    if (d.content !== undefined) setContent(d.content || "");
+    if (d.category_id || d.category) {
+      const catVal = String(d.category_id || d.category);
+      const catName = d.category_name || d.categoryRelation?.name || catVal;
+      setSelectedCategoryOption({ value: catVal, label: catName });
+    }
+    if (d.visibility_level !== undefined) setVisibilityLevel(d.visibility_level || "organization");
+    if (d.project_id !== undefined) setProjectId(d.project_id ? String(d.project_id) : "");
+    if (d.team_ids !== undefined) setSelectedTeamIds(Array.isArray(d.team_ids) ? d.team_ids : []);
+    if (d.user_ids !== undefined) setSelectedUserIds(Array.isArray(d.user_ids) ? d.user_ids : []);
+    if (d.status !== undefined) setStatus(d.status || "published");
+    if (d.is_pinned !== undefined) setIsPinned(Boolean(d.is_pinned));
+    if (d.tags !== undefined) {
+      setTags(Array.isArray(d.tags) ? d.tags : typeof d.tags === "string" ? JSON.parse(d.tags || "[]") : []);
+    }
+    if (d.reference_link !== undefined) setReferenceLink(d.reference_link || "");
+    if (d.file_path !== undefined) setExistingFilePath(d.file_path || null);
+    if (d.file_name !== undefined) setExistingFileName(d.file_name || null);
+  }, []);
+
+  // Handle draft restoration from DraftCenter for create mode
+  useEffect(() => {
+    if (id) return; // For edit mode, draft is overlaid after article fetch
+    const draftId = location.state?.openDraft;
+    const directDraftData = location.state?.draftData;
+
+    if (!draftId && !directDraftData) return;
+
+    window.history.replaceState({}, document.title);
+
+    if (directDraftData) {
+      applyDraftData(directDraftData);
+      return;
+    }
+
+    if (draftId) {
+      draftService.get(draftId)
+        .then((res) => {
+          const draftObj = res?.data || res;
+          if (draftObj?.draft_data) {
+            applyDraftData(draftObj.draft_data);
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to restore KB draft:", err);
+        });
+    }
+  }, [location.state, id, applyDraftData]);
+
   // 2. Fetch Document Data if editing or viewing
   useEffect(() => {
     if (!id) {
@@ -301,6 +361,17 @@ export default function KnowledgeBaseEditor() {
           currentDocIdRef.current = data.id;
           setSavingStatus("saved");
           setLastSavedTime(new Date());
+
+          // Overlay draft data if opened with draft state
+          const directDraft = location.state?.draftData;
+          const draftId = location.state?.openDraft;
+          if (directDraft) {
+            applyDraftData(directDraft);
+          } else if (draftId) {
+            draftService.get(draftId).then((resDraft) => {
+              if (resDraft?.data?.draft_data) applyDraftData(resDraft.data.draft_data);
+            }).catch(() => {});
+          }
         } else {
           notify.error(t("Document not found.", { defaultValue: "Document not found." }));
           navigate(rolePath("knowledge-base"));
@@ -361,6 +432,37 @@ export default function KnowledgeBaseEditor() {
     }
   };
 
+  // Category Deletion via ConfirmModal
+  const confirmDeleteCategory = async () => {
+    if (!categoryToDelete?.value) return;
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/kb-categories/${categoryToDelete.value}`, {
+        method: "DELETE",
+        headers: {
+          Accept: "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setCategories((prev) => prev.filter((c) => String(c.id) !== String(categoryToDelete.value)));
+        if (selectedCategoryOption?.value === String(categoryToDelete.value)) {
+          setSelectedCategoryOption(null);
+        }
+        notify.success(t("Category deleted successfully", { defaultValue: "Category deleted successfully" }));
+      } else {
+        notify.error(data?.message || t("Failed to delete category", { defaultValue: "Failed to delete category" }));
+      }
+    } catch (err) {
+      console.error("Delete category error:", err);
+      notify.error(t("Network error while deleting category", { defaultValue: "Network error while deleting category" }));
+    } finally {
+      setIsCategoryDeleteModalOpen(false);
+      setCategoryToDelete(null);
+    }
+  };
+
   // 3. Save / Update Article Function
   const saveArticle = useCallback(
     async (isManual = false, overrideStatus = null) => {
@@ -376,9 +478,15 @@ export default function KnowledgeBaseEditor() {
         fd.append("title", title.trim());
         fd.append("content", content || "");
         if (selectedCategoryOption?.value || categoryId) {
-          const numCat = Number(selectedCategoryOption?.value || categoryId);
+          const catVal = selectedCategoryOption?.value || categoryId;
+          const numCat = Number(catVal);
           if (!isNaN(numCat) && numCat > 0) {
             fd.append("category_id", String(numCat));
+            if (selectedCategoryOption?.label) {
+              fd.append("category", selectedCategoryOption.label);
+            }
+          } else if (typeof catVal === "string" && catVal.trim()) {
+            fd.append("category", catVal.trim());
           }
         }
         fd.append("visibility_level", visibilityLevel);
@@ -459,6 +567,28 @@ export default function KnowledgeBaseEditor() {
 
           if (!activeId && data.data?.id) {
             currentDocIdRef.current = data.data.id;
+            if (location.state?.taskId) {
+              fetch(`${API_URL}/tasks/${location.state.taskId}/knowledge-bases`, {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  "Content-Type": "application/json",
+                  Accept: "application/json",
+                },
+                body: JSON.stringify({ knowledge_base_id: data.data.id }),
+              }).catch(() => {});
+            }
+            if (location.state?.projectId) {
+              fetch(`${API_URL}/projects/${location.state.projectId}/knowledge-bases`, {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  "Content-Type": "application/json",
+                  Accept: "application/json",
+                },
+                body: JSON.stringify({ knowledge_base_id: data.data.id }),
+              }).catch(() => {});
+            }
             // Update URL without full reload
             window.history.replaceState(null, "", rolePath(`knowledge-base/edit/${data.data.id}`));
           }
@@ -482,7 +612,7 @@ export default function KnowledgeBaseEditor() {
         if (isManual) notify.error(t("An error occurred while saving.", { defaultValue: "An error occurred while saving." }));
       }
     },
-    [title, content, categoryId, visibilityLevel, projectId, status, isPinned, tags, selectedTeamIds, selectedUserIds, deleteExistingFile, file]
+    [title, content, categoryId, selectedCategoryOption, visibilityLevel, projectId, status, isPinned, tags, selectedTeamIds, selectedUserIds, deleteExistingFile, file]
   );
 
   // 4. Debounced Autosave (Triggers 2s after typing stops if document exists)
@@ -667,6 +797,51 @@ export default function KnowledgeBaseEditor() {
     value: String(c.id),
     label: c.name,
   }));
+
+  const CustomOption = (props) => {
+    const { data, isSelected } = props;
+    const isCreatable = data.__isNew__;
+
+    return (
+      <components.Option {...props}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {props.children}
+          </span>
+          {!isCreatable && data.value && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                setCategoryToDelete(data);
+                setIsCategoryDeleteModalOpen(true);
+              }}
+              title={t("Delete Category", { defaultValue: "Delete Category" })}
+              style={{
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                padding: "2px 4px",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: isSelected ? "#ffffff" : "#ef4444",
+                borderRadius: "4px",
+                marginLeft: "8px",
+                flexShrink: 0,
+                opacity: 0.85,
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+              onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.85")}
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      </components.Option>
+    );
+  };
 
   const visibilityOptions = [
     { value: "organization", label: t("Organization (Everyone in Company)", { defaultValue: "Organization (Everyone in Company)" }) },
@@ -868,6 +1043,16 @@ export default function KnowledgeBaseEditor() {
                 </button>
               )}
 
+              {/* ATTACH TO PROJECT / TASK BUTTON */}
+              <button
+                type="button"
+                onClick={() => setAttachModalOpen(true)}
+                style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "7px 12px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-hover)", color: "var(--text-primary)", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                title={t("Attach to Project / Task", { defaultValue: "Attach to Project / Task" })}
+              >
+                <Link2 size={14} color="#2563eb" /> {t("Attach", { defaultValue: "Attach" })}
+              </button>
+
               {/* ARCHIVE / RESTORE BUTTON */}
               {status !== "archived" && canArchive && (
                 <button
@@ -917,6 +1102,27 @@ export default function KnowledgeBaseEditor() {
             isOpen={shareModalOpen}
             onClose={() => setShareModalOpen(false)}
             article={rawArticle || { id, title, category: categoryName }}
+          />
+
+          {/* ATTACH RESOURCE MODAL IN VIEW */}
+          <AttachResourceModal
+            isOpen={attachModalOpen}
+            onClose={() => setAttachModalOpen(false)}
+            resource={{
+              type: "knowledge_base",
+              id: id,
+              title: title || rawArticle?.title,
+              project_id: projectId || rawArticle?.project_id || rawArticle?.projectId || rawArticle?.project?.id,
+              task_id: rawArticle?.task_id || rawArticle?.taskId || rawArticle?.task?.id,
+              project: rawArticle?.project,
+              task: rawArticle?.task,
+              projects: rawArticle?.projects,
+              tasks: rawArticle?.tasks,
+              ...rawArticle,
+            }}
+            onSuccess={() => {
+              notify.success(t("Document attached successfully!", { defaultValue: "Document attached successfully!" }));
+            }}
           />
 
           {/* ARCHIVE CONFIRMATION MODAL IN VIEW */}
@@ -1402,6 +1608,7 @@ export default function KnowledgeBaseEditor() {
                   isClearable
                   isDisabled={savingNewCat}
                   isLoading={savingNewCat}
+                  components={{ Option: CustomOption }}
                   onChange={(option) => setSelectedCategoryOption(option || null)}
                   onCreateOption={handleCreateCategory}
                   options={categoryOptions}
@@ -1635,9 +1842,9 @@ export default function KnowledgeBaseEditor() {
       </div>
 
       {/* VERSION HISTORY MODAL */}
-      {versionsModalOpen && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
-          <div style={{ background: "var(--bg-card)", borderRadius: "12px", width: "100%", maxWidth: "600px", maxHeight: "85vh", display: "flex", flexDirection: "column", border: "1px solid var(--border-color)", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)" }}>
+      {versionsModalOpen && createPortal(
+        <div style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }} onClick={() => setVersionsModalOpen(false)}>
+          <div style={{ background: "var(--bg-card)", borderRadius: "12px", width: "100%", maxWidth: "600px", maxHeight: "85vh", display: "flex", flexDirection: "column", border: "1px solid var(--border-color)", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)" }} onClick={(e) => e.stopPropagation()}>
             <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 600, display: "flex", alignItems: "center", gap: "8px" }}>
                 <History size={18} color="#2563eb" /> {t("Document Version History", { defaultValue: "Document Version History" })}
@@ -1719,8 +1926,27 @@ export default function KnowledgeBaseEditor() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
+
+      {/* CATEGORY DELETE CONFIRM MODAL */}
+      <ConfirmModal
+        isOpen={isCategoryDeleteModalOpen}
+        onClose={() => {
+          setIsCategoryDeleteModalOpen(false);
+          setCategoryToDelete(null);
+        }}
+        onConfirm={confirmDeleteCategory}
+        title={t("Delete Category", { defaultValue: "Delete Category" })}
+        message={t('Are you sure you want to delete category "{{name}}"?', {
+          name: categoryToDelete?.label || "",
+          defaultValue: `Are you sure you want to delete category "${categoryToDelete?.label || ""}"?`,
+        })}
+        confirmText={t("Delete", { defaultValue: "Delete" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        danger={true}
+      />
     </DashboardLayout>
   );
 }

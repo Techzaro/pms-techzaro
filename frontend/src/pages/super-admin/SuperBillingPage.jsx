@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { CreditCard, Building2, Loader2, CheckCircle, Clock, DollarSign, ArrowUpRight, Search, XCircle, AlertTriangle, Eye, X, Download } from 'lucide-react';
@@ -303,11 +304,11 @@ export default function SuperBillingPage() {
       )}
 
       {/* Approve Confirmation Modal */}
-      {approveModal && (
+      {approveModal && createPortal(
         <div style={{
-          position: 'fixed', inset: 0, zIndex: 10000,
+          position: 'fixed', inset: 0, zIndex: 100000,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
+          background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
         }}>
           <div className="rounded-2xl p-6 w-full max-w-md" style={{ background: 'var(--bg-card)', boxShadow: 'var(--shadow-lg)' }}>
             <div className="flex items-center gap-3 mb-4">
@@ -341,15 +342,16 @@ export default function SuperBillingPage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Reject Confirmation Modal */}
-      {rejectModal && (
+      {rejectModal && createPortal(
         <div style={{
-          position: 'fixed', inset: 0, zIndex: 10000,
+          position: 'fixed', inset: 0, zIndex: 100000,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
+          background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
         }}>
           <div className="rounded-2xl p-6 w-full max-w-md" style={{ background: 'var(--bg-card)', boxShadow: 'var(--shadow-lg)' }}>
             <div className="flex items-center gap-3 mb-4">
@@ -382,11 +384,12 @@ export default function SuperBillingPage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       {/* View Invoice Modal */}
-      {viewInvoiceModal && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}>
+      {viewInvoiceModal && createPortal(
+        <div style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}>
           <div className="rounded-2xl w-full max-w-lg overflow-hidden" style={{ background: 'var(--bg-card)', boxShadow: 'var(--shadow-lg)' }}>
             <div className="px-6 py-4 flex items-center justify-between" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
               <div className="flex items-center gap-3">
@@ -497,7 +500,8 @@ export default function SuperBillingPage() {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

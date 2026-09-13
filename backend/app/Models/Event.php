@@ -142,4 +142,16 @@ class Event extends Model
     {
         return $this->hasMany(EventAttachment::class, 'event_id');
     }
+
+    /** The project linked to this event. */
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class, 'project_id');
+    }
+
+    /** The tasks linked to this event. */
+    public function tasks(): BelongsToMany
+    {
+        return $this->belongsToMany(Task::class, 'event_task')->withTimestamps();
+    }
 }

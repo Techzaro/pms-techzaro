@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
+import draftService from "../services/draftService";
 import CustomSelect from "./CustomSelect";
 import { X, Edit, Trash2, Paperclip } from "lucide-react";
 
-export default function CreateKnowledgeModal({ isOpen, onClose, onSuccess, initialItem }) {
+export default function CreateKnowledgeModal({ isOpen, onClose, onSuccess, initialItem, restoreDraftId = null, draftData = null }) {
   const { t } = useTranslation();
   const notify = useNotification();
   const [loading, setLoading] = useState(false);
@@ -38,6 +40,39 @@ export default function CreateKnowledgeModal({ isOpen, onClose, onSuccess, initi
       setFile(null);
     }
   }, [initialItem]);
+
+  // Restore draft data
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const applyDraft = (d) => {
+      if (!d) return;
+      setForm((prev) => ({
+        ...prev,
+        title: d.title !== undefined ? d.title : prev.title,
+        content: d.content !== undefined ? d.content : (d.description !== undefined ? d.description : prev.content),
+        category: d.category_id ? String(d.category_id) : (d.category !== undefined ? String(d.category) : prev.category),
+        visibility_level: d.visibility_level !== undefined ? d.visibility_level : prev.visibility_level,
+        project_id: d.project_id !== undefined ? (Array.isArray(d.project_id) ? d.project_id[0] || "" : String(d.project_id)) : prev.project_id,
+      }));
+    };
+
+    if (draftData) {
+      applyDraft(draftData);
+      return;
+    }
+
+    if (restoreDraftId) {
+      draftService.get(restoreDraftId)
+        .then((res) => {
+          const draft = res?.data || res;
+          if (draft?.draft_data) {
+            applyDraft(draft.draft_data);
+          }
+        })
+        .catch((err) => console.error("Failed to restore draft in CreateKnowledgeModal:", err));
+    }
+  }, [isOpen, restoreDraftId, draftData]);
 
   useEffect(() => {
     const token = authToken();
@@ -107,7 +142,16 @@ export default function CreateKnowledgeModal({ isOpen, onClose, onSuccess, initi
       const formData = new FormData();
       formData.append("title", form.title.trim());
       formData.append("content", form.content || "");
-      formData.append("category", finalCategory);
+      if (finalCategory) {
+        const numCat = Number(finalCategory);
+        if (!isNaN(numCat) && numCat > 0) {
+          formData.append("category_id", String(numCat));
+          const matched = categories.find((c) => String(c.id) === String(numCat));
+          formData.append("category", matched ? matched.name : finalCategory);
+        } else {
+          formData.append("category", finalCategory);
+        }
+      }
       formData.append("visibility_level", form.visibility_level);
       if (form.visibility_level === "project_team" && form.project_id) {
         formData.append("project_id", form.project_id);
@@ -150,8 +194,8 @@ export default function CreateKnowledgeModal({ isOpen, onClose, onSuccess, initi
 
   const hasAttachedFile = !deleteExistingFile && (file || (initialItem && (initialItem.file_path || initialItem.file_name)));
 
-  return (
-    <div className="modal-overlay" style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
+  return createPortal(
+    <div className="modal-overlay" style={{ position: "fixed", inset: 0, width: "100vw", height: "100vh", backgroundColor: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 99999 }}>
       <div className="modal-content" style={{ background: "var(--bg-card)", color: "var(--text-primary)", borderRadius: "12px", width: "100%", maxWidth: "680px", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)" }}>
         {/* HEADER */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid var(--border-color)" }}>
@@ -311,6 +355,7 @@ export default function CreateKnowledgeModal({ isOpen, onClose, onSuccess, initi
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

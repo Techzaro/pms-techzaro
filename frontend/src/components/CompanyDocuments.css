@@ -197,6 +197,7 @@
   color: var(--text-dark);
   border: 1px solid var(--border-color);
   transition: all 0.15s;
+  cursor: pointer;
 }
 
 .cd-view-btn:hover {
@@ -269,6 +270,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
 }
 
 .cd-other-file-name:hover {

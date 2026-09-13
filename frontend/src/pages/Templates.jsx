@@ -8,7 +8,7 @@ import ConfirmModal from "../components/ConfirmModal";
 import API_URL from "../config/api";
 import { authToken, rolePath, getUser } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
-import { Plus, Search, FileText, Lock, Users, Building, ShieldCheck, Edit, Trash2, ArrowRight, Paperclip, Download } from "lucide-react";
+import { Plus, Search, FileText, Lock, Users, Building, ShieldCheck, Edit, Trash2, ArrowRight, Paperclip, Download, Globe, FolderGit2 } from "lucide-react";
 
 export default function Templates() {
   const { t } = useTranslation();

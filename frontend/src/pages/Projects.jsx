@@ -139,6 +139,7 @@ function Projects() {
 
   const [orderedProjects, setOrderedProjects] = useState([]);
   const [restoreDraftId, setRestoreDraftId] = useState(null);
+  const [draftDataPayload, setDraftDataPayload] = useState(null);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
   useEffect(() => {
@@ -252,10 +253,42 @@ function Projects() {
   useEffect(() => {
     const draftId = location.state?.openDraft;
     if (!draftId) return;
+
+    const origId = location.state?.originalRecordId || location.state?.draft?.original_record_id;
+    const directDraftData = location.state?.draftData;
+
     window.history.replaceState({}, document.title);
-    setRestoreDraftId(draftId);
-    setShowModal(true);
-  }, [location.state]);
+
+    if (origId) {
+      setRestoreDraftId(draftId);
+      setDraftDataPayload(directDraftData || null);
+
+      const existingProj = projects.find((p) => String(p.id) === String(origId));
+      if (existingProj) {
+        setEditingProject(existingProj);
+        setShowEditModal(true);
+      } else {
+        const token = authToken();
+        fetch(`${API_URL}/projects/${origId}`, {
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        })
+          .then((r) => r.json())
+          .then((data) => {
+            const p = data?.data || data?.project || data;
+            setEditingProject(p || { id: origId, title: directDraftData?.title || "" });
+            setShowEditModal(true);
+          })
+          .catch(() => {
+            setEditingProject({ id: origId, title: directDraftData?.title || "" });
+            setShowEditModal(true);
+          });
+      }
+    } else {
+      setRestoreDraftId(draftId);
+      setDraftDataPayload(directDraftData || null);
+      setShowModal(true);
+    }
+  }, [location.state, projects]);
 
   useAutoRefresh(() => { fetchProjects(); fetchSharedProjects(); }, {
     events: ['project:created', 'project:updated', 'project:deleted', 'data:changed', 'sharing:changed'],
@@ -916,9 +949,11 @@ function Projects() {
         <div className="modal-overlay">
           <CreateProjectModal
             restoreDraftId={restoreDraftId}
+            draftData={draftDataPayload}
             onClose={(created) => {
               setShowModal(false);
               setRestoreDraftId(null);
+              setDraftDataPayload(null);
               if (created) fetchProjects();
             }}
           />
@@ -928,9 +963,13 @@ function Projects() {
       {showEditModal && editingProject && (
         <EditProjectModal
           project={editingProject}
+          restoreDraftId={restoreDraftId}
+          draftData={draftDataPayload}
           onClose={(refresh) => {
             setShowEditModal(false);
             setEditingProject(null);
+            setRestoreDraftId(null);
+            setDraftDataPayload(null);
             if (refresh) fetchProjects();
           }}
         />

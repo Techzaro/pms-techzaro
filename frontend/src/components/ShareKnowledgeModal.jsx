@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { X, Share2, Copy, Check, Users, User, Send, Loader2 } from "lucide-react";
 import API_URL from "../config/api";
@@ -99,9 +100,28 @@ export default function ShareKnowledgeModal({ isOpen, onClose, article }) {
     }
   };
 
-  return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
-      <div style={{ background: "var(--bg-card)", borderRadius: "12px", width: "100%", maxWidth: "520px", border: "1px solid var(--border-color)", padding: "24px", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.12)" }}>
+  return createPortal(
+    <div
+      className="modal-overlay"
+      style={{
+        position: "fixed",
+        inset: 0,
+        width: "100vw",
+        height: "100vh",
+        zIndex: 99999,
+        background: "rgba(15, 23, 42, 0.6)",
+        backdropFilter: "blur(4px)",
+        WebkitBackdropFilter: "blur(4px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "16px",
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div style={{ background: "var(--bg-card)", borderRadius: "12px", width: "100%", maxWidth: "520px", border: "1px solid var(--border-color)", padding: "24px", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.12)" }} onClick={(e) => e.stopPropagation()}>
         {/* MODAL HEADER */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -283,6 +303,7 @@ export default function ShareKnowledgeModal({ isOpen, onClose, article }) {
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

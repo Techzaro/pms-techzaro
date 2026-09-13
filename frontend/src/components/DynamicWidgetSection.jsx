@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Plus, X, GripVertical, RotateCcw, Search, Maximize2, Minimize2, Pin } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -482,18 +483,19 @@ export default function DynamicWidgetSection({ storageKey = "pms_dashboard_widge
       </div>
 
       {/* SEARCHABLE ADD WIDGET SELECTION MODAL (Tasks 5 & 6) */}
-      {showAddModal && (
+      {showAddModal && createPortal(
         <div
           className="modal-overlay"
           onClick={() => setShowAddModal(false)}
           style={{
             position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(15, 23, 42, 0.5)",
-            zIndex: 9999,
+            inset: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(15, 23, 42, 0.6)",
+            backdropFilter: "blur(4px)",
+            WebkitBackdropFilter: "blur(4px)",
+            zIndex: 99999,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -660,7 +662,8 @@ export default function DynamicWidgetSection({ storageKey = "pms_dashboard_widge
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

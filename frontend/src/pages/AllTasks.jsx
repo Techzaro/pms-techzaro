@@ -36,6 +36,7 @@ import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import { renderDynamicDates } from "../utils/tableDateUtils";
 import { formatDateTimeInline, formatDateOnly } from "../utils/formatDateTime";
+import { getUpdatedSinceThreshold } from "../utils/filterUtils";
 import "../components/ActionPopover.css";
 import "../pages/Task.css";
 
@@ -94,6 +95,8 @@ function AllTasks() {
     return filterParam || "";
   });
   const [timeFilter, setTimeFilter] = useState("");
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
   const [orderedItems, setOrderedItems] = useState([]);
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
@@ -109,8 +112,16 @@ function AllTasks() {
     status: [],
     states: [],
     due_states: [],
+    priority: [],
+    created_by: [],
+    follower_id: [],
     start_date: "",
     end_date: "",
+    due_date_from: "",
+    due_date_to: "",
+    updated_since: "",
+    updated_since_value: "",
+    updated_since_unit: "hours",
   });
 
   const handleSort = (column) => {
@@ -186,7 +197,13 @@ function AllTasks() {
       setLoading(true);
       const token = authToken();
       const params = new URLSearchParams();
-      if (timeFilter) params.append("time_filter", timeFilter);
+      if (timeFilter && timeFilter !== "custom") {
+        params.append("time_filter", timeFilter);
+      } else if (timeFilter === "custom") {
+        params.append("time_filter", "custom");
+        if (customStartDate) params.append("start_date", customStartDate);
+        if (customEndDate) params.append("end_date", customEndDate);
+      }
       if (debouncedSearch) params.append("search", debouncedSearch);
 
       const stList = Array.isArray(advancedFilters.statuses)
@@ -241,6 +258,15 @@ function AllTasks() {
 
       if (advancedFilters.start_date) params.append("start_date", advancedFilters.start_date);
       if (advancedFilters.end_date) params.append("end_date", advancedFilters.end_date);
+      if (advancedFilters.due_date_from) params.append("due_date_from", advancedFilters.due_date_from);
+      if (advancedFilters.due_date_to) params.append("due_date_to", advancedFilters.due_date_to);
+      if (advancedFilters.updated_since) {
+        params.append("updated_since", advancedFilters.updated_since);
+        if (advancedFilters.updated_since === "custom") {
+          if (advancedFilters.updated_since_value) params.append("updated_since_value", advancedFilters.updated_since_value);
+          if (advancedFilters.updated_since_unit) params.append("updated_since_unit", advancedFilters.updated_since_unit);
+        }
+      }
       if (sortBy) {
         params.append("sort_by", sortBy);
         params.append("sort_direction", sortDirection);
@@ -267,7 +293,7 @@ function AllTasks() {
       setLoading(false);
       setItems([]);
     }
-  }, [debouncedSearch, timeFilter, statusFilter, advancedFilters, sortBy, sortDirection]);
+  }, [debouncedSearch, timeFilter, customStartDate, customEndDate, statusFilter, advancedFilters, sortBy, sortDirection]);
 
   useEffect(() => {
     fetchTasks();
@@ -313,6 +339,19 @@ function AllTasks() {
 
   const filteredItems = useMemo(() => {
     let list = baseItems;
+    const selectedPriorities = Array.isArray(advancedFilters.priority) && advancedFilters.priority.length > 0
+      ? advancedFilters.priority
+      : (Array.isArray(advancedFilters.priorities) && advancedFilters.priorities.length > 0 ? advancedFilters.priorities : []);
+
+    if (selectedPriorities.length > 0) {
+      const prioLower = selectedPriorities.map((p) => String(p).toLowerCase());
+      list = list.filter((item) => {
+        if (!item) return false;
+        const itemPrio = String(item.priority || "medium").toLowerCase();
+        return prioLower.includes(itemPrio);
+      });
+    }
+
     if (statusFilter) {
       const sf = String(statusFilter).toLowerCase();
       if (sf === "due_today") {
@@ -345,8 +384,24 @@ function AllTasks() {
         list = list.filter((item) => String(item.status).toLowerCase() === sf);
       }
     }
+
+    // Updated Since filtering
+    const updatedSinceThreshold = getUpdatedSinceThreshold(
+      advancedFilters.updated_since,
+      advancedFilters.updated_since_value,
+      advancedFilters.updated_since_unit
+    );
+    if (updatedSinceThreshold) {
+      const thresholdTime = updatedSinceThreshold.getTime();
+      list = list.filter((item) => {
+        if (!item?.updated_at) return false;
+        const itemUpdated = new Date(item.updated_at).getTime();
+        return !isNaN(itemUpdated) && itemUpdated >= thresholdTime;
+      });
+    }
+
     return list;
-  }, [baseItems, statusFilter, pendingStatuses, inProgressStatuses, submittedStatuses, completedStatuses, pausedStatuses, declinedStatuses, abandonedStatuses]);
+  }, [baseItems, statusFilter, advancedFilters.priority, advancedFilters.priorities, advancedFilters.updated_since, advancedFilters.updated_since_value, advancedFilters.updated_since_unit, pendingStatuses, inProgressStatuses, submittedStatuses, completedStatuses, pausedStatuses, declinedStatuses, abandonedStatuses]);
 
   const taskIdList = filteredItems.map((i) => i.id);
 
@@ -368,14 +423,32 @@ function AllTasks() {
         </div>
 
         <div className="task-btns">
-          <div className="all-time">
+          <div className="all-time" style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
             <select value={timeFilter} onChange={(e) => { setTimeFilter(e.target.value); setPage(1); }}>
               <option value="">{t("All Time", { defaultValue: "All Time" })}</option>
               <option value="today">{t("Today", { defaultValue: "Today" })}</option>
               <option value="7">{t("Last 7 Days", { defaultValue: "Last 7 Days" })}</option>
               <option value="30">{t("Last 30 Days", { defaultValue: "Last 30 Days" })}</option>
               <option value="180">{t("Last 6 Months", { defaultValue: "Last 6 Months" })}</option>
+              <option value="custom">{t("Custom Date", { defaultValue: "Custom Date" })}</option>
             </select>
+            {timeFilter === "custom" && (
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => { setCustomStartDate(e.target.value); setPage(1); }}
+                  style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-color, #cbd5e1)', fontSize: '13px' }}
+                />
+                <span style={{ fontSize: '12px', color: '#64748b' }}>{t("to", { defaultValue: "to" })}</span>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => { setCustomEndDate(e.target.value); setPage(1); }}
+                  style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-color, #cbd5e1)', fontSize: '13px' }}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -411,7 +484,14 @@ function AllTasks() {
           setPage(1);
         }}
         onFilterChange={(key, val) => {
-          setAdvancedFilters((prev) => ({ ...prev, [key]: val }));
+          setAdvancedFilters((prev) => {
+            const updated = { ...prev, [key]: val };
+            if (key === "priority" || key === "priorities") {
+              updated.priority = val;
+              updated.priorities = val;
+            }
+            return updated;
+          });
           setPage(1);
         }}
         onApplyFilters={(appliedFilters, appliedSort) => {
@@ -429,6 +509,11 @@ function AllTasks() {
             follower_id: appliedFilters?.follower_id || [],
             start_date: appliedFilters?.start_date || "",
             end_date: appliedFilters?.end_date || "",
+            due_date_from: appliedFilters?.due_date_from || "",
+            due_date_to: appliedFilters?.due_date_to || "",
+            updated_since: appliedFilters?.updated_since || "",
+            updated_since_value: appliedFilters?.updated_since_value || "",
+            updated_since_unit: appliedFilters?.updated_since_unit || "hours",
           }));
           if (appliedSort && appliedSort.sort_by) {
             setSortBy(appliedSort.sort_by);
@@ -440,6 +525,8 @@ function AllTasks() {
           setSearch("");
           setStatusFilter("");
           setSearchParams({});
+          setCustomStartDate("");
+          setCustomEndDate("");
           setAdvancedFilters({
             user_id: [],
             project_id: [],
@@ -452,6 +539,11 @@ function AllTasks() {
             follower_id: [],
             start_date: "",
             end_date: "",
+            due_date_from: "",
+            due_date_to: "",
+            updated_since: "",
+            updated_since_value: "",
+            updated_since_unit: "hours",
           });
           setPage(1);
         }}

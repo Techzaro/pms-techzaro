@@ -27,10 +27,15 @@ window.fetch = async function (...args) {
     if (tenantSlug && !skipTenantHeader) {
       headers["X-Tenant-ID"] = tenantSlug;
     }
-    const noCacheConfig = { ...config, headers };
-
     const role = getCurrentRole();
     const tokenAtRequest = getToken(role);
+
+    // Dynamically attach authorization header if not already provided
+    if (tokenAtRequest && !skipTenantHeader && !headers.Authorization && !headers.authorization) {
+      headers.Authorization = `Bearer ${tokenAtRequest}`;
+    }
+
+    const noCacheConfig = { ...config, headers };
     const res = await originalFetch.apply(this, [resource, noCacheConfig]);
 
     // Handle session expiration (401 Unauthorized)
@@ -38,7 +43,6 @@ window.fetch = async function (...args) {
       const url = typeof resource === "string" ? resource : resource?.url || "";
       if (url.includes("/super-admin")) return res;
       // On admin domain, super admin has its own 401 handling (superAdminApi.js)
-      // Skip zombie tab detection to avoid cross-role interference from shared localStorage
       if (isAdminDomain()) return res;
       const tokenNow = getToken(role);
       const isTokenExpired = tokenNow && tokenNow === tokenAtRequest;
@@ -101,41 +105,23 @@ export function invalidateCache() {}
 export function onMutation() {}
 
 // Cross-tab session synchronization
-// Detects when our session is removed by another tab (e.g. logout)
-// NOTE: On admin domain, skip entirely — super admin uses its own session management
-// (clearSuperAdminSession + superAdminApi.js handles 401s independently)
+// Detects when our session is removed by another tab (logout)
 let _sessionConflictHandled = false;
 window.addEventListener("storage", (e) => {
   if (!e.key || _sessionConflictHandled) return;
   if (isAdminDomain()) return;
 
-  const role = getCurrentRole();
-  if (!role) return;
-  const sid = getSessionId();
-  if (!sid) return;
-
-  // Only react to sessions_{role} changes
-  if (e.key !== `sessions_${role}`) return;
-
-  // No change — ignore
-  if (e.newValue === e.oldValue) return;
-
-  try {
-    const oldSessions = e.oldValue ? JSON.parse(e.oldValue) : {};
-    const newSessions = e.newValue ? JSON.parse(e.newValue) : {};
-
-    // Our session was explicitly removed (existed before, gone now)
-    if (oldSessions[sid] && !newSessions[sid]) {
+  // If token or active_role was removed across tabs (logout)
+  if (e.key === "token" || e.key === "active_role" || e.key === "currentRole") {
+    if (!e.newValue && e.oldValue) {
       _sessionConflictHandled = true;
-      clearSession(role);
+      clearSession();
       const loginPath = isAdminDomain() ? "/super-admin/login" : "/login";
       try {
         window.history.replaceState(null, "", loginPath);
       } catch {}
-      window.location.replace(`${loginPath}?message=${encodeURIComponent("You have been logged in from another tab.")}`);
+      window.location.replace(`${loginPath}?message=${encodeURIComponent("You have been logged out from another tab.")}`);
     }
-  } catch {
-    // Parse error — ignore (don't force logout on corrupted data)
   }
 });
 

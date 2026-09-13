@@ -24,7 +24,7 @@ import "../pages/UserPerformance.css";
 import "../pages/Task.css";
 import { useApiQuery } from "../hooks/useApi";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
-import { getUser, rolePath, authToken } from "../utils/auth";
+import { getUser, getCurrentRole, rolePath, authToken } from "../utils/auth";
 import { formatDateTime } from "../utils/formatDateTime";
 import API_URL from "../config/api";
 import { GoDotFill } from "react-icons/go";
@@ -137,7 +137,7 @@ function UserPerformance() {
   const [orderedItems, setOrderedItems] = useState([]);
 
   const stored = getUser();
-  const currentRole = stored?.role || "member";
+  const currentRole = getCurrentRole() || stored?.role || "";
   const isAdminOrManager = currentRole === "admin" || currentRole === "manager";
   const isTeamLead = currentRole === "team_lead" || currentRole === "teamlead";
   const canAssignTask = isAdminOrManager || isTeamLead;

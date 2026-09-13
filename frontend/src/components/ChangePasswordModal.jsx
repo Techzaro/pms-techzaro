@@ -89,7 +89,7 @@ export default function ChangePasswordModal({ onClose }) {
   };
 
   return createPortal(
-    <div style={{ position: "fixed", inset: 0, zIndex: 10010, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={handleClose}>
+    <div className="modal-overlay" onClick={handleClose}>
       <div style={{ background: "var(--bg-card)", borderRadius: 16, padding: "28px 30px 24px", width: 440, maxWidth: "92vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)", maxHeight: "90vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
