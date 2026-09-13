@@ -341,6 +341,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/projects', [ProjectController::class, 'index']);
     Route::get('/projects/{project}', [ProjectController::class, 'show']);
     Route::get('/projects/{project}/members', [ProjectController::class, 'getMembers']);
+    Route::get('/projects/{project}/collaborate-users', [TaskController::class, 'getCollaborateUsers']);
     Route::get('/projects/{project}/tasks', [ProjectController::class, 'getTasks']);
     Route::post('/projects/{project}/changes/mark-read', [ProjectController::class, 'markChangesRead']);
 
@@ -839,8 +840,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/shared-by-us', [SharingController::class, 'sharedByUs']);
         Route::get('/shared-with-me', [SharingController::class, 'sharedWithMe']);
         Route::get('/shared-resources', [SharingController::class, 'sharedResources']);
+        Route::get('/shared-project-users/{sharedResourceId}', [SharingController::class, 'getSharedProjectUsers']);
+        Route::put('/resources/{id}/project', [SharingController::class, 'updateSharedProject']);
+        Route::get('/resources/{id}/members', [SharingController::class, 'getSharedProjectMembers']);
+        Route::post('/resources/{id}/tasks', [SharingController::class, 'storeTaskForSharedProject']);
+        Route::post('/resources/{id}/members', [SharingController::class, 'addSharedProjectMembers']);
+        Route::delete('/resources/{id}/members/{userId}', [SharingController::class, 'removeSharedProjectMember']);
         Route::get('/stats', [SharingController::class, 'stats']);
         Route::get('/resources/{id}', [SharingController::class, 'showSharedResource']);
+        Route::get('/shared-by-resource/{resourceType}/{resourceId}', [SharingController::class, 'getExistingShares']);
         Route::put('/resources/{id}/permission', [SharingController::class, 'updatePermission']);
         Route::delete('/resources/{id}', [SharingController::class, 'revokeAccess']);
         Route::post('/resources/{id}/users', [SharingController::class, 'addUsers']);

@@ -141,11 +141,7 @@ class SharedResource extends Model
     public function scopeSharedByOrganization($query, int $organizationId)
     {
         return $query->where('shared_by_organization_id', $organizationId)
-                     ->where('status', 'active')
-                     ->where(function ($q) {
-                         $q->whereNull('expires_at')
-                           ->orWhere('expires_at', '>', now());
-                     });
+                     ->where('status', 'active');
     }
 
     /**
@@ -154,11 +150,7 @@ class SharedResource extends Model
     public function scopeSharedWithOrganization($query, int $organizationId)
     {
         return $query->where('shared_with_organization_id', $organizationId)
-                     ->where('status', 'active')
-                     ->where(function ($q) {
-                         $q->whereNull('expires_at')
-                           ->orWhere('expires_at', '>', now());
-                     });
+                     ->where('status', 'active');
     }
 
     /**

@@ -62,16 +62,55 @@ class SharingService
         // Validate resource exists
         $this->validateResourceExists($resourceType, $resourceId);
 
-        // Check for existing share (including revoked ones for re-sharing)
-        $existing = SharedResource::where('connection_id', $connection->id)
+        // Check for existing share (including soft-deleted ones — unique constraint still applies)
+        $existing = SharedResource::withTrashed()
+            ->where('connection_id', $connection->id)
             ->where('resource_type', $resourceType)
             ->where('resource_id', $resourceId)
-            ->where('status', 'active')
+            ->where('shared_by_organization_id', $sharedByOrgId)
+            ->where('shared_with_organization_id', $sharedWithOrgId)
             ->first();
 
         if ($existing) {
-            throw new \RuntimeException('This resource is already shared with this organization.');
+            if ($existing->trashed()) {
+                $existing->restore();
+                $existing->update([
+                    'status'     => 'active',
+                    'permission' => $permission,
+                    'can_download' => $canDownload,
+                    'notes'      => $notes,
+                    'shared_at'  => now(),
+                    'expires_at' => $expiresAt,
+                ]);
+                $this->updateMirrorInReceiverDb($existing);
+                return $existing;
+            }
+            // Reactivate if revoked/expired
+            if ($existing->status !== 'active') {
+                $existing->update([
+                    'status'     => 'active',
+                    'permission' => $permission,
+                    'can_download' => $canDownload,
+                    'notes'      => $notes,
+                    'shared_at'  => now(),
+                    'expires_at' => $expiresAt,
+                    'revoked_at' => null,
+                ]);
+                $this->updateMirrorInReceiverDb($existing);
+            }
+            return $existing;
         }
+
+        $sharedResource = null;
+
+        \Log::info('shareResource: Starting', [
+            'connection_id' => $connection->id,
+            'resource_type' => $resourceType,
+            'resource_id' => $resourceId,
+            'shared_by_org' => $sharedByOrgId,
+            'shared_with_org' => $sharedWithOrgId,
+            'db' => config('database.connections.mysql.database'),
+        ]);
 
         $sharedResource = null;
 
@@ -161,7 +200,8 @@ class SharingService
         string $newPermission,
         bool $canDownload,
         int $userId,
-        int $organizationId
+        int $organizationId,
+        ?string $expiresAt = null
     ): SharedResource {
         $oldPermission = $sharedResource->permission;
 
@@ -171,10 +211,22 @@ class SharingService
 
         DB::beginTransaction();
         try {
-            $sharedResource->update([
+            $updateData = [
                 'permission'   => $newPermission,
                 'can_download' => $canDownload,
-            ]);
+                'expires_at'   => $expiresAt,
+            ];
+
+            // If extending expiry (new expiry is in the future or cleared), reactivate the share
+            if ($sharedResource->status === 'expired') {
+                $newExpiry = $expiresAt ? \Carbon\Carbon::parse($expiresAt) : null;
+                if (!$newExpiry || $newExpiry->isFuture()) {
+                    $updateData['status'] = 'active';
+                    $updateData['revoked_at'] = null;
+                }
+            }
+
+            $sharedResource->update($updateData);
 
             // If updating a project, cascade permission to all child resources
             if ($sharedResource->resource_type === 'project') {
@@ -293,13 +345,16 @@ class SharingService
         $sharedResource = SharedResource::where('resource_type', $resourceType)
             ->where('resource_id', $resourceId)
             ->where('status', 'active')
-            ->where(function ($q) {
-                $q->whereNull('expires_at')
-                  ->orWhere('expires_at', '>', now());
-            })->first();
+            ->first();
 
         if (!$sharedResource) {
             return null;
+        }
+
+        // Determine effective permission: if expires_at has passed, downgrade to view
+        $effectivePermission = $sharedResource->permission;
+        if ($sharedResource->expires_at && $sharedResource->expires_at->isPast()) {
+            $effectivePermission = 'view';
         }
 
         // Check if user is explicitly granted access
@@ -309,10 +364,14 @@ class SharingService
             ->first();
 
         if ($userAccess) {
-            // User has explicit access - check their override or fall back to resource-level
+            // User has explicit access - check their override or fall back to effective resource-level permission
             if ($requiredPermission) {
-                $effectivePermission = $userAccess->getEffectivePermission();
-                if (!$this->hasPermissionLevel($effectivePermission, $requiredPermission)) {
+                $userEffectivePermission = $userAccess->getEffectivePermission();
+                // Downgrade to view if share has expired
+                if ($effectivePermission === 'view' && $userEffectivePermission !== 'view') {
+                    $userEffectivePermission = 'view';
+                }
+                if (!$this->hasPermissionLevel($userEffectivePermission, $requiredPermission)) {
                     return null;
                 }
             }
@@ -320,7 +379,6 @@ class SharingService
         }
 
         // No specific user access - check if user belongs to the receiving org
-        // If no users are explicitly assigned, all users from the receiving org get resource-level permission
         $assignedUsersCount = SharedResourceUser::where('shared_resource_id', $sharedResource->id)
             ->where('status', 'active')
             ->count();
@@ -328,7 +386,7 @@ class SharingService
         if ($assignedUsersCount === 0) {
             // No users explicitly assigned - grant access to all users of the receiving org
             if ($requiredPermission) {
-                if (!$this->hasPermissionLevel($sharedResource->permission, $requiredPermission)) {
+                if (!$this->hasPermissionLevel($effectivePermission, $requiredPermission)) {
                     return null;
                 }
             }
@@ -461,10 +519,6 @@ class SharingService
     public function getStats(int $organizationId): array
     {
         $query = SharedResource::where('status', 'active')
-            ->where(function ($q) {
-                $q->whereNull('expires_at')
-                  ->orWhere('expires_at', '>', now());
-            })
             ->where(function ($q) use ($organizationId) {
                 $q->where('shared_by_organization_id', $organizationId)
                   ->orWhere('shared_with_organization_id', $organizationId);
@@ -590,7 +644,8 @@ class SharingService
             DB::purge($connName);
             $conn = DB::connection($connName);
 
-            $conn->table('shared_resources')->insert([
+            $conn->table('shared_resources')->insertOrIgnore([
+                'id'                          => $sharedResource->id,
                 'connection_id'               => $sharedResource->connection_id,
                 'shared_by_organization_id'   => $sharedResource->shared_by_organization_id,
                 'shared_with_organization_id' => $sharedResource->shared_with_organization_id,
@@ -652,6 +707,9 @@ class SharingService
                 ->update([
                     'permission'   => $sharedResource->permission,
                     'can_download' => $sharedResource->can_download,
+                    'status'       => $sharedResource->status,
+                    'expires_at'   => $sharedResource->expires_at,
+                    'revoked_at'   => $sharedResource->revoked_at,
                     'updated_at'   => now(),
                 ]);
         } catch (\Throwable $e) {
@@ -720,8 +778,13 @@ class SharingService
         bool $canDownload,
         ?string $expiresAt
     ): void {
-        // Fetch child tasks
-        $tasks = Task::where('project_id', $projectResourceId)->get();
+        // Fetch child tasks — exclude self-assigned tasks (user assigned to themselves)
+        $tasks = Task::where('project_id', $projectResourceId)
+            ->where(function ($q) use ($userId) {
+                // NOT (assigned_by = me AND assigned_to = me) = assigned_by != me OR assigned_to != me
+                $q->where('assigned_by', '!=', $userId)
+                  ->orWhere('assigned_to', '!=', $userId);
+            })->get();
 
         foreach ($tasks as $task) {
             $this->shareChildResource(
@@ -904,15 +967,23 @@ class SharingService
         bool $canDownload
     ): void {
         $children = SharedResource::where('parent_resource_id', $parentSharedResource->id)
-            ->where('status', 'active')
+            ->whereIn('status', ['active', 'expired'])
             ->get();
 
         foreach ($children as $child) {
             try {
-                $child->update([
+                $childUpdate = [
                     'permission'   => $newPermission,
                     'can_download' => $canDownload,
-                ]);
+                ];
+
+                // If child was expired and parent is being reactivated, reactivate child too
+                if ($child->status === 'expired' && $parentSharedResource->status === 'active') {
+                    $childUpdate['status'] = 'active';
+                    $childUpdate['revoked_at'] = null;
+                }
+
+                $child->update($childUpdate);
 
                 // Update mirror in receiver DB
                 $this->updateMirrorInReceiverDb($child);

@@ -10,6 +10,7 @@ class ActivityLog extends Model
     protected $connection = 'mysql_master';
     protected $table = 'activity_logs';
     protected $fillable = ['user', 'action', 'target', 'ip', 'status', 'details'];
+    protected $casts = ['details' => 'array'];
 
     public function scopeSearch(Builder $query, ?string $search): Builder
     {

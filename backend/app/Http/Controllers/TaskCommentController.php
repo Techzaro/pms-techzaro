@@ -599,6 +599,20 @@ class TaskCommentController extends Controller
             if ($user->role === 'guest' && $task->project->isAccessibleByGuest($user)) {
                 return true;
             }
+
+            // Check if user's org has this project shared with comment/collaborate permission
+            $currentOrg = $user->currentOrganization;
+            if ($currentOrg) {
+                $hasSharedAccess = \App\Models\SharedResource::where('resource_type', 'project')
+                    ->where('resource_id', $task->project_id)
+                    ->where('shared_with_organization_id', $currentOrg->id)
+                    ->where('status', 'active')
+                    ->whereIn('permission', ['comment', 'collaborate'])
+                    ->exists();
+                if ($hasSharedAccess) {
+                    return true;
+                }
+            }
         }
 
         return false;
@@ -637,6 +651,20 @@ class TaskCommentController extends Controller
 
             if ($deliverable->project->team_id) {
                 if ($user->teams()->where('teams.id', $deliverable->project->team_id)->exists()) {
+                    return true;
+                }
+            }
+
+            // Check shared project access with comment/collaborate permission
+            $currentOrg = $user->currentOrganization;
+            if ($currentOrg) {
+                $hasSharedAccess = \App\Models\SharedResource::where('resource_type', 'project')
+                    ->where('resource_id', $deliverable->project_id)
+                    ->where('shared_with_organization_id', $currentOrg->id)
+                    ->where('status', 'active')
+                    ->whereIn('permission', ['comment', 'collaborate'])
+                    ->exists();
+                if ($hasSharedAccess) {
                     return true;
                 }
             }

@@ -82,7 +82,6 @@ function AllTasks() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState([]);
-  const [sharedTasks, setSharedTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -164,7 +163,8 @@ function AllTasks() {
       { bg: "#EDE9FE", text: "#7C3AED" },
       { bg: "#FCE7F3", text: "#DB2777" },
     ];
-    return colors[(id || 0) % colors.length];
+    const index = Math.abs(Number(id || 0) || 0) % colors.length;
+    return colors[index];
   }, []);
 
   const formatDate = (dateStr) => {
@@ -299,34 +299,13 @@ function AllTasks() {
     fetchTasks();
   }, [fetchTasks, page]);
 
-  const fetchSharedTasks = useCallback(async () => {
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/sharing/shared-resources?type=task`, {
-        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      setSharedTasks(Array.isArray(data?.data) ? data.data : []);
-    } catch (err) {
-      console.error("Failed to fetch shared tasks:", err);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchSharedTasks();
-  }, [fetchSharedTasks]);
-
-  useAutoRefresh(() => { fetchTasks(); fetchSharedTasks(); }, {
-    events: ['task:created', 'task:updated', 'task:deleted', 'data:changed', 'sharing:changed'],
+  useAutoRefresh(() => { fetchTasks(); }, {
+    events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
   });
 
   useEffect(() => {
-    const merged = [
-      ...items,
-      ...sharedTasks.filter((st) => !items.some((i) => String(i.id) === String(st.id))),
-    ];
-    setOrderedItems(merged);
-  }, [items, sharedTasks]);
+    setOrderedItems(items);
+  }, [items]);
 
   useEffect(() => {
     const filterParam = searchParams.get("filter");

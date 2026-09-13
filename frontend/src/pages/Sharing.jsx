@@ -6,6 +6,7 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import LoadingSpinner from "../components/LoadingSpinner";
 import ConfirmModal from "../components/ConfirmModal";
+import ShareResourceModal from "../components/ShareResourceModal";
 import API_URL from "../config/api";
 import { authToken, getCurrentRole, getTenantSlug, rolePath, getUser } from "../utils/auth";
 import { FiLink, FiShare2, FiDownload, FiUsers, FiActivity, FiSearch, FiPlus, FiCheck, FiX, FiClock, FiAlertTriangle, FiCopy, FiExternalLink, FiSettings, FiTrash2, FiEdit2, FiEye, FiMessageSquare, FiFilter, FiRefreshCw, FiUpload, FiBell } from "react-icons/fi";
@@ -74,6 +75,9 @@ export default function Sharing() {
   // Confirm modal states
   const [confirmAction, setConfirmAction] = useState(null); // { type, id }
   const confirmModalOpen = confirmAction !== null;
+
+  // Share edit modal states
+  const [shareEditModal, setShareEditModal] = useState({ open: false, resource: null });
 
   // Form states
   const [findIdentifier, setFindIdentifier] = useState("");
@@ -812,17 +816,17 @@ export default function Sharing() {
                 </div>
               ) : (
                 filteredSharedByUs.map((resource) => (
-                  <div key={resource.id} className="resource-card" style={{ cursor: "pointer" }} onClick={() => {
-                    if (resource.resource_type === "project") navigate(`${basePath}/projects/project-details/${resource.resource_id}`);
-                    else if (resource.resource_type === "task") navigate(`${basePath}/tasks/task-details/${resource.resource_id}`);
-                  }}>
+                  <div key={resource.id} className="resource-card">
                     <div className="resource-type-icon">
                       {resource.resource_type === "project" && <FiShare2 />}
                       {resource.resource_type === "task" && <FiClock />}
                       {resource.resource_type === "event" && <FiActivity />}
                       {resource.resource_type === "knowledge_base" && <FiLink />}
                     </div>
-                    <div className="resource-info">
+                    <div className="resource-info" style={{ cursor: "pointer", flex: 1 }} onClick={() => {
+                      if (resource.resource_type === "project") navigate(`${basePath}/projects/project-details/${resource.resource_id}`);
+                      else if (resource.resource_type === "task") navigate(`${basePath}/tasks/task-details/${resource.resource_id}`);
+                    }}>
                       <h4>{resource.resource_name || `${RESOURCE_TYPE_LABELS[resource.resource_type] || resource.resource_type} #${resource.resource_id}`}</h4>
                       <span className="resource-permission" style={{ backgroundColor: PERMISSION_COLORS[resource.permission]?.bg, color: PERMISSION_COLORS[resource.permission]?.text }}>
                         {resource.permission}
@@ -835,6 +839,32 @@ export default function Sharing() {
                       </span>
                       <span className="resource-date">{new Date(resource.shared_at).toLocaleDateString()}</span>
                     </div>
+                    <button
+                      className="resource-edit-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShareEditModal({ open: true, resource });
+                      }}
+                      title={t("Edit Share", { defaultValue: "Edit Share" })}
+                      style={{
+                        background: "none",
+                        border: "1px solid var(--border-color, #e5e7eb)",
+                        borderRadius: "6px",
+                        padding: "6px 8px",
+                        cursor: "pointer",
+                        color: "var(--primary-color, #3b82f6)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        flexShrink: 0,
+                        transition: "all 0.15s",
+                      }}
+                    >
+                      <FiEdit2 size={13} />
+                      {t("Edit", { defaultValue: "Edit" })}
+                    </button>
                   </div>
                 ))
               )}
@@ -874,7 +904,7 @@ export default function Sharing() {
                       <span className="resource-date">{new Date(resource.shared_at).toLocaleDateString()}</span>
                       {resource.expires_at && (
                         <span className="expiry-badge">
-                          <FiAlertTriangle /> Expires: {new Date(resource.expires_at).toLocaleDateString()}
+                          <FiAlertTriangle /> Expires: {new Date(resource.expires_at.endsWith("Z") || resource.expires_at.includes("+") ? resource.expires_at : resource.expires_at + "Z").toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                         </span>
                       )}
                     </div>
@@ -1062,6 +1092,32 @@ export default function Sharing() {
         confirmText="Delete"
         danger
       />
+
+      {shareEditModal.open && shareEditModal.resource && (
+        <ShareResourceModal
+          resourceType={shareEditModal.resource.resource_type}
+          resourceId={shareEditModal.resource.resource_id}
+          resourceName={shareEditModal.resource.resource_name || `${shareEditModal.resource.resource_type} #${shareEditModal.resource.resource_id}`}
+          onClose={() => setShareEditModal({ open: false, resource: null })}
+          onShared={() => {
+            setShareEditModal({ open: false, resource: null });
+            if (loadedTabs["shared-by-us"]) fetchSharedByUs();
+          }}
+          existingShares={[{
+            id: shareEditModal.resource.id,
+            connection_id: shareEditModal.resource.connection_id || null,
+            permission: shareEditModal.resource.permission,
+            can_download: shareEditModal.resource.can_download,
+            status: shareEditModal.resource.status,
+            notes: shareEditModal.resource.notes,
+            shared_at: shareEditModal.resource.shared_at,
+            expires_at: shareEditModal.resource.expires_at,
+            shared_with_organization: shareEditModal.resource.shared_with_organization || null,
+            shared_by_user: shareEditModal.resource.shared_by_user || null,
+          }]}
+          editingShareId={shareEditModal.resource.id}
+        />
+      )}
     </DashboardLayout>
   );
 }

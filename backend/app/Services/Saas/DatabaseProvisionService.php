@@ -76,24 +76,39 @@ class DatabaseProvisionService
     {
         $this->configureTenantConnection($databaseName);
 
-        try {
-            Artisan::call('migrate', [
-                '--database' => 'tenant_runner',
-                '--path'     => 'database/migrations',
-                '--force'    => true,
-            ]);
+        // Run each migration INDIVIDUALLY so one failure doesn't block the rest.
+        // Laravel's `migrate` stops on first failure — we need resilience.
+        $migrationPath = database_path('migrations');
+        $files = glob($migrationPath . '/*.php');
+        sort($files);
 
-            Log::info("Migrations completed on tenant DB {$databaseName}", [
-                'output' => Artisan::output(),
-            ]);
-        } catch (\Throwable $e) {
-            Log::warning("Some migrations failed on tenant DB {$databaseName} (continuing with schema sync)", [
-                'error'  => $e->getMessage(),
-                'output' => Artisan::output(),
-            ]);
+        $ran = 0;
+        $failed = 0;
+
+        foreach ($files as $file) {
+            $shortPath = basename($file);
+            try {
+                Artisan::call('migrate', [
+                    '--database' => 'tenant_runner',
+                    '--path'     => 'database/migrations/' . $shortPath,
+                    '--force'    => true,
+                ]);
+                $output = Artisan::output();
+                if (str_contains($output, 'Nothing to migrate')) {
+                    continue;
+                }
+                $ran++;
+            } catch (\Throwable $e) {
+                $failed++;
+                Log::warning("Migration failed individually on {$databaseName}: {$shortPath}", [
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
-        // Run legacy FixTenantColumns first (fast, covers known cases)
+        Log::info("Individual migrations completed on {$databaseName}: {$ran} ran, {$failed} failed");
+
+        // Run legacy FixTenantColumns (safety net for columns added via AFTER clauses)
         try {
             FixTenantColumns::fixDatabaseProgrammatic($databaseName);
         } catch (\Throwable $e) {
@@ -108,14 +123,12 @@ class DatabaseProvisionService
             $this->syncSchema($databaseName);
         } catch (\Throwable $e) {
             Log::warning("Schema sync failed (non-fatal)", [
-                'database' => $databaseName,
-                'error'    => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
         }
 
         DB::purge('tenant_runner');
 
-        // Clear any accidental output buffer contamination from Artisan/migration output
         if (ob_get_level() > 0) {
             ob_clean();
         }
@@ -158,7 +171,16 @@ class DatabaseProvisionService
                         $tablesCreated++;
                         Log::info("Schema sync: Created table `{$databaseName}`.`{$tableName}`");
                     } catch (\Throwable $e) {
-                        Log::warning("Schema sync: Failed to create `{$tableName}`: " . $e->getMessage());
+                        // Table creation failed — might be a broken table that exists
+                        // Try dropping and recreating
+                        try {
+                            $pdo->exec("DROP TABLE IF EXISTS `{$tableName}`");
+                            $pdo->exec($createSql);
+                            $tablesCreated++;
+                            Log::info("Schema sync: Repaired table `{$databaseName}`.`{$tableName}` (dropped + recreated)");
+                        } catch (\Throwable $e2) {
+                            Log::warning("Schema sync: Failed to create/repair `{$tableName}`: " . $e2->getMessage());
+                        }
                     }
                 }
             } else {

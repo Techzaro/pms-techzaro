@@ -13,19 +13,19 @@ return new class extends Migration
     {
         Schema::table('tasks', function (Blueprint $table) {
             if (!Schema::hasColumn('tasks', 'completion_reason')) {
-                $table->string('completion_reason')->nullable()->after('description');
+                $table->string('completion_reason')->nullable();
             }
             if (!Schema::hasColumn('tasks', 'completion_notes')) {
-                $table->text('completion_notes')->nullable()->after('completion_reason');
+                $table->text('completion_notes')->nullable();
             }
         });
 
         Schema::table('deliverables', function (Blueprint $table) {
             if (!Schema::hasColumn('deliverables', 'completion_reason')) {
-                $table->string('completion_reason')->nullable()->after('description');
+                $table->string('completion_reason')->nullable();
             }
             if (!Schema::hasColumn('deliverables', 'completion_notes')) {
-                $table->text('completion_notes')->nullable()->after('completion_reason');
+                $table->text('completion_notes')->nullable();
             }
         });
     }

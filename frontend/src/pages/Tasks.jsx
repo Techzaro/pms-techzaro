@@ -122,11 +122,9 @@ function Tasks() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [items, setItems] = useState([]);
-  const [sharedTasks, setSharedTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [orderedItems, setOrderedItems] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
   const currentUser = getUser();
   const [statusFilter, setStatusFilter] = useState(() => {
@@ -167,7 +165,7 @@ function Tasks() {
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-
+  const [orderedItems, setOrderedItems] = useState([]);
 
   const [sortBy, setSortBy] = useState("");
   const [sortDirection, setSortDirection] = useState("desc");
@@ -357,28 +355,11 @@ function Tasks() {
     }
   }, [timeFilter, customStartDate, customEndDate, debouncedSearch, statusFilter, advancedFilters, sortBy, sortDirection]);
 
-  const fetchSharedTasks = useCallback(async () => {
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/sharing/shared-resources?type=task`, {
-        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-        skipLoader: true,
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setSharedTasks(Array.isArray(data?.data) ? data.data : []);
-      }
-    } catch (err) {
-      console.error("Error fetching shared tasks:", err);
-    }
-  }, []);
-
   useEffect(() => {
     fetchTasks();
-    fetchSharedTasks();
   }, [fetchTasks, page]);
 
-  // Handle draft restoration from DraftCenter
+// Handle draft restoration from DraftCenter
   useEffect(() => {
     const draftId = location.state?.openDraft;
     if (!draftId) return;
@@ -424,12 +405,8 @@ function Tasks() {
   });
 
   useEffect(() => {
-    const merged = [
-      ...items,
-      ...sharedTasks.filter((st) => !items.some((i) => String(i.id) === String(st.id))),
-    ];
-    setOrderedItems(merged);
-  }, [items, sharedTasks]);
+    setOrderedItems(items);
+  }, [items]);
 
   const baseItems = orderedItems.length ? orderedItems : items;
   const pendingStatuses = ["pending", "planned", "planning", "Pending", "Planned", "Planning"];

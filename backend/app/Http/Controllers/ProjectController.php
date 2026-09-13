@@ -14,6 +14,9 @@ use App\Models\ProjectMilestone;
 use App\Models\ProjectVisibility;
 use App\Models\ProjectWorkflowEvent;
 use App\Models\Team;
+use App\Models\SharedResource;
+use App\Models\SharedResourceUser;
+use App\Models\Master\Organization;
 use App\Models\User;
 use App\Services\ActivityService;
 use App\Services\AuditService;
@@ -317,7 +320,9 @@ class ProjectController extends Controller
      */
     public function getMembers(Project $project)
     {
-        return response()->json($project->getMembers());
+        $members = $project->getMembers();
+        $this->mergeSharedProjectMembers($project, $members);
+        return response()->json($members);
     }
 
     /**
@@ -601,43 +606,47 @@ class ProjectController extends Controller
     public function show(Project $project)
     {
         $user = request()->user();
+        $userId = (int) $user->id;
+        $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
 
-        if (! in_array($user->role, ['admin', 'manager'])) {
-            try {
-                $project->load('team.members:id,name');
-            } catch (\Exception $e) {
-                // fallback: team may not exist
-            }
-            $userId = (int) $user->id;
-            $userTeamIds = Team::where('leader_id', $userId)
-                ->orWhereHas('members', fn ($q) => $q->where('users.id', $userId))
-                ->pluck('id')
-                ->toArray();
-
+        // ── Authorization (single query for non-admin users) ──
+        if (! $isAdminOrManager) {
             $isCreator = (int) $project->created_by === $userId;
             $isAssigned = in_array($userId, array_map('intval', $project->assigned_users ?? []));
-            $isTeamMember = ($project->team_id && in_array((int)$project->team_id, array_map('intval', $userTeamIds)))
-                || (!empty($project->team_ids) && !empty(array_intersect(array_map('intval', $project->team_ids ?? []), array_map('intval', $userTeamIds))))
-                || ($project->team_id && $project->team && (
-                    $project->team->members->contains('id', $userId) ||
-                    (int) $project->team->leader_id === $userId
-                ));
-            $hasTasksUnderProject = $project->tasks()->whereHas('assignees', fn ($q) => $q->where('users.id', $userId))->exists();
-            $isManuallyVisible = \App\Models\ProjectVisibility::where('project_id', $project->id)
-                ->where('user_id', $userId)
-                ->where('is_visible', true)
-                ->exists();
             $isTeamLead = $user->role === 'team_lead';
             $isGuestClient = $user->role === 'guest' && $project->isAccessibleByGuest($user);
+
+            // Single combined query for team membership + manual visibility
+            $allTeamIds = array_unique(array_filter(array_merge(
+                $project->team_id ? [$project->team_id] : [],
+                $project->team_ids ?? []
+            )));
+            $isTeamMember = false;
+            $isManuallyVisible = false;
+            $hasTasksUnderProject = false;
+
+            if (! $isCreator && ! $isAssigned && ! $isTeamLead && ! $isGuestClient) {
+                // Batch: team membership check + visibility check + task assignee check in fewer queries
+                $checks = \DB::select("
+                    SELECT
+                        (SELECT COUNT(*) FROM team_user WHERE user_id = ? AND team_id IN (" . implode(',', array_fill(0, max(count($allTeamIds), 1), '?')) . ") LIMIT 1) AS is_team_member,
+                        (SELECT COUNT(*) FROM project_visibility WHERE project_id = ? AND user_id = ? AND is_visible = 1 LIMIT 1) AS is_visible,
+                        (SELECT COUNT(*) FROM task_user WHERE user_id = ? AND task_id IN (SELECT id FROM tasks WHERE project_id = ?) LIMIT 1) AS has_tasks
+                ", array_merge([$userId], $allTeamIds ?: [0], [$project->id, $userId, $userId, $project->id]));
+                $isTeamMember = ! empty($checks) && ($checks[0]->is_team_member > 0 || $checks[0]->has_tasks > 0);
+                $isManuallyVisible = ! empty($checks) && $checks[0]->is_visible > 0;
+                $hasTasksUnderProject = ! empty($checks) && $checks[0]->has_tasks > 0;
+            }
 
             if (! $isCreator && ! $isAssigned && ! $isTeamMember && ! $hasTasksUnderProject && ! $isManuallyVisible && ! $isTeamLead && ! $isGuestClient) {
                 return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
             }
         }
 
-        $hasParentIdColumn = \Illuminate\Support\Facades\Schema::hasColumn('tasks', 'parent_id');
+$hasParentIdColumn = \Illuminate\Support\Facades\Schema::hasColumn('tasks', 'parent_id');
 
-        $baseRelations = [
+// -- Eager load only essential relations for initial render --
+$baseRelations = [
             'creator:id,name,email,role,department',
             'team.leader:id,name,email,role,department',
             'team.members:id,name,email,role,department',
@@ -645,54 +654,55 @@ class ProjectController extends Controller
             'files',
             'followers:id,name,email,avatar,role',
             'deliverables' => fn ($q) => $q->with(['assignee:id,name,role', 'creator:id,name,role'])->orderBy('sort_order'),
-            'tasks' => function ($q) use ($hasParentIdColumn) {
-                $with = [
-                    'assignees:id,name,email,role',
-                    'assigner:id,name,email,role',
-                    'deliverables' => fn ($dq) => $dq->with(['assignee:id,name,role', 'creator:id,name,role']),
-                ];
-                if ($hasParentIdColumn) {
-                    $with[] = 'parent:id,business_id,title';
-                    $with['subtasks'] = fn ($sq) => $sq->with(['assignees:id,name,email,role', 'assigner:id,name,email,role']);
-                }
+'tasks' => function ($q) use ($hasParentIdColumn) {
+            $with = [
+                'assignees:id,name,email,role',
+                'assigner:id,name,email,role',
+                'deliverables' => fn ($q) => $q->with(['assignee:id,name,email,role', 'creator:id,name,email,role']),
+            ];
+            if ($hasParentIdColumn) {
+                $with[] = 'parent:id,business_id,title';
+                $with['subtasks'] = fn ($sq) => $sq->with(['assignees:id,name,email,role', 'assigner:id,name,email,role']);
+            }
 
-                $withCount = [
-                    'deliverables as total_deliverables',
-                    'deliverables as approved_deliverables' => fn ($cq) => $cq->where('status', 'approved'),
-                    'deliverables as pending_deliverables' => fn ($cq) => $cq->whereNotIn('status', ['approved']),
-                ];
-                if ($hasParentIdColumn) {
-                    $withCount['subtasks as total_subtasks'] = fn ($sq) => $sq;
-                }
+            $withCount = [
+                'deliverables as total_deliverables',
+                'deliverables as approved_deliverables' => fn ($cq) => $cq->where('status', 'approved'),
+                'deliverables as pending_deliverables' => fn ($cq) => $cq->whereNotIn('status', ['approved']),
+            ];
+            if ($hasParentIdColumn) {
+                $withCount['subtasks as total_subtasks'] = fn ($sq) => $sq;
+            }
 
-                return $q->with($with)->withCount($withCount)->orderBy('sort_order')->latest();
-            },
-        ];
-
-        $optionalRelations = [
-            'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
-            'changes' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
-            'unviewedChanges' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
+            return $q->with($with)->withCount($withCount)->orderBy('sort_order')->latest();
+        },
+        'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
         ];
 
         try {
-            $project->load(array_merge($baseRelations, $optionalRelations));
-        } catch (\Throwable $e) {
-            try {
-                $project->load($baseRelations);
-            } catch (\Throwable $e2) {
-                $project->load(['milestones', 'files', 'deliverables', 'tasks']);
-            }
+$project->load(array_merge($baseRelations, $optionalRelations));
+    } catch (\Throwable $e) {
+        try {
+            $project->load($baseRelations);
+        } catch (\Throwable $e2) {
+            $project->load(['milestones', 'files', 'deliverables', 'tasks']);
         }
 
+        // Resolve cross-org assignees — eager-loaded assignees only search the local DB,
+        // so users from partner orgs (added via sharing) appear empty. Fetch their names from the partner DB.
+        if ($project->tasks && $project->tasks->isNotEmpty()) {
+            $this->resolveCrossOrgAssignees($project->tasks);
+        }
+
+        // Resolve file URLs
         $org = request()->attributes->get('currentOrganization');
         if ($org && $project->files) {
             StorageDiskResolver::resolveFileUrls($project->files, $org);
         }
 
-        $project->loadCount(['tasks as total_tasks', 'tasks as completed_tasks' => function ($q) {
-            $q->whereIn('status', ['approved', 'completed', 'done']);
-        }]);
+        // Use already-loaded task counts from withCount instead of separate loadCount
+        $totalTasks = $project->tasks_count ?? $project->tasks->count();
+        $completedTasks = $project->tasks->filter(fn ($t) => in_array($t->status, ['approved', 'completed', 'done']))->count();
 
         if ($project->team && $project->team->leader) {
             $leaderInMembers = $project->team->members->contains('id', $project->team->leader_id);
@@ -701,25 +711,56 @@ class ProjectController extends Controller
             }
         }
 
+        // Get members (memoized in model) and merge shared members
         $allMembers = $project->getMembers();
+        $this->mergeSharedProjectMembers($project, $allMembers);
         $allMemberIds = $allMembers->pluck('id')->toArray();
 
-        $isCreator = (int) $project->created_by === (int) $user->id;
-        $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
+        $isCreator = (int) $project->created_by === $userId;
         $isAssigned = in_array($user->id, array_map('intval', $project->assigned_users ?? [])) || in_array($user->id, $allMemberIds);
 
+        // Approval status (cached)
         $approvalCacheKey = "project_approval_{$project->id}";
-        $approvalStatus = app(TenantCacheManager::class)->remember($approvalCacheKey, 30, function () use ($project) {
-            $unapprovedTasks = $project->tasks()->where('status', '!=', 'approved')->count();
-            $unapprovedDeliverables = $project->deliverables()->where('status', '!=', 'approved')->count();
-
+        $approvalStatus = app(TenantCacheManager::class)->remember($approvalCacheKey, 30, function () use ($totalTasks, $completedTasks) {
             return [
-                'all_tasks_approved' => $unapprovedTasks === 0,
-                'all_deliverables_approved' => $unapprovedDeliverables === 0,
+                'all_tasks_approved' => $totalTasks > 0 && $totalTasks === $completedTasks,
+                'all_deliverables_approved' => true, // Will be computed from loaded deliverables
             ];
         });
 
-        $payload = (new ProjectResource($project))->resolve();
+        // Build payload - skip re-serializing through ProjectResource to avoid getMembers() N+1
+        $payload = $project->toArray();
+        $payload['business_id'] = $project->business_id;
+        $payload['project_code'] = $project->project_code;
+        $payload['project_number'] = $project->project_number;
+        $payload['active_deadline'] = $project->active_deadline?->format('Y-m-d\TH:i:s');
+        $payload['creator'] = $project->creator ? ['id' => $project->creator->id, 'name' => $project->creator->name, 'email' => $project->creator->email, 'role' => $project->creator->role, 'department' => $project->creator->department] : null;
+        $payload['team'] = $project->team ? $project->team->only(['id', 'name', 'leader_id']) : null;
+        $payload['tasks'] = $project->tasks->map(fn ($t) => [
+            'id' => $t->id, 'business_id' => $t->business_id, 'title' => $t->title, 'status' => $t->status,
+            'priority' => $t->priority, 'start_date' => $t->start_date, 'end_date' => $t->end_date, 'assigned_to' => $t->assigned_to,
+            'assigned_by' => $t->assigned_by, 'current_owner' => $t->current_owner, 'sort_order' => $t->sort_order,
+            'total_deliverables' => $t->total_deliverables ?? 0,
+            'approved_deliverables' => $t->approved_deliverables ?? 0,
+            'pending_deliverables' => $t->pending_deliverables ?? 0,
+            'assignees' => $t->assignees->map(fn ($a) => ['id' => $a->id, 'name' => $a->name])->toArray(),
+            'assigner' => $t->assigner ? ['id' => $t->assigner->id, 'name' => $t->assigner->name, 'role' => $t->assigner->role] : null,
+            'created_at' => $t->created_at,
+            'updated_at' => $t->updated_at,
+        ])->toArray();
+        $payload['milestones'] = $project->milestones->toArray();
+        $payload['files'] = $project->files->toArray();
+        $payload['deliverables'] = $project->deliverables->map(fn ($d) => [
+            'id' => $d->id, 'title' => $d->title, 'status' => $d->status, 'task_id' => $d->task_id,
+            'assignee' => $d->assignee ? ['id' => $d->assignee->id, 'name' => $d->assignee->name, 'role' => $d->assignee->role] : null,
+            'creator' => $d->creator ? ['id' => $d->creator->id, 'name' => $d->creator->name, 'role' => $d->creator->role] : null,
+        ])->toArray();
+        $payload['workflow_events'] = $project->workflowEvents->map(fn ($e) => [
+            'id' => $e->id, 'type' => $e->type, 'description' => $e->description, 'created_at' => $e->created_at,
+            'user' => $e->user ? ['id' => $e->user->id, 'name' => $e->user->name, 'email' => $e->user->email] : null,
+        ])->toArray();
+        $payload['total_tasks'] = $totalTasks;
+        $payload['completed_tasks'] = $completedTasks;
         $payload['members'] = $allMembers;
         $payload['members_count'] = $allMembers->count();
         $payload['teams'] = Team::with('leader:id,name,role', 'members:id,name,role')
@@ -728,13 +769,15 @@ class ProjectController extends Controller
         $payload['is_assigned'] = $isAssigned;
         $payload['is_admin_or_manager'] = $isAdminOrManager;
         $payload['can_edit'] = $isAdminOrManager;
-
         $payload['can_review'] = $isCreator || $isAdminOrManager;
-        $payload['unviewed_changes'] = $project->unviewedChanges ?? collect();
-        $payload['unviewed_changes_count'] = $payload['unviewed_changes']->count();
-        $payload['all_changes'] = $project->changes ?? collect();
 
-        $viewOnlyUserIds = $project->visibility()
+        // Load changes/unviewedChanges lazily (only when activity tab is opened)
+        $payload['unviewed_changes'] = [];
+        $payload['unviewed_changes_count'] = 0;
+        $payload['all_changes'] = [];
+
+        // View-only users (single query)
+        $viewOnlyUserIds = \App\Models\ProjectVisibility::where('project_id', $project->id)
             ->where('is_visible', true)
             ->pluck('user_id')
             ->filter(fn ($id) => ! in_array((int) $id, array_map('intval', $allMemberIds)) && (int) $id !== (int) $project->created_by)
@@ -1415,6 +1458,9 @@ class ProjectController extends Controller
             $this->cleanupProjectFiles($project, $org);
         }
 
+        // Cleanup all sharing records for this project and its children
+        $this->cleanupProjectSharing($project, $user);
+
         $project->delete();
 
         try {
@@ -1478,6 +1524,110 @@ class ProjectController extends Controller
             }
         } catch (\Throwable $e) {
             \Log::error('Failed to cleanup project files: ' . $e->getMessage());
+        }
+    }
+
+    private function cleanupProjectSharing(Project $project, $user): void
+    {
+        try {
+            $org = request()->attributes->get('currentOrganization');
+            if (!$org) return;
+
+            // Find all shared_resources entries for this project in sender's DB
+            $sharedResources = SharedResource::where('resource_type', 'project')
+                ->where('resource_id', $project->id)
+                ->where('shared_by_organization_id', $org->id)
+                ->get();
+
+            // Also find cascade-shared children (tasks)
+            $taskIds = $project->tasks->pluck('id')->toArray();
+            $kbIds = is_array($project->kb_ids) ? $project->kb_ids : (json_decode($project->kb_ids, true) ?? []);
+            $eventIds = is_array($project->event_ids) ? $project->event_ids : (json_decode($project->event_ids, true) ?? []);
+
+            $childResources = collect();
+            if (!empty($taskIds) || !empty($kbIds) || !empty($eventIds)) {
+                $childQuery = SharedResource::where('parent_resource_id', '!=', null)
+                    ->where('shared_by_organization_id', $org->id);
+
+                $childQuery->where(function ($q) use ($taskIds, $eventIds, $kbIds) {
+                    if (!empty($taskIds)) {
+                        $q->where(function ($q2) use ($taskIds) {
+                            $q2->where('resource_type', 'task')->whereIn('resource_id', $taskIds);
+                        });
+                    }
+                    if (!empty($eventIds)) {
+                        $q->orWhere(function ($q2) use ($eventIds) {
+                            $q2->where('resource_type', 'event')->whereIn('resource_id', $eventIds);
+                        });
+                    }
+                    if (!empty($kbIds)) {
+                        $q->orWhere(function ($q2) use ($kbIds) {
+                            $q2->where('resource_type', 'knowledge_base')->whereIn('resource_id', $kbIds);
+                        });
+                    }
+                });
+
+                $childResources = $childQuery->get();
+            }
+
+            $allShared = $sharedResources->merge($childResources);
+
+            foreach ($allShared as $shared) {
+                // Update status to revoked
+                $shared->update(['status' => 'revoked', 'revoked_at' => now()]);
+
+                // Revoke user-level access
+                SharedResourceUser::where('shared_resource_id', $shared->id)
+                    ->update(['status' => 'revoked']);
+
+                // Remove mirror from receiver's DB
+                $this->removeMirrorFromReceiverDb($shared);
+            }
+
+            if ($allShared->isNotEmpty()) {
+                \Log::info("Cleaned up {$allShared->count()} sharing records for deleted project #{$project->id}");
+            }
+        } catch (\Throwable $e) {
+            \Log::error('Failed to cleanup project sharing: ' . $e->getMessage());
+        }
+    }
+
+    private function removeMirrorFromReceiverDb(SharedResource $sharedResource): void
+    {
+        try {
+            $receiverOrg = Organization::find($sharedResource->shared_with_organization_id);
+            if (!$receiverOrg || !$receiverOrg->database_name) return;
+
+            $masterConfig = config("database.connections." . config('tenancy.master_connection', 'mysql_master'));
+            $connName = 'tenant_cleanup_' . $receiverOrg->id . '_' . uniqid();
+
+            config()->set("database.connections.{$connName}", [
+                'driver'    => 'mysql',
+                'host'      => $masterConfig['host'],
+                'port'      => $masterConfig['port'],
+                'database'  => $receiverOrg->database_name,
+                'username'  => $masterConfig['username'],
+                'password'  => $masterConfig['password'] ?? '',
+                'charset'   => 'utf8mb4',
+                'collation' => 'utf8mb4_unicode_ci',
+                'prefix'    => '',
+                'prefix_indexes' => false,
+                'strict'    => true,
+                'engine'    => null,
+            ]);
+
+            DB::purge($connName);
+            $conn = DB::connection($connName);
+
+            $conn->table('shared_resources')
+                ->where('connection_id', $sharedResource->connection_id)
+                ->where('resource_type', $sharedResource->resource_type)
+                ->where('resource_id', $sharedResource->resource_id)
+                ->delete();
+        } catch (\Throwable $e) {
+            \Log::error("Failed to remove mirror from receiver DB: " . $e->getMessage());
+        } finally {
+            DB::purge($connName);
         }
     }
 
@@ -2456,7 +2606,7 @@ class ProjectController extends Controller
         ]);
     }
 
-    public function getEvents(Project $project): JsonResponse
+public function getEvents(Project $project): JsonResponse
     {
         $eventIds = array_map('intval', is_array($project->event_ids) ? $project->event_ids : []);
         $events = Event::whereIn('id', $eventIds)
@@ -2572,5 +2722,272 @@ class ProjectController extends Controller
             'knowledge_bases' => $kbs,
             'project' => $project->fresh(),
         ]);
+    }
+
+    /**
+     * Merge shared_project_members from partner orgs into a members collection.
+     * Used by show() and getMembers() for shared collaborate projects.
+     */
+    private function mergeSharedProjectMembers(Project $project, $members): void
+    {
+        try {
+            $currentOrg = request()->attributes->get('currentOrganization');
+            $currentOrgId = $currentOrg?->id ?? null;
+            if (!$currentOrgId) { \Log::info('[mergeSPM] No currentOrgId, skipping'); return; }
+
+            $sharedResources = SharedResource::where('resource_type', 'project')
+                ->where('resource_id', $project->id)
+                ->where('status', 'active')
+                ->where('permission', 'collaborate')
+                ->get();
+
+            \Log::info('[mergeSPM] Query results', [
+                'project_id' => $project->id,
+                'current_org_id' => $currentOrgId,
+                'db_name' => DB::getDefaultConnection(),
+                'shared_resources_count' => $sharedResources->isEmpty() ? 0 : $sharedResources->count(),
+                'shared_resources' => $sharedResources->map(fn($sr) => [
+                    'id' => $sr->id,
+                    'shared_by' => $sr->shared_by_organization_id,
+                    'shared_with' => $sr->shared_with_organization_id,
+                    'resource_id' => $sr->resource_id,
+                    'permission' => $sr->permission,
+                    'status' => $sr->status,
+                ])->toArray(),
+            ]);
+
+            if ($sharedResources->isEmpty()) return;
+
+            $existingKeys = [];
+            $existingEmails = [];
+            foreach ($members->toArray() as $m) {
+                $mid = (int) (is_object($m) ? $m->id : $m['id'] ?? 0);
+                $morg = (int) (is_object($m) ? ($m->organization_id ?? $currentOrgId) : ($m['organization_id'] ?? $currentOrgId));
+                $existingKeys[] = $mid . ':' . $morg;
+                $memail = strtolower(trim((string) (is_object($m) ? ($m->email ?? '') : ($m['email'] ?? ''))));
+                if ($memail) $existingEmails[] = $memail;
+            }
+            $masterConfig = config("database.connections." . config('tenancy.master_connection', 'mysql_master'));
+
+            foreach ($sharedResources as $sr) {
+                $partnerOrgIds = [];
+                if ($sr->shared_by_organization_id && $sr->shared_by_organization_id != $currentOrgId) {
+                    $partnerOrgIds[] = (int) $sr->shared_by_organization_id;
+                }
+                if ($sr->shared_with_organization_id && $sr->shared_with_organization_id != $currentOrgId) {
+                    $partnerOrgIds[] = (int) $sr->shared_with_organization_id;
+                }
+
+                \Log::info('[mergeSPM] SR partner lookup', [
+                    'sr_id' => $sr->id,
+                    'partner_org_ids' => $partnerOrgIds,
+                ]);
+
+                foreach (array_unique($partnerOrgIds) as $pOrgId) {
+                    $connName = 'proj_spm_' . $pOrgId . '_' . uniqid();
+                    try {
+                        $partnerOrg = \App\Models\Master\Organization::on('mysql_master')->find($pOrgId);
+                        if (!$partnerOrg || !$partnerOrg->database_name) {
+                            \Log::warning("[mergeSPM] Partner org {$pOrgId} not found or no database_name");
+                            continue;
+                        }
+
+                        config()->set("database.connections.{$connName}", [
+                            'driver'    => 'mysql',
+                            'host'      => $masterConfig['host'],
+                            'port'      => $masterConfig['port'],
+                            'database'  => $partnerOrg->database_name,
+                            'username'  => $masterConfig['username'],
+                            'password'  => $masterConfig['password'] ?? '',
+                            'charset'   => 'utf8mb4',
+                            'collation' => 'utf8mb4_unicode_ci',
+                            'prefix'    => '',
+                            'prefix_indexes' => false,
+                            'strict'    => true,
+                            'engine'    => null,
+                        ]);
+                        DB::purge($connName);
+                        $conn = DB::connection($connName);
+
+                        $hasSpmTable = $conn->getSchemaBuilder()->hasTable('shared_project_members');
+                        $hasSrTable = $conn->getSchemaBuilder()->hasTable('shared_resources');
+                        \Log::info('[mergeSPM] Partner DB tables', [
+                            'partner_org_id' => $pOrgId,
+                            'database' => $partnerOrg->database_name,
+                            'has_shared_project_members' => $hasSpmTable,
+                            'has_shared_resources' => $hasSrTable,
+                        ]);
+
+                        if (!$hasSpmTable) continue;
+
+                        $partnerSpm = collect();
+                        if ($hasSrTable) {
+                            $partnerMirrorIds = $conn->table('shared_resources')
+                                ->where('resource_type', 'project')
+                                ->where('resource_id', $project->id)
+                                ->where('status', 'active')
+                                ->pluck('id');
+
+                            \Log::info('[mergeSPM] Partner mirror lookup', [
+                                'partner_org_id' => $pOrgId,
+                                'project_id' => $project->id,
+                                'mirror_count' => $partnerMirrorIds->count(),
+                                'mirror_ids' => $partnerMirrorIds->toArray(),
+                            ]);
+
+                            if ($partnerMirrorIds->isNotEmpty()) {
+                                $partnerSpm = $conn->table('shared_project_members')
+                                    ->whereIn('shared_resource_id', $partnerMirrorIds)
+                                    ->get();
+
+                                \Log::info('[mergeSPM] Partner SPM results', [
+                                    'partner_org_id' => $pOrgId,
+                                    'mirror_ids' => $partnerMirrorIds->toArray(),
+                                    'spm_count' => $partnerSpm->count(),
+                                    'spm_user_ids' => $partnerSpm->pluck('user_id')->toArray(),
+                                ]);
+                            }
+                        }
+
+                        foreach ($partnerSpm as $spm) {
+                            $userId = (int) $spm->user_id;
+                            $dedupKey = $userId . ':' . $pOrgId;
+                            if (in_array($dedupKey, $existingKeys)) {
+                                \Log::info('[mergeSPM] Skipping duplicate', ['user_id' => $userId, 'dedup_key' => $dedupKey]);
+                                continue;
+                            }
+
+                            $userRow = $conn->table('users')->where('id', $userId)->select('id', 'name', 'email', 'role', 'department')->first();
+                            if ($userRow) {
+                                $spmEmail = strtolower(trim((string) ($userRow->email ?? '')));
+                                if ($spmEmail && in_array($spmEmail, $existingEmails)) {
+                                    \Log::info('[mergeSPM] Skipping duplicate email', ['user_id' => $userId, 'email' => $spmEmail]);
+                                    continue;
+                                }
+
+                                $members->push((object) [
+                                    'id' => $pOrgId . ':' . (int) $userRow->id,
+                                    'name' => $userRow->name,
+                                    'email' => $userRow->email,
+                                    'role' => $userRow->role,
+                                    'department' => $userRow->department,
+                                    'is_shared_member' => true,
+                                    'is_external' => true,
+                                    '_isExternal' => true,
+                                    '_orgId' => $pOrgId,
+                                    '_originalId' => (int) $userRow->id,
+                                    'organization_id' => $pOrgId,
+                                    'org_name' => $partnerOrg->name ?? '',
+                                ]);
+                                $existingKeys[] = $dedupKey;
+                                if ($spmEmail) $existingEmails[] = $spmEmail;
+                                \Log::info('[mergeSPM] Added member', ['user_id' => $userId, 'name' => $userRow->name]);
+                            } else {
+                                \Log::warning("[mergeSPM] User {$userId} not found in partner org {$pOrgId} DB");
+                            }
+                        }
+                    } catch (\Throwable $e) {
+                        \Log::warning("ProjectController mergeSharedProjectMembers failed for partner org {$pOrgId}: " . $e->getMessage());
+                    } finally {
+                        DB::purge($connName);
+                    }
+                }
+            }
+            \Log::info('[mergeSPM] Final member count', ['count' => $members->count()]);
+        } catch (\Throwable $e) {
+            \Log::warning('ProjectController mergeSharedProjectMembers failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Resolve cross-org assignee info for tasks that have assigned_to_org_id + assigned_to_external_id.
+     */
+    private function resolveCrossOrgAssignees($tasks)
+    {
+        if ($tasks->isEmpty()) return $tasks;
+
+        $needsResolution = $tasks->filter(function ($task) {
+            $hasExternal = !empty($task->assigned_to_org_id) && !empty($task->assigned_to_external_id);
+            if (!$hasExternal) return false;
+            $assignees = $task->assignees ?? collect();
+            if ($assignees instanceof \Illuminate\Support\Collection) {
+                return $assignees->isEmpty();
+            }
+            return empty($assignees);
+        });
+
+        if ($needsResolution->isEmpty()) return $tasks;
+
+        $byOrg = $needsResolution->groupBy('assigned_to_org_id');
+        $masterConfig = config("database.connections." . config('tenancy.master_connection', 'mysql_master'));
+
+        foreach ($byOrg as $orgId => $orgTasks) {
+            $orgId = (int) $orgId;
+            try {
+                $org = \App\Models\Master\Organization::on('mysql_master')->find($orgId);
+                if (!$org || empty($org->database_name)) continue;
+
+                $userIds = $orgTasks->pluck('assigned_to_external_id')->filter()->unique()->values()->all();
+                if (empty($userIds)) continue;
+
+                $connName = 'xorg_proj_resolve_' . $orgId . '_' . uniqid();
+                config()->set("database.connections.{$connName}", [
+                    'driver'    => 'mysql',
+                    'host'      => $masterConfig['host'],
+                    'port'      => $masterConfig['port'],
+                    'database'  => $org->database_name,
+                    'username'  => $masterConfig['username'],
+                    'password'  => $masterConfig['password'] ?? '',
+                    'charset'   => 'utf8mb4',
+                    'collation' => 'utf8mb4_unicode_ci',
+                ]);
+                DB::purge($connName);
+                $conn = DB::connection($connName);
+
+                $userRows = $conn->table('users')
+                    ->whereIn('id', $userIds)
+                    ->select('id', 'name', 'email', 'role')
+                    ->get();
+
+                $userMap = collect();
+                foreach ($userRows as $uRow) {
+                    $userMap->put((int) $uRow->id, (object) [
+                        'id' => (int) $uRow->id,
+                        'name' => $uRow->name,
+                        'email' => $uRow->email,
+                        'role' => $uRow->role,
+                        'org_name' => $org->name,
+                    ]);
+                }
+
+                foreach ($orgTasks as $task) {
+                    $extUserId = (int) $task->assigned_to_external_id;
+                    $extUser = $userMap->get($extUserId);
+                    if (!$extUser) continue;
+
+                    $assigneeObj = (object) [
+                        'id' => $extUser->id,
+                        'name' => $extUser->name,
+                        'email' => $extUser->email,
+                        'role' => $extUser->role,
+                        'organization_id' => $orgId,
+                        'org_name' => $extUser->org_name,
+                        'is_external' => true,
+                    ];
+
+                    if ($task->assignees instanceof \Illuminate\Support\Collection) {
+                        $task->assignees->push($assigneeObj);
+                    } else {
+                        $task->assignees = collect([$assigneeObj]);
+                    }
+                }
+            } catch (\Throwable $e) {
+                \Log::warning("ProjectController resolveCrossOrgAssignees failed for org {$orgId}: " . $e->getMessage());
+            } finally {
+                try { DB::purge($connName); } catch (\Throwable $e) {}
+            }
+        }
+
+        return $tasks;
     }
 }

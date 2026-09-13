@@ -459,17 +459,27 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
 
   useEffect(() => {
     const token = authToken();
-    if (activeProjectIds.length === 1) {
-      fetch(`${API_URL}/projects/${activeProjectIds[0]}/tasks`, {
-        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-        skipLoader: true,
-      })
-        .then((r) => (r.ok ? r.json() : []))
-        .then((d) => {
-          const items = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
-          setProjectTasks(items);
+const pids = projectId ? [projectId] : (Array.isArray(form.project_id) ? form.project_id : (form.project_id ? [form.project_id] : []));
+    if (pids.length === 1) {
+      const pid = pids[0];
+      const isShared = String(pid).startsWith('shared_');
+      const url = isShared
+        ? `${API_URL}/sharing/resources/${String(pid).replace('shared_', '')}/members`
+        : `${API_URL}/projects/${pid}/tasks`;
+      if (!isShared) {
+        fetch(url, {
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          skipLoader: true,
         })
-        .catch(() => setProjectTasks([]));
+          .then((r) => (r.ok ? r.json() : []))
+          .then((d) => {
+            const items = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
+            setProjectTasks(items);
+          })
+          .catch(() => setProjectTasks([]));
+      } else {
+        setProjectTasks([]);
+      }
     } else {
       setProjectTasks([]);
     }
@@ -506,6 +516,126 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
     }
   }, [subtaskAssigneeHighlightedIndex]);
 
+useEffect(() => {
+    const token = authToken();
+    const currentUser = getUser();
+    const ensureCurrentUser = (users) => {
+      if (!currentUser) return users;
+      return users.some((u) => u.id === currentUser.id) ? users : [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: currentUser.role, department: currentUser.department }, ...users];
+    };
+
+    if (projectId) {
+      const isShared = String(projectId).startsWith('shared_');
+      const sharedResourceId = isShared ? String(projectId).replace('shared_', '') : null;
+
+      // For shared projects: fetch merged members from partner
+      // For local: fetch project members
+      const memberFetch = isShared
+        ? fetch(`${API_URL}/sharing/resources/${sharedResourceId}/members`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+            .then((r) => (r.ok ? r.json() : { members: [], shared_members: [] }))
+            .then((d) => {
+              const originalMembers = Array.isArray(d?.members) ? d.members : [];
+              const sharedMembers = Array.isArray(d?.shared_members) ? d.shared_members : [];
+              const seenKeys = new Set();
+              const seenEmails = new Set();
+              const allMembers = [];
+              [...originalMembers, ...sharedMembers].forEach((m) => {
+                const dedupeKey = `${m.id}:${m.org_id || ""}`;
+                if (seenKeys.has(dedupeKey)) return;
+                const email = (m.email || "").toLowerCase().trim();
+                if (email && seenEmails.has(email)) return;
+                seenKeys.add(dedupeKey);
+                if (email) seenEmails.add(email);
+                if (m.org_id && (m.is_external || m.source === 'original')) {
+                  allMembers.push({ ...m, id: `${m.org_id}:${m.id}`, _originalId: m.id, _orgId: m.org_id, _isExternal: true });
+                } else {
+                  allMembers.push(m);
+                }
+              });
+              return ensureCurrentUser(allMembers);
+            })
+            .catch(() => ensureCurrentUser([]))
+        : fetch(`${API_URL}/projects/${projectId}/members`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+            .then((r) => (r.ok ? r.json() : []))
+            .then((d) => {
+              const allMembers = Array.isArray(d) ? d : [];
+              return ensureCurrentUser(allMembers);
+            })
+            .catch(() => ensureCurrentUser([]));
+
+      Promise.all([
+        memberFetch.then((users) => {
+          setDisplayUsers(users);
+          if (!isShared) {
+            fetch(`${API_URL}/projects/${projectId}/collaborate-users`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+              .then((r) => (r.ok ? r.json() : { users: [] })).then((d) => {
+                const crossOrgUsers = Array.isArray(d?.users) ? d.users : [];
+                if (crossOrgUsers.length > 0) {
+                  const transformedUsers = crossOrgUsers.map((u) => ({
+                    ...u,
+                    id: `${u.org_id}:${u.id}`,
+                    _originalId: u.id,
+                    _orgId: u.org_id,
+                    _isExternal: true,
+                  }));
+                  setDisplayUsers((prev) => {
+                    const existingIds = new Set(prev.map((u) => String(u.id)));
+                    const newUsers = transformedUsers.filter((u) => !existingIds.has(String(u.id)));
+                    return [...prev, ...newUsers];
+                  });
+                }
+              }).catch(() => {});
+          }
+        }),
+        !isShared ? fetch(`${API_URL}/projects/${projectId}`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+            .then((r) => (r.ok ? r.json() : null)).then((data) => { if (data?.project?.end_date) setProjectEndDate(data.project.end_date); }).catch(() => {}) : Promise.resolve(),
+        fetch(`${API_URL}/knowledge-base?all=true`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+          .then((r) => (r.ok ? r.json() : [])).then((d) => { const items = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : []; setKbArticles(items); }).catch(() => {}),
+        fetch(`${API_URL}/events?all=true`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+          .then((r) => (r.ok ? r.json() : [])).then((d) => { const items = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : []; setEventsList(items); }).catch(() => {}),
+      ]);
+    } else {
+      Promise.all([
+        fetch(`${API_URL}/projects`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+          .then((r) => (r.ok ? r.json() : [])).then((d) => { const l = d?.data || d; setProjects(Array.isArray(l) ? l : []); }).catch(() => {}),
+        fetch(`${API_URL}/sharing/shared-resources?type=project`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+          .then((r) => (r.ok ? r.json() : [])).then((d) => {
+            const items = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
+            const shared = items.map((sr) => ({
+              id: `shared_${sr.shared_resource_id}`,
+              title: sr.title || sr.name || `Shared Project #${sr.shared_resource_id}`,
+              _shared: true,
+              _sharedResourceId: sr.shared_resource_id,
+              _permission: sr.permission,
+              _sharerOrg: sr.shared_by_organization?.name || sr.shared_by_user?.name || 'Partner Org',
+              _sharerOrgId: sr.shared_by_organization_id,
+            }));
+            setProjects((prev) => {
+              const existingIds = new Set(prev.map((p) => String(p.id)));
+              return [...prev, ...shared.filter((s) => !existingIds.has(String(s.id)))];
+            });
+          }).catch(() => {}),
+        fetch(`${API_URL}/team-users`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+          .then((r) => (r.ok ? r.json() : { users: [] })).then((d) => { const u = ensureCurrentUser(Array.isArray(d) ? d : (d.users || [])); setAllUsers(u); }).catch(() => {}),
+        fetch(`${API_URL}/knowledge-base?all=true`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+          .then((r) => (r.ok ? r.json() : [])).then((d) => { const items = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : []; setKbArticles(items); }).catch(() => {}),
+        fetch(`${API_URL}/events?all=true`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+          .then((r) => (r.ok ? r.json() : [])).then((d) => { const items = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : []; setEventsList(items); }).catch(() => {}),
+      ]);
+    }
+  }, [projectId]);
+
+  const userInteractedRef = useRef(false);
+  useEffect(() => {
+    const markInteracted = () => { userInteractedRef.current = true; };
+    window.addEventListener("keydown", markInteracted, { once: true, capture: true });
+    window.addEventListener("mousedown", markInteracted, { once: true, capture: true });
+    return () => {
+      window.removeEventListener("keydown", markInteracted, { capture: true });
+      window.removeEventListener("mousedown", markInteracted, { capture: true });
+    };
+  }, []);
+  const markDirty = useCallback(() => { if (userInteractedRef.current) setIsDirty(true); }, []);
   const fetchMembersForProjects = useCallback((projectIds) => {
     const token = authToken();
     const currentUser = getUser();
@@ -517,17 +647,67 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
       setDisplayUsers([]);
       return;
     }
-    Promise.all(
-      ids.map((pid) =>
-        fetch(`${API_URL}/projects/${pid}/members`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
-          .then((r) => (r.ok ? r.json() : [])).catch(() => [])
-      )
-    ).then((results) => {
-      const memberSets = results.map((members) => {
+
+    // Separate local IDs from shared IDs
+    const localIds = ids.filter((pid) => !String(pid).startsWith('shared_'));
+    const sharedIds = ids.filter((pid) => String(pid).startsWith('shared_'));
+
+    // Build fetch tasks: local projects get members + collaborate-users, shared projects get partner users
+    const fetchTasks = [];
+
+    // Local projects: fetch members + collaborate-users (exclude team-users to show only project members)
+    localIds.forEach((pid) => {
+      fetchTasks.push(
+        Promise.all([
+          fetch(`${API_URL}/projects/${pid}/members`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+            .then((r) => (r.ok ? r.json() : [])).catch(() => []),
+          fetch(`${API_URL}/projects/${pid}/collaborate-users`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+            .then((r) => (r.ok ? r.json() : { users: [] })).catch(() => ({ users: [] })),
+        ]).then(([members, crossOrg]) => {
+          const memberList = Array.isArray(members) ? members : [];
+          return {
+            members: memberList,
+            crossOrgUsers: Array.isArray(crossOrg?.users) ? crossOrg.users : [],
+          };
+        })
+      );
+    });
+
+    // Shared projects: fetch merged members from partner + cross-org partners (no team-users)
+    sharedIds.forEach((pid) => {
+      const sharedResourceId = String(pid).replace('shared_', '');
+      fetchTasks.push(
+        fetch(`${API_URL}/sharing/resources/${sharedResourceId}/members`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+          .then((r) => (r.ok ? r.json() : { members: [], shared_members: [] }))
+          .then((d) => {
+            const originalMembers = Array.isArray(d?.members) ? d.members : [];
+            const sharedMembers = Array.isArray(d?.shared_members) ? d.shared_members : [];
+            const seenKeys = new Set();
+            const seenEmails = new Set();
+            const allMembers = [];
+            [...originalMembers, ...sharedMembers].forEach((m) => {
+              const dedupeKey = `${m.id}:${m.org_id || ""}`;
+              if (seenKeys.has(dedupeKey)) return;
+              const email = (m.email || "").toLowerCase().trim();
+              if (email && seenEmails.has(email)) return;
+              seenKeys.add(dedupeKey);
+              if (email) seenEmails.add(email);
+              if (m.org_id && (m.is_external || m.source === 'original')) {
+                allMembers.push({ ...m, id: `${m.org_id}:${m.id}`, _originalId: m.id, _orgId: m.org_id, _isExternal: true });
+              } else {
+                allMembers.push(m);
+              }
+            });
+            return { members: allMembers, crossOrgUsers: [] };
+          })
+          .catch(() => ({ members: [], crossOrgUsers: [] }))
+      );
+    });
+
+    Promise.all(fetchTasks).then((results) => {
+      const memberSets = results.map((r) => {
         const map = new Map();
-        (Array.isArray(members) ? members : []).forEach((u) => {
-          if (u && u.id) map.set(Number(u.id), u);
-        });
+r.members.forEach((u) => map.set(String(u.id), u));
         return map;
       });
       let users = [];
@@ -540,8 +720,26 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
           if (memberSets.every((s) => s.has(id))) users.push(u);
         });
       }
-      if (currentUser && !users.some((u) => Number(u.id) === Number(currentUser.id))) {
-        users = [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: currentUser.role, department: currentUser.department, timezone: currentUser.timezone, working_hours: currentUser.working_hours }, ...users];
+// Merge cross-org users with composite IDs
+      const allCrossOrg = results.flatMap((r) => r.crossOrgUsers);
+      if (allCrossOrg.length > 0) {
+        const existingIds = new Set(users.map((u) => String(u.id)));
+        allCrossOrg.forEach((u) => {
+          const compositeId = `${u.org_id}:${u.id}`;
+          if (!existingIds.has(String(compositeId))) {
+            users.push({
+              ...u,
+              id: compositeId,
+              _originalId: u.id,
+              _orgId: u.org_id,
+              _isExternal: true,
+            });
+            existingIds.add(String(compositeId));
+          }
+        });
+      }
+      if (currentUser && !users.some((u) => u.id === currentUser.id)) {
+        users = [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: currentUser.role, department: currentUser.department }, ...users];
       }
       setDisplayUsers(users);
     }).catch(() => setDisplayUsers([]));
@@ -653,7 +851,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
 
   const handleSubtaskDropdownKeyDown = (e, idx) => {
     if (openSubtaskDropdown !== idx) return;
-    const filteredUsers = displayUsers.filter(u => form.assigned_to.includes(u.id));
+    const filteredUsers = displayUsers.filter(u => form.assigned_to.some(id => String(id) === String(u.id)));
     const itemCount = 1 + filteredUsers.length;
     if (e.key === "ArrowDown") {
       e.preventDefault();
@@ -812,8 +1010,12 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
 
         if (projectIds && projectIds.length > 0) {
           const results = await Promise.all(
-            projectIds.map((pid) =>
-              fetch(`${API_URL}/projects/${pid}/tasks`, {
+            projectIds.map((pid) => {
+              const isShared = String(pid).startsWith('shared_');
+              const url = isShared
+                ? `${API_URL}/sharing/resources/${String(pid).replace('shared_', '')}/tasks`
+                : `${API_URL}/projects/${pid}/tasks`;
+              return fetch(url, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
                 body: JSON.stringify(body),
@@ -826,8 +1028,8 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                   throw new Error(errors || msg);
                 }
                 return data;
-              })
-            )
+              });
+            })
           );
           results.forEach((data) => {
             const ids = data.tasks?.map((t) => t.id) || (data.task?.id ? [data.task.id] : []);
@@ -945,7 +1147,10 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                       onChange={(val) => handleChange({ target: { name: "project_id", value: val } })}
                       placeholder={t("Select projects", { defaultValue: "Select projects" })}
                       searchPlaceholder={t("Search projects...")}
-                      options={projects.map((p) => ({ value: p.id, label: getProjectDisplayName(p) }))}
+options={projects.map((p) => ({
+                        value: p.id,
+                        label: p._sharerOrg ? `${p.title} (${p._sharerOrg})` : p.title,
+                      }))}
                       showChips={true}
                     />
                     {formErrors.project_id && <span className="field-error-text">{formErrors.project_id}</span>}
@@ -981,7 +1186,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                       {form.assigned_to && form.assigned_to.length > 0 && (
                         <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "6px" }}>
                           {displayUsers
-                            .filter((u) => form.assigned_to.some((aid) => Number(aid) === Number(u.id)))
+.filter((u) => form.assigned_to.some((id) => String(id) === String(u.id)))
                             .map((u) => {
                               const tz = u.timezone || "UTC";
                               const uTime = formatLocalTime(new Date().toISOString(), tz);
@@ -1122,7 +1327,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                                 >
                                   All assignees
                                 </button>
-                                {displayUsers.filter(u => form.assigned_to.includes(u.id)).map((u, uIdx) => (
+                                {displayUsers.filter(u => form.assigned_to.some(id => String(id) === String(u.id))).map((u, uIdx) => (
                                   <button
                                     key={u.id}
                                     type="button"
@@ -1292,7 +1497,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                       <Clock size={13} /> {t("Assignee Deadline Equivalent", { defaultValue: "Assignee Deadline Equivalent" })}
                     </div>
                     {displayUsers
-                      .filter((u) => (form.assigned_to || []).some((aid) => Number(aid) === Number(u.id)))
+.filter((u) => (form.assigned_to || []).some((id) => String(id) === String(u.id)))
                       .map((u) => {
                         const tz = u.timezone || "UTC";
                         const targetDate = form.end_date || form.recurrence_end_date;
@@ -1320,7 +1525,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                   <div className="task-field">
                     <label>{t("Followers (Optional)", { defaultValue: "Followers (Optional)" })}</label>
                     <UserSelectDropdown
-                      users={displayUsers.filter((u) => !(form.assigned_to || []).some((aid) => Number(aid) === Number(u.id)))}
+users={displayUsers.filter((u) => !(form.assigned_to || []).some((id) => String(id) === String(u.id)))}
                       selectedIds={form.followers || []}
                       onChange={handleFollowersChange}
                       disabled={!hasProjectSelected}

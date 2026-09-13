@@ -316,3 +316,222 @@
   background: #93c5fd;
   cursor: not-allowed;
 }
+
+/* ========== Existing Shares Section ========== */
+
+.share-existing-section {
+  margin-bottom: 20px;
+}
+
+.share-existing-header {
+  margin-bottom: 10px;
+}
+
+.share-existing-header label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary, #6b7280);
+}
+
+.share-existing-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.share-existing-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 8px;
+  transition: all 0.15s;
+  background: var(--bg-card, #fff);
+}
+
+.share-existing-item:hover {
+  border-color: #93c5fd;
+  background: var(--bg-hover, #f9fafb);
+}
+
+.share-existing-item.editing {
+  border-color: var(--primary-color, #3b82f6);
+  background: var(--primary-light, #dbeafe);
+}
+
+.share-existing-item.expired {
+  opacity: 0.6;
+}
+
+.share-existing-org {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.share-existing-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: var(--bg-hover, #f3f4f6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--primary-color, #3b82f6);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.share-existing-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.share-existing-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.share-existing-name {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #111827);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.share-existing-code {
+  font-size: 11px;
+  color: var(--text-secondary, #6b7280);
+  font-family: monospace;
+}
+
+.share-existing-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.share-existing-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.share-badge--view {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.share-badge--comment {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.share-badge--collaborate {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.share-existing-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--text-secondary, #6b7280);
+  background: var(--bg-hover, #f3f4f6);
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.share-existing-tag--expired {
+  color: #ef4444;
+  background: #fef2f2;
+}
+
+.share-existing-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.share-existing-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.share-edit-btn {
+  color: var(--primary-color, #3b82f6);
+}
+
+.share-edit-btn:hover {
+  background: var(--primary-light, #dbeafe);
+}
+
+.share-revoke-btn {
+  color: #ef4444;
+}
+
+.share-revoke-btn:hover {
+  background: #fef2f2;
+}
+
+/* ========== Form Divider ========== */
+
+.share-form-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.share-form-divider::before,
+.share-form-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-color, #e5e7eb);
+}
+
+.share-form-divider span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #6b7280);
+  white-space: nowrap;
+}
+
+/* ========== Edit Mode Org Display ========== */
+
+.share-edit-org-display {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 2px solid var(--primary-color, #3b82f6);
+  border-radius: 8px;
+  background: var(--primary-light, #dbeafe);
+}

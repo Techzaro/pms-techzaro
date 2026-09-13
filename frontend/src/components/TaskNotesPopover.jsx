@@ -30,11 +30,19 @@ const TaskNotesPopover = ({ taskId, itemType = "task" }) => {
   const editInputRef = useRef(null);
   const newNoteInputRef = useRef(null);
 
+  // Shared tasks (prefixed with "shared_") don't have personal notes in the current org
+  const isSharedTask = String(taskId).startsWith("shared_");
+
   const endpoint = itemType === "task"
     ? `${API_URL}/tasks/${taskId}/my-note`
     : `${API_URL}/deliverables/${taskId}/my-note`;
 
   const fetchNotes = useCallback(async () => {
+    if (isSharedTask) {
+      setNotes([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     const token = authToken();
     try {
@@ -47,7 +55,7 @@ const TaskNotesPopover = ({ taskId, itemType = "task" }) => {
       }
     } catch {}
     setLoading(false);
-  }, [endpoint]);
+  }, [endpoint, isSharedTask]);
 
   useEffect(() => {
     fetchNotes();
@@ -378,7 +386,8 @@ const TaskNotesPopover = ({ taskId, itemType = "task" }) => {
               )}
             </div>
 
-            {/* Quick Add Note Footer */}
+            {/* Quick Add Note Footer - hidden for shared tasks */}
+            {!isSharedTask && (
             <div className="tnp-popover-footer">
               <form onSubmit={handleAddNote} className="tnp-add-form">
                 <input
@@ -406,6 +415,7 @@ const TaskNotesPopover = ({ taskId, itemType = "task" }) => {
                 </button>
               </form>
             </div>
+            )}
           </div>,
           document.body
         )}

@@ -7,6 +7,7 @@ use App\Models\Task;
 use App\Models\TaskDelegation;
 use App\Models\TaskWorkflowEvent;
 use App\Models\User;
+use App\Models\Master\ActivityLog as MasterActivityLog;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -296,6 +297,19 @@ class DelegationService
             );
         } catch (\Throwable $e) {
             Log::error('Failed to log audit for delegation', ['error' => $e->getMessage()]);
+        }
+
+        try {
+            MasterActivityLog::create([
+                'user' => $delegatedBy->name,
+                'action' => 'task_delegated',
+                'target' => "Task '#{$task->business_id}' delegated to {$delegatedTo->name}",
+                'ip' => request()->ip(),
+                'status' => 'success',
+                'details' => ['task_id' => $task->id, 'delegated_to' => $delegatedTo->name],
+            ]);
+        } catch (\Exception $e) {
+            Log::warning("Master activity log failed (delegation): " . $e->getMessage());
         }
 
         return $delegation;

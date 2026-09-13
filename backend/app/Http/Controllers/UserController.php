@@ -380,7 +380,7 @@ class UserController extends Controller
             'status' => $isDraft ? 'Draft' : (($isAutoPassword || $emailMode === 'single') ? 'Inactive' : 'Active'),
             'active' => $isDraft ? false : (!$isAutoPassword && $emailMode !== 'single'),
             'must_change_password' => $isAutoPassword || $emailMode === 'single',
-            'email_verification_exempt' => $isAutoPassword && $emailMode === 'single',
+            'email_verification_exempt' => $isAutoPassword || $emailMode === 'two_emails',
 
             // Contact
             'contact_no' => $request->input('phone_number') ?? $request->input('contact_no'),
