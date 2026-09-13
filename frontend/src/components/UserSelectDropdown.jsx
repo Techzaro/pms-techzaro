@@ -4,7 +4,8 @@
  * Click input → search mode. Click arrow → toggle dropdown.
  */
 
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { MdExpandMore } from "react-icons/md";
 import "./UserSelectDropdown.css";
@@ -17,20 +18,23 @@ const UserSelectDropdown = ({
   disabled = false,
   viewOnly = false,
   error = false,
+  autoOpen = false,
+  onBeforeRemove,
 }) => {
   const { t } = useTranslation();
   const defaultPlaceholder = placeholder || t("Click to select members", { defaultValue: "Click to select members" });
   const selectedIds = Array.isArray(rawSelectedIds) ? rawSelectedIds : [];
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(autoOpen);
   const [search, setSearch] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const ref = useRef(null);
   const inputRef = useRef(null);
   const listRef = useRef(null);
+  const dropdownRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) {
+      if (ref.current && !ref.current.contains(e.target) && dropdownRef.current && !dropdownRef.current.contains(e.target)) {
         setOpen(false);
         setSearch("");
       }
@@ -43,6 +47,34 @@ const UserSelectDropdown = ({
     setHighlightedIndex(0);
   }, [search, open]);
 
+  const [dropdownStyle, setDropdownStyle] = useState({});
+
+  const updateDropdownPosition = useCallback(() => {
+    if (ref.current) {
+      const rect = ref.current.getBoundingClientRect();
+      setDropdownStyle({
+        position: "fixed",
+        top: rect.bottom + 6,
+        left: rect.left,
+        width: rect.width,
+        maxHeight: Math.min(320, window.innerHeight - rect.bottom - 20),
+        zIndex: 99999,
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      updateDropdownPosition();
+      window.addEventListener("scroll", updateDropdownPosition, true);
+      window.addEventListener("resize", updateDropdownPosition);
+      return () => {
+        window.removeEventListener("scroll", updateDropdownPosition, true);
+        window.removeEventListener("resize", updateDropdownPosition);
+      };
+    }
+  }, [open, updateDropdownPosition]);
+
   useEffect(() => {
     if (open && listRef.current) {
       const el = listRef.current.children[highlightedIndex];
@@ -51,28 +83,28 @@ const UserSelectDropdown = ({
   }, [highlightedIndex, open]);
 
   const isUserSelected = (userId) => {
-    const num = Number(typeof userId === "object" ? userId?.id : userId);
-    return selectedIds.some((id) => Number(typeof id === "object" ? id?.id : id) === num);
+    const strId = String(typeof userId === "object" ? userId?.id : userId);
+    return selectedIds.some((id) => String(typeof id === "object" ? id?.id : id) === strId);
   };
 
   const toggleAll = () => {
-    const filteredIds = filteredUsers.map((u) => Number(u.id));
+    const filteredIds = filteredUsers.map((u) => String(u.id));
     const allSelected = filteredIds.every((id) => isUserSelected(id));
     if (allSelected) {
-      onChange(selectedIds.filter((id) => !filteredIds.includes(Number(typeof id === "object" ? id?.id : id))));
+      onChange(selectedIds.filter((id) => !filteredIds.includes(String(typeof id === "object" ? id?.id : id))));
     } else {
-      const currentNumeric = selectedIds.map((id) => Number(typeof id === "object" ? id?.id : id));
-      onChange([...new Set([...currentNumeric, ...filteredIds])]);
+      const currentStrIds = selectedIds.map((id) => String(typeof id === "object" ? id?.id : id));
+      onChange([...new Set([...currentStrIds, ...filteredIds])]);
     }
   };
 
   const toggleUser = (userId) => {
-    const numId = Number(typeof userId === "object" ? userId?.id : userId);
-    if (isUserSelected(numId)) {
-      onChange(selectedIds.filter((id) => Number(typeof id === "object" ? id?.id : id) !== numId));
+    const strId = String(typeof userId === "object" ? userId?.id : userId);
+    if (isUserSelected(strId)) {
+      onChange(selectedIds.filter((id) => String(typeof id === "object" ? id?.id : id) !== strId));
     } else {
-      const currentNumeric = selectedIds.map((id) => Number(typeof id === "object" ? id?.id : id));
-      onChange([...currentNumeric, numId]);
+      const currentStrIds = selectedIds.map((id) => String(typeof id === "object" ? id?.id : id));
+      onChange([...currentStrIds, strId]);
     }
   };
 
@@ -150,8 +182,8 @@ const UserSelectDropdown = ({
   const selectedNamesList = selectedIds
     .map((item) => {
       if (typeof item === "object" && item?.name) return item.name;
-      const numId = Number(typeof item === "object" ? item?.id : item);
-      const found = (users || []).find((u) => Number(u.id) === numId);
+      const strId = String(typeof item === "object" ? item?.id : item);
+      const found = (users || []).find((u) => String(u.id) === strId);
       return found?.name || null;
     })
     .filter(Boolean);
@@ -208,14 +240,14 @@ const UserSelectDropdown = ({
       {selectedIds.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "8px" }}>
           {selectedIds.map((rawId, index) => {
-            const numId = Number(typeof rawId === "object" ? rawId?.id : rawId);
-            if (!numId) return null;
-            const foundUser = (users || []).find((u) => Number(u.id) === numId);
+            const strId = String(typeof rawId === "object" ? rawId?.id : rawId);
+            if (!strId || strId === "undefined") return null;
+            const foundUser = (users || []).find((u) => String(u.id) === strId);
             const chipName = (typeof rawId === "object" && rawId?.name) || foundUser?.name || null;
             if (!chipName) return null;
             return (
               <span
-                key={numId || index}
+                key={strId || index}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -235,7 +267,11 @@ const UserSelectDropdown = ({
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      toggleUser(numId);
+                      if (onBeforeRemove) {
+                        const userName = chipName || "this member";
+                        if (!window.confirm(t("Remove \"{{name}}\" from this project?", { name: userName, defaultValue: `Remove "${userName}" from this project?` }))) return;
+                      }
+                      toggleUser(rawId);
                     }}
                     style={{
                       background: "none",
@@ -260,14 +296,14 @@ const UserSelectDropdown = ({
         </div>
       )}
 
-      {open && (
-        <div className="usd-dropdown" onClick={(e) => e.stopPropagation()}>
+      {open && createPortal(
+        <div ref={dropdownRef} className="usd-dropdown" style={dropdownStyle} onClick={(e) => e.stopPropagation()}>
           {!viewOnly && selectedNamesText && (
             <div className="usd-dropdown-header" style={{ padding: "6px 12px", borderBottom: "1px solid var(--border-color, #e5e7eb)", fontSize: "12px", color: "var(--text-muted, #6b7280)" }}>
               <span className="usd-count" style={{ fontWeight: 500 }}>{selectedNamesText}</span>
             </div>
           )}
-          <div className="usd-dropdown-items" ref={listRef}>
+          <div className="usd-dropdown-items" ref={listRef} style={{ maxHeight: "inherit" }}>
             {filteredUsers.length === 0 ? (
               <p className="usd-empty">{search ? t("No users match your search.", { defaultValue: "No users match your search." }) : t("No users available.", { defaultValue: "No users available." })}</p>
             ) : (
@@ -297,7 +333,15 @@ const UserSelectDropdown = ({
                           disabled={viewOnly}
                         />
                         <div className="usd-item-info">
-                          <span className="usd-name">{user.name}</span>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <span className="usd-name">{user.name}</span>
+                            {user._isExternal && (
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10, padding: "1px 6px", borderRadius: 10, background: "#ede9fe", color: "#6d28d9", fontWeight: 500, whiteSpace: "nowrap", lineHeight: "16px" }}>
+                                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+                                {user.org_name || "Shared"}
+                              </span>
+                            )}
+                          </div>
                           <div className="usd-meta">
                             {user.role && <span className="usd-role">{formatRole(user.role)}</span>}
                             {user.department && <span className="usd-dept">{user.department}</span>}
@@ -310,7 +354,8 @@ const UserSelectDropdown = ({
               </>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

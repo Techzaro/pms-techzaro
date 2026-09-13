@@ -38,7 +38,7 @@ import API_URL from "../config/api";
 import { authToken, rolePath, getUser } from "../utils/auth";
 import { renderDynamicDates } from "../utils/tableDateUtils";
 import { formatDateTimeInline } from "../utils/formatDateTime";
-import { showSuccessMessage, notify, toast } from "../utils/notify";
+import { showSuccessMessage, toast } from "../utils/notify";
 import { useNotification } from "../context/NotificationContext";
 import "../components/ActionPopover.css";
 import "../pages/Task.css";
@@ -88,7 +88,6 @@ const Taskby = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [items, setItems] = useState([]);
-  const [sharedTasks, setSharedTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -101,7 +100,6 @@ const Taskby = () => {
     return filterParam || "";
   });
   const [timeFilter, setTimeFilter] = useState("");
-  const [orderedItems, setOrderedItems] = useState([]);
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
@@ -279,36 +277,11 @@ const Taskby = () => {
     fetchTasks();
   }, [fetchTasks, page]);
 
-  const fetchSharedTasks = useCallback(async () => {
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/sharing/shared-resources?type=task`, {
-        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      setSharedTasks(Array.isArray(data?.data) ? data.data : []);
-    } catch (err) {
-      console.error("Failed to fetch shared tasks:", err);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchSharedTasks();
-  }, [fetchSharedTasks]);
-
-  useEffect(() => {
-    const merged = [
-      ...items,
-      ...sharedTasks.filter((st) => !items.some((i) => String(i.id) === String(st.id))),
-    ];
-    setOrderedItems(merged);
-  }, [items, sharedTasks]);
-
-  useAutoRefresh(() => { fetchTasks(); fetchSharedTasks(); }, {
-    events: ['task:created', 'task:updated', 'task:deleted', 'data:changed', 'sharing:changed'],
+  useAutoRefresh(() => { fetchTasks(); }, {
+    events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
   });
 
-  const baseItems = orderedItems.length ? orderedItems : items;
+  const baseItems = items;
   const pendingStatuses = ["pending", "planned", "planning", "Pending", "Planned", "Planning"];
   const inProgressStatuses = ["in_progress", "In Progress", "In-progress", "reopened", "Reopened", "doing"];
   const completedStatuses = ["completed", "approved", "done", "Completed", "Approved", "Done"];
@@ -402,7 +375,6 @@ const Taskby = () => {
       });
       if (res.ok) {
         setItems((prev) => prev.filter((item) => String(item.id) !== String(taskId)));
-        setOrderedItems((prev) => prev.filter((item) => String(item.id) !== String(taskId)));
         publish('task:deleted', { id: taskId });
         publish('data:changed', { type: 'task', action: 'deleted' });
         toast.success(t("Task deleted successfully", { defaultValue: "Task deleted successfully" }));

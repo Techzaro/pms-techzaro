@@ -39,44 +39,46 @@ class FixTenantColumns extends Command
         ],
         'tasks' => [
             ['name' => 'deleted_at',                      'definition' => "TIMESTAMP NULL AFTER `updated_at`"],
-            ['name' => 'recurrence_start_date',         'definition' => "TIMESTAMP NULL AFTER `recurrence_settings`"],
-            ['name' => 'recurrence_end_date',           'definition' => "TIMESTAMP NULL AFTER `recurrence_start_date`"],
-            ['name' => 'has_edited_submission',         'definition' => "TINYINT(1) DEFAULT 0 AFTER `status`"],
-            ['name' => 'status',                        'definition' => "VARCHAR(64) DEFAULT 'Pending' AFTER `requirements`", 'skip_if_exists' => true],
-            ['name' => 'states',                        'definition' => "JSON NULL AFTER `status`", 'skip_if_exists' => true],
-            ['name' => 'creator_id',                    'definition' => "BIGINT UNSIGNED NULL AFTER `assigned_by`"],
-            ['name' => 'current_submitter_id',          'definition' => "BIGINT UNSIGNED NULL AFTER `current_owner`"],
-            ['name' => 'current_reviewer_id',           'definition' => "BIGINT UNSIGNED NULL AFTER `current_submitter_id`"],
-            ['name' => 'submission_stage',              'definition' => "VARCHAR(64) NULL AFTER `current_reviewer_id`"],
-            ['name' => 'submission_forwarded_by',       'definition' => "JSON NULL AFTER `submission_stage`"],
-            ['name' => 'is_reopened',                   'definition' => "TINYINT(1) DEFAULT 0 AFTER `allow_transfer`"],
-            ['name' => 'is_transferred',                'definition' => "TINYINT(1) DEFAULT 0 AFTER `is_reopened`"],
-            ['name' => 'completion_reason',             'definition' => "VARCHAR(255) NULL AFTER `description`"],
-            ['name' => 'completion_notes',              'definition' => "TEXT NULL AFTER `completion_reason`"],
-            ['name' => 'kb_ids',                        'definition' => "JSON NULL AFTER `description`"],
-            ['name' => 'event_ids',                     'definition' => "JSON NULL AFTER `kb_ids`"],
+            ['name' => 'recurrence_start_date',         'definition' => "TIMESTAMP NULL"],
+            ['name' => 'recurrence_end_date',           'definition' => "TIMESTAMP NULL"],
+            ['name' => 'has_edited_submission',         'definition' => "TINYINT(1) DEFAULT 0"],
+            ['name' => 'status',                        'definition' => "VARCHAR(64) DEFAULT 'Pending'", 'skip_if_exists' => true],
+            ['name' => 'states',                        'definition' => "JSON NULL", 'skip_if_exists' => true],
+            ['name' => 'creator_id',                    'definition' => "BIGINT UNSIGNED NULL"],
+            ['name' => 'current_submitter_id',          'definition' => "BIGINT UNSIGNED NULL"],
+            ['name' => 'current_reviewer_id',           'definition' => "BIGINT UNSIGNED NULL"],
+            ['name' => 'submission_stage',              'definition' => "VARCHAR(64) NULL"],
+            ['name' => 'submission_forwarded_by',       'definition' => "JSON NULL"],
+            ['name' => 'is_reopened',                   'definition' => "TINYINT(1) DEFAULT 0"],
+            ['name' => 'is_transferred',                'definition' => "TINYINT(1) DEFAULT 0"],
+            ['name' => 'completion_reason',             'definition' => "VARCHAR(255) NULL"],
+            ['name' => 'completion_notes',              'definition' => "TEXT NULL"],
+            ['name' => 'kb_ids',                        'definition' => "JSON NULL"],
+            ['name' => 'event_ids',                     'definition' => "JSON NULL"],
+            ['name' => 'assigned_to_org_id',             'definition' => "BIGINT UNSIGNED NULL"],
+            ['name' => 'assigned_to_external_id',        'definition' => "BIGINT UNSIGNED NULL"],
         ],
         'deliverables' => [
             ['name' => 'deleted_at',                    'definition' => "TIMESTAMP NULL AFTER `updated_at`"],
-            ['name' => 'has_edited_submission',         'definition' => "TINYINT(1) DEFAULT 0 AFTER `status`"],
-            ['name' => 'parent_deliverable_id',         'definition' => "BIGINT UNSIGNED NULL AFTER `task_id`"],
-            ['name' => 'is_reopened',                   'definition' => "TINYINT(1) DEFAULT 0 AFTER `allow_transfer`"],
-            ['name' => 'is_transferred',                'definition' => "TINYINT(1) DEFAULT 0 AFTER `is_reopened`"],
-            ['name' => 'completion_reason',             'definition' => "VARCHAR(255) NULL AFTER `description`"],
-            ['name' => 'completion_notes',              'definition' => "TEXT NULL AFTER `completion_reason`"],
-            ['name' => 'kb_ids',                        'definition' => "JSON NULL AFTER `description`"],
-            ['name' => 'event_ids',                     'definition' => "JSON NULL AFTER `kb_ids`"],
+            ['name' => 'has_edited_submission',         'definition' => "TINYINT(1) DEFAULT 0"],
+            ['name' => 'parent_deliverable_id',         'definition' => "BIGINT UNSIGNED NULL"],
+            ['name' => 'is_reopened',                   'definition' => "TINYINT(1) DEFAULT 0"],
+            ['name' => 'is_transferred',                'definition' => "TINYINT(1) DEFAULT 0"],
+            ['name' => 'completion_reason',             'definition' => "VARCHAR(255) NULL"],
+            ['name' => 'completion_notes',              'definition' => "TEXT NULL"],
+            ['name' => 'kb_ids',                        'definition' => "JSON NULL"],
+            ['name' => 'event_ids',                     'definition' => "JSON NULL"],
         ],
         'projects' => [
-            ['name' => 'kb_ids',                        'definition' => "JSON NULL AFTER `sidebar_notes`"],
-            ['name' => 'event_ids',                     'definition' => "JSON NULL AFTER `kb_ids`"],
-            ['name' => 'guest_ids',                     'definition' => "JSON NULL AFTER `assigned_users`"],
-            ['name' => 'team_ids',                      'definition' => "JSON NULL AFTER `team_id`"],
+            ['name' => 'kb_ids',                        'definition' => "JSON NULL"],
+            ['name' => 'event_ids',                     'definition' => "JSON NULL"],
+            ['name' => 'guest_ids',                     'definition' => "JSON NULL"],
+            ['name' => 'team_ids',                      'definition' => "JSON NULL"],
         ],
         'teams' => [
-            ['name' => 'status',                        'definition' => "VARCHAR(255) DEFAULT 'active' AFTER `description`"],
-            ['name' => 'is_draft',                      'definition' => "TINYINT(1) DEFAULT 0 AFTER `status`"],
-            ['name' => 'working_hours',                 'definition' => "JSON NULL AFTER `is_draft`"],
+            ['name' => 'status',                        'definition' => "VARCHAR(255) DEFAULT 'active'"],
+            ['name' => 'is_draft',                      'definition' => "TINYINT(1) DEFAULT 0"],
+            ['name' => 'working_hours',                 'definition' => "JSON NULL"],
         ],
         'conversations' => [
             ['name' => 'org_id',                        'definition' => "BIGINT UNSIGNED NULL AFTER `created_by`"],
@@ -731,9 +733,23 @@ class FixTenantColumns extends Command
             FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 
+        'shared_project_members' => "CREATE TABLE IF NOT EXISTS `shared_project_members` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `shared_resource_id` BIGINT UNSIGNED NOT NULL,
+            `user_id` BIGINT UNSIGNED NOT NULL,
+            `organization_id` BIGINT UNSIGNED NOT NULL,
+            `added_by` BIGINT UNSIGNED NULL,
+            `created_at` TIMESTAMP NULL,
+            `updated_at` TIMESTAMP NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `unique_member` (`shared_resource_id`, `user_id`, `organization_id`),
+            FOREIGN KEY (`shared_resource_id`) REFERENCES `shared_resources`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
         'shared_resources' => [
             ['name' => 'resource_name', 'definition' => "VARCHAR(255) NULL AFTER `resource_id`"],
             ['name' => 'parent_resource_id', 'definition' => "BIGINT UNSIGNED NULL AFTER `resource_name`"],
+            ['name' => 'connection_id', 'definition' => "BIGINT UNSIGNED NULL"],
         ],
     ];
 
@@ -898,6 +914,47 @@ class FixTenantColumns extends Command
                 } catch (\Throwable $e) {
                     $logs[] = ['type' => 'error', 'message' => "Failed to create `{$table}`: {$e->getMessage()}"];
                 }
+            }
+        }
+
+        // Fix unique keys that are too restrictive
+        $uniqueKeyFixes = [
+            [
+                'table' => 'shared_resources',
+                'old_key_name' => 'unique_shared_resource',
+                'old_columns' => ['connection_id', 'resource_type', 'resource_id'],
+                'new_columns' => ['connection_id', 'resource_type', 'resource_id', 'shared_by_organization_id', 'shared_with_organization_id'],
+            ],
+        ];
+
+        foreach ($uniqueKeyFixes as $keyFix) {
+            if (!self::tableExists($databaseName, $keyFix['table'])) {
+                continue;
+            }
+            try {
+                // Check if old unique key exists (with only old columns)
+                $keyExists = DB::connection('tenant_fix')
+                    ->select("SELECT COUNT(*) as cnt FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?", [$databaseName, $keyFix['table'], $keyFix['old_key_name']]);
+
+                if ($keyExists[0]->cnt > 0) {
+                    // Check if the key has the wrong number of columns
+                    $keyColumns = DB::connection('tenant_fix')
+                        ->select("SELECT SEQ_IN_INDEX, COLUMN_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ? ORDER BY SEQ_IN_INDEX", [$databaseName, $keyFix['table'], $keyFix['old_key_name']]);
+
+                    $currentCols = array_column($keyColumns, 'COLUMN_NAME');
+
+                    // If current key doesn't match new columns, fix it
+                    if ($currentCols !== $keyFix['new_columns']) {
+                        $escapedTable = str_replace('`', '``', $keyFix['table']);
+                        $pdo->exec("ALTER TABLE `{$escapedTable}` DROP INDEX `{$keyFix['old_key_name']}`");
+                        $newColList = implode('`, `', $keyFix['new_columns']);
+                        $pdo->exec("ALTER TABLE `{$escapedTable}` ADD UNIQUE KEY `{$keyFix['old_key_name']}` (`{$newColList}`)");
+                        $logs[] = ['type' => 'info', 'message' => "~ Fixed unique key `{$keyFix['old_key_name']}` on `{$keyFix['table']}` (added org IDs)"];
+                        $fixed++;
+                    }
+                }
+            } catch (\Throwable $e) {
+                $logs[] = ['type' => 'error', 'message' => "Failed to fix unique key on `{$keyFix['table']}`: {$e->getMessage()}"];
             }
         }
 

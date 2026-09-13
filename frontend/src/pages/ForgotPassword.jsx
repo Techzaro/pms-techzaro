@@ -73,12 +73,7 @@ function ForgotPassword() {
       <div className="forgot-page">
         <div className="forgot-left">
           <div className="forgot-left-overlay">
-            <img
-              src="https://cdn-icons-png.flaticon.com/512/5968/5968705.png"
-              alt="PMS Logo"
-              className="forgot-left-logo"
-            />
-            <h1>{t("TECHXARO PMS", { defaultValue: "TECHXARO PMS" })}</h1>
+            <h1>{t("TECHXARO ONE", { defaultValue: "TECHXARO ONE" })}</h1>
             <p>{t("Manage Projects, Teams & Tasks Professionally", { defaultValue: "Manage Projects, Teams & Tasks Professionally" })}</p>
           </div>
         </div>
@@ -123,12 +118,7 @@ function ForgotPassword() {
     <div className="forgot-page">
       <div className="forgot-left">
         <div className="forgot-left-overlay">
-          <img
-            src="https://cdn-icons-png.flaticon.com/512/5968/5968705.png"
-            alt="PMS Logo"
-            className="forgot-left-logo"
-          />
-          <h1>{t("TECHXARO PMS", { defaultValue: "TECHXARO PMS" })}</h1>
+          <h1>{t("TECHXARO ONE", { defaultValue: "TECHXARO ONE" })}</h1>
           <p>{t("Manage Projects, Teams & Tasks Professionally", { defaultValue: "Manage Projects, Teams & Tasks Professionally" })}</p>
         </div>
       </div>
@@ -147,7 +137,7 @@ function ForgotPassword() {
 
           <h2>{t("Forgot Password?", { defaultValue: "Forgot Password?" })}</h2>
           <p className="forgot-subtitle">
-            {t("No worries! Enter your email address and we will send you a link to reset your password.", { defaultValue: "No worries! Enter your email address and we will send you a link to reset your password." })}
+            {t("No worries! Enter the email address you use to log in and we will send you a link to reset your password.", { defaultValue: "No worries! Enter the email address you use to log in and we will send you a link to reset your password." })}
           </p>
 
           {isLocked && (
@@ -179,7 +169,7 @@ function ForgotPassword() {
           {fieldError && !isLocked && <div className="forgot-error-box">{fieldError}</div>}
 
           <form onSubmit={handleSubmit}>
-            <label className="forgot-label">{t("Professional Email Address", { defaultValue: "Professional Email Address" })}</label>
+            <label className="forgot-label">{t("Registered Login Email", { defaultValue: "Registered Login Email" })}</label>
             <div className="forgot-input-wrapper">
               <svg className="forgot-input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="2" y="4" width="20" height="16" rx="2"/>
@@ -187,7 +177,7 @@ function ForgotPassword() {
               </svg>
               <input
                 type="email"
-                placeholder={t("Enter your professional email address", { defaultValue: "Enter your professional email address" })}
+                placeholder={t("Enter your registered login email", { defaultValue: "Enter your registered login email" })}
                 value={email}
                 onChange={(e) => { setEmail(e.target.value); setFieldError(""); }}
                 className={fieldError ? "field-error" : ""}
@@ -201,8 +191,8 @@ function ForgotPassword() {
                 <line x1="12" y1="8" x2="12.01" y2="8"/>
               </svg>
               <div>
-                <strong>{t("Use your professional email", { defaultValue: "Use your professional email" })}</strong>
-                <span>{t("Enter the same professional email address you use to access your PMS account.", { defaultValue: "Enter the same professional email address you use to access your PMS account." })}</span>
+                <strong>{t("Use your login email", { defaultValue: "Use your login email" })}</strong>
+                <span>{t("Enter the email address you use to log into your PMS account (professional, personal, or single email).", { defaultValue: "Enter the email address you use to log into your PMS account (professional, personal, or single email)." })}</span>
               </div>
             </div>
 

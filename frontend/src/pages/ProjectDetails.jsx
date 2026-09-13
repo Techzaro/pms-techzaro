@@ -339,6 +339,7 @@ function ProjectDetails() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [hasActiveConnections, setHasActiveConnections] = useState(false);
+  const [existingShares, setExistingShares] = useState([]);
   const [deleteProjectConfirmOpen, setDeleteProjectConfirmOpen] = useState(false);
   const [deleteTaskConfirmOpen, setDeleteTaskConfirmOpen] = useState(false);
   const [deleteTaskId, setDeleteTaskId] = useState(null);
@@ -399,10 +400,11 @@ function ProjectDetails() {
 
   const memberCount = useMemo(() => {
     if (!project) return 0;
-    const ids = new Set();
-    if (project.creator?.id) ids.add(project.creator.id);
-    (project.members || []).forEach((m) => ids.add(m.id));
-    return ids.size;
+    const count = (project.members || []).length;
+    if (project.creator?.id && !(project.members || []).some((m) => m.id === project.creator.id)) {
+      return count + 1;
+    }
+    return count;
   }, [project]);
 
   const authHeadersLocal = () => {
@@ -519,31 +521,8 @@ function ProjectDetails() {
     }
   }, [tab, project?.id, project?.event_id, project?.event, project?.tasks, projectId]);
 
-  useEffect(() => {
-    const token = authToken();
-    if (!token) return;
-    fetch(`${API_URL}/knowledge-base?all=1`, {
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-      skipLoader: true,
-    })
-      .then((r) => (r.ok ? r.json() : []))
-      .then((d) => {
-        const list = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
-        setKbArticles(list);
-      })
-      .catch(() => {});
-
-    fetch(`${API_URL}/events?all=true`, {
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-      skipLoader: true,
-    })
-      .then((r) => (r.ok ? r.json() : []))
-      .then((d) => {
-        const list = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
-        setEventsList(list);
-      })
-      .catch(() => {});
-  }, []);
+  // KB and Events are fetched lazily when their tabs are opened (see tab useEffects above)
+  // Removed redundant mount fetch to improve initial page load time
 
   useEffect(() => {
     const handleClickOutsideManager = (e) => {
@@ -706,6 +685,8 @@ function ProjectDetails() {
       p.shared_resource_id = shared.id;
       p.shared_by_user = shared.shared_by_user;
       p.shared_at = shared.shared_at;
+      p.is_view_only = shared.is_view_only || false;
+      p.original_permission = shared.original_permission || shared.permission;
       setProject(p);
       setLoadError(null);
       loadErrorRef.current = false;
@@ -748,6 +729,9 @@ function ProjectDetails() {
           if (e.status === 403) {
             setLoadError(403);
             notifyRef.current.error(t("You don't have access to this project.", { defaultValue: "You don't have access to this project." }));
+          } else if (e.status === 410) {
+            setLoadError(410);
+            notifyRef.current.error(t("This shared project has been removed.", { defaultValue: "This shared project has been removed." }));
           } else {
             notifyRef.current.error(t("Unable to load project details.", { defaultValue: "Unable to load project details." }));
           }
@@ -797,6 +781,26 @@ function ProjectDetails() {
 
     return () => window.removeEventListener('project-file-refresh', handler);
   }, [loadProject]);
+
+  useEffect(() => {
+    if (!project?.id || isShared) {
+      setExistingShares([]);
+      return;
+    }
+    const fetchExistingShares = async () => {
+      try {
+        const token = authToken();
+        const res = await fetch(`${API_URL}/sharing/shared-by-resource/project/${project.id}`, {
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setExistingShares(Array.isArray(data?.data) ? data.data : []);
+        }
+      } catch (err) { /* ignore */ }
+    };
+    fetchExistingShares();
+  }, [project?.id, isShared]);
 
   useEffect(() => {
     if (!project?.id || !project?.unviewed_changes_count) return;
@@ -1101,10 +1105,12 @@ function ProjectDetails() {
   const isAssigned = !!project?.is_assigned;
   const isAdminOrManager = !!project?.is_admin_or_manager;
   const isViewOnlyUser = !!project?.is_view_only || (project?.view_only_users || []).some((u) => Number(u?.id || u) === Number(currentUser?.id));
+  const isShareViewOnly = isShared && project?.is_view_only;
+  const isCollaborate = isShared && project?.shared_permission === 'collaborate' && !isShareViewOnly;
 
-  const canEdit = !isShared && !isViewOnlyUser && (project?.can_edit || isAdminOrManager);
-  const canManage = !isShared && !isViewOnlyUser && isAdminOrManager;
-  const canAddTask = !isShared && !isViewOnlyUser && currentUser?.role !== "guest" && (isCreator || isAdminOrManager || isAssigned);
+  const canEdit = (isCollaborate || !isShared) && !isViewOnlyUser && (project?.can_edit || isAdminOrManager);
+  const canManage = (isCollaborate || !isShared) && !isViewOnlyUser && (isCollaborate || isAdminOrManager);
+  const canAddTask = (isCollaborate || !isShared) && !isViewOnlyUser && currentUser?.role !== "guest" && (isCollaborate || isCreator || isAdminOrManager || isAssigned);
 
   const handleMilestoneToggle = async (milestone) => {
     await runMilestoneToggle(async () => {
@@ -1185,9 +1191,10 @@ function ProjectDetails() {
 
   const fetchAccessCredentials = async () => {
     if (!project) return;
-    // For shared projects, use embedded credentials from the cross-DB fetch
-    if (isShared && project.accessCredentials) {
-      setAccessCredentials(Array.isArray(project.accessCredentials) ? project.accessCredentials : (project.accessCredentials?.data || []));
+    // For shared projects, always use embedded credentials from cross-DB fetch
+    if (isShared) {
+      const creds = project.accessCredentials || project.access_credentials || [];
+      setAccessCredentials(Array.isArray(creds) ? creds : (creds?.data || []));
       setLoadingCredentials(false);
       return;
     }
@@ -1555,6 +1562,18 @@ function ProjectDetails() {
                     <Monitor size={28} strokeWidth={1.75} />
                   </div>
                   <h1 className="pd-title-tx">{project.title}</h1>
+                  {isShared && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: isShareViewOnly ? '#FEF3C7' : '#EDE9FE', color: isShareViewOnly ? '#D97706' : '#7C3AED', border: `1px solid ${isShareViewOnly ? '#FDE68A' : '#DDD6FE'}`, borderRadius: '6px', padding: '4px 10px', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                      {isShareViewOnly
+                        ? t("View-Only", { defaultValue: "View-Only" })
+                        : t("Shared", { defaultValue: "Shared" })
+                      }
+                      {project.shared_permission && !isShareViewOnly && (
+                        <span style={{ fontSize: 10, opacity: 0.8, marginLeft: 2 }}>({t(project.shared_permission, { defaultValue: project.shared_permission })})</span>
+                      )}
+                    </span>
+                  )}
                   {project.business_id && (
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 700, background: '#fefce8', color: '#ca8a04', whiteSpace: 'nowrap', flexShrink: 0 }}>
                       {project.business_id}
@@ -1586,7 +1605,9 @@ function ProjectDetails() {
                     {isAdminOrManager && hasActiveConnections && !isShared && (
                       <button type="button" className="pd-btn-tx pd-btn-tx--outline" onClick={() => setShowShareModal(true)}>
                         <Share2 size={16} />
-                        {t("Share", { defaultValue: "Share" })}
+                        {existingShares.length > 0
+                          ? t("Edit Share", { defaultValue: "Edit Share" })
+                          : t("Share", { defaultValue: "Share" })}
                       </button>
                     )}
                     {!isShared && canEdit && (
@@ -1690,8 +1711,8 @@ function ProjectDetails() {
                                         <div className={`ptt-row ${currentUser?.role === "guest" ? "ptt-row--guest" : ""}`} key={tItem.id}>
                                           <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={tItem.id} businessId={tItem.business_id} />
                                           {currentUser?.role !== "guest" && <div>{isShared || isCreator || isAdminOrManager ? ((tItem.assignees || []).map((a) => a.name).join(", ") || "—") : (tItem.assigner?.name || "—")}</div>}
-                                        <div className="ptt-col-name">
-                                           <Link to={rolePath(`tasks/task-details/${tItem.id}`)} state={{ from: "project", projectId: project?.id || projectId, projectTitle: project?.title, returnUrl: location.pathname + (location.search || "?tab=tasks") }} className="ptt-task-link">
+                                          <div className="ptt-col-name">
+                                            <Link to={rolePath(`tasks/task-details/${isShared ? `shared_${tItem.shared_resource_id || tItem.id}` : tItem.id}`)} state={{ from: "project", projectId: project?.id || projectId, projectTitle: project?.title, returnUrl: location.pathname + (location.search || "?tab=tasks") }} className="ptt-task-link">
                                              {tItem.title}
                                            </Link>
                                          </div>
@@ -1753,9 +1774,9 @@ function ProjectDetails() {
                                                   <IoEyeOutline size={20} />
                                                 </button>
                                               }
-                                              onTriggerClick={() => navigate(rolePath(`tasks/task-details/${tItem.id}`), { state: { from: "project", projectId: project?.id || projectId, projectTitle: project?.title, returnUrl: location.pathname + (location.search || "?tab=tasks") } })}
+                                                onTriggerClick={() => navigate(rolePath(`tasks/task-details/${isShared ? `shared_${tItem.shared_resource_id || tItem.id}` : tItem.id}`), { state: { from: "project", projectId: project?.id || projectId, projectTitle: project?.title, returnUrl: location.pathname + (location.search || "?tab=tasks") } })}
                                             >
-                                              {isShared ? null : (
+                                              {(!isShared || isCollaborate) ? (
                                               <>
                                               <button className="action-icon-btn action-note" title={t("Add Note", { defaultValue: "Add Note" })} onClick={() => setNoteModal({ open: true, itemId: tItem.id })}>
                                                 <StickyNote size={14} />
@@ -1887,9 +1908,9 @@ function ProjectDetails() {
                                                 }
 
                                                 return null;
-                                              })()}
-                                              </>
-                                              )}
+                                               })()}
+                                               </>
+                                               ) : null}
                                             </ActionPopover>
                                           </div>
                                         </div>
@@ -1986,13 +2007,13 @@ function ProjectDetails() {
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                               <input type="text" placeholder={t("Search by member name or role...", { defaultValue: "Search by member name or role..." })} value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)} />
                             </div>
-                            {!isShared && isAdminOrManager && !isViewOnlyUser && (
+                            {(isCollaborate || (!isShared && isAdminOrManager)) && !isViewOnlyUser && (
                               <button
                                 type="button"
                                 onClick={() => setShowProjectMembersModal(true)}
-                                className="pd-link-manage"
-                                style={{ background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}
+                                style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "7px 16px", borderRadius: 6, background: "var(--color-primary, #3b82f6)", color: "#fff", border: "none", cursor: "pointer", fontWeight: 600, fontSize: 13, boxShadow: "0 1px 2px rgba(0,0,0,0.08)" }}
                               >
+                                <Users size={15} />
                                 {t("Manage Members", { defaultValue: "Manage Members" })}
                               </button>
                             )}
@@ -2012,7 +2033,14 @@ function ProjectDetails() {
                             </div>
                           )}
                           <SortableTableWrapper
-                            items={filteredMembers.filter((m) => m.id !== project.creator?.id)}
+                            items={filteredMembers.filter((m) => {
+                              if (project.creator?.id && m.id === project.creator.id) {
+                                if (m.is_shared_member || (m.organization_id && m.organization_id !== project.creator?.organization_id)) return true;
+                                if (project.creator?.email && m.email && m.email === project.creator.email) return false;
+                                return false;
+                              }
+                              return true;
+                            })}
                             onReorder={handleMemberReorder}
                             as="div"
                           >
@@ -2022,7 +2050,15 @@ function ProjectDetails() {
                                   {initials(m.name)}
                                 </div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div className="pd-member-name">{m.name}</div>
+                                  <div className="pd-member-name">
+                                    {m.name}
+                                    {(m.is_shared_member || m.is_external) && m.org_name && (
+                                      <span style={{ marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, padding: "2px 8px", borderRadius: 12, background: "#ede9fe", color: "#6d28d9", fontWeight: 500 }}>
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+                                        {m.org_name}
+                                      </span>
+                                    )}
+                                  </div>
                                   <div className="pd-member-role">{m.role || t("Member", { defaultValue: "Member" })}</div>
                                 </div>
                                 <div className="pd-member-right">
@@ -2456,7 +2492,11 @@ function ProjectDetails() {
                     {tab === "activity" && (
                       <div className="pd-tab-panel">
                         <section className="pd-card-flat" style={{ padding: "20px" }}>
-                          <UnifiedActivityFeed module="project" entityId={isShared ? (project?.id || projectId) : projectId} initialUsers={members} />
+                          {isShared ? (
+                            <p className="pd-muted" style={{ textAlign: "center", padding: "20px" }}>{t("Activity log is not available for shared projects.", { defaultValue: "Activity log is not available for shared projects." })}</p>
+                          ) : (
+                            <UnifiedActivityFeed module="project" entityId={project?.id || projectId} initialUsers={members} />
+                          )}
                         </section>
                       </div>
                     )}
@@ -2518,7 +2558,24 @@ function ProjectDetails() {
           resourceId={project.id}
           resourceName={project.title}
           onClose={() => setShowShareModal(false)}
-          onShared={() => loadProject()}
+          onShared={() => {
+            loadProject();
+            // Re-fetch existing shares
+            const fetchShares = async () => {
+              try {
+                const token = authToken();
+                const res = await fetch(`${API_URL}/sharing/shared-by-resource/project/${project.id}`, {
+                  headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+                });
+                if (res.ok) {
+                  const data = await res.json();
+                  setExistingShares(Array.isArray(data?.data) ? data.data : []);
+                }
+              } catch (err) { /* ignore */ }
+            };
+            fetchShares();
+          }}
+          existingShares={existingShares}
         />
       )}
 

@@ -283,25 +283,8 @@ function CredentialRow({ credential, onDelete }) {
             </div>
           </div>
         )}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <h1 className="td-title">
-                    {task.title}
-                  </h1>
-                  {task.business_id && (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 700, background: '#eff6ff', color: '#2563eb', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                      {task.business_id}
-                      <button
-                        onClick={() => { navigator.clipboard.writeText(task.business_id); notify.success(t("Task ID copied!", { defaultValue: "Task ID copied!" })); }}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
-                        title={t("Copy Task ID", { defaultValue: "Copy Task ID" })}
-                      >
-                        <Copy size={13} color="#2563eb" />
-                      </button>
-                    </span>
-                  )}
-                </div>
-              </div>
+        </div>
+    </div>
   );
 }
 
@@ -333,6 +316,7 @@ function TaskDetails() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [hasActiveConnections, setHasActiveConnections] = useState(false);
+  const [existingShares, setExistingShares] = useState([]);
   const [deleteTaskConfirmOpen, setDeleteTaskConfirmOpen] = useState(false);
   const [tab, setTab] = useState("overview");
   const [showCreateSubtaskModal, setShowCreateSubtaskModal] = useState(false);
@@ -372,31 +356,8 @@ function TaskDetails() {
   const [kbArticles, setKbArticles] = useState([]);
   const [eventsList, setEventsList] = useState([]);
 
-  useEffect(() => {
-    const token = authToken();
-    if (!token) return;
-    fetch(`${API_URL}/knowledge-base?all=1`, {
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-      skipLoader: true,
-    })
-      .then((r) => (r.ok ? r.json() : []))
-      .then((d) => {
-        const list = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
-        setKbArticles(list);
-      })
-      .catch(() => {});
-
-    fetch(`${API_URL}/events?all=true`, {
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-      skipLoader: true,
-    })
-      .then((r) => (r.ok ? r.json() : []))
-      .then((d) => {
-        const list = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
-        setEventsList(list);
-      })
-      .catch(() => {});
-  }, []);
+  // KB, Events, and Team Users are fetched lazily by their respective components/tabs
+  // Removed redundant mount fetches to improve initial page load time
 
   const taskChangesForHighlight = (task?.changes || []).map((c) => ({ ...c, id: c.id || 0 }));
   const {
@@ -527,6 +488,8 @@ function TaskDetails() {
           taskData.shared_resource_id = data.data.id;
           taskData.shared_by_user = data.data.shared_by_user;
           taskData.shared_at = data.data.shared_at;
+          taskData.is_view_only = data.data.is_view_only || false;
+          taskData.original_permission = data.data.original_permission || data.data.permission;
           setSharedPermission(data.data.permission);
         } else {
           taskData = data.task;
@@ -547,6 +510,12 @@ function TaskDetails() {
           notify.error(t("You don't have permission to view this task.", { defaultValue: "You don't have permission to view this task." }));
           setTimeout(() => navigate(rolePath("tasks")), 1500);
         }
+      } else if (res.status === 410) {
+        setTask(null);
+        if (!isDeletingRef.current) {
+          notify.error(t("This shared task has been removed.", { defaultValue: "This shared task has been removed." }));
+          setTimeout(() => navigate(rolePath("tasks")), 1500);
+        }
       } else {
         setTask(null);
       }
@@ -565,6 +534,8 @@ function TaskDetails() {
   }, [task?.followers]);
 
   useEffect(() => {
+    // Defer team-users fetch until follower dropdown is opened
+    if (!followerDropdownOpen) return;
     const fetchTeamUsers = async () => {
       try {
         const token = authToken();
@@ -581,7 +552,7 @@ function TaskDetails() {
       }
     };
     fetchTeamUsers();
-  }, []);
+  }, [followerDropdownOpen]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -691,6 +662,26 @@ function TaskDetails() {
     checkConnections();
   }, [taskId, fetchTask]);
 
+  useEffect(() => {
+    if (!task?.id) {
+      setExistingShares([]);
+      return;
+    }
+    const fetchExistingShares = async () => {
+      try {
+        const token = authToken();
+        const res = await fetch(`${API_URL}/sharing/shared-by-resource/task/${task.id}`, {
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setExistingShares(Array.isArray(data?.data) ? data.data : []);
+        }
+      } catch (err) { /* ignore */ }
+    };
+    fetchExistingShares();
+  }, [task?.id]);
+
   useAutoRefresh(() => fetchTask(false), {
     events: ["task:updated", "task:deleted", "deliverable:created", "deliverable:updated", "deliverable:deleted", "data:changed"],
   });
@@ -784,6 +775,12 @@ function TaskDetails() {
 
   const fetchAccessCredentials = useCallback(async () => {
     if (!task) return;
+    // Skip API for shared tasks
+    if (isSharedTask) {
+      setAccessCredentials([]);
+      setLoadingCredentials(false);
+      return;
+    }
     setLoadingCredentials(true);
     try {
       const token = authToken();
@@ -836,7 +833,7 @@ function TaskDetails() {
   const files = task?.files || [];
 
   const handleFileReorder = useCallback((reordered) => {
-    if (!task?.id) return;
+    if (!task?.id || isSharedTask) return;
     const payload = reordered.map((item, idx) => ({ id: item.id, sort_order: idx }));
     fetch(`${API_URL}/tasks/${task.id}/files/reorder`, {
       method: 'POST',
@@ -849,6 +846,12 @@ function TaskDetails() {
 
   useEffect(() => {
     if (!task?.id) return;
+    // Skip notes API for shared tasks (notes are in sender's DB)
+    if (isSharedTask) {
+      setNotes([]);
+      setNoteInput("");
+      return;
+    }
     const token = authToken();
     const fetchNotes = fetch(`${API_URL}/tasks/${task.id}/my-note`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -871,7 +874,7 @@ function TaskDetails() {
   }, [task?.id, task?.unviewed_changes_count]);
 
   const saveNote = async () => {
-    if (!task?.id || !noteInput.trim()) return;
+    if (!task?.id || !noteInput.trim() || isSharedTask) return;
     setNoteSaving(true);
     const token = authToken();
     try {
@@ -893,7 +896,7 @@ function TaskDetails() {
   };
 
   const deleteNote = async (noteId) => {
-    if (!task?.id) return;
+    if (!task?.id || isSharedTask) return;
     const token = authToken();
     try {
       const res = await fetch(`${API_URL}/tasks/${task.id}/my-note/${noteId}`, {
@@ -1606,7 +1609,9 @@ function TaskDetails() {
                   {isAdminOrManager && hasActiveConnections && !isSharedTask && (
                     <button className="td-btn-outline" onClick={() => setShowShareModal(true)}>
                       <Share2 size={15} />
-                      {t("Share", { defaultValue: "Share" })}
+                      {existingShares.length > 0
+                        ? t("Edit Share", { defaultValue: "Edit Share" })
+                        : t("Share", { defaultValue: "Share" })}
                     </button>
                   )}
                   {canDelete && (
@@ -1804,6 +1809,18 @@ function TaskDetails() {
                   <h1 className="td-title">
                     {task.title}
                   </h1>
+                  {isSharedTask && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: task?.is_view_only ? '#FEF3C7' : '#EDE9FE', color: task?.is_view_only ? '#D97706' : '#7C3AED', border: `1px solid ${task?.is_view_only ? '#FDE68A' : '#DDD6FE'}`, borderRadius: '6px', padding: '4px 10px', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                      {task?.is_view_only
+                        ? t("View-Only", { defaultValue: "View-Only" })
+                        : t("Shared", { defaultValue: "Shared" })
+                      }
+                      {task.shared_permission && !task?.is_view_only && (
+                        <span style={{ fontSize: 10, opacity: 0.8, marginLeft: 2 }}>({t(task.shared_permission, { defaultValue: task.shared_permission })})</span>
+                      )}
+                    </span>
+                  )}
                   {task.business_id && (
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 700, background: '#eff6ff', color: '#2563eb', whiteSpace: 'nowrap', flexShrink: 0 }}>
                       {task.business_id}
@@ -2713,7 +2730,24 @@ function TaskDetails() {
             resourceId={task.id}
             resourceName={task.title}
             onClose={() => setShowShareModal(false)}
-            onShared={() => fetchTask(false)}
+            onShared={() => {
+              fetchTask(false);
+              // Re-fetch existing shares
+              const fetchShares = async () => {
+                try {
+                  const token = authToken();
+                  const res = await fetch(`${API_URL}/sharing/shared-by-resource/task/${task.id}`, {
+                    headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+                  });
+                  if (res.ok) {
+                    const data = await res.json();
+                    setExistingShares(Array.isArray(data?.data) ? data.data : []);
+                  }
+                } catch (err) { /* ignore */ }
+              };
+              fetchShares();
+            }}
+            existingShares={existingShares}
           />
         )}
 

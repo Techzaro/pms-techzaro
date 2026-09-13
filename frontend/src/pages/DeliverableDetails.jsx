@@ -141,6 +141,7 @@ function SubtaskDetails() {
   };
   const subtaskSource = subtaskSourcePages[location.state?.from] || null;
   const readOnly = location.state?.readOnly === true || currentUser?.role === "guest";
+  const isSharedContext = location.state?.projectId && String(location.state.projectId).startsWith('shared_');
   const subtaskIds = location.state?.subtaskIds || [];
 
   const currentIdx = subtaskIds.findIndex(
@@ -676,6 +677,12 @@ if (res.ok) {
               <div className="td-title-row">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
                   <h1 className="td-title">{subtask.title}</h1>
+                  {isSharedContext && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#EDE9FE', color: '#7C3AED', border: '1px solid #DDD6FE', borderRadius: '6px', padding: '4px 10px', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                      {t("Shared", { defaultValue: "Shared" })}
+                    </span>
+                  )}
                   {subtask.business_id && (
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 700, background: '#f0fdf4', color: '#16a34a', whiteSpace: 'nowrap', flexShrink: 0 }}>
                       {subtask.business_id}

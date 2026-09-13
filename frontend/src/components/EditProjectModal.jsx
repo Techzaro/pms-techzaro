@@ -42,6 +42,10 @@ const EditProjectModal = ({ project, onClose, onProjectUpdated }) => {
     hasDraftFeature: true,
   });
 
+  const isShared = project && (String(project.id || "").startsWith("shared_") || project.is_shared === true);
+  const sharedResourceId = isShared ? String(project.shared_resource_id || project.id).replace("shared_", "") : null;
+  const isCollaborate = isShared && project?.shared_permission === "collaborate";
+
   const userInteractedRef = useRef(false);
   useEffect(() => {
     const markInteracted = () => { userInteractedRef.current = true; };
@@ -668,7 +672,11 @@ const EditProjectModal = ({ project, onClose, onProjectUpdated }) => {
           event_ids: eventIds.length > 0 ? eventIds.map(Number) : [],
         };
 
-        const response = await fetch(`${API_URL}/projects/${project.id}`, {
+        const response = await fetch(
+          isCollaborate
+            ? `${API_URL}/sharing/resources/${sharedResourceId}/project`
+            : `${API_URL}/projects/${project.id}`,
+          {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",

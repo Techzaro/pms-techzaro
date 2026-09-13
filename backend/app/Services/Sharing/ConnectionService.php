@@ -122,6 +122,12 @@ class ConnectionService
             'requested_at'               => now(),
         ]);
 
+        $this->logConnectionActivity($connection, 'connection_requested', $requestingOrg->id, $userId, [
+            'receiving_org_id' => $receivingOrg->id,
+            'receiving_org_name' => $receivingOrg->name,
+            'message' => $message,
+        ]);
+
         return $connection;
     }
 

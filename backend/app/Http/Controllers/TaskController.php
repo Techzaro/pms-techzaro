@@ -19,6 +19,7 @@ use App\Models\TaskUserNote;
 use App\Models\TaskWorkflowEvent;
 use App\Models\Team;
 use App\Models\User;
+use App\Models\Master\ActivityLog as MasterActivityLog;
 use App\Services\ActivityService;
 use App\Services\AuditService;
 use App\Services\DelegationService;
@@ -36,6 +37,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use App\Models\SharedResource;
 
 /**
  * Controller for managing tasks within projects.
@@ -78,7 +80,12 @@ class TaskController extends Controller
             $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
                 ->orWhere('assigned_to', $user->id);
         })
-            ->where('assigned_by', '!=', $user->id)
+            // NOTE: We intentionally do NOT filter by assigned_by != $user.id here.
+            // User IDs are NOT globally unique across tenant databases. A cross-org
+            // task may have assigned_by that collides with the current user's ID
+            // (e.g. both orgs have a user with id=1). This would incorrectly exclude
+            // valid "Assigned To You" tasks. The self-task filter is applied later
+            // in PHP using email comparison (see the filter below after fetch).
             // Once this user transfers a task onward, it belongs in Assigned By
             // You for them. Keep it out of Assigned To You until that handoff is
             // rejected or revoked. Deliverable-only delegations do not move the task.
@@ -91,6 +98,75 @@ class TaskController extends Controller
         $tasksQuery->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role', 'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role', 'currentOwner:id,name']);
         $tasksQuery = $this->applyQueryFiltersSortingPagination($request, $tasksQuery);
         $tasks = $tasksQuery->get();
+
+        $this->resolveCrossOrgAssignees($tasks);
+
+        // Email-based self-task filter for local tasks (replaces the removed SQL-level
+        // assigned_by != $user.id filter). A self-task is where the creator (assigner)
+        // is also an assignee — it's private to its creator.
+        // Uses email comparison to handle cross-org ID collisions correctly.
+        $tasks = $tasks->filter(function ($task) {
+            $assigner = $task->assigner;
+            if (!$assigner || empty($assigner->email)) return true;
+            $assignerEmail = strtolower($assigner->email);
+            $assigneeEmails = $task->assignees->pluck('email')->map(fn($e) => strtolower((string)$e))->values()->toArray();
+            // If assigner email matches any assignee email, it's a self-task — exclude
+            if (in_array($assignerEmail, $assigneeEmails)) return false;
+            return true;
+        })->values();
+
+        // Fetch shared tasks early so we can cross-reference in the collision filter.
+        // The shared tasks flow resolves assignees via the partner DB connection, giving
+        // us the TRUE assignee emails even for cross-org tasks. We use this to detect
+        // ID collisions where the local DB resolves the wrong user.
+        $sharedTasksRaw = $this->getCollaborateSharedTasks($user, allUsers: true);
+        $sharedTasksAssigneeEmailsMap = [];
+        foreach ($sharedTasksRaw as $st) {
+            $originalId = (int) str_replace('shared_', '', $st->id);
+            $emails = [];
+            foreach (($st->assignees ?? []) as $a) {
+                $emails[] = strtolower($a->email ?? '');
+            }
+            $sharedTasksAssigneeEmailsMap[$originalId] = $emails;
+        }
+
+        // Filter out tasks with ID collisions between orgs.
+        // User IDs are not globally unique across tenant databases. A task assigned to
+        // User X in Org B may have the same assigned_to ID as User Y in Org A.
+        // The Eloquent assignee relationships resolve from the LOCAL DB, so they can give
+        // the wrong user when IDs collide. Cross-reference with the shared tasks flow
+        // (which resolves via partner DB) to catch false positives.
+        $userEmail = strtolower($user->email);
+        $tasks = $tasks->filter(function ($task) use ($user, $userEmail, $sharedTasksAssigneeEmailsMap) {
+            // Check if assigned_to matches by ID but email doesn't match
+            if ($task->assigned_to && (int) $task->assigned_to === (int) $user->id) {
+                $assignee = $task->assignee;
+                $localMatch = $assignee && strtolower($assignee->email) === $userEmail;
+                if (!$localMatch) {
+                    // Local DB didn't resolve correctly - verify via shared tasks flow
+                    // (which resolves assignees via partner DB, the correct org)
+                    if (isset($sharedTasksAssigneeEmailsMap[$task->id])) {
+                        return in_array($userEmail, $sharedTasksAssigneeEmailsMap[$task->id]);
+                    }
+                    return false;
+                }
+            }
+            // Check if assignees pivot has matching ID but wrong email
+            if ($task->assignees && $task->assignees->isNotEmpty()) {
+                $hasMatchingEmail = $task->assignees->contains(function ($a) use ($userEmail) {
+                    return strtolower($a->email) === $userEmail;
+                });
+                if (!$hasMatchingEmail) {
+                    // If this task also appears in shared tasks, verify with the shared
+                    // version's assignees (resolved via partner DB) as source of truth.
+                    if (isset($sharedTasksAssigneeEmailsMap[$task->id])) {
+                        return in_array($userEmail, $sharedTasksAssigneeEmailsMap[$task->id]);
+                    }
+                    return false;
+                }
+            }
+            return true;
+        })->values();
 
         // Bulk load deliverable counts for all tasks
         $taskIds = $tasks->pluck('id');
@@ -180,7 +256,61 @@ class TaskController extends Controller
         $deliverables = $delivQuery->get();
         $deliverables->transform(fn ($d) => $this->formatDeliverableAsListItem($d, $user));
 
-        $allItems = $tasks->concat($deliverables)->sortByDesc('created_at')->values();
+        // Include shared tasks from collaborate-shared projects (assigned to current user)
+        // Reuse the $sharedTasksRaw fetched earlier for collision verification.
+        // The outer isAssignedToUser() filter handles the correct matching.
+        // Always exclude self-tasks: a task where assigner is also assignee is private.
+        $sharedTasks = $sharedTasksRaw
+            ->filter(fn($t) => $this->isAssignedToUser($t, $user))
+            ->filter(function ($t) {
+                $assigner = $t->assigner ?? null;
+                $assignees = $t->assignees ?? [];
+                if (!$assigner) return true;
+                $assignerEmail = strtolower($assigner->email ?? '');
+                if (empty($assignerEmail)) return true;
+                foreach ($assignees as $a) {
+                    if (strtolower($a->email ?? '') === $assignerEmail) return false;
+                }
+                return true;
+            })
+            ->map(function ($task) use ($user) {
+                // Add delegation flags for shared tasks (same as regular tasks)
+                $isTransferor = false;
+                $chain = $task->delegation_chain ?? [];
+                foreach ($chain as $entry) {
+                    if ((int) ($entry['delegated_by'] ?? 0) === (int) $user->id && ($entry['status'] ?? '') === 'accepted') {
+                        $isTransferor = true;
+                        break;
+                    }
+                }
+                $task->is_transferor = $isTransferor;
+                $task->transferor_return_to_self = true;
+                $task->transferor_has_approved = false;
+                foreach ($chain as $entry) {
+                    if ((int) ($entry['delegated_by'] ?? 0) === (int) $user->id && ($entry['status'] ?? '') === 'accepted') {
+                        $task->transferor_return_to_self = $entry['return_to_transferor'] ?? true;
+                        break;
+                    }
+                }
+                $approvalChain = $task->approval_chain ?? [];
+                foreach ($approvalChain as $aEntry) {
+                    if ((int) ($aEntry['approver_id'] ?? 0) === (int) $user->id && ($aEntry['status'] ?? '') === 'approved') {
+                        $task->transferor_has_approved = true;
+                        break;
+                    }
+                }
+                $task->current_owner_id = $task->current_owner ?? null;
+                $task->current_owner_name = $task->currentOwner->name ?? null;
+                $task->transferred_by_name = null;
+                foreach ($chain as $entry) {
+                    if ((int) ($entry['delegated_to'] ?? 0) === (int) $user->id && ($entry['status'] ?? '') === 'accepted') {
+                        $task->transferred_by_name = $entry['delegated_by_name'] ?? null;
+                    }
+                }
+                return $task;
+            });
+
+        $allItems = $tasks->concat($deliverables)->concat($sharedTasks)->sortByDesc('created_at')->values();
 
         return response()->json([
             'data' => $allItems,
@@ -223,19 +353,28 @@ class TaskController extends Controller
         $tasksQuery = $this->applyQueryFiltersSortingPagination($request, $tasksQuery);
         $tasks = $tasksQuery->get();
 
-        if ($user->role === 'guest') {
-            $guestTasksQuery = Task::whereHas('project', fn ($q) => $q->whereJsonContains('guest_ids', $user->id))
-                ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q, $user->id))
-                ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
-                ->with(['project:id,title,team_id', 'assigners:id,name,email,role', 'assigner:id,name,email,role', 'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role'])
-                ->orderBy('created_at', 'desc')->orderBy('id', 'desc')
-                ->filter($filters);
-
-            if ($request->filled('per_page') || $request->filled('limit')) {
-                $guestTasksQuery->limit((int) ($request->input('per_page') ?: $request->input('limit')));
+        // Filter out tasks with ID collisions between orgs.
+        // Verify both assigner and assignee emails match to prevent cross-org ID collisions.
+        $userEmail = strtolower($user->email);
+        $tasks = $tasks->filter(function ($task) use ($user, $userEmail) {
+            // Check assigner email matches
+            if ($task->assigner && strtolower($task->assigner->email) !== $userEmail) {
+                return false;
             }
-            $tasks = $guestTasksQuery->get();
-        }
+            // Check assignee email matches
+            if ($task->assigned_to && $task->assignee && strtolower($task->assignee->email) !== $userEmail) {
+                return false;
+            }
+            if ($task->assignees && $task->assignees->isNotEmpty()) {
+                $hasMatchingEmail = $task->assignees->contains(function ($a) use ($userEmail) {
+                    return strtolower($a->email) === $userEmail;
+                });
+                if (!$hasMatchingEmail) {
+                    return false;
+                }
+            }
+            return true;
+        })->values();
 
         // Bulk load deliverable counts
         $taskIds = $tasks->pluck('id');
@@ -532,6 +671,43 @@ class TaskController extends Controller
         $tasksQuery = $this->applyQueryFiltersSortingPagination($request, $tasksQuery);
         $tasks = $tasksQuery->get();
 
+        $this->resolveCrossOrgAssignees($tasks);
+
+        // Fetch shared tasks early so we can cross-reference in the collision filter.
+        // The shared tasks flow resolves assigners via the partner DB connection, giving
+        // us the TRUE assigner email even for cross-org tasks. We use this to detect
+        // ID collisions where the local DB resolves the wrong user.
+        $sharedTasksRaw = $this->getCollaborateSharedTasks($user, allUsers: true);
+        $sharedTasksByEmailMap = [];
+        foreach ($sharedTasksRaw as $st) {
+            $originalId = (int) str_replace('shared_', '', $st->id);
+            if ($st->assigner) {
+                $sharedTasksByEmailMap[$originalId] = strtolower($st->assigner->email ?? '');
+            }
+        }
+
+        // Filter out tasks with ID collisions between orgs.
+        // User IDs are not globally unique across tenant databases. A task created by
+        // User X in Org B may have the same assigned_by ID as User Y in Org A.
+        // The Eloquent assigner relationship resolves from the LOCAL DB, so it can give
+        // the wrong user when IDs collide. Cross-reference with the shared tasks flow
+        // (which resolves via partner DB) to catch false positives.
+        $tasks = $tasks->filter(function ($task) use ($user, $sharedTasksByEmailMap) {
+            if ((int) $task->assigned_by === (int) $user->id) {
+                // If assigner is null, the assigner is from a different org (ID collision)
+                if (!$task->assigner) return false;
+
+                // If this task also appears in shared tasks, the shared version's assigner
+                // was resolved via partner DB (the correct org). Use it as source of truth.
+                if (isset($sharedTasksByEmailMap[$task->id])) {
+                    return $sharedTasksByEmailMap[$task->id] === strtolower($user->email);
+                }
+
+                return strtolower($task->assigner->email) === strtolower($user->email);
+            }
+            return true;
+        })->values();
+
         // Bulk load deliverable counts
         $taskIds = $tasks->pluck('id');
         $dlvStats = collect();
@@ -582,7 +758,11 @@ class TaskController extends Controller
             $assignees = $task->assignees->isEmpty() ? collect([null]) : $task->assignees;
             $rowCreated = false;
             foreach ($assignees as $assignee) {
-                if ($assignee && (int) $assignee->id === (int) $task->assigned_by) {
+                // Skip self-assignment: if assignee == assigner, it's a personal task, not "Assigned By You".
+                // For cross-org tasks, assignee IDs come from a different DB so integer IDs can collide
+                // (e.g. both Dummy.id=1 and Test.id=1). Only skip when both are from the SAME org.
+                $isExternalAssignee = !empty($assignee->is_external) || !empty($assignee->organization_id);
+                if ($assignee && !$isExternalAssignee && (int) $assignee->id === (int) $task->assigned_by) {
                     continue;
                 }
                 if (! $assignee && (int) $task->assigned_to === (int) $task->assigned_by) {
@@ -723,7 +903,61 @@ class TaskController extends Controller
         $deliverables = $delivQuery->get();
         $deliverables->transform(fn ($d) => $this->formatDeliverableAsListItem($d, $user));
 
-        $allItems = $expandedTasks->concat($deliverables)->sortByDesc('created_at')->values();
+        // Include shared tasks from collaborate-shared projects (assigned by current user)
+        // Reuse the $sharedTasksRaw fetched earlier for collision verification.
+        // The outer isAssignedByUser() filter handles the correct matching.
+        // Always exclude self-tasks: a task where assigner is also assignee is private.
+        $sharedTasks = $sharedTasksRaw
+            ->filter(fn($t) => $this->isAssignedByUser($t, $user))
+            ->filter(function ($t) {
+                $assigner = $t->assigner ?? null;
+                $assignees = $t->assignees ?? [];
+                if (!$assigner) return true;
+                $assignerEmail = strtolower($assigner->email ?? '');
+                if (empty($assignerEmail)) return true;
+                foreach ($assignees as $a) {
+                    if (strtolower($a->email ?? '') === $assignerEmail) return false;
+                }
+                return true;
+            })
+            ->map(function ($task) use ($user) {
+                // Add delegation flags for shared tasks (same as regular tasks)
+                $isTransferor = false;
+                $chain = $task->delegation_chain ?? [];
+                foreach ($chain as $entry) {
+                    if ((int) ($entry['delegated_by'] ?? 0) === (int) $user->id && ($entry['status'] ?? '') === 'accepted') {
+                        $isTransferor = true;
+                        break;
+                    }
+                }
+                $task->is_transferor = $isTransferor;
+                $task->transferor_return_to_self = true;
+                $task->transferor_has_approved = false;
+                foreach ($chain as $entry) {
+                    if ((int) ($entry['delegated_by'] ?? 0) === (int) $user->id && ($entry['status'] ?? '') === 'accepted') {
+                        $task->transferor_return_to_self = $entry['return_to_transferor'] ?? true;
+                        break;
+                    }
+                }
+                $approvalChain = $task->approval_chain ?? [];
+                foreach ($approvalChain as $aEntry) {
+                    if ((int) ($aEntry['approver_id'] ?? 0) === (int) $user->id && ($aEntry['status'] ?? '') === 'approved') {
+                        $task->transferor_has_approved = true;
+                        break;
+                    }
+                }
+                $task->current_owner_id = $task->current_owner ?? null;
+                $task->current_owner_name = $task->currentOwner->name ?? null;
+                $task->transferred_by_name = null;
+                foreach ($chain as $entry) {
+                    if ((int) ($entry['delegated_to'] ?? 0) === (int) $user->id && ($entry['status'] ?? '') === 'accepted') {
+                        $task->transferred_by_name = $entry['delegated_by_name'] ?? null;
+                    }
+                }
+                return $task;
+            });
+
+        $allItems = $expandedTasks->concat($deliverables)->concat($sharedTasks)->sortByDesc('created_at')->values();
 
         return response()->json(['success' => true, 'data' => $allItems, 'total' => $allItems->count()]);
     }
@@ -741,6 +975,9 @@ class TaskController extends Controller
     {
         $this->authorize('view', $task);
         $user = request()->user();
+
+        // ── Load only essential relations for initial page render ──
+        // Tab-specific data (events, KB, access credentials) are loaded lazily
         $task->load([
             'project:id,title,team_id,created_by,client_name,category,budget,priority,sidebar_notes,sheets_documents,website_link,website_name,status,start_date,end_date,guest_ids',
             'project.creator:id,name,email,role',
@@ -765,15 +1002,11 @@ class TaskController extends Controller
             'currentReviewer:id,name,email,role',
             'currentSubmitter:id,name,email,role',
             'originalAssigner:id,name,email,role',
-            'delegations' => fn ($q) => $q->with(['delegatedBy:id,name,email,role', 'delegatedTo:id,name,email,role'])->latest(),
             'unviewedChanges' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
-            'deliverableTemplates',
             'followers:id,name,email,avatar,role',
-            'events:id,title,start_date,end_date,type,color,all_day',
-            'knowledgeBases:id,title,category,visibility_level,file_path,file_name,created_by',
-            'accessCredentials',
         ]);
 
+        // Resolve file URLs in a single pass
         $org = request()->attributes->get('currentOrganization');
         if ($org) {
             if ($task->files) StorageDiskResolver::resolveFileUrls($task->files, $org);
@@ -803,6 +1036,7 @@ class TaskController extends Controller
             }
         }
 
+        // ── Authorization flags (from loaded relations, no extra queries) ──
         $isCreator = (int) $task->assigned_by === (int) $user->id;
         $isAssignee = $task->assignees->contains('id', $user->id);
         $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
@@ -810,14 +1044,21 @@ class TaskController extends Controller
         $isTeamLeader = $task->project && $task->project->team && (int) $task->project->team->leader_id === (int) $user->id;
         $isTeamMember = $task->project && $task->project->team && $task->project->team->members && $task->project->team->members->contains('id', $user->id);
         $isGuestOfProject = $user->role === 'guest' && $task->project && $task->project->isAccessibleByGuest($user);
-        $isGuestDeliverableAssignee = $user->role === 'guest' && \App\Models\Deliverable::where('task_id', $task->id)->where('assigned_to', $user->id)->exists();
         $isCurrentOwner = $task->current_owner && (int) $task->current_owner === (int) $user->id;
+        $isExternalAssignee = $task->assigned_to_org_id && $task->assigned_to_external_id
+            && (int) $task->assigned_to_external_id === (int) $user->id;
 
-        if (! $isCreator && ! $isAssignee && ! $isAdminOrManager && ! $isProjectCreator && ! $isTeamLeader && ! $isTeamMember && ! $isGuestOfProject && ! $isGuestDeliverableAssignee && ! $isCurrentOwner) {
+        // Single combined query for guest deliverable check
+        $isGuestDeliverableAssignee = false;
+        if ($user->role === 'guest' && ! $isGuestOfProject) {
+            $isGuestDeliverableAssignee = \App\Models\Deliverable::where('task_id', $task->id)->where('assigned_to', $user->id)->exists();
+        }
+
+        if (! $isCreator && ! $isAssignee && ! $isAdminOrManager && ! $isProjectCreator && ! $isTeamLeader && ! $isTeamMember && ! $isGuestOfProject && ! $isGuestDeliverableAssignee && ! $isCurrentOwner && ! $isExternalAssignee) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
-        // Single query for deliverables with stats
+        // ── Deliverables: single query with stats ──
         $deliverables = $task->deliverables()->when(! $isCreator && ! $isGuestOfProject, function ($q) use ($user) {
             $q->where(function ($qq) use ($user) {
                 $qq->where('assigned_to', $user->id)->orWhere('created_by', $user->id);
@@ -828,42 +1069,56 @@ class TaskController extends Controller
             'reopenedBy:id,name',
         ])->orderBy('sort_order')->latest('updated_at')->get();
 
+        // Combined: submitted IDs + stats in fewer queries
         $deliverableIds = $deliverables->pluck('id');
-        $submittedIds = $deliverableIds->isNotEmpty()
-            ? DeliverableSubmission::where('submitted_by', $user->id)->whereIn('deliverable_id', $deliverableIds)->pluck('deliverable_id')->toArray()
-            : [];
+        $submittedIds = collect();
+        $dlvStats = (object) ['total' => 0, 'completed' => 0, 'pending' => 0];
+        if ($deliverableIds->isNotEmpty()) {
+            [$submittedIds, $dlvStats] = \DB::transaction(function () use ($deliverableIds, $user, $task) {
+                $submitted = DeliverableSubmission::where('submitted_by', $user->id)
+                    ->whereIn('deliverable_id', $deliverableIds)
+                    ->pluck('deliverable_id');
+                $stats = Deliverable::selectRaw('COUNT(*) as total, SUM(CASE WHEN status = "approved" THEN 1 ELSE 0 END) as completed, SUM(CASE WHEN status = "pending" THEN 1 ELSE 0 END) as pending')
+                    ->where('task_id', $task->id)
+                    ->first();
+                return [$submitted, $stats];
+            });
+        }
 
         $deliverables->each(function ($deliverable) use ($submittedIds) {
-            $deliverable->has_submitted = in_array($deliverable->id, $submittedIds);
+            $deliverable->has_submitted = $submittedIds->contains($deliverable->id);
         });
 
-        // Bulk stats for deliverable progress
-        $dlvStats = $deliverableIds->isNotEmpty()
-            ? Deliverable::selectRaw('COUNT(*) as total, SUM(CASE WHEN status = "approved" THEN 1 ELSE 0 END) as completed, SUM(CASE WHEN status = "pending" THEN 1 ELSE 0 END) as pending')
-                ->where('task_id', $task->id)
-                ->first()
-            : (object) ['total' => 0, 'completed' => 0, 'pending' => 0];
-
         $isApproved = strtolower((string) $task->status) === 'approved';
-        $pendingStatuses = ['pending', 'in_progress', 'reopened', 'paused'];
         $pendingDeliverables = $dlvStats->pending ?? 0;
         $allDeliverablesSubmitted = (int) $pendingDeliverables === 0;
 
+        // ── Unviewed changes (already loaded via eager loading) ──
         $changes = $task->unviewedChanges->map(fn ($c) => [
             'id' => $c->id, 'field_name' => $c->field_name,
             'old_value' => $c->old_value, 'new_value' => $c->new_value,
             'modified_by' => $c->modifiedBy?->name ?? 'Unknown', 'created_at' => $c->created_at,
         ]);
 
+        // ── Build payload ──
         $payload = $task->toArray();
-        $payload = array_merge($payload, $this->delegationService->routingPayload($task, $user));
+        $routing = $this->delegationService->routingPayload($task, $user);
+        $payload = array_merge($payload, $routing);
         $nextRouteUserId = $payload['next_route_user_id'] ?? null;
         $nextRouteUser = $nextRouteUserId ? User::select('id', 'name', 'role')->find($nextRouteUserId) : null;
         $payload['next_route_user'] = $nextRouteUser;
         $payload['submit_to_next_label'] = 'Submit';
 
-        // When return_to_transferor=true, only the transferor should see the transferee's submissions
-        // The OA and other viewers should NOT see them until the transferor submits
+        // Skip cross-org DB connection on initial load - resolve lazily if needed
+        if ($task->assigned_to_org_id && $task->assigned_to_external_id) {
+            $payload['is_external_task'] = true;
+            $payload['external_org_id'] = $task->assigned_to_org_id;
+            $payload['external_user_id'] = $task->assigned_to_external_id;
+            // Defer external user resolution to a separate endpoint
+            $payload['external_assignee'] = null;
+        }
+
+        // ── Delegation chain filtering ──
         $delegationChain = $task->delegation_chain ?? [];
         if (is_string($delegationChain)) {
             $delegationChain = json_decode($delegationChain, true) ?? [];
@@ -878,7 +1133,6 @@ class TaskController extends Controller
             if ($lastAccepted && ($lastAccepted['return_to_transferor'] ?? true)) {
                 $transferorId = (int) ($lastAccepted['delegated_by'] ?? 0);
                 $transfereeId = (int) ($lastAccepted['delegated_to'] ?? 0);
-                // Only transferor and transferee should see the transferee's submissions prior to forwarding, but creator, admin & manager always see them
                 if ((int) $user->id !== $transferorId && (int) $user->id !== $transfereeId && (int) $user->id !== (int) $task->assigned_by && ! in_array($user->role, ['admin', 'manager'])) {
                     $allSubmissions = $payload['submissions'] ?? [];
                     $payload['submissions'] = array_values(array_filter($allSubmissions, function ($s) use ($transfereeId) {
@@ -904,7 +1158,6 @@ class TaskController extends Controller
             }
         }
 
-        // A creator above an unfinished checkpoint must not see the downstream submission yet.
         if ($task->submission_stage === 'awaiting_checkpoint'
             && (int) $user->id !== (int) $task->current_reviewer_id
             && (int) $user->id !== (int) $task->current_submitter_id
@@ -927,18 +1180,26 @@ class TaskController extends Controller
         $payload['assigner_paused'] = (bool) $task->assigner_paused;
         $payload['assigner_paused_at'] = $task->assigner_paused_at;
         $payload['can_edit'] = $isCreator && ! $isApproved;
-        $userNotes = TaskPersonalNote::where('task_id', $task->id)->where('user_id', $user->id)->orderBy('created_at', 'desc')->get();
+
+        // Personal notes: single query with fallback
+        $userNotes = TaskPersonalNote::where('task_id', $task->id)->where('user_id', $user->id)
+            ->orderBy('created_at', 'desc')->limit(5)->get();
         if ($userNotes->isEmpty()) {
-            $userNotes = TaskUserNote::where('task_id', $task->id)->where('user_id', $user->id)->orderBy('created_at', 'desc')->get();
+            $userNotes = TaskUserNote::where('task_id', $task->id)->where('user_id', $user->id)
+                ->orderBy('created_at', 'desc')->limit(5)->get();
         }
         $payload['personal_notes'] = $userNotes;
-        $userPivot = $isAssignee ? $task->assignees()->where('users.id', $user->id)->first()?->pivot : null;
-        $payload['my_status'] = $routing['display_status'] ?? ($userPivot?->status ?? 'pending');
-        $payload['my_submitted_at'] = $userPivot?->submitted_at;
+        $payload['my_status'] = $routing['display_status'] ?? 'pending';
+        $payload['my_submitted_at'] = null;
+        if ($isAssignee) {
+            $userPivot = $task->assignees()->where('users.id', $user->id)->first()?->pivot;
+            $payload['my_status'] = $routing['display_status'] ?? ($userPivot?->status ?? 'pending');
+            $payload['my_submitted_at'] = $userPivot?->submitted_at;
+        }
         $isCurrentOwner = $this->delegationService->isCurrentOwner($task, $user);
         $payload['is_current_owner'] = $isCurrentOwner;
 
-        // Determine if the current user is a transferor
+        // ── Transferor logic ──
         $isTransferor = false;
         $transferorReturnToSelf = true;
         $transferorHasApproved = false;
@@ -950,7 +1211,6 @@ class TaskController extends Controller
                 break;
             }
         }
-        // Check approval_chain for this transferor
         $approvalChain = $task->approval_chain ?? [];
         foreach ($approvalChain as $aEntry) {
             if ((int) $aEntry['approver_id'] === (int) $user->id && $aEntry['status'] === 'approved') {
@@ -958,12 +1218,9 @@ class TaskController extends Controller
                 break;
             }
         }
-        // Fallback: if approval_chain is empty/stale but the transferor is the current owner
-        // and the task is in_progress after a submitted status, they must have approved
         if (! $transferorHasApproved && $isTransferor && $transferorReturnToSelf) {
             if ((int) ($task->current_owner ?? 0) === (int) $user->id && $task->status === 'in_progress') {
                 $transferorHasApproved = true;
-                // Also fix the approval_chain in DB for future requests
                 if (empty($approvalChain)) {
                     $fixedChain = [];
                     foreach ($chain as $entry) {
@@ -996,22 +1253,19 @@ class TaskController extends Controller
         $payload['active_outgoing_delegation_id'] = $activeOutgoingDelegation?->id;
         $payload['can_revoke_delegation'] = $activeOutgoingDelegation && $activeOutgoingDelegation->status === 'pending';
 
-        // Transferors: can_submit is false until they approve; after approval they can submit to OA
         $isAlreadySubmittedOrClosed = in_array($task->status, ['submitted', 'submitted_late', 'approved', 'abandoned']);
         $isReturnedRevision = $task->submission_stage === 'declined'
             && in_array($task->status, ['reopened', 'rejected'], true);
         $canActOnReturnedRevision = ! $isReturnedRevision
             || ($isCurrentOwner && (int) $user->id === (int) ($task->current_submitter_id ?: $task->current_owner));
         $payload['can_submit'] = ! $isAlreadySubmittedOrClosed && $canActOnReturnedRevision && ($isAssignee || $isCurrentOwner) && in_array($task->status, ['in_progress', 'reopened', 'paused', 'rejected']) && $allDeliverablesSubmitted
-            && ($userPivot?->status !== 'submitted');
+            && ($payload['my_status'] !== 'submitted');
         if ($isTransferor && ! $transferorHasApproved) {
-            // Transferor hasn't approved yet — block submit
             $payload['can_submit'] = false;
             if (! $transferorReturnToSelf) {
                 $payload['is_assignee'] = false;
             }
         }
-        // Transferor has approved — force allow submit so they can forward to OA
         if ($isTransferor && $transferorHasApproved && $transferorReturnToSelf && ! $isAlreadySubmittedOrClosed && $canActOnReturnedRevision) {
             $payload['can_submit'] = true;
             $payload['is_assignee'] = true;
@@ -1038,9 +1292,9 @@ class TaskController extends Controller
             && ($task->delegation_count > 0 || ! empty($task->delegation_chain));
         $payload['allow_transfer'] = $task->allow_transfer ?? true;
 
-        $taskChangeMax = (int) TaskChange::where('task_id', $task->id)->max('id');
-        $taskEventMax = (int) TaskWorkflowEvent::where('task_id', $task->id)->max('id');
-        $payload['activity_max_id'] = max($taskChangeMax, $taskEventMax);
+        // Activity max ID: single combined query
+        $activityMax = \DB::select("SELECT GREATEST(COALESCE((SELECT MAX(id) FROM task_changes WHERE task_id = ?), 0), COALESCE((SELECT MAX(id) FROM task_workflow_events WHERE task_id = ?), 0)) AS max_id", [$task->id, $task->id]);
+        $payload['activity_max_id'] = !empty($activityMax) ? (int) $activityMax[0]->max_id : 0;
 
         $payload['timer'] = [
             'state' => $task->timer_state,
@@ -1057,16 +1311,6 @@ class TaskController extends Controller
             'last_timer_event_at' => $task->last_timer_event_at?->toIso8601String(),
         ];
 
-        $routing = $this->delegationService->routingPayload($task, $user);
-        $nextUser = ! empty($routing['next_route_user_id'])
-            ? User::select('id', 'name', 'role')->find($routing['next_route_user_id'])
-            : null;
-
-        $payload = array_merge($payload, $routing, [
-            'next_route_user' => $nextUser,
-            'submit_to_next_label' => 'Submit',
-        ]);
-
         return response()->json(['success' => true, 'task' => $payload]);
     }
 
@@ -1080,6 +1324,108 @@ class TaskController extends Controller
      * @param  Project  $project  The parent project.
      * @return JsonResponse JSON response with created tasks.
      */
+    public function getCollaborateUsers(Request $request, Project $project)
+    {
+        $currentOrg = $request->attributes->get('currentOrganization');
+        $currentOrgId = $currentOrg?->id ?? ($request->user()->organization_id ?? $request->user()->org_id ?? null);
+
+        if (!$currentOrgId) {
+            return response()->json(['users' => []]);
+        }
+
+        // Check if this project is shared with "collaborate" permission
+        // Case 1: Current org shared this project WITH another org (shared_by_organization_id = current org)
+        $sharedOut = SharedResource::where('shared_by_organization_id', $currentOrgId)
+            ->where('resource_type', 'project')
+            ->where('resource_id', $project->id)
+            ->where('permission', 'collaborate')
+            ->where('status', 'active')
+            ->first();
+
+        // Case 2: Another org shared this project WITH current org (shared_with_organization_id = current org)
+        $sharedIn = SharedResource::where('shared_with_organization_id', $currentOrgId)
+            ->where('resource_type', 'project')
+            ->where('resource_id', $project->id)
+            ->where('permission', 'collaborate')
+            ->where('status', 'active')
+            ->first();
+
+        $partnerOrgId = null;
+        if ($sharedOut) {
+            $partnerOrgId = $sharedOut->shared_with_organization_id;
+        } elseif ($sharedIn) {
+            $partnerOrgId = $sharedIn->shared_by_organization_id;
+        }
+
+        if (!$partnerOrgId) {
+            return response()->json(['users' => [], 'partner_org' => null]);
+        }
+
+        // Get partner org details from master DB
+        $partnerOrg = null;
+        $masterConn = config('tenancy.master_connection', 'mysql_master');
+        $masterDb = DB::connection($masterConn);
+        $orgRecord = $masterDb->table('organizations')->where('id', $partnerOrgId)->first();
+        if ($orgRecord) {
+            $partnerOrg = [
+                'id' => $orgRecord->id,
+                'name' => $orgRecord->name,
+            ];
+        }
+
+        // Get users from partner org's database (dynamic connection for multi-tenant)
+        $partnerUsers = [];
+        if ($orgRecord && !empty($orgRecord->database_name)) {
+            $masterConfig = config("database.connections." . config('tenancy.master_connection', 'mysql_master'));
+            $connName = 'collab_users_' . $partnerOrgId . '_' . uniqid();
+            try {
+                config()->set("database.connections.{$connName}", [
+                    'driver'    => 'mysql',
+                    'host'      => $masterConfig['host'],
+                    'port'      => $masterConfig['port'],
+                    'database'  => $orgRecord->database_name,
+                    'username'  => $masterConfig['username'],
+                    'password'  => $masterConfig['password'] ?? '',
+                    'charset'   => 'utf8mb4',
+                    'collation' => 'utf8mb4_unicode_ci',
+                    'prefix'    => '',
+                    'prefix_indexes' => false,
+                    'strict'    => true,
+                    'engine'    => null,
+                ]);
+                DB::purge($connName);
+                $partnerDb = DB::connection($connName);
+                $partnerUsers = $partnerDb->table('users')
+                    ->where('active', true)
+                    ->select('id', 'name', 'email', 'role', 'department')
+                    ->orderBy('name')
+                    ->get()
+                    ->map(function ($u) use ($orgRecord) {
+                        return [
+                            'id' => $u->id,
+                            'name' => $u->name,
+                            'email' => $u->email,
+                            'role' => $u->role,
+                            'department' => $u->department,
+                            'org_name' => $orgRecord->name,
+                            'org_id' => $orgRecord->id,
+                            'is_external' => true,
+                        ];
+                    })
+                    ->toArray();
+            } catch (\Throwable $e) {
+                Log::warning('Failed to fetch partner org users: ' . $e->getMessage());
+            } finally {
+                DB::purge($connName);
+            }
+        }
+
+        return response()->json([
+            'users' => $partnerUsers,
+            'partner_org' => $partnerOrg,
+        ]);
+    }
+
     public function store(Request $request, Project $project)
     {
         $this->authorize('create', [Task::class, $project]);
@@ -1106,14 +1452,14 @@ class TaskController extends Controller
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date',
             'assigned_to' => 'required|array|min:1',
-            'assigned_to.*' => 'exists:users,id',
+            'assigned_to.*' => 'string',
             'priority' => 'required|string|max:32',
             'deliverables' => 'nullable|array',
             'deliverables.*.title' => 'required_with:deliverables|string|max:255',
             'deliverables.*.description' => 'nullable|string|max:2000',
             'deliverables.*.start_date' => 'nullable|date',
             'deliverables.*.due_date' => 'nullable|date',
-            'deliverables.*.assigned_to' => 'nullable|exists:users,id',
+            'deliverables.*.assigned_to' => 'nullable|string',
             'due_dates' => 'nullable|array',
             'due_dates.*' => 'nullable|date',
             'task_type' => 'nullable|in:standard,recurring',
@@ -1129,12 +1475,36 @@ class TaskController extends Controller
             'deliverable_templates.*.combined' => 'nullable|boolean',
             'allow_transfer' => 'nullable|boolean',
             'followers' => 'nullable|array',
-            'followers.*' => 'exists:users,id',
+            'followers.*' => 'string',
             'kb_ids' => 'nullable|array',
             'kb_ids.*' => 'nullable|integer',
             'event_ids' => 'nullable|array',
             'event_ids.*' => 'nullable|integer',
         ]);
+
+        // Split assigned_to into local users and cross-org users
+        $localUserIds = [];
+        $crossOrgAssignments = [];
+        foreach ($validated['assigned_to'] as $assignee) {
+            if (str_contains((string) $assignee, ':')) {
+                [$orgId, $extUserId] = explode(':', $assignee, 2);
+                $crossOrgAssignments[] = ['org_id' => (int) $orgId, 'external_id' => (int) $extUserId];
+            } else {
+                $localUserIds[] = (int) $assignee;
+            }
+        }
+        $validated['assigned_to'] = $localUserIds;
+
+        // Validate local users exist
+        if (!empty($localUserIds)) {
+            $existingUserIds = User::whereIn('id', $localUserIds)->pluck('id')->map(fn($id) => (int) $id)->toArray();
+            $invalidLocal = array_diff($localUserIds, $existingUserIds);
+            if (!empty($invalidLocal)) {
+                throw ValidationException::withMessages([
+                    'assigned_to' => 'One or more selected users are not valid.',
+                ]);
+            }
+        }
 
         if (! empty($validated['start_date']) && ! empty($validated['end_date'])) {
             if (Carbon::parse($validated['end_date'])->lt(Carbon::parse($validated['start_date']))) {
@@ -1224,29 +1594,59 @@ class TaskController extends Controller
         }
 
         // Validate that all assignees are members of the project
-        $projectMemberIds = collect(app(ProjectController::class)
+        $allMemberIds = collect(app(ProjectController::class)
             ->getMembers($project)
             ->getData())
             ->pluck('id')
-            ->map(fn ($id) => (int) $id)
             ->toArray();
 
-        $invalidAssignees = array_diff(
-            array_map('intval', $validated['assigned_to']),
-            $projectMemberIds
-        );
+        // Extract local member IDs - handle both plain IDs and composite "orgId:userId" IDs
+        $projectMemberIds = [];
+        foreach ($allMemberIds as $mid) {
+            if (str_contains((string) $mid, ':')) {
+                [, $userId] = explode(':', (string) $mid, 2);
+                $projectMemberIds[] = (int) $userId;
+            } else {
+                $projectMemberIds[] = (int) $mid;
+            }
+        }
 
-        if (! empty($invalidAssignees)) {
-            throw ValidationException::withMessages([
-                'assigned_to' => 'One or more selected users are not members of this project. Please select only project members.',
-            ]);
+        $allowedAssigneeKeys = collect($allMemberIds)->map(fn ($mid) => (string) $mid)->toArray();
+
+        // Validate local users are project members
+        if (!empty($localUserIds)) {
+            $invalidLocalAssignees = array_diff($localUserIds, $projectMemberIds);
+            if (!empty($invalidLocalAssignees)) {
+                throw ValidationException::withMessages([
+                    'assigned_to' => 'One or more selected users are not members of this project. Please select only project members.',
+                ]);
+            }
+        }
+
+        // Validate cross-org users are project members (from shared_project_members / merged members)
+        if (!empty($crossOrgAssignments)) {
+            foreach ($crossOrgAssignments as $cross) {
+                $compositeKey = $cross['org_id'] . ':' . $cross['external_id'];
+                if (!in_array($compositeKey, $allowedAssigneeKeys, true)) {
+                    throw ValidationException::withMessages([
+                        'assigned_to' => 'One or more selected users are not members of this project. Please select only project members.',
+                    ]);
+                }
+            }
         }
 
         if (! empty($validated['followers'])) {
-            $invalidFollowers = array_diff(
-                array_map('intval', $validated['followers']),
-                $projectMemberIds
-            );
+            $invalidFollowers = [];
+            foreach ($validated['followers'] as $follower) {
+                $followerKey = (string) $follower;
+                if (str_contains($followerKey, ':')) {
+                    if (!in_array($followerKey, $allowedAssigneeKeys, true)) {
+                        $invalidFollowers[] = $follower;
+                    }
+                } elseif (!in_array((int) $follower, $projectMemberIds, true)) {
+                    $invalidFollowers[] = $follower;
+                }
+            }
             if (! empty($invalidFollowers)) {
                 throw ValidationException::withMessages([
                     'followers' => 'One or more selected followers are not members of this project.',
@@ -1256,10 +1656,19 @@ class TaskController extends Controller
 
         if (! empty($validated['deliverables'])) {
             foreach ($validated['deliverables'] as $index => $del) {
-                if (! empty($del['assigned_to']) && ! in_array((int) $del['assigned_to'], $projectMemberIds)) {
-                    throw ValidationException::withMessages([
-                        "deliverables.{$index}.assigned_to" => 'Deliverable assignee must be a member of this project.',
-                    ]);
+                if (! empty($del['assigned_to'])) {
+                    $delAssignee = (string) $del['assigned_to'];
+                    if (str_contains($delAssignee, ':')) {
+                        if (!in_array($delAssignee, $allowedAssigneeKeys, true)) {
+                            throw ValidationException::withMessages([
+                                "deliverables.{$index}.assigned_to" => 'Deliverable assignee must be a member of this project.',
+                            ]);
+                        }
+                    } elseif (!in_array((int) $delAssignee, $projectMemberIds, true)) {
+                        throw ValidationException::withMessages([
+                            "deliverables.{$index}.assigned_to" => 'Deliverable assignee must be a member of this project.',
+                        ]);
+                    }
                 }
             }
         }
@@ -1386,6 +1795,43 @@ class TaskController extends Controller
             $createdTasks[] = $task;
         }
 
+        // Create tasks for cross-org users
+        foreach ($crossOrgAssignments as $cross) {
+            $task = $project->tasks()->create([
+                'title' => $validated['title'],
+                'description' => $validated['description'] ?? null,
+                'requirements' => $validated['requirements'] ?? null,
+                'start_date' => $validated['start_date'] ?? now()->toDateTimeString(),
+                'end_date' => $validated['end_date'] ?? null,
+                'assigned_to' => null,
+                'assigned_to_org_id' => $cross['org_id'],
+                'assigned_to_external_id' => $cross['external_id'],
+                'assigned_by' => $user->id,
+                'creator_id' => $user->id,
+                'updated_by' => $user->id,
+                'priority' => $validated['priority'],
+                'status' => 'pending',
+                'task_type' => $validated['task_type'] ?? 'standard',
+                'recurrence_settings' => $validated['recurrence_settings'] ?? null,
+                'recurrence_start_date' => $validated['recurrence_start_date'] ?? $validated['start_date'] ?? null,
+                'recurrence_end_date' => $validated['recurrence_end_date'] ?? $validated['end_date'] ?? null,
+                'allow_transfer' => $validated['allow_transfer'] ?? true,
+                'kb_ids' => $validated['kb_ids'] ?? null,
+                'event_ids' => $validated['event_ids'] ?? null,
+            ]);
+
+            $workflowRecords[] = [
+                'task_id' => $task->id,
+                'user_id' => $user->id,
+                'action' => 'created',
+                'comment' => 'Assigned to external user (Org #' . $cross['org_id'] . ', User #' . $cross['external_id'] . ')',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
+
+            $createdTasks[] = $task;
+        }
+
         if (! empty($workflowRecords)) {
             DB::table('task_workflow_events')->insert($workflowRecords);
         }
@@ -1478,6 +1924,13 @@ class TaskController extends Controller
         } catch (\Throwable $e) {
             \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
         }
+
+        $this->logMasterActivity(
+            'task_created',
+            "{$taskCount} task(s) created in project '{$project->title}'",
+            'success',
+            ['task_count' => $taskCount, 'project_id' => $project->id, 'project_name' => $project->title]
+        );
 
         $firstTask = $createdTasks[0]->load('assignees:id,name,email,role');
 
@@ -1825,6 +2278,13 @@ class TaskController extends Controller
         } catch (\Throwable $e) {
             \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
         }
+
+        $this->logMasterActivity(
+            'task_created',
+            "{$taskCount} standalone task(s) created",
+            'success',
+            ['task_count' => $taskCount]
+        );
 
         $firstTask = $createdTasks[0]->load('assignees:id,name,email,role');
 
@@ -2364,6 +2824,25 @@ class TaskController extends Controller
 
         $task->fresh()->load('deliverableTemplates');
 
+        $this->activityService->log(
+            user: $user,
+            action: 'task_recurrence_updated',
+            relatedModule: 'task',
+            relatedId: $task->id,
+            entityName: $task->title,
+            description: "Recurring settings updated for task: {$task->title}" . ($regeneratedCount > 0 ? ". {$regeneratedCount} deliverable(s) regenerated." : ''),
+            metadata: ['regenerated_count' => $regeneratedCount]
+        );
+
+        $this->auditService->log(
+            user: $user,
+            module: 'Task Management',
+            action: 'Recurring Settings Updated',
+            entityType: 'Task',
+            entityId: $task->id,
+            description: "Recurrence updated for task #{$task->business_id}" . ($regeneratedCount > 0 ? ", {$regeneratedCount} deliverables regenerated" : '')
+        );
+
         return response()->json([
             'success' => true,
             'message' => $regeneratedCount > 0
@@ -2434,6 +2913,32 @@ class TaskController extends Controller
                 ]);
             });
 
+            $this->activityService->log(
+                user: $user,
+                action: 'task_recurrence_deleted',
+                relatedModule: 'task',
+                relatedId: $task->id,
+                entityName: $task->title,
+                description: "Recurring schedule deleted for task: {$task->title}. {$deletedCount} future deliverable(s) removed.",
+                metadata: ['deleted_deliverables' => $deletedCount]
+            );
+
+            $this->auditService->log(
+                user: $user,
+                module: 'Task Management',
+                action: 'Recurring Schedule Deleted',
+                entityType: 'Task',
+                entityId: $task->id,
+                description: "Recurrence cancelled for task #{$task->business_id}, {$deletedCount} deliverables removed"
+            );
+
+            $this->logMasterActivity(
+                'task_recurrence_deleted',
+                "Recurrence cancelled for Task #{$task->business_id}",
+                'success',
+                ['task_id' => $task->id, 'deleted_deliverables' => $deletedCount]
+            );
+
             return response()->json([
                 'success' => true,
                 'message' => 'Recurring schedule deleted successfully. Future uncompleted deliverables removed.',
@@ -2499,6 +3004,34 @@ class TaskController extends Controller
             'action' => 'status_updated',
             'details' => json_encode(['old' => $oldStatus, 'new' => $newStatus]),
         ]);
+
+        $this->activityService->log(
+            user: $user,
+            action: 'task_status_changed',
+            relatedModule: 'task',
+            relatedId: $task->id,
+            entityName: $task->title,
+            description: "Task status changed from {$oldStatus} to {$newStatus}",
+            metadata: ['old_status' => $oldStatus, 'new_status' => $newStatus]
+        );
+
+        $this->auditService->log(
+            user: $user,
+            module: 'Task Management',
+            action: 'Task Status Changed',
+            entityType: 'Task',
+            entityId: $task->id,
+            description: "Status changed from {$oldStatus} to {$newStatus}",
+            oldValues: ['status' => $oldStatus],
+            newValues: ['status' => $newStatus]
+        );
+
+        $this->logMasterActivity(
+            'task_status_changed',
+            "Task #{$task->business_id}: {$oldStatus} → {$newStatus}",
+            'success',
+            ['task_id' => $task->id, 'old_status' => $oldStatus, 'new_status' => $newStatus]
+        );
 
         return response()->json([
             'success' => true,
@@ -2926,6 +3459,13 @@ class TaskController extends Controller
             } catch (\Throwable $e) {
                 Log::warning('Audit log warning during acknowledge: ' . $e->getMessage());
             }
+
+            $this->logMasterActivity(
+                'task_acknowledged',
+                "Task '#{$task->business_id}' acknowledged: {$task->title}",
+                'success',
+                ['task_id' => $task->id, 'task_name' => $task->title]
+            );
 
             try {
                 $task->load('project:id,title');
@@ -3958,6 +4498,13 @@ class TaskController extends Controller
             \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
         }
 
+        $this->logMasterActivity(
+            $isResubmit ? 'task_resubmitted' : 'task_submitted',
+            "Task '#{$task->business_id}' " . ($isResubmit ? 'resubmitted' : 'submitted') . ": {$task->title}",
+            'success',
+            ['task_id' => $task->id, 'task_name' => $task->title]
+        );
+
         $responseMessage = 'Task submitted successfully';
         if ($fileSkipped || $filesSkipped) {
             $responseMessage = $this->buildFileSkippedMessage('task');
@@ -4043,6 +4590,25 @@ class TaskController extends Controller
                 'Task Submitted',
                 $user->name.' submitted task '.$updatedTask->business_id.' to you.',
                 '/tasks/task-details/'.$updatedTask->id.'?from=taskby'
+            );
+
+            $this->activityService->log(
+                user: $user,
+                action: 'task_submitted_to_next',
+                relatedModule: 'task',
+                relatedId: $updatedTask->id,
+                entityName: $updatedTask->title,
+                description: "Task submitted to " . ($nextUser?->name ?? 'next reviewer') . " by {$user->name}",
+                metadata: ['next_reviewer_id' => $nextUserId, 'next_reviewer_name' => $nextUser?->name]
+            );
+
+            $this->auditService->log(
+                user: $user,
+                module: 'Task Management',
+                action: 'Task Submitted to Next',
+                entityType: 'Task',
+                entityId: $updatedTask->id,
+                description: "Task #{$updatedTask->business_id} forwarded to " . ($nextUser?->name ?? 'next reviewer')
             );
 
             return response()->json([
@@ -4147,6 +4713,25 @@ class TaskController extends Controller
             'action' => 'resubmitted',
             'comment' => 'Edited submission notes/attachments',
         ]);
+
+        $this->activityService->log(
+            user: $user,
+            action: 'task_submission_edited',
+            relatedModule: 'task',
+            relatedId: $task->id,
+            entityName: $task->title,
+            description: "Submission edited for task: {$task->title}",
+            metadata: ['submission_id' => $submission->id]
+        );
+
+        $this->auditService->log(
+            user: $user,
+            module: 'Task Management',
+            action: 'Submission Edited',
+            entityType: 'TaskSubmission',
+            entityId: $submission->id,
+            description: "Submission edited for task #{$task->business_id}"
+        );
 
         return response()->json([
             'success' => true,
@@ -4338,6 +4923,13 @@ class TaskController extends Controller
             \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
         }
 
+        $this->logMasterActivity(
+            'task_approved',
+            "Task '#{$task->business_id}' approved: {$task->title}",
+            'success',
+            ['task_id' => $task->id, 'task_name' => $task->title]
+        );
+
         return response()->json([
             'success' => true,
             'message' => 'Task approved successfully',
@@ -4450,6 +5042,13 @@ class TaskController extends Controller
         } catch (\Throwable $e) {
             \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
         }
+
+        $this->logMasterActivity(
+            'task_rejected',
+            "Task '#{$task->business_id}' rejected: {$task->title}",
+            'success',
+            ['task_id' => $task->id, 'task_name' => $task->title]
+        );
 
         return response()->json([
             'success' => true,
@@ -4862,6 +5461,13 @@ class TaskController extends Controller
             } catch (\Throwable $e) {
                 Log::error('Failed to log audit', ['error' => $e->getMessage()]);
             }
+
+            $this->logMasterActivity(
+                'task_deleted',
+                "Task '#{$task->business_id}' deleted: {$task->title}",
+                'success',
+                ['task_id' => $task->id, 'task_name' => $task->title]
+            );
 
             return response()->json(['success' => true, 'message' => 'Task deleted successfully']);
         } catch (\Throwable $e) {
@@ -5369,6 +5975,32 @@ class TaskController extends Controller
 
         $credential->assignedUsers()->sync($request->assigned_user_ids);
 
+        $this->activityService->log(
+            user: $request->user(),
+            action: 'task_credential_added',
+            relatedModule: 'task',
+            relatedId: $task->id,
+            entityName: $credential->website_name ?? 'Access Credential',
+            description: "Access credential added to task: {$credential->website_name}",
+            metadata: ['credential_id' => $credential->id, 'website_name' => $credential->website_name]
+        );
+
+        $this->auditService->log(
+            user: $request->user(),
+            module: 'Task Management',
+            action: 'Access Credential Added',
+            entityType: 'TaskAccessCredential',
+            entityId: $credential->id,
+            description: "Credential '{$credential->website_name}' created for task #{$task->business_id}"
+        );
+
+        $this->logMasterActivity(
+            'task_credential_added',
+            "Credential added to Task #{$task->business_id}: {$credential->website_name}",
+            'success',
+            ['task_id' => $task->id, 'credential_id' => $credential->id]
+        );
+
         return response()->json([
             'success' => true,
             'message' => 'Access credential created successfully',
@@ -5411,6 +6043,32 @@ class TaskController extends Controller
 
         $credential->assignedUsers()->sync($request->assigned_user_ids);
 
+        $this->activityService->log(
+            user: $request->user(),
+            action: 'task_credential_updated',
+            relatedModule: 'task',
+            relatedId: $task->id,
+            entityName: $credential->website_name ?? 'Access Credential',
+            description: "Access credential updated on task: {$credential->website_name}",
+            metadata: ['credential_id' => $credential->id, 'website_name' => $credential->website_name]
+        );
+
+        $this->auditService->log(
+            user: $request->user(),
+            module: 'Task Management',
+            action: 'Access Credential Updated',
+            entityType: 'TaskAccessCredential',
+            entityId: $credential->id,
+            description: "Credential '{$credential->website_name}' updated on task #{$task->business_id}"
+        );
+
+        $this->logMasterActivity(
+            'task_credential_updated',
+            "Credential updated on Task #{$task->business_id}: {$credential->website_name}",
+            'success',
+            ['task_id' => $task->id, 'credential_id' => $credential->id]
+        );
+
         return response()->json([
             'success' => true,
             'message' => 'Access credential updated successfully',
@@ -5435,7 +6093,34 @@ class TaskController extends Controller
             return response()->json(['success' => false, 'message' => 'Credential does not belong to this task'], 404);
         }
 
+        $credentialName = $credential->website_name ?? 'Access Credential';
         $credential->delete();
+
+        $this->activityService->log(
+            user: request()->user(),
+            action: 'task_credential_deleted',
+            relatedModule: 'task',
+            relatedId: $task->id,
+            entityName: $credentialName,
+            description: "Access credential deleted from task: {$credentialName}",
+            metadata: ['credential_id' => $credential->id, 'website_name' => $credentialName]
+        );
+
+        $this->auditService->log(
+            user: request()->user(),
+            module: 'Task Management',
+            action: 'Access Credential Deleted',
+            entityType: 'TaskAccessCredential',
+            entityId: $credential->id,
+            description: "Credential '{$credentialName}' deleted from task #{$task->business_id}"
+        );
+
+        $this->logMasterActivity(
+            'task_credential_deleted',
+            "Credential deleted from Task #{$task->business_id}: {$credentialName}",
+            'success',
+            ['task_id' => $task->id, 'credential_id' => $credential->id]
+        );
 
         return response()->json([
             'success' => true,
@@ -5555,6 +6240,8 @@ class TaskController extends Controller
 
         $tasksQuery = $this->applyQueryFiltersSortingPagination($request, $tasksQuery);
         $tasks = $tasksQuery->get();
+
+        $this->resolveCrossOrgAssignees($tasks);
 
         // ── Bulk load deliverable counts ──
         $taskIds = $tasks->pluck('id');
@@ -5699,7 +6386,64 @@ class TaskController extends Controller
         $deliverables = $delivQuery->get();
         $deliverables->transform(fn ($d) => $this->formatDeliverableAsListItem($d, $user));
 
-        $allItems = $tasks->concat($deliverables)->sortByDesc('created_at')->values();
+        // ── Include shared tasks from collaborate-shared projects ──
+        // Admin/Manager/SuperAdmin see all shared tasks; others see only tasks assigned to or by them
+        $showAllShared = in_array($role, ['admin', 'manager', 'super_admin']);
+        $sharedTasks = $this->getCollaborateSharedTasks($user, allUsers: $showAllShared);
+        if (!$showAllShared) {
+            $sharedTasks = $sharedTasks->filter(fn($t) => $this->isAssignedToUser($t, $user) || $this->isAssignedByUser($t, $user));
+        }
+        // Always filter out self-tasks from shared tasks. A self-task is private to its
+        // creator and must NEVER appear in any external org's views, even All Tasks.
+        $sharedTasks = $sharedTasks->filter(function ($t) {
+            $assigner = $t->assigner ?? null;
+            $assignees = $t->assignees ?? [];
+            if (!$assigner) return true;
+            $assignerEmail = strtolower($assigner->email ?? '');
+            if (empty($assignerEmail)) return true;
+            foreach ($assignees as $a) {
+                if (strtolower($a->email ?? '') === $assignerEmail) return false;
+            }
+            return true;
+        });
+        // Add delegation flags for shared tasks (same as regular tasks)
+        $sharedTasks = $sharedTasks->map(function ($task) use ($user) {
+            $isTransferor = false;
+            $chain = $task->delegation_chain ?? [];
+            foreach ($chain as $entry) {
+                if ((int) ($entry['delegated_by'] ?? 0) === (int) $user->id && ($entry['status'] ?? '') === 'accepted') {
+                    $isTransferor = true;
+                    break;
+                }
+            }
+            $task->is_transferor = $isTransferor;
+            $task->transferor_return_to_self = true;
+            $task->transferor_has_approved = false;
+            foreach ($chain as $entry) {
+                if ((int) ($entry['delegated_by'] ?? 0) === (int) $user->id && ($entry['status'] ?? '') === 'accepted') {
+                    $task->transferor_return_to_self = $entry['return_to_transferor'] ?? true;
+                    break;
+                }
+            }
+            $approvalChain = $task->approval_chain ?? [];
+            foreach ($approvalChain as $aEntry) {
+                if ((int) ($aEntry['approver_id'] ?? 0) === (int) $user->id && ($aEntry['status'] ?? '') === 'approved') {
+                    $task->transferor_has_approved = true;
+                    break;
+                }
+            }
+            $task->current_owner_id = $task->current_owner ?? null;
+            $task->current_owner_name = $task->currentOwner->name ?? null;
+            $task->transferred_by_name = null;
+            foreach ($chain as $entry) {
+                if ((int) ($entry['delegated_to'] ?? 0) === (int) $user->id && ($entry['status'] ?? '') === 'accepted') {
+                    $task->transferred_by_name = $entry['delegated_by_name'] ?? null;
+                }
+            }
+            return $task;
+        });
+
+        $allItems = $tasks->concat($deliverables)->concat($sharedTasks)->sortByDesc('created_at')->values();
 
         return response()->json([
             'data' => $allItems,
@@ -7076,6 +7820,22 @@ class TaskController extends Controller
         ]);
     }
 
+    private function logMasterActivity(string $action, string $target, string $status = 'success', ?array $details = null): void
+    {
+        try {
+            MasterActivityLog::create([
+                'user' => request()->user()?->name ?? 'system',
+                'action' => $action,
+                'target' => $target,
+                'ip' => request()->ip(),
+                'status' => $status,
+                'details' => $details,
+            ]);
+        } catch (\Exception $e) {
+            Log::warning("Master activity log failed (non-critical): " . $e->getMessage());
+        }
+    }
+
     private function taskPayloadFor(Task $task, User $viewer): array
     {
         $task->loadMissing([
@@ -7226,5 +7986,477 @@ class TaskController extends Controller
             'message' => 'Personal note deleted.',
             'notes' => $notes,
         ]);
+    }
+
+    /**
+     * Fetch tasks from projects shared with the current user's org via collaborate permission.
+     * Uses cross-tenant DB connection to load actual task data from the sender's DB.
+     */
+    private function getCollaborateSharedTasks(User $user, bool $allUsers = false): \Illuminate\Support\Collection
+    {
+        $currentOrg = request()->attributes->get('currentOrganization');
+        if (!$currentOrg) {
+            $currentOrg = app('currentOrganization');
+        }
+        if (!$currentOrg) return collect();
+
+        $activeShared = SharedResource::where('shared_with_organization_id', $currentOrg->id)
+            ->where('status', 'active')
+            ->where(function ($q) {
+                $q->whereNull('expires_at')
+                  ->orWhere('expires_at', '>', now());
+            })
+            ->get();
+
+        $sharedProjects = $sharedTasks = collect();
+        $sharedProjects = $activeShared->where('resource_type', 'project');
+        $sharedTasks = $activeShared->where('resource_type', 'task');
+
+        if ($activeShared->isEmpty()) {
+            return collect();
+        }
+
+        $masterConfig = config("database.connections." . config('tenancy.master_connection', 'mysql_master'));
+        $allTasks = collect();
+        $connCache = [];
+
+        $getSharerConn = function ($sharerOrgId) use (&$connCache, $masterConfig) {
+            if (isset($connCache[$sharerOrgId])) {
+                return $connCache[$sharerOrgId];
+            }
+            $sharerOrg = \App\Models\Master\Organization::on('mysql_master')->find($sharerOrgId);
+            if (!$sharerOrg || !$sharerOrg->database_name) return null;
+
+            $connName = 'shared_tasks_' . $sharerOrg->id . '_' . uniqid();
+            config()->set("database.connections.{$connName}", [
+                'driver'    => 'mysql',
+                'host'      => $sharerOrg->database_host ?? $masterConfig['host'] ?? '127.0.0.1',
+                'port'      => $sharerOrg->database_port ?? $masterConfig['port'] ?? 3306,
+                'database'  => $sharerOrg->database_name,
+                'username'  => $sharerOrg->database_username ?? $masterConfig['username'] ?? 'root',
+                'password'  => $sharerOrg->database_password ?? $masterConfig['password'] ?? '',
+                'charset'   => 'utf8mb4',
+                'collation' => 'utf8mb4_unicode_ci',
+                'prefix'    => '',
+                'prefix_indexes' => false,
+                'strict'    => true,
+                'engine'    => null,
+            ]);
+            DB::purge($connName);
+            $conn = DB::connection($connName);
+            if (!$conn->getSchemaBuilder()->hasTable('tasks')) return null;
+            $connCache[$sharerOrgId] = ['conn' => $conn, 'org' => $sharerOrg, 'name' => $connName];
+            return $connCache[$sharerOrgId];
+        };
+
+        // Also get partner (current) org connection for resolving cross-org users
+        $partnerOrgId = $currentOrg->id;
+        $getPartnerConn = function ($orgId) use (&$connCache, $masterConfig) {
+            $cacheKey = 'partner_' . $orgId;
+            if (isset($connCache[$cacheKey])) {
+                return $connCache[$cacheKey];
+            }
+            $org = \App\Models\Master\Organization::on('mysql_master')->find($orgId);
+            if (!$org || !$org->database_name) return null;
+
+            $connName = 'shared_partner_' . $org->id . '_' . uniqid();
+            config()->set("database.connections.{$connName}", [
+                'driver'    => 'mysql',
+                'host'      => $org->database_host ?? $masterConfig['host'] ?? '127.0.0.1',
+                'port'      => $org->database_port ?? $masterConfig['port'] ?? 3306,
+                'database'  => $org->database_name,
+                'username'  => $org->database_username ?? $masterConfig['username'] ?? 'root',
+                'password'  => $org->database_password ?? $masterConfig['password'] ?? '',
+                'charset'   => 'utf8mb4',
+                'collation' => 'utf8mb4_unicode_ci',
+                'prefix'    => '',
+                'prefix_indexes' => false,
+                'strict'    => true,
+                'engine'    => null,
+            ]);
+            DB::purge($connName);
+            $conn = DB::connection($connName);
+            $connCache[$cacheKey] = ['conn' => $conn, 'org' => $org, 'name' => $connName];
+            return $connCache[$cacheKey];
+        };
+
+        $buildTaskObj = function ($tRow, $conn, $share, $allUsers, $user) use ($masterConfig, $partnerOrgId, $getPartnerConn) {
+            $assigneeIds = [];
+            if ($conn->getSchemaBuilder()->hasTable('task_user')) {
+                $pivotRows = $conn->table('task_user')->where('task_id', $tRow->id)->get();
+                $assigneeIds = $pivotRows->pluck('user_id')->toArray();
+            }
+            if ($tRow->assigned_to && !in_array($tRow->assigned_to, $assigneeIds)) {
+                $assigneeIds[] = $tRow->assigned_to;
+            }
+            $assignees = collect();
+            $resolvedAssigneeIds = [];
+            if (!empty($assigneeIds)) {
+                $userRows = $conn->table('users')->whereIn('id', $assigneeIds)->get();
+                foreach ($userRows as $uRow) {
+                    $assignees->push((object)[
+                        'id' => $uRow->id, 'name' => $uRow->name,
+                        'email' => $uRow->email, 'role' => $uRow->role ?? null,
+                        'avatar' => $uRow->avatar ?? null,
+                    ]);
+                    $resolvedAssigneeIds[] = $uRow->id;
+                }
+            }
+
+            // Resolve cross-org assignee if task has external assignment and no local assignees found
+            if (!empty($tRow->assigned_to_org_id) && !empty($tRow->assigned_to_external_id) && $assignees->isEmpty()) {
+                try {
+                    $extOrg = \App\Models\Master\Organization::on('mysql_master')->find($tRow->assigned_to_org_id);
+                    if ($extOrg && !empty($extOrg->database_name)) {
+                        $xconnName = 'xorg_shared_' . $extOrg->id . '_' . uniqid();
+                        config()->set("database.connections.{$xconnName}", [
+                            'driver'    => 'mysql',
+                            'host'      => $masterConfig['host'],
+                            'port'      => $masterConfig['port'],
+                            'database'  => $extOrg->database_name,
+                            'username'  => $masterConfig['username'],
+                            'password'  => $masterConfig['password'] ?? '',
+                            'charset'   => 'utf8mb4',
+                            'collation' => 'utf8mb4_unicode_ci',
+                        ]);
+                        DB::purge($xconnName);
+                        $xconn = DB::connection($xconnName);
+                        $extUser = $xconn->table('users')->where('id', $tRow->assigned_to_external_id)
+                            ->select('id', 'name', 'email', 'role')->first();
+                        if ($extUser) {
+                            $assignees->push((object)[
+                                'id' => (int) $extUser->id,
+                                'name' => $extUser->name,
+                                'email' => $extUser->email,
+                                'role' => $extUser->role,
+                                'org_name' => $extOrg->name,
+                                'is_external' => true,
+                            ]);
+                        }
+                        DB::purge($xconnName);
+                    }
+                } catch (\Throwable $e) {
+                    \Log::warning("getCollaborateSharedTasks: cross-org assignee resolve failed: " . $e->getMessage());
+                }
+            }
+
+            // Resolve assignees from partner (current) org if not found in sharer's DB
+            $unresolvedIds = array_diff($assigneeIds, $resolvedAssigneeIds);
+            if (!empty($unresolvedIds)) {
+                $partnerCache = $getPartnerConn($partnerOrgId);
+                if ($partnerCache) {
+                    try {
+                        $partnerRows = $partnerCache['conn']->table('users')
+                            ->whereIn('id', $unresolvedIds)
+                            ->select('id', 'name', 'email', 'role', 'avatar')
+                            ->get();
+                        foreach ($partnerRows as $pRow) {
+                            $assignees->push((object)[
+                                'id' => $pRow->id, 'name' => $pRow->name,
+                                'email' => $pRow->email, 'role' => $pRow->role ?? null,
+                                'avatar' => $pRow->avatar ?? null,
+                            ]);
+                        }
+                    } catch (\Throwable $e) {
+                        \Log::warning("getCollaborateSharedTasks: partner org assignee resolve failed: " . $e->getMessage());
+                    }
+                }
+            }
+
+            $assigner = null;
+            if ($tRow->assigned_by) {
+                // Resolve the task creator from the SHARER'S DB only.
+                // The task was written to this DB, so this is the source of truth for
+                // who the system thinks created it. Even if the assigned_by ID was
+                // wrong due to a cross-org collision, this is consistent — the writing
+                // side fix (storeTaskForSharedProject) ensures new tasks get the
+                // correct ID going forward.
+                $assignerRow = $conn->table('users')->where('id', $tRow->assigned_by)
+                    ->select('id', 'name', 'email', 'role')->first();
+                if ($assignerRow) {
+                    $assigner = (object)[
+                        'id' => $assignerRow->id, 'name' => $assignerRow->name,
+                        'email' => $assignerRow->email, 'role' => $assignerRow->role ?? null,
+                    ];
+                }
+            }
+            if (!$allUsers) {
+                $assigneeEmails = $assignees->pluck('email')->map(fn($e) => strtolower($e))->toArray();
+                $userEmail = strtolower($user->email ?? '');
+                $isAssignedToMe = in_array($userEmail, $assigneeEmails);
+                $isAssignedByMe = $assigner && strtolower($assigner->email) === $userEmail;
+                if (!$isAssignedToMe && !$isAssignedByMe) return null;
+            }
+
+            // Self-task filter: Exclude tasks where the assigner is also an assignee.
+            // A self-task (created_by = assigned_to) is private to its creator and must
+            // NEVER be exposed to external organizations, even when the parent project
+            // is shared. This check uses resolved emails (not raw IDs) to correctly
+            // identify self-tasks across different tenant databases.
+            if ($assigner) {
+                $assignerEmail = strtolower($assigner->email ?? '');
+                $assigneeEmails = $assignees->pluck('email')->map(fn($e) => strtolower($e))->toArray();
+                if (!empty($assignerEmail) && in_array($assignerEmail, $assigneeEmails)) {
+                    return null;
+                }
+            }
+
+            $projectTitle = $share->resource_name ?? 'Shared Project';
+            if ($share->resource_type === 'task' && $tRow->project_id) {
+                $projRow = $conn->table('projects')->where('id', $tRow->project_id)->first();
+                $projectTitle = $projRow ? $projRow->title : $projectTitle;
+            }
+
+            // Determine the correct project ID for navigation.
+            // Use composite key shared_{sharerOrgId}_{resourceId} which is globally unique
+            // across tenant DBs (SharedResource PKs are NOT unique across DBs).
+            $projectId = $tRow->project_id;
+            $isProjectShared = false;
+            if ($share->resource_type === 'project') {
+                $projectId = 'shared_' . $share->shared_by_organization_id . '_' . $share->resource_id;
+                $isProjectShared = true;
+            } elseif ($tRow->project_id) {
+                // Check if the task's project is also shared with the current org
+                $projectShare = \App\Models\SharedResource::where('shared_with_organization_id', $partnerOrgId)
+                    ->where('resource_type', 'project')
+                    ->where('resource_id', $tRow->project_id)
+                    ->where('status', 'active')
+                    ->first();
+                if ($projectShare) {
+                    $projectId = 'shared_' . $projectShare->shared_by_organization_id . '_' . $projectShare->resource_id;
+                    $isProjectShared = true;
+                }
+            }
+
+            return (object) [
+                'id' => 'shared_' . $tRow->id,
+                'title' => $tRow->title,
+                'description' => $tRow->description ?? null,
+                'status' => $tRow->status ?? 'pending',
+                'priority' => $tRow->priority ?? 'Medium',
+                'start_date' => $tRow->start_date ?? null,
+                'end_date' => $tRow->end_date ?? null,
+                'assigned_to' => $tRow->assigned_to,
+                'assigned_by' => $tRow->assigned_by,
+                'creator_id' => $tRow->creator_id ?? null,
+                'project_id' => $tRow->project_id,
+                'created_at' => $tRow->created_at ?? null,
+                'updated_at' => $tRow->updated_at ?? null,
+                'business_id' => $tRow->business_id ?? null,
+                'task_number' => $tRow->task_number ?? null,
+                'item_type' => 'task',
+                'is_shared' => true,
+                'shared_permission' => $share->permission,
+                'shared_resource_id' => $share->id,
+                'assignees' => $assignees->values()->all(),
+                'assigner' => $assigner,
+                'project' => [
+                    'id' => $projectId,
+                    'title' => $projectTitle,
+                    'is_shared' => $isProjectShared,
+                ],
+            ];
+        };
+
+        foreach ($sharedProjects as $projectShare) {
+            $cache = $getSharerConn($projectShare->shared_by_organization_id);
+            if (!$cache) continue;
+            ['conn' => $conn, 'name' => $connName] = $cache;
+
+            try {
+                // Exclude self-tasks (assigned_by = assigned_to) from shared project results.
+                // Self-tasks are private to their creator and must never be exposed to
+                // external organizations, even when the parent project is shared.
+                $taskRows = $conn->table('tasks')
+                    ->where('project_id', $projectShare->resource_id)
+                    ->where(function ($q) {
+                        $q->whereColumn('assigned_by', '!=', 'assigned_to')
+                          ->orWhereNull('assigned_to');
+                    })
+                    ->orderBy('sort_order')
+                    ->orderBy('created_at', 'desc')
+                    ->get();
+                foreach ($taskRows as $tRow) {
+                    $taskObj = $buildTaskObj($tRow, $conn, $projectShare, $allUsers, $user);
+                    if ($taskObj) $allTasks->push($taskObj);
+                }
+            } catch (\Throwable $e) {
+                \Log::warning("getCollaborateSharedTasks error for project #{$projectShare->resource_id}: " . $e->getMessage());
+            }
+        }
+
+        foreach ($sharedTasks as $taskShare) {
+            $cache = $getSharerConn($taskShare->shared_by_organization_id);
+            if (!$cache) continue;
+            ['conn' => $conn, 'name' => $connName] = $cache;
+
+            try {
+                $tRow = $conn->table('tasks')->where('id', $taskShare->resource_id)->first();
+                if ($tRow) {
+                    // Exclude self-tasks from individually shared tasks as well
+                    if ($tRow->assigned_to && $tRow->assigned_by && (int)$tRow->assigned_to === (int)$tRow->assigned_by) {
+                        continue;
+                    }
+                    $taskObj = $buildTaskObj($tRow, $conn, $taskShare, $allUsers, $user);
+                    if ($taskObj) $allTasks->push($taskObj);
+                }
+            } catch (\Throwable $e) {
+                \Log::warning("getCollaborateSharedTasks error for task #{$taskShare->resource_id}: " . $e->getMessage());
+            }
+        }
+
+        foreach ($connCache as $cache) {
+            DB::purge($cache['name']);
+        }
+
+        // Deduplicate by original task ID. A task can appear via both a shared project
+        // (which fetches all tasks in the project) and an individual task share, or via
+        // duplicate SharedResource mirror records. The shared_ prefix is stripped for
+        // comparison since the same org-level task ID is unique within the sharer's DB.
+        $allTasks = $allTasks->unique(function ($task) {
+            return (int) str_replace('shared_', '', $task->id);
+        })->values();
+
+        return $allTasks;
+    }
+
+    /**
+     * Check if a shared task object is assigned to the given user.
+     * Uses email match only — ID comparison is unsafe for cross-org tasks
+     * because IDs from different orgs can collide (e.g. both users have id=1).
+     */
+    private function isAssignedToUser(object $task, User $user): bool
+    {
+        $userEmail = strtolower($user->email ?? '');
+        if (empty($userEmail)) return false;
+
+        // Email-based matching via resolved assignees (primary and only method).
+        // ID-based matching is intentionally NOT used here because user IDs are NOT
+        // globally unique across tenant databases. A task assigned to user ID 1 in
+        // Org A can falsely match user ID 1 in Org B even though they are different
+        // people. Email is the only reliable cross-org identifier.
+        $assignees = $task->assignees ?? [];
+        foreach ($assignees as $a) {
+            if (strtolower($a->email ?? '') === $userEmail) return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if a shared task object was assigned by the given user.
+     * Uses email match only — ID comparison is unsafe for cross-org tasks
+     * because IDs from different orgs can collide (e.g. both users have id=1).
+     */
+    private function isAssignedByUser(object $task, User $user): bool
+    {
+        $userEmail = strtolower($user->email ?? '');
+        if (empty($userEmail)) return false;
+
+        // Email-based matching via resolved assigner (primary and only method).
+        // ID-based matching is intentionally NOT used here because user IDs are NOT
+        // globally unique across tenant databases. A task created by user ID 1 in
+        // Org A can falsely match user ID 1 in Org B even though they are different
+        // people. Email is the only reliable cross-org identifier.
+        $assigner = $task->assigner ?? null;
+        if ($assigner && strtolower($assigner->email ?? '') === $userEmail) return true;
+
+        return false;
+    }
+
+    /**
+     * Resolve cross-org assignee info for tasks that have assigned_to_org_id + assigned_to_external_id.
+     * Populates the `assignees` collection so list views show the external user's name.
+     *
+     * @param  \Illuminate\Support\Collection|array  $tasks  Tasks to resolve (each must have assignees, assigned_to_org_id, assigned_to_external_id).
+     * @return \Illuminate\Support\Collection  The same collection with assignees populated.
+     */
+    private function resolveCrossOrgAssignees($tasks)
+    {
+        if ($tasks->isEmpty()) return $tasks;
+
+        $needsResolution = $tasks->filter(function ($task) {
+            $hasExternal = !empty($task->assigned_to_org_id) && !empty($task->assigned_to_external_id);
+            if (!$hasExternal) return false;
+            $assignees = $task->assignees ?? collect();
+            if ($assignees instanceof \Illuminate\Support\Collection) {
+                return $assignees->isEmpty();
+            }
+            return empty($assignees);
+        });
+
+        if ($needsResolution->isEmpty()) return $tasks;
+
+        $byOrg = $needsResolution->groupBy('assigned_to_org_id');
+        $masterConfig = config("database.connections." . config('tenancy.master_connection', 'mysql_master'));
+
+        foreach ($byOrg as $orgId => $orgTasks) {
+            $orgId = (int) $orgId;
+            try {
+                $org = \App\Models\Master\Organization::on('mysql_master')->find($orgId);
+                if (!$org || empty($org->database_name)) continue;
+
+                $userIds = $orgTasks->pluck('assigned_to_external_id')->filter()->unique()->values()->all();
+                if (empty($userIds)) continue;
+
+                $connName = 'xorg_resolve_' . $orgId . '_' . uniqid();
+                config()->set("database.connections.{$connName}", [
+                    'driver'    => 'mysql',
+                    'host'      => $masterConfig['host'],
+                    'port'      => $masterConfig['port'],
+                    'database'  => $org->database_name,
+                    'username'  => $masterConfig['username'],
+                    'password'  => $masterConfig['password'] ?? '',
+                    'charset'   => 'utf8mb4',
+                    'collation' => 'utf8mb4_unicode_ci',
+                ]);
+                DB::purge($connName);
+                $conn = DB::connection($connName);
+
+                $userRows = $conn->table('users')
+                    ->whereIn('id', $userIds)
+                    ->select('id', 'name', 'email', 'role')
+                    ->get();
+
+                $userMap = collect();
+                foreach ($userRows as $uRow) {
+                    $userMap->put((int) $uRow->id, (object) [
+                        'id' => (int) $uRow->id,
+                        'name' => $uRow->name,
+                        'email' => $uRow->email,
+                        'role' => $uRow->role,
+                        'org_name' => $org->name,
+                    ]);
+                }
+
+                foreach ($orgTasks as $task) {
+                    $extUserId = (int) $task->assigned_to_external_id;
+                    $extUser = $userMap->get($extUserId);
+                    if (!$extUser) continue;
+
+                    $assigneeObj = (object) [
+                        'id' => $extUser->id,
+                        'name' => $extUser->name,
+                        'email' => $extUser->email,
+                        'role' => $extUser->role,
+                        'organization_id' => $orgId,
+                        'org_name' => $extUser->org_name,
+                        'is_external' => true,
+                    ];
+
+                    if ($task->assignees instanceof \Illuminate\Support\Collection) {
+                        $task->assignees->push($assigneeObj);
+                    } else {
+                        $task->assignees = collect([$assigneeObj]);
+                    }
+                }
+            } catch (\Throwable $e) {
+                \Log::warning("resolveCrossOrgAssignees failed for org {$orgId}: " . $e->getMessage());
+            } finally {
+                try { DB::purge($connName); } catch (\Throwable $e) {}
+            }
+        }
+
+        return $tasks;
     }
 }

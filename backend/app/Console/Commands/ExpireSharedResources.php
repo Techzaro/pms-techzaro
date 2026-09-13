@@ -4,28 +4,29 @@ namespace App\Console\Commands;
 
 use App\Models\Master\Organization;
 use App\Models\SharedResource;
-use App\Services\Sharing\SharingNotificationService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Artisan command to expire shared resources that have passed their expiration date.
- * 
- * Run via scheduler: every hour or daily
+ * Artisan command to handle shared resources that have passed their view-only date.
+ *
+ * When expires_at is reached, the share remains 'active' but is effectively
+ * downgraded to 'view' permission (regardless of the original permission).
+ *
+ * Run via scheduler: every hour
  * php artisan sharing:expire-resources
  */
 class ExpireSharedResources extends Command
 {
     protected $signature = 'sharing:expire-resources';
-    protected $description = 'Mark expired shared resources as expired and notify affected organizations';
+    protected $description = 'Notify affected organizations when shared resources transition to view-only mode';
 
-    public function handle(SharingNotificationService $notificationService): int
+    public function handle(): int
     {
-        $expiredCount = 0;
-        $notifiedCount = 0;
+        $viewOnlyCount = 0;
+        $masterConfig = config("database.connections." . config('tenancy.master_connection', 'mysql_master'));
 
-        // Get all organizations with tenant databases
         $organizations = Organization::whereNotNull('database_name')
             ->where('status', 'active')
             ->get();
@@ -33,8 +34,6 @@ class ExpireSharedResources extends Command
         foreach ($organizations as $org) {
             try {
                 $dbName = $org->database_name;
-                $masterConfig = config("database.connections." . config('tenancy.master_connection', 'mysql_master'));
-
                 $connName = 'expire_check_' . $org->id;
                 config()->set("database.connections.{$connName}", [
                     'driver'    => 'mysql',
@@ -51,62 +50,48 @@ class ExpireSharedResources extends Command
                 DB::purge($connName);
                 $conn = DB::connection($connName);
 
-                // Find active resources that have expired
-                $expiredResources = $conn->table('shared_resources')
+                // Find active resources where expires_at has passed and they haven't been logged yet
+                $viewOnlyResources = $conn->table('shared_resources')
                     ->where('status', 'active')
                     ->whereNotNull('expires_at')
                     ->where('expires_at', '<=', now())
+                    ->where('permission', '!=', 'view')
                     ->get();
 
-                foreach ($expiredResources as $resource) {
-                    // Mark as expired
-                    $conn->table('shared_resources')
-                        ->where('id', $resource->id)
-                        ->update([
-                            'status' => 'expired',
-                            'updated_at' => now(),
-                        ]);
-
-                    $expiredCount++;
-
-                    // Notify the receiving organization
-                    try {
-                        $notificationService->accessExpired(
-                            orgId: $resource->shared_with_organization_id,
-                            resourceType: $resource->resource_type,
-                            resourceId: $resource->resource_id
-                        );
-                        $notifiedCount++;
-                    } catch (\Exception $e) {
-                        Log::error("Failed to notify about expired resource: " . $e->getMessage());
-                    }
-
-                    // Log activity
+                foreach ($viewOnlyResources as $resource) {
+                    // Log the transition to view-only mode
                     try {
                         $conn->table('shared_resource_activity_logs')->insert([
                             'shared_resource_id' => $resource->id,
-                            'action' => 'access_expired',
+                            'connection_id' => $resource->connection_id,
+                            'organization_id' => $org->id,
+                            'action' => 'transitioned_to_view_only',
                             'resource_type' => $resource->resource_type,
                             'resource_id' => $resource->resource_id,
-                            'details' => json_encode(['expired_at' => $resource->expires_at]),
+                            'details' => json_encode([
+                                'expires_at' => $resource->expires_at,
+                                'previous_permission' => $resource->permission,
+                                'effective_permission' => 'view',
+                            ]),
                             'acted_at' => now(),
                             'created_at' => now(),
                             'updated_at' => now(),
                         ]);
                     } catch (\Exception $e) {
-                        Log::error("Failed to log expiration activity: " . $e->getMessage());
+                        Log::error("Failed to log view-only transition: " . $e->getMessage());
                     }
+
+                    $viewOnlyCount++;
                 }
 
                 DB::purge($connName);
             } catch (\Exception $e) {
-                Log::error("Error processing org {$org->id} for expiration: " . $e->getMessage());
+                Log::error("Error processing org {$org->id} for view-only check: " . $e->getMessage());
                 DB::purge('expire_check_' . $org->id);
             }
         }
 
-        $this->info("Expired {$expiredCount} shared resources across " . $organizations->count() . " organizations.");
-        $this->info("Sent {$notifiedCount} expiration notifications.");
+        $this->info("{$viewOnlyCount} shared resources are now in view-only mode across " . $organizations->count() . " organizations.");
 
         return Command::SUCCESS;
     }

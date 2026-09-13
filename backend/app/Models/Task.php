@@ -36,6 +36,8 @@ class Task extends Model
         'end_date',
         'assigned_to',
         'assigned_by',
+        'assigned_to_org_id',
+        'assigned_to_external_id',
         'creator_id',
         'updated_by',
         'submitted_at',
@@ -95,30 +97,19 @@ class Task extends Model
 
     /**
      * Auto-generate business_id if missing (for old data without migration).
+     * NOTE: Does NOT write to DB on read anymore (was causing N+1 UPDATE queries on every list page).
+     * Missing business_ids should be backfilled via a one-time artisan command.
      */
     public function getBusinessIdAttribute($value)
     {
         if ($value) return $value;
 
+        // Generate on-the-fly without persisting (read-only accessor)
         $service = app(BusinessIdService::class);
         if ($this->project_id && $this->project && !empty($this->project->project_code) && !empty($this->project->project_number)) {
             $bizId = $service->generateTaskBusinessId($this->project);
-            $taskNumber = (int) substr(strrchr($bizId, '.'), 1);
         } else {
             $bizId = 'TASK-' . $this->id;
-            $taskNumber = $this->id;
-        }
-
-        try {
-            $this->updateQuietly([
-                'task_number' => $taskNumber,
-                'business_id' => $bizId,
-            ]);
-        } catch (\Throwable $e) {
-            Log::warning('Failed to auto-generate business_id for task', [
-                'task_id' => $this->id,
-                'error' => $e->getMessage(),
-            ]);
         }
 
         return $bizId;

@@ -55,7 +55,9 @@ class ProjectResource extends JsonResource
             'workflow_events' => $this->whenLoaded('workflowEvents'),
             'total_tasks' => $this->total_tasks ?? $this->tasks_count ?? 0,
             'completed_tasks' => $this->completed_tasks ?? 0,
-            'members_count' => $this->getMembers()->count(),
+            'members_count' => $this->when(isset($this->members_count), $this->members_count, function () {
+                return $this->getMembers()->count();
+            }),
             'progress_percent' => $this->when($this->total_tasks ?? $this->tasks_count, function () {
                 $total = $this->total_tasks ?? $this->tasks_count ?? 0;
                 if ($total === 0) return 0;

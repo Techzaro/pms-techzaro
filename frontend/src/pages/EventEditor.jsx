@@ -85,6 +85,7 @@ export default function EventEditor() {
   // Share state (for view mode)
   const [showShareModal, setShowShareModal] = useState(false);
   const [hasActiveConnections, setHasActiveConnections] = useState(false);
+  const [existingShares, setExistingShares] = useState([]);
 
   // Form Mode: 'event' vs 'announcement'
   const [formType, setFormType] = useState("event");
@@ -362,6 +363,26 @@ export default function EventEditor() {
     };
     checkConnections();
   }, [isViewMode]);
+
+  useEffect(() => {
+    if (!loadedEvent?.id) {
+      setExistingShares([]);
+      return;
+    }
+    const fetchExistingShares = async () => {
+      try {
+        const token = authToken();
+        const res = await fetch(`${API_URL}/sharing/shared-by-resource/event/${loadedEvent.id}`, {
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setExistingShares(Array.isArray(data?.data) ? data.data : []);
+        }
+      } catch (err) { /* ignore */ }
+    };
+    fetchExistingShares();
+  }, [loadedEvent?.id]);
 
   // Category Creation — called by CreatableSelect's onCreateOption
   const handleCreateCategory = async (inputValue) => {
@@ -868,7 +889,9 @@ export default function EventEditor() {
                   style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 14px", borderRadius: "8px", border: "1px solid #bfdbfe", background: "#eff6ff", color: "#1d4ed8", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
                 >
                   <Share2 size={15} />
-                  {t("Share", { defaultValue: "Share" })}
+                  {existingShares.length > 0
+                    ? t("Edit Share", { defaultValue: "Edit Share" })
+                    : t("Share", { defaultValue: "Share" })}
                 </button>
               )}
             </div>
@@ -1837,7 +1860,21 @@ export default function EventEditor() {
               const ev = d?.data || d?.event;
               if (ev) setLoadedEvent(ev);
             }).catch(() => {});
+            // Re-fetch existing shares
+            const fetchShares = async () => {
+              try {
+                const res = await fetch(`${API_URL}/sharing/shared-by-resource/event/${loadedEvent.id}`, {
+                  headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+                });
+                if (res.ok) {
+                  const data = await res.json();
+                  setExistingShares(Array.isArray(data?.data) ? data.data : []);
+                }
+              } catch (err) { /* ignore */ }
+            };
+            fetchShares();
           }}
+          existingShares={existingShares}
         />
       )}
     </DashboardLayout>

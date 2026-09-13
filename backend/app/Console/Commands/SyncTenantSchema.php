@@ -144,14 +144,24 @@ class SyncTenantSchema extends Command
                                 $this->line("  ✅ Created table `{$tableName}`");
                                 $this->tablesCreated++;
                             } catch (\Throwable $e) {
-                                $this->error("  ❌ Failed to create `{$tableName}`: " . $e->getMessage());
-                                $this->errors[] = "{$dbName}.{$tableName}: " . $e->getMessage();
+                                // Table creation failed — might be a broken table that exists
+                                // with a wrong structure. Drop and recreate.
+                                try {
+                                    $pdo->exec("DROP TABLE IF EXISTS `{$tableName}`");
+                                    $pdo->exec($createSql);
+                                    $this->line("  🔧 Repaired table `{$tableName}` (dropped + recreated)");
+                                    $this->tablesCreated++;
+                                } catch (\Throwable $e2) {
+                                    $this->error("  ❌ Failed to create/repair `{$tableName}`: " . $e2->getMessage());
+                                    $this->errors[] = "{$dbName}.{$tableName}: " . $e2->getMessage();
+                                }
                             }
                         }
                         $tableChanges++;
                     }
                 } else {
                     // Table exists — check for missing columns
+                    $tableRepaired = false;
                     foreach ($goldenColumns as $colName => $goldenColInfo) {
                         if (!isset($currentSchema[$tableName][$colName])) {
                             // Column is missing — add it
@@ -165,8 +175,27 @@ class SyncTenantSchema extends Command
                                         $this->line("  ✅ Added `{$tableName}`.`{$colName}` ({$goldenColInfo['type']})");
                                         $this->columnsAdded++;
                                     } catch (\Throwable $e) {
-                                        $this->error("  ❌ Failed to add `{$tableName}`.`{$colName}`: " . $e->getMessage());
-                                        $this->errors[] = "{$dbName}.{$tableName}.{$colName}: " . $e->getMessage();
+                                        // Column add failed — table might be broken
+                                        // Try dropping and recreating the whole table
+                                        if (!$tableRepaired) {
+                                            try {
+                                                $createSql = $schemaRef->buildCreateTableSql($tableName);
+                                                if ($createSql) {
+                                                    $pdo->exec("DROP TABLE IF EXISTS `{$tableName}`");
+                                                    $pdo->exec($createSql);
+                                                    $tableRepaired = true;
+                                                    $this->line("  🔧 Repaired table `{$tableName}` (dropped + recreated)");
+                                                    $this->tablesCreated++;
+                                                }
+                                            } catch (\Throwable $e2) {
+                                                $this->error("  ❌ Failed to repair `{$tableName}`: " . $e2->getMessage());
+                                                $this->errors[] = "{$dbName}.{$tableName}: " . $e2->getMessage();
+                                            }
+                                        }
+                                        if (!$tableRepaired) {
+                                            $this->error("  ❌ Failed to add `{$tableName}`.`{$colName}`: " . $e->getMessage());
+                                            $this->errors[] = "{$dbName}.{$tableName}.{$colName}: " . $e->getMessage();
+                                        }
                                     }
                                 }
                                 $columnChanges++;
@@ -255,7 +284,7 @@ class SyncTenantSchema extends Command
             ->toArray();
         $databases = array_merge($databases, $registered);
 
-        // 2. Scan for unregistered local tenant databases
+        // 2. Scan for unregistered local tenant databases (both pms_tenant_* and techxaro_*)
         $prefix = config('tenancy.database_prefix', 'pms_tenant_');
         $masterConfig = config('database.connections.' . config('tenancy.master_connection', 'mysql_master'));
 
@@ -266,8 +295,15 @@ class SyncTenantSchema extends Command
                 \PDO::ATTR_TIMEOUT => 5,
             ]);
 
+            // Scan pms_tenant_* databases
             $stmt = $pdo->query("SHOW DATABASES LIKE '{$prefix}%'");
             $allLocalDbs = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+
+            // Also scan techxaro_* databases
+            $stmt2 = $pdo->query("SHOW DATABASES LIKE 'techxaro_%'");
+            $techxaroDbs = $stmt2->fetchAll(\PDO::FETCH_COLUMN);
+
+            $allLocalDbs = array_merge($allLocalDbs, $techxaroDbs);
 
             foreach ($allLocalDbs as $db) {
                 if (!in_array($db, $databases)) {
@@ -317,8 +353,10 @@ class SyncTenantSchema extends Command
         }
 
         // Unregistered local database — use master credentials
+        // Match both pms_tenant_* and techxaro_* prefixes
         $prefix = config('tenancy.database_prefix', 'pms_tenant_');
-        if (str_starts_with($dbName, $prefix)) {
+        $isLocalTenant = str_starts_with($dbName, $prefix) || str_starts_with($dbName, 'techxaro_');
+        if ($isLocalTenant) {
             return [
                 'driver'   => 'mysql',
                 'host'     => $masterConfig['host'],

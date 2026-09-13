@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Mail\PasswordResetMail;
+use App\Models\Master\Organization;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -16,6 +18,66 @@ use Illuminate\Validation\ValidationException;
 class PasswordResetController extends Controller
 {
     /**
+     * Search for a user across all active tenant databases.
+     *
+     * Since forgot-password is a central route with no tenant context,
+     * we must iterate through all active organizations and search each
+     * tenant database for the given email.
+     *
+     * @return array{user: User, organization: Organization}|null
+     */
+    private function findUserAcrossAllTenants(string $email): ?array
+    {
+        $organizations = Organization::whereIn('status', ['active', 'trial'])->get();
+
+        foreach ($organizations as $org) {
+            try {
+                $pdo = new \PDO(
+                    sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4', $org->database_host, (int) $org->database_port, $org->database_name),
+                    $org->database_username,
+                    $org->database_password ?? '',
+                    [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION, \PDO::ATTR_TIMEOUT => 3]
+                );
+
+                $stmt = $pdo->prepare(
+                    'SELECT id, name, email, personal_email, professional_email, phone_number, contact_no, password, role, active, must_change_password, email_mode, email_verified_at, password_reset_locked FROM users WHERE (professional_email = ? OR email = ? OR personal_email = ?) AND active = 1 LIMIT 1'
+                );
+                $stmt->execute([$email, $email, $email]);
+                $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+                $pdo = null;
+
+                if ($row) {
+                    $user = new User();
+                    $user->setRawAttributes($row);
+                    $user->exists = true;
+
+                    return ['user' => $user, 'organization' => $org];
+                }
+            } catch (\Throwable $e) {
+                \Log::warning("Password reset: failed searching tenant DB {$org->database_name}: " . $e->getMessage());
+                continue;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Switch to a specific tenant database connection.
+     */
+    private function switchToTenantDb(Organization $org): void
+    {
+        config()->set('database.connections.mysql_tenant.host', $org->database_host);
+        config()->set('database.connections.mysql_tenant.port', $org->database_port);
+        config()->set('database.connections.mysql_tenant.database', $org->database_name);
+        config()->set('database.connections.mysql_tenant.username', $org->database_username);
+        config()->set('database.connections.mysql_tenant.password', $org->database_password ?? '');
+        DB::purge('mysql_tenant');
+        DB::reconnect('mysql_tenant');
+    }
+
+    /**
      * Handle a password reset request.
      *
      * Validates the email, checks if the user exists and is active,
@@ -23,7 +85,7 @@ class PasswordResetController extends Controller
      * Returns a generic success message regardless of email existence
      * to prevent user enumeration attacks.
      *
-     * @param  Request  $request  Input: email (required, valid professional email).
+     * @param  Request  $request  Input: email (required, valid email - personal, professional, or single).
      * @return JsonResponse JSON response confirming email was sent.
      */
     public function forgotPassword(Request $request)
@@ -37,13 +99,25 @@ class PasswordResetController extends Controller
 
             \Log::info('Password reset requested', ['email' => $inputEmail]);
 
+            // Try tenant-scoped User model first (works when middleware resolved tenant)
             $user = User::where('professional_email', $inputEmail)
                 ->orWhere('email', $inputEmail)
                 ->orWhere('personal_email', $inputEmail)
                 ->first();
 
+            $organization = null;
+
+            // If not found in current DB connection, search across all tenant databases
             if (! $user) {
-                \Log::info('Password reset: user not found', ['email' => $inputEmail]);
+                $result = $this->findUserAcrossAllTenants($inputEmail);
+                if ($result) {
+                    $user = $result['user'];
+                    $organization = $result['organization'];
+                }
+            }
+
+            if (! $user) {
+                \Log::info('Password reset: user not found across all tenants', ['email' => $inputEmail]);
 
                 return response()->json([
                     'success' => false,
@@ -64,7 +138,7 @@ class PasswordResetController extends Controller
             }
 
             // Check if password recovery is locked by admin
-            if ($user->password_reset_locked) {
+            if (! empty($user->password_reset_locked) && $user->password_reset_locked) {
                 \Log::info('Password reset: recovery locked by admin', ['user_id' => $user->id]);
 
                 return response()->json([
@@ -83,7 +157,9 @@ class PasswordResetController extends Controller
                 ], 422);
             }
 
-            $sendTo = $user->professional_email ?: $user->personal_email ?: $user->email;
+            // Determine which email to send the reset link to
+            // Rule: Send to the email the user logged in with (login/authentication email)
+            $sendTo = $this->resolveLoginEmail($user);
 
             $token = Str::random(64);
 
@@ -100,8 +176,11 @@ class PasswordResetController extends Controller
 
             \Log::info('Password reset: sending email', [
                 'user_id' => $user->id,
-                'professional_email' => $user->professional_email,
+                'professional_email' => $user->professional_email ?? null,
+                'personal_email' => $user->personal_email ?? null,
+                'email' => $user->email ?? null,
                 'send_to' => $sendTo,
+                'organization' => $organization?->name,
             ]);
 
             try {
@@ -162,7 +241,7 @@ class PasswordResetController extends Controller
             $token = $request->input('token');
             $password = $request->input('password');
 
-            // Look up by professional_email (login email)
+            // Look up the token in master DB
             $record = \DB::table('password_reset_tokens')
                 ->where('email', $email)
                 ->first();
@@ -191,10 +270,27 @@ class PasswordResetController extends Controller
                 ], 422);
             }
 
+            // Try tenant-scoped User model first
             $user = User::where('professional_email', $email)
                 ->orWhere('email', $email)
                 ->orWhere('personal_email', $email)
                 ->first();
+
+            // If not found in current DB, search across all tenant databases
+            if (! $user) {
+                $result = $this->findUserAcrossAllTenants($email);
+                if ($result) {
+                    $user = $result['user'];
+                    $organization = $result['organization'];
+
+                    // Switch to the correct tenant DB to update the user
+                    $this->switchToTenantDb($organization);
+                    $user = User::where('professional_email', $email)
+                        ->orWhere('email', $email)
+                        ->orWhere('personal_email', $email)
+                        ->first();
+                }
+            }
 
             if (! $user) {
                 return response()->json([
@@ -204,7 +300,7 @@ class PasswordResetController extends Controller
             }
 
             // Check if password recovery is locked by admin
-            if ($user->password_reset_locked) {
+            if (! empty($user->password_reset_locked) && $user->password_reset_locked) {
                 return response()->json([
                     'success' => false,
                     'code' => 'PASSWORD_RESET_DISABLED',
@@ -240,10 +336,38 @@ class PasswordResetController extends Controller
                 'errors' => $e->errors(),
             ], 422);
         } catch (\Throwable $e) {
+            \Log::error('Password reset failed', ['email' => $email ?? null, 'error' => $e->getMessage()]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Something went wrong. Please try again later.',
             ], 500);
         }
+    }
+
+    /**
+     * Determine the correct email address to send the password reset link to.
+     *
+     * Rule: The reset email goes to the exact email the user uses to
+     * authenticate/login to the system (auth_email).
+     *
+     * - Single email mode: personal_email (same as email)
+     * - Two emails mode: professional_email (used for login)
+     * - Auto-generated password: professional_email or email (login email)
+     */
+    private function resolveLoginEmail(User $user): string
+    {
+        // For two-email mode: professional_email is the login email
+        if (! empty($user->professional_email)) {
+            return $user->professional_email;
+        }
+
+        // Fallback to email (single-email mode users login with this)
+        if (! empty($user->email)) {
+            return $user->email;
+        }
+
+        // Last resort: personal_email
+        return $user->personal_email;
     }
 }

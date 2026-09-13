@@ -363,18 +363,58 @@ export default function EditTaskModal({ task, onClose }) {
       return;
     }
     const currentUser = getUser();
+    const headers = { Accept: "application/json", Authorization: `Bearer ${token}` };
     Promise.all(
-      pids.map((pid) =>
-        fetch(`${API_URL}/projects/${pid}/members`, {
-          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-          skipLoader: true,
-        })
-          .then((res) => (res.ok ? res.json() : [])).catch(() => [])
-      )
+      pids.map((pid) => {
+        const isShared = String(pid).startsWith('shared_');
+        if (isShared) {
+          const sharedResourceId = String(pid).replace('shared_', '');
+          return fetch(`${API_URL}/sharing/resources/${sharedResourceId}/members`, { headers, skipLoader: true })
+            .then((res) => (res.ok ? res.json() : { members: [], shared_members: [] }))
+            .then((d) => {
+              const originalMembers = Array.isArray(d?.members) ? d.members : [];
+              const sharedMembers = Array.isArray(d?.shared_members) ? d.shared_members : [];
+              const seenKeys = new Map();
+              const seenEmails = new Set();
+              [...originalMembers, ...sharedMembers].forEach((m) => {
+                const dedupeKey = `${m.id}:${m.org_id || ""}`;
+                if (seenKeys.has(dedupeKey)) return;
+                const email = (m.email || "").toLowerCase().trim();
+                if (email && seenEmails.has(email)) return;
+                if (m.org_id && (m.is_external || m.source === 'original')) {
+                  seenKeys.set(dedupeKey, { ...m, id: `${m.org_id}:${m.id}`, _originalId: m.id, _orgId: m.org_id, _isExternal: true });
+                } else {
+                  seenKeys.set(dedupeKey, m);
+                }
+                if (email) seenEmails.add(email);
+              });
+              return Array.from(seenKeys.values());
+            }).catch(() => []);
+        }
+        return Promise.all([
+          fetch(`${API_URL}/projects/${pid}/members`, { headers, skipLoader: true })
+            .then((res) => (res.ok ? res.json() : [])).catch(() => []),
+          fetch(`${API_URL}/projects/${pid}/collaborate-users`, { headers, skipLoader: true })
+            .then((res) => (res.ok ? res.json() : { users: [] })).catch(() => ({ users: [] })),
+        ]).then(([members, crossOrg]) => {
+          const memberList = Array.isArray(members) ? members : [];
+          const crossOrgUsers = Array.isArray(crossOrg?.users) ? crossOrg.users : [];
+          // Merge local members with cross-org collaborate users
+          const map = new Map();
+          memberList.forEach((u) => map.set(String(u.id), u));
+          crossOrgUsers.forEach((u) => {
+            const compositeId = `${u.org_id}:${u.id}`;
+            if (!map.has(String(compositeId))) {
+              map.set(String(compositeId), { ...u, id: compositeId, _originalId: u.id, _orgId: u.org_id, _isExternal: true });
+            }
+          });
+          return Array.from(map.values());
+        });
+      })
     ).then((results) => {
       const memberSets = results.map((members) => {
         const map = new Map();
-        (Array.isArray(members) ? members : []).forEach((u) => map.set(u.id, u));
+        (Array.isArray(members) ? members : []).forEach((u) => map.set(String(u.id), u));
         return map;
       });
       let users = [];
@@ -387,7 +427,7 @@ export default function EditTaskModal({ task, onClose }) {
           if (memberSets.every((s) => s.has(id))) users.push(u);
         });
       }
-      if (currentUser && !users.some((u) => u.id === currentUser.id)) {
+      if (currentUser && !users.some((u) => String(u.id) === String(currentUser.id))) {
         users = [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: currentUser.role, department: currentUser.department }, ...users];
       }
       setDisplayUsers(users);

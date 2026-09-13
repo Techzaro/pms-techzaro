@@ -107,7 +107,7 @@ class SchemaReferenceService
             }
         }
 
-        // Also try unregistered local tenant databases
+        // Also try unregistered local tenant databases (pms_tenant_* and techxaro_*)
         $prefix = config('tenancy.database_prefix', 'pms_tenant_');
         try {
             $dsn = sprintf('mysql:host=%s;port=%d;charset=utf8mb4', $masterConfig['host'], $masterConfig['port']);
@@ -116,8 +116,15 @@ class SchemaReferenceService
                 \PDO::ATTR_TIMEOUT => 5,
             ]);
 
+            // Scan pms_tenant_* databases
             $stmt = $pdo->query("SHOW DATABASES LIKE '{$prefix}%'");
             $localDbs = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+
+            // Also scan techxaro_* databases
+            $stmt2 = $pdo->query("SHOW DATABASES LIKE 'techxaro_%'");
+            $techxaroDbs = $stmt2->fetchAll(\PDO::FETCH_COLUMN);
+
+            $localDbs = array_merge($localDbs, $techxaroDbs);
 
             foreach ($localDbs as $dbName) {
                 try {

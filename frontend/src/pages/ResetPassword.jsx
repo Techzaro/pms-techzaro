@@ -118,12 +118,7 @@ function ResetPassword() {
       <div className="reset-page">
         <div className="reset-left">
           <div className="reset-left-overlay">
-            <img
-              src="https://cdn-icons-png.flaticon.com/512/5968/5968705.png"
-              alt="PMS Logo"
-              className="reset-left-logo"
-            />
-            <h1>{t("TECHXARO PMS", { defaultValue: "TECHXARO PMS" })}</h1>
+            <h1>{t("TECHXARO ONE", { defaultValue: "TECHXARO ONE" })}</h1>
             <p>{t("Manage Projects, Teams & Tasks Professionally", { defaultValue: "Manage Projects, Teams & Tasks Professionally" })}</p>
           </div>
         </div>
@@ -155,12 +150,7 @@ function ResetPassword() {
       <div className="reset-page">
         <div className="reset-left">
           <div className="reset-left-overlay">
-            <img
-              src="https://cdn-icons-png.flaticon.com/512/5968/5968705.png"
-              alt="PMS Logo"
-              className="reset-left-logo"
-            />
-            <h1>{t("TECHXARO PMS", { defaultValue: "TECHXARO PMS" })}</h1>
+            <h1>{t("TECHXARO ONE", { defaultValue: "TECHXARO ONE" })}</h1>
             <p>{t("Manage Projects, Teams & Tasks Professionally", { defaultValue: "Manage Projects, Teams & Tasks Professionally" })}</p>
           </div>
         </div>
@@ -197,12 +187,7 @@ function ResetPassword() {
     <div className="reset-page">
       <div className="reset-left">
         <div className="reset-left-overlay">
-          <img
-            src="https://cdn-icons-png.flaticon.com/512/5968/5968705.png"
-            alt="PMS Logo"
-            className="reset-left-logo"
-          />
-          <h1>{t("TECHXARO PMS", { defaultValue: "TECHXARO PMS" })}</h1>
+          <h1>{t("TECHXARO ONE", { defaultValue: "TECHXARO ONE" })}</h1>
           <p>{t("Manage Projects, Teams & Tasks Professionally", { defaultValue: "Manage Projects, Teams & Tasks Professionally" })}</p>
         </div>
       </div>
@@ -291,7 +276,7 @@ function ResetPassword() {
                 <span className={/[0-9]/.test(password) ? "rule-met" : ""}>
                   {/[0-9]/.test(password) ? "✓" : "○"} {t("One number", { defaultValue: "One number" })}
                 </span>
-                <span className={/[@$!%*?&#]/.test(password) ? "rule-met" : ""}>
+                <span className={/ [@$!%*?&#]/.test(password) ? "rule-met" : ""}>
                   {/[@$!%*?&#]/.test(password) ? "✓" : "○"} {t("One special character (@$!%*?&#)", { defaultValue: "One special character (@$!%*?&#)" })}
                 </span>
               </div>
