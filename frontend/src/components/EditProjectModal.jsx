@@ -680,6 +680,32 @@ const EditProjectModal = ({ project = {}, onClose, onProjectUpdated, restoreDraf
     if (!form.title.trim()) {
       errors.title = "Project Name is required.";
     }
+
+    // Check manager reassignment constraint (PROJ_058)
+    const initialAssigned = (Array.isArray(project?.assigned_users)
+      ? project.assigned_users.map((u) => Number(typeof u === "object" && u !== null ? u.id : u))
+      : (project?.members || []).map((m) => Number(typeof m === "object" && m !== null ? m.id : m))).filter((id) => !isNaN(id) && id > 0);
+
+    const userMap = new Map();
+    (allUsers || []).forEach((u) => { if (u && u.id) userMap.set(Number(u.id), u); });
+    (project?.members || []).forEach((u) => { if (u && typeof u === "object" && u.id && !userMap.has(Number(u.id))) userMap.set(Number(u.id), u); });
+
+    const hadManager = initialAssigned.some((id) => userMap.get(id)?.role === "manager");
+
+    const currentAssigned = (form.assigned_users || [])
+      .map((u) => Number(typeof u === "object" && u !== null ? u.id : u))
+      .filter((id) => !isNaN(id) && id > 0);
+
+    const hasManager = currentAssigned.some((id) => userMap.get(id)?.role === "manager");
+
+    if (hadManager && !hasManager) {
+      const msg = t("You cannot remove the Project Manager until you select another.", {
+        defaultValue: "You cannot remove the Project Manager until you select another.",
+      });
+      errors.assigned_users = msg;
+      notify.error(msg);
+    }
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };

@@ -28,9 +28,15 @@ class SubmissionResource extends JsonResource
             'submitted_by' => $this->submitted_by,
             'file_path' => $this->file_path,
             'file_name' => $this->file_name,
+            'version_number' => $this->version_number ?? 1,
+            'version' => $this->version_number ?? 1,
+            'status' => $this->status,
+            'is_edited' => (bool) $this->is_edited,
+            'edit_count' => (int) ($this->edit_count ?? ($this->is_edited ? 1 : 0)),
             'submitted_by_user' => UserMinResource::make($this->whenLoaded('submittedBy')),
             'attachments' => $this->whenLoaded('attachments'),
             'created_at' => $this->created_at?->format('Y-m-d\TH:i:s'),
+            'updated_at' => $this->updated_at?->format('Y-m-d\TH:i:s'),
         ];
     }
 }

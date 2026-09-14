@@ -324,25 +324,22 @@ function Projects() {
     }
   };
 
-  useEffect(() => {
-    const nextFilter = searchParams.get("filter") === "active" ? "active" : "";
-    setStatusFilter((current) => {
-      if (nextFilter === "active" || current === "active") {
-        return current === nextFilter ? current : nextFilter;
-      }
-      return current;
-    });
-  }, [searchParams]);
-
   const selectStatusFilter = (filter) => {
-    setStatusFilter(filter);
+    setStatusFilter(filter || "");
     setShowAll(false);
     setPage(1);
-    if (filter === "active") {
-      setSearchParams({ filter: "active" });
-    } else {
-      setSearchParams({});
-    }
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (filter) {
+        next.set("status", filter);
+        next.delete("filter");
+      } else {
+        next.delete("status");
+        next.delete("filter");
+      }
+      next.delete("page");
+      return next;
+    });
   };
 
   /** Derive the display status (Completed / Failed / In Progress) from progress and dates. */
@@ -427,10 +424,12 @@ function Projects() {
     }
     if (statusFilter) {
       if (statusFilter === "active") {
-        // active status matches all
+        const s = (project.status || "").toLowerCase();
+        if (s === "pause" || s === "paused" || s === "completed" || s === "approved" || s === "rejected" || s === "abandoned" || s === "cancelled" || s === "canceled" || s === "closed" || s === "archived") return false;
+        if (!(s === "active" || s === "in-progress" || s === "in_progress" || s === "planning" || s === "planned" || s === "pending")) return false;
       } else if (statusFilter === "In-progress") {
         const s = (project.status || "").toLowerCase();
-        if (!(s === "in-progress" || s === "in_progress" || s === "pending" || s === "planned")) return false;
+        if (!(s === "in-progress" || s === "in_progress" || s === "pending" || s === "planned" || s === "active")) return false;
       } else if (statusFilter === "Planning") {
         const s = (project.status || "").toLowerCase();
         if (!(s === "planning" || s === "planned")) return false;
@@ -492,8 +491,8 @@ function Projects() {
           counts.dueToday++;
         }
       }
-      if (s === "in-progress" || s === "in_progress" || s === "planning" || s === "planned") counts.active++;
-      if (s === "in-progress" || s === "in_progress" || s === "pending" || s === "planned") counts.inProgress++;
+      if ((s === "in-progress" || s === "in_progress" || s === "planning" || s === "planned" || s === "active" || s === "pending") && !(s === "pause" || s === "paused" || s === "completed" || s === "approved" || s === "rejected" || s === "abandoned" || s === "cancelled" || s === "canceled" || s === "closed" || s === "archived")) counts.active++;
+      if (s === "in-progress" || s === "in_progress" || s === "pending" || s === "planned" || s === "active") counts.inProgress++;
       if (s === "planning" || s === "planned") counts.planning++;
       if (s === "pause" || s === "paused" || s === "rejected") counts.pause++;
       if (s === "completed" || s === "approved") counts.completed++;

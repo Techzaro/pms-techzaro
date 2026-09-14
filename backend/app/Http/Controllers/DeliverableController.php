@@ -2332,7 +2332,14 @@ class DeliverableController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized to edit this submission.'], 403);
         }
 
-        if ($deliverable->has_edited_submission) {
+        $isAlreadyEdited = $deliverable->has_edited_submission ||
+            $submission->is_edited ||
+            ((int) ($submission->edit_count ?? 0) > 0) ||
+            ((int) ($submission->version_number ?? 1) > 1) ||
+            ((int) ($submission->version ?? 1) > 1) ||
+            ($submission->updated_at && $submission->created_at && $submission->updated_at->diffInSeconds($submission->created_at) > 2);
+
+        if ($isAlreadyEdited) {
             return response()->json(['success' => false, 'message' => 'Submission can only be edited once.'], 422);
         }
 
@@ -2342,11 +2349,27 @@ class DeliverableController extends Controller
             'files' => 'nullable|array',
             'files.*' => 'file|max:51200',
             'links' => 'nullable|array',
-            'links.*' => 'string|max:2048',
+            'links.*' => 'nullable|string|max:2048',
+            'deleted_attachment_ids' => 'nullable|array',
+            'deleted_attachment_ids.*' => 'nullable',
+            'remove_main_file' => 'nullable|boolean',
         ]);
 
         if (array_key_exists('comment', $validated)) {
             $submission->comment = $validated['comment'];
+        }
+
+        $deletedAttachmentIds = array_filter((array) $request->input('deleted_attachment_ids', []));
+        if (!empty($deletedAttachmentIds)) {
+            $numericIds = array_filter($deletedAttachmentIds, 'is_numeric');
+            if (!empty($numericIds)) {
+                $submission->attachments()->whereIn('id', $numericIds)->delete();
+            }
+        }
+
+        if ($request->boolean('remove_main_file') || in_array('main_file', $deletedAttachmentIds, true)) {
+            $submission->file_path = null;
+            $submission->file_name = null;
         }
 
         if ($request->hasFile('file')) {
@@ -2360,6 +2383,7 @@ class DeliverableController extends Controller
             }
         }
 
+        $submission->version_number = max((int) ($submission->version_number ?? 1), 2);
         $submission->save();
         $deliverable->update(['has_edited_submission' => true]);
 
@@ -2389,16 +2413,27 @@ class DeliverableController extends Controller
             );
         }
 
-        if (! empty($validated['links'])) {
-            $submission->attachments()->createMany(
-                collect($validated['links'])->map(fn ($url) => [
-                    'submission_type' => 'deliverable',
-                    'file_name' => $url,
-                    'original_name' => $url,
-                    'attachment_type' => 'link',
-                    'url' => $url,
-                ])->toArray()
-            );
+        if ($request->has('links')) {
+            $newLinkUrls = collect($request->input('links', []))
+                ->map(fn ($l) => is_array($l) ? ($l['url'] ?? '') : (is_string($l) ? $l : ''))
+                ->map(fn ($l) => trim((string) $l))
+                ->filter()
+                ->unique()
+                ->values();
+
+            $submission->attachments()->where('attachment_type', 'link')->delete();
+
+            if ($newLinkUrls->isNotEmpty()) {
+                $submission->attachments()->createMany(
+                    $newLinkUrls->map(fn ($url) => [
+                        'submission_type' => 'deliverable',
+                        'file_name' => $url,
+                        'original_name' => $url,
+                        'attachment_type' => 'link',
+                        'url' => $url,
+                    ])->toArray()
+                );
+            }
         }
 
         // Trigger Notification to Stakeholders
@@ -2427,6 +2462,11 @@ class DeliverableController extends Controller
             'success' => true,
             'message' => 'Delivery submission updated successfully',
             'submission' => $submission->fresh(['submittedBy:id,name,email', 'attachments']),
+            'deliverable' => $deliverable->fresh()->load([
+                'assignee:id,name,email,role', 'creator:id,name,role',
+                'latestSubmission', 'latestSubmission.submittedBy:id,name,email', 'latestSubmission.attachments',
+                'reopenedBy:id,name',
+            ]),
         ]);
     }
 
@@ -3670,7 +3710,7 @@ class DeliverableController extends Controller
      */
     public function acceptDelegation(Request $request, Deliverable $deliverable)
     {
-        $this->authorize('delegate', $deliverable);
+        $this->authorize('acceptDelegation', $deliverable);
         $user = $request->user();
 
         $delegation = TaskDelegation::where('deliverable_id', $deliverable->id)
@@ -3704,7 +3744,7 @@ class DeliverableController extends Controller
      */
     public function rejectDelegation(Request $request, Deliverable $deliverable)
     {
-        $this->authorize('delegate', $deliverable);
+        $this->authorize('rejectDelegation', $deliverable);
         $user = $request->user();
 
         $validated = $request->validate([
@@ -3742,7 +3782,7 @@ class DeliverableController extends Controller
      */
     public function revokeDelegation(Request $request, Deliverable $deliverable)
     {
-        $this->authorize('delegate', $deliverable);
+        $this->authorize('revokeDelegation', $deliverable);
         $user = $request->user();
 
         $validated = $request->validate([

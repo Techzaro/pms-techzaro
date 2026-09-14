@@ -1,6 +1,7 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { RotateCcw, ArrowRightLeft, Lock } from "lucide-react";
+import { RotateCcw, ArrowRightLeft, Lock, XCircle } from "lucide-react";
+import { isDelegationRejectedByMe, isDelegationRevokedFromMe } from "../utils/delegationUtils";
 
 export const STATUS_COLORS = {
   Pending: "#FEF3C7",
@@ -87,7 +88,13 @@ export function getEffectiveStatus(item) {
   if (item?.assigner_paused) {
     return "paused";
   }
-  const st = String(item?.status || "pending").toLowerCase();
+  if (
+    item?.submission_stage === "awaiting_checkpoint" &&
+    !["completed", "approved", "declined", "abandoned"].includes(String(item?.status || "").toLowerCase())
+  ) {
+    return "in_progress";
+  }
+  const st = String(item?.my_status || item?.status || "pending").toLowerCase();
   if (st === "pause") return "paused";
   if (st === "in-progress" || st === "acknowledged") return "in_progress";
   if (st === "submitted_late") return "submitted";
@@ -137,6 +144,11 @@ export default function TaskMultiStatusBadges({ item }) {
   // Assigner Paused Lock Indicator
   const isAssignerPaused = Boolean(item?.assigner_paused);
 
+  // Delegation Rejected Indicator
+  const isDelegationRejected = isDelegationRejectedByMe(item);
+  // Delegation Revoked Indicator
+  const isDelegationRevoked = isDelegationRevokedFromMe(item);
+
   return (
     <div
       style={{
@@ -178,6 +190,48 @@ export default function TaskMultiStatusBadges({ item }) {
       </span>
 
       {/* Subtle Modifier Icons without text clutter */}
+      {isDelegationRejected && (
+        <span
+          title={t("Transfer Rejected by You", { defaultValue: "Transfer Rejected by You" })}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 20,
+            height: 20,
+            borderRadius: "50%",
+            background: "#FEE2E2",
+            color: "#DC2626",
+            border: "1px solid #FCA5A5",
+            cursor: "help",
+            flexShrink: 0,
+          }}
+        >
+          <XCircle size={11} />
+        </span>
+      )}
+
+      {isDelegationRevoked && (
+        <span
+          title={t("Transfer Revoked by Assigner", { defaultValue: "Transfer Revoked by Assigner" })}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 20,
+            height: 20,
+            borderRadius: "50%",
+            background: "#FEF3C7",
+            color: "#B45309",
+            border: "1px solid #FCD34D",
+            cursor: "help",
+            flexShrink: 0,
+          }}
+        >
+          <XCircle size={11} />
+        </span>
+      )}
+
       {isReopened && (
         <span
           title={item?.reopen_count && item.reopen_count > 1 ? t("Reopened ({{count}}x)", { count: item.reopen_count, defaultValue: `Reopened (${item.reopen_count}x)` }) : t("Reopened", { defaultValue: "Reopened" })}
@@ -199,7 +253,7 @@ export default function TaskMultiStatusBadges({ item }) {
         </span>
       )}
 
-      {isTransferred && (
+      {isTransferred && !isDelegationRejected && !isDelegationRevoked && (
         <span
           title={t("Transferred / Delegated", { defaultValue: "Transferred / Delegated" })}
           style={{

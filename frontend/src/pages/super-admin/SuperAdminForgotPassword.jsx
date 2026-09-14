@@ -67,12 +67,7 @@ function SuperAdminForgotPassword() {
       <div className="forgot-page">
         <div className="forgot-left">
           <div className="forgot-left-overlay">
-            <img
-              src="https://cdn-icons-png.flaticon.com/512/5968/5968705.png"
-              alt="TechXaro Logo"
-              className="forgot-left-logo"
-            />
-            <h1>{t('TECHXARO', { defaultValue: 'TECHXARO' })}</h1>
+            <h1>{t('TECHXARO ADMIN', { defaultValue: 'TECHXARO ADMIN' })}</h1>
             <p>{t('Organization Management System', { defaultValue: 'Organization Management System' })}</p>
           </div>
         </div>
@@ -114,12 +109,7 @@ function SuperAdminForgotPassword() {
     <div className="forgot-page">
       <div className="forgot-left">
         <div className="forgot-left-overlay">
-          <img
-            src="https://cdn-icons-png.flaticon.com/512/5968/5968705.png"
-            alt="TechXaro Logo"
-            className="forgot-left-logo"
-          />
-          <h1>{t('TECHXARO', { defaultValue: 'TECHXARO' })}</h1>
+          <h1>{t('TECHXARO ADMIN', { defaultValue: 'TECHXARO ADMIN' })}</h1>
           <p>{t('Organization Management System', { defaultValue: 'Organization Management System' })}</p>
         </div>
       </div>

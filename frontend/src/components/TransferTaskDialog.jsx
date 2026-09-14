@@ -4,7 +4,7 @@
  * Allows selecting a user, specifying reason, return preference, and optional notes.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import API_URL from "../config/api";
@@ -13,6 +13,7 @@ import { useEscapeKey } from "../hooks/useEscapeKey";
 import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import { notify } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
+import CustomSelect from "./CustomSelect";
 import "./TransferTaskDialog.css";
 
 const TRANSFER_REASONS = [
@@ -74,6 +75,22 @@ function TransferTaskDialog({ isOpen, onClose, task, entityType, onTransferSucce
       setLoadingUsers(false);
     }
   };
+
+  const userOptions = useMemo(() => {
+    return users.map((u) => ({
+      value: String(u.id),
+      label: `${u.name || u.email}${u.role ? ` (${t(u.role, { defaultValue: u.role })})` : ""}`,
+      email: u.email || "",
+      role: u.role || "",
+    }));
+  }, [users, t]);
+
+  const reasonOptions = useMemo(() => {
+    return TRANSFER_REASONS.map((r) => ({
+      value: r,
+      label: t(r, { defaultValue: r }),
+    }));
+  }, [t]);
 
   const handleSubmit = async () => {
     if (!delegatedTo) {
@@ -148,31 +165,25 @@ function TransferTaskDialog({ isOpen, onClose, task, entityType, onTransferSucce
               {loadingUsers ? (
                 <span className="tt-loading-text">{t("Loading users...", { defaultValue: "Loading users..." })}</span>
               ) : (
-                <select
-                  className="tt-input"
+                <CustomSelect
+                  name="delegated_to"
                   value={delegatedTo}
-                  onChange={(e) => { setDelegatedTo(e.target.value); setIsDirty(true); }}
-                >
-                  <option value="">{t("Select a user...", { defaultValue: "Select a user..." })}</option>
-                  {users.map((u) => (
-                    <option key={u.id} value={u.id}>{u.name} ({u.role ? t(u.role) : ""})</option>
-                  ))}
-                </select>
+                  onChange={(val) => { setDelegatedTo(val); setIsDirty(true); }}
+                  options={userOptions}
+                  placeholder={t("Select a user...", { defaultValue: "Select a user..." })}
+                />
               )}
             </div>
 
             <div className="tt-field">
               <label className="tt-label">{t("Reason", { defaultValue: "Reason" })} <span>*</span></label>
-              <select
-                className="tt-input"
+              <CustomSelect
+                name="reason"
                 value={reason}
-                onChange={(e) => { setReason(e.target.value); setIsDirty(true); }}
-              >
-                <option value="">{t("Select a reason...", { defaultValue: "Select a reason..." })}</option>
-                {TRANSFER_REASONS.map((r) => (
-                  <option key={r} value={r}>{t(r)}</option>
-                ))}
-              </select>
+                onChange={(val) => { setReason(val); setIsDirty(true); }}
+                options={reasonOptions}
+                placeholder={t("Select a reason...", { defaultValue: "Select a reason..." })}
+              />
               <div className="tt-reason-tags">
                 {TRANSFER_REASONS.map((r) => (
                   <button

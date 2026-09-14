@@ -11,6 +11,7 @@ import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
 import { notify } from "../utils/notify";
 import { formatDateTime } from "../utils/formatDateTime";
+import ConfirmModal from "./ConfirmModal";
 
 function DelegationChain({ task, delegationChain = [], safeApprovalChain = [], onTaskUpdate }) {
   const { t } = useTranslation(); // Added this because t() was being used but not defined
@@ -18,16 +19,18 @@ function DelegationChain({ task, delegationChain = [], safeApprovalChain = [], o
   const [accepting, setAccepting] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [revoking, setRevoking] = useState(false);
+  const [revokeConfirmTarget, setRevokeConfirmTarget] = useState(null);
 
   const pendingDelegation = task?.pending_delegation;
-  const isDelegatedToMe = pendingDelegation && pendingDelegation.delegated_to === currentUser?.id;
+  const isDelegatedToMe = pendingDelegation && parseInt(pendingDelegation.delegated_to, 10) === parseInt(currentUser?.id, 10);
+  const entity = (task?.task_id || task?.deliverable_id) ? "deliverables" : "tasks";
 
   const handleAccept = async () => {
     if (!pendingDelegation) return;
     setAccepting(true);
     try {
       const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${task.id}/accept-delegation`, {
+      const res = await fetch(`${API_URL}/${entity}/${task.id}/accept-delegation`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         _notifHandled: true,
@@ -57,7 +60,7 @@ function DelegationChain({ task, delegationChain = [], safeApprovalChain = [], o
     setRejecting(true);
     try {
       const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${task.id}/reject-delegation`, {
+      const res = await fetch(`${API_URL}/${entity}/${task.id}/reject-delegation`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ reason: "Not available to take this task" }),
@@ -80,7 +83,7 @@ function DelegationChain({ task, delegationChain = [], safeApprovalChain = [], o
     setRevoking(true);
     try {
       const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${task.id}/revoke-delegation`, {
+      const res = await fetch(`${API_URL}/${entity}/${task.id}/revoke-delegation`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ delegation_id: delegationId }),
@@ -222,7 +225,7 @@ function DelegationChain({ task, delegationChain = [], safeApprovalChain = [], o
                 {canRevoke && isDelegator && (
                   <button
                     className="btn btn-sm"
-                    onClick={() => handleRevoke(entry.id)}
+                    onClick={() => setRevokeConfirmTarget(entry.id)}
                     disabled={revoking}
                     style={{
                       marginTop: "6px", fontSize: "11px", padding: "2px 8px",
@@ -273,6 +276,23 @@ function DelegationChain({ task, delegationChain = [], safeApprovalChain = [], o
           {t("Current Owner", { defaultValue: "Current Owner" })}: <strong style={{ color: "var(--text-heading)" }}>{task.current_owner_name}</strong>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={!!revokeConfirmTarget}
+        onClose={() => setRevokeConfirmTarget(null)}
+        onConfirm={async () => {
+          const id = revokeConfirmTarget;
+          setRevokeConfirmTarget(null);
+          await handleRevoke(id);
+        }}
+        title={t("Revoke Transfer", { defaultValue: "Revoke Transfer" })}
+        message={t("Are you sure you want to revoke this transfer? The user will no longer be able to work on this task.", {
+          defaultValue: "Are you sure you want to revoke this transfer? The user will no longer be able to work on this task.",
+        })}
+        confirmText={t("Revoke", { defaultValue: "Revoke" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        danger
+      />
     </div>
   );
 }

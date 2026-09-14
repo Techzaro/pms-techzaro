@@ -508,7 +508,7 @@ export default function EditTaskModal({ task = {}, onClose, restoreDraftId = nul
     const currentUser = getUser();
     const headers = { Accept: "application/json", Authorization: `Bearer ${token}` };
     Promise.all(
-pids.map((pid) => {
+      activeProjectIds.map((pid) => {
         const isShared = String(pid).startsWith('shared_');
         if (isShared) {
           const sharedResourceId = String(pid).replace('shared_', '');

@@ -352,7 +352,11 @@ function TaskSubmissionPanel({
         <div className="td-card td-submission-card">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
             <h3 className="td-card-title" style={{ margin: 0 }}>{t("Submission Details", { defaultValue: "Submission Details" })}</h3>
-            {!task.has_edited_submission &&
+            {!task?.has_edited_submission &&
+              !latestSubmission?.is_edited &&
+              (!latestSubmission?.edit_count || Number(latestSubmission?.edit_count) === 0) &&
+              (!latestSubmission?.version_number || Number(latestSubmission?.version_number) <= 1) &&
+              (!latestSubmission?.version || Number(latestSubmission?.version) <= 1) &&
               ((latestSubmission.submitted_by || latestSubmission.submittedBy)?.id === currentUser?.id || latestSubmission.submitted_by === currentUser?.id) && (
                 <button
                   type="button"

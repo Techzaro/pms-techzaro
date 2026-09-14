@@ -15,6 +15,7 @@ import useUnsavedChanges from "../hooks/useUnsavedChanges";
 import { notify } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
 import LoadingButton from "./LoadingButton";
+import CustomSelect from "./CustomSelect";
 import "./ReopenDialog.css";
 import { toDatetimeLocal, toUTCIso } from "../utils/formatDateTime";
 
@@ -90,6 +91,22 @@ function ReopenDialog({ isOpen, onClose, subtask, onReopenSuccess }) {
     }
   };
 
+  const userOptions = useMemo(() => {
+    return availableUsers.map((u) => ({
+      value: String(u.id),
+      label: `${u.name || u.email}${u.role ? ` (${t(u.role, { defaultValue: u.role })})` : ""}`,
+      email: u.email || "",
+      role: u.role || "",
+    }));
+  }, [availableUsers, t]);
+
+  const reopenReasonOptions = useMemo(() => {
+    return REOPEN_REASONS.map((r) => ({
+      value: r,
+      label: t(r, { defaultValue: r }),
+    }));
+  }, [t]);
+
   const handleSubmit = async () => {
     if (!reopenReason) {
       notify.error(t("Please select a reason for reopening.", { defaultValue: "Please select a reason for reopening." }));
@@ -160,32 +177,24 @@ function ReopenDialog({ isOpen, onClose, subtask, onReopenSuccess }) {
               {t("Who should receive this update?", { defaultValue: "Who should receive this update?" })}{" "}
               <span style={{ color: "var(--color-danger)" }}>*</span>
             </label>
-            <select
-              className="rd-input"
+            <CustomSelect
+              name="assignee_id"
               value={assigneeId}
-              onChange={(e) => setAssigneeId(e.target.value)}
-            >
-              <option value="">{t("Select assignee...", { defaultValue: "Select assignee..." })}</option>
-              {availableUsers.map((u) => (
-                <option key={u.id} value={String(u.id)}>
-                  {u.name || u.email} {u.role ? `(${u.role})` : ""}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setAssigneeId(val)}
+              options={userOptions}
+              placeholder={t("Select assignee...", { defaultValue: "Select assignee..." })}
+            />
           </div>
 
           <div className="rd-field">
             <label className="rd-label">{t("Reason for Reopening", { defaultValue: "Reason for Reopening" })} <span style={{ color: "var(--color-danger)" }}>*</span></label>
-            <select
-              className="rd-input"
+            <CustomSelect
+              name="reopen_reason"
               value={reopenReason}
-              onChange={(e) => { setReopenReason(e.target.value); }}
-            >
-              <option value="">{t("Select a reason...", { defaultValue: "Select a reason..." })}</option>
-              {REOPEN_REASONS.map((r) => (
-                <option key={r} value={r}>{t(r)}</option>
-              ))}
-            </select>
+              onChange={(val) => setReopenReason(val)}
+              options={reopenReasonOptions}
+              placeholder={t("Select a reason...", { defaultValue: "Select a reason..." })}
+            />
             <div className="rd-reason-tags">
               {REOPEN_REASONS.map((r) => (
                 <button

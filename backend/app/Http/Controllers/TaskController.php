@@ -798,6 +798,9 @@ class TaskController extends Controller
                 $clone = clone $task;
                 $clone->setRelation('assignees', $assignee ? collect([$assignee]) : collect());
                 $clone->item_type = 'task';
+                if ($task->submission_stage === 'awaiting_checkpoint' && !in_array(strtolower((string)$task->status), ['completed', 'approved', 'declined', 'abandoned'], true)) {
+                    $clone->status = 'in_progress';
+                }
                 $clone->total_deliverables = $progress['total'];
                 $clone->completed_deliverables = $progress['completed'];
                 $clone->pending_deliverables_count = $progress['pending'];
@@ -854,6 +857,9 @@ class TaskController extends Controller
                 $clone = clone $task;
                 $clone->setRelation('assignees', collect());
                 $clone->item_type = 'task';
+                if ($task->submission_stage === 'awaiting_checkpoint' && !in_array(strtolower((string)$task->status), ['completed', 'approved', 'declined', 'abandoned'], true)) {
+                    $clone->status = 'in_progress';
+                }
                 $clone->total_deliverables = $progress['total'];
                 $clone->completed_deliverables = $progress['completed'];
                 $clone->pending_deliverables_count = $progress['pending'];
@@ -1647,12 +1653,31 @@ $routing = $this->delegationService->routingPayload($task, $user);
                 $projectMemberIds[] = (int) $mid;
             }
         }
+        if ($project->created_by) {
+            $projectMemberIds[] = (int) $project->created_by;
+        }
+        if (!empty($project->assigned_users)) {
+            $assigned = is_array($project->assigned_users) ? $project->assigned_users : json_decode($project->assigned_users, true);
+            if (is_array($assigned)) {
+                foreach ($assigned as $u) {
+                    $uId = is_array($u) || is_object($u) ? ($u['id'] ?? $u->id ?? null) : $u;
+                    if ($uId) $projectMemberIds[] = (int) $uId;
+                }
+            }
+        }
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasTable('project_user')) {
+                $pivotIds = $project->users()->pluck('users.id')->map(fn ($id) => (int) $id)->toArray();
+                $projectMemberIds = array_merge($projectMemberIds, $pivotIds);
+            }
+        } catch (\Throwable $e) {}
+        $projectMemberIds = array_values(array_unique(array_filter(array_map('intval', $projectMemberIds))));
 
-        $allowedAssigneeKeys = collect($allMemberIds)->map(fn ($mid) => (string) $mid)->toArray();
+        $allowedAssigneeKeys = collect(array_merge($allMemberIds, $projectMemberIds))->map(fn ($mid) => (string) $mid)->unique()->values()->toArray();
 
         // Validate local users are project members
         if (!empty($localUserIds)) {
-            $invalidLocalAssignees = array_diff($localUserIds, $projectMemberIds);
+            $invalidLocalAssignees = array_diff(array_map('intval', $localUserIds), $projectMemberIds);
             if (!empty($invalidLocalAssignees)) {
                 throw ValidationException::withMessages([
                     'assigned_to' => 'One or more selected users are not members of this project. Please select only project members.',
@@ -2465,6 +2490,25 @@ $routing = $this->delegationService->routingPayload($task, $user);
                 ->pluck('id')
                 ->map(fn ($id) => (int) $id)
                 ->toArray();
+            if ($targetProject->created_by) {
+                $projectMemberIds[] = (int) $targetProject->created_by;
+            }
+            if (!empty($targetProject->assigned_users)) {
+                $assigned = is_array($targetProject->assigned_users) ? $targetProject->assigned_users : json_decode($targetProject->assigned_users, true);
+                if (is_array($assigned)) {
+                    foreach ($assigned as $u) {
+                        $uId = is_array($u) || is_object($u) ? ($u['id'] ?? $u->id ?? null) : $u;
+                        if ($uId) $projectMemberIds[] = (int) $uId;
+                    }
+                }
+            }
+            try {
+                if (\Illuminate\Support\Facades\Schema::hasTable('project_user')) {
+                    $pivotIds = $targetProject->users()->pluck('users.id')->map(fn ($id) => (int) $id)->toArray();
+                    $projectMemberIds = array_merge($projectMemberIds, $pivotIds);
+                }
+            } catch (\Throwable $e) {}
+            $projectMemberIds = array_values(array_unique(array_filter(array_map('intval', $projectMemberIds))));
 
             if ($assigneeIds !== null) {
                 $invalidAssignees = array_diff(
@@ -4503,7 +4547,15 @@ $routing = $this->delegationService->routingPayload($task, $user);
             ]);
         }
 
-        $targetStatus = $isLate ? 'submitted_late' : 'submitted';
+        // Route the submission to the nearest required checkpoint, otherwise the creator.
+        $notifyUserId = $this->delegationService->nextSubmissionReviewer($task, (int) $user->id);
+        $creatorId = (int) ($this->delegationService->creatorId($task) ?: ($task->creator_id ?: $task->assigned_by));
+
+        // Transferee submitting to intermediate transferor must not prematurely change main task status to 'submitted'
+        $isIntermediateSubmission = $notifyUserId && (int) $notifyUserId !== $creatorId;
+        $targetStatus = $isIntermediateSubmission
+            ? 'in_progress'
+            : ($isLate ? 'submitted_late' : 'submitted');
 
         $updateData = [
             'status' => $targetStatus,
@@ -4517,6 +4569,26 @@ $routing = $this->delegationService->routingPayload($task, $user);
         if (in_array($task->status, ['reopened', 'in_progress', 'paused'])) {
             foreach (['rejected_at', 'rejected_by', 'rejection_comment', 'reopened_at', 'reopened_by', 'reopen_comment', 'reopen_instructions', 'reopen_new_deadline', 'reopen_file_path', 'reopen_file_name'] as $f) {
                 $updateData[$f] = null;
+            }
+        }
+
+        // Update specific step in delegation_chain to reflect transfer step submission
+        $chain = $task->delegation_chain ?? [];
+        if (is_string($chain)) {
+            $chain = json_decode($chain, true) ?? [];
+        }
+        if (!empty($chain)) {
+            $chainUpdated = false;
+            foreach ($chain as &$entry) {
+                if ((int) ($entry['delegated_to'] ?? 0) === (int) $user->id && strtolower($entry['status'] ?? '') === 'accepted') {
+                    $entry['submission_status'] = 'submitted';
+                    $entry['submitted_at'] = now()->toISOString();
+                    $chainUpdated = true;
+                }
+            }
+            unset($entry);
+            if ($chainUpdated) {
+                $updateData['delegation_chain'] = $chain;
             }
         }
 
@@ -4544,15 +4616,12 @@ $routing = $this->delegationService->routingPayload($task, $user);
 
         $task->load('project:id,title');
 
-        // Route the submission to the nearest required checkpoint, otherwise the creator.
-        $notifyUserId = $this->delegationService->nextSubmissionReviewer($task, (int) $user->id);
-        $creatorId = $this->delegationService->creatorId($task);
         $task->update([
             'creator_id' => $task->creator_id ?: $creatorId,
             'current_submitter_id' => $user->id,
             'current_reviewer_id' => $notifyUserId,
             'current_owner' => $notifyUserId,
-            'submission_stage' => $notifyUserId && (int) $notifyUserId === (int) $creatorId
+            'submission_stage' => $notifyUserId && (int) $notifyUserId === $creatorId
                 ? 'awaiting_creator'
                 : 'awaiting_checkpoint',
             'submission_forwarded_by' => [],
@@ -4651,13 +4720,16 @@ $routing = $this->delegationService->routingPayload($task, $user);
                     throw ValidationException::withMessages(['task' => 'No next reviewer is available.']);
                 }
 
-                $creatorId = $this->delegationService->creatorId($locked);
-                $targetStatus = in_array($locked->status, ['submitted', 'submitted_late'], true) ? $locked->status : 'submitted';
+                $creatorId = (int) $this->delegationService->creatorId($locked);
+                $isFinalSubmission = (int) $nextUserId === $creatorId;
+                $targetStatus = $isFinalSubmission
+                    ? (in_array($locked->status, ['submitted', 'submitted_late'], true) ? $locked->status : 'submitted')
+                    : 'in_progress';
                 $locked->update([
                     'status' => $targetStatus,
                     'current_reviewer_id' => $nextUserId,
                     'current_owner' => $nextUserId,
-                    'submission_stage' => (int) $nextUserId === (int) $creatorId ? 'awaiting_creator' : 'awaiting_checkpoint',
+                    'submission_stage' => $isFinalSubmission ? 'awaiting_creator' : 'awaiting_checkpoint',
                     'submission_forwarded_by' => $forwarded,
                     'updated_by' => $user->id,
                 ]);
@@ -4743,8 +4815,15 @@ $routing = $this->delegationService->routingPayload($task, $user);
             return response()->json(['success' => false, 'message' => 'Unauthorized to edit this submission.'], 403);
         }
 
-        if ($task->has_edited_submission) {
-            return response()->json(['success' => false, 'message' => 'Submission can only be edited once.'], 422);
+        $isAlreadyEdited = $task->has_edited_submission ||
+            $submission->is_edited ||
+            ((int) ($submission->edit_count ?? 0) > 0) ||
+            ((int) ($submission->version_number ?? 1) > 1) ||
+            ((int) ($submission->version ?? 1) > 1) ||
+            ($submission->updated_at && $submission->created_at && $submission->updated_at->diffInSeconds($submission->created_at) > 2);
+
+        if ($isAlreadyEdited) {
+            return response()->json(['success' => false, 'message' => 'Task submission can only be edited once.'], 422);
         }
 
         $validated = $request->validate([
@@ -4753,11 +4832,27 @@ $routing = $this->delegationService->routingPayload($task, $user);
             'files' => 'nullable|array',
             'files.*' => 'file|max:51200',
             'links' => 'nullable|array',
-            'links.*' => 'string|max:2048',
+            'links.*' => 'nullable|string|max:2048',
+            'deleted_attachment_ids' => 'nullable|array',
+            'deleted_attachment_ids.*' => 'nullable',
+            'remove_main_file' => 'nullable|boolean',
         ]);
 
         if (array_key_exists('comment', $validated)) {
             $submission->comment = $validated['comment'];
+        }
+
+        $deletedAttachmentIds = array_filter((array) $request->input('deleted_attachment_ids', []));
+        if (!empty($deletedAttachmentIds)) {
+            $numericIds = array_filter($deletedAttachmentIds, 'is_numeric');
+            if (!empty($numericIds)) {
+                $submission->attachments()->whereIn('id', $numericIds)->delete();
+            }
+        }
+
+        if ($request->boolean('remove_main_file') || in_array('main_file', $deletedAttachmentIds, true)) {
+            $submission->file_path = null;
+            $submission->file_name = null;
         }
 
         if ($request->hasFile('file')) {
@@ -4771,6 +4866,7 @@ $routing = $this->delegationService->routingPayload($task, $user);
             }
         }
 
+        $submission->version_number = max((int) ($submission->version_number ?? 1), 2);
         $submission->save();
 
         if ($request->hasFile('files')) {
@@ -4793,16 +4889,27 @@ $routing = $this->delegationService->routingPayload($task, $user);
             );
         }
 
-        if (! empty($validated['links'])) {
-            $submission->attachments()->createMany(
-                collect($validated['links'])->map(fn ($url) => [
-                    'submission_type' => 'task',
-                    'file_name' => $url,
-                    'original_name' => $url,
-                    'attachment_type' => 'link',
-                    'url' => $url,
-                ])->toArray()
-            );
+        if ($request->has('links')) {
+            $newLinkUrls = collect($request->input('links', []))
+                ->map(fn ($l) => is_array($l) ? ($l['url'] ?? '') : (is_string($l) ? $l : ''))
+                ->map(fn ($l) => trim((string) $l))
+                ->filter()
+                ->unique()
+                ->values();
+
+            $submission->attachments()->where('attachment_type', 'link')->delete();
+
+            if ($newLinkUrls->isNotEmpty()) {
+                $submission->attachments()->createMany(
+                    $newLinkUrls->map(fn ($url) => [
+                        'submission_type' => 'task',
+                        'file_name' => $url,
+                        'original_name' => $url,
+                        'attachment_type' => 'link',
+                        'url' => $url,
+                    ])->toArray()
+                );
+            }
         }
 
         $task->update(['has_edited_submission' => true]);
@@ -4815,23 +4922,30 @@ $routing = $this->delegationService->routingPayload($task, $user);
         ]);
 
         $this->activityService->log(
-            user: $user,
-            action: 'task_submission_edited',
-            relatedModule: 'task',
-            relatedId: $task->id,
-            entityName: $task->title,
-            description: "Submission edited for task: {$task->title}",
-            metadata: ['submission_id' => $submission->id]
+            $user->id,
+            'task_submission_edited',
+            "Submission edited for task: {$task->title}",
+            'task',
+            $task->id,
+            'submission_edited',
+            $task->title,
+            null,
+            ['submission_id' => $submission->id]
         );
 
-        $this->auditService->log(
-            user: $user,
-            module: 'Task Management',
-            action: 'Submission Edited',
-            entityType: 'TaskSubmission',
-            entityId: $submission->id,
-            description: "Submission edited for task #{$task->business_id}"
-        );
+        try {
+            $this->auditService->log(
+                module: 'Task Management',
+                action: 'Submission Edited',
+                description: "Submission edited for task #{$task->business_id}",
+                user: $user,
+                entityType: 'TaskSubmission',
+                entityId: $submission->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
 
         return response()->json([
             'success' => true,
@@ -5397,7 +5511,10 @@ $routing = $this->delegationService->routingPayload($task, $user);
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
-        $submission = TaskSubmission::where('task_id', $task->id)->with('submittedBy:id,name,email')->latest()->first();
+        $submission = TaskSubmission::where('task_id', $task->id)
+            ->with(['submittedBy:id,name,email', 'attachments'])
+            ->latest()
+            ->first();
 
         return response()->json(['success' => true, 'submission' => $submission]);
     }

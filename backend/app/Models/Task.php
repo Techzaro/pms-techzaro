@@ -769,6 +769,12 @@ class Task extends Model
         return $this->hasMany(TaskDelegation::class)->where('status', 'pending')->latest();
     }
 
+    /** Get the single latest pending delegation for this task. */
+    public function pendingDelegation(): HasOne
+    {
+        return $this->hasOne(TaskDelegation::class)->where('status', 'pending')->latestOfMany();
+    }
+
     /** Get the latest delegation for this task. */
     public function latestDelegation()
     {

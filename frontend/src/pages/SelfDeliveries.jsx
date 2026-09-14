@@ -13,7 +13,7 @@ import DraggableStatusBadges from "../components/DraggableStatusBadges";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { GoDotFill } from "react-icons/go";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import { renderDynamicDates } from "../utils/tableDateUtils";
+import { isDelegationRejectedByMe, isDelegationRevokedFromMe } from "../utils/delegationUtils";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
@@ -133,12 +134,34 @@ function SelfDeliveries() {
   const [deleteSubtaskTargetId, setDeleteSubtaskTargetId] = useState(null);
   const [deleteSubtaskConfirmOpen, setDeleteSubtaskConfirmOpen] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(() => {
+    const p = searchParams.get("page");
+    return p ? Math.max(1, parseInt(p, 10) || 1) : 1;
+  });
   const [showAll, setShowAll] = useState(false);
   const [actingId, setActingId] = useState(null);
   const [actingType, setActingType] = useState(null);
   const [perPage, setPerPage] = useState(10);
   const ITEMS_PER_PAGE = perPage;
+
+  useEffect(() => {
+    const p = searchParams.get("page");
+    const parsed = p ? Math.max(1, parseInt(p, 10) || 1) : 1;
+    setPage((prev) => (prev !== parsed ? parsed : prev));
+  }, [searchParams]);
+
+  const handlePageChange = useCallback((newPage) => {
+    setPage(newPage);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (newPage > 1) {
+        next.set("page", String(newPage));
+      } else {
+        next.delete("page");
+      }
+      return next;
+    });
+  }, [setSearchParams]);
 
   useEffect(() => {
     setOrderedSubtasks(subtasks);
@@ -228,11 +251,16 @@ function SelfDeliveries() {
       setStatusFilter(filter);
       setShowAll(false);
       setPage(1);
-      if (filter) {
-        setSearchParams({ status: filter });
-      } else {
-        setSearchParams({});
-      }
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        if (filter) {
+          next.set("status", filter);
+        } else {
+          next.delete("status");
+        }
+        next.delete("page");
+        return next;
+      });
     }
   };
 
@@ -741,7 +769,7 @@ function SelfDeliveries() {
                 {t("+ Create Subtask", { defaultValue: "+ Create Subtask" })}
               </button>
             )}
-            <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)} className="reports-filter">
+            <select value={timeFilter} onChange={(e) => { setTimeFilter(e.target.value); handlePageChange(1); }} className="reports-filter">
               <option value="">{t("All Time", { defaultValue: "All Time" })}</option>
               <option value="today">{t("Today", { defaultValue: "Today" })}</option>
               <option value="7">{t("Last 7 Days", { defaultValue: "Last 7 Days" })}</option>
@@ -754,14 +782,14 @@ function SelfDeliveries() {
                 <input
                   type="date"
                   value={customStartDate}
-                  onChange={(e) => { setCustomStartDate(e.target.value); setPage(1); }}
+                  onChange={(e) => { setCustomStartDate(e.target.value); handlePageChange(1); }}
                   style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--border-color, #cbd5e1)", fontSize: "13px" }}
                 />
                 <span style={{ fontSize: "12px", color: "#64748b" }}>{t("to", { defaultValue: "to" })}</span>
                 <input
                   type="date"
                   value={customEndDate}
-                  onChange={(e) => { setCustomEndDate(e.target.value); setPage(1); }}
+                  onChange={(e) => { setCustomEndDate(e.target.value); handlePageChange(1); }}
                   style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--border-color, #cbd5e1)", fontSize: "13px" }}
                 />
               </div>
@@ -792,7 +820,10 @@ function SelfDeliveries() {
         {/* DEDICATED ACTION BAR & FILTERS */}
         <TaskFilterBar
           search={search}
-          onSearchChange={setSearch}
+          onSearchChange={(val) => {
+            setSearch(val);
+            handlePageChange(1);
+          }}
           filters={advancedFilters}
           activeStatus={statusFilter}
           onFilterChange={(key, val) => {
@@ -804,11 +835,16 @@ function SelfDeliveries() {
               }
               return updated;
             });
-            setPage(1);
+            handlePageChange(1);
           }}
           onApplyFilters={(appliedFilters, appliedSort) => {
             setStatusFilter("");
-            setSearchParams({});
+            setSearchParams((prev) => {
+              const next = new URLSearchParams(prev);
+              next.delete("page");
+              next.delete("status");
+              return next;
+            });
             setAdvancedFilters((prev) => ({
               ...prev,
               statuses: appliedFilters?.statuses || appliedFilters?.status || [],
@@ -877,15 +913,83 @@ function SelfDeliveries() {
               {(item, idx, dndProps) => {
                 const colors = getRandomColors(item.id);
                 const canSubmit = item.status === "pending" || item.status === "rework_required";
+
+                const isRejectedByMe = isDelegationRejectedByMe(item, currentUser);
+                const isRevokedFromMe = isDelegationRevokedFromMe(item, currentUser);
+                const isInactiveForMe = isRejectedByMe || isRevokedFromMe;
+                const hasRejectedDelegation = Array.isArray(item.delegation_chain) && item.delegation_chain.some((d) => String(d.status).toLowerCase() === "rejected");
+                const hasRevokedDelegation = Array.isArray(item.delegation_chain) && item.delegation_chain.some((d) => String(d.status).toLowerCase() === "revoked");
+
                 return (
-                  <div className="deliveries-table-row self-deliveries-grid">
+                  <div className={`deliveries-table-row self-deliveries-grid ${isInactiveForMe ? "delegation-rejected-row" : ""}`} key={item.id} style={isInactiveForMe ? { opacity: 0.88 } : undefined}>
                     <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={item.id} businessId={item.business_id} color="#16a34a" />
                     <div className="user-box">
                       <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
                         {getInitials(item.title)}
                       </div>
                       <div>
-                        <div className="user-name" title={item.title} style={{ maxWidth: "250px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.delegation_chain && item.delegation_chain.length > 0 && <ArrowUpRight size={14} style={{ color: "#6B7280", flexShrink: 0 }} />} {item.title}</div>
+                        <div className="user-name" title={item.title} style={{ maxWidth: "250px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", opacity: isInactiveForMe ? 0.75 : 1 }}>
+                          {item.delegation_chain && item.delegation_chain.length > 0 && !isInactiveForMe && !hasRejectedDelegation && !hasRevokedDelegation && (
+                            <ArrowUpRight size={14} style={{ color: "#6B7280", flexShrink: 0, marginRight: 4 }} />
+                          )}
+                          {(() => {
+                            if (!isRejectedByMe && !hasRejectedDelegation) return null;
+                            return (
+                              <span
+                                className="badge"
+                                title={isRejectedByMe ? t("Transfer Rejected by You", { defaultValue: "Transfer Rejected by You" }) : t("Transfer Rejected", { defaultValue: "Transfer Rejected" })}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                  padding: "1px 6px",
+                                  borderRadius: "4px",
+                                  backgroundColor: "#FEE2E2",
+                                  color: "#DC2626",
+                                  fontSize: "10px",
+                                  fontWeight: 700,
+                                  lineHeight: "14px",
+                                  border: "1px solid #FCA5A5",
+                                  flexShrink: 0,
+                                  marginRight: 4,
+                                  cursor: "help",
+                                }}
+                              >
+                                <XCircle size={11} />
+                                {t("Transfer Rejected", { defaultValue: "Transfer Rejected" })}
+                              </span>
+                            );
+                          })()}
+                          {(() => {
+                            if (!isRevokedFromMe && !hasRevokedDelegation) return null;
+                            return (
+                              <span
+                                className="badge"
+                                title={isRevokedFromMe ? t("Transfer Revoked by Assigner", { defaultValue: "Transfer Revoked by Assigner" }) : t("Transfer Revoked", { defaultValue: "Transfer Revoked" })}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                  padding: "1px 6px",
+                                  borderRadius: "4px",
+                                  backgroundColor: "#FEF3C7",
+                                  color: "#B45309",
+                                  fontSize: "10px",
+                                  fontWeight: 700,
+                                  lineHeight: "14px",
+                                  border: "1px solid #FCD34D",
+                                  flexShrink: 0,
+                                  marginRight: 4,
+                                  cursor: "help",
+                                }}
+                              >
+                                <XCircle size={11} />
+                                {t("Transfer Revoked", { defaultValue: "Transfer Revoked" })}
+                              </span>
+                            );
+                          })()}
+                          {item.title}
+                        </div>
                       </div>
                     </div>
                     <div>
@@ -909,7 +1013,11 @@ function SelfDeliveries() {
                             <IoEyeOutline size={20} />
                           </button>
                         }
-                        onTriggerClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { from: "self-deliveries", subtaskIds } })}
+                        onTriggerClick={() => {
+                          const currentSearch = location.search || (page > 1 ? `?page=${page}` : "");
+                          const returnUrl = `${location.pathname}${currentSearch}`;
+                          navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { from: "self-deliveries", subtaskIds, page, returnUrl } });
+                        }}
                       >
                         {(() => {
                           const sStatus = (item.status || "").toLowerCase();
@@ -1090,9 +1198,9 @@ function SelfDeliveries() {
         <Pagination
           currentPage={page}
           totalPages={totalPages}
-          onPageChange={setPage}
+          onPageChange={handlePageChange}
           itemsPerPage={perPage}
-          onItemsPerPageChange={(val) => { setPerPage(val); setPage(1); }}
+          onItemsPerPageChange={(val) => { setPerPage(val); handlePageChange(1); }}
         />
       )}
 

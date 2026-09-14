@@ -151,3 +151,14 @@
   background: #444444;
   color: #ffffff;
 }
+
+.cs-disabled {
+  opacity: 0.6;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+.cs-disabled .cs-trigger {
+  cursor: not-allowed;
+  background: var(--bg-hover, #f3f4f6);
+}

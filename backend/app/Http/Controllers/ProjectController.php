@@ -880,6 +880,7 @@ $baseRelations = [
             'view_only_users' => 'nullable|array',
             'view_only_users.*' => 'exists:users,id',
             'created_by' => 'nullable|exists:users,id',
+            'manager_id' => 'nullable|exists:users,id',
             'status' => 'sometimes|nullable|string|max:64',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date',
@@ -919,8 +920,13 @@ $baseRelations = [
         $newAttachments = $validated['attachments'] ?? null;
         unset($validated['attachments']);
 
+        // If manager_id is passed, also update created_by to point to current manager
+        if ($request->has('manager_id') && ! empty($validated['manager_id'])) {
+            $validated['created_by'] = $validated['manager_id'];
+        }
+
         // Strip fields that may not exist as columns in older tenant databases
-        foreach (['kb_ids', 'event_ids', 'guest_ids', 'team_ids'] as $field) {
+        foreach (['kb_ids', 'event_ids', 'guest_ids', 'team_ids', 'manager_id'] as $field) {
             if (array_key_exists($field, $validated) && !\Illuminate\Support\Facades\Schema::hasColumn('projects', $field)) {
                 unset($validated[$field]);
             }
@@ -940,7 +946,51 @@ $baseRelations = [
             }
         }
 
+        $initialManager = (int) ($project->manager_id ?? $project->created_by ?? 0);
         $oldAssignedUsers = $project->assigned_users ?? [];
+        if (is_string($oldAssignedUsers)) {
+            $oldAssignedUsers = json_decode($oldAssignedUsers, true) ?? [];
+        }
+
+        if (array_key_exists('assigned_users', $validated) || $request->has('manager_id')) {
+            $newAssignedRaw = $validated['assigned_users'] ?? $oldAssignedUsers;
+            $newAssignedIds = collect(is_array($newAssignedRaw) ? $newAssignedRaw : [])
+                ->map(fn ($id) => is_array($id) ? (int) ($id['id'] ?? 0) : (int) $id)
+                ->filter(fn ($id) => $id > 0)
+                ->values()
+                ->all();
+
+            $oldAssignedIds = collect(is_array($oldAssignedUsers) ? $oldAssignedUsers : [])
+                ->map(fn ($id) => is_array($id) ? (int) ($id['id'] ?? 0) : (int) $id)
+                ->filter(fn ($id) => $id > 0)
+                ->values()
+                ->all();
+
+            $hadManager = ($initialManager > 0) || (! empty($oldAssignedIds) && User::whereIn('id', $oldAssignedIds)->where('role', 'manager')->exists());
+
+            $newManagerId = $request->has('manager_id') && ! empty($request->input('manager_id'))
+                ? (int) $request->input('manager_id')
+                : (isset($validated['created_by']) ? (int) $validated['created_by'] : 0);
+
+            $hasManagerInAssigned = ! empty($newAssignedIds) && User::whereIn('id', $newAssignedIds)->where('role', 'manager')->exists();
+            $hasManager = ($newManagerId > 0) || $hasManagerInAssigned;
+
+            // Check if initial manager was removed from assigned_users without a new manager selected
+            $initialManagerRemoved = $initialManager > 0 && ! in_array($initialManager, $newAssignedIds);
+            $newManagerSelected = $newManagerId > 0 && $newManagerId !== $initialManager;
+
+            if ($hadManager && (($initialManagerRemoved && ! $newManagerSelected) || ! $hasManager)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You cannot remove the Project Manager until you select another.',
+                    'errors' => [
+                        'manager_id' => ['You cannot remove the Project Manager until you select another.'],
+                        'assigned_users' => ['You cannot remove the Project Manager until you select another.'],
+                    ],
+                ], 422);
+            }
+        }
+
         $oldTeamId = $project->team_id;
         $oldViewOnlyUserIds = $project->visibility()
             ->where('is_visible', true)
@@ -1304,6 +1354,38 @@ $baseRelations = [
             'assigned_users' => 'sometimes|nullable|array',
             'assigned_users.*' => 'integer|exists:users,id',
         ]);
+
+        if (array_key_exists('assigned_users', $validated)) {
+            $newAssignedRaw = $validated['assigned_users'] ?? [];
+            $newAssignedIds = collect(is_array($newAssignedRaw) ? $newAssignedRaw : [])
+                ->map(fn ($id) => is_array($id) ? (int) ($id['id'] ?? 0) : (int) $id)
+                ->filter(fn ($id) => $id > 0)
+                ->values()
+                ->all();
+
+            $oldAssignedRaw = $project->assigned_users ?? [];
+            if (is_string($oldAssignedRaw)) {
+                $oldAssignedRaw = json_decode($oldAssignedRaw, true) ?? [];
+            }
+            $oldAssignedIds = collect(is_array($oldAssignedRaw) ? $oldAssignedRaw : [])
+                ->map(fn ($id) => is_array($id) ? (int) ($id['id'] ?? 0) : (int) $id)
+                ->filter(fn ($id) => $id > 0)
+                ->values()
+                ->all();
+
+            $hadManager = ! empty($oldAssignedIds) && User::whereIn('id', $oldAssignedIds)->where('role', 'manager')->exists();
+            $hasManager = ! empty($newAssignedIds) && User::whereIn('id', $newAssignedIds)->where('role', 'manager')->exists();
+
+            if ($hadManager && ! $hasManager) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'A project must have an assigned Project Manager.',
+                    'errors' => [
+                        'assigned_users' => ['A project must have an assigned Project Manager.'],
+                    ],
+                ], 422);
+            }
+        }
 
         $oldStatus = $project->status;
         $oldSidebarNotes = $project->sidebar_notes;
@@ -2267,7 +2349,8 @@ $baseRelations = [
     private function inactiveProjectStatuses(): array
     {
         return ['completed', 'Completed', 'done', 'Done', 'approved', 'Approved', 'rejected', 'Rejected',
-            'cancelled', 'Cancelled', 'canceled', 'Canceled', 'abandoned', 'Abandoned', 'closed', 'Closed', 'archived', 'Archived'];
+            'cancelled', 'Cancelled', 'canceled', 'Canceled', 'abandoned', 'Abandoned', 'closed', 'Closed', 'archived', 'Archived',
+            'paused', 'Paused', 'pause', 'Pause'];
     }
 
     /**

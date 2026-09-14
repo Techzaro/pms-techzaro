@@ -44,6 +44,7 @@ class Project extends Model
         'start_date',
         'end_date',
         'created_by',
+        'manager_id',
         'updated_by',
         'sort_order',
     ];
@@ -108,6 +109,12 @@ class Project extends Model
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /** The project manager assigned to this project. */
+    public function manager()
+    {
+        return $this->belongsTo(User::class, 'manager_id');
     }
 
     /** The user who last updated this project. */
@@ -272,15 +279,31 @@ class Project extends Model
             return $this->_cachedMembers;
         }
 
-        $memberIds = collect($this->assigned_users ?? []);
+        $assigned = $this->assigned_users ?? [];
+        if (is_string($assigned)) {
+            $assigned = json_decode($assigned, true) ?? [];
+        }
+        $memberIds = collect(is_array($assigned) ? $assigned : [])->map(function ($u) {
+            if (is_array($u) || is_object($u)) {
+                return (int) ($u['id'] ?? $u->id ?? 0);
+            }
+            return (int) $u;
+        })->filter();
 
         if ($this->created_by) {
-            $memberIds->push($this->created_by);
+            $memberIds->push((int) $this->created_by);
         }
 
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasTable('project_user')) {
+                $pivotUserIds = $this->users()->pluck('users.id')->map(fn ($id) => (int) $id);
+                $memberIds = $memberIds->merge($pivotUserIds);
+            }
+        } catch (\Throwable $e) {}
+
         $teamIds = array_merge(
-            $this->team_id ? [$this->team_id] : [],
-            $this->team_ids ?? []
+            $this->team_id ? [(int) $this->team_id] : [],
+            is_array($this->team_ids) ? array_map('intval', $this->team_ids) : (is_string($this->team_ids) ? array_map('intval', json_decode($this->team_ids, true) ?? []) : [])
         );
         $teamIds = array_unique(array_filter($teamIds));
 
@@ -291,13 +314,14 @@ class Project extends Model
             $teamMemberIds = $teams->flatMap(fn ($team) => $team->members->pluck('id'))
                 ->merge($teams->pluck('leader_id'))
                 ->filter()
+                ->map(fn ($id) => (int) $id)
                 ->unique()
                 ->values();
 
             $memberIds = $memberIds->merge($teamMemberIds);
         }
 
-        $memberIds = $memberIds->filter()->unique()->values()->all();
+        $memberIds = $memberIds->filter()->map(fn ($id) => (int) $id)->unique()->values()->all();
 
         if (empty($memberIds)) {
             $this->_cachedMembers = collect();
@@ -305,7 +329,9 @@ class Project extends Model
         }
 
         $this->_cachedMembers = User::whereIn('id', $memberIds)
-            ->where('active', true)
+            ->where(function ($q) {
+                $q->where('active', true)->orWhere('active', 1)->orWhereNull('active');
+            })
             ->select('id', 'name', 'email', 'role', 'department')
             ->orderBy('name')
             ->get();

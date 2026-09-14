@@ -8,7 +8,16 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import "./CustomSelect.css";
 
-const CustomSelect = ({ value, onChange, options = [], placeholder = "Select...", name }) => {
+const CustomSelect = ({
+  value,
+  onChange,
+  options = [],
+  placeholder = "Select...",
+  name,
+  disabled = false,
+  className = "",
+  style = {},
+}) => {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -60,7 +69,11 @@ const CustomSelect = ({ value, onChange, options = [], placeholder = "Select..."
   const q = search.toLowerCase().trim();
   const filtered = useMemo(() => {
     const result = q
-      ? options.filter((o) => o.label?.toLowerCase().includes(q))
+      ? options.filter((o) => {
+          const lbl = String(o.label || "").toLowerCase();
+          const sub = String(o.subtitle || o.email || o.role || "").toLowerCase();
+          return lbl.includes(q) || sub.includes(q);
+        })
       : options;
     if (!q && selected) {
       const selectedIdx = result.findIndex((o) => String(o.value) === String(selected.value));
@@ -83,15 +96,18 @@ const CustomSelect = ({ value, onChange, options = [], placeholder = "Select..."
   }, [highlightedIndex, open]);
 
   const handleInputChange = (e) => {
+    if (disabled) return;
     setSearch(e.target.value);
     if (!open) setOpen(true);
   };
 
   const handleInputFocus = () => {
+    if (disabled) return;
     setOpen(true);
   };
 
   const handleTriggerClick = () => {
+    if (disabled) return;
     if (!open) {
       setSearch("");
       setOpen(true);
@@ -103,6 +119,7 @@ const CustomSelect = ({ value, onChange, options = [], placeholder = "Select..."
 
   const handleArrowClick = (e) => {
     e.stopPropagation();
+    if (disabled) return;
     if (open) {
       setOpen(false);
       setSearch("");
@@ -116,6 +133,7 @@ const CustomSelect = ({ value, onChange, options = [], placeholder = "Select..."
   };
 
   const handleKeyDown = (e) => {
+    if (disabled) return;
     if (e.key === "Escape") {
       setSearch("");
       setOpen(false);
@@ -135,29 +153,34 @@ const CustomSelect = ({ value, onChange, options = [], placeholder = "Select..."
   };
 
   const handleSelect = (optValue) => {
-    onChange(optValue);
+    onChange?.(optValue);
     setOpen(false);
     setSearch("");
   };
 
   return (
-    <div className={`cs-wrap ${open ? "cs-open" : ""}`} ref={ref}>
+    <div
+      className={`cs-wrap ${open ? "cs-open" : ""} ${disabled ? "cs-disabled" : ""} ${className}`}
+      ref={ref}
+      style={style}
+    >
       <div className="cs-trigger" onClick={handleTriggerClick}>
         {open ? (
           <input
             ref={inputRef}
             type="text"
             className="cs-combo-input"
-            placeholder={t("Search...")}
+            placeholder={t("Search...", { defaultValue: "Search..." })}
             value={search}
             onChange={handleInputChange}
             onFocus={handleInputFocus}
             onKeyDown={handleKeyDown}
+            disabled={disabled}
           />
         ) : selected ? (
-          <span className="cs-selected-text">{t(selected.label)}</span>
+          <span className="cs-selected-text">{selected.label}</span>
         ) : (
-          <span className="cs-placeholder-text">{t(placeholder)}</span>
+          <span className="cs-placeholder-text">{t(placeholder, { defaultValue: placeholder })}</span>
         )}
         <svg
           className={`cs-arrow ${open ? "cs-arrow-open" : ""}`}
@@ -186,7 +209,7 @@ const CustomSelect = ({ value, onChange, options = [], placeholder = "Select..."
             }}
           >
             {filtered.length === 0 ? (
-              <div className="cs-empty">{t("No matches found")}</div>
+              <div className="cs-empty">{t("No matches found", { defaultValue: "No matches found" })}</div>
             ) : (
               filtered.map((opt, idx) => (
                 <div
@@ -195,7 +218,7 @@ const CustomSelect = ({ value, onChange, options = [], placeholder = "Select..."
                   onClick={() => handleSelect(opt.value)}
                   onMouseEnter={() => setHighlightedIndex(idx)}
                 >
-                  {t(opt.label)}
+                  {opt.label}
                 </div>
               ))
             )}

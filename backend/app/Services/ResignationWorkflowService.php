@@ -89,8 +89,38 @@ class ResignationWorkflowService
 
             $notificationsSent = 0;
             foreach ($draftOwners as $ownerId => $count) {
-                $this->sendResignationNotification($ownerId, $user, $count, $admin);
-                $notificationsSent++;
+                if ($ownerId && (int) $ownerId !== (int) $user->id) {
+                    $this->sendResignationNotification($ownerId, $user, $count, $admin);
+                    $notificationsSent++;
+                }
+            }
+
+            // Explicitly notify all active Admins and Project Managers that tasks/projects from the resigned user have been returned and require reassignment
+            $managersAndAdmins = User::whereIn('role', ['admin', 'manager'])
+                ->where('active', true)
+                ->where('id', '!=', $user->id)
+                ->get();
+
+            $totalReturned = count($draftsCreated);
+            foreach ($managersAndAdmins as $mgr) {
+                if (!isset($draftOwners[$mgr->id])) {
+                    $this->notificationService->notify(
+                        userId: $mgr->id,
+                        senderId: $admin->id,
+                        type: 'work_items_returned',
+                        module: 'system',
+                        relatedId: $user->id,
+                        title: 'Work Items Returned from Resignation',
+                        message: "Tasks and projects previously assigned to resigned user {$user->name} have been returned to drafts and require reassignment.",
+                        link: '/drafts?tab=returned',
+                        changes: [
+                            'resigned_user' => $user->name,
+                            'total_returned' => $totalReturned,
+                            'resigned_by' => $admin->name,
+                        ]
+                    );
+                    $notificationsSent++;
+                }
             }
 
             $user->tokens()->delete();
@@ -182,7 +212,7 @@ class ResignationWorkflowService
     private function getActiveProjects(User $user): array
     {
         $projects = Project::whereRaw("JSON_CONTAINS(assigned_users, ?)", [json_encode($user->id)])
-            ->whereNotIn('status', ['Completed', 'Cancelled', 'Archived'])
+            ->whereNotIn(DB::raw('LOWER(status)'), ['completed', 'approved', 'cancelled', 'archived', 'done'])
             ->with('creator:id,name')
             ->get();
 
@@ -255,9 +285,12 @@ class ResignationWorkflowService
     {
         $project = Project::findOrFail($projectId);
 
-        if (! in_array(strtolower((string) $project->status), ['completed', 'approved', 'cancelled', 'archived'])) {
+        if (! in_array(strtolower((string) $project->status), ['completed', 'approved', 'cancelled', 'archived', 'done'])) {
             $assignedUsers = $project->assigned_users ?? [];
-            $assignedUsers = array_values(array_filter($assignedUsers, fn ($id) => (int) $id !== (int) $resignedUser->id));
+            if (is_string($assignedUsers)) {
+                $assignedUsers = json_decode($assignedUsers, true) ?? [];
+            }
+            $assignedUsers = array_values(array_filter($assignedUsers, fn ($id) => (int) (is_array($id) ? ($id['id'] ?? 0) : $id) !== (int) $resignedUser->id));
             $updateData = ['assigned_users' => $assignedUsers, 'updated_by' => $admin->id];
             if ((int) ($project->manager_id ?? 0) === (int) $resignedUser->id) {
                 $updateData['manager_id'] = null;
@@ -268,12 +301,12 @@ class ResignationWorkflowService
             $project->update($updateData);
         }
 
-        return Draft::create([
+        $draft = Draft::create([
             'module_type' => 'project',
             'original_record_id' => $project->id,
             'draft_data' => $project->toArray(),
             'title' => $project->title,
-            'created_by' => $ownerId,
+            'created_by' => $ownerId ?: ($project->created_by ?: $admin->id),
             'last_edited_by' => $admin->id,
             'status' => 'draft',
             'project_id' => $project->id,
@@ -281,14 +314,25 @@ class ResignationWorkflowService
             'returned_from_user_id' => $resignedUser->id,
             'returned_at' => now(),
             'return_reason' => "Employee {$resignedUser->name} resigned",
+            'version' => 1,
         ]);
+
+        DraftVersion::create([
+            'draft_id' => $draft->id,
+            'version' => 1,
+            'draft_data' => $draft->draft_data,
+            'edited_by' => $admin->id,
+            'edited_at' => now(),
+        ]);
+
+        return $draft;
     }
 
     private function createDraftFromTask(int $taskId, int $ownerId, User $admin, User $resignedUser): Draft
     {
         $task = Task::findOrFail($taskId);
 
-        if (! in_array(strtolower((string) $task->status), ['approved', 'completed'])) {
+        if (! in_array(strtolower((string) $task->status), ['approved', 'completed', 'done'])) {
             $task->update([
                 'status' => 'draft',
                 'assigned_to' => null,
@@ -312,12 +356,12 @@ class ResignationWorkflowService
             );
         }
 
-        return Draft::create([
+        $draft = Draft::create([
             'module_type' => 'task',
             'original_record_id' => $task->id,
             'draft_data' => $task->toArray(),
             'title' => $task->title,
-            'created_by' => $ownerId,
+            'created_by' => $ownerId ?: ($task->created_by ?: ($task->assigned_by ?: $admin->id)),
             'last_edited_by' => $admin->id,
             'status' => 'draft',
             'project_id' => $task->project_id,
@@ -325,14 +369,25 @@ class ResignationWorkflowService
             'returned_from_user_id' => $resignedUser->id,
             'returned_at' => now(),
             'return_reason' => "Employee {$resignedUser->name} resigned",
+            'version' => 1,
         ]);
+
+        DraftVersion::create([
+            'draft_id' => $draft->id,
+            'version' => 1,
+            'draft_data' => $draft->draft_data,
+            'edited_by' => $admin->id,
+            'edited_at' => now(),
+        ]);
+
+        return $draft;
     }
 
     private function createDraftFromDeliverable(int $deliverableId, int $ownerId, User $admin, User $resignedUser): Draft
     {
         $deliverable = Deliverable::findOrFail($deliverableId);
 
-        if (! in_array(strtolower((string) $deliverable->status), ['approved', 'completed'])) {
+        if (! in_array(strtolower((string) $deliverable->status), ['approved', 'completed', 'done'])) {
             $deliverable->update([
                 'status' => 'draft',
                 'assigned_to' => null,
@@ -356,39 +411,62 @@ class ResignationWorkflowService
             );
         }
 
-        return Draft::create([
+        $draft = Draft::create([
             'module_type' => 'deliverable',
             'original_record_id' => $deliverable->id,
             'draft_data' => $deliverable->toArray(),
             'title' => $deliverable->title,
-            'created_by' => $ownerId,
+            'created_by' => $ownerId ?: ($deliverable->created_by ?: $admin->id),
             'last_edited_by' => $admin->id,
             'status' => 'draft',
             'project_id' => $deliverable->project_id,
+            'parent_id' => $deliverable->task_id,
             'is_returned' => true,
             'returned_from_user_id' => $resignedUser->id,
             'returned_at' => now(),
             'return_reason' => "Employee {$resignedUser->name} resigned",
+            'version' => 1,
         ]);
+
+        DraftVersion::create([
+            'draft_id' => $draft->id,
+            'version' => 1,
+            'draft_data' => $draft->draft_data,
+            'edited_by' => $admin->id,
+            'edited_at' => now(),
+        ]);
+
+        return $draft;
     }
 
     private function createDraftFromEvent(int $eventId, int $ownerId, User $admin, User $resignedUser): Draft
     {
         $event = Event::findOrFail($eventId);
 
-        return Draft::create([
+        $draft = Draft::create([
             'module_type' => 'event',
             'original_record_id' => $event->id,
             'draft_data' => $event->toArray(),
             'title' => $event->title,
-            'created_by' => $ownerId,
+            'created_by' => $ownerId ?: ($event->user_id ?: $admin->id),
             'last_edited_by' => $admin->id,
             'status' => 'draft',
             'is_returned' => true,
             'returned_from_user_id' => $resignedUser->id,
             'returned_at' => now(),
             'return_reason' => "Employee {$resignedUser->name} resigned",
+            'version' => 1,
         ]);
+
+        DraftVersion::create([
+            'draft_id' => $draft->id,
+            'version' => 1,
+            'draft_data' => $draft->draft_data,
+            'edited_by' => $admin->id,
+            'edited_at' => now(),
+        ]);
+
+        return $draft;
     }
 
     private function sendResignationNotification(int $ownerId, User $resignedUser, int $itemCount, User $admin): void

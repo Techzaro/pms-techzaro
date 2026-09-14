@@ -19,9 +19,9 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import DraggableStatusBadges from "../components/DraggableStatusBadges";
 import { GoDotFill } from "react-icons/go";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
-import { ArrowUpRight, StickyNote } from "lucide-react";
+import { ArrowUpRight, StickyNote, XCircle } from "lucide-react";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
@@ -34,6 +34,7 @@ import { authToken, getUser, rolePath } from "../utils/auth";
 import { renderDynamicDates } from "../utils/tableDateUtils";
 import { formatDateOnly } from "../utils/formatDateTime";
 import { getUpdatedSinceThreshold } from "../utils/filterUtils";
+import { isDelegationRejectedByMe, isDelegationRevokedFromMe } from "../utils/delegationUtils";
 import "../components/ActionPopover.css";
 import "../pages/Deliveries.css";
 
@@ -78,6 +79,7 @@ function AllDeliveries() {
   const { t } = useTranslation();
   const currentUser = getUser();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -113,9 +115,31 @@ function AllDeliveries() {
   const [orderedItems, setOrderedItems] = useState([]);
   const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
 
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(() => {
+    const p = searchParams.get("page");
+    return p ? Math.max(1, parseInt(p, 10) || 1) : 1;
+  });
   const [showAll, setShowAll] = useState(false);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  useEffect(() => {
+    const p = searchParams.get("page");
+    const parsed = p ? Math.max(1, parseInt(p, 10) || 1) : 1;
+    setPage((prev) => (prev !== parsed ? parsed : prev));
+  }, [searchParams]);
+
+  const handlePageChange = useCallback((newPage) => {
+    setPage(newPage);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (newPage > 1) {
+        next.set("page", String(newPage));
+      } else {
+        next.delete("page");
+      }
+      return next;
+    });
+  }, [setSearchParams]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -207,11 +231,16 @@ function AllDeliveries() {
       setStatusFilter(filter);
       setShowAll(false);
       setPage(1);
-      if (filter) {
-        setSearchParams({ status: filter });
-      } else {
-        setSearchParams({});
-      }
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        if (filter) {
+          next.set("status", filter);
+        } else {
+          next.delete("status");
+        }
+        next.delete("page");
+        return next;
+      });
     }
   };
 
@@ -397,7 +426,7 @@ function AllDeliveries() {
             <p>{t("Monitor and track subtasks across your scope", { defaultValue: "Monitor and track subtasks across your scope" })}</p>
           </div>
           <div className="header-actions" style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-            <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)} className="reports-filter">
+            <select value={timeFilter} onChange={(e) => { setTimeFilter(e.target.value); handlePageChange(1); }} className="reports-filter">
               <option value="">{t("All Time", { defaultValue: "All Time" })}</option>
               <option value="today">{t("Today", { defaultValue: "Today" })}</option>
               <option value="7">{t("Last 7 Days", { defaultValue: "Last 7 Days" })}</option>
@@ -410,14 +439,14 @@ function AllDeliveries() {
                 <input
                   type="date"
                   value={customStartDate}
-                  onChange={(e) => { setCustomStartDate(e.target.value); setPage(1); }}
+                  onChange={(e) => { setCustomStartDate(e.target.value); handlePageChange(1); }}
                   style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--border-color, #cbd5e1)", fontSize: "13px" }}
                 />
                 <span style={{ fontSize: "12px", color: "#64748b" }}>{t("to", { defaultValue: "to" })}</span>
                 <input
                   type="date"
                   value={customEndDate}
-                  onChange={(e) => { setCustomEndDate(e.target.value); setPage(1); }}
+                  onChange={(e) => { setCustomEndDate(e.target.value); handlePageChange(1); }}
                   style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--border-color, #cbd5e1)", fontSize: "13px" }}
                 />
               </div>
@@ -449,7 +478,10 @@ function AllDeliveries() {
         {/* DEDICATED ACTION BAR & FILTERS */}
         <TaskFilterBar
           search={search}
-          onSearchChange={setSearch}
+          onSearchChange={(val) => {
+            setSearch(val);
+            handlePageChange(1);
+          }}
           filters={advancedFilters}
           activeStatus={statusFilter}
           onFilterChange={(key, val) => {
@@ -461,11 +493,16 @@ function AllDeliveries() {
               }
               return updated;
             });
-            setPage(1);
+            handlePageChange(1);
           }}
           onApplyFilters={(appliedFilters, appliedSort) => {
             setStatusFilter("");
-            setSearchParams({});
+            setSearchParams((prev) => {
+              const next = new URLSearchParams(prev);
+              next.delete("page");
+              next.delete("status");
+              return next;
+            });
             setAdvancedFilters((prev) => ({
               ...prev,
               statuses: appliedFilters?.statuses || appliedFilters?.status || [],
@@ -485,7 +522,7 @@ function AllDeliveries() {
               updated_since_value: appliedFilters?.updated_since_value || "",
               updated_since_unit: appliedFilters?.updated_since_unit || "hours",
             }));
-            setPage(1);
+            handlePageChange(1);
           }}
           onReset={() => {
             setSearch("");
@@ -511,7 +548,7 @@ function AllDeliveries() {
               updated_since_value: "",
               updated_since_unit: "hours",
             });
-            setPage(1);
+            handlePageChange(1);
           }}
         />
 
@@ -550,8 +587,14 @@ function AllDeliveries() {
                 const creatorColors = getRandomColors((item.creator?.id || 0) + 100);
                 const uniqueKey = `all-subtask-${item.id}-${idx}`;
 
+                const isRejectedByMe = isDelegationRejectedByMe(item, currentUser);
+                const isRevokedFromMe = isDelegationRevokedFromMe(item, currentUser);
+                const isInactiveForMe = isRejectedByMe || isRevokedFromMe;
+                const hasRejectedDelegation = Array.isArray(item.delegation_chain) && item.delegation_chain.some((d) => String(d.status).toLowerCase() === "rejected");
+                const hasRevokedDelegation = Array.isArray(item.delegation_chain) && item.delegation_chain.some((d) => String(d.status).toLowerCase() === "revoked");
+
                 return (
-                  <div className="all-subtasks-row" key={uniqueKey}>
+                  <div className={`all-subtasks-row ${isInactiveForMe ? "delegation-rejected-row" : ""}`} key={uniqueKey} style={isInactiveForMe ? { opacity: 0.88 } : undefined}>
                     <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={item.id} businessId={item.business_id} color="#16a34a" />
 
                     {/* Assigned To */}
@@ -582,8 +625,64 @@ function AllDeliveries() {
 
                     {/* Sub-Task Name */}
                     <div className="col-subtask-name">
-                      {item.delegation_chain && item.delegation_chain.length > 0 && <ArrowUpRight size={14} style={{ color: "#6B7280", flexShrink: 0 }} />}
-                      <div className="task-title" title={item.title} style={{ maxWidth: "250px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</div>
+                      {item.delegation_chain && item.delegation_chain.length > 0 && !isInactiveForMe && !hasRejectedDelegation && !hasRevokedDelegation && (
+                        <ArrowUpRight size={14} style={{ color: "#6B7280", flexShrink: 0 }} />
+                      )}
+                      {(() => {
+                        if (!isRejectedByMe && !hasRejectedDelegation) return null;
+                        return (
+                          <span
+                            className="badge"
+                            title={isRejectedByMe ? t("Transfer Rejected by You", { defaultValue: "Transfer Rejected by You" }) : t("Transfer Rejected", { defaultValue: "Transfer Rejected" })}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              padding: "1px 6px",
+                              borderRadius: "4px",
+                              backgroundColor: "#FEE2E2",
+                              color: "#DC2626",
+                              fontSize: "10px",
+                              fontWeight: 700,
+                              lineHeight: "14px",
+                              border: "1px solid #FCA5A5",
+                              flexShrink: 0,
+                              cursor: "help",
+                            }}
+                          >
+                            <XCircle size={11} />
+                            {t("Transfer Rejected", { defaultValue: "Transfer Rejected" })}
+                          </span>
+                        );
+                      })()}
+                      {(() => {
+                        if (!isRevokedFromMe && !hasRevokedDelegation) return null;
+                        return (
+                          <span
+                            className="badge"
+                            title={isRevokedFromMe ? t("Transfer Revoked by Assigner", { defaultValue: "Transfer Revoked by Assigner" }) : t("Transfer Revoked", { defaultValue: "Transfer Revoked" })}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              padding: "1px 6px",
+                              borderRadius: "4px",
+                              backgroundColor: "#FEF3C7",
+                              color: "#B45309",
+                              fontSize: "10px",
+                              fontWeight: 700,
+                              lineHeight: "14px",
+                              border: "1px solid #FCD34D",
+                              flexShrink: 0,
+                              cursor: "help",
+                            }}
+                          >
+                            <XCircle size={11} />
+                            {t("Transfer Revoked", { defaultValue: "Transfer Revoked" })}
+                          </span>
+                        );
+                      })()}
+                      <div className="task-title" title={item.title} style={{ maxWidth: "250px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", opacity: isInactiveForMe ? 0.75 : 1 }}>{item.title}</div>
                     </div>
 
                     {/* Parent Task */}
@@ -633,7 +732,19 @@ function AllDeliveries() {
                             <IoEyeOutline size={20} />
                           </button>
                         }
-                        onTriggerClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { subtaskIds: deliverableIdList, from: 'all-deliverables', readOnly: true } })}
+                        onTriggerClick={() => {
+                          const currentSearch = location.search || (page > 1 ? `?page=${page}` : "");
+                          const returnUrl = `${location.pathname}${currentSearch}`;
+                          navigate(rolePath(`deliveries/deliverable-details/${item.id}`), {
+                            state: {
+                              subtaskIds: deliverableIdList,
+                              from: 'all-deliverables',
+                              readOnly: true,
+                              page,
+                              returnUrl
+                            }
+                          });
+                        }}
                       >
                         <button
                           className="action-icon-btn action-note"
@@ -656,9 +767,9 @@ function AllDeliveries() {
         <Pagination
           currentPage={page}
           totalPages={totalPages}
-          onPageChange={setPage}
+          onPageChange={handlePageChange}
           itemsPerPage={itemsPerPage}
-          onItemsPerPageChange={(val) => { setItemsPerPage(val); setPage(1); }}
+          onItemsPerPageChange={(val) => { setItemsPerPage(val); handlePageChange(1); }}
         />
       )}
 

@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\Models\Project;
 use App\Models\Task;
+use App\Models\TaskDelegation;
 use App\Models\User;
 use App\Services\DelegationService;
 use Illuminate\Auth\Access\HandlesAuthorization;
@@ -481,7 +482,14 @@ class TaskPolicy
      */
     public function acceptDelegation(User $user, Task $task): bool
     {
-        return $task->pendingDelegation && (int) $task->pendingDelegation->delegated_to === (int) $user->id;
+        if (in_array($user->role, ['admin', 'super_admin'])) {
+            return true;
+        }
+
+        return TaskDelegation::where('task_id', $task->id)
+            ->where('delegated_to', $user->id)
+            ->where('status', 'pending')
+            ->exists();
     }
 
     /**
@@ -497,7 +505,16 @@ class TaskPolicy
      */
     public function revokeDelegation(User $user, Task $task): bool
     {
-        return $task->pendingDelegation && ((int) $task->pendingDelegation->delegated_by === (int) $user->id || (int) $task->assigned_by === (int) $user->id || in_array($user->role, ['admin', 'super_admin']));
+        if (in_array($user->role, ['admin', 'super_admin'])) {
+            return true;
+        }
+
+        return TaskDelegation::where('task_id', $task->id)
+            ->where('delegated_by', $user->id)
+            ->where('status', 'pending')
+            ->exists()
+            || (int) $task->assigned_by === (int) $user->id
+            || (int) ($task->creator_id ?? 0) === (int) $user->id;
     }
 
     /**

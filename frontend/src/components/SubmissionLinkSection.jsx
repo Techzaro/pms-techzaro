@@ -5,20 +5,27 @@
  * Used in SubmitSubtaskModal and SubmitTaskModal.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import ConfirmModal from "./ConfirmModal";
 
 /**
  * Link management section with add/remove functionality.
+ * @param {Array} [initialLinks] - Initial links array.
  * @param {Function} onLinksChange - Callback with the updated array of link objects.
  */
-function SubmissionLinkSection({ onLinksChange }) {
+function SubmissionLinkSection({ initialLinks = [], onLinksChange }) {
   const { t } = useTranslation();
-  const [links, setLinks] = useState([]);
+  const [links, setLinks] = useState(initialLinks || []);
   const [linkInput, setLinkInput] = useState("");
   const [linkRemoveConfirmOpen, setLinkRemoveConfirmOpen] = useState(false);
   const [pendingLinkIndex, setPendingLinkIndex] = useState(-1);
+
+  useEffect(() => {
+    if (initialLinks && Array.isArray(initialLinks)) {
+      setLinks(initialLinks);
+    }
+  }, [initialLinks]);
 
   /**
    * Normalizes a URL by trimming whitespace and prepending https:// if missing.

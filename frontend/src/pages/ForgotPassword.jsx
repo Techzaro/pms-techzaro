@@ -239,7 +239,7 @@ function ForgotPassword() {
           <div>
             <strong>{t("Need Help?", { defaultValue: "Need Help?" })}</strong>
             <span>{t("If you are having trouble resetting your password, please contact our support team.", { defaultValue: "If you are having trouble resetting your password, please contact our support team." })}</span>
-            <a href="mailto:support@pms.com">support@pms.com</a>
+            <a href="mailto:contact@one.techxaro.com">contact@one.techxaro.com</a>
           </div>
         </div>
 

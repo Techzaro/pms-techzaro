@@ -401,6 +401,7 @@ function TaskDetails() {
     // 2. Coming from a known page / view
     if (from && sourcePages[from]) {
       const src = sourcePages[from];
+      const pageParam = location.state?.page > 1 ? `?page=${location.state.page}` : "";
       if (from === "dashboard" || from === "notifications" || from === "user-performance" || from === "sharing") {
         return [
           { label: src.label, path: returnUrl || src.path },
@@ -409,7 +410,7 @@ function TaskDetails() {
       }
       return [
         { label: t("Tasks", { defaultValue: "Tasks" }), path: rolePath("tasks") },
-        { label: src.label, path: returnUrl || src.path },
+        { label: src.label, path: returnUrl || `${src.path}${pageParam}` },
         { label: task.title },
       ];
     }
@@ -439,6 +440,7 @@ function TaskDetails() {
 
     // 2. If explicit 'from' parameter
     const from = location.state?.from || new URLSearchParams(location.search).get("from");
+    const pageParam = location.state?.page > 1 ? `?page=${location.state.page}` : "";
     if (from === "project") {
       const pId = location.state?.projectId || task?.project?.id;
       if (pId) {
@@ -450,7 +452,7 @@ function TaskDetails() {
     }
 
     if (from && sourcePages[from]) {
-      navigate(sourcePages[from].path);
+      navigate(`${sourcePages[from].path}${pageParam}`);
       return;
     }
 
@@ -461,7 +463,7 @@ function TaskDetails() {
     }
 
     // 4. Default fallback: Tasks list
-    navigate(rolePath("tasks"));
+    navigate(`${rolePath("tasks")}${pageParam}`);
   };
 
   const isSharedTask = taskId && String(taskId).startsWith("shared_");
@@ -727,47 +729,159 @@ function TaskDetails() {
   }, []);
 
   const currentUser = getUser();
+  const currentUserId = currentUser ? parseInt(currentUser.id, 10) : null;
+  const currentOwnerId = task?.current_owner_id ?? task?.current_owner;
+
   const isAdminOrManager = currentUser && ["admin", "manager"].includes(currentUser.role);
   const isSuperAdmin = currentUser && ["admin", "super_admin"].includes(currentUser.role);
   const isCreator = Boolean(
     task?.is_creator === true ||
     (task && currentUser && (
-      parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10) ||
-      parseInt(task.creator_id, 10) === parseInt(currentUser.id, 10) ||
-      parseInt(task.original_assigner, 10) === parseInt(currentUser.id, 10) ||
-      parseInt(task.user_id, 10) === parseInt(currentUser.id, 10)
+      parseInt(task.assigned_by, 10) === currentUserId ||
+      parseInt(task.creator_id, 10) === currentUserId ||
+      parseInt(task.original_assigner, 10) === currentUserId ||
+      parseInt(task.user_id, 10) === currentUserId
     ))
   );
-  const isAssignee = task?.is_assignee ?? (task && currentUser && ((task.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10)) || (task?.assigned_to && parseInt(task.assigned_to, 10) === parseInt(currentUser?.id, 10))));
-  const isCurrentOwner = Boolean(task?.is_current_owner ?? (task?.current_owner && currentUser && parseInt(task.current_owner, 10) === parseInt(currentUser.id, 10)) ?? isAssignee);
-  const isFollower = (followers || []).some((f) => parseInt(f.id, 10) === parseInt(currentUser?.id, 10));
-  const isOnlyFollower = isFollower && !isAdminOrManager && !isCreator && !isAssignee;
+
+  const isRawAssignee = Boolean(
+    task?.is_assignee ??
+    (task && currentUser && (
+      (task.assignees || []).some((a) => parseInt(a.id, 10) === currentUserId) ||
+      (task?.assigned_to && parseInt(task.assigned_to, 10) === currentUserId)
+    ))
+  );
+
+  // Delegation & Transfer chain detection
+  const delegationChain = Array.isArray(task?.delegation_chain)
+    ? task.delegation_chain
+    : Array.isArray(task?.transfer_chain)
+      ? task.transfer_chain
+      : (typeof task?.delegation_chain === "string"
+          ? (() => { try { return JSON.parse(task.delegation_chain); } catch { return []; } })()
+          : []);
+
+  const latestAcceptedDelegation = delegationChain.slice().reverse().find((d) => String(d?.status || "").toLowerCase() === "accepted");
+
+  const isTransferor = Boolean(
+    task?.is_transferor ||
+    delegationChain.some((d) => parseInt(d?.delegated_by, 10) === currentUserId && ["accepted", "pending"].includes(String(d?.status || "").toLowerCase()))
+  );
+  const transferorReturnToSelf = task?.transferor_return_to_self ?? true;
+  const transferorHasApproved = Boolean(task?.transferor_has_approved);
+
+  // Effective active current owner ID: current_owner > current_owner_id > latest accepted transferee (if not approved by transferor) > current_submitter_id > assigned_to
+  const activeOwnerId = (() => {
+    if (task?.current_owner != null) return parseInt(task.current_owner, 10);
+    if (task?.current_owner_id != null) return parseInt(task.current_owner_id, 10);
+    if (!transferorHasApproved && latestAcceptedDelegation?.delegated_to != null) {
+      return parseInt(latestAcceptedDelegation.delegated_to, 10);
+    }
+    if (task?.current_submitter_id != null) return parseInt(task.current_submitter_id, 10);
+    if (task?.assigned_to != null) return parseInt(task.assigned_to, 10);
+    if (task?.assignees && task.assignees.length > 0) return parseInt(task.assignees[0].id, 10);
+    return null;
+  })();
+
+  // Latest delegation targeting current user
+  const myLatestDelegation = delegationChain.slice().reverse().find(
+    (d) => parseInt(d?.delegated_to, 10) === currentUserId
+  );
+  const isDelegationRejectedByMe = Boolean(
+    myLatestDelegation &&
+    String(myLatestDelegation?.status || "").toLowerCase() === "rejected" &&
+    (activeOwnerId != null && activeOwnerId !== currentUserId)
+  );
+  const isDelegationRevokedFromMe = Boolean(
+    myLatestDelegation &&
+    String(myLatestDelegation?.status || "").toLowerCase() === "revoked" &&
+    (activeOwnerId != null && activeOwnerId !== currentUserId)
+  );
+  const isDelegationInactiveForMe = isDelegationRejectedByMe || isDelegationRevokedFromMe;
+
+  // Previous transferor check: user transferred the task away to someone else AND someone else is currently holding/working on it
+  const isPreviousTransferor = Boolean(
+    currentUserId &&
+    (activeOwnerId != null && activeOwnerId !== currentUserId) &&
+    !transferorHasApproved &&
+    (
+      task?.is_transferor ||
+      delegationChain.some((d) => parseInt(d?.delegated_by, 10) === currentUserId && String(d?.status || "").toLowerCase() === "accepted")
+    )
+  );
+
+  // Current Active Assignee / Current Owner:
+  // Must match activeOwnerId, OR task.is_current_owner === true, OR be in assignees list without having transferred the task away
+  const isCurrentActiveAssignee = Boolean(
+    currentUserId && !isPreviousTransferor && !isDelegationInactiveForMe && (
+      (activeOwnerId != null && activeOwnerId === currentUserId) ||
+      task?.is_current_owner === true ||
+      (!activeOwnerId && isRawAssignee) ||
+      (activeOwnerId == null && task?.is_assignee === true)
+    )
+  );
+
+  const isAssignee = isCurrentActiveAssignee && !isDelegationInactiveForMe;
+  const isCurrentOwner = Boolean(
+    !isDelegationInactiveForMe && (
+      (activeOwnerId != null && activeOwnerId === currentUserId) ||
+      task?.is_current_owner === true ||
+      isCurrentActiveAssignee
+    )
+  );
+
+  const isFollower = (followers || []).some((f) => parseInt(f.id, 10) === currentUserId);
+  const isOnlyFollower = isFollower && !isAdminOrManager && !isCreator && !isAssignee && !isRawAssignee;
   const taskStatus = (task?.status || "").toLowerCase();
-  const isTerminalOrSubmitted = ["submitted", "submitted_late", "approved", "abandoned"].includes(taskStatus);
+
+  // Terminal or already submitted statuses
+  const isTerminalOrSubmitted = ["submitted", "submitted_late", "approved", "abandoned", "completed"].includes(taskStatus);
   const canEdit = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isCreator || isAdminOrManager) && !["approved", "submitted", "submitted_late", "abandoned"].includes(taskStatus));
   const canDelete = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isCreator || isAdminOrManager));
-  const canSubmitTask = !readOnly && !isTerminalOrSubmitted && !isOnlyFollower && (task?.can_submit === true || (isAssignee && ["in_progress", "reopened", "paused"].includes(taskStatus)));
-  const canAcknowledge = (readOnly || isOnlyFollower) ? false : (task && currentUser && isAssignee && ["pending", "reopened"].includes(task?.status));
-  const canStartTimer = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isCurrentOwner) && ["in_progress", "in-progress"].includes(task?.status) && (!task?.timer || task?.timer?.state === "idle" || !task?.timer?.state) && !task?.assigner_paused);
-  const isAssignerLocked = !!task?.assigner_paused;
-  const canAssignerPause = (readOnly || isOnlyFollower) ? false : (task && currentUser && isCreator && !task?.assigner_paused && ["pending", "in_progress", "reopened", "submitted"].includes(task?.status) && task?.status !== "paused");
-  const canTimerPause = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isCurrentOwner) && ["in_progress", "submitted"].includes(task?.status) && task?.timer?.state === "running" && !task?.assigner_paused);
-  const isTransferor = task?.is_transferor ?? false;
-  const transferorReturnToSelf = task?.transferor_return_to_self ?? true;
-  const transferorHasApproved = task?.transferor_has_approved ?? false;
-  const canPause = (canTimerPause || canAssignerPause) && (!isTransferor || transferorHasApproved) && !task?.active_outgoing_delegation;
-  const canContinue = (readOnly || isOnlyFollower) ? false : (task && currentUser && (isAssignee || isCurrentOwner) && (task?.status === "paused" || task?.timer?.state === "paused") && !task?.assigner_paused);
-  const canAssignerResume = (readOnly || isOnlyFollower) ? false : (task && currentUser && isCreator && task?.assigner_paused);
-  const hasPendingDelegation = Boolean(task?.pending_delegation && currentUser && parseInt(task.pending_delegation.delegated_to, 10) === parseInt(currentUser.id, 10));
+
   const isTransferorApproval = (isTransferor || task?.is_transferor) && !transferorHasApproved && (task?.submission_stage === "awaiting_checkpoint" || task?.can_submit_to_next || ["submitted", "submitted_late"].includes(taskStatus));
+
+  // Pending review / sub-submission check:
+  // True if there is a sub-submission / checkpoint review waiting for this user's approval
+  const hasPendingReview = Boolean(
+    task?.has_pending_review ||
+    isTransferorApproval ||
+    task?.can_submit_to_next ||
+    (task?.submission_stage === "awaiting_checkpoint" && (
+      parseInt(task?.current_reviewer_id, 10) === currentUserId ||
+      (isTransferor && !transferorHasApproved)
+    ))
+  );
+
+  // "Submit Task" button visibility:
+  // Shows for the current active owner (including transferee who received the transfer, or returned transferor who approved intermediate submission), provided task is not submitted/terminal, user is not a previous transferor whose task is with someone else, and there are no pending reviews waiting for this user.
+  const canSubmitTask = !readOnly &&
+    !isTerminalOrSubmitted &&
+    !isOnlyFollower &&
+    !isPreviousTransferor &&
+    !isDelegationInactiveForMe &&
+    !hasPendingReview &&
+    isCurrentActiveAssignee &&
+    task?.can_submit !== false;
+
+  const canAcknowledge = (readOnly || isOnlyFollower || isPreviousTransferor || isDelegationInactiveForMe) ? false : (task && currentUser && isCurrentActiveAssignee && ["pending", "reopened"].includes(task?.status));
+  const canStartTimer = (readOnly || isOnlyFollower || isPreviousTransferor || isDelegationInactiveForMe) ? false : (task && currentUser && isCurrentActiveAssignee && !isTerminalOrSubmitted && (!task?.timer || task?.timer?.state === "idle" || !task?.timer?.state) && !task?.assigner_paused);
+  const isAssignerLocked = !!task?.assigner_paused;
+  const canAssignerPause = (readOnly || isOnlyFollower) ? false : (task && currentUser && isCreator && !task?.assigner_paused && ["pending", "in_progress", "reopened", "submitted", "transferred"].includes(task?.status) && task?.status !== "paused");
+  const canTimerPause = (readOnly || isOnlyFollower || isPreviousTransferor || isDelegationInactiveForMe) ? false : (task && currentUser && isCurrentActiveAssignee && !["completed", "approved", "abandoned"].includes(taskStatus) && task?.timer?.state === "running" && !task?.assigner_paused);
+  const canPause = (canTimerPause || canAssignerPause) && (!isTransferor || transferorHasApproved) && !task?.active_outgoing_delegation && !isPreviousTransferor && !isDelegationInactiveForMe;
+  const canContinue = (readOnly || isOnlyFollower || isPreviousTransferor || isDelegationInactiveForMe) ? false : (task && currentUser && isCurrentActiveAssignee && (task?.status === "paused" || task?.timer?.state === "paused") && !task?.assigner_paused);
+
+  const canAssignerResume = (readOnly || isOnlyFollower) ? false : (task && currentUser && isCreator && task?.assigner_paused);
+  const hasPendingDelegation = Boolean(task?.pending_delegation && currentUser && parseInt(task.pending_delegation.delegated_to, 10) === currentUserId);
   const canApprove = (readOnly || isOnlyFollower)
     ? false
     : isTransferorApproval || ((isCreator || isSuperAdmin) && (!task?.is_transferred || transferorHasApproved || task?.submission_stage === "awaiting_creator"));
   const isAssignerOrCreator = isCreator || isSuperAdmin || isAdminOrManager || (currentUser && (
-    parseInt(task?.assigned_by, 10) === parseInt(currentUser.id, 10) ||
-    parseInt(task?.creator_id, 10) === parseInt(currentUser.id, 10) ||
-    parseInt(task?.original_assigner, 10) === parseInt(currentUser.id, 10) ||
-    parseInt(task?.user_id, 10) === parseInt(currentUser.id, 10)
+    parseInt(task?.assigned_by, 10) === currentUserId ||
+    parseInt(task?.creator_id, 10) === currentUserId ||
+    parseInt(task?.original_assigner, 10) === currentUserId ||
+    parseInt(task?.user_id, 10) === currentUserId
   ));
   const canReopen = (readOnly || isOnlyFollower)
     ? false
@@ -777,9 +891,10 @@ function TaskDetails() {
     ? false
     : (isCreator || isSuperAdmin || isAdminOrManager || isAssignerOrCreator) &&
       (taskStatus === "pending" || taskStatus === "in-progress" || taskStatus === "in_progress" || task?.status === "pending" || task?.status === "in-progress" || task?.status === "in_progress");
-  const canAbandon = (readOnly || isOnlyFollower)
+
+  const canAbandon = (readOnly || isOnlyFollower || isPreviousTransferor || isDelegationInactiveForMe)
     ? false
-    : (task && currentUser && (isAssignee || isCreator || isSuperAdmin || isAdminOrManager) && !["abandoned", "approved", "completed", "submitted", "submitted_late"].includes(taskStatus));
+    : (task && currentUser && (isCurrentActiveAssignee || ((isCreator || isSuperAdmin || isAdminOrManager) && !isPreviousTransferor)) && !["abandoned", "approved", "completed", "submitted", "submitted_late"].includes(taskStatus));
 
   const { submitting: acknowledging, run: runAcknowledge } = useSubmit();
   const { submitting: startingTimer, run: runStartTimer } = useSubmit();
@@ -791,6 +906,7 @@ function TaskDetails() {
   const { submitting: assignerPausing, run: runAssignerPause } = useSubmit();
   const { submitting: assignerResuming, run: runAssignerResume } = useSubmit();
   const { submitting: revoking, run: runRevoke } = useSubmit();
+  const [revokeConfirmOpen, setRevokeConfirmOpen] = useState(false);
   const { submitting: approvingTask, run: runApproveTask } = useSubmit();
   const { submitting: rejectingTask, run: runRejectTask } = useSubmit();
   const { submitting: forwardingTask, run: runForwardTask } = useSubmit();
@@ -854,7 +970,15 @@ function TaskDetails() {
   const goToTask = (id) => {
     if (!id) return;
     navigate(rolePath(`tasks/task-details/${id}`), {
-      state: { taskIds, from: location.state?.from },
+      state: {
+        taskIds,
+        from: location.state?.from,
+        returnUrl: location.state?.returnUrl,
+        page: location.state?.page,
+        projectId: location.state?.projectId,
+        projectTitle: location.state?.projectTitle,
+        readOnly: location.state?.readOnly,
+      },
     });
   };
   const assignees = task?.assignees || [];
@@ -1715,7 +1839,7 @@ function TaskDetails() {
                       {deleting ? t("Deleting...", { defaultValue: "Deleting..." }) : t("Delete", { defaultValue: "Delete" })}
                     </button>
                   )}
-                  {!readOnly && (task?.can_delegate === true || (task?.allow_transfer !== false && (isAssignee || isCurrentOwner) && !isTransferor)) && !["approved", "rejected", "pending", "submitted"].includes(task?.status) && task?.my_status !== "submitted" && !task?.active_outgoing_delegation && !hasPendingDelegation && (
+                  {!readOnly && !isDelegationInactiveForMe && (task?.can_delegate === true || (task?.allow_transfer !== false && (isAssignee || isCurrentOwner) && !isTransferor)) && !["approved", "rejected", "pending", "submitted"].includes(task?.status) && task?.my_status !== "submitted" && !task?.active_outgoing_delegation && !hasPendingDelegation && (
                     <button className="td-btn-outline" onClick={() => setTransferDialog(true)}>
                       <Users size={15} />
                       {t("Transfer", { defaultValue: "Transfer" })}
@@ -1904,12 +2028,24 @@ function TaskDetails() {
                         {t("Transferred", { defaultValue: "Transferred" })}
                       </span>
                       {task?.can_revoke_delegation && task?.active_outgoing_delegation_id && (
-                        <button className="td-btn-danger" onClick={handleRevokeDelegation} disabled={revoking}>
+                        <button className="td-btn-danger" onClick={() => setRevokeConfirmOpen(true)} disabled={revoking}>
                           <Trash2 size={15} />
                           {revoking ? t("Revoking...", { defaultValue: "Revoking..." }) : t("Revoke", { defaultValue: "Revoke" })}
                         </button>
                       )}
                     </>
+                  )}
+                  {isDelegationRejectedByMe && (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 14px", borderRadius: "6px", backgroundColor: "#fee2e2", color: "#dc2626", fontSize: "13px", fontWeight: 600, border: "1px solid #fca5a5" }}>
+                      <XCircle size={14} />
+                      {t("Transfer Rejected", { defaultValue: "Transfer Rejected" })}
+                    </span>
+                  )}
+                  {isDelegationRevokedFromMe && (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 14px", borderRadius: "6px", backgroundColor: "#fef3c7", color: "#b45309", fontSize: "13px", fontWeight: 600, border: "1px solid #fcd34d" }}>
+                      <XCircle size={14} />
+                      {t("Transfer Revoked by Assigner", { defaultValue: "Transfer Revoked by Assigner" })}
+                    </span>
                   )}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -2043,7 +2179,7 @@ function TaskDetails() {
               </div>
 
               {/* Task Submission Workflow */}
-              {!readOnly && (isAssignee || isCreator || isSuperAdmin) && (
+              {!readOnly && (isRawAssignee || isAssignee || isCreator || isSuperAdmin) && (
                 <TaskSubmissionPanel
                   task={task}
                   isCreator={isCreator}
@@ -3105,6 +3241,22 @@ function TaskDetails() {
         title={t("Delete Credential", { defaultValue: "Delete Credential" })}
         message={t("Are you sure you want to delete this access credential? This action cannot be undone.", { defaultValue: "Are you sure you want to delete this access credential? This action cannot be undone." })}
         confirmText={t("Delete", { defaultValue: "Delete" })}
+        danger
+      />
+
+      <ConfirmModal
+        isOpen={revokeConfirmOpen}
+        onClose={() => setRevokeConfirmOpen(false)}
+        onConfirm={() => {
+          setRevokeConfirmOpen(false);
+          handleRevokeDelegation();
+        }}
+        title={t("Confirm Revoke Transfer", { defaultValue: "Confirm Revoke Transfer" })}
+        message={t("Are you sure you want to revoke this transfer? The user will no longer be able to work on this task.", {
+          defaultValue: "Are you sure you want to revoke this transfer? The user will no longer be able to work on this task.",
+        })}
+        confirmText={t("Revoke Transfer", { defaultValue: "Revoke Transfer" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
         danger
       />
 

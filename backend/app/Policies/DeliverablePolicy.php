@@ -5,6 +5,7 @@ namespace App\Policies;
 use App\Models\Deliverable;
 use App\Models\Project;
 use App\Models\Task;
+use App\Models\TaskDelegation;
 use App\Models\User;
 use Illuminate\Auth\Access\HandlesAuthorization;
 
@@ -457,6 +458,46 @@ class DeliverablePolicy
     {
         $isOwner = (int) $deliverable->assigned_to === (int) $user->id || (int) ($deliverable->current_owner ?? 0) === (int) $user->id;
         return $isOwner && $deliverable->allow_transfer !== false;
+    }
+
+    /**
+     * Accept delegation on deliverable.
+     */
+    public function acceptDelegation(User $user, Deliverable $deliverable): bool
+    {
+        if (in_array($user->role, ['admin', 'super_admin'])) {
+            return true;
+        }
+
+        return TaskDelegation::where('deliverable_id', $deliverable->id)
+            ->where('delegated_to', $user->id)
+            ->where('status', 'pending')
+            ->exists();
+    }
+
+    /**
+     * Reject delegation on deliverable.
+     */
+    public function rejectDelegation(User $user, Deliverable $deliverable): bool
+    {
+        return $this->acceptDelegation($user, $deliverable);
+    }
+
+    /**
+     * Revoke delegation on deliverable.
+     */
+    public function revokeDelegation(User $user, Deliverable $deliverable): bool
+    {
+        if (in_array($user->role, ['admin', 'super_admin'])) {
+            return true;
+        }
+
+        return TaskDelegation::where('deliverable_id', $deliverable->id)
+            ->where('delegated_by', $user->id)
+            ->where('status', 'pending')
+            ->exists()
+            || (int) $deliverable->created_by === (int) $user->id
+            || $this->isCreatorOrTaskAssigner($user, $deliverable);
     }
 
     /**

@@ -58,6 +58,7 @@ import { publish } from "../utils/eventBus";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
+import { isDelegationRejectedByMe, isDelegationRevokedFromMe } from "../utils/delegationUtils";
 import { useSubmit } from "../hooks/useSubmit";
 import { useWorkTimer } from "../hooks/useWorkTimer";
 import { formatDateTimeShort, formatDateTime, parseUtcToEpochMs } from "../utils/formatDateTime";
@@ -192,7 +193,15 @@ function SubtaskDetails() {
   const goToSubtask = (id) => {
     if (!id) return;
     navigate(rolePath(`deliveries/deliverable-details/${id}`), {
-      state: { subtaskIds, from: location.state?.from },
+      state: {
+        subtaskIds,
+        from: location.state?.from,
+        projectId: location.state?.projectId,
+        taskId: location.state?.taskId,
+        readOnly: location.state?.readOnly,
+        page: location.state?.page,
+        returnUrl: location.state?.returnUrl,
+      },
     });
   };
 
@@ -216,6 +225,7 @@ function SubtaskDetails() {
   const { submitting: assignerPausing, run: runAssignerPause } = useSubmit();
   const { submitting: assignerResuming, run: runAssignerResume } = useSubmit();
   const { submitting: revoking, run: runRevoke } = useSubmit();
+  const [revokeConfirmOpen, setRevokeConfirmOpen] = useState(false);
   const [reopenDialogOpen, setReopenDialogOpen] = useState(false);
   const [abandonModalOpen, setAbandonModalOpen] = useState(false);
   const [abandonSubmitting, setAbandonSubmitting] = useState(false);
@@ -325,17 +335,64 @@ function SubtaskDetails() {
       parseInt(subtask.creator_id, 10) === parseInt(currentUser.id, 10)
     ))
   );
-  const isAssignee = Boolean(
+  const isRawAssignee = Boolean(
     subtask?.is_assignee ??
     (subtask && currentUser && (
       (subtask.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10)) ||
       (subtask.assigned_to && parseInt(subtask.assigned_to, 10) === parseInt(currentUser.id, 10))
     ))
   );
+
+  const delegationChain = Array.isArray(subtask?.delegation_chain)
+    ? subtask.delegation_chain
+    : Array.isArray(subtask?.transfer_chain)
+      ? subtask.transfer_chain
+      : (typeof subtask?.delegation_chain === "string"
+          ? (() => { try { return JSON.parse(subtask.delegation_chain); } catch { return []; } })()
+          : []);
+
+  const latestAcceptedDelegation = delegationChain.slice().reverse().find((d) => String(d?.status || "").toLowerCase() === "accepted");
+
+  const activeOwnerId = (() => {
+    if (subtask?.current_owner != null) return parseInt(subtask.current_owner, 10);
+    if (subtask?.current_owner_id != null) return parseInt(subtask.current_owner_id, 10);
+    if (!subtask?.transferor_has_approved && latestAcceptedDelegation?.delegated_to != null) {
+      return parseInt(latestAcceptedDelegation.delegated_to, 10);
+    }
+    if (subtask?.assigned_to != null) return parseInt(subtask.assigned_to, 10);
+    if (subtask?.assignees && subtask.assignees.length > 0) return parseInt(subtask.assignees[0].id, 10);
+    return null;
+  })();
+
+  const myLatestDelegation = delegationChain.slice().reverse().find(
+    (d) => parseInt(d?.delegated_to, 10) === parseInt(currentUser?.id, 10)
+  );
+  const isDelegationRejectedByMe = Boolean(
+    myLatestDelegation &&
+    String(myLatestDelegation?.status || "").toLowerCase() === "rejected" &&
+    (activeOwnerId != null && activeOwnerId !== parseInt(currentUser?.id, 10))
+  );
+  const isDelegationRevokedFromMe = Boolean(
+    myLatestDelegation &&
+    String(myLatestDelegation?.status || "").toLowerCase() === "revoked" &&
+    (activeOwnerId != null && activeOwnerId !== parseInt(currentUser?.id, 10))
+  );
+  const isDelegationInactiveForMe = isDelegationRejectedByMe || isDelegationRevokedFromMe;
+
+  const isAssignee = Boolean(
+    !isDelegationInactiveForMe && (
+      (activeOwnerId != null && activeOwnerId === parseInt(currentUser?.id, 10)) ||
+      subtask?.is_assignee ||
+      subtask?.is_current_owner ||
+      (!activeOwnerId && isRawAssignee)
+    )
+  );
   const isCurrentOwner = Boolean(
-    subtask?.is_current_owner ??
-    (subtask?.current_owner && currentUser && parseInt(subtask.current_owner, 10) === parseInt(currentUser.id, 10)) ??
-    isAssignee
+    !isDelegationInactiveForMe && (
+      subtask?.is_current_owner ??
+      (subtask?.current_owner && currentUser && parseInt(subtask.current_owner, 10) === parseInt(currentUser.id, 10)) ??
+      isAssignee
+    )
   );
   const isFollower = (subtask?.followers || []).some((f) => parseInt(f.id, 10) === parseInt(currentUser?.id, 10));
   const isOnlyFollower = isFollower && !isAdminOrManager && !isCreator && !isAssignee;
@@ -650,6 +707,7 @@ function SubtaskDetails() {
       return;
     }
     const from = location.state?.from || new URLSearchParams(location.search).get("from");
+    const pageParam = location.state?.page > 1 ? `?page=${location.state.page}` : "";
     if (from === "task") {
       const tId = location.state?.taskId || subtask?.task_id || subtask?.task?.id;
       if (tId) {
@@ -669,7 +727,7 @@ function SubtaskDetails() {
       return;
     }
     if (from && subtaskSourcePages[from]) {
-      navigate(subtaskSourcePages[from].path);
+      navigate(`${subtaskSourcePages[from].path}${pageParam}`);
       return;
     }
     if (subtask?.task_id || subtask?.task?.id) {
@@ -680,7 +738,7 @@ function SubtaskDetails() {
       navigate(rolePath(`projects/project-details/${subtask.project_id || subtask.project.id}`));
       return;
     }
-    navigate(rolePath("deliveries"));
+    navigate(`${rolePath("deliveries")}${pageParam}`);
   };
 
   const confirmDeleteSubtask = async () => {
@@ -725,14 +783,14 @@ function SubtaskDetails() {
     : (subtask && currentUser && (isCreator || isAdminOrManager));
 
   const isAssignerLocked = !!subtask?.assigner_paused;
-  const canAcknowledge = (readOnly || isOnlyFollower)
+  const canAcknowledge = (readOnly || isOnlyFollower || isDelegationInactiveForMe)
     ? false
     : (subtask && currentUser && isAssignee && ["pending", "reopened"].includes(subtaskStatus));
 
   const timerRunning = timerState === "running";
   const timerPaused = timerState === "paused";
 
-  const canStartTimer = (readOnly || isOnlyFollower)
+  const canStartTimer = (readOnly || isOnlyFollower || isDelegationInactiveForMe)
     ? false
     : (subtask && currentUser && (isAssignee || isCurrentOwner) && ["in_progress", "in-progress"].includes(subtaskStatus) && (!timerState || timerState === "idle") && !isAssignerLocked);
 
@@ -740,12 +798,12 @@ function SubtaskDetails() {
     ? false
     : (subtask && currentUser && isCreator && !subtask?.assigner_paused && ["pending", "in_progress", "reopened", "submitted"].includes(subtaskStatus) && subtaskStatus !== "paused");
 
-  const canTimerPause = (readOnly || isOnlyFollower)
+  const canTimerPause = (readOnly || isOnlyFollower || isDelegationInactiveForMe)
     ? false
     : (subtask && currentUser && (isAssignee || isCurrentOwner) && ["in_progress", "submitted"].includes(subtaskStatus) && timerRunning && !isAssignerLocked);
 
-  const canPause = (canTimerPause || canAssignerPause) && (!isTransferor || transferorHasApproved) && !subtask?.active_outgoing_delegation;
-  const canContinue = (readOnly || isOnlyFollower)
+  const canPause = (canTimerPause || canAssignerPause) && (!isTransferor || transferorHasApproved) && !subtask?.active_outgoing_delegation && !isDelegationInactiveForMe;
+  const canContinue = (readOnly || isOnlyFollower || isDelegationInactiveForMe)
     ? false
     : (subtask && currentUser && (isAssignee || isCurrentOwner) && (subtaskStatus === "paused" || timerPaused) && !isAssignerLocked);
 
@@ -753,7 +811,7 @@ function SubtaskDetails() {
     ? false
     : (subtask && currentUser && isCreator && subtask?.assigner_paused);
 
-  const canSubmitTask = !readOnly && !isTerminalOrSubmitted && !isOnlyFollower && (subtask?.can_submit === true || (isAssignee && ["in_progress", "reopened", "paused", "rejected"].includes(subtaskStatus)));
+  const canSubmitTask = !readOnly && !isTerminalOrSubmitted && !isOnlyFollower && !isDelegationInactiveForMe && (subtask?.can_submit === true || (isAssignee && ["in_progress", "reopened", "paused", "rejected"].includes(subtaskStatus)));
 
   const isAssignerOrCreator = isCreator || isSuperAdmin || isAdminOrManager || (currentUser && (
     parseInt(subtask?.assigned_by, 10) === parseInt(currentUser.id, 10) ||
@@ -784,9 +842,9 @@ function SubtaskDetails() {
     : (isCreator || isSuperAdmin || isAdminOrManager || isAssignerOrCreator) &&
       ["pending", "in_progress", "in-progress", "reopened", "paused", "acknowledged"].includes(subtaskStatus);
 
-  const canAbandon = (readOnly || isOnlyFollower)
+  const canAbandon = (readOnly || isOnlyFollower || isDelegationInactiveForMe)
     ? false
-    : (subtask && currentUser && (isAssignee || isCreator || isSuperAdmin || isAdminOrManager || isAssignerOrCreator) && !["abandoned", "approved", "completed", "submitted", "submitted_late"].includes(subtaskStatus));
+    : (subtask && currentUser && (isAssignee || ((isCreator || isSuperAdmin || isAdminOrManager || isAssignerOrCreator) && !isDelegationInactiveForMe)) && !["abandoned", "approved", "completed", "submitted", "submitted_late"].includes(subtaskStatus));
 
   const isApproved = subtask.status === "approved";
   const isRejected = ["rejected", "reopened"].includes(subtask.status);
@@ -800,8 +858,8 @@ function SubtaskDetails() {
             {/* ===== LEFT ===== */}
             <div className="td-main">
               <Breadcrumb items={[
-                { label: t("Subtasks", { defaultValue: "Subtasks" }), path: rolePath("deliveries") },
-                ...(subtaskSource ? [{ label: subtaskSource.label, path: subtaskSource.path }] : []),
+                { label: t("Subtasks", { defaultValue: "Subtasks" }), path: (!location.state?.from || location.state?.from === "deliveries") && location.state?.returnUrl ? location.state.returnUrl : `${rolePath("deliveries")}${!subtaskSource && location.state?.page > 1 ? `?page=${location.state.page}` : ""}` },
+                ...(subtaskSource ? [{ label: subtaskSource.label, path: location.state?.returnUrl || `${subtaskSource.path}${location.state?.page > 1 ? `?page=${location.state.page}` : ""}` }] : []),
                 { label: subtask.title },
               ]} />
 
@@ -881,7 +939,7 @@ function SubtaskDetails() {
                       {deleting ? t("Deleting...", { defaultValue: "Deleting..." }) : t("Delete", { defaultValue: "Delete" })}
                     </button>
                   )}
-                  {!readOnly && (subtask?.can_delegate === true || (subtask?.allow_transfer !== false && (isAssignee || isCurrentOwner) && !isTransferor)) && !["approved", "rejected", "pending", "submitted"].includes(subtask?.status) && subtask?.my_status !== "submitted" && !subtask?.active_outgoing_delegation && !hasPendingDelegation && !isDelegatee && (
+                  {!readOnly && !isDelegationInactiveForMe && (subtask?.can_delegate === true || (subtask?.allow_transfer !== false && (isAssignee || isCurrentOwner) && !isTransferor)) && !["approved", "rejected", "pending", "submitted"].includes(subtask?.status) && subtask?.my_status !== "submitted" && !subtask?.active_outgoing_delegation && !hasPendingDelegation && !isDelegatee && (
                     <button className="td-btn-outline" onClick={() => setTransferDialog(true)}>
                       <Users size={15} />
                       {t("Transfer", { defaultValue: "Transfer" })}
@@ -1047,12 +1105,24 @@ function SubtaskDetails() {
                         {t("Transferred", { defaultValue: "Transferred" })}
                       </span>
                       {subtask?.can_revoke_delegation && subtask?.active_outgoing_delegation_id && (
-                        <button className="td-btn-danger" onClick={handleRevokeDelegation} disabled={revoking}>
+                        <button className="td-btn-danger" onClick={() => setRevokeConfirmOpen(true)} disabled={revoking}>
                           <Trash2 size={15} />
                           {revoking ? t("Revoking...", { defaultValue: "Revoking..." }) : t("Revoke", { defaultValue: "Revoke" })}
                         </button>
                       )}
                     </>
+                  )}
+                  {isDelegationRejectedByMe && (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 14px", borderRadius: "6px", backgroundColor: "#fee2e2", color: "#dc2626", fontSize: "13px", fontWeight: 600, border: "1px solid #fca5a5" }}>
+                      <XCircle size={14} />
+                      {t("Transfer Rejected", { defaultValue: "Transfer Rejected" })}
+                    </span>
+                  )}
+                  {isDelegationRevokedFromMe && (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 14px", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#B45309", fontSize: "13px", fontWeight: 600, border: "1px solid #FCD34D" }}>
+                      <XCircle size={14} />
+                      {t("Transfer Revoked by Assigner", { defaultValue: "Transfer Revoked by Assigner" })}
+                    </span>
                   )}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -1686,6 +1756,21 @@ function SubtaskDetails() {
         title={t("Delete Subtask", { defaultValue: "Delete Subtask" })}
         message={t("Are you sure you want to delete this subtask? This action cannot be undone.", { defaultValue: "Are you sure you want to delete this subtask? This action cannot be undone." })}
         confirmText={t("Delete", { defaultValue: "Delete" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        danger
+      />
+      <ConfirmModal
+        isOpen={revokeConfirmOpen}
+        onClose={() => setRevokeConfirmOpen(false)}
+        onConfirm={() => {
+          setRevokeConfirmOpen(false);
+          handleRevokeDelegation();
+        }}
+        title={t("Confirm Revoke Transfer", { defaultValue: "Confirm Revoke Transfer" })}
+        message={t("Are you sure you want to revoke this transfer? The user will no longer be able to work on this task.", {
+          defaultValue: "Are you sure you want to revoke this transfer? The user will no longer be able to work on this task.",
+        })}
+        confirmText={t("Revoke Transfer", { defaultValue: "Revoke Transfer" })}
         cancelText={t("Cancel", { defaultValue: "Cancel" })}
         danger
       />

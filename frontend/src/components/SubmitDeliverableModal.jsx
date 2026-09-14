@@ -1,8 +1,8 @@
 /**
  * SubmitDeliverableModal.jsx
  * Modal form for submitting a subtask. Supports file uploads via drag-and-drop,
- * link attachments, and submission notes. Handles both initial submissions and
- * resubmissions for rework-required status.
+ * link attachments, and submission notes. Handles initial submissions,
+ * editing existing submissions, and resubmissions for rework-required status.
  */
 
 import { useEffect, useState } from "react";
@@ -21,6 +21,21 @@ import LoadingButton from "./LoadingButton";
 import ConfirmModal from "./ConfirmModal";
 import "./SubmitDeliverableModal.css";
 import "./layout/CreateTaskModal.css";
+
+const API_BASE = API_URL.replace(/\/api\/?$/, "");
+
+function getFileUrl(url) {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  return API_BASE + (url.startsWith("/") ? "" : "/") + url;
+}
+
+function formatFileSize(bytes) {
+  if (!bytes || isNaN(bytes)) return "";
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
 
 /**
  * Modal form for submitting or resubmitting a subtask.
@@ -47,10 +62,12 @@ function SubmitDeliverableModal({
 
   const [comment, setComment] = useState("");
   const [files, setFiles] = useState([]);
+  const [existingAttachments, setExistingAttachments] = useState([]);
+  const [deletedAttachmentIds, setDeletedAttachmentIds] = useState([]);
   const [links, setLinks] = useState([]);
   const { submitting, run } = useSubmit();
   const [fileRemoveConfirmOpen, setFileRemoveConfirmOpen] = useState(false);
-  const [pendingFileIndex, setPendingFileIndex] = useState(-1);
+  const [pendingRemoval, setPendingRemoval] = useState(null);
 
   // Lock body scroll and reset form state when modal opens/closes
   useEffect(() => {
@@ -58,14 +75,32 @@ function SubmitDeliverableModal({
       document.body.style.overflow = "hidden";
       if (submissionToEdit) {
         setComment(submissionToEdit.comment || "");
-        const prevLinks = (submissionToEdit.attachments || [])
-          .filter((a) => a.attachment_type === "link")
-          .map((a) => ({ url: a.url || a.file_name }));
-        setLinks(prevLinks);
+
+        const rawAtts = submissionToEdit.attachments || [];
+        const fileAtts = rawAtts.filter((a) => a.attachment_type === "file" || a.attachment_type === "image" || (!a.attachment_type && a.file_path));
+        const legacyFile = submissionToEdit.file_path && !fileAtts.some((a) => (a.file_path && a.file_path === submissionToEdit.file_path) || a.file_name === submissionToEdit.file_name)
+          ? [{ id: "main_file", file_name: submissionToEdit.file_name || "Attachment", original_name: submissionToEdit.file_name || "Attachment", url: submissionToEdit.file_path, full_url: submissionToEdit.file_path, attachment_type: "file" }]
+          : [];
+        const addFiles = Array.isArray(submissionToEdit.files) ? submissionToEdit.files.filter((f) => !fileAtts.some((a) => a.id === f.id || a.file_path === f.file_path)) : [];
+        const addImages = Array.isArray(submissionToEdit.images) ? submissionToEdit.images.filter((img) => !fileAtts.some((a) => a.id === img.id || a.file_path === img.file_path)) : [];
+
+        setExistingAttachments([...fileAtts, ...legacyFile, ...addFiles, ...addImages]);
+        setDeletedAttachmentIds([]);
+
+        const linkAtts = rawAtts
+          .filter((a) => a.attachment_type === "link" || (a.url && /^https?:\/\//i.test(a.url) && !a.file_path))
+          .map((a) => ({ id: a.id, url: a.url || a.file_name, name: a.original_name || a.url || a.file_name }));
+        const addLinks = Array.isArray(submissionToEdit.links)
+          ? submissionToEdit.links.map((l) => (typeof l === "string" ? { url: l, name: l } : { id: l.id, url: l.url || l.name, name: l.name || l.url }))
+          : [];
+        const combinedLinks = [...linkAtts, ...addLinks.filter((al) => !linkAtts.some((la) => la.url === al.url))];
+        setLinks(combinedLinks);
         setFiles([]);
       } else {
         setComment("");
         setFiles([]);
+        setExistingAttachments([]);
+        setDeletedAttachmentIds([]);
         setLinks([]);
       }
       setIsDirty(false);
@@ -115,6 +150,14 @@ function SubmitDeliverableModal({
     setFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const removeExistingAttachment = (item) => {
+    setIsDirty(true);
+    setExistingAttachments((prev) => prev.filter((a) => (a.id ? a.id !== item.id : a !== item)));
+    if (item.id) {
+      setDeletedAttachmentIds((prev) => [...prev, item.id]);
+    }
+  };
+
   const handleDrop = (e) => {
     e.preventDefault();
     setIsDirty(true);
@@ -129,7 +172,7 @@ function SubmitDeliverableModal({
       .map((l) => (typeof l === "string" ? l.trim() : l?.url ? l.url.trim() : ""))
       .filter(Boolean);
 
-    if (!comment.trim() && files.length === 0 && validLinks.length === 0 && !submissionToEdit) {
+    if (!comment.trim() && files.length === 0 && existingAttachments.length === 0 && validLinks.length === 0 && !submissionToEdit) {
       notify.error(
         t("Please add a comment, attach files, or add links.", {
           defaultValue: "Please add a comment, attach files, or add links.",
@@ -150,8 +193,15 @@ function SubmitDeliverableModal({
         const formData = new FormData();
         if (comment.trim()) formData.append("comment", comment.trim());
         files.forEach((f) => formData.append("files[]", f));
-        if (files.length === 1) formData.append("file", files[0]);
+        if (files.length === 1 && !submissionToEdit) formData.append("file", files[0]);
         validLinks.forEach((l) => formData.append("links[]", l));
+
+        if (submissionToEdit) {
+          deletedAttachmentIds.forEach((id) => formData.append("deleted_attachment_ids[]", id));
+          if (deletedAttachmentIds.includes("main_file")) {
+            formData.append("remove_main_file", "1");
+          }
+        }
 
         const endpoint = submissionToEdit
           ? `${API_URL}/deliveries/submissions/${submissionToEdit.id}`
@@ -215,6 +265,7 @@ function SubmitDeliverableModal({
 
   const statusLabel = t((subtask.status || "pending").charAt(0).toUpperCase() + (subtask.status || "pending").slice(1));
   const isImageFile = (f) => f.type?.startsWith("image/");
+  const totalAttachmentCount = existingAttachments.length + files.length;
 
   return createPortal(
     <>
@@ -244,13 +295,13 @@ function SubmitDeliverableModal({
               className="sd-textarea"
               placeholder={t("Describe your submission...", { defaultValue: "Describe your submission..." })}
               value={comment}
-              onChange={(e) => { setComment(e.target.value); }}
+              onChange={(e) => { setIsDirty(true); setComment(e.target.value); }}
               rows={3}
             />
           </div>
 
           <div className="sd-field">
-            <label className="sd-label">{t("Attachments", { defaultValue: "Attachments" })} ({files.length})</label>
+            <label className="sd-label">{t("Attachments", { defaultValue: "Attachments" })} ({totalAttachmentCount})</label>
             <div
               className="sd-dropzone"
               onDragOver={(e) => e.preventDefault()}
@@ -270,10 +321,53 @@ function SubmitDeliverableModal({
               style={{ display: "none" }}
               onChange={handleFileSelect}
             />
-            {files.length > 0 && (
+            {totalAttachmentCount > 0 && (
               <div className="sd-file-list">
+                {/* Existing attachments */}
+                {existingAttachments.map((att, idx) => {
+                  const isImg = att.attachment_type === "image" ||
+                    (att.file_name && /\.(png|jpe?g|gif|webp|svg)$/i.test(att.file_name)) ||
+                    (att.original_name && /\.(png|jpe?g|gif|webp|svg)$/i.test(att.original_name));
+                  const displayName = att.original_name || att.file_name || t("Attachment", { defaultValue: "Attachment" });
+                  const fileSourceUrl = getFileUrl(att.full_url || att.url || att.file_path);
+
+                  return (
+                    <div key={att.id || `ext-${idx}`} className="sd-file-preview">
+                      <div className="sd-file-icon">
+                        {isImg && fileSourceUrl ? (
+                          <img
+                            src={fileSourceUrl}
+                            alt={displayName}
+                            style={{ width: 28, height: 28, objectFit: "cover", borderRadius: 4 }}
+                          />
+                        ) : isImg ? (
+                          <Image size={18} strokeWidth={1.5} />
+                        ) : (
+                          <FileText size={18} strokeWidth={1.5} />
+                        )}
+                      </div>
+                      <div className="sd-file-info">
+                        <span className="sd-file-name" title={displayName}>{displayName}</span>
+                        {att.file_size ? <span className="sd-file-size">{formatFileSize(att.file_size)}</span> : null}
+                      </div>
+                      <button
+                        type="button"
+                        className="sd-file-remove"
+                        title={t("Remove File", { defaultValue: "Remove File" })}
+                        onClick={() => {
+                          setPendingRemoval({ type: "existing", item: att });
+                          setFileRemoveConfirmOpen(true);
+                        }}
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  );
+                })}
+
+                {/* Newly attached files */}
                 {files.map((f, i) => (
-                  <div key={i} className="sd-file-preview">
+                  <div key={`new-${i}`} className="sd-file-preview">
                     <div className="sd-file-icon">
                       {isImageFile(f) ? <Image size={18} strokeWidth={1.5} /> : <FileText size={18} strokeWidth={1.5} />}
                     </div>
@@ -281,7 +375,15 @@ function SubmitDeliverableModal({
                       <span className="sd-file-name">{f.name}</span>
                       <span className="sd-file-size">{(f.size / 1024 / 1024).toFixed(1)} MB</span>
                     </div>
-                    <button className="sd-file-remove" onClick={() => { setPendingFileIndex(i); setFileRemoveConfirmOpen(true); }}>
+                    <button
+                      type="button"
+                      className="sd-file-remove"
+                      title={t("Remove File", { defaultValue: "Remove File" })}
+                      onClick={() => {
+                        setPendingRemoval({ type: "new", index: i });
+                        setFileRemoveConfirmOpen(true);
+                      }}
+                    >
                       <X size={14} />
                     </button>
                   </div>
@@ -291,7 +393,8 @@ function SubmitDeliverableModal({
           </div>
 
           <SubmissionLinkSection
-            onLinksChange={(val) => { setLinks(val); }}
+            initialLinks={links}
+            onLinksChange={(val) => { setIsDirty(true); setLinks(val); }}
           />
         </div>
 
@@ -305,8 +408,16 @@ function SubmitDeliverableModal({
     </div>
     <ConfirmModal
       isOpen={fileRemoveConfirmOpen}
-      onClose={() => { setFileRemoveConfirmOpen(false); setPendingFileIndex(-1); }}
-      onConfirm={() => { removeFile(pendingFileIndex); setFileRemoveConfirmOpen(false); setPendingFileIndex(-1); }}
+      onClose={() => { setFileRemoveConfirmOpen(false); setPendingRemoval(null); }}
+      onConfirm={() => {
+        if (pendingRemoval?.type === "existing") {
+          removeExistingAttachment(pendingRemoval.item);
+        } else if (pendingRemoval?.type === "new") {
+          removeFile(pendingRemoval.index);
+        }
+        setFileRemoveConfirmOpen(false);
+        setPendingRemoval(null);
+      }}
       title={t("Remove File", { defaultValue: "Remove File" })}
       message={t("Are you sure you want to remove this file?", { defaultValue: "Are you sure you want to remove this file?" })}
       confirmText={t("Remove", { defaultValue: "Remove" })}

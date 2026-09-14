@@ -3,12 +3,14 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import UserSelectDropdown from "./UserSelectDropdown";
 import { authToken } from "../utils/auth";
+import { notify } from "../utils/notify";
 import API_URL from "../config/api";
 
 export default function ProjectMembersModal({ isOpen, onClose, project, onSuccess }) {
   const { t } = useTranslation();
   const [teams, setTeams] = useState([]);
   const [users, setUsers] = useState([]);
+  const [selectedManagerId, setSelectedManagerId] = useState("");
   const [selectedTeamIds, setSelectedTeamIds] = useState([]);
   const [assignedUsers, setAssignedUsers] = useState([]);
   const [viewOnlyUsers, setViewOnlyUsers] = useState([]);
@@ -23,7 +25,7 @@ export default function ProjectMembersModal({ isOpen, onClose, project, onSucces
   useEffect(() => {
     if (!isOpen || !project) return;
 
-const token = authToken();
+    const token = authToken();
     const headers = { Accept: "application/json", Authorization: `Bearer ${token}` };
 
     if (isShared && isCollaborate) {
@@ -61,6 +63,9 @@ const token = authToken();
         .catch(() => {});
     } else {
       // Local project: pre-fill state with safe mapping
+      const currentMgr = Number(project.manager_id || project.created_by || project.creator?.id || 0);
+      setSelectedManagerId(currentMgr > 0 ? currentMgr : "");
+
       const currentTeams = Array.isArray(project.team_ids)
         ? project.team_ids.map((t) => Number(typeof t === "object" && t !== null ? t.id : t))
         : project.team_id
@@ -175,10 +180,52 @@ const token = authToken();
         throw new Error(t("You don't have permission to edit members on this shared project.", { defaultValue: "You don't have permission to edit members on this shared project." }));
       } else {
         // Local project
+        const initialManager = Number(project?.manager_id || project?.created_by || project?.creator?.id || 0);
+        const currentAssigned = Array.isArray(project.assigned_users)
+          ? project.assigned_users.map((u) => Number(typeof u === "object" && u !== null ? u.id : u))
+          : (project.members || []).map((m) => Number(typeof m === "object" && m !== null ? m.id : m));
+
+        const newAssigned = (assignedUsers || []).map((u) =>
+          Number(typeof u === "object" && u !== null ? u.id : u)
+        );
+
+        // Check if initial manager was removed from assigned members list
+        const isInitialManagerRemoved = initialManager > 0 && !newAssigned.includes(initialManager);
+        const hasValidManagerSelected = selectedManagerId && Number(selectedManagerId) > 0;
+        const isNewManagerSelected = hasValidManagerSelected && Number(selectedManagerId) !== initialManager;
+
+        if (initialManager > 0) {
+          if (!hasValidManagerSelected || (isInitialManagerRemoved && !isNewManagerSelected)) {
+            const errorMsg = "You cannot remove the Project Manager until you select another.";
+            setError(errorMsg);
+            notify.error(errorMsg);
+            setSaving(false);
+            return;
+          }
+        } else if (!hasValidManagerSelected) {
+          const hadAnyManager = users.some((u) => currentAssigned.includes(Number(u.id)) && u.role === "manager");
+          const hasAnyManager = users.some((u) => newAssigned.includes(Number(u.id)) && u.role === "manager");
+          if (hadAnyManager && !hasAnyManager) {
+            const errorMsg = "You cannot remove the Project Manager until you select another.";
+            setError(errorMsg);
+            notify.error(errorMsg);
+            setSaving(false);
+            return;
+          }
+        }
+
+        const finalManagerId = selectedManagerId ? Number(selectedManagerId) : initialManager;
+        let finalAssignedUsers = [...newAssigned];
+        if (finalManagerId && !finalAssignedUsers.includes(finalManagerId)) {
+          finalAssignedUsers.push(finalManagerId);
+        }
+
         const payload = {
           team_ids: (selectedTeamIds || []).map((t) => Number(typeof t === "object" ? t.id : t)).filter((id) => !isNaN(id) && id > 0),
-          assigned_users: (assignedUsers || []).map((u) => Number(typeof u === "object" ? u.id : u)).filter((id) => !isNaN(id) && id > 0),
+          assigned_users: finalAssignedUsers.filter((id) => !isNaN(id) && id > 0),
           view_only_users: (viewOnlyUsers || []).map((u) => Number(typeof u === "object" ? u.id : u)).filter((id) => !isNaN(id) && id > 0),
+          manager_id: finalManagerId || null,
+          created_by: finalManagerId || project.created_by,
         };
 
         const res = await fetch(`${API_URL}/projects/${project.id}`, {
@@ -202,6 +249,17 @@ const token = authToken();
       setSaving(false);
     }
   };
+
+  const managerOptions = users.filter(
+    (u) =>
+      u.role === "manager" ||
+      u.role === "admin" ||
+      Number(u.id) === Number(selectedManagerId) ||
+      Number(u.id) === Number(project?.created_by) ||
+      Number(u.id) === Number(project?.creator?.id) ||
+      Number(u.id) === Number(project?.manager_id)
+  );
+  const displayManagerOptions = managerOptions.length > 0 ? managerOptions : users;
 
   return createPortal(
     <div className="cp-overlay" onClick={onClose}>
@@ -234,6 +292,49 @@ const token = authToken();
                 </span>
               ))}
               <span style={{ color: "#9ca3af", marginLeft: 4 }}>({t("read-only", { defaultValue: "read-only" })})</span>
+            </div>
+          )}
+
+          {/* Project Manager Selection - only for local projects */}
+          {!isShared && (
+            <div className="cp-field" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-dark, #1f2937)" }}>
+                {t("Project Manager", { defaultValue: "Project Manager" })} <span style={{ color: "#ef4444" }}>*</span>
+              </label>
+              <select
+                value={selectedManagerId || ""}
+                onChange={(e) => {
+                  const val = Number(e.target.value) || "";
+                  setSelectedManagerId(val);
+                  if (val) {
+                    setAssignedUsers((prev) => {
+                      const currentIds = prev.map((u) => Number(typeof u === "object" ? u.id : u));
+                      if (!currentIds.includes(val)) {
+                        return [...prev, val];
+                      }
+                      return prev;
+                    });
+                  }
+                }}
+                className="cp-select"
+                style={{
+                  width: "100%",
+                  padding: "8px 12px",
+                  borderRadius: "6px",
+                  border: "1px solid var(--border-color, #d1d5db)",
+                  background: "var(--bg-card, #fff)",
+                  fontSize: "14px",
+                  color: "var(--text-dark, #1f2937)",
+                  outline: "none",
+                }}
+              >
+                <option value="">{t("Select Project Manager...", { defaultValue: "Select Project Manager..." })}</option>
+                {displayManagerOptions.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name} ({u.role ? u.role.charAt(0).toUpperCase() + u.role.slice(1) : "User"})
+                  </option>
+                ))}
+              </select>
             </div>
           )}
 

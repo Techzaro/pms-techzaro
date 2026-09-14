@@ -45,6 +45,7 @@ import { authToken, getUser, rolePath } from "../utils/auth";
 import { renderDynamicDates } from "../utils/tableDateUtils";
 import { formatDateTimeInline } from "../utils/formatDateTime";
 import { getUpdatedSinceThreshold } from "../utils/filterUtils";
+import { isDelegationRejectedByMe, isDelegationRevokedFromMe } from "../utils/delegationUtils";
 import "../components/ActionPopover.css";
 import "../pages/Task.css";
 
@@ -162,10 +163,32 @@ function Tasks() {
   const [markCompletedTask, setMarkCompletedTask] = useState(null);
   const [abandoning, setAbandoning] = useState(false);
 
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(() => {
+    const p = searchParams.get("page");
+    return p ? Math.max(1, parseInt(p, 10) || 1) : 1;
+  });
   const [showAll, setShowAll] = useState(false);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [orderedItems, setOrderedItems] = useState([]);
+
+  useEffect(() => {
+    const p = searchParams.get("page");
+    const parsed = p ? Math.max(1, parseInt(p, 10) || 1) : 1;
+    setPage((prev) => (prev !== parsed ? parsed : prev));
+  }, [searchParams]);
+
+  const handlePageChange = useCallback((newPage) => {
+    setPage(newPage);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (newPage > 1) {
+        next.set("page", String(newPage));
+      } else {
+        next.delete("page");
+      }
+      return next;
+    });
+  }, [setSearchParams]);
 
   const [sortBy, setSortBy] = useState("");
   const [sortDirection, setSortDirection] = useState("desc");
@@ -196,7 +219,7 @@ function Tasks() {
       setSortBy(column);
       setSortDirection("asc");
     }
-    setPage(1);
+    handlePageChange(1);
   };
 
   const handleReorder = (newItems) => {
@@ -221,11 +244,16 @@ function Tasks() {
   const selectStatusFilter = (status) => {
     setStatusFilter(status);
     setPage(1);
-    if (status) {
-      setSearchParams({ status });
-    } else {
-      setSearchParams({});
-    }
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (status) {
+        next.set("status", status);
+      } else {
+        next.delete("status");
+      }
+      next.delete("page");
+      return next;
+    });
   };
 
   const getInitials = useCallback((name) => {
@@ -866,7 +894,7 @@ function Tasks() {
 
         <div className="task-btns">
           <div className="all-time" style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <select value={timeFilter} onChange={(e) => { setTimeFilter(e.target.value); setPage(1); }}>
+            <select value={timeFilter} onChange={(e) => { setTimeFilter(e.target.value); handlePageChange(1); }}>
               <option value="">{t("All Time", { defaultValue: "All Time" })}</option>
               <option value="today">{t("Today", { defaultValue: "Today" })}</option>
               <option value="7">{t("Last 7 Days", { defaultValue: "Last 7 Days" })}</option>
@@ -879,14 +907,14 @@ function Tasks() {
                 <input
                   type="date"
                   value={customStartDate}
-                  onChange={(e) => { setCustomStartDate(e.target.value); setPage(1); }}
+                  onChange={(e) => { setCustomStartDate(e.target.value); handlePageChange(1); }}
                   style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-color, #cbd5e1)', fontSize: '13px' }}
                 />
                 <span style={{ fontSize: '12px', color: '#64748b' }}>{t("to", { defaultValue: "to" })}</span>
                 <input
                   type="date"
                   value={customEndDate}
-                  onChange={(e) => { setCustomEndDate(e.target.value); setPage(1); }}
+                  onChange={(e) => { setCustomEndDate(e.target.value); handlePageChange(1); }}
                   style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-color, #cbd5e1)', fontSize: '13px' }}
                 />
               </div>
@@ -946,7 +974,10 @@ function Tasks() {
       {isWidgetEnabled("tasks", "filter_bar") && (
         <TaskFilterBar
           search={search}
-          onSearchChange={setSearch}
+          onSearchChange={(val) => {
+            setSearch(val);
+            handlePageChange(1);
+          }}
           filters={advancedFilters}
           activeStatus={statusFilter}
           sortBy={sortBy}
@@ -954,7 +985,7 @@ function Tasks() {
           onSortChange={(col, dir) => {
             setSortBy(col);
             setSortDirection(dir || "desc");
-            setPage(1);
+            handlePageChange(1);
           }}
           onFilterChange={(key, val) => {
             setAdvancedFilters((prev) => {
@@ -965,11 +996,16 @@ function Tasks() {
               }
               return updated;
             });
-            setPage(1);
+            handlePageChange(1);
           }}
           onApplyFilters={(appliedFilters, appliedSort) => {
             setStatusFilter("");
-            setSearchParams({});
+            setSearchParams((prev) => {
+              const next = new URLSearchParams(prev);
+              next.delete("page");
+              next.delete("status");
+              return next;
+            });
             setAdvancedFilters((prev) => ({
               ...prev,
               statuses: appliedFilters?.statuses || appliedFilters?.status || [],
@@ -1061,12 +1097,15 @@ function Tasks() {
             {(item, idx, dndProps) => {
               const colors = getRandomColors(item.id);
 
+              const isRejected = isDelegationRejectedByMe(item, currentUser);
+              const isRevoked = isDelegationRevokedFromMe(item, currentUser);
+              const isInactive = isRejected || isRevoked;
               const hasChain = item.delegation_chain && item.delegation_chain.length > 0;
               const assigner = item.assigner;
               const displayName = item.transferred_by_name || assigner?.name || "System";
               const displayRole = item.transferred_by_name ? t("Transferred", { defaultValue: "Transferred" }) : (assigner?.role ? t(assigner.role, { defaultValue: assigner.role }) : "");
               return (
-                <div className="taskby-row" key={item.sortableId}>
+                <div className={`taskby-row ${isInactive ? "delegation-rejected-row" : ""}`} key={item.sortableId} style={isInactive ? { opacity: 0.88 } : undefined}>
                   <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={item.id} businessId={item.business_id} />
                   <div className="col-assigned-to">
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -1085,8 +1124,56 @@ function Tasks() {
                           ↳ {t("Subtask", { defaultValue: "Subtask" })}
                         </span>
                       )}
-                      {hasChain && <ArrowUpRight size={14} style={{ color: "#6B7280", flexShrink: 0 }} />}
-                      <div className="task-title" title={item.title} style={{ maxWidth: "250px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</div>
+                      {hasChain && !isInactive && <ArrowUpRight size={14} style={{ color: "#6B7280", flexShrink: 0 }} />}
+                      {isRejected && (
+                        <span
+                          className="badge"
+                          title={t("Transfer Rejected by You", { defaultValue: "Transfer Rejected by You" })}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            padding: "1px 6px",
+                            borderRadius: "4px",
+                            backgroundColor: "#FEE2E2",
+                            color: "#DC2626",
+                            fontSize: "10px",
+                            fontWeight: 700,
+                            lineHeight: "14px",
+                            border: "1px solid #FCA5A5",
+                            flexShrink: 0,
+                            cursor: "help",
+                          }}
+                        >
+                          <XCircle size={11} />
+                          {t("Transfer Rejected", { defaultValue: "Transfer Rejected" })}
+                        </span>
+                      )}
+                      {isRevoked && (
+                        <span
+                          className="badge"
+                          title={t("Transfer Revoked by Assigner", { defaultValue: "Transfer Revoked by Assigner" })}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            padding: "1px 6px",
+                            borderRadius: "4px",
+                            backgroundColor: "#FEF3C7",
+                            color: "#B45309",
+                            fontSize: "10px",
+                            fontWeight: 700,
+                            lineHeight: "14px",
+                            border: "1px solid #FCD34D",
+                            flexShrink: 0,
+                            cursor: "help",
+                          }}
+                        >
+                          <XCircle size={11} />
+                          {t("Transfer Revoked", { defaultValue: "Transfer Revoked" })}
+                        </span>
+                      )}
+                      <div className="task-title" title={item.title} style={{ maxWidth: "250px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", opacity: isInactive ? 0.75 : 1 }}>{item.title}</div>
                       {item.is_shared && (
                         <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", background: "#EEF2FF", color: "#4F46E5", padding: "1px 6px", borderRadius: "10px", fontSize: "10px", fontWeight: 600, flexShrink: 0 }}>
                           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
@@ -1135,7 +1222,9 @@ function Tasks() {
                       title={t("View Task", { defaultValue: "View Task" })}
                       onClick={() => {
                         const targetId = item.item_type === "subtask" ? (item.parent_id || item.task_id || item.id) : item.id;
-                        navigate(rolePath(`tasks/task-details/${targetId}`), { state: { taskIds: taskIdList, from: 'tasks' } });
+                        const currentSearch = location.search || (page > 1 ? `?page=${page}` : "");
+                        const returnUrl = `${location.pathname}${currentSearch}`;
+                        navigate(rolePath(`tasks/task-details/${targetId}`), { state: { taskIds: taskIdList, from: 'tasks', page, returnUrl } });
                       }}
                     >
                       <IoEyeOutline size={18} />
@@ -1344,9 +1433,9 @@ function Tasks() {
         <Pagination
           currentPage={page}
           totalPages={totalPages}
-          onPageChange={setPage}
+          onPageChange={handlePageChange}
           itemsPerPage={itemsPerPage}
-          onItemsPerPageChange={(val) => { setItemsPerPage(val); setPage(1); }}
+          onItemsPerPageChange={(val) => { setItemsPerPage(val); handlePageChange(1); }}
         />
       )}
 

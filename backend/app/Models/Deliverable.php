@@ -589,6 +589,12 @@ class Deliverable extends Model
         return $this->hasMany(TaskDelegation::class, 'deliverable_id')->where('status', 'pending')->latest();
     }
 
+    /** Get the single latest pending delegation for this deliverable. */
+    public function pendingDelegation(): HasOne
+    {
+        return $this->hasOne(TaskDelegation::class, 'deliverable_id')->where('status', 'pending')->latestOfMany();
+    }
+
     /** Get the latest delegation for this deliverable. */
     public function latestDelegation()
     {

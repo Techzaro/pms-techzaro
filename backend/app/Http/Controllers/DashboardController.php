@@ -103,7 +103,7 @@ class DashboardController extends Controller
                 $onlyPendingStatuses = ['pending','planned','Planning'];
 
                 $activeProjects = Project::whereIn('id', $projectIds)
-                    ->whereIn('status', ['Planning', 'In-progress', 'Paused'])->count();
+                    ->whereIn('status', ['Planning', 'In-progress', 'in_progress', 'planned', 'active'])->count();
 
                 $tasksDueToday = DB::table('tasks')
                     ->join('task_user', 'tasks.id', '=', 'task_user.task_id')
@@ -164,7 +164,7 @@ class DashboardController extends Controller
                 $onlyPendingStatuses = ['pending','planned','Planning'];
 
                 $activeProjects = Project::where('created_by', $user->id)
-                    ->whereIn('status', ['Planning', 'In-progress', 'Paused'])->count();
+                    ->whereIn('status', ['Planning', 'In-progress', 'in_progress', 'planned', 'active'])->count();
 
                 $tasksDueToday = DB::table('tasks')
                     ->join('task_user', 'tasks.id', '=', 'task_user.task_id')
@@ -232,7 +232,7 @@ class DashboardController extends Controller
             $onlyPendingStatuses = ['pending','planned','Planning'];
 
             $activeProjects = Project::whereIn('id', $projectIds)
-                ->whereIn('status', ['Planning', 'In-progress', 'Paused'])->count();
+                ->whereIn('status', ['Planning', 'In-progress', 'in_progress', 'planned', 'active'])->count();
 
             $tasksDueToday = Task::where(function ($q) use ($user) {
                     $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
@@ -267,7 +267,7 @@ class DashboardController extends Controller
 
         // Regular user assignee view (existing behavior)
         $activeProjects = Project::whereIn('id', $projectIds)
-            ->whereIn('status', ['Planning', 'In-progress', 'Paused'])
+            ->whereIn('status', ['Planning', 'In-progress', 'in_progress', 'planned', 'active'])
             ->count();
 
         $tasksDueToday = Task::whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
@@ -408,7 +408,7 @@ class DashboardController extends Controller
      */
     private function computeActiveProjects(User $user, array $projectIds): array
     {
-        $activeStatuses = ['Planning', 'In-progress', 'Paused'];
+        $activeStatuses = ['Planning', 'In-progress', 'in_progress', 'planned', 'active'];
         $projects = Project::with(['creator:id,name', 'team:id,name'])
             ->withCount(['tasks as total_tasks', 'tasks as completed_tasks' => function ($q) {
                 $q->whereIn('status', ['approved', 'completed', 'done']);
@@ -1262,7 +1262,7 @@ class DashboardController extends Controller
      */
     private function inactiveProjectStatuses(): array
     {
-        return ['completed', 'Completed', 'done', 'Done', 'approved', 'Approved', 'rejected', 'Rejected', 'cancelled', 'Cancelled', 'canceled', 'Canceled', 'abandoned', 'Abandoned', 'closed', 'Closed', 'archived', 'Archived'];
+        return ['completed', 'Completed', 'done', 'Done', 'approved', 'Approved', 'rejected', 'Rejected', 'cancelled', 'Cancelled', 'canceled', 'Canceled', 'abandoned', 'Abandoned', 'closed', 'Closed', 'archived', 'Archived', 'paused', 'Paused', 'pause', 'Pause'];
     }
 
     /**

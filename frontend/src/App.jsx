@@ -323,7 +323,7 @@ function App() {
               {onOrg && (
                 <>
                   {/* Public routes */}
-                  <Route path="/" element={<Login />} />
+                  <Route path="/" element={<Navigate to="/login" replace />} />
                   <Route path="/login" element={<Login />} />
                   <Route path="/logged-out" element={<LoggedOut />} />
                   <Route path="/forgot-password" element={<ForgotPassword />} />

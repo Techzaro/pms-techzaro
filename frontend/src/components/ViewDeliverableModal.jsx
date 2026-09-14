@@ -234,7 +234,12 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
                   <div className="vd-section">
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                       <h3 className="vd-section-title" style={{ margin: 0 }}>{t("Submission Notes", { defaultValue: "Submission Notes" })}</h3>
-                      {!subtask.has_edited_submission &&
+                      {!subtask?.has_edited_submission &&
+                        !deliverable?.has_edited_submission &&
+                        !submission?.is_edited &&
+                        (!submission?.edit_count || Number(submission?.edit_count) === 0) &&
+                        (!submission?.version_number || Number(submission?.version_number) <= 1) &&
+                        (!submission?.version || Number(submission?.version) <= 1) &&
                         ((submission.submitted_by || submission.submittedBy)?.id === getUser()?.id || submission.submitted_by === getUser()?.id) && (
                           <button
                             type="button"

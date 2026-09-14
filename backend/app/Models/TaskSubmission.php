@@ -33,6 +33,36 @@ class TaskSubmission extends Model
         'version_number' => 'integer',
     ];
 
+    protected $appends = [
+        'is_edited',
+        'edit_count',
+    ];
+
+    public function getIsEditedAttribute(): bool
+    {
+        if (!empty($this->attributes['is_edited'])) {
+            return true;
+        }
+        if ((int) ($this->attributes['version_number'] ?? 1) > 1 || (int) ($this->attributes['version'] ?? 1) > 1) {
+            return true;
+        }
+        if ($this->task && $this->task->has_edited_submission) {
+            return true;
+        }
+        if ($this->updated_at && $this->created_at && $this->updated_at->diffInSeconds($this->created_at) > 1) {
+            return true;
+        }
+        return false;
+    }
+
+    public function getEditCountAttribute(): int
+    {
+        if (isset($this->attributes['edit_count'])) {
+            return (int) $this->attributes['edit_count'];
+        }
+        return $this->getIsEditedAttribute() ? 1 : 0;
+    }
+
     /** The task this submission belongs to. */
     public function task(): BelongsTo
     {
