@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('shared_project_members')) {
+            return;
+        }
+
         Schema::create('shared_project_members', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('shared_resource_id');
@@ -16,7 +20,7 @@ return new class extends Migration
             $table->unsignedBigInteger('added_by')->nullable();
             $table->timestamps();
 
-            $table->unique(['shared_resource_id', 'user_id', 'organization_id']);
+            $table->unique(['shared_resource_id', 'user_id', 'organization_id'], 'spm_res_user_org_unique');
             $table->foreign('shared_resource_id')->references('id')->on('shared_resources')->cascadeOnDelete();
         });
     }

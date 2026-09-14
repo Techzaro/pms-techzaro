@@ -71,65 +71,22 @@ class PasswordResetMail extends Mailable
                                 </td>
                             </tr>
 
-                            <!-- Security Badge -->
-                            <tr>
-                                <td style="padding:28px 34px 0;">
-                                    <table cellpadding="0" cellspacing="0">
-                                        <tr>
-                                            <td style="background-color:#f5f3ff;border:1px solid #7c3aed22;border-radius:20px;padding:5px 14px;">
-                                                <span style="color:#7c3aed;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">&#128274; Password Reset</span>
-                                            </td>
-                                        </tr>
-                                    </table>
-                                </td>
-                            </tr>
-
                             <!-- Body -->
                             <tr>
-                                <td style="padding:20px 34px 0;">
-                                    <p style="color:#6b7280;font-size:14px;line-height:1.6;margin:0 0 6px;">Dear <strong style="color:#111827;">{$name}</strong>,</p>
+                                <td style="padding:30px 34px 0;">
+                                    <p style="color:#374151;font-size:14px;line-height:1.6;margin:0 0 6px;">Dear <strong>{$name}</strong>,</p>
 
-                                    <p style="color:#374151;font-size:14px;line-height:1.7;margin:16px 0 20px;">We received a request to reset the password for your PMS account. Click the button below to create a new password:</p>
+                                    <p style="color:#374151;font-size:14px;line-height:1.7;margin:16px 0 20px;">A request was made to reset the password on your PMS account. To create a new password, please visit the link below:</p>
 
-                                    <!-- Reset Button -->
-                                    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
-                                        <tr>
-                                            <td align="center">
-                                                <table cellpadding="0" cellspacing="0">
-                                                    <tr>
-                                                        <td style="background-color:#2563eb;border-radius:8px;">
-                                                            <a href="{$resetUrl}" target="_blank"
-                                                               style="display:inline-block;color:#ffffff;text-decoration:none;padding:16px 44px;font-size:16px;font-weight:600;letter-spacing:0.3px;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;">
-                                                                Reset Password
-                                                            </a>
-                                                        </td>
-                                                    </tr>
-                                                </table>
-                                            </td>
-                                        </tr>
-                                    </table>
+                                    <!-- Reset Link -->
+                                    <p style="margin:0 0 24px;">
+                                        <a href="{$resetUrl}" style="color:#2563eb;font-size:14px;text-decoration:underline;word-break:break-all;">{$resetUrl}</a>
+                                    </p>
 
                                     <!-- Expiry Notice -->
-                                    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#fef3c7;border:1px solid #f59e0b;border-radius:12px;margin-bottom:20px;">
-                                        <tr>
-                                            <td style="padding:16px 20px;">
-                                                <p style="color:#92400e;font-size:14px;font-weight:700;margin:0 0 6px;">&#9888; Important:</p>
-                                                <p style="color:#92400e;font-size:13px;line-height:1.6;margin:0;">This password reset link is valid for <strong>60 minutes</strong>. If the link expires, you will need to request a new one.</p>
-                                            </td>
-                                        </tr>
-                                    </table>
+                                    <p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0 0 16px;">This link is valid for 60 minutes. If the link expires, you will need to request a new one.</p>
 
-                                    <!-- Security Note -->
-                                    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;margin-bottom:24px;">
-                                        <tr>
-                                            <td style="padding:16px 20px;">
-                                                <p style="color:#166534;font-size:14px;font-weight:700;margin:0 0 6px;">&#128274; Security Notice</p>
-                                                <p style="color:#166534;font-size:13px;line-height:1.6;margin:0;">If you did not request a password reset, please ignore this email. Your password will remain unchanged. For any security concerns, contact our support team.</p>
-                                            </td>
-                                        </tr>
-                                    </table>
-
-                                    <p style="color:#9ca3af;font-size:13px;line-height:1.6;margin:0 0 4px;">This is an automated email from TechXaro PMS. Please do not reply to this email.</p>
+                                    <p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0 0 4px;">If you did not request this, you can safely ignore this email.</p>
                                 </td>
                             </tr>
 

@@ -625,17 +625,6 @@ useEffect(() => {
     }
   }, [projectId]);
 
-  const userInteractedRef = useRef(false);
-  useEffect(() => {
-    const markInteracted = () => { userInteractedRef.current = true; };
-    window.addEventListener("keydown", markInteracted, { once: true, capture: true });
-    window.addEventListener("mousedown", markInteracted, { once: true, capture: true });
-    return () => {
-      window.removeEventListener("keydown", markInteracted, { capture: true });
-      window.removeEventListener("mousedown", markInteracted, { capture: true });
-    };
-  }, []);
-  const markDirty = useCallback(() => { if (userInteractedRef.current) setIsDirty(true); }, []);
   const fetchMembersForProjects = useCallback((projectIds) => {
     const token = authToken();
     const currentUser = getUser();

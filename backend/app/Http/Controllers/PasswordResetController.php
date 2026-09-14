@@ -40,7 +40,7 @@ class PasswordResetController extends Controller
                 );
 
                 $stmt = $pdo->prepare(
-                    'SELECT id, name, email, personal_email, professional_email, phone_number, contact_no, password, role, active, must_change_password, email_mode, email_verified_at, password_reset_locked FROM users WHERE (professional_email = ? OR email = ? OR personal_email = ?) AND active = 1 LIMIT 1'
+                    'SELECT id, name, email, personal_email, professional_email, phone_number, contact_no, password, role, active, email_mode, email_verified_at FROM users WHERE (professional_email = ? OR email = ? OR personal_email = ?) AND active = 1 LIMIT 1'
                 );
                 $stmt->execute([$email, $email, $email]);
                 $row = $stmt->fetch(\PDO::FETCH_ASSOC);
@@ -66,15 +66,40 @@ class PasswordResetController extends Controller
     /**
      * Switch to a specific tenant database connection.
      */
+    private $originalMysqlConfig = [];
+
     private function switchToTenantDb(Organization $org): void
     {
-        config()->set('database.connections.mysql_tenant.host', $org->database_host);
-        config()->set('database.connections.mysql_tenant.port', $org->database_port);
-        config()->set('database.connections.mysql_tenant.database', $org->database_name);
-        config()->set('database.connections.mysql_tenant.username', $org->database_username);
-        config()->set('database.connections.mysql_tenant.password', $org->database_password ?? '');
-        DB::purge('mysql_tenant');
-        DB::reconnect('mysql_tenant');
+        // Save original master config before switching
+        $this->originalMysqlConfig = [
+            'host' => config('database.connections.mysql.host'),
+            'port' => config('database.connections.mysql.port'),
+            'database' => config('database.connections.mysql.database'),
+            'username' => config('database.connections.mysql.username'),
+            'password' => config('database.connections.mysql.password'),
+        ];
+
+        config()->set('database.connections.mysql.host', $org->database_host);
+        config()->set('database.connections.mysql.port', $org->database_port);
+        config()->set('database.connections.mysql.database', $org->database_name);
+        config()->set('database.connections.mysql.username', $org->database_username);
+        config()->set('database.connections.mysql.password', $org->database_password ?? '');
+        DB::purge('mysql');
+        DB::reconnect('mysql');
+    }
+
+    private function switchToMasterDb(): void
+    {
+        if (empty($this->originalMysqlConfig)) {
+            return;
+        }
+        config()->set('database.connections.mysql.host', $this->originalMysqlConfig['host']);
+        config()->set('database.connections.mysql.port', $this->originalMysqlConfig['port']);
+        config()->set('database.connections.mysql.database', $this->originalMysqlConfig['database']);
+        config()->set('database.connections.mysql.username', $this->originalMysqlConfig['username']);
+        config()->set('database.connections.mysql.password', $this->originalMysqlConfig['password']);
+        DB::purge('mysql');
+        DB::reconnect('mysql');
     }
 
     /**
@@ -184,8 +209,19 @@ class PasswordResetController extends Controller
             ]);
 
             try {
-                Mail::to($sendTo)->send(new PasswordResetMail($user, $resetUrl, $token));
-                \Log::info('Password reset: email sent successfully', ['send_to' => $sendTo]);
+                $mailer = config('mail.default', 'unknown');
+                $recipients = Mail::to($sendTo)->send(new PasswordResetMail($user, $resetUrl, $token));
+                \Log::info('Password reset: email dispatch completed', [
+                    'send_to' => $sendTo,
+                    'mailer' => $mailer,
+                    'recipients' => $recipients,
+                ]);
+
+                if ($mailer === 'log') {
+                    \Log::warning('Password reset: MAIL_MAILER is set to "log" — email was NOT sent via SMTP. Check .env MAIL_MAILER setting.', [
+                        'send_to' => $sendTo,
+                    ]);
+                }
             } catch (\Throwable $mailException) {
                 \Log::error('Password reset: SMTP send failed', [
                     'send_to' => $sendTo,
@@ -241,6 +277,14 @@ class PasswordResetController extends Controller
             $token = $request->input('token');
             $password = $request->input('password');
 
+            if (!\Illuminate\Support\Facades\Schema::hasTable('password_reset_tokens')) {
+                \Log::error('Password reset: password_reset_tokens table does not exist');
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Something went wrong. Please try again later.',
+                ], 500);
+            }
+
             // Look up the token in master DB
             $record = \DB::table('password_reset_tokens')
                 ->where('email', $email)
@@ -270,11 +314,18 @@ class PasswordResetController extends Controller
                 ], 422);
             }
 
+            $organization = null;
+            $switchedToTenant = false;
+
             // Try tenant-scoped User model first
-            $user = User::where('professional_email', $email)
-                ->orWhere('email', $email)
-                ->orWhere('personal_email', $email)
-                ->first();
+            try {
+                $user = User::where('professional_email', $email)
+                    ->orWhere('email', $email)
+                    ->orWhere('personal_email', $email)
+                    ->first();
+            } catch (\Throwable $e) {
+                $user = null;
+            }
 
             // If not found in current DB, search across all tenant databases
             if (! $user) {
@@ -285,6 +336,7 @@ class PasswordResetController extends Controller
 
                     // Switch to the correct tenant DB to update the user
                     $this->switchToTenantDb($organization);
+                    $switchedToTenant = true;
                     $user = User::where('professional_email', $email)
                         ->orWhere('email', $email)
                         ->orWhere('personal_email', $email)
@@ -300,25 +352,60 @@ class PasswordResetController extends Controller
             }
 
             // Check if password recovery is locked by admin
-            if (! empty($user->password_reset_locked) && $user->password_reset_locked) {
-                return response()->json([
-                    'success' => false,
-                    'code' => 'PASSWORD_RESET_DISABLED',
-                    'message' => 'Your password has been changed by your administrator. Password recovery has been disabled for your account. Please contact your administrator to regain access.',
-                ], 403);
+            try {
+                if (! empty($user->password_reset_locked) && $user->password_reset_locked) {
+                    return response()->json([
+                        'success' => false,
+                        'code' => 'PASSWORD_RESET_DISABLED',
+                        'message' => 'Your password has been changed by your administrator. Password recovery has been disabled for your account. Please contact your administrator to regain access.',
+                    ], 403);
+                }
+            } catch (\Throwable $e) {
+                // password_reset_locked column may not exist, continue
             }
 
+            // Update password — only set columns that exist
             $user->password = bcrypt($password);
-            $user->must_change_password = false;
-            $user->password_changed_at = now();
-            $user->password_version = ($user->password_version ?? 1) + 1;
+
+            try {
+                $schema = \Illuminate\Support\Facades\Schema;
+                $table = $user->getTable();
+                if ($schema->hasColumn($table, 'must_change_password')) {
+                    $user->must_change_password = false;
+                }
+                if ($schema->hasColumn($table, 'password_changed_at')) {
+                    $user->password_changed_at = now();
+                }
+                if ($schema->hasColumn($table, 'password_version')) {
+                    $user->password_version = ($user->password_version ?? 1) + 1;
+                }
+            } catch (\Throwable $e) {
+                \Log::warning("Password reset: failed setting extra columns: " . $e->getMessage());
+            }
+
             $user->save();
 
-            event(new PasswordReset($user));
+            try {
+                event(new PasswordReset($user));
+            } catch (\Throwable $e) {
+                \Log::warning("Password reset: event dispatch failed: " . $e->getMessage());
+            }
 
-            $user->tokens()->delete();
+            try {
+                $user->tokens()->delete();
+            } catch (\Throwable $e) {
+                \Log::warning("Password reset: tokens delete failed: " . $e->getMessage());
+            }
 
-            \DB::table('password_reset_tokens')->where('email', $email)->delete();
+            // Delete token from master DB — reconnect to master if we switched to tenant
+            try {
+                if ($switchedToTenant && $organization) {
+                    $this->switchToMasterDb();
+                }
+                \DB::table('password_reset_tokens')->where('email', $email)->delete();
+            } catch (\Throwable $e) {
+                \Log::warning("Password reset: token cleanup failed: " . $e->getMessage());
+            }
 
             return response()->json([
                 'success' => true,
@@ -336,7 +423,7 @@ class PasswordResetController extends Controller
                 'errors' => $e->errors(),
             ], 422);
         } catch (\Throwable $e) {
-            \Log::error('Password reset failed', ['email' => $email ?? null, 'error' => $e->getMessage()]);
+            \Log::error('Password reset failed', ['email' => $email ?? null, 'error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
 
             return response()->json([
                 'success' => false,

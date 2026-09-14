@@ -626,16 +626,19 @@ class ProjectController extends Controller
             $hasTasksUnderProject = false;
 
             if (! $isCreator && ! $isAssigned && ! $isTeamLead && ! $isGuestClient) {
-                // Batch: team membership check + visibility check + task assignee check in fewer queries
-                $checks = \DB::select("
-                    SELECT
-                        (SELECT COUNT(*) FROM team_user WHERE user_id = ? AND team_id IN (" . implode(',', array_fill(0, max(count($allTeamIds), 1), '?')) . ") LIMIT 1) AS is_team_member,
-                        (SELECT COUNT(*) FROM project_visibility WHERE project_id = ? AND user_id = ? AND is_visible = 1 LIMIT 1) AS is_visible,
-                        (SELECT COUNT(*) FROM task_user WHERE user_id = ? AND task_id IN (SELECT id FROM tasks WHERE project_id = ?) LIMIT 1) AS has_tasks
-                ", array_merge([$userId], $allTeamIds ?: [0], [$project->id, $userId, $userId, $project->id]));
-                $isTeamMember = ! empty($checks) && ($checks[0]->is_team_member > 0 || $checks[0]->has_tasks > 0);
-                $isManuallyVisible = ! empty($checks) && $checks[0]->is_visible > 0;
-                $hasTasksUnderProject = ! empty($checks) && $checks[0]->has_tasks > 0;
+                try {
+                    $checks = \DB::select("
+                        SELECT
+                            (SELECT COUNT(*) FROM team_user WHERE user_id = ? AND team_id IN (" . implode(',', array_fill(0, max(count($allTeamIds), 1), '?')) . ") LIMIT 1) AS is_team_member,
+                            (SELECT COUNT(*) FROM project_visibility WHERE project_id = ? AND user_id = ? AND is_visible = 1 LIMIT 1) AS is_visible,
+                            (SELECT COUNT(*) FROM task_user WHERE user_id = ? AND task_id IN (SELECT id FROM tasks WHERE project_id = ?) LIMIT 1) AS has_tasks
+                    ", array_merge([$userId], $allTeamIds ?: [0], [$project->id, $userId, $userId, $project->id]));
+                    $isTeamMember = ! empty($checks) && ($checks[0]->is_team_member > 0 || $checks[0]->has_tasks > 0);
+                    $isManuallyVisible = ! empty($checks) && $checks[0]->is_visible > 0;
+                    $hasTasksUnderProject = ! empty($checks) && $checks[0]->has_tasks > 0;
+                } catch (\Throwable $e) {
+                    \Log::warning("show() authorization query failed: " . $e->getMessage());
+                }
             }
 
             if (! $isCreator && ! $isAssigned && ! $isTeamMember && ! $hasTasksUnderProject && ! $isManuallyVisible && ! $isTeamLead && ! $isGuestClient) {
@@ -679,14 +682,7 @@ $baseRelations = [
         'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
         ];
 
-        try {
-$project->load(array_merge($baseRelations, $optionalRelations));
-    } catch (\Throwable $e) {
-        try {
-            $project->load($baseRelations);
-        } catch (\Throwable $e2) {
-            $project->load(['milestones', 'files', 'deliverables', 'tasks']);
-        }
+        $project->load($baseRelations);
 
         // Resolve cross-org assignees — eager-loaded assignees only search the local DB,
         // so users from partner orgs (added via sharing) appear empty. Fetch their names from the partner DB.
