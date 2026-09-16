@@ -77,6 +77,7 @@ import TaskEvents from "../components/TaskEvents";
 import TaskKnowledge from "../components/TaskKnowledge";
 import TaskMembers from "../components/TaskMembers";
 import AbandonModal from "../components/AbandonModal";
+import DeclineModal from "../components/DeclineModal";
 import MarkTaskCompletedModal from "../components/MarkTaskCompletedModal";
 import CreateDeliverableModel from "../components/layout/CreateDeliverableModel";
 import Pagination from "../components/Pagination";
@@ -355,6 +356,8 @@ function TaskDetails() {
   const [deleteSubtaskTargetId, setDeleteSubtaskTargetId] = useState(null);
   const [editingSubtask, setEditingSubtask] = useState(null);
   const [reopenSubtask, setReopenSubtask] = useState(null);
+  const [declineSubtask, setDeclineSubtask] = useState(null);
+  const [declineSubtaskLoading, setDeclineSubtaskLoading] = useState(false);
   const [abandonSubtask, setAbandonSubtask] = useState(null);
   const [abandonSubtaskLoading, setAbandonSubtaskLoading] = useState(false);
   const [markCompletedSubtask, setMarkCompletedSubtask] = useState(null);
@@ -1222,13 +1225,15 @@ function TaskDetails() {
     setActingSubtaskId(null);
   };
 
-  const handleSubtaskReject = async (subtaskId) => {
+  const handleSubtaskReject = async (subtaskId, comment) => {
     setActingSubtaskId(subtaskId);
+    setDeclineSubtaskLoading(true);
     try {
       const token = authToken();
       const res = await fetch(`${API_URL}/deliverables/${subtaskId}/reject`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ comment }),
         _notifHandled: true,
       });
       const data = await res.json();
@@ -1236,13 +1241,16 @@ function TaskDetails() {
         const updated = data.deliverable || data.subtask || data;
         handleSubtaskActionSuccess(updated);
         showSuccessMessage("Subtask", "declined");
+        setDeclineSubtask(null);
       } else {
         notify.error(data.message || t("Failed to decline subtask.", { defaultValue: "Failed to decline subtask." }));
       }
     } catch {
       notify.error(t("Failed to decline subtask.", { defaultValue: "Failed to decline subtask." }));
+    } finally {
+      setActingSubtaskId(null);
+      setDeclineSubtaskLoading(false);
     }
-    setActingSubtaskId(null);
   };
 
   const handleSubtaskAssignerPause = async (subtaskId) => {
@@ -1698,19 +1706,20 @@ function TaskDetails() {
     });
   };
 
-  const handleTaskReject = async () => {
+  const handleTaskReject = async (comment) => {
     await runRejectTask(async () => {
       try {
         const token = authToken();
         const res = await fetch(`${API_URL}/tasks/${taskId}/reject`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ comment }),
           _notifHandled: true,
         });
         const data = await res.json();
         if (res.ok) {
           setTask(data.task);
-          publish('task:updated', { id: taskId, status: 'rejected' });
+          publish('task:updated', { id: taskId, status: 'declined' });
           publish('data:changed', { type: 'task', action: 'updated' });
           showSuccessMessage("Task", "declined");
         } else {
@@ -2502,7 +2511,7 @@ function TaskDetails() {
                                             </button>
                                           )}
                                           {canSubtaskDecline && (
-                                            <button className="action-icon-btn action-submit" title={t("Decline", { defaultValue: "Decline" })} disabled={actingSubtaskId === d.id} onClick={() => handleSubtaskReject(d.id)} style={{ color: "#DC2626" }}>
+                                            <button className="action-icon-btn action-submit" title={t("Decline", { defaultValue: "Decline" })} disabled={actingSubtaskId === d.id} onClick={() => setDeclineSubtask(d)} style={{ color: "#DC2626" }}>
                                               <XCircle size={16} />
                                             </button>
                                           )}
@@ -3394,6 +3403,19 @@ function TaskDetails() {
           onClose={() => setTaskReopenDialog(false)}
           task={task}
           onReopenSuccess={handleTaskActionSuccess}
+        />
+      )}
+
+      {declineSubtask && (
+        <DeclineModal
+          isOpen={!!declineSubtask}
+          onClose={() => setDeclineSubtask(null)}
+          title={t("Decline Subtask", { defaultValue: "Decline Subtask" })}
+          subtitle={declineSubtask?.title}
+          actionLabel={t("Decline Subtask", { defaultValue: "Decline Subtask" })}
+          placeholder={t("Please enter a reason for declining this subtask...", { defaultValue: "Please enter a reason for declining this subtask..." })}
+          onSubmit={(comment) => handleSubtaskReject(declineSubtask.id, comment)}
+          loading={declineSubtaskLoading}
         />
       )}
     </>

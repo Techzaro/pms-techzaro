@@ -114,4 +114,26 @@ export function isDelegationPendingForMe(item, currentUser) {
   return Boolean(pending);
 }
 
+/**
+ * Checks whether a given task/item represents a deliverable/subtask.
+ *
+ * @param {Object} item - The task or deliverable object
+ * @returns {boolean}
+ */
+export function isDeliverableItem(item) {
+  if (!item) return false;
+  return Boolean(
+    item.entity_type === "deliverable" ||
+    item.entityType === "deliverable" ||
+    item.item_type === "subtask" ||
+    item.is_deliverable === true ||
+    item.is_subtask === true ||
+    item.deliverable_number ||
+    item.subtask_number ||
+    (item.task_id && !item.task_number) ||
+    item.parent_task_id
+  );
+}
+
+
 

@@ -19,6 +19,7 @@ import { useSubmit } from "../hooks/useSubmit";
 import SubmissionLinkSection from "./SubmissionLinkSection";
 import LoadingButton from "./LoadingButton";
 import ConfirmModal from "./ConfirmModal";
+import { isDeliverableItem } from "../utils/delegationUtils";
 import "./SubmitDeliverableModal.css";
 import "./layout/CreateTaskModal.css";
 
@@ -38,15 +39,16 @@ function formatFileSize(bytes) {
 }
 
 /**
- * Modal form for submitting or editing a task submission.
+ * Modal form for submitting or editing a task or subtask submission.
  * @param {boolean} isOpen - Whether the modal is visible.
  * @param {Function} onClose - Callback to close the modal.
- * @param {Object} task - The task being submitted.
+ * @param {Object} task - The task or subtask being submitted.
+ * @param {string} [entityType] - "task" or "deliverable".
  * @param {Object} [existingSubmission] - Existing submission data when editing.
  * @param {boolean} [isEdit] - Whether the modal is in edit mode.
- * @param {Function} onSubmitSuccess - Callback after successful submission, receives updated task.
+ * @param {Function} onSubmitSuccess - Callback after successful submission, receives updated item.
  */
-function SubmitTaskModal({ isOpen, onClose, task, existingSubmission = null, isEdit = false, onSubmitSuccess }) {
+function SubmitTaskModal({ isOpen, onClose, task, entityType, existingSubmission = null, isEdit = false, onSubmitSuccess }) {
   const { t } = useTranslation();
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
   useEscapeKey(isOpen, handleClose);
@@ -178,10 +180,12 @@ function SubmitTaskModal({ isOpen, onClose, task, existingSubmission = null, isE
           }
         }
 
+        const isDeliverable = entityType === "deliverable" || isDeliverableItem(task);
+
         const sub = existingSubmission || task?.latest_submission || task?.latestSubmission;
         const endpoint = isEdit && sub
-          ? `${API_URL}/tasks/submissions/${sub.id}`
-          : `${API_URL}/tasks/${task.id}/submit`;
+          ? (isDeliverable ? `${API_URL}/deliverables/submissions/${sub.id}` : `${API_URL}/tasks/submissions/${sub.id}`)
+          : (isDeliverable ? `${API_URL}/deliverables/${task.id}/submit` : `${API_URL}/tasks/${task.id}/submit`);
 
         const res = await fetch(endpoint, {
           method: "POST",
@@ -190,26 +194,47 @@ function SubmitTaskModal({ isOpen, onClose, task, existingSubmission = null, isE
           _notifHandled: true,
         });
 
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (res.ok) {
+          const entityLabel = isDeliverable ? t("Subtask", { defaultValue: "Subtask" }) : t("Task", { defaultValue: "Task" });
           if (data.file_skipped) {
-            notify.warning(data.message || t("Task submitted, but file could not be uploaded due to storage limit.", { defaultValue: "Task submitted, but file could not be uploaded due to storage limit." }));
+            notify.warning(data.message || t("{{entity}} submitted, but file could not be uploaded due to storage limit.", { entity: entityLabel, defaultValue: `${entityLabel} submitted, but file could not be uploaded due to storage limit.` }));
           } else {
-            notify.success(isEdit ? t("Submission updated successfully!", { defaultValue: "Submission updated successfully!" }) : t("Task submitted successfully!", { defaultValue: "Task submitted successfully!" }));
+            notify.success(
+              isEdit
+                ? t("Submission updated successfully!", { defaultValue: "Submission updated successfully!" })
+                : (isDeliverable
+                    ? t("Subtask submitted successfully!", { defaultValue: "Subtask submitted successfully!" })
+                    : t("Task submitted successfully!", { defaultValue: "Task submitted successfully!" }))
+            );
           }
           setIsDirty(false);
-          if (onSubmitSuccess) onSubmitSuccess(data.task);
+          const updatedItem = data.deliverable || data.task || data;
+          if (onSubmitSuccess) onSubmitSuccess(updatedItem);
           onClose();
         } else {
-          notify.error(data.message || t("Failed to submit task.", { defaultValue: "Failed to submit task." }));
+          let errorMsg = data?.message;
+          if (data?.errors && typeof data.errors === "object") {
+            const errorEntries = Object.entries(data.errors);
+            if (errorEntries.length > 0) {
+              const [, msgs] = errorEntries[0];
+              const msg = Array.isArray(msgs) ? msgs[0] : msgs;
+              if (msg) errorMsg = msg;
+            }
+          }
+          notify.error(errorMsg || (isDeliverable ? t("Failed to submit subtask.", { defaultValue: "Failed to submit subtask." }) : t("Failed to submit task.", { defaultValue: "Failed to submit task." })));
         }
-      } catch {
-        notify.error(t("An error occurred. Please try again.", { defaultValue: "An error occurred. Please try again." }));
+      } catch (err) {
+        console.error("Submit task modal error:", err);
+        const errorMsg = err?.response?.data?.message || err?.message || t("An error occurred. Please try again.", { defaultValue: "An error occurred. Please try again." });
+        notify.error(errorMsg);
       }
     });
   };
 
   if (!isOpen || !task) return null;
+
+  const isDeliverable = entityType === "deliverable" || isDeliverableItem(task);
 
   const statusLabel = t((task.status || "pending").charAt(0).toUpperCase() + (task.status || "pending").slice(1));
   const isResubmit = task.status === "reopened";
@@ -250,7 +275,14 @@ function SubmitTaskModal({ isOpen, onClose, task, existingSubmission = null, isE
         </div>
 
         <div className="sd-body">
-          <h3 className="sd-section-title">{isEdit ? t("Edit Submission", { defaultValue: "Edit Submission" }) : isResubmit ? t("Resubmit Task", { defaultValue: "Resubmit Task" }) : t("Submit Task", { defaultValue: "Submit Task" })}</h3>
+          <h3 className="sd-section-title">
+            {isEdit
+              ? t("Edit Submission", { defaultValue: "Edit Submission" })
+              : isResubmit
+                ? (isDeliverable ? t("Resubmit Subtask", { defaultValue: "Resubmit Subtask" }) : t("Resubmit Task", { defaultValue: "Resubmit Task" }))
+                : (isDeliverable ? t("Submit Subtask", { defaultValue: "Submit Subtask" }) : t("Submit Task", { defaultValue: "Submit Task" }))
+            }
+          </h3>
 
           <div className="sd-field">
             <label className="sd-label">{t("Submission Notes", { defaultValue: "Submission Notes" })}</label>
@@ -364,7 +396,12 @@ function SubmitTaskModal({ isOpen, onClose, task, existingSubmission = null, isE
         <div className="sd-footer">
           <button className="sd-cancel-btn" onClick={handleClose} disabled={submitting}>{t("Cancel")}</button>
           <LoadingButton className="sd-submit-btn" onClick={handleSubmit} loading={submitting}>
-            {isEdit ? t("Edit Submission", { defaultValue: "Edit Submission" }) : isResubmit ? t("Resubmit Task", { defaultValue: "Resubmit Task" }) : t("Submit Task", { defaultValue: "Submit Task" })}
+            {isEdit
+              ? t("Edit Submission", { defaultValue: "Edit Submission" })
+              : isResubmit
+                ? (isDeliverable ? t("Resubmit Subtask", { defaultValue: "Resubmit Subtask" }) : t("Resubmit Task", { defaultValue: "Resubmit Task" }))
+                : (isDeliverable ? t("Submit Subtask", { defaultValue: "Submit Subtask" }) : t("Submit Task", { defaultValue: "Submit Task" }))
+            }
           </LoadingButton>
         </div>
       </div>

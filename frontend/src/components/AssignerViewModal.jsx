@@ -12,6 +12,7 @@ import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import ConfirmationDialog from "./ConfirmationDialog";
+import DeclineModal from "./DeclineModal";
 import ReopenDialog from "./ReopenDialog";
 import AbandonModal from "./AbandonModal";
 import { formatDateTime } from "../utils/formatDateTime";
@@ -90,6 +91,7 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
   const [submission, setSubmission] = useState(null);
   const [loading, setLoading] = useState(true);
   const [confirmDialog, setConfirmDialog] = useState({ open: false, type: null });
+  const [declineModalOpen, setDeclineModalOpen] = useState(false);
   const [reopenDialog, setReopenDialog] = useState(false);
   const [acting, setActing] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
@@ -160,25 +162,27 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
       .finally(() => setLoading(false));
   }, [isOpen, subtask]);
 
-  const handleAction = async (action) => {
+  const handleAction = async (action, comment = "") => {
     setActing(true);
     try {
       const token = authToken();
-      const res = await fetch(`${API_URL}/deliverables/${subtask.id}/review`, {
+      const endpoint = action === "approve" ? "approve" : "reject";
+      const body = action === "reject" ? JSON.stringify({ comment }) : undefined;
+      const res = await fetch(`${API_URL}/deliverables/${subtask.id}/${endpoint}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ action }),
+        body,
         _notifHandled: true,
       });
       const data = await res.json();
       if (res.ok) {
-        const actionLabel = action === "approve" ? "approved" : action === "reject" ? "rejected" : "reopened";
+        const actionLabel = action === "approve" ? "approved" : "declined";
         showSuccessMessage("Subtask", actionLabel);
-        onActionSuccess(data.deliverable);
+        onActionSuccess(data.deliverable || { ...subtask, status: actionLabel });
         onClose();
       }
     } catch {
@@ -520,7 +524,7 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
               <button className="avm-action-btn avm-approve-btn" disabled={acting} onClick={() => setConfirmDialog({ open: true, type: "approve" })}>
                 {t("Approve", { defaultValue: "Approve" })}
               </button>
-              <button className="avm-action-btn avm-reject-btn" disabled={acting} onClick={() => setConfirmDialog({ open: true, type: "reject" })}>
+              <button className="avm-action-btn avm-reject-btn" disabled={acting} onClick={() => setDeclineModalOpen(true)}>
                 {t("Decline", { defaultValue: "Decline" })}
               </button>
               <button className="avm-action-btn avm-reopen-btn" disabled={acting} onClick={() => setReopenDialog(true)}>
@@ -557,6 +561,17 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
           )}
         </div>
       </div>
+
+      <DeclineModal
+        isOpen={declineModalOpen}
+        onClose={() => setDeclineModalOpen(false)}
+        title={t("Decline Subtask", { defaultValue: "Decline Subtask" })}
+        subtitle={subtask.title}
+        actionLabel={t("Decline Subtask", { defaultValue: "Decline Subtask" })}
+        placeholder={t("Please enter a reason for declining this subtask...", { defaultValue: "Please enter a reason for declining this subtask..." })}
+        onSubmit={(comment) => handleAction("reject", comment)}
+        loading={acting}
+      />
 
       <ConfirmationDialog
         isOpen={confirmDialog.open}

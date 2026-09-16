@@ -66,14 +66,9 @@ class TaskController extends Controller
     {
         $user = $request->user();
 
-        $isDueTodayFilter = $request->input('status') === 'due_today';
-        $isPendingFilter = $request->input('status') === 'pending';
-        $isInProgressFilter = $request->input('status') === 'in_progress';
-        $isPausedFilter = $request->input('status') === 'paused';
-        $statusFilter = $request->input('status');
-        $filters = $request->query();
-        if ($isDueTodayFilter || $isPendingFilter || $isInProgressFilter || $isPausedFilter) {
-            unset($filters['status']);
+        // Guests only see tasks inside project details
+        if ($user->role === 'guest') {
+            return response()->json(['data' => collect(), 'total' => 0]);
         }
 
         $tasksQuery = Task::where(function ($q) use ($user) {
@@ -96,24 +91,33 @@ class TaskController extends Controller
             });
 
         $tasksQuery->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role', 'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role', 'currentOwner:id,name']);
-        $tasksQuery = $this->applyQueryFiltersSortingPagination($request, $tasksQuery);
-        $tasks = $tasksQuery->get();
+        $tasksQuery = $this->applyQueryFiltersSortingPagination($request, $tasksQuery, false);
 
-        $this->resolveCrossOrgAssignees($tasks);
+        // ── Fetch deliverables assigned to user (excluding self-created) ──
+        $delivQuery = Deliverable::where(function ($q) use ($user) {
+            $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
+                ->orWhere('assigned_to', $user->id);
+        })
+            ->where('created_by', '!=', $user->id)
+            ->whereDoesntHave('delegations', function ($q) use ($user) {
+                $q->where('delegated_by', $user->id)
+                    ->whereIn('status', ['pending', 'accepted']);
+            })
+            ->with([
+                'project:id,title,team_id',
+                'assignee:id,name,email,role',
+                'creator:id,name,email,role',
+                'task:id,title,business_id,project_id',
+                'task.project:id,title',
+                'latestSubmission',
+                'approvedBy:id,name,role',
+                'rejectedBy:id,name,role',
+                'reopenedBy:id,name,role',
+                'updatedBy:id,name,role',
+                'currentOwner:id,name',
+            ]);
 
-        // Email-based self-task filter for local tasks (replaces the removed SQL-level
-        // assigned_by != $user.id filter). A self-task is where the creator (assigner)
-        // is also an assignee — it's private to its creator.
-        // Uses email comparison to handle cross-org ID collisions correctly.
-        $tasks = $tasks->filter(function ($task) {
-            $assigner = $task->assigner;
-            if (!$assigner || empty($assigner->email)) return true;
-            $assignerEmail = strtolower($assigner->email);
-            $assigneeEmails = $task->assignees->pluck('email')->map(fn($e) => strtolower((string)$e))->values()->toArray();
-            // If assigner email matches any assignee email, it's a self-task — exclude
-            if (in_array($assignerEmail, $assigneeEmails)) return false;
-            return true;
-        })->values();
+        $delivQuery = $this->applyDeliverableQueryFilters($request, $delivQuery, false);
 
         // Fetch shared tasks early so we can cross-reference in the collision filter.
         // The shared tasks flow resolves assignees via the partner DB connection, giving
@@ -129,6 +133,85 @@ class TaskController extends Controller
             }
             $sharedTasksAssigneeEmailsMap[$originalId] = $emails;
         }
+
+        // Include shared tasks from collaborate-shared projects (assigned to current user)
+        // Reuse the $sharedTasksRaw fetched earlier for collision verification.
+        // The outer isAssignedToUser() filter handles the correct matching.
+        // Always exclude self-tasks: a task where assigner is also assignee is private.
+        $sharedTasks = $sharedTasksRaw
+            ->filter(fn($t) => $this->isAssignedToUser($t, $user))
+            ->filter(function ($t) {
+                $assigner = $t->assigner ?? null;
+                $assignees = $t->assignees ?? [];
+                if (!$assigner) return true;
+                $assignerEmail = strtolower($assigner->email ?? '');
+                if (empty($assignerEmail)) return true;
+                foreach ($assignees as $a) {
+                    if (strtolower($a->email ?? '') === $assignerEmail) return false;
+                }
+                return true;
+            })
+            ->map(function ($task) use ($user) {
+                // Add delegation flags for shared tasks (same as regular tasks)
+                $isTransferor = false;
+                $chain = $task->delegation_chain ?? [];
+                foreach ($chain as $entry) {
+                    if ((int) ($entry['delegated_by'] ?? 0) === (int) $user->id && ($entry['status'] ?? '') === 'accepted') {
+                        $isTransferor = true;
+                        break;
+                    }
+                }
+                $task->is_transferor = $isTransferor;
+                $task->transferor_return_to_self = true;
+                $task->transferor_has_approved = false;
+                foreach ($chain as $entry) {
+                    if ((int) ($entry['delegated_by'] ?? 0) === (int) $user->id && ($entry['status'] ?? '') === 'accepted') {
+                        $task->transferor_return_to_self = $entry['return_to_transferor'] ?? true;
+                        break;
+                    }
+                }
+                $approvalChain = $task->approval_chain ?? [];
+                foreach ($approvalChain as $aEntry) {
+                    if ((int) ($aEntry['approver_id'] ?? 0) === (int) $user->id && ($aEntry['status'] ?? '') === 'approved') {
+                        $task->transferor_has_approved = true;
+                        break;
+                    }
+                }
+                $task->current_owner_id = $task->current_owner ?? null;
+                $task->current_owner_name = $task->currentOwner->name ?? null;
+                $task->transferred_by_name = null;
+                foreach ($chain as $entry) {
+                    if ((int) ($entry['delegated_to'] ?? 0) === (int) $user->id && ($entry['status'] ?? '') === 'accepted') {
+                        $task->transferred_by_name = $entry['delegated_by_name'] ?? null;
+                    }
+                }
+                return $task;
+            });
+
+        // Compute status counts directly from base queries
+        $counts = $this->computeTaskStatusCountsFromQuery($tasksQuery, $delivQuery, $sharedTasks);
+
+        // Apply status filters to queries at the database level
+        $this->applyStatusFilterOnly($request, $tasksQuery);
+        $this->applyDeliverableStatusFilterOnly($request, $delivQuery);
+        $sharedTasks = $this->filterSharedTasksByStatus($sharedTasks, $request);
+
+        $tasks = $tasksQuery->get();
+        $this->resolveCrossOrgAssignees($tasks);
+
+        // Email-based self-task filter for local tasks (replaces the removed SQL-level
+        // assigned_by != $user.id filter). A self-task is where the creator (assigner)
+        // is also an assignee — it's private to its creator.
+        // Uses email comparison to handle cross-org ID collisions correctly.
+        $tasks = $tasks->filter(function ($task) {
+            $assigner = $task->assigner;
+            if (!$assigner || empty($assigner->email)) return true;
+            $assignerEmail = strtolower($assigner->email);
+            $assigneeEmails = $task->assignees->pluck('email')->map(fn($e) => strtolower((string)$e))->values()->toArray();
+            // If assigner email matches any assignee email, it's a self-task — exclude
+            if (in_array($assignerEmail, $assigneeEmails)) return false;
+            return true;
+        })->values();
 
         // Filter out tasks with ID collisions between orgs.
         // User IDs are not globally unique across tenant databases. A task assigned to
@@ -228,93 +311,17 @@ class TaskController extends Controller
             return $task;
         });
 
-        // ── Fetch deliverables assigned to user (excluding self-created) ──
-        $delivQuery = Deliverable::where(function ($q) use ($user) {
-            $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
-                ->orWhere('assigned_to', $user->id);
-        })
-            ->where('created_by', '!=', $user->id)
-            ->whereDoesntHave('delegations', function ($q) use ($user) {
-                $q->where('delegated_by', $user->id)
-                    ->whereIn('status', ['pending', 'accepted']);
-            })
-            ->with([
-                'project:id,title,team_id',
-                'assignee:id,name,email,role',
-                'creator:id,name,email,role',
-                'task:id,title,business_id,project_id',
-                'task.project:id,title',
-                'latestSubmission',
-                'approvedBy:id,name,role',
-                'rejectedBy:id,name,role',
-                'reopenedBy:id,name,role',
-                'updatedBy:id,name,role',
-                'currentOwner:id,name',
-            ]);
-
-        $delivQuery = $this->applyDeliverableQueryFilters($request, $delivQuery);
         $deliverables = $delivQuery->get();
         $deliverables->transform(fn ($d) => $this->formatDeliverableAsListItem($d, $user));
-
-        // Include shared tasks from collaborate-shared projects (assigned to current user)
-        // Reuse the $sharedTasksRaw fetched earlier for collision verification.
-        // The outer isAssignedToUser() filter handles the correct matching.
-        // Always exclude self-tasks: a task where assigner is also assignee is private.
-        $sharedTasks = $sharedTasksRaw
-            ->filter(fn($t) => $this->isAssignedToUser($t, $user))
-            ->filter(function ($t) {
-                $assigner = $t->assigner ?? null;
-                $assignees = $t->assignees ?? [];
-                if (!$assigner) return true;
-                $assignerEmail = strtolower($assigner->email ?? '');
-                if (empty($assignerEmail)) return true;
-                foreach ($assignees as $a) {
-                    if (strtolower($a->email ?? '') === $assignerEmail) return false;
-                }
-                return true;
-            })
-            ->map(function ($task) use ($user) {
-                // Add delegation flags for shared tasks (same as regular tasks)
-                $isTransferor = false;
-                $chain = $task->delegation_chain ?? [];
-                foreach ($chain as $entry) {
-                    if ((int) ($entry['delegated_by'] ?? 0) === (int) $user->id && ($entry['status'] ?? '') === 'accepted') {
-                        $isTransferor = true;
-                        break;
-                    }
-                }
-                $task->is_transferor = $isTransferor;
-                $task->transferor_return_to_self = true;
-                $task->transferor_has_approved = false;
-                foreach ($chain as $entry) {
-                    if ((int) ($entry['delegated_by'] ?? 0) === (int) $user->id && ($entry['status'] ?? '') === 'accepted') {
-                        $task->transferor_return_to_self = $entry['return_to_transferor'] ?? true;
-                        break;
-                    }
-                }
-                $approvalChain = $task->approval_chain ?? [];
-                foreach ($approvalChain as $aEntry) {
-                    if ((int) ($aEntry['approver_id'] ?? 0) === (int) $user->id && ($aEntry['status'] ?? '') === 'approved') {
-                        $task->transferor_has_approved = true;
-                        break;
-                    }
-                }
-                $task->current_owner_id = $task->current_owner ?? null;
-                $task->current_owner_name = $task->currentOwner->name ?? null;
-                $task->transferred_by_name = null;
-                foreach ($chain as $entry) {
-                    if ((int) ($entry['delegated_to'] ?? 0) === (int) $user->id && ($entry['status'] ?? '') === 'accepted') {
-                        $task->transferred_by_name = $entry['delegated_by_name'] ?? null;
-                    }
-                }
-                return $task;
-            });
 
         $allItems = $tasks->concat($deliverables)->concat($sharedTasks)->sortByDesc('created_at')->values();
 
         return response()->json([
+            'success' => true,
             'data' => $allItems,
+            'tasks' => $allItems,
             'total' => $allItems->count(),
+            'counts' => $counts,
         ]);
     }
 
@@ -334,15 +341,6 @@ class TaskController extends Controller
             return response()->json(['data' => collect(), 'total' => 0]);
         }
 
-        $isDueTodayFilter = $request->input('status') === 'due_today';
-        $isPendingFilter = $request->input('status') === 'pending';
-        $isInProgressFilter = $request->input('status') === 'in_progress';
-        $isPausedFilter = $request->input('status') === 'paused';
-        $filters = $request->query();
-        if ($isPendingFilter || $isDueTodayFilter || $isInProgressFilter || $isPausedFilter) {
-            unset($filters['status']);
-        }
-
         $tasksQuery = Task::where('assigned_by', $user->id)
             ->where(function ($q) use ($user) {
                 $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
@@ -350,7 +348,37 @@ class TaskController extends Controller
             })
             ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role', 'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role', 'currentOwner:id,name']);
 
-        $tasksQuery = $this->applyQueryFiltersSortingPagination($request, $tasksQuery);
+        $tasksQuery = $this->applyQueryFiltersSortingPagination($request, $tasksQuery, false);
+
+        // ── Fetch self-created deliverables ──
+        $delivQuery = Deliverable::where('created_by', $user->id)
+            ->where(function ($q) use ($user) {
+                $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
+                    ->orWhere('assigned_to', $user->id);
+            })
+            ->with([
+                'project:id,title,team_id',
+                'assignee:id,name,email,role',
+                'creator:id,name,email,role',
+                'task:id,title,business_id,project_id',
+                'task.project:id,title',
+                'latestSubmission',
+                'approvedBy:id,name,role',
+                'rejectedBy:id,name,role',
+                'reopenedBy:id,name,role',
+                'updatedBy:id,name,role',
+                'currentOwner:id,name',
+            ]);
+
+        $delivQuery = $this->applyDeliverableQueryFilters($request, $delivQuery, false);
+
+        // Compute status counts directly from base queries
+        $counts = $this->computeTaskStatusCountsFromQuery($tasksQuery, $delivQuery);
+
+        // Apply status filters to queries at the database level
+        $this->applyStatusFilterOnly($request, $tasksQuery);
+        $this->applyDeliverableStatusFilterOnly($request, $delivQuery);
+
         $tasks = $tasksQuery->get();
 
         // Filter out tasks with ID collisions between orgs.
@@ -449,35 +477,17 @@ class TaskController extends Controller
             return $task;
         });
 
-        // ── Fetch self-created deliverables ──
-        $delivQuery = Deliverable::where('created_by', $user->id)
-            ->where(function ($q) use ($user) {
-                $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
-                    ->orWhere('assigned_to', $user->id);
-            })
-            ->with([
-                'project:id,title,team_id',
-                'assignee:id,name,email,role',
-                'creator:id,name,email,role',
-                'task:id,title,business_id,project_id',
-                'task.project:id,title',
-                'latestSubmission',
-                'approvedBy:id,name,role',
-                'rejectedBy:id,name,role',
-                'reopenedBy:id,name,role',
-                'updatedBy:id,name,role',
-                'currentOwner:id,name',
-            ]);
-
-        $delivQuery = $this->applyDeliverableQueryFilters($request, $delivQuery);
         $deliverables = $delivQuery->get();
         $deliverables->transform(fn ($d) => $this->formatDeliverableAsListItem($d, $user));
 
         $allItems = $tasks->concat($deliverables)->sortByDesc('created_at')->values();
 
         return response()->json([
+            'success' => true,
             'data' => $allItems,
+            'tasks' => $allItems,
             'total' => $allItems->count(),
+            'counts' => $counts,
         ]);
     }
 
@@ -515,9 +525,6 @@ class TaskController extends Controller
         $isTeamLeadViewingMember = ($requestingUser->role === 'team_lead' || $requestingUser->role === 'teamlead')
             && $requestingUser->id != $userId;
 
-        $isDueTodayFilter = $request->input('status') === 'due_today';
-        $isPendingFilter = $request->input('status') === 'pending';
-        $statusFilter = $request->input('status');
         $search = $request->input('search');
         $rawTimeFilter = $request->input('time_filter', $request->input('period'));
         $timeFilter = strtolower(trim((string) $rawTimeFilter));
@@ -530,15 +537,12 @@ class TaskController extends Controller
         })
             // If team lead is viewing member, only show tasks assigned BY the team lead
             ->when($isTeamLeadViewingMember, fn ($q) => $q->where('tasks.assigned_by', $requestingUser->id))
-            ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q, $userId))
-            ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
             ->when($search, fn ($q) => $q->where(function ($sq) use ($search) {
                 $sq->where('title', 'like', '%'.$search.'%')
                     ->orWhere('status', 'like', '%'.$search.'%')
                     ->orWhere('priority', 'like', '%'.$search.'%')
                     ->orWhere('business_id', 'like', '%'.$search.'%');
-            }))
-            ->when($statusFilter && ! $isDueTodayFilter && ! $isPendingFilter, fn ($q) => $q->where('status', $statusFilter));
+            }));
 
         if ($timeFilter === 'custom' || ($startDate && $endDate)) {
             if ($startDate && $endDate) {
@@ -568,6 +572,35 @@ class TaskController extends Controller
         $tasksQuery->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role'])
             ->orderBy('sort_order')->latest('updated_at');
 
+        // ── Fetch deliverables for this user ──
+        $delivQuery = Deliverable::where(function ($q) use ($userId) {
+            $q->whereHas('assignees', fn ($q) => $q->where('users.id', $userId))
+                ->orWhere('assigned_to', $userId);
+        })
+            ->when($isTeamLeadViewingMember, fn ($q) => $q->where('deliverables.created_by', $requestingUser->id))
+            ->with([
+                'project:id,title,team_id',
+                'assignee:id,name,email,role',
+                'creator:id,name,email,role',
+                'task:id,title,business_id,project_id',
+                'task.project:id,title',
+                'latestSubmission',
+                'approvedBy:id,name,role',
+                'rejectedBy:id,name,role',
+                'reopenedBy:id,name,role',
+                'updatedBy:id,name,role',
+                'currentOwner:id,name',
+            ]);
+
+        $delivQuery = $this->applyDeliverableQueryFilters($request, $delivQuery, false);
+
+        // Compute status counts directly from base queries
+        $counts = $this->computeTaskStatusCountsFromQuery($tasksQuery, $delivQuery);
+
+        // Apply status filters to queries at the database level
+        $this->applyStatusFilterOnly($request, $tasksQuery);
+        $this->applyDeliverableStatusFilterOnly($request, $delivQuery);
+
         $tasks = $tasksQuery->limit(200)->get();
 
         $taskIds = $tasks->pluck('id');
@@ -596,33 +629,18 @@ class TaskController extends Controller
             $expandedTasks->push($clone);
         }
 
-        // ── Fetch deliverables for this user ──
-        $delivQuery = Deliverable::where(function ($q) use ($userId) {
-            $q->whereHas('assignees', fn ($q) => $q->where('users.id', $userId))
-                ->orWhere('assigned_to', $userId);
-        })
-            ->when($isTeamLeadViewingMember, fn ($q) => $q->where('deliverables.created_by', $requestingUser->id))
-            ->with([
-                'project:id,title,team_id',
-                'assignee:id,name,email,role',
-                'creator:id,name,email,role',
-                'task:id,title,business_id,project_id',
-                'task.project:id,title',
-                'latestSubmission',
-                'approvedBy:id,name,role',
-                'rejectedBy:id,name,role',
-                'reopenedBy:id,name,role',
-                'updatedBy:id,name,role',
-                'currentOwner:id,name',
-            ]);
-
-        $delivQuery = $this->applyDeliverableQueryFilters($request, $delivQuery);
         $deliverables = $delivQuery->limit(100)->get();
         $deliverables->transform(fn ($d) => $this->formatDeliverableAsListItem($d, $requestingUser));
 
         $allItems = $expandedTasks->concat($deliverables)->sortByDesc('created_at')->values();
 
-        return response()->json(['success' => true, 'data' => $allItems, 'total' => $allItems->count()]);
+        return response()->json([
+            'success' => true,
+            'data' => $allItems,
+            'tasks' => $allItems,
+            'total' => $allItems->count(),
+            'counts' => $counts,
+        ]);
     }
 
     /**
@@ -644,9 +662,6 @@ class TaskController extends Controller
 
         $userId = $user->id;
         $isDueTodayFilter = $request->input('status') === 'due_today';
-        $isPendingFilter = $request->input('status') === 'pending';
-        $isInProgressFilter = $request->input('status') === 'in_progress';
-        $isPausedFilter = $request->input('status') === 'paused';
 
         $tasksQuery = Task::with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role', 'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role', 'currentOwner:id,name']);
 
@@ -668,10 +683,37 @@ class TaskController extends Controller
             });
         }
 
-        $tasksQuery = $this->applyQueryFiltersSortingPagination($request, $tasksQuery);
-        $tasks = $tasksQuery->get();
+        $tasksQuery = $this->applyQueryFiltersSortingPagination($request, $tasksQuery, false);
 
-        $this->resolveCrossOrgAssignees($tasks);
+        // ── Fetch deliverables created/assigned by this user to others ──
+        $delivQuery = Deliverable::with([
+            'project:id,title,team_id',
+            'assignee:id,name,email,role',
+            'creator:id,name,email,role',
+            'task:id,title,business_id,project_id',
+            'task.project:id,title',
+            'latestSubmission',
+            'approvedBy:id,name,role',
+            'rejectedBy:id,name,role',
+            'reopenedBy:id,name,role',
+            'updatedBy:id,name,role',
+            'currentOwner:id,name',
+        ]);
+
+        $delivQuery->where(function ($query) use ($userId) {
+            $query->where(function ($createdQuery) use ($userId) {
+                $createdQuery->where('created_by', $userId)
+                    ->where(function ($assigneeQuery) {
+                        $assigneeQuery->whereColumn('created_by', '!=', 'assigned_to')
+                            ->orWhereNull('assigned_to');
+                    });
+            })->orWhereHas('delegations', function ($delegationQuery) use ($userId) {
+                $delegationQuery->where('delegated_by', $userId)
+                    ->whereIn('status', ['pending', 'accepted']);
+            });
+        });
+
+        $delivQuery = $this->applyDeliverableQueryFilters($request, $delivQuery, false);
 
         // Fetch shared tasks early so we can cross-reference in the collision filter.
         // The shared tasks flow resolves assigners via the partner DB connection, giving
@@ -685,6 +727,71 @@ class TaskController extends Controller
                 $sharedTasksByEmailMap[$originalId] = strtolower($st->assigner->email ?? '');
             }
         }
+
+        // Include shared tasks from collaborate-shared projects (assigned by current user)
+        // Reuse the $sharedTasksRaw fetched earlier for collision verification.
+        // The outer isAssignedByUser() filter handles the correct matching.
+        // Always exclude self-tasks: a task where assigner is also assignee is private.
+        $sharedTasks = $sharedTasksRaw
+            ->filter(fn($t) => $this->isAssignedByUser($t, $user))
+            ->filter(function ($t) {
+                $assigner = $t->assigner ?? null;
+                $assignees = $t->assignees ?? [];
+                if (!$assigner) return true;
+                $assignerEmail = strtolower($assigner->email ?? '');
+                if (empty($assignerEmail)) return true;
+                foreach ($assignees as $a) {
+                    if (strtolower($a->email ?? '') === $assignerEmail) return false;
+                }
+                return true;
+            })
+            ->map(function ($task) use ($user) {
+                // Add delegation flags for shared tasks (same as regular tasks)
+                $isTransferor = false;
+                $chain = $task->delegation_chain ?? [];
+                foreach ($chain as $entry) {
+                    if ((int) ($entry['delegated_by'] ?? 0) === (int) $user->id && ($entry['status'] ?? '') === 'accepted') {
+                        $isTransferor = true;
+                        break;
+                    }
+                }
+                $task->is_transferor = $isTransferor;
+                $task->transferor_return_to_self = true;
+                $task->transferor_has_approved = false;
+                foreach ($chain as $entry) {
+                    if ((int) ($entry['delegated_by'] ?? 0) === (int) $user->id && ($entry['status'] ?? '') === 'accepted') {
+                        $task->transferor_return_to_self = $entry['return_to_transferor'] ?? true;
+                        break;
+                    }
+                }
+                $approvalChain = $task->approval_chain ?? [];
+                foreach ($approvalChain as $aEntry) {
+                    if ((int) ($aEntry['approver_id'] ?? 0) === (int) $user->id && ($aEntry['status'] ?? '') === 'approved') {
+                        $task->transferor_has_approved = true;
+                        break;
+                    }
+                }
+                $task->current_owner_id = $task->current_owner ?? null;
+                $task->current_owner_name = $task->currentOwner->name ?? null;
+                $task->transferred_by_name = null;
+                foreach ($chain as $entry) {
+                    if ((int) ($entry['delegated_to'] ?? 0) === (int) $user->id && ($entry['status'] ?? '') === 'accepted') {
+                        $task->transferred_by_name = $entry['delegated_by_name'] ?? null;
+                    }
+                }
+                return $task;
+            });
+
+        // Compute status counts directly from base queries
+        $counts = $this->computeTaskStatusCountsFromQuery($tasksQuery, $delivQuery, $sharedTasks);
+
+        // Apply status filters to queries at the database level
+        $this->applyStatusFilterOnly($request, $tasksQuery);
+        $this->applyDeliverableStatusFilterOnly($request, $delivQuery);
+        $sharedTasks = $this->filterSharedTasksByStatus($sharedTasks, $request);
+
+        $tasks = $tasksQuery->get();
+        $this->resolveCrossOrgAssignees($tasks);
 
         // Filter out tasks with ID collisions between orgs.
         // User IDs are not globally unique across tenant databases. A task created by
@@ -877,95 +984,18 @@ class TaskController extends Controller
             }
         }
 
-        // ── Fetch deliverables created/assigned by this user to others ──
-        $delivQuery = Deliverable::with([
-            'project:id,title,team_id',
-            'assignee:id,name,email,role',
-            'creator:id,name,email,role',
-            'task:id,title,business_id,project_id',
-            'task.project:id,title',
-            'latestSubmission',
-            'approvedBy:id,name,role',
-            'rejectedBy:id,name,role',
-            'reopenedBy:id,name,role',
-            'updatedBy:id,name,role',
-            'currentOwner:id,name',
-        ]);
-
-        $delivQuery->where(function ($query) use ($userId) {
-            $query->where(function ($createdQuery) use ($userId) {
-                $createdQuery->where('created_by', $userId)
-                    ->where(function ($assigneeQuery) {
-                        $assigneeQuery->whereColumn('created_by', '!=', 'assigned_to')
-                            ->orWhereNull('assigned_to');
-                    });
-            })->orWhereHas('delegations', function ($delegationQuery) use ($userId) {
-                $delegationQuery->where('delegated_by', $userId)
-                    ->whereIn('status', ['pending', 'accepted']);
-            });
-        });
-
-        $delivQuery = $this->applyDeliverableQueryFilters($request, $delivQuery);
         $deliverables = $delivQuery->get();
         $deliverables->transform(fn ($d) => $this->formatDeliverableAsListItem($d, $user));
 
-        // Include shared tasks from collaborate-shared projects (assigned by current user)
-        // Reuse the $sharedTasksRaw fetched earlier for collision verification.
-        // The outer isAssignedByUser() filter handles the correct matching.
-        // Always exclude self-tasks: a task where assigner is also assignee is private.
-        $sharedTasks = $sharedTasksRaw
-            ->filter(fn($t) => $this->isAssignedByUser($t, $user))
-            ->filter(function ($t) {
-                $assigner = $t->assigner ?? null;
-                $assignees = $t->assignees ?? [];
-                if (!$assigner) return true;
-                $assignerEmail = strtolower($assigner->email ?? '');
-                if (empty($assignerEmail)) return true;
-                foreach ($assignees as $a) {
-                    if (strtolower($a->email ?? '') === $assignerEmail) return false;
-                }
-                return true;
-            })
-            ->map(function ($task) use ($user) {
-                // Add delegation flags for shared tasks (same as regular tasks)
-                $isTransferor = false;
-                $chain = $task->delegation_chain ?? [];
-                foreach ($chain as $entry) {
-                    if ((int) ($entry['delegated_by'] ?? 0) === (int) $user->id && ($entry['status'] ?? '') === 'accepted') {
-                        $isTransferor = true;
-                        break;
-                    }
-                }
-                $task->is_transferor = $isTransferor;
-                $task->transferor_return_to_self = true;
-                $task->transferor_has_approved = false;
-                foreach ($chain as $entry) {
-                    if ((int) ($entry['delegated_by'] ?? 0) === (int) $user->id && ($entry['status'] ?? '') === 'accepted') {
-                        $task->transferor_return_to_self = $entry['return_to_transferor'] ?? true;
-                        break;
-                    }
-                }
-                $approvalChain = $task->approval_chain ?? [];
-                foreach ($approvalChain as $aEntry) {
-                    if ((int) ($aEntry['approver_id'] ?? 0) === (int) $user->id && ($aEntry['status'] ?? '') === 'approved') {
-                        $task->transferor_has_approved = true;
-                        break;
-                    }
-                }
-                $task->current_owner_id = $task->current_owner ?? null;
-                $task->current_owner_name = $task->currentOwner->name ?? null;
-                $task->transferred_by_name = null;
-                foreach ($chain as $entry) {
-                    if ((int) ($entry['delegated_to'] ?? 0) === (int) $user->id && ($entry['status'] ?? '') === 'accepted') {
-                        $task->transferred_by_name = $entry['delegated_by_name'] ?? null;
-                    }
-                }
-                return $task;
-            });
-
         $allItems = $expandedTasks->concat($deliverables)->concat($sharedTasks)->sortByDesc('created_at')->values();
 
-        return response()->json(['success' => true, 'data' => $allItems, 'total' => $allItems->count()]);
+        return response()->json([
+            'success' => true,
+            'data' => $allItems,
+            'tasks' => $allItems,
+            'total' => $allItems->count(),
+            'counts' => $counts,
+        ]);
     }
 
     /**
@@ -1486,17 +1516,19 @@ $routing = $this->delegationService->routingPayload($task, $user);
             $request->merge(['parent_id' => $parentId]);
         }
 
+        $isDraft = $request->boolean('is_draft') || $request->input('status') === 'draft' || $request->has('is_draft');
+
         $validated = $request->validate([
-            'title' => 'required|string|max:255',
+            'title' => $isDraft ? 'nullable|string|max:255' : 'required|string|max:255',
             'parent_id' => 'nullable|integer|exists:tasks,id',
             'description' => 'nullable|string',
             'requirements' => 'nullable|array',
             'requirements.*' => 'required_with:requirements|string|max:500',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date',
-            'assigned_to' => 'required|array|min:1',
+            'assigned_to' => $isDraft ? 'nullable|array' : 'required|array|min:1',
             'assigned_to.*' => 'string',
-            'priority' => 'required|string|max:32',
+            'priority' => $isDraft ? 'nullable|string|max:32' : 'required|string|max:32',
             'deliverables' => 'nullable|array',
             'deliverables.*.title' => 'required_with:deliverables|string|max:255',
             'deliverables.*.description' => 'nullable|string|max:2000',
@@ -1506,8 +1538,8 @@ $routing = $this->delegationService->routingPayload($task, $user);
             'due_dates' => 'nullable|array',
             'due_dates.*' => 'nullable|date',
             'task_type' => 'nullable|in:standard,recurring',
-            'recurrence_settings' => 'nullable|array|required_if:task_type,recurring',
-            'recurrence_settings.repeat' => 'required_with:recurrence_settings|in:daily,weekly,monthly,custom',
+            'recurrence_settings' => 'nullable|array',
+            'recurrence_settings.repeat' => 'nullable|in:daily,weekly,monthly,custom',
             'recurrence_settings.skip_weekends' => 'nullable|boolean',
             'recurrence_start_date' => 'nullable|date',
             'recurrence_end_date' => 'nullable|date',
@@ -1525,15 +1557,25 @@ $routing = $this->delegationService->routingPayload($task, $user);
             'event_ids.*' => 'nullable|integer',
         ]);
 
+        if (empty($validated['title'])) {
+            $validated['title'] = 'Untitled Draft';
+        }
+        if (empty($validated['priority'])) {
+            $validated['priority'] = 'Medium';
+        }
+        $validated['assigned_to'] = $validated['assigned_to'] ?? [];
+
         // Split assigned_to into local users and cross-org users
         $localUserIds = [];
         $crossOrgAssignments = [];
-        foreach ($validated['assigned_to'] as $assignee) {
-            if (str_contains((string) $assignee, ':')) {
-                [$orgId, $extUserId] = explode(':', $assignee, 2);
-                $crossOrgAssignments[] = ['org_id' => (int) $orgId, 'external_id' => (int) $extUserId];
-            } else {
-                $localUserIds[] = (int) $assignee;
+        if (!empty($validated['assigned_to'])) {
+            foreach ($validated['assigned_to'] as $assignee) {
+                if (str_contains((string) $assignee, ':')) {
+                    [$orgId, $extUserId] = explode(':', $assignee, 2);
+                    $crossOrgAssignments[] = ['org_id' => (int) $orgId, 'external_id' => (int) $extUserId];
+                } else {
+                    $localUserIds[] = (int) $assignee;
+                }
             }
         }
         $validated['assigned_to'] = $localUserIds;
@@ -1558,7 +1600,7 @@ $routing = $this->delegationService->routingPayload($task, $user);
             }
         }
 
-        if (($validated['task_type'] ?? 'standard') === 'recurring') {
+        if (! $isDraft && ($validated['task_type'] ?? 'standard') === 'recurring') {
             $recStart = $validated['recurrence_start_date'] ?? $validated['start_date'] ?? null;
             $recEnd = $validated['recurrence_end_date'] ?? $validated['end_date'] ?? null;
 
@@ -1739,23 +1781,25 @@ $routing = $this->delegationService->routingPayload($task, $user);
         $deliverablesToCreate = [];
         $deliverableNotifications = [];
         $workflowRecords = [];
-        $dueDates = $validated['due_dates'] ?? [];
-        $assignees = User::whereIn('id', $validated['assigned_to'])->get()->keyBy('id');
+        $assignedUserIds = $validated['assigned_to'] ?? [];
+        $assignees = !empty($assignedUserIds) ? User::whereIn('id', $assignedUserIds)->get()->keyBy('id') : collect();
 
-        foreach ($validated['assigned_to'] as $userId) {
+        $initialStatus = $isDraft ? 'draft' : 'pending';
+
+        if (empty($assignedUserIds) && empty($crossOrgAssignments)) {
             $task = $project->tasks()->create([
-                'title' => $validated['title'],
+                'title' => $validated['title'] ?? 'Untitled Draft Task',
                 'parent_id' => $validated['parent_id'] ?? null,
                 'description' => $validated['description'] ?? null,
                 'requirements' => $validated['requirements'] ?? null,
-                'start_date' => $validated['start_date'] ?? now()->toDateTimeString(),
+                'start_date' => $validated['start_date'] ?? null,
                 'end_date' => $validated['end_date'] ?? null,
-                'assigned_to' => $userId,
+                'assigned_to' => null,
                 'assigned_by' => $user->id,
                 'creator_id' => $user->id,
                 'updated_by' => $user->id,
-                'priority' => $validated['priority'],
-                'status' => 'pending',
+                'priority' => $validated['priority'] ?? 'Medium',
+                'status' => $initialStatus,
                 'task_type' => $validated['task_type'] ?? 'standard',
                 'recurrence_settings' => $validated['recurrence_settings'] ?? null,
                 'recurrence_start_date' => $validated['recurrence_start_date'] ?? $validated['start_date'] ?? null,
@@ -1764,7 +1808,6 @@ $routing = $this->delegationService->routingPayload($task, $user);
                 'kb_ids' => $validated['kb_ids'] ?? null,
                 'event_ids' => $validated['event_ids'] ?? null,
             ]);
-            $task->assignees()->sync([$userId => ['due_date' => $dueDates[$userId] ?? null]]);
             if (! empty($validated['followers'])) {
                 $task->followers()->sync($validated['followers']);
             }
@@ -1774,22 +1817,66 @@ $routing = $this->delegationService->routingPayload($task, $user);
             if (! empty($validated['event_ids'])) {
                 $task->events()->sync(array_filter(array_map('intval', $validated['event_ids'])));
             }
-
-            $assignee = $assignees->get($userId);
-
+            $createdTasks[] = $task;
             $workflowRecords[] = [
                 'task_id' => $task->id,
                 'user_id' => $user->id,
                 'action' => 'created',
-                'comment' => $assignee ? 'Assigned to '.$assignee->name : null,
+                'comment' => $isDraft ? 'Saved as draft' : 'Task created without initial assignee',
                 'created_at' => now(),
                 'updated_at' => now(),
             ];
+        } else {
+            foreach ($assignedUserIds as $userId) {
+                $task = $project->tasks()->create([
+                    'title' => $validated['title'],
+                    'parent_id' => $validated['parent_id'] ?? null,
+                    'description' => $validated['description'] ?? null,
+                    'requirements' => $validated['requirements'] ?? null,
+                    'start_date' => $validated['start_date'] ?? now()->toDateTimeString(),
+                    'end_date' => $validated['end_date'] ?? null,
+                    'assigned_to' => $userId,
+                    'assigned_by' => $user->id,
+                    'creator_id' => $user->id,
+                    'updated_by' => $user->id,
+                    'priority' => $validated['priority'],
+                    'status' => $initialStatus,
+                    'task_type' => $validated['task_type'] ?? 'standard',
+                    'recurrence_settings' => $validated['recurrence_settings'] ?? null,
+                    'recurrence_start_date' => $validated['recurrence_start_date'] ?? $validated['start_date'] ?? null,
+                    'recurrence_end_date' => $validated['recurrence_end_date'] ?? $validated['end_date'] ?? null,
+                    'allow_transfer' => $validated['allow_transfer'] ?? true,
+                    'kb_ids' => $validated['kb_ids'] ?? null,
+                    'event_ids' => $validated['event_ids'] ?? null,
+                ]);
+                $dueDates = $validated['due_dates'] ?? [];
+                $task->assignees()->sync([$userId => ['due_date' => $dueDates[$userId] ?? null]]);
+                if (! empty($validated['followers'])) {
+                    $task->followers()->sync($validated['followers']);
+                }
+                if (! empty($validated['kb_ids'])) {
+                    $task->knowledgeBases()->sync(array_filter(array_map('intval', $validated['kb_ids'])));
+                }
+                if (! empty($validated['event_ids'])) {
+                    $task->events()->sync(array_filter(array_map('intval', $validated['event_ids'])));
+                }
+
+                $assignee = $assignees->get($userId);
+
+                $workflowRecords[] = [
+                    'task_id' => $task->id,
+                    'user_id' => $user->id,
+                    'action' => 'created',
+                    'comment' => $assignee ? 'Assigned to '.$assignee->name : null,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
 
             if (! empty($validated['deliverables'])) {
                 foreach ($validated['deliverables'] as $del) {
-                    // Skip if deliverable is assigned to a different user
-                    if (! empty($del['assigned_to']) && (int) $del['assigned_to'] !== (int) $userId) {
+                    $delAssignee = $del['assigned_to'] ?? $userId;
+                    // In a multi-assignee task creation, each user only gets deliverables assigned to them (or unassigned deliverables)
+                    if (!empty($del['assigned_to']) && (int) $del['assigned_to'] !== (int) $userId) {
                         continue;
                     }
                     $deliverablesToCreate[] = [
@@ -1862,6 +1949,7 @@ $routing = $this->delegationService->routingPayload($task, $user);
             }
 
             $createdTasks[] = $task;
+        }
         }
 
         // Create tasks for cross-org users
@@ -1941,7 +2029,7 @@ $routing = $this->delegationService->routingPayload($task, $user);
         $sent = [];
         $notifications = [];
         foreach ($createdTasks as $task) {
-            foreach ($validated['assigned_to'] as $assigneeId) {
+            foreach ($assignedUserIds as $assigneeId) {
                 if ((int) $assigneeId === (int) $user->id || in_array($assigneeId, $sent)) {
                     continue;
                 }
@@ -1961,10 +2049,10 @@ $routing = $this->delegationService->routingPayload($task, $user);
 
         // Send confirmation email to performer
         $taskCount = count($createdTasks);
-        $assigneeNames = User::whereIn('id', $validated['assigned_to'])->pluck('name')->implode(', ');
-        $this->notificationService->confirmAction($user, 'Assigned', 'task', $createdTasks[0]->title, [
+        $assigneeNames = !empty($assignedUserIds) ? User::whereIn('id', $assignedUserIds)->pluck('name')->implode(', ') : 'Unassigned';
+        $this->notificationService->confirmAction($user, 'Assigned', 'task', $createdTasks[0]->title ?? 'Task', [
             'Project' => $project->title,
-            'Business ID' => $createdTasks[0]->business_id,
+            'Business ID' => $createdTasks[0]->business_id ?? '',
             'Assigned To' => $assigneeNames,
             'Tasks Created' => (string) $taskCount,
         ]);
@@ -1974,7 +2062,7 @@ $routing = $this->delegationService->routingPayload($task, $user);
         $this->clearDashboardCache($user->id);
 
         // Clear cache for all assignees
-        foreach ($validated['assigned_to'] as $assigneeId) {
+        foreach ($assignedUserIds as $assigneeId) {
             if ((int) $assigneeId !== (int) $user->id) {
                 $this->clearDashboardCache((int) $assigneeId);
             }
@@ -2071,17 +2159,19 @@ $routing = $this->delegationService->routingPayload($task, $user);
             $request->merge(['parent_id' => $parentId]);
         }
 
+        $isDraft = $request->boolean('is_draft') || $request->input('status') === 'draft' || $request->has('is_draft');
+
         $validated = $request->validate([
-            'title' => 'required|string|max:255',
+            'title' => $isDraft ? 'nullable|string|max:255' : 'required|string|max:255',
             'parent_id' => 'nullable|integer|exists:tasks,id',
             'description' => 'nullable|string',
             'requirements' => 'nullable|array',
             'requirements.*' => 'required_with:requirements|string|max:500',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date',
-            'assigned_to' => 'required|array|min:1',
+            'assigned_to' => $isDraft ? 'nullable|array' : 'required|array|min:1',
             'assigned_to.*' => 'exists:users,id',
-            'priority' => 'required|string|max:32',
+            'priority' => $isDraft ? 'nullable|string|max:32' : 'required|string|max:32',
             'deliverables' => 'nullable|array',
             'deliverables.*.title' => 'required_with:deliverables|string|max:255',
             'deliverables.*.description' => 'nullable|string|max:2000',
@@ -2091,8 +2181,8 @@ $routing = $this->delegationService->routingPayload($task, $user);
             'due_dates' => 'nullable|array',
             'due_dates.*' => 'nullable|date',
             'task_type' => 'nullable|in:standard,recurring',
-            'recurrence_settings' => 'nullable|array|required_if:task_type,recurring',
-            'recurrence_settings.repeat' => 'required_with:recurrence_settings|in:daily,weekly,monthly,custom',
+            'recurrence_settings' => 'nullable|array',
+            'recurrence_settings.repeat' => 'nullable|in:daily,weekly,monthly,custom',
             'recurrence_settings.skip_weekends' => 'nullable|boolean',
             'recurrence_start_date' => 'nullable|date',
             'recurrence_end_date' => 'nullable|date',
@@ -2108,7 +2198,15 @@ $routing = $this->delegationService->routingPayload($task, $user);
             'event_ids.*' => 'nullable|integer',
         ]);
 
-        if (($validated['task_type'] ?? 'standard') === 'recurring') {
+        if (empty($validated['title'])) {
+            $validated['title'] = 'Untitled Draft';
+        }
+        if (empty($validated['priority'])) {
+            $validated['priority'] = 'Medium';
+        }
+        $validated['assigned_to'] = $validated['assigned_to'] ?? [];
+
+        if (! $isDraft && ($validated['task_type'] ?? 'standard') === 'recurring') {
             $recStart = $validated['recurrence_start_date'] ?? $validated['start_date'] ?? null;
             $recEnd = $validated['recurrence_end_date'] ?? $validated['end_date'] ?? null;
 
@@ -2179,21 +2277,23 @@ $routing = $this->delegationService->routingPayload($task, $user);
         $deliverableNotifications = [];
         $workflowRecords = [];
         $dueDates = $validated['due_dates'] ?? [];
-        $assignees = User::whereIn('id', $validated['assigned_to'])->get()->keyBy('id');
+        $assignedUserIds = $validated['assigned_to'] ?? [];
+        $assignees = !empty($assignedUserIds) ? User::whereIn('id', $assignedUserIds)->get()->keyBy('id') : collect();
+        $initialStatus = $isDraft ? 'draft' : 'pending';
 
-        foreach ($validated['assigned_to'] as $userId) {
+        if (empty($assignedUserIds)) {
             $task = Task::create([
-                'title' => $validated['title'],
+                'title' => $validated['title'] ?? 'Untitled Draft Task',
                 'parent_id' => $validated['parent_id'] ?? null,
                 'description' => $validated['description'] ?? null,
                 'requirements' => $validated['requirements'] ?? null,
-                'start_date' => $validated['start_date'] ?? now()->toDateTimeString(),
+                'start_date' => $validated['start_date'] ?? null,
                 'end_date' => $validated['end_date'] ?? null,
-                'assigned_to' => $userId,
+                'assigned_to' => null,
                 'assigned_by' => $user->id,
                 'creator_id' => $user->id,
-                'priority' => $validated['priority'],
-                'status' => 'pending',
+                'priority' => $validated['priority'] ?? 'Medium',
+                'status' => $initialStatus,
                 'project_id' => null,
                 'task_type' => $validated['task_type'] ?? 'standard',
                 'recurrence_settings' => $validated['recurrence_settings'] ?? null,
@@ -2203,7 +2303,6 @@ $routing = $this->delegationService->routingPayload($task, $user);
                 'kb_ids' => $validated['kb_ids'] ?? null,
                 'event_ids' => $validated['event_ids'] ?? null,
             ]);
-            $task->assignees()->sync([$userId => ['due_date' => $dueDates[$userId] ?? null]]);
             if (! empty($validated['kb_ids'])) {
                 $task->knowledgeBases()->sync(array_filter(array_map('intval', $validated['kb_ids'])));
             }
@@ -2211,98 +2310,139 @@ $routing = $this->delegationService->routingPayload($task, $user);
                 $task->events()->sync(array_filter(array_map('intval', $validated['event_ids'])));
             }
 
-            $assignee = $assignees->get($userId);
-
+            $createdTasks[] = $task;
             $workflowRecords[] = [
                 'task_id' => $task->id,
                 'user_id' => $user->id,
                 'action' => 'created',
-                'comment' => $assignee ? 'Assigned to '.$assignee->name : null,
+                'comment' => $isDraft ? 'Saved as draft' : 'Task created without initial assignee',
                 'created_at' => now(),
                 'updated_at' => now(),
             ];
-
-            if (! empty($validated['deliverables'])) {
-                $deliverableData = collect($validated['deliverables'])
-                    ->filter(fn ($del) => empty($del['assigned_to']) || (int) $del['assigned_to'] === (int) $userId)
-                    ->map(fn ($del) => [
-                        'title' => $del['title'], 'description' => $del['description'] ?? null,
-                        'status' => 'pending', 'priority' => $validated['priority'],
-                        'start_date' => $del['start_date'] ?? null,
-                        'due_date' => $del['due_date'] ?? $validated['end_date'] ?? null,
-                        'assigned_to' => $userId, 'created_by' => $user->id,
-                        'created_at' => now(), 'updated_at' => now(),
-                    ])->toArray();
-                $createdDeliverables = $task->deliverables()->createMany($deliverableData);
-                foreach ($createdDeliverables as $dlv) {
-                    if ((int) $dlv->assigned_to !== (int) $user->id) {
-                        $deliverableNotifications[] = [
-                            'user_id' => $dlv->assigned_to, 'sender_user_id' => $user->id,
-                            'type' => 'deliverable_assigned', 'related_module' => 'deliverable',
-                            'related_id' => $dlv->id,
-                            'title' => 'Deliverable Assigned',
-                            'message' => 'A new deliverable "'.$dlv->title.'" has been assigned to you by '.$user->name.'.',
-                            'link' => '/deliveries?selectedDeliverable='.$dlv->id,
-                        ];
-                    }
+        } else {
+            foreach ($assignedUserIds as $userId) {
+                $task = Task::create([
+                    'title' => $validated['title'],
+                    'parent_id' => $validated['parent_id'] ?? null,
+                    'description' => $validated['description'] ?? null,
+                    'requirements' => $validated['requirements'] ?? null,
+                    'start_date' => $validated['start_date'] ?? now()->toDateTimeString(),
+                    'end_date' => $validated['end_date'] ?? null,
+                    'assigned_to' => $userId,
+                    'assigned_by' => $user->id,
+                    'creator_id' => $user->id,
+                    'priority' => $validated['priority'],
+                    'status' => $initialStatus,
+                    'project_id' => null,
+                    'task_type' => $validated['task_type'] ?? 'standard',
+                    'recurrence_settings' => $validated['recurrence_settings'] ?? null,
+                    'recurrence_start_date' => $validated['recurrence_start_date'] ?? $validated['start_date'] ?? null,
+                    'recurrence_end_date' => $validated['recurrence_end_date'] ?? $validated['end_date'] ?? null,
+                    'allow_transfer' => $validated['allow_transfer'] ?? true,
+                    'kb_ids' => $validated['kb_ids'] ?? null,
+                    'event_ids' => $validated['event_ids'] ?? null,
+                ]);
+                $task->assignees()->sync([$userId => ['due_date' => $dueDates[$userId] ?? null]]);
+                if (! empty($validated['kb_ids'])) {
+                    $task->knowledgeBases()->sync(array_filter(array_map('intval', $validated['kb_ids'])));
                 }
-            }
-
-            // Save deliverable templates for recurring standalone tasks
-            if (! empty($validated['deliverable_templates'])) {
-                $templateData = [];
-                foreach ($validated['deliverable_templates'] as $order => $tmpl) {
-                    $templateData[] = [
-                        'task_id' => $task->id,
-                        'title' => $tmpl['title'],
-                        'description' => $tmpl['description'] ?? null,
-                        'quantity' => $tmpl['quantity'] ?? 1,
-                        'combined' => $tmpl['combined'] ?? false,
-                        'sort_order' => $order,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ];
+                if (! empty($validated['event_ids'])) {
+                    $task->events()->sync(array_filter(array_map('intval', $validated['event_ids'])));
                 }
-                DB::table('deliverable_templates')->insert($templateData);
 
-                // Generate ALL deliverables immediately for recurring standalone tasks
-                if (($validated['task_type'] ?? 'standard') === 'recurring') {
-                    $recurringSvc = app(RecurringService::class);
-                    $settings = $validated['recurrence_settings'];
-                    $taskStartDate = $validated['recurrence_start_date'] ?? $validated['start_date'] ?? now()->toDateTimeString();
-                    $taskEndDate = $validated['recurrence_end_date'] ?? $validated['end_date'] ?? now()->addDays(30)->toDateTimeString();
-                    $totalPeriods = $recurringSvc->calculateTotalPeriods($settings, $taskStartDate, $taskEndDate);
-                    $allDlvs = collect();
-                    for ($p = 1; $p <= $totalPeriods; $p++) {
-                        $date = $recurringSvc->getPeriodDate(
-                            $taskStartDate,
-                            $settings['repeat'] ?? 'daily',
-                            $p,
-                            (bool) ($settings['skip_weekends'] ?? false)
-                        );
-                        $created = $recurringSvc->generateOccurrenceDeliverables($task, $p, $date->format('Y-m-d'));
-                        $allDlvs = $allDlvs->concat($created);
-                    }
-                    $task->update([
-                        'deliverables_generated' => $totalPeriods,
-                        'recurrence_status' => 'completed',
-                    ]);
-                    foreach ($allDlvs as $dlv) {
+                $assignee = $assignees->get($userId);
+
+                $workflowRecords[] = [
+                    'task_id' => $task->id,
+                    'user_id' => $user->id,
+                    'action' => 'created',
+                    'comment' => $assignee ? 'Assigned to '.$assignee->name : null,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+
+                if (! empty($validated['deliverables'])) {
+                    $deliverableData = collect($validated['deliverables'])
+                        ->filter(fn ($del) => empty($del['assigned_to']) || (int) $del['assigned_to'] === (int) $userId)
+                        ->map(fn ($del) => [
+                            'title' => $del['title'], 'description' => $del['description'] ?? null,
+                            'status' => 'pending', 'priority' => $validated['priority'],
+                            'start_date' => $del['start_date'] ?? null,
+                            'due_date' => $del['due_date'] ?? $validated['end_date'] ?? null,
+                            'assigned_to' => $userId, 'created_by' => $user->id,
+                            'created_at' => now(), 'updated_at' => now(),
+                        ])->toArray();
+                    $createdDeliverables = $task->deliverables()->createMany($deliverableData);
+                    foreach ($createdDeliverables as $dlv) {
                         if ((int) $dlv->assigned_to !== (int) $user->id) {
                             $deliverableNotifications[] = [
                                 'user_id' => $dlv->assigned_to, 'sender_user_id' => $user->id,
                                 'type' => 'deliverable_assigned', 'related_module' => 'deliverable',
                                 'related_id' => $dlv->id,
                                 'title' => 'Deliverable Assigned',
-                                'message' => 'A new recurring deliverable "'.$dlv->title.'" has been created.',
+                                'message' => 'A new deliverable "'.$dlv->title.'" has been assigned to you by '.$user->name.'.',
                                 'link' => '/deliveries?selectedDeliverable='.$dlv->id,
                             ];
                         }
                     }
                 }
-            }
 
-            $createdTasks[] = $task;
+                // Save deliverable templates for recurring standalone tasks
+                if (! empty($validated['deliverable_templates'])) {
+                    $templateData = [];
+                    foreach ($validated['deliverable_templates'] as $order => $tmpl) {
+                        $templateData[] = [
+                            'task_id' => $task->id,
+                            'title' => $tmpl['title'],
+                            'description' => $tmpl['description'] ?? null,
+                            'quantity' => $tmpl['quantity'] ?? 1,
+                            'combined' => $tmpl['combined'] ?? false,
+                            'sort_order' => $order,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ];
+                    }
+                    DB::table('deliverable_templates')->insert($templateData);
+
+                    // Generate ALL deliverables immediately for recurring standalone tasks
+                    if (($validated['task_type'] ?? 'standard') === 'recurring') {
+                        $recurringSvc = app(RecurringService::class);
+                        $settings = $validated['recurrence_settings'];
+                        $taskStartDate = $validated['recurrence_start_date'] ?? $validated['start_date'] ?? now()->toDateTimeString();
+                        $taskEndDate = $validated['recurrence_end_date'] ?? $validated['end_date'] ?? now()->addDays(30)->toDateTimeString();
+                        $totalPeriods = $recurringSvc->calculateTotalPeriods($settings, $taskStartDate, $taskEndDate);
+                        $allDlvs = collect();
+                        for ($p = 1; $p <= $totalPeriods; $p++) {
+                            $date = $recurringSvc->getPeriodDate(
+                                $taskStartDate,
+                                $settings['repeat'] ?? 'daily',
+                                $p,
+                                (bool) ($settings['skip_weekends'] ?? false)
+                            );
+                            $created = $recurringSvc->generateOccurrenceDeliverables($task, $p, $date->format('Y-m-d'));
+                            $allDlvs = $allDlvs->concat($created);
+                        }
+                        $task->update([
+                            'deliverables_generated' => $totalPeriods,
+                            'recurrence_status' => 'completed',
+                        ]);
+                        foreach ($allDlvs as $dlv) {
+                            if ((int) $dlv->assigned_to !== (int) $user->id) {
+                                $deliverableNotifications[] = [
+                                    'user_id' => $dlv->assigned_to, 'sender_user_id' => $user->id,
+                                    'type' => 'deliverable_assigned', 'related_module' => 'deliverable',
+                                    'related_id' => $dlv->id,
+                                    'title' => 'Deliverable Assigned',
+                                    'message' => 'A new recurring deliverable "'.$dlv->title.'" has been created.',
+                                    'link' => '/deliveries?selectedDeliverable='.$dlv->id,
+                                ];
+                            }
+                        }
+                    }
+                }
+
+                $createdTasks[] = $task;
+            }
         }
 
         if (! empty($workflowRecords)) {
@@ -2316,7 +2456,7 @@ $routing = $this->delegationService->routingPayload($task, $user);
         $sent = [];
         $notifications = [];
         foreach ($createdTasks as $task) {
-            foreach ($validated['assigned_to'] as $assigneeId) {
+            foreach ($assignedUserIds as $assigneeId) {
                 if ((int) $assigneeId === (int) $user->id || in_array($assigneeId, $sent)) {
                     continue;
                 }
@@ -2336,9 +2476,9 @@ $routing = $this->delegationService->routingPayload($task, $user);
 
         // Send confirmation email to performer
         $taskCount = count($createdTasks);
-        $assigneeNames = User::whereIn('id', $validated['assigned_to'])->pluck('name')->implode(', ');
-        $this->notificationService->confirmAction($user, 'Assigned', 'task', $createdTasks[0]->title, [
-            'Business ID' => $createdTasks[0]->business_id,
+        $assigneeNames = !empty($assignedUserIds) ? User::whereIn('id', $assignedUserIds)->pluck('name')->implode(', ') : 'Unassigned';
+        $this->notificationService->confirmAction($user, 'Assigned', 'task', $createdTasks[0]->title ?? 'Task', [
+            'Business ID' => $createdTasks[0]->business_id ?? '',
             'Assigned To' => $assigneeNames,
             'Tasks Created' => (string) $taskCount,
         ]);
@@ -2348,7 +2488,7 @@ $routing = $this->delegationService->routingPayload($task, $user);
         $this->clearDashboardCache($user->id);
 
         // Clear cache for all assignees
-        foreach ($validated['assigned_to'] as $assigneeId) {
+        foreach ($assignedUserIds as $assigneeId) {
             if ((int) $assigneeId !== (int) $user->id) {
                 $this->clearDashboardCache((int) $assigneeId);
             }
@@ -5184,9 +5324,12 @@ $routing = $this->delegationService->routingPayload($task, $user);
         $validated = $request->validate(['comment' => 'nullable|string|max:2000']);
 
         $returnUserId = $isRoutingReviewer ? (int) $task->current_submitter_id : null;
+        $currentStates = is_array($task->states) ? $task->states : [];
+        $filteredStates = array_values(array_filter($currentStates, fn ($s) => strtolower((string)$s) !== 'reopened'));
+
         $task->update([
-            'status' => 'pending',
-            'is_reopened' => true,
+            'status' => 'declined',
+            'is_reopened' => false,
             'rejected_at' => now(),
             'rejected_by' => $user->id,
             'rejection_comment' => $validated['comment'] ?? null,
@@ -5195,15 +5338,15 @@ $routing = $this->delegationService->routingPayload($task, $user);
             'current_reviewer_id' => null,
             'submission_stage' => $returnUserId ? 'declined' : $task->submission_stage,
             'submission_forwarded_by' => $returnUserId ? [] : ($task->submission_forwarded_by ?? []),
-            'states' => array_values(array_unique(array_merge(is_array($task->states) ? $task->states : [], ['Reopened']))),
+            'states' => $filteredStates,
         ]);
 
         if ($returnUserId && $task->assignees()->where('users.id', $returnUserId)->exists()) {
-            $task->assignees()->updateExistingPivot($returnUserId, ['status' => 'pending', 'submitted_at' => null]);
+            $task->assignees()->updateExistingPivot($returnUserId, ['status' => 'declined']);
         } else {
             $assigneeIds = $task->assignees()->pluck('users.id')->toArray();
             if (! empty($assigneeIds)) {
-                $task->assignees()->updateExistingPivot($assigneeIds, ['status' => 'pending', 'submitted_at' => null]);
+                $task->assignees()->updateExistingPivot($assigneeIds, ['status' => 'declined']);
             }
         }
 
@@ -5211,7 +5354,7 @@ $routing = $this->delegationService->routingPayload($task, $user);
 
         $assigneeIds = $returnUserId ? [$returnUserId] : $task->assignees()->pluck('users.id')->toArray();
         $assigneeIds = array_values(array_filter($assigneeIds, fn ($id) => (int) $id !== (int) $user->id));
-        $rejectMsg = 'Your task '.$task->business_id.' ("'.$task->title.'") has been rejected. Please make the required changes.';
+        $rejectMsg = 'Your task '.$task->business_id.' ("'.$task->title.'") has been declined.';
         if (! empty($validated['comment'])) {
             $rejectMsg .= ' Reason: '.$validated['comment'];
         }
@@ -5222,28 +5365,29 @@ $routing = $this->delegationService->routingPayload($task, $user);
             'task_rejected',
             'task',
             $task->id,
-            'Task Rejected',
+            'Task Declined',
             $rejectMsg,
             '/tasks/task-details/'.$task->id.'?from=tasks'
         );
 
         // Send confirmation email to performer
-        $this->notificationService->confirmAction($user, 'Rejected', 'task', $task->title, [
+        $this->notificationService->confirmAction($user, 'Declined', 'task', $task->title, [
             'Business ID' => $task->business_id,
             'Project' => $task->project?->title ?? 'N/A',
             'Assigned To' => $task->assignees->pluck('name')->implode(', '),
             'Reason' => $validated['comment'] ?? 'N/A',
         ]);
 
-        // Log activity
-        $this->activityService->log($user->id, 'task_rejected', 'You rejected task "'.$task->title.'"', 'task', $task->id);
+        // Log activity: "Task declined. Reason: {comment}"
+        $reasonText = ! empty($validated['comment']) ? $validated['comment'] : 'No reason provided';
+        $this->activityService->log($user->id, 'task_declined', 'Task declined. Reason: '.$reasonText, 'task', $task->id);
         $this->clearDashboardCache($user->id);
 
         try {
             $this->auditService->log(
                 module: 'Task Management',
                 action: 'Task Declined',
-                description: "Declined task {$task->title}",
+                description: "Declined task {$task->title}".(! empty($validated['comment']) ? " Reason: {$validated['comment']}" : ''),
                 user: $user,
                 entityType: 'Task',
                 entityId: $task->id,
@@ -5255,14 +5399,14 @@ $routing = $this->delegationService->routingPayload($task, $user);
 
         $this->logMasterActivity(
             'task_rejected',
-            "Task '#{$task->business_id}' rejected: {$task->title}",
+            "Task '#{$task->business_id}' declined: {$task->title}",
             'success',
             ['task_id' => $task->id, 'task_name' => $task->title]
         );
 
         return response()->json([
             'success' => true,
-            'message' => 'Task rejected',
+            'message' => 'Task declined',
             'task' => $this->taskWithTimer($task->fresh()->load(['assignees:id,name,email,role', 'assigner:id,name', 'rejectedBy:id,name',
                 'submissions' => fn ($q) => $q->with('submittedBy:id,name,email')->latest(),
                 'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
@@ -6447,69 +6591,7 @@ $routing = $this->delegationService->routingPayload($task, $user);
             'currentOwner:id,name',
         ]);
 
-        $tasksQuery = $this->applyQueryFiltersSortingPagination($request, $tasksQuery);
-        $tasks = $tasksQuery->get();
-
-        $this->resolveCrossOrgAssignees($tasks);
-
-        // ── Bulk load deliverable counts ──
-        $taskIds = $tasks->pluck('id');
-        $dlvStats = collect();
-        if ($taskIds->isNotEmpty()) {
-            $dlvStats = Deliverable::selectRaw('task_id, COUNT(*) as total, SUM(CASE WHEN status = "approved" THEN 1 ELSE 0 END) as completed, SUM(CASE WHEN status = "pending" THEN 1 ELSE 0 END) as pending')
-                ->whereIn('task_id', $taskIds)
-                ->groupBy('task_id')
-                ->get()->keyBy('task_id');
-        }
-
-        $tasks->transform(function ($task) use ($dlvStats, $user) {
-            $task->item_type = 'task';
-            $stats = $dlvStats->get($task->id);
-            $total = $stats ? (int) $stats->total : 0;
-            $completed = $stats ? (int) $stats->completed : 0;
-            $pending = $stats ? (int) $stats->pending : 0;
-            $task->total_deliverables = $total;
-            $task->completed_deliverables = $completed;
-            $task->pending_deliverables_count = $pending;
-            $isTerminal = in_array(strtolower($task->status ?? ''), ['completed', 'approved', 'done']);
-            $task->deliverables_progress = $total > 0 ? (int) round(($completed / $total) * 100) : ($isTerminal ? 100 : 0);
-
-            // Transferor flag for list views
-            $isTransferor = false;
-            $chain = $task->delegation_chain ?? [];
-            foreach ($chain as $entry) {
-                if ((int) $entry['delegated_by'] === (int) $user->id && $entry['status'] === 'accepted') {
-                    $isTransferor = true;
-                    break;
-                }
-            }
-            $task->is_transferor = $isTransferor;
-            $task->transferor_return_to_self = true;
-            $task->transferor_has_approved = false;
-            foreach ($chain as $entry) {
-                if ((int) $entry['delegated_by'] === (int) $user->id && $entry['status'] === 'accepted') {
-                    $task->transferor_return_to_self = $entry['return_to_transferor'] ?? true;
-                    break;
-                }
-            }
-            $approvalChain = $task->approval_chain ?? [];
-            foreach ($approvalChain as $aEntry) {
-                if ((int) $aEntry['approver_id'] === (int) $user->id && $aEntry['status'] === 'approved') {
-                    $task->transferor_has_approved = true;
-                    break;
-                }
-            }
-
-            // Set transferred_by_name for the transferee
-            $task->transferred_by_name = null;
-            foreach ($chain as $entry) {
-                if ((int) $entry['delegated_to'] === (int) $user->id && $entry['status'] === 'accepted') {
-                    $task->transferred_by_name = $entry['delegated_by_name'];
-                }
-            }
-
-            return $task;
-        });
+        $tasksQuery = $this->applyQueryFiltersSortingPagination($request, $tasksQuery, false);
 
         // ── Fetch deliverables based on role-based visibility ──
         $delivQuery = Deliverable::query();
@@ -6591,9 +6673,7 @@ $routing = $this->delegationService->routingPayload($task, $user);
             'currentOwner:id,name',
         ]);
 
-        $delivQuery = $this->applyDeliverableQueryFilters($request, $delivQuery);
-        $deliverables = $delivQuery->get();
-        $deliverables->transform(fn ($d) => $this->formatDeliverableAsListItem($d, $user));
+        $delivQuery = $this->applyDeliverableQueryFilters($request, $delivQuery, false);
 
         // ── Include shared tasks from collaborate-shared projects ──
         // Admin/Manager/SuperAdmin see all shared tasks; others see only tasks assigned to or by them
@@ -6652,11 +6732,87 @@ $routing = $this->delegationService->routingPayload($task, $user);
             return $task;
         });
 
+        // Compute status counts directly from base queries
+        $counts = $this->computeTaskStatusCountsFromQuery($tasksQuery, $delivQuery, $sharedTasks);
+
+        // Apply status filters to queries at the database level
+        $this->applyStatusFilterOnly($request, $tasksQuery);
+        $this->applyDeliverableStatusFilterOnly($request, $delivQuery);
+        $sharedTasks = $this->filterSharedTasksByStatus($sharedTasks, $request);
+
+        $tasks = $tasksQuery->get();
+        $this->resolveCrossOrgAssignees($tasks);
+
+        // ── Bulk load deliverable counts ──
+        $taskIds = $tasks->pluck('id');
+        $dlvStats = collect();
+        if ($taskIds->isNotEmpty()) {
+            $dlvStats = Deliverable::selectRaw('task_id, COUNT(*) as total, SUM(CASE WHEN status = "approved" THEN 1 ELSE 0 END) as completed, SUM(CASE WHEN status = "pending" THEN 1 ELSE 0 END) as pending')
+                ->whereIn('task_id', $taskIds)
+                ->groupBy('task_id')
+                ->get()->keyBy('task_id');
+        }
+
+        $tasks->transform(function ($task) use ($dlvStats, $user) {
+            $task->item_type = 'task';
+            $stats = $dlvStats->get($task->id);
+            $total = $stats ? (int) $stats->total : 0;
+            $completed = $stats ? (int) $stats->completed : 0;
+            $pending = $stats ? (int) $stats->pending : 0;
+            $task->total_deliverables = $total;
+            $task->completed_deliverables = $completed;
+            $task->pending_deliverables_count = $pending;
+            $isTerminal = in_array(strtolower($task->status ?? ''), ['completed', 'approved', 'done']);
+            $task->deliverables_progress = $total > 0 ? (int) round(($completed / $total) * 100) : ($isTerminal ? 100 : 0);
+
+            // Transferor flag for list views
+            $isTransferor = false;
+            $chain = $task->delegation_chain ?? [];
+            foreach ($chain as $entry) {
+                if ((int) $entry['delegated_by'] === (int) $user->id && $entry['status'] === 'accepted') {
+                    $isTransferor = true;
+                    break;
+                }
+            }
+            $task->is_transferor = $isTransferor;
+            $task->transferor_return_to_self = true;
+            $task->transferor_has_approved = false;
+            foreach ($chain as $entry) {
+                if ((int) $entry['delegated_by'] === (int) $user->id && $entry['status'] === 'accepted') {
+                    $task->transferor_return_to_self = $entry['return_to_transferor'] ?? true;
+                    break;
+                }
+            }
+            $approvalChain = $task->approval_chain ?? [];
+            foreach ($approvalChain as $aEntry) {
+                if ((int) $aEntry['approver_id'] === (int) $user->id && $aEntry['status'] === 'approved') {
+                    $task->transferor_has_approved = true;
+                    break;
+                }
+            }
+
+            // Set transferred_by_name for the transferee
+            $task->transferred_by_name = null;
+            foreach ($chain as $entry) {
+                if ((int) $entry['delegated_to'] === (int) $user->id && $entry['status'] === 'accepted') {
+                    $task->transferred_by_name = $entry['delegated_by_name'];
+                }
+            }
+
+            return $task;
+        });
+
+        $deliverables = $delivQuery->get();
+        $deliverables->transform(fn ($d) => $this->formatDeliverableAsListItem($d, $user));
+
         $allItems = $tasks->concat($deliverables)->concat($sharedTasks)->sortByDesc('created_at')->values();
 
         return response()->json([
+            'success' => true,
             'data' => $allItems,
+            'tasks' => $allItems,
             'total' => $allItems->count(),
+            'counts' => $counts,
         ]);
     }
 
@@ -6842,7 +6998,10 @@ $routing = $this->delegationService->routingPayload($task, $user);
     /**
      * Apply query filtering to deliverables queries for list views.
      */
-    private function applyDeliverableQueryFilters(Request $request, $query)
+    /**
+     * Apply query filtering to deliverables queries for list views.
+     */
+    private function applyDeliverableQueryFilters(Request $request, $query, bool $includeStatusFilter = true)
     {
         if ($request->filled('search')) {
             $search = $request->input('search');
@@ -6889,58 +7048,8 @@ $routing = $this->delegationService->routingPayload($task, $user);
             }
         }
 
-        $rawStatuses = $request->input('statuses', $request->input('status', []));
-        if (is_string($rawStatuses) && str_contains($rawStatuses, ',')) {
-            $rawStatuses = explode(',', $rawStatuses);
-        }
-        if (! is_array($rawStatuses) && ! empty($rawStatuses)) {
-            $rawStatuses = [$rawStatuses];
-        }
-        if (is_array($rawStatuses) && ! empty($rawStatuses)) {
-            $expandedStatuses = [];
-            $hasDueToday = false;
-            foreach ($rawStatuses as $st) {
-                $stLower = strtolower(trim((string) $st));
-                if ($stLower === 'due_today') {
-                    $hasDueToday = true;
-                } elseif (in_array($stLower, ['pending', 'planned', 'planning'])) {
-                    $expandedStatuses = array_merge($expandedStatuses, ['pending', 'planned', 'Planning', 'Planned']);
-                } elseif (in_array($stLower, ['in_progress', 'in progress', 'in-progress', 'doing'])) {
-                    $expandedStatuses = array_merge($expandedStatuses, ['In Progress', 'in_progress', 'in-progress']);
-                } elseif (in_array($stLower, ['submitted', 'review', 'in_review'])) {
-                    $expandedStatuses = array_merge($expandedStatuses, ['submitted', 'Submitted']);
-                } elseif (in_array($stLower, ['approved', 'completed', 'done'])) {
-                    $expandedStatuses = array_merge($expandedStatuses, ['Approved', 'approved', 'completed', 'done']);
-                } elseif (in_array($stLower, ['paused', 'pause'])) {
-                    $expandedStatuses = array_merge($expandedStatuses, ['Paused', 'paused', 'pause']);
-                } elseif (in_array($stLower, ['declined', 'rejected', 'failed'])) {
-                    $expandedStatuses = array_merge($expandedStatuses, ['declined', 'rejected']);
-                } elseif (in_array($stLower, ['abandoned', 'abandon_requested'])) {
-                    $expandedStatuses = array_merge($expandedStatuses, ['abandoned', 'abandon_requested']);
-                } elseif (! empty($st)) {
-                    $expandedStatuses[] = $st;
-                }
-            }
-            $expandedStatuses = array_values(array_unique($expandedStatuses));
-            if (! empty($expandedStatuses) || $hasDueToday) {
-                $query->where(function ($sq) use ($expandedStatuses, $hasDueToday) {
-                    $hasCondition = false;
-                    if (! empty($expandedStatuses)) {
-                        $sq->whereIn('deliverables.status', $expandedStatuses);
-                        $hasCondition = true;
-                    }
-                    if ($hasDueToday) {
-                        $today = now()->toDateString();
-                        if ($hasCondition) {
-                            $sq->orWhere(function ($dq) use ($today) {
-                                $dq->whereDate('due_date', $today)->whereNotIn('status', ['approved', 'completed', 'done', 'abandoned']);
-                            });
-                        } else {
-                            $sq->whereDate('due_date', $today)->whereNotIn('status', ['approved', 'completed', 'done', 'abandoned']);
-                        }
-                    }
-                });
-            }
+        if ($includeStatusFilter) {
+            $query = $this->applyDeliverableStatusFilterOnly($request, $query);
         }
 
         // Priority Filter for Deliverables (single or multi-select, case-insensitive expansion)
@@ -7102,58 +7211,107 @@ $routing = $this->delegationService->routingPayload($task, $user);
     }
 
     /**
-     * Standard query builder pipeline:
-     * 1. Apply WHERE filters (search, user_id/assigned_to, project_id, status, start_date, end_date)
-     * 2. Apply ORDER BY (sort_by, sort_dir/sort_order)
-     * 3. Apply LIMIT/OFFSET (per_page)
+     * Apply status filter only directly to deliverable query.
      */
-    private function applyQueryFiltersSortingPagination(Request $request, $query)
+    private function applyDeliverableStatusFilterOnly(Request $request, $query)
     {
-        // 1. WHERE filters
-        if ($request->filled('search')) {
-            $search = $request->input('search');
-            $query->where(function ($sq) use ($search) {
-                $sq->where('tasks.title', 'like', '%'.$search.'%')
-                    ->orWhere('tasks.status', 'like', '%'.$search.'%')
-                    ->orWhere('tasks.priority', 'like', '%'.$search.'%')
-                    ->orWhere('tasks.business_id', 'like', '%'.$search.'%')
-                    ->orWhereHas('assignees', fn ($aq) => $aq->where('users.name', 'like', '%'.$search.'%'))
-                    ->orWhereHas('assigner', fn ($aq) => $aq->where('users.name', 'like', '%'.$search.'%'))
-                    ->orWhereHas('project', fn ($pq) => $pq->where('projects.title', 'like', '%'.$search.'%'));
-            });
+        $rawStatuses = $request->input('statuses', $request->input('status', []));
+        if (is_string($rawStatuses) && str_contains($rawStatuses, ',')) {
+            $rawStatuses = explode(',', $rawStatuses);
         }
-
-        $userIds = $request->input('user_id', $request->input('user_ids', $request->input('assigned_to', [])));
-        if (is_string($userIds) && str_contains($userIds, ',')) {
-            $userIds = explode(',', $userIds);
+        if (! is_array($rawStatuses) && ! empty($rawStatuses)) {
+            $rawStatuses = [$rawStatuses];
         }
-        if (! is_array($userIds) && ! empty($userIds)) {
-            $userIds = [$userIds];
-        }
-        if (! empty($userIds) && is_array($userIds)) {
-            $userIds = array_values(array_filter(array_map('intval', $userIds)));
-            if (! empty($userIds)) {
-                $query->where(function ($q) use ($userIds) {
-                    $q->whereIn('tasks.assigned_to', $userIds)
-                        ->orWhereHas('assignees', fn ($aq) => $aq->whereIn('users.id', $userIds));
+        if (is_array($rawStatuses) && ! empty($rawStatuses)) {
+            $expandedStatuses = [];
+            $hasDueToday = false;
+            $hasTransferred = false;
+            $hasReopened = false;
+            foreach ($rawStatuses as $st) {
+                $stLower = strtolower(trim((string) $st));
+                if ($stLower === 'due_today') {
+                    $hasDueToday = true;
+                } elseif ($stLower === 'transferred') {
+                    $hasTransferred = true;
+                } elseif ($stLower === 'reopened') {
+                    $hasReopened = true;
+                } elseif (in_array($stLower, ['pending', 'planned', 'planning'])) {
+                    $expandedStatuses = array_merge($expandedStatuses, ['pending', 'planned', 'Planning', 'Planned']);
+                } elseif (in_array($stLower, ['in_progress', 'in progress', 'in-progress', 'doing'])) {
+                    $expandedStatuses = array_merge($expandedStatuses, ['In Progress', 'in_progress', 'in-progress']);
+                } elseif (in_array($stLower, ['submitted', 'review', 'in_review'])) {
+                    $expandedStatuses = array_merge($expandedStatuses, ['submitted', 'Submitted']);
+                } elseif (in_array($stLower, ['approved', 'completed', 'done'])) {
+                    $expandedStatuses = array_merge($expandedStatuses, ['Approved', 'approved', 'completed', 'done']);
+                } elseif (in_array($stLower, ['paused', 'pause'])) {
+                    $expandedStatuses = array_merge($expandedStatuses, ['Paused', 'paused', 'pause']);
+                } elseif (in_array($stLower, ['declined', 'rejected', 'failed'])) {
+                    $expandedStatuses = array_merge($expandedStatuses, ['declined', 'rejected']);
+                } elseif (in_array($stLower, ['abandoned', 'abandon_requested'])) {
+                    $expandedStatuses = array_merge($expandedStatuses, ['abandoned', 'abandon_requested']);
+                } elseif (! empty($st)) {
+                    $expandedStatuses[] = $st;
+                }
+            }
+            $expandedStatuses = array_values(array_unique($expandedStatuses));
+            if (! empty($expandedStatuses) || $hasDueToday || $hasTransferred || $hasReopened) {
+                $query->where(function ($sq) use ($expandedStatuses, $hasDueToday, $hasTransferred, $hasReopened) {
+                    $hasCondition = false;
+                    if (! empty($expandedStatuses)) {
+                        $sq->whereIn('deliverables.status', $expandedStatuses);
+                        $hasCondition = true;
+                    }
+                    if ($hasDueToday) {
+                        $today = now()->toDateString();
+                        if ($hasCondition) {
+                            $sq->orWhere(function ($dq) use ($today) {
+                                $dq->whereDate('due_date', $today)->whereNotIn('status', ['approved', 'completed', 'done', 'abandoned']);
+                            });
+                        } else {
+                            $sq->whereDate('due_date', $today)->whereNotIn('status', ['approved', 'completed', 'done', 'abandoned']);
+                            $hasCondition = true;
+                        }
+                    }
+                    if ($hasTransferred) {
+                        $transferredClause = function ($tq) {
+                            $tq->where('deliverables.is_transferred', true)
+                               ->orWhere(function ($dtq) {
+                                   $dtq->whereNotNull('deliverables.delegation_chain')->where('deliverables.delegation_chain', '!=', '[]');
+                               });
+                        };
+                        if ($hasCondition) {
+                            $sq->orWhere($transferredClause);
+                        } else {
+                            $sq->where($transferredClause);
+                            $hasCondition = true;
+                        }
+                    }
+                    if ($hasReopened) {
+                        $reopenedClause = function ($rq) {
+                            $rq->where('deliverables.is_reopened', true)
+                               ->orWhere('deliverables.status', 'reopened')
+                               ->orWhere('deliverables.reopen_count', '>', 0)
+                               ->orWhereNotNull('deliverables.reopened_at');
+                        };
+                        if ($hasCondition) {
+                            $sq->orWhere($reopenedClause);
+                        } else {
+                            $sq->where($reopenedClause);
+                            $hasCondition = true;
+                        }
+                    }
                 });
             }
         }
 
-        $projectIds = $request->input('project_id', $request->input('project_ids', []));
-        if (is_string($projectIds) && str_contains($projectIds, ',')) {
-            $projectIds = explode(',', $projectIds);
-        }
-        if (! is_array($projectIds) && ! empty($projectIds)) {
-            $projectIds = [$projectIds];
-        }
-        if (! empty($projectIds) && is_array($projectIds)) {
-            $projectIds = array_values(array_filter(array_map('intval', $projectIds)));
-            if (! empty($projectIds)) {
-                $query->whereIn('tasks.project_id', $projectIds);
-            }
-        }
+        return $query;
+    }
 
+    /**
+     * Apply status, states, and due_states filters directly to task query.
+     */
+    private function applyStatusFilterOnly(Request $request, $query)
+    {
         // ── 1. STATUSES FILTER (OR within statuses) ──
         $rawStatuses = $request->input('statuses', $request->input('status', []));
         if (is_string($rawStatuses) && str_contains($rawStatuses, ',')) {
@@ -7356,6 +7514,66 @@ $routing = $this->delegationService->routingPayload($task, $user);
                     }
                 });
             }
+        }
+
+        return $query;
+    }
+
+    /**
+     * Standard query builder pipeline:
+     * 1. Apply WHERE filters (search, user_id/assigned_to, project_id, status, start_date, end_date)
+     * 2. Apply ORDER BY (sort_by, sort_dir/sort_order)
+     * 3. Apply LIMIT/OFFSET (per_page)
+     */
+    private function applyQueryFiltersSortingPagination(Request $request, $query, bool $includeStatusFilter = true)
+    {
+        // 1. WHERE filters
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($sq) use ($search) {
+                $sq->where('tasks.title', 'like', '%'.$search.'%')
+                    ->orWhere('tasks.status', 'like', '%'.$search.'%')
+                    ->orWhere('tasks.priority', 'like', '%'.$search.'%')
+                    ->orWhere('tasks.business_id', 'like', '%'.$search.'%')
+                    ->orWhereHas('assignees', fn ($aq) => $aq->where('users.name', 'like', '%'.$search.'%'))
+                    ->orWhereHas('assigner', fn ($aq) => $aq->where('users.name', 'like', '%'.$search.'%'))
+                    ->orWhereHas('project', fn ($pq) => $pq->where('projects.title', 'like', '%'.$search.'%'));
+            });
+        }
+
+        $userIds = $request->input('user_id', $request->input('user_ids', $request->input('assigned_to', [])));
+        if (is_string($userIds) && str_contains($userIds, ',')) {
+            $userIds = explode(',', $userIds);
+        }
+        if (! is_array($userIds) && ! empty($userIds)) {
+            $userIds = [$userIds];
+        }
+        if (! empty($userIds) && is_array($userIds)) {
+            $userIds = array_values(array_filter(array_map('intval', $userIds)));
+            if (! empty($userIds)) {
+                $query->where(function ($q) use ($userIds) {
+                    $q->whereIn('tasks.assigned_to', $userIds)
+                        ->orWhereHas('assignees', fn ($aq) => $aq->whereIn('users.id', $userIds));
+                });
+            }
+        }
+
+        $projectIds = $request->input('project_id', $request->input('project_ids', []));
+        if (is_string($projectIds) && str_contains($projectIds, ',')) {
+            $projectIds = explode(',', $projectIds);
+        }
+        if (! is_array($projectIds) && ! empty($projectIds)) {
+            $projectIds = [$projectIds];
+        }
+        if (! empty($projectIds) && is_array($projectIds)) {
+            $projectIds = array_values(array_filter(array_map('intval', $projectIds)));
+            if (! empty($projectIds)) {
+                $query->whereIn('tasks.project_id', $projectIds);
+            }
+        }
+
+        if ($includeStatusFilter) {
+            $query = $this->applyStatusFilterOnly($request, $query);
         }
 
         $rawTimeFilter = $request->input('time_filter') ?: $request->input('period');
@@ -8885,5 +9103,287 @@ $routing = $this->delegationService->routingPayload($task, $user);
         }
 
         return $tasks;
+    }
+
+    /**
+     * Compute aggregate status counts directly at the database (SQL) level for tasks and optional deliverables.
+     */
+    private function computeTaskStatusCountsFromQuery($tasksQuery, $delivQuery = null, $extraItems = null): array
+    {
+        $today = Carbon::today()->toDateString();
+        $taskCountQuery = (clone $tasksQuery)->setEagerLoads([])->reorder();
+
+        // 1. Task SQL status counts
+        $taskStatusCounts = (clone $taskCountQuery)
+            ->select('tasks.status', DB::raw('count(*) as aggregate'))
+            ->groupBy('tasks.status')
+            ->pluck('aggregate', 'tasks.status')
+            ->toArray();
+
+        // Task Due Today count: end_date = today and status not in terminal/abandoned
+        $taskDueTodayCount = (clone $taskCountQuery)
+            ->whereDate('tasks.end_date', $today)
+            ->whereNotIn('tasks.status', ['completed', 'approved', 'done', 'abandoned', 'Completed', 'Approved', 'Done', 'Abandoned'])
+            ->count();
+
+        // Task Reopened count
+        $taskReopenedCount = (clone $taskCountQuery)
+            ->where(function ($rq) {
+                $rq->where('tasks.is_reopened', true)
+                   ->orWhere('tasks.status', 'reopened')
+                   ->orWhere('tasks.status', 'Reopened')
+                   ->orWhere('tasks.reopen_count', '>', 0)
+                   ->orWhereNotNull('tasks.reopened_at');
+            })
+            ->count();
+
+        // Task Transferred count
+        $taskTransferredCount = (clone $taskCountQuery)
+            ->where(function ($tq) {
+                $tq->where('tasks.is_transferred', true)
+                   ->orWhere(function ($dtq) {
+                       $dtq->whereNotNull('tasks.delegation_chain')->where('tasks.delegation_chain', '!=', '[]');
+                   });
+            })
+            ->count();
+
+        // 2. Deliverable SQL counts (if $delivQuery provided)
+        $delivStatusCounts = [];
+        $delivDueTodayCount = 0;
+        $delivReopenedCount = 0;
+        $delivTransferredCount = 0;
+
+        if ($delivQuery !== null) {
+            $delivCountQuery = (clone $delivQuery)->setEagerLoads([])->reorder();
+
+            $delivStatusCounts = (clone $delivCountQuery)
+                ->select('deliverables.status', DB::raw('count(*) as aggregate'))
+                ->groupBy('deliverables.status')
+                ->pluck('aggregate', 'deliverables.status')
+                ->toArray();
+
+            $delivDueTodayCount = (clone $delivCountQuery)
+                ->whereDate('deliverables.due_date', $today)
+                ->whereNotIn('deliverables.status', ['approved', 'completed', 'done', 'abandoned', 'Approved', 'Completed', 'Done', 'Abandoned'])
+                ->count();
+
+            $delivReopenedCount = (clone $delivCountQuery)
+                ->where(function ($rq) {
+                    $rq->where('deliverables.is_reopened', true)
+                       ->orWhere('deliverables.status', 'reopened')
+                       ->orWhere('deliverables.status', 'Reopened')
+                       ->orWhere('deliverables.reopen_count', '>', 0)
+                       ->orWhereNotNull('deliverables.reopened_at');
+                })
+                ->count();
+
+            $delivTransferredCount = (clone $delivCountQuery)
+                ->where(function ($tq) {
+                    $tq->where('deliverables.is_transferred', true)
+                       ->orWhere(function ($dtq) {
+                           $dtq->whereNotNull('deliverables.delegation_chain')->where('deliverables.delegation_chain', '!=', '[]');
+                       });
+                })
+                ->count();
+        }
+
+        $counts = [
+            'all' => 0,
+            'due_today' => $taskDueTodayCount + $delivDueTodayCount,
+            'dueToday' => $taskDueTodayCount + $delivDueTodayCount,
+            'pending' => 0,
+            'in_progress' => 0,
+            'inProgress' => 0,
+            'paused' => 0,
+            'submitted' => 0,
+            'completed' => 0,
+            'approved' => 0,
+            'declined' => 0,
+            'rejected' => 0,
+            'abandoned' => 0,
+            'reopened' => $taskReopenedCount + $delivReopenedCount,
+            'transferred' => $taskTransferredCount + $delivTransferredCount,
+        ];
+
+        // Aggregate task status counts
+        foreach ($taskStatusCounts as $rawStatus => $cnt) {
+            $cnt = (int) $cnt;
+            $counts['all'] += $cnt;
+            $st = strtolower(trim((string) $rawStatus));
+
+            if (in_array($st, ['pending', 'planned', 'planning'])) {
+                $counts['pending'] += $cnt;
+            } elseif (in_array($st, ['in_progress', 'in progress', 'in-progress', 'doing'])) {
+                $counts['in_progress'] += $cnt;
+                $counts['inProgress'] += $cnt;
+            } elseif (in_array($st, ['paused', 'pause', 'hold', 'on_hold'])) {
+                $counts['paused'] += $cnt;
+            } elseif (in_array($st, ['submitted', 'review', 'in_review', 'under_review'])) {
+                $counts['submitted'] += $cnt;
+            } elseif (in_array($st, ['completed', 'approved', 'done'])) {
+                $counts['completed'] += $cnt;
+                $counts['approved'] += $cnt;
+            } elseif (in_array($st, ['declined', 'rejected', 'failed'])) {
+                $counts['declined'] += $cnt;
+                $counts['rejected'] += $cnt;
+            } elseif (in_array($st, ['abandoned', 'abandon_requested'])) {
+                $counts['abandoned'] += $cnt;
+            }
+        }
+
+        // Aggregate deliverable status counts
+        foreach ($delivStatusCounts as $rawStatus => $cnt) {
+            $cnt = (int) $cnt;
+            $counts['all'] += $cnt;
+            $st = strtolower(trim((string) $rawStatus));
+
+            if (in_array($st, ['pending', 'planned', 'planning'])) {
+                $counts['pending'] += $cnt;
+            } elseif (in_array($st, ['in_progress', 'in progress', 'in-progress', 'doing'])) {
+                $counts['in_progress'] += $cnt;
+                $counts['inProgress'] += $cnt;
+            } elseif (in_array($st, ['paused', 'pause', 'hold', 'on_hold'])) {
+                $counts['paused'] += $cnt;
+            } elseif (in_array($st, ['submitted', 'review', 'in_review', 'under_review'])) {
+                $counts['submitted'] += $cnt;
+            } elseif (in_array($st, ['completed', 'approved', 'done'])) {
+                $counts['completed'] += $cnt;
+                $counts['approved'] += $cnt;
+            } elseif (in_array($st, ['declined', 'rejected', 'failed'])) {
+                $counts['declined'] += $cnt;
+                $counts['rejected'] += $cnt;
+            } elseif (in_array($st, ['abandoned', 'abandon_requested'])) {
+                $counts['abandoned'] += $cnt;
+            }
+        }
+
+        // 3. Extra items (e.g. cross-org shared tasks collection)
+        if ($extraItems && (is_array($extraItems) || $extraItems instanceof \Illuminate\Support\Collection)) {
+            foreach ($extraItems as $item) {
+                $counts['all']++;
+                $rawStatus = is_array($item) ? ($item['status'] ?? '') : ($item->status ?? '');
+                $statusLower = strtolower(trim((string) $rawStatus));
+
+                $endDate = is_array($item) ? ($item['end_date'] ?? $item['due_date'] ?? null) : ($item->end_date ?? $item->due_date ?? null);
+                $isDueToday = false;
+                if ($endDate) {
+                    try {
+                        $isDueToday = Carbon::parse($endDate)->toDateString() === $today;
+                    } catch (\Throwable $e) {}
+                }
+                $isCompletedOrApproved = in_array($statusLower, ['completed', 'approved', 'done']);
+                $isAbandoned = in_array($statusLower, ['abandoned', 'abandon_requested']);
+
+                if ($isDueToday && !$isCompletedOrApproved && !$isAbandoned) {
+                    $counts['due_today']++;
+                    $counts['dueToday']++;
+                }
+
+                if (in_array($statusLower, ['pending', 'planned', 'planning'])) {
+                    $counts['pending']++;
+                } elseif (in_array($statusLower, ['in_progress', 'in progress', 'in-progress', 'doing'])) {
+                    $counts['in_progress']++;
+                    $counts['inProgress']++;
+                } elseif (in_array($statusLower, ['paused', 'pause', 'hold', 'on_hold'])) {
+                    $counts['paused']++;
+                } elseif (in_array($statusLower, ['submitted', 'review', 'in_review', 'under_review'])) {
+                    $counts['submitted']++;
+                } elseif ($isCompletedOrApproved) {
+                    $counts['completed']++;
+                    $counts['approved']++;
+                } elseif (in_array($statusLower, ['declined', 'rejected', 'failed'])) {
+                    $counts['declined']++;
+                    $counts['rejected']++;
+                } elseif ($isAbandoned) {
+                    $counts['abandoned']++;
+                }
+
+                $isReopened = is_array($item) ? (!empty($item['is_reopened']) || $statusLower === 'reopened') : (!empty($item->is_reopened) || $statusLower === 'reopened');
+                if ($isReopened) {
+                    $counts['reopened']++;
+                }
+
+                $chain = is_array($item) ? ($item['delegation_chain'] ?? []) : ($item->delegation_chain ?? []);
+                $isTransferred = is_array($item) ? (!empty($item['is_transferred']) || (!empty($chain) && count($chain) > 0)) : (!empty($item->is_transferred) || (!empty($chain) && count($chain) > 0));
+                if ($isTransferred) {
+                    $counts['transferred']++;
+                }
+            }
+        }
+
+        return $counts;
+    }
+
+    /**
+     * Filter external shared tasks collection by requested status.
+     */
+    private function filterSharedTasksByStatus($sharedTasks, Request $request)
+    {
+        if (empty($sharedTasks) || ($sharedTasks instanceof \Illuminate\Support\Collection && $sharedTasks->isEmpty())) {
+            return $sharedTasks;
+        }
+
+        $rawStatuses = $request->input('statuses', $request->input('status', []));
+        if (is_string($rawStatuses) && str_contains($rawStatuses, ',')) {
+            $rawStatuses = explode(',', $rawStatuses);
+        }
+        if (! is_array($rawStatuses) && ! empty($rawStatuses)) {
+            $rawStatuses = [$rawStatuses];
+        }
+        if (empty($rawStatuses)) {
+            return $sharedTasks;
+        }
+
+        $normalizedStatuses = array_values(array_filter(array_map(fn($s) => strtolower(trim((string)$s)), $rawStatuses)));
+        if (empty($normalizedStatuses) || (count($normalizedStatuses) === 1 && ($normalizedStatuses[0] === 'all' || $normalizedStatuses[0] === ''))) {
+            return $sharedTasks;
+        }
+
+        $todayStr = Carbon::today()->toDateString();
+
+        return $sharedTasks->filter(function ($item) use ($normalizedStatuses, $todayStr) {
+            $rawStatus = is_array($item) ? ($item['status'] ?? '') : ($item->status ?? '');
+            $st = strtolower(trim((string) $rawStatus));
+
+            foreach ($normalizedStatuses as $filterStatus) {
+                if ($filterStatus === 'all' || $filterStatus === '') {
+                    return true;
+                }
+                if ($filterStatus === 'due_today') {
+                    $endDate = is_array($item) ? ($item['end_date'] ?? $item['due_date'] ?? null) : ($item->end_date ?? $item->due_date ?? null);
+                    if ($endDate) {
+                        try {
+                            $isToday = Carbon::parse($endDate)->toDateString() === $todayStr;
+                            $isCompleted = in_array($st, ['completed', 'approved', 'done', 'abandoned']);
+                            if ($isToday && !$isCompleted) return true;
+                        } catch (\Throwable $e) {}
+                    }
+                } elseif ($filterStatus === 'pending' && in_array($st, ['pending', 'planned', 'planning'])) {
+                    return true;
+                } elseif ($filterStatus === 'in_progress' && in_array($st, ['in_progress', 'in progress', 'in-progress', 'doing'])) {
+                    return true;
+                } elseif ($filterStatus === 'submitted' && in_array($st, ['submitted', 'review', 'in_review', 'under_review'])) {
+                    return true;
+                } elseif (in_array($filterStatus, ['completed', 'approved']) && in_array($st, ['completed', 'approved', 'done'])) {
+                    return true;
+                } elseif ($filterStatus === 'paused' && in_array($st, ['paused', 'pause', 'hold', 'on_hold'])) {
+                    return true;
+                } elseif (in_array($filterStatus, ['declined', 'rejected']) && in_array($st, ['declined', 'rejected', 'failed'])) {
+                    return true;
+                } elseif ($filterStatus === 'abandoned' && in_array($st, ['abandoned', 'abandon_requested'])) {
+                    return true;
+                } elseif ($filterStatus === 'reopened') {
+                    $isReopened = is_array($item) ? (!empty($item['is_reopened']) || $st === 'reopened') : (!empty($item->is_reopened) || $st === 'reopened');
+                    if ($isReopened) return true;
+                } elseif ($filterStatus === 'transferred') {
+                    $chain = is_array($item) ? ($item['delegation_chain'] ?? []) : ($item->delegation_chain ?? []);
+                    $isTransferred = is_array($item) ? (!empty($item['is_transferred']) || (!empty($chain) && count($chain) > 0)) : (!empty($item->is_transferred) || (!empty($chain) && count($chain) > 0));
+                    if ($isTransferred) return true;
+                } elseif ($st === $filterStatus) {
+                    return true;
+                }
+            }
+            return false;
+        })->values();
     }
 }

@@ -37,7 +37,7 @@ import { authToken, getUser, rolePath } from "../utils/auth";
 import { renderDynamicDates } from "../utils/tableDateUtils";
 import { formatDateTimeInline, formatDateOnly } from "../utils/formatDateTime";
 import { getUpdatedSinceThreshold } from "../utils/filterUtils";
-import { isDelegationRejectedByMe, isDelegationRevokedFromMe } from "../utils/delegationUtils";
+import { isDelegationRejectedByMe, isDelegationRevokedFromMe, isDeliverableItem } from "../utils/delegationUtils";
 import "../components/ActionPopover.css";
 import "../pages/Task.css";
 
@@ -788,12 +788,17 @@ function AllTasks() {
                   <div className="col-action" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                     <button
                       className="action-icon-btn action-view action-trigger-lg"
-                      title={t("View Task", { defaultValue: "View Task" })}
+                      title={isDeliverableItem(item) ? t("View Subtask", { defaultValue: "View Subtask" }) : t("View Task", { defaultValue: "View Task" })}
                       onClick={() => {
-                        const targetId = item.item_type === "subtask" ? (item.parent_id || item.task_id || item.id) : item.id;
+                        const isDeliv = isDeliverableItem(item);
                         const currentSearch = location.search || (page > 1 ? `?page=${page}` : "");
                         const returnUrl = `${location.pathname}${currentSearch}`;
-                        navigate(rolePath(`tasks/task-details/${targetId}`), { state: { taskIds: taskIdList, from: 'all-tasks', readOnly: true, page, returnUrl } });
+                        if (isDeliv) {
+                          navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { deliverableIds: taskIdList, from: 'all-tasks', readOnly: true, page, returnUrl } });
+                        } else {
+                          const targetId = item.id;
+                          navigate(rolePath(`tasks/task-details/${targetId}`), { state: { taskIds: taskIdList, from: 'all-tasks', readOnly: true, page, returnUrl } });
+                        }
                       }}
                     >
                       <IoEyeOutline size={20} />

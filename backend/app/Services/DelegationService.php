@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Deliverable;
+use App\Models\DeliverableWorkflowEvent;
 use App\Models\Task;
 use App\Models\TaskDelegation;
 use App\Models\TaskWorkflowEvent;
@@ -360,18 +361,37 @@ class DelegationService
         $existingChain[] = $chainEntry;
         $approvalChain = $this->buildApprovalChain($existingChain);
 
+        $existingStatus = strtolower((string) ($deliverable->status ?? ''));
+        $newStatus = in_array($existingStatus, ['in_progress', 'working', 'started']) ? 'in_progress' : ($existingStatus ?: 'pending');
+
         $deliverable->update([
             'current_owner' => $delegatedTo->id,
             'delegation_chain' => $existingChain,
             'approval_chain' => $approvalChain,
             'delegation_count' => $level,
-            'status' => 'pending',
+            'status' => $newStatus,
             'is_transferred' => true,
             'states' => array_values(array_unique(array_merge(is_array($deliverable->states) ? $deliverable->states : [], ['Transferred']))),
         ]);
+        $deliverable->stopTimer();
 
+        // If no original_assigner set yet, save the first assigner
         if (empty($deliverable->original_assigner)) {
             $deliverable->update(['original_assigner' => $delegatedBy->id]);
+        }
+
+        // Add to assignees if not already
+        try {
+            if (! $deliverable->assignees()->where('users.id', $delegatedTo->id)->exists()) {
+                $deliverable->assignees()->attach($delegatedTo->id, [
+                    'status' => 'pending',
+                ]);
+            } else {
+                $deliverable->assignees()->updateExistingPivot($delegatedTo->id, [
+                    'status' => 'pending',
+                ]);
+            }
+        } catch (\Throwable $e) {
         }
 
         // System comment on deliverable's parent task
@@ -380,10 +400,19 @@ class DelegationService
             $comment .= " ({$reasonDetail})";
         }
 
-        TaskWorkflowEvent::create([
-            'task_id' => $deliverable->task_id,
+        if ($deliverable->task_id) {
+            TaskWorkflowEvent::create([
+                'task_id' => $deliverable->task_id,
+                'user_id' => $delegatedBy->id,
+                'action' => 'delegated',
+                'comment' => $comment,
+            ]);
+        }
+
+        DeliverableWorkflowEvent::create([
+            'deliverable_id' => $deliverable->id,
+            'event_type' => 'delegated',
             'user_id' => $delegatedBy->id,
-            'action' => 'delegated',
             'comment' => $comment,
         ]);
 
@@ -462,27 +491,47 @@ class DelegationService
                 'delegation_chain' => $chain,
                 'approval_chain' => $approvalChain,
                 'status' => 'in_progress',
+                'current_owner' => $acceptor->id,
                 'acknowledged_at' => now(),
                 'acknowledged_by' => $acceptor->id,
             ]);
 
-            $model->assignees()->updateExistingPivot($acceptor->id, [
-                'status' => 'in_progress',
-            ]);
+            if ($model->assignees()->where('users.id', $acceptor->id)->exists()) {
+                $model->assignees()->updateExistingPivot($acceptor->id, [
+                    'status' => 'in_progress',
+                ]);
+            } else {
+                $model->assignees()->syncWithoutDetaching([
+                    $acceptor->id => [
+                        'status' => 'in_progress',
+                        'assigned_at' => now(),
+                    ],
+                ]);
+            }
 
             $taskId = $isDeliverable ? $model->task_id : $model->id;
-            TaskWorkflowEvent::create([
-                'task_id' => $taskId,
-                'user_id' => $acceptor->id,
-                'action' => 'delegation_accepted',
-                'comment' => "{$acceptor->name} accepted the delegation of this {$entityType}.",
-            ]);
-            TaskWorkflowEvent::create([
-                'task_id' => $taskId,
-                'user_id' => $acceptor->id,
-                'action' => 'acknowledged',
-                'comment' => "{$acceptor->name} acknowledged this {$entityType}",
-            ]);
+            if ($taskId) {
+                TaskWorkflowEvent::create([
+                    'task_id' => $taskId,
+                    'user_id' => $acceptor->id,
+                    'action' => 'delegation_accepted',
+                    'comment' => "{$acceptor->name} accepted the delegation of this {$entityType}.",
+                ]);
+                TaskWorkflowEvent::create([
+                    'task_id' => $taskId,
+                    'user_id' => $acceptor->id,
+                    'action' => 'acknowledged',
+                    'comment' => "{$acceptor->name} acknowledged this {$entityType}",
+                ]);
+            }
+            if ($isDeliverable) {
+                DeliverableWorkflowEvent::create([
+                    'deliverable_id' => $model->id,
+                    'event_type' => 'delegation_accepted',
+                    'user_id' => $acceptor->id,
+                    'comment' => "{$acceptor->name} accepted the transfer of this subtask.",
+                ]);
+            }
         });
 
         $link = $isDeliverable
@@ -584,12 +633,22 @@ class DelegationService
         $comment = "{$rejector->name} rejected the delegation.".($reason ? " Reason: {$reason}" : '');
 
         $taskId = $isDeliverable ? $model->task_id : $model->id;
-        TaskWorkflowEvent::create([
-            'task_id' => $taskId,
-            'user_id' => $rejector->id,
-            'action' => 'delegation_rejected',
-            'comment' => $comment,
-        ]);
+        if ($taskId) {
+            TaskWorkflowEvent::create([
+                'task_id' => $taskId,
+                'user_id' => $rejector->id,
+                'action' => 'delegation_rejected',
+                'comment' => $comment,
+            ]);
+        }
+        if ($isDeliverable) {
+            DeliverableWorkflowEvent::create([
+                'deliverable_id' => $model->id,
+                'event_type' => 'delegation_rejected',
+                'user_id' => $rejector->id,
+                'comment' => $comment,
+            ]);
+        }
 
         $this->activityService->log(
             $rejector->id,
@@ -675,12 +734,22 @@ class DelegationService
         $comment = "{$revoker->name} revoked the delegation.";
 
         $taskId = $isDeliverable ? $model->task_id : $model->id;
-        TaskWorkflowEvent::create([
-            'task_id' => $taskId,
-            'user_id' => $revoker->id,
-            'action' => 'delegation_revoked',
-            'comment' => $comment,
-        ]);
+        if ($taskId) {
+            TaskWorkflowEvent::create([
+                'task_id' => $taskId,
+                'user_id' => $revoker->id,
+                'action' => 'delegation_revoked',
+                'comment' => $comment,
+            ]);
+        }
+        if ($isDeliverable) {
+            DeliverableWorkflowEvent::create([
+                'deliverable_id' => $model->id,
+                'event_type' => 'delegation_revoked',
+                'user_id' => $revoker->id,
+                'comment' => $comment,
+            ]);
+        }
 
         $this->activityService->log(
             $revoker->id,
@@ -790,22 +859,32 @@ class DelegationService
     public function getDeliverableApprover(Deliverable $deliverable): ?int
     {
         $chain = $deliverable->delegation_chain ?? [];
+        if (is_string($chain)) {
+            $chain = json_decode($chain, true) ?? [];
+        }
         $approvalChain = $deliverable->approval_chain ?? [];
+        if (is_string($approvalChain)) {
+            $approvalChain = json_decode($approvalChain, true) ?? [];
+        }
 
         if (empty($chain)) {
             return null;
         }
 
-        // Check if transferor has already approved
-        foreach ($approvalChain as $aEntry) {
-            if ($aEntry['status'] === 'approved') {
-                return null;
+        // If approval chain exists, find the first non-approved approver
+        if (! empty($approvalChain)) {
+            foreach ($approvalChain as $aEntry) {
+                if (($aEntry['status'] ?? 'pending') !== 'approved') {
+                    return (int) $aEntry['approver_id'];
+                }
             }
+            // All intermediate transferors approved; route to root assigner
+            return null;
         }
 
         $lastAccepted = null;
         foreach ($chain as $entry) {
-            if ($entry['status'] === 'accepted') {
+            if (in_array(strtolower((string) ($entry['status'] ?? '')), ['accepted', 'submitted'])) {
                 $lastAccepted = $entry;
             }
         }
@@ -818,7 +897,7 @@ class DelegationService
             } else {
                 // Skip the transferor
                 foreach ($chain as $entry) {
-                    if ($entry['status'] === 'accepted' && (int) $entry['delegated_to'] === (int) $lastAccepted['delegated_by']) {
+                    if (in_array(strtolower((string) ($entry['status'] ?? '')), ['accepted', 'submitted']) && (int) ($entry['delegated_to'] ?? 0) === (int) ($lastAccepted['delegated_by'] ?? 0)) {
                         return (int) $entry['delegated_by'];
                     }
                 }
@@ -938,6 +1017,21 @@ class DelegationService
     }
 
     /**
+     * Rebuild the approval chain for a deliverable.
+     */
+    public function rebuildApprovalChainForDeliverable(Deliverable $deliverable): array
+    {
+        $chain = $deliverable->delegation_chain ?? [];
+        if (is_string($chain)) {
+            $chain = json_decode($chain, true) ?? [];
+        }
+        $approvalChain = $this->buildApprovalChain($chain);
+        $deliverable->update(['approval_chain' => $approvalChain]);
+
+        return $approvalChain;
+    }
+
+    /**
      * Get the parent delegation ID for chained task delegations.
      */
     private function getParentDelegationId(Task $task): ?int
@@ -979,12 +1073,25 @@ class DelegationService
     public function isInDeliverableDelegationChain(Deliverable $deliverable, User $user): bool
     {
         $chain = $deliverable->delegation_chain ?? [];
-        foreach ($chain as $entry) {
-            if ((int) $entry['delegated_by'] === (int) $user->id || (int) $entry['delegated_to'] === (int) $user->id) {
-                return true;
+        if (is_string($chain)) {
+            $chain = json_decode($chain, true) ?? [];
+        }
+        if (is_iterable($chain)) {
+            foreach ($chain as $entry) {
+                if ((int) ($entry['delegated_by'] ?? 0) === (int) $user->id || (int) ($entry['delegated_to'] ?? 0) === (int) $user->id) {
+                    return true;
+                }
             }
         }
 
-        return false;
+        try {
+            return TaskDelegation::where('deliverable_id', $deliverable->id)
+                ->where(function ($q) use ($user) {
+                    $q->where('delegated_by', $user->id)
+                      ->orWhere('delegated_to', $user->id);
+                })->exists();
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 }

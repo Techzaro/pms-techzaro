@@ -48,6 +48,7 @@ import CreateDeliverableModel from "../components/layout/CreateDeliverableModel"
 import TaskMultiStatusBadges from "../components/TaskMultiStatusBadges";
 import TaskFilterBar from "../components/TaskFilterBar";
 import ConfirmModal from "../components/ConfirmModal";
+import DeclineModal from "../components/DeclineModal";
 import PauseReasonModal from "../components/PauseReasonModal";
 import ReopenDialog from "../components/ReopenDialog";
 import AbandonModal from "../components/AbandonModal";
@@ -127,6 +128,8 @@ function SelfDeliveries() {
   const [transferDialog, setTransferDialog] = useState({ open: false, subtask: null });
   const [editingSubtask, setEditingSubtask] = useState(null);
   const [reopenSubtask, setReopenSubtask] = useState(null);
+  const [declineSubtask, setDeclineSubtask] = useState(null);
+  const [declineSubtaskLoading, setDeclineSubtaskLoading] = useState(false);
   const [abandonSubtask, setAbandonSubtask] = useState(null);
   const [abandonSubtaskLoading, setAbandonSubtaskLoading] = useState(false);
   const [markCompletedSubtask, setMarkCompletedSubtask] = useState(null);
@@ -412,22 +415,25 @@ function SelfDeliveries() {
     }
   };
 
-  const handleReject = async (itemId) => {
+  const handleReject = async (itemId, comment) => {
     setActingId(itemId);
     setActingType("reject");
+    setDeclineSubtaskLoading(true);
     try {
       const token = authToken();
       const res = await fetch(`${API_URL}/deliverables/${itemId}/reject`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ comment }),
         _notifHandled: true,
       });
       const data = await res.json();
       if (res.ok) {
-        setSubtasks((prev) => Array.isArray(prev) ? prev.map((d) => d.id === itemId ? { ...d, status: "rejected", ...data.deliverable } : d) : []);
-        publish('deliverable:updated', { id: itemId, status: 'rejected' });
+        setSubtasks((prev) => Array.isArray(prev) ? prev.map((d) => d.id === itemId ? { ...d, status: "declined", ...data.deliverable } : d) : []);
+        publish('deliverable:updated', { id: itemId, status: 'declined' });
         publish('data:changed', { type: 'deliverable', action: 'updated' });
         showSuccessMessage("Subtask", "declined");
+        setDeclineSubtask(null);
       } else {
         notify.error(data.message || t("Failed to decline.", { defaultValue: "Failed to decline." }));
       }
@@ -436,6 +442,7 @@ function SelfDeliveries() {
     } finally {
       setActingId(null);
       setActingType(null);
+      setDeclineSubtaskLoading(false);
     }
   };
 
@@ -1093,7 +1100,7 @@ function SelfDeliveries() {
                                 </button>
                               )}
                               {canSubtaskDecline && (
-                                <button className="action-icon-btn action-submit" title={t("Decline", { defaultValue: "Decline" })} disabled={actingId === item.id} onClick={() => handleReject(item.id)} style={{ color: "#DC2626" }}>
+                                <button className="action-icon-btn action-submit" title={t("Decline", { defaultValue: "Decline" })} disabled={actingId === item.id} onClick={() => setDeclineSubtask(item)} style={{ color: "#DC2626" }}>
                                   <XCircle size={16} />
                                 </button>
                               )}
@@ -1305,6 +1312,19 @@ function SelfDeliveries() {
           onClose={() => setAssignerPauseSubtask(null)}
           onConfirm={handleAssignerPauseSubmit}
           isAssigner
+        />
+      )}
+
+      {declineSubtask && (
+        <DeclineModal
+          isOpen={!!declineSubtask}
+          onClose={() => setDeclineSubtask(null)}
+          title={t("Decline Subtask", { defaultValue: "Decline Subtask" })}
+          subtitle={declineSubtask?.title}
+          actionLabel={t("Decline Subtask", { defaultValue: "Decline Subtask" })}
+          placeholder={t("Please enter a reason for declining this subtask...", { defaultValue: "Please enter a reason for declining this subtask..." })}
+          onSubmit={(comment) => handleReject(declineSubtask.id, comment)}
+          loading={declineSubtaskLoading}
         />
       )}
 

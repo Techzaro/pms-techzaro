@@ -11,6 +11,7 @@ import { FileText, Download, ExternalLink } from "lucide-react";
 import ConfirmationDialog from "./ConfirmationDialog";
 import TaskReopenDialog from "./TaskReopenDialog";
 import AbandonModal from "./AbandonModal";
+import DeclineModal from "./DeclineModal";
 import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
 import { formatDateTime } from "../utils/formatDateTime";
@@ -146,6 +147,7 @@ function TaskSubmissionPanel({
 
   const [abandonModalOpen, setAbandonModalOpen] = useState(false);
   const [abandonAction, setAbandonAction] = useState(null);
+  const [declineModalOpen, setDeclineModalOpen] = useState(false);
 
   const handleAbandonSubmit = async (reason) => {
     setAbandonModalOpen(false);
@@ -535,7 +537,7 @@ function TaskSubmissionPanel({
                   <button
                     className="td-review-btn td-review-btn--reject"
                     disabled={acting}
-                    onClick={() => setConfirmDialog({ open: true, type: "reject" })}
+                    onClick={() => setDeclineModalOpen(true)}
                   >
                     {t("Decline", { defaultValue: "Decline" })}
                   </button>
@@ -802,6 +804,19 @@ function TaskSubmissionPanel({
             : t("Confirm Abandon", { defaultValue: "Confirm Abandon" })
         }
         onSubmit={handleAbandonSubmit}
+        loading={acting}
+      />
+
+      <DeclineModal
+        isOpen={declineModalOpen}
+        onClose={() => setDeclineModalOpen(false)}
+        title={t("Decline Task", { defaultValue: "Decline Task" })}
+        subtitle={task.title}
+        actionLabel={t("Decline Task", { defaultValue: "Decline Task" })}
+        onSubmit={async (comment) => {
+          setDeclineModalOpen(false);
+          await handleAction("reject", { comment });
+        }}
         loading={acting}
       />
     </div>

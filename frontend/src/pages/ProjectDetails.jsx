@@ -62,6 +62,7 @@ import AssignerViewModal from "../components/AssignerViewModal";
 import AddProjectFileModal from "../components/AddProjectFileModal";
 import AddAccessModal from "../components/AddAccessModal";
 import ConfirmModal from "../components/ConfirmModal";
+import DeclineModal from "../components/DeclineModal";
 import SubmitTaskModal from "../components/SubmitTaskModal";
 import AddNoteModal from "../components/AddNoteModal";
 import ShareResourceModal from "../components/ShareResourceModal";
@@ -414,8 +415,8 @@ function ProjectDetails() {
   const [unlinkEventId, setUnlinkEventId] = useState(null);
   const [approveTaskConfirmOpen, setApproveTaskConfirmOpen] = useState(false);
   const [approveTaskId, setApproveTaskId] = useState(null);
-  const [declineTaskConfirmOpen, setDeclineTaskConfirmOpen] = useState(false);
   const [declineTaskItem, setDeclineTaskItem] = useState(null);
+  const [declineTaskLoading, setDeclineTaskLoading] = useState(false);
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [visibilityUsers, setVisibilityUsers] = useState([]);
   const [visibilitySelected, setVisibilitySelected] = useState({});
@@ -904,30 +905,47 @@ function ProjectDetails() {
     }
   };
 
-  const handleTaskAcknowledge = async (e, taskId) => {
+  const handleTaskAcknowledge = async (e, taskOrId) => {
     if (e && e.stopPropagation) {
       e.stopPropagation();
       e.preventDefault();
     }
-    const realTaskId = typeof e === "number" || typeof e === "string" ? e : taskId;
+    const item = typeof taskOrId === "object" && taskOrId !== null ? taskOrId : (typeof e === "object" && e?.id ? e : null);
+    const realTaskId = item ? item.id : (typeof e === "number" || typeof e === "string" ? e : taskOrId);
+    const isDeliverable = Boolean(
+      item?.entity_type === 'deliverable' ||
+      item?.is_subtask ||
+      item?.deliverable_number ||
+      item?.subtask_number ||
+      (item?.task_id && !item?.task_number)
+    );
+    const endpoint = isDeliverable ? `${API}/deliverables/${realTaskId}/acknowledge` : `${API}/tasks/${realTaskId}/acknowledge`;
+
     try {
       const token = authToken();
-      const res = await fetch(`${API}/tasks/${realTaskId}/acknowledge`, {
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         _notifHandled: true,
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setOrderedTasks((prev) => prev.map((t) => t.id === realTaskId ? { ...t, status: "in_progress", ...(data.task || {}) } : t));
-        publish('task:updated', { id: realTaskId, status: 'in_progress' });
-        publish('data:changed', { type: 'task', action: 'updated' });
-        showSuccessMessage("Task", "acknowledged");
+        const updatedObj = data.deliverable || data.task || {};
+        setOrderedTasks((prev) => prev.map((t) => t.id === realTaskId ? { ...t, status: "in_progress", ...updatedObj } : t));
+        if (isDeliverable) {
+          publish('deliverable:updated', { id: realTaskId, status: 'in_progress', ...updatedObj });
+          publish('data:changed', { type: 'deliverable', action: 'updated' });
+          showSuccessMessage(t("Subtask", { defaultValue: "Subtask" }), t("acknowledged", { defaultValue: "acknowledged" }));
+        } else {
+          publish('task:updated', { id: realTaskId, status: 'in_progress', ...updatedObj });
+          publish('data:changed', { type: 'task', action: 'updated' });
+          showSuccessMessage(t("Task", { defaultValue: "Task" }), t("acknowledged", { defaultValue: "acknowledged" }));
+        }
       } else {
-        notify.error(data.message || t("Failed to acknowledge task.", { defaultValue: "Failed to acknowledge task." }));
+        notify.error(data.message || t("Failed to acknowledge.", { defaultValue: "Failed to acknowledge." }));
       }
     } catch {
-      notify.error(t("Failed to acknowledge task.", { defaultValue: "Failed to acknowledge task." }));
+      notify.error(t("Failed to acknowledge.", { defaultValue: "Failed to acknowledge." }));
     }
   };
 
@@ -1087,27 +1105,32 @@ function ProjectDetails() {
     }
   };
 
-  const handleProjectTaskDirectDecline = async (e, task) => {
+  const handleProjectTaskDirectDecline = async (e, task, comment) => {
     if (e && e.stopPropagation) { e.stopPropagation(); e.preventDefault(); }
     const taskId = task.id;
+    setDeclineTaskLoading(true);
     try {
       const token = authToken();
       const res = await fetch(`${API}/tasks/${taskId}/reject`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        body: JSON.stringify({ comment }),
         _notifHandled: true,
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "rejected", ...(data.task || {}) } : t));
-        publish("task:updated", { id: taskId, status: "rejected" });
+        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "declined", ...(data.task || {}) } : t));
+        publish("task:updated", { id: taskId, status: "declined" });
         publish("data:changed", { type: "task", action: "updated" });
         showSuccessMessage(t("Task", { defaultValue: "Task" }), t("declined", { defaultValue: "declined" }));
+        setDeclineTaskItem(null);
       } else {
         notify.error(data.message || t("Failed to decline task.", { defaultValue: "Failed to decline task." }));
       }
     } catch {
       notify.error(t("An error occurred while declining task.", { defaultValue: "An error occurred while declining task." }));
+    } finally {
+      setDeclineTaskLoading(false);
     }
   };
 
@@ -1117,14 +1140,6 @@ function ProjectDetails() {
     setApproveTaskConfirmOpen(false);
     setApproveTaskId(null);
     await handleProjectTaskDirectApprove(null, id);
-  };
-
-  const confirmDirectDeclineTask = async () => {
-    if (!declineTaskItem) return;
-    const item = declineTaskItem;
-    setDeclineTaskConfirmOpen(false);
-    setDeclineTaskItem(null);
-    await handleProjectTaskDirectDecline(null, item);
   };
 
   const handleProjectTaskDirectAbandonSubmit = async (reason) => {
@@ -2170,7 +2185,7 @@ function ProjectDetails() {
                                                          className="action-icon-btn"
                                                          title={t("Decline Task", { defaultValue: "Decline Task" })}
                                                          style={{ color: "#DC2626" }}
-                                                         onClick={(e) => { e.stopPropagation(); e.preventDefault(); setDeclineTaskItem(tItem); setDeclineTaskConfirmOpen(true); }}
+                                                         onClick={(e) => { e.stopPropagation(); e.preventDefault(); setDeclineTaskItem(tItem); }}
                                                        >
                                                          <XCircle size={16} />
                                                        </button>
@@ -3127,16 +3142,18 @@ function ProjectDetails() {
         confirmColor="#16A34A"
       />
 
-      <ConfirmModal
-        isOpen={declineTaskConfirmOpen}
-        onClose={() => { setDeclineTaskConfirmOpen(false); setDeclineTaskItem(null); }}
-        onConfirm={confirmDirectDeclineTask}
-        title={t("Decline Task", { defaultValue: "Decline Task" })}
-        message={t("Are you sure you want to decline this task?", { defaultValue: "Are you sure you want to decline this task?" })}
-        confirmText={t("Decline", { defaultValue: "Decline" })}
-        cancelText={t("Cancel", { defaultValue: "Cancel" })}
-        danger
-      />
+      {declineTaskItem && (
+        <DeclineModal
+          isOpen={!!declineTaskItem}
+          onClose={() => setDeclineTaskItem(null)}
+          title={t("Decline Task", { defaultValue: "Decline Task" })}
+          subtitle={declineTaskItem?.title}
+          actionLabel={t("Decline Task", { defaultValue: "Decline Task" })}
+          placeholder={t("Please enter a reason for declining this task...", { defaultValue: "Please enter a reason for declining this task..." })}
+          onSubmit={(comment) => handleProjectTaskDirectDecline(null, declineTaskItem, comment)}
+          loading={declineTaskLoading}
+        />
+      )}
 
       {editingTask && (
         <EditTaskModal
@@ -3185,11 +3202,11 @@ function ProjectDetails() {
         onClose={() => { setAcknowledgeModalOpen(false); setAcknowledgeModalTask(null); }}
         onConfirm={async () => {
           if (!acknowledgeModalTask) return;
-          await handleTaskAcknowledge(acknowledgeModalTask.id);
+          await handleTaskAcknowledge(null, acknowledgeModalTask);
           setAcknowledgeModalOpen(false);
           setAcknowledgeModalTask(null);
         }}
-        title={t("Acknowledge Task", { defaultValue: "Acknowledge Task" })}
+        title={t("Acknowledge", { defaultValue: "Acknowledge" })}
         message={t("Are you sure you want to acknowledge this task?", { defaultValue: "Are you sure you want to acknowledge this task?" })}
         confirmText={t("Acknowledge", { defaultValue: "Acknowledge" })}
         cancelText={t("Cancel", { defaultValue: "Cancel" })}

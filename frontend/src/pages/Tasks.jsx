@@ -24,6 +24,7 @@ import CreateTaskModal from "../components/CreateTaskModal";
 import EditTaskModal from "../components/EditTaskModal";
 import SubmitTaskModal from "../components/SubmitTaskModal";
 import ConfirmModal from "../components/ConfirmModal";
+import DeclineModal from "../components/DeclineModal";
 import PauseReasonModal from "../components/PauseReasonModal";
 import SortableTableWrapper from "../components/SortableTableWrapper";
 import SmartDragHandle from "../components/SmartDragHandle";
@@ -45,7 +46,7 @@ import { authToken, getUser, rolePath } from "../utils/auth";
 import { renderDynamicDates } from "../utils/tableDateUtils";
 import { formatDateTimeInline } from "../utils/formatDateTime";
 import { getUpdatedSinceThreshold } from "../utils/filterUtils";
-import { isDelegationRejectedByMe, isDelegationRevokedFromMe } from "../utils/delegationUtils";
+import { isDelegationRejectedByMe, isDelegationRevokedFromMe, isDeliverableItem } from "../utils/delegationUtils";
 import "../components/ActionPopover.css";
 import "../pages/Task.css";
 
@@ -123,6 +124,7 @@ function Tasks() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [items, setItems] = useState([]);
+  const [apiCounts, setApiCounts] = useState(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -370,6 +372,9 @@ function Tasks() {
         .then((data) => {
           setItems(Array.isArray(data?.data) ? data.data : []);
           setTotalCount(typeof data?.total === "number" ? data.total : Array.isArray(data?.data) ? data.data.length : 0);
+          if (data?.counts) {
+            setApiCounts(data.counts);
+          }
         })
         .catch((err) => {
           console.warn("Failed to fetch tasks:", err);
@@ -437,13 +442,13 @@ function Tasks() {
   }, [items]);
 
   const baseItems = orderedItems.length ? orderedItems : items;
-  const pendingStatuses = ["pending", "planned", "planning", "Pending", "Planned", "Planning"];
-  const inProgressStatuses = ["in_progress", "In Progress", "In-progress", "reopened", "Reopened", "doing"];
-  const completedStatuses = ["completed", "approved", "done", "Completed", "Approved", "Done"];
-  const pausedStatuses = ["paused", "Paused", "hold", "on_hold"];
-  const submittedStatuses = ["submitted", "Submitted", "review", "in_review", "under_review"];
-  const declinedStatuses = ["declined", "rejected", "failed", "Declined", "Rejected", "Failed"];
-  const abandonedStatuses = ["abandoned", "abandon_requested", "Abandoned", "Abandon Requested"];
+  const pendingStatuses = useMemo(() => ["pending", "planned", "planning", "Pending", "Planned", "Planning"], []);
+  const inProgressStatuses = useMemo(() => ["in_progress", "In Progress", "In-progress", "reopened", "Reopened", "doing"], []);
+  const completedStatuses = useMemo(() => ["completed", "approved", "done", "Completed", "Approved", "Done"], []);
+  const pausedStatuses = useMemo(() => ["paused", "Paused", "hold", "on_hold"], []);
+  const submittedStatuses = useMemo(() => ["submitted", "Submitted", "review", "in_review", "under_review"], []);
+  const declinedStatuses = useMemo(() => ["declined", "rejected", "failed", "Declined", "Rejected", "Failed"], []);
+  const abandonedStatuses = useMemo(() => ["abandoned", "abandon_requested", "Abandoned", "Abandon Requested"], []);
 
   // Single-pass status counts instead of 11 separate .filter() iterations
   const taskStatusCounts = useMemo(() => {
@@ -467,19 +472,20 @@ function Tasks() {
     counts.rejected = counts.declined;
     return counts;
   }, [baseItems, pendingStatuses, inProgressStatuses, completedStatuses, pausedStatuses, submittedStatuses, declinedStatuses, abandonedStatuses]);
-  const allCount = taskStatusCounts.all;
-  const dueTodayCount = taskStatusCounts.dueToday;
-  const pendingCount = taskStatusCounts.pending;
-  const inProgressCount = taskStatusCounts.inProgress;
-  const pausedCount = taskStatusCounts.paused;
-  const submittedCount = taskStatusCounts.submitted;
-  const reopenedCount = taskStatusCounts.reopened;
-  const transferredCount = taskStatusCounts.transferred;
-  const completedCount = taskStatusCounts.completed;
-  const approvedCount = taskStatusCounts.approved;
-  const declinedCount = taskStatusCounts.declined;
-  const rejectedCount = taskStatusCounts.rejected;
-  const abandonedCount = taskStatusCounts.abandoned;
+
+  const allCount = apiCounts?.all ?? taskStatusCounts.all;
+  const dueTodayCount = (apiCounts?.due_today ?? apiCounts?.dueToday) ?? taskStatusCounts.dueToday;
+  const pendingCount = apiCounts?.pending ?? taskStatusCounts.pending;
+  const inProgressCount = (apiCounts?.in_progress ?? apiCounts?.inProgress) ?? taskStatusCounts.inProgress;
+  const pausedCount = apiCounts?.paused ?? taskStatusCounts.paused;
+  const submittedCount = apiCounts?.submitted ?? taskStatusCounts.submitted;
+  const reopenedCount = apiCounts?.reopened ?? taskStatusCounts.reopened;
+  const transferredCount = apiCounts?.transferred ?? taskStatusCounts.transferred;
+  const completedCount = (apiCounts?.completed ?? apiCounts?.approved) ?? taskStatusCounts.completed;
+  const approvedCount = completedCount;
+  const declinedCount = (apiCounts?.declined ?? apiCounts?.rejected) ?? taskStatusCounts.declined;
+  const rejectedCount = declinedCount;
+  const abandonedCount = apiCounts?.abandoned ?? taskStatusCounts.abandoned;
   const searchFilteredItems = useMemo(() => {
     return baseItems;
   }, [baseItems]);
@@ -567,75 +573,95 @@ function Tasks() {
     { label: t("Assigned To You", { defaultValue: "Assigned To You" }) },
   ];
 
-  const handleTaskSubmitSuccess = (taskId, updatedTask) => {
+  const handleTaskSubmitSuccess = (taskOrId, updatedTask) => {
+    const updated = typeof taskOrId === "object" && taskOrId !== null ? taskOrId : (updatedTask || {});
+    const targetId = typeof taskOrId === "object" && taskOrId !== null ? (taskOrId.id || submitTaskModal.task?.id) : (taskOrId || submitTaskModal.task?.id);
+    const item = items.find((i) => i.id === targetId);
+    const isDeliverable = isDeliverableItem(item) || isDeliverableItem(submitTaskModal.task) || isDeliverableItem(updated);
     setItems((prev) =>
-      prev.map((item) =>
-        item.id === taskId
-          ? { ...item, ...updatedTask }
-          : item
+      prev.map((i) =>
+        i.id === targetId
+          ? { ...i, ...updated, status: updated.status || i.status || "submitted" }
+          : i
       )
     );
+    publish(isDeliverable ? 'deliverable:updated' : 'task:updated', { id: targetId, ...(updated || {}) });
+    publish('data:changed', { type: isDeliverable ? 'deliverable' : 'task', action: 'updated' });
     setSubmitTaskModal({ open: false, task: null });
   };
 
-  const handleDirectApprove = async (e, taskId) => {
-    if (e) {
-      e.stopPropagation();
-      e.preventDefault();
-    }
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}/approve`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
-        _notifHandled: true,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setItems((prev) =>
-          prev.map((item) =>
-            item.id === taskId ? { ...item, status: "approved", ...(data.task || {}) } : item
-          )
-        );
-        publish('task:updated', { id: taskId, status: 'approved' });
-        publish('data:changed', { type: 'task', action: 'updated' });
-        showSuccessMessage(t("Task", { defaultValue: "Task" }), t("approved", { defaultValue: "approved" }));
-      } else {
-        notify.error(data.message || t("Failed to approve task.", { defaultValue: "Failed to approve task." }));
-      }
-    } catch {
-      notify.error(t("An error occurred while approving task.", { defaultValue: "An error occurred while approving task." }));
-    }
-  };
-
-  const handleDirectDecline = async (e, task) => {
+  const handleDirectApprove = async (e, taskOrId) => {
     if (e && e.stopPropagation) {
       e.stopPropagation();
       e.preventDefault();
     }
-    const taskId = task.id;
+    const item = typeof taskOrId === 'object' && taskOrId !== null ? taskOrId : items.find((i) => i.id === taskOrId);
+    const taskId = item ? item.id : taskOrId;
+    const isDeliverable = isDeliverableItem(item);
+    const endpoint = isDeliverable ? `${API_URL}/deliverables/${taskId}/approve` : `${API_URL}/tasks/${taskId}/approve`;
     try {
       const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}/reject`, {
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
         _notifHandled: true,
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
+        const updatedObj = data.deliverable || data.task || {};
         setItems((prev) =>
-          prev.map((item) =>
-            item.id === taskId ? { ...item, status: "rejected", ...(data.task || {}) } : item
+          prev.map((i) =>
+            i.id === taskId ? { ...i, status: "approved", ...updatedObj } : i
           )
         );
-        publish('task:updated', { id: taskId, status: 'rejected' });
-        publish('data:changed', { type: 'task', action: 'updated' });
-        showSuccessMessage(t("Task", { defaultValue: "Task" }), t("declined", { defaultValue: "declined" }));
+        publish(isDeliverable ? 'deliverable:updated' : 'task:updated', { id: taskId, status: 'approved', ...updatedObj });
+        publish('data:changed', { type: isDeliverable ? 'deliverable' : 'task', action: 'updated' });
+        showSuccessMessage(isDeliverable ? t("Subtask", { defaultValue: "Subtask" }) : t("Task", { defaultValue: "Task" }), t("approved", { defaultValue: "approved" }));
       } else {
-        notify.error(data.message || t("Failed to decline task.", { defaultValue: "Failed to decline task." }));
+        notify.error(data.message || (isDeliverable ? t("Failed to approve subtask.", { defaultValue: "Failed to approve subtask." }) : t("Failed to approve task.", { defaultValue: "Failed to approve task." })));
       }
     } catch {
-      notify.error(t("An error occurred while declining task.", { defaultValue: "An error occurred while declining task." }));
+      notify.error(isDeliverable ? t("An error occurred while approving subtask.", { defaultValue: "An error occurred while approving subtask." }) : t("An error occurred while approving task.", { defaultValue: "An error occurred while approving task." }));
+    }
+  };
+
+  const handleDirectDecline = async (e, taskOrId, comment) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    const item = typeof taskOrId === 'object' && taskOrId !== null ? taskOrId : items.find((i) => i.id === taskOrId);
+    const taskId = item ? item.id : taskOrId;
+    const isDeliverable = isDeliverableItem(item);
+    const endpoint = isDeliverable ? `${API_URL}/deliverables/${taskId}/reject` : `${API_URL}/tasks/${taskId}/reject`;
+    setDeclineTaskLoading(true);
+    try {
+      const token = authToken();
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        body: JSON.stringify({ comment }),
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const updatedObj = data.deliverable || data.task || {};
+        setItems((prev) =>
+          prev.map((i) =>
+            i.id === taskId ? { ...i, status: "declined", ...updatedObj } : i
+          )
+        );
+        publish(isDeliverable ? 'deliverable:updated' : 'task:updated', { id: taskId, status: 'declined', ...updatedObj });
+        publish('data:changed', { type: isDeliverable ? 'deliverable' : 'task', action: 'updated' });
+        showSuccessMessage(isDeliverable ? t("Subtask", { defaultValue: "Subtask" }) : t("Task", { defaultValue: "Task" }), t("declined", { defaultValue: "declined" }));
+        setDeclineTaskItem(null);
+      } else {
+        notify.error(data.message || (isDeliverable ? t("Failed to decline subtask.", { defaultValue: "Failed to decline subtask." }) : t("Failed to decline task.", { defaultValue: "Failed to decline task." })));
+      }
+    } catch {
+      notify.error(isDeliverable ? t("An error occurred while declining subtask.", { defaultValue: "An error occurred while declining subtask." }) : t("An error occurred while declining task.", { defaultValue: "An error occurred while declining task." }));
+    } finally {
+      setDeclineTaskLoading(false);
     }
   };
 
@@ -647,20 +673,16 @@ function Tasks() {
     await handleDirectApprove(null, id);
   };
 
-  const confirmDirectDecline = async () => {
-    if (!declineTaskItem) return;
-    const task = declineTaskItem;
-    setDeclineConfirmOpen(false);
-    setDeclineTaskItem(null);
-    await handleDirectDecline(null, task);
-  };
-
   const handleDirectAbandonSubmit = async (reason) => {
     if (!abandonTask) return;
     setAbandoning(true);
-    const taskId = abandonTask.id;
+    const item = abandonTask;
+    const taskId = item.id;
+    const isDeliverable = isDeliverableItem(item);
     const isUserAdminOrManager = ["admin", "manager"].includes(currentUser?.role);
-    const endpoint = isUserAdminOrManager ? `${API_URL}/tasks/${taskId}/abandon` : `${API_URL}/tasks/${taskId}/request-abandon`;
+    const endpoint = isDeliverable
+      ? (isUserAdminOrManager ? `${API_URL}/deliverables/${taskId}/abandon` : `${API_URL}/deliverables/${taskId}/request-abandon`)
+      : (isUserAdminOrManager ? `${API_URL}/tasks/${taskId}/abandon` : `${API_URL}/tasks/${taskId}/request-abandon`);
     try {
       const token = authToken();
       const res = await fetch(endpoint, {
@@ -671,20 +693,21 @@ function Tasks() {
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
+        const updatedObj = data.deliverable || data.task || {};
         setItems((prev) =>
-          prev.map((item) =>
-            item.id === taskId ? { ...item, status: "abandoned", ...(data.task || {}) } : item
+          prev.map((i) =>
+            i.id === taskId ? { ...i, status: "abandoned", ...updatedObj } : i
           )
         );
-        publish('task:updated', { id: taskId, status: 'abandoned' });
-        publish('data:changed', { type: 'task', action: 'updated' });
-        showSuccessMessage(t("Task", { defaultValue: "Task" }), isUserAdminOrManager ? t("abandoned", { defaultValue: "abandoned" }) : t("abandon requested", { defaultValue: "abandon requested" }));
+        publish(isDeliverable ? 'deliverable:updated' : 'task:updated', { id: taskId, status: 'abandoned', ...updatedObj });
+        publish('data:changed', { type: isDeliverable ? 'deliverable' : 'task', action: 'updated' });
+        showSuccessMessage(isDeliverable ? t("Subtask", { defaultValue: "Subtask" }) : t("Task", { defaultValue: "Task" }), isUserAdminOrManager ? t("abandoned", { defaultValue: "abandoned" }) : t("abandon requested", { defaultValue: "abandon requested" }));
         setAbandonTask(null);
       } else {
-        notify.error(data.message || t("Failed to abandon task.", { defaultValue: "Failed to abandon task." }));
+        notify.error(data.message || (isDeliverable ? t("Failed to abandon subtask.", { defaultValue: "Failed to abandon subtask." }) : t("Failed to abandon task.", { defaultValue: "Failed to abandon task." })));
       }
     } catch {
-      notify.error(t("Failed to abandon task.", { defaultValue: "Failed to abandon task." }));
+      notify.error(isDeliverable ? t("Failed to abandon subtask.", { defaultValue: "Failed to abandon subtask." }) : t("Failed to abandon task.", { defaultValue: "Failed to abandon task." }));
     } finally {
       setAbandoning(false);
     }
@@ -692,167 +715,197 @@ function Tasks() {
 
   const handleDirectReopenSuccess = (updatedTask) => {
     if (!updatedTask && !reopenTask) return;
-    const taskId = updatedTask?.id || reopenTask?.id;
+    const item = updatedTask || reopenTask;
+    const taskId = item?.id;
+    const isDeliverable = isDeliverableItem(item);
     setItems((prev) =>
-      prev.map((item) =>
-        item.id === taskId ? { ...item, status: "pending", ...(updatedTask || {}) } : item
+      prev.map((i) =>
+        i.id === taskId ? { ...i, status: "pending", ...(updatedTask || {}) } : i
       )
     );
-    publish('task:updated', { id: taskId, status: 'pending' });
-    publish('data:changed', { type: 'task', action: 'updated' });
-    showSuccessMessage(t("Task", { defaultValue: "Task" }), t("reopened", { defaultValue: "reopened" }));
+    publish(isDeliverable ? 'deliverable:updated' : 'task:updated', { id: taskId, status: 'pending', ...(updatedTask || {}) });
+    publish('data:changed', { type: isDeliverable ? 'deliverable' : 'task', action: 'updated' });
+    showSuccessMessage(isDeliverable ? t("Subtask", { defaultValue: "Subtask" }) : t("Task", { defaultValue: "Task" }), t("reopened", { defaultValue: "reopened" }));
     setReopenTask(null);
   };
 
   const handleDirectCompleteSuccess = (updatedTask) => {
     if (!updatedTask && !markCompletedTask) return;
-    const taskId = updatedTask?.id || markCompletedTask?.id;
+    const item = updatedTask || markCompletedTask;
+    const taskId = item?.id;
+    const isDeliverable = isDeliverableItem(item);
     setItems((prev) =>
-      prev.map((item) =>
-        item.id === taskId ? { ...item, status: "completed", ...(updatedTask || {}) } : item
+      prev.map((i) =>
+        i.id === taskId ? { ...i, status: "completed", ...(updatedTask || {}) } : i
       )
     );
-    publish('task:updated', { id: taskId, status: 'completed' });
-    publish('data:changed', { type: 'task', action: 'updated' });
-    showSuccessMessage(t("Task", { defaultValue: "Task" }), t("marked as completed", { defaultValue: "marked as completed" }));
+    publish(isDeliverable ? 'deliverable:updated' : 'task:updated', { id: taskId, status: 'completed', ...(updatedTask || {}) });
+    publish('data:changed', { type: isDeliverable ? 'deliverable' : 'task', action: 'updated' });
+    showSuccessMessage(isDeliverable ? t("Subtask", { defaultValue: "Subtask" }) : t("Task", { defaultValue: "Task" }), t("marked as completed", { defaultValue: "marked as completed" }));
     setMarkCompletedTask(null);
   };
 
-  const handleAcknowledge = async (e, taskId) => {
-    const actualTaskId = (e && typeof e === 'object' && e.stopPropagation) ? taskId : (e || taskId);
+  const handleAcknowledge = async (e, taskOrId) => {
+    const item = typeof taskOrId === 'object' && taskOrId !== null ? taskOrId : (typeof e === 'object' && e?.id ? e : items.find(i => i.id === taskOrId));
+    const actualTaskId = item ? item.id : ((e && typeof e === 'object' && e.stopPropagation) ? taskOrId : (e || taskOrId));
     if (e && e.stopPropagation) {
       e.stopPropagation();
       e.preventDefault();
     }
+    const isDeliverable = isDeliverableItem(item);
+    const endpoint = isDeliverable ? `${API_URL}/deliverables/${actualTaskId}/acknowledge` : `${API_URL}/tasks/${actualTaskId}/acknowledge`;
+
     try {
       const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${actualTaskId}/acknowledge`, {
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
         _notifHandled: true,
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
+        const updatedObj = data.deliverable || data.task || {};
         setItems((prev) =>
-          prev.map((item) =>
-            item.id === actualTaskId ? { ...item, status: "in_progress", ...(data.task || {}) } : item
+          prev.map((i) =>
+            i.id === actualTaskId ? { ...i, status: "in_progress", ...updatedObj } : i
           )
         );
-        publish('task:updated', { id: actualTaskId, status: 'in_progress' });
-        publish('data:changed', { type: 'task', action: 'updated' });
-        showSuccessMessage(t("Task", { defaultValue: "Task" }), t("acknowledged", { defaultValue: "acknowledged" }));
+        if (isDeliverable) {
+          publish('deliverable:updated', { id: actualTaskId, status: 'in_progress', ...updatedObj });
+          publish('data:changed', { type: 'deliverable', action: 'updated' });
+          showSuccessMessage(t("Subtask", { defaultValue: "Subtask" }), t("acknowledged", { defaultValue: "acknowledged" }));
+        } else {
+          publish('task:updated', { id: actualTaskId, status: 'in_progress', ...updatedObj });
+          publish('data:changed', { type: 'task', action: 'updated' });
+          showSuccessMessage(t("Task", { defaultValue: "Task" }), t("acknowledged", { defaultValue: "acknowledged" }));
+        }
       } else {
-        const errorMsg = data?.message || data?.error || (data?.errors ? Object.values(data.errors).flat().join(", ") : null) || t("Failed to acknowledge task.", { defaultValue: "Failed to acknowledge task." });
+        const errorMsg = data?.message || data?.error || (data?.errors ? Object.values(data.errors).flat().join(", ") : null) || (isDeliverable ? t("Failed to acknowledge subtask.", { defaultValue: "Failed to acknowledge subtask." }) : t("Failed to acknowledge task.", { defaultValue: "Failed to acknowledge task." }));
         if (notify?.error) {
           notify.error(errorMsg);
         }
       }
     } catch (err) {
-      const errorMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || t("Failed to acknowledge task.", { defaultValue: "Failed to acknowledge task." });
+      const errorMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || (isDeliverable ? t("Failed to acknowledge subtask.", { defaultValue: "Failed to acknowledge subtask." }) : t("Failed to acknowledge task.", { defaultValue: "Failed to acknowledge task." }));
       if (notify?.error) {
         notify.error(errorMsg);
       }
     }
   };
 
-  const handleStartTimer = async (e, taskId) => {
+  const handleStartTimer = async (e, taskOrId) => {
     if (e && e.stopPropagation) {
       e.stopPropagation();
       e.preventDefault();
     }
+    const item = typeof taskOrId === 'object' && taskOrId !== null ? taskOrId : items.find((i) => i.id === taskOrId);
+    const taskId = item ? item.id : taskOrId;
+    const isDeliverable = isDeliverableItem(item);
+    const endpoint = isDeliverable ? `${API_URL}/deliverables/${taskId}/start-timer` : `${API_URL}/tasks/${taskId}/start-timer`;
     try {
       const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}/start-timer`, {
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
         _notifHandled: true,
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
+        const updatedObj = data.deliverable || data.task || {};
         setItems((prev) =>
-          prev.map((item) =>
-            item.id === taskId ? { ...item, status: "in_progress", ...(data.task || {}) } : item
+          prev.map((i) =>
+            i.id === taskId ? { ...i, status: "in_progress", ...updatedObj } : i
           )
         );
-        publish('task:updated', { id: taskId, status: 'in_progress' });
-        publish('data:changed', { type: 'task', action: 'updated' });
-        showSuccessMessage(t("Task", { defaultValue: "Task" }), t("timer started", { defaultValue: "timer started" }));
+        publish(isDeliverable ? 'deliverable:updated' : 'task:updated', { id: taskId, status: 'in_progress', ...updatedObj });
+        publish('data:changed', { type: isDeliverable ? 'deliverable' : 'task', action: 'updated' });
+        showSuccessMessage(isDeliverable ? t("Subtask", { defaultValue: "Subtask" }) : t("Task", { defaultValue: "Task" }), t("timer started", { defaultValue: "timer started" }));
       } else {
-        const errorMsg = data?.message || data?.error || (data?.errors ? Object.values(data.errors).flat().join(", ") : null) || t("Failed to start task timer.", { defaultValue: "Failed to start task timer." });
+        const errorMsg = data?.message || data?.error || (data?.errors ? Object.values(data.errors).flat().join(", ") : null) || (isDeliverable ? t("Failed to start subtask timer.", { defaultValue: "Failed to start subtask timer." }) : t("Failed to start task timer.", { defaultValue: "Failed to start task timer." }));
         notify.error(errorMsg);
       }
     } catch (err) {
-      const errorMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || t("Failed to start task timer.", { defaultValue: "Failed to start task timer." });
+      const errorMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || (isDeliverable ? t("Failed to start subtask timer.", { defaultValue: "Failed to start subtask timer." }) : t("Failed to start task timer.", { defaultValue: "Failed to start task timer." }));
       notify.error(errorMsg);
     }
   };
 
-  const handleContinue = async (e, taskId) => {
-    const actualTaskId = (e && typeof e === 'object' && e.stopPropagation) ? taskId : (e || taskId);
+  const handleContinue = async (e, taskOrId) => {
+    const item = typeof taskOrId === 'object' && taskOrId !== null ? taskOrId : items.find((i) => i.id === taskOrId);
+    const actualTaskId = item ? item.id : ((e && typeof e === 'object' && e.stopPropagation) ? taskOrId : (e || taskOrId));
     if (e && e.stopPropagation) {
       e.stopPropagation();
       e.preventDefault();
     }
+    const isDeliverable = isDeliverableItem(item);
+    const endpoint = isDeliverable ? `${API_URL}/deliverables/${actualTaskId}/resume` : `${API_URL}/tasks/${actualTaskId}/continue`;
     try {
       const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${actualTaskId}/continue`, {
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
         _notifHandled: true,
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
+        const updatedObj = data.deliverable || data.task || {};
         setItems((prev) =>
-          prev.map((item) =>
-            item.id === actualTaskId ? { ...item, status: "in_progress", ...(data.task || {}) } : item
+          prev.map((i) =>
+            i.id === actualTaskId ? { ...i, status: "in_progress", ...updatedObj } : i
           )
         );
-        publish('task:updated', { id: actualTaskId, status: 'in_progress' });
-        publish('data:changed', { type: 'task', action: 'updated' });
-        showSuccessMessage(t("Task", { defaultValue: "Task" }), t("resumed", { defaultValue: "resumed" }));
+        publish(isDeliverable ? 'deliverable:updated' : 'task:updated', { id: actualTaskId, status: 'in_progress', ...updatedObj });
+        publish('data:changed', { type: isDeliverable ? 'deliverable' : 'task', action: 'updated' });
+        showSuccessMessage(isDeliverable ? t("Subtask", { defaultValue: "Subtask" }) : t("Task", { defaultValue: "Task" }), t("resumed", { defaultValue: "resumed" }));
       } else {
-        const errorMsg = data?.message || data?.error || (data?.errors ? Object.values(data.errors).flat().join(", ") : null) || t("Failed to continue task.", { defaultValue: "Failed to continue task." });
+        const errorMsg = data?.message || data?.error || (data?.errors ? Object.values(data.errors).flat().join(", ") : null) || (isDeliverable ? t("Failed to continue subtask.", { defaultValue: "Failed to continue subtask." }) : t("Failed to continue task.", { defaultValue: "Failed to continue task." }));
         notify.error(errorMsg);
       }
     } catch (err) {
-      const errorMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || t("Failed to continue task.", { defaultValue: "Failed to continue task." });
+      const errorMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || (isDeliverable ? t("Failed to continue subtask.", { defaultValue: "Failed to continue subtask." }) : t("Failed to continue task.", { defaultValue: "Failed to continue task." }));
       notify.error(errorMsg);
     }
   };
 
-  const handlePause = async (taskId, data = {}) => {
+  const handlePause = async (taskOrId, data = {}) => {
+    const item = typeof taskOrId === 'object' && taskOrId !== null ? taskOrId : items.find((i) => i.id === taskOrId);
+    const taskId = item ? item.id : taskOrId;
+    const isDeliverable = isDeliverableItem(item);
+    const endpoint = isDeliverable ? `${API_URL}/deliverables/${taskId}/pause` : `${API_URL}/tasks/${taskId}/pause`;
     try {
       const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}/pause`, {
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
-        body: JSON.stringify({ reason: data.reason || "other", reason_detail: data.reason_detail || "Paused from task list" }),
+        body: JSON.stringify({ reason: data.reason || "other", reason_detail: data.reason_detail || (isDeliverable ? "Paused from subtask list" : "Paused from task list") }),
         _notifHandled: true,
       });
       const resData = await res.json().catch(() => ({}));
       if (res.ok) {
+        const updatedObj = resData.deliverable || resData.task || {};
         setItems((prev) =>
-          prev.map((item) =>
-            item.id === taskId ? { ...item, status: "paused", ...(resData.task || {}) } : item
+          prev.map((i) =>
+            i.id === taskId ? { ...i, status: "paused", ...updatedObj } : i
           )
         );
-        publish('task:updated', { id: taskId, status: 'paused' });
-        publish('data:changed', { type: 'task', action: 'updated' });
-        showSuccessMessage(t("Task", { defaultValue: "Task" }), t("paused", { defaultValue: "paused" }));
+        publish(isDeliverable ? 'deliverable:updated' : 'task:updated', { id: taskId, status: 'paused', ...updatedObj });
+        publish('data:changed', { type: isDeliverable ? 'deliverable' : 'task', action: 'updated' });
+        showSuccessMessage(isDeliverable ? t("Subtask", { defaultValue: "Subtask" }) : t("Task", { defaultValue: "Task" }), t("paused", { defaultValue: "paused" }));
       } else {
-        notify.error(resData?.message || resData?.error || t("Failed to pause task.", { defaultValue: "Failed to pause task." }));
+        notify.error(resData?.message || resData?.error || (isDeliverable ? t("Failed to pause subtask.", { defaultValue: "Failed to pause subtask." }) : t("Failed to pause task.", { defaultValue: "Failed to pause task." })));
       }
-    } catch {
-      notify.error(t("Failed to pause task.", { defaultValue: "Failed to pause task." }));
+    } catch (err) {
+      notify.error(isDeliverable ? t("Failed to pause subtask.", { defaultValue: "Failed to pause subtask." }) : t("Failed to pause task.", { defaultValue: "Failed to pause task." }));
     }
   };
 
-  const handleDelete = (e, taskId) => {
+  const handleDelete = (e, taskOrId) => {
     if (e && e.stopPropagation) {
       e.stopPropagation();
       e.preventDefault();
     }
-    setDeleteTargetId(taskId);
+    const item = typeof taskOrId === 'object' && taskOrId !== null ? taskOrId : items.find((i) => i.id === taskOrId);
+    setDeleteTargetId(item?.id || taskOrId);
     setDeleteConfirmOpen(true);
   };
 
@@ -861,25 +914,28 @@ function Tasks() {
     setDeleteConfirmOpen(false);
     setDeleteTargetId(null);
     if (!taskId) return;
+    const item = items.find((i) => i.id === taskId);
+    const isDeliverable = isDeliverableItem(item);
+    const endpoint = isDeliverable ? `${API_URL}/deliverables/${taskId}` : `${API_URL}/tasks/${taskId}`;
     try {
       const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}`, {
+      const res = await fetch(endpoint, {
         method: "DELETE",
         headers: { Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
         _notifHandled: true,
       });
       if (res.ok) {
-        setItems((prev) => prev.filter((item) => String(item.id) !== String(taskId)));
-        setOrderedItems((prev) => prev.filter((item) => String(item.id) !== String(taskId)));
-        publish('task:deleted', { id: taskId });
-        publish('data:changed', { type: 'task', action: 'deleted' });
-        toast.success(t("Task deleted successfully", { defaultValue: "Task deleted successfully" }));
+        setItems((prev) => prev.filter((i) => String(i.id) !== String(taskId)));
+        setOrderedItems((prev) => prev.filter((i) => String(i.id) !== String(taskId)));
+        publish(isDeliverable ? 'deliverable:deleted' : 'task:deleted', { id: taskId });
+        publish('data:changed', { type: isDeliverable ? 'deliverable' : 'task', action: 'deleted' });
+        toast.success(isDeliverable ? t("Subtask deleted successfully", { defaultValue: "Subtask deleted successfully" }) : t("Task deleted successfully", { defaultValue: "Task deleted successfully" }));
       } else {
         const data = await res.json().catch(() => ({}));
-        toast.error(data.message || t("Failed to delete task.", { defaultValue: "Failed to delete task." }));
+        toast.error(data.message || (isDeliverable ? t("Failed to delete subtask.", { defaultValue: "Failed to delete subtask." }) : t("Failed to delete task.", { defaultValue: "Failed to delete task." })));
       }
     } catch {
-      toast.error(t("Failed to delete task.", { defaultValue: "Failed to delete task." }));
+      toast.error(isDeliverable ? t("Failed to delete subtask.", { defaultValue: "Failed to delete subtask." }) : t("Failed to delete task.", { defaultValue: "Failed to delete task." }));
     }
   };
 
@@ -1219,12 +1275,16 @@ function Tasks() {
                   <div className="col-action" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                     <button
                       className="action-icon-btn action-view action-trigger-lg"
-                      title={t("View Task", { defaultValue: "View Task" })}
+                      title={isDeliverableItem(item) ? t("View Subtask", { defaultValue: "View Subtask" }) : t("View Task", { defaultValue: "View Task" })}
                       onClick={() => {
-                        const targetId = item.item_type === "subtask" ? (item.parent_id || item.task_id || item.id) : item.id;
+                        const isDeliverable = isDeliverableItem(item);
                         const currentSearch = location.search || (page > 1 ? `?page=${page}` : "");
                         const returnUrl = `${location.pathname}${currentSearch}`;
-                        navigate(rolePath(`tasks/task-details/${targetId}`), { state: { taskIds: taskIdList, from: 'tasks', page, returnUrl } });
+                        if (isDeliverable) {
+                          navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { from: 'tasks', page, returnUrl } });
+                        } else {
+                          navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks', page, returnUrl } });
+                        }
                       }}
                     >
                       <IoEyeOutline size={18} />
@@ -1253,9 +1313,9 @@ function Tasks() {
                             {canUserApprove && (item.status === "submitted" || item.status === "reopened") && (
                               <button
                                 className="action-icon-btn"
-                                title={t("Approve Task", { defaultValue: "Approve Task" })}
+                                title={isDeliverableItem(item) ? t("Approve Subtask", { defaultValue: "Approve Subtask" }) : t("Approve Task", { defaultValue: "Approve Task" })}
                                 style={{ color: "#16A34A", fontWeight: "bold" }}
-                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setApproveTaskId(item.id); setApproveConfirmOpen(true); }}
+                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setApproveTaskId(item); setApproveConfirmOpen(true); }}
                               >
                                 <CheckCircle2 size={16} />
                               </button>
@@ -1263,9 +1323,9 @@ function Tasks() {
                             {canUserApprove && (item.status === "submitted" || item.status === "reopened") && (
                               <button
                                 className="action-icon-btn"
-                                title={t("Decline Task", { defaultValue: "Decline Task" })}
+                                title={isDeliverableItem(item) ? t("Decline Subtask", { defaultValue: "Decline Subtask" }) : t("Decline Task", { defaultValue: "Decline Task" })}
                                 style={{ color: "#DC2626" }}
-                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setDeclineTaskItem(item); setDeclineConfirmOpen(true); }}
+                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setDeclineTaskItem(item); }}
                               >
                                 <XCircle size={16} />
                               </button>
@@ -1273,7 +1333,7 @@ function Tasks() {
                             {canUserApprove && (item.status === "approved" || item.status === "submitted" || item.status === "reopened" || item.status === "abandoned") && (
                               <button
                                 className="action-icon-btn"
-                                title={t("Reopen Task", { defaultValue: "Reopen Task" })}
+                                title={isDeliverableItem(item) ? t("Reopen Subtask", { defaultValue: "Reopen Subtask" }) : t("Reopen Task", { defaultValue: "Reopen Task" })}
                                 style={{ color: "#2563EB" }}
                                 onClick={(e) => { e.stopPropagation(); e.preventDefault(); setReopenTask(item); }}
                               >
@@ -1283,7 +1343,7 @@ function Tasks() {
                             {item.status !== "abandoned" && (
                               <button
                                 className="action-icon-btn"
-                                title={isUserAdminOrManager ? t("Abandon Task", { defaultValue: "Abandon Task" }) : t("Request Abandon", { defaultValue: "Request Abandon" })}
+                                title={isUserAdminOrManager ? (isDeliverableItem(item) ? t("Abandon Subtask", { defaultValue: "Abandon Subtask" }) : t("Abandon Task", { defaultValue: "Abandon Task" })) : t("Request Abandon", { defaultValue: "Request Abandon" })}
                                 style={{ color: "#F59E0B" }}
                                 onClick={(e) => { e.stopPropagation(); e.preventDefault(); setAbandonTask(item); }}
                               >
@@ -1325,7 +1385,7 @@ function Tasks() {
                           return (
                             <button
                               className="action-icon-btn action-submit"
-                              title={t("Acknowledge Task", { defaultValue: "Acknowledge Task" })}
+                              title={isDeliverableItem(item) ? t("Acknowledge Subtask", { defaultValue: "Acknowledge Subtask" }) : t("Acknowledge Task", { defaultValue: "Acknowledge Task" })}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 e.preventDefault();
@@ -1340,7 +1400,7 @@ function Tasks() {
                         }
                         if (item.status === "in_progress" && (!item.timer || item.timer?.state === "idle" || !item.timer?.state) && canUserPauseResume(item, currentUser)) {
                           return (
-                            <button className="action-icon-btn action-submit" title={t("Start Timer", { defaultValue: "Start Timer" })} onClick={(e) => handleStartTimer(e, item.id)} style={{ color: "#2563eb" }}>
+                            <button className="action-icon-btn action-submit" title={t("Start Timer", { defaultValue: "Start Timer" })} onClick={(e) => handleStartTimer(e, item)} style={{ color: "#2563eb" }}>
                               <Play size={16} />
                             </button>
                           );
@@ -1349,11 +1409,11 @@ function Tasks() {
                           return (
                             <button
                               className="action-icon-btn action-submit"
-                              title={t("Pause Task", { defaultValue: "Pause Task" })}
+                              title={isDeliverableItem(item) ? t("Pause Subtask", { defaultValue: "Pause Subtask" }) : t("Pause Task", { defaultValue: "Pause Task" })}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 e.preventDefault();
-                                setPauseModalTaskId(item.id);
+                                setPauseModalTaskId(item);
                                 setPauseModalOpen(true);
                               }}
                               style={{ color: "#D97706" }}
@@ -1366,7 +1426,7 @@ function Tasks() {
                           return (
                             <button
                               className="action-icon-btn action-submit"
-                              title={t("Resume Task", { defaultValue: "Resume Task" })}
+                              title={isDeliverableItem(item) ? t("Resume Subtask", { defaultValue: "Resume Subtask" }) : t("Resume Task", { defaultValue: "Resume Task" })}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 e.preventDefault();
@@ -1384,10 +1444,10 @@ function Tasks() {
                             <div style={{ position: "relative", display: "inline-flex" }}>
                               <button
                                 className="action-icon-btn action-submit"
-                                title={item.pending_deliverables_count > 0 ? t("Submit all subtasks first", { defaultValue: "Submit all subtasks first" }) : item.status === "paused" || item.assigner_paused ? t("Task is paused. Resume first.", { defaultValue: "Task is paused. Resume first." }) : t("Submit Task", { defaultValue: "Submit Task" })}
-                                disabled={item.pending_deliverables_count > 0 || item.status === "paused" || item.assigner_paused}
-                                onClick={(e) => { e.stopPropagation(); !item.pending_deliverables_count && item.status !== "paused" && !item.assigner_paused && setSubmitTaskModal({ open: true, task: item }); }}
-                                style={item.pending_deliverables_count > 0 || item.status === "paused" || item.assigner_paused ? { opacity: 0.4, cursor: "not-allowed" } : {}}
+                                title={!isDeliverableItem(item) && item.pending_deliverables_count > 0 ? t("Submit all subtasks first", { defaultValue: "Submit all subtasks first" }) : item.status === "paused" || item.assigner_paused ? t("Task is paused. Resume first.", { defaultValue: "Task is paused. Resume first." }) : (isDeliverableItem(item) ? t("Submit Subtask", { defaultValue: "Submit Subtask" }) : t("Submit Task", { defaultValue: "Submit Task" }))}
+                                disabled={(!isDeliverableItem(item) && item.pending_deliverables_count > 0) || item.status === "paused" || item.assigner_paused}
+                                onClick={(e) => { e.stopPropagation(); (isDeliverableItem(item) || !item.pending_deliverables_count) && item.status !== "paused" && !item.assigner_paused && setSubmitTaskModal({ open: true, task: item }); }}
+                                style={(!isDeliverableItem(item) && item.pending_deliverables_count > 0) || item.status === "paused" || item.assigner_paused ? { opacity: 0.4, cursor: "not-allowed" } : {}}
                               >
                                 <LuSend size={16} />
                               </button>
@@ -1403,8 +1463,8 @@ function Tasks() {
                         return (
                           <button
                             className="action-icon-btn action-delete"
-                            title={t("Delete Task", { defaultValue: "Delete Task" })}
-                            onClick={(e) => handleDelete(e, item.id)}
+                            title={isDeliverableItem(item) ? t("Delete Subtask", { defaultValue: "Delete Subtask" }) : t("Delete Task", { defaultValue: "Delete Task" })}
+                            onClick={(e) => handleDelete(e, item)}
                           >
                             <Trash2 size={16} />
                           </button>
@@ -1413,7 +1473,7 @@ function Tasks() {
                       {!["approved", "rejected", "pending", "submitted"].includes(item.status) && !item.is_transferor && (
                         <button
                           className="action-icon-btn"
-                          title={t("Transfer Task", { defaultValue: "Transfer Task" })}
+                          title={isDeliverableItem(item) ? t("Transfer Subtask", { defaultValue: "Transfer Subtask" }) : t("Transfer Task", { defaultValue: "Transfer Task" })}
                           onClick={(e) => { e.stopPropagation(); setTransferDialog({ open: true, task: item }); }}
                           style={{ color: "#2563EB", cursor: "pointer" }}
                         >
@@ -1461,16 +1521,18 @@ function Tasks() {
         confirmColor="#16A34A"
       />
 
-      <ConfirmModal
-        isOpen={declineConfirmOpen}
-        onClose={() => { setDeclineConfirmOpen(false); setDeclineTaskItem(null); }}
-        onConfirm={confirmDirectDecline}
-        title={t("Decline Task", { defaultValue: "Decline Task" })}
-        message={t("Are you sure you want to decline this task?", { defaultValue: "Are you sure you want to decline this task?" })}
-        confirmText={t("Decline", { defaultValue: "Decline" })}
-        cancelText={t("Cancel", { defaultValue: "Cancel" })}
-        danger
-      />
+      {declineTaskItem && (
+        <DeclineModal
+          isOpen={!!declineTaskItem}
+          onClose={() => setDeclineTaskItem(null)}
+          title={t("Decline Task", { defaultValue: "Decline Task" })}
+          subtitle={declineTaskItem?.title}
+          actionLabel={t("Decline Task", { defaultValue: "Decline Task" })}
+          placeholder={t("Please enter a reason for declining this task...", { defaultValue: "Please enter a reason for declining this task..." })}
+          onSubmit={(comment) => handleDirectDecline(null, declineTaskItem, comment)}
+          loading={declineTaskLoading}
+        />
+      )}
 
       <PauseReasonModal
         isOpen={pauseModalOpen}
@@ -1503,11 +1565,11 @@ function Tasks() {
         onClose={() => { setAcknowledgeConfirmOpen(false); setAcknowledgeTaskItem(null); }}
         onConfirm={async () => {
           if (!acknowledgeTaskItem) return;
-          await handleAcknowledge(null, acknowledgeTaskItem.id);
+          await handleAcknowledge(null, acknowledgeTaskItem);
           setAcknowledgeConfirmOpen(false);
           setAcknowledgeTaskItem(null);
         }}
-        title={t("Acknowledge Task", { defaultValue: "Acknowledge Task" })}
+        title={t("Acknowledge", { defaultValue: "Acknowledge" })}
         message={t("Are you sure you want to acknowledge this task?", { defaultValue: "Are you sure you want to acknowledge this task?" })}
         confirmText={t("Acknowledge", { defaultValue: "Acknowledge" })}
         cancelText={t("Cancel", { defaultValue: "Cancel" })}

@@ -45,6 +45,7 @@ import ConfirmModal from "../components/ConfirmModal";
 import PauseReasonModal from "../components/PauseReasonModal";
 import ReopenDialog from "../components/ReopenDialog";
 import AbandonModal from "../components/AbandonModal";
+import DeclineModal from "../components/DeclineModal";
 import MarkTaskCompletedModal from "../components/MarkTaskCompletedModal";
 import TransferTaskDialog from "../components/TransferTaskDialog";
 import DelegationChain from "../components/DelegationChain";
@@ -58,7 +59,7 @@ import { publish } from "../utils/eventBus";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
-import { isDelegationRejectedByMe, isDelegationRevokedFromMe } from "../utils/delegationUtils";
+import { isDelegationPendingForMe, isDelegationRejectedByMe, isDelegationRevokedFromMe, isDeliverableItem } from "../utils/delegationUtils";
 import { useSubmit } from "../hooks/useSubmit";
 import { useWorkTimer } from "../hooks/useWorkTimer";
 import { formatDateTimeShort, formatDateTime, parseUtcToEpochMs } from "../utils/formatDateTime";
@@ -205,12 +206,12 @@ function SubtaskDetails() {
     });
   };
 
+  const isDeletingRef = useRef(false);
   const [subtask, setSubtask] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("overview");
   const [submitModalOpen, setSubmitModalOpen] = useState(false);
-  const [rejectComment, setRejectComment] = useState("");
-  const [showRejectForm, setShowRejectForm] = useState(false);
+  const [declineModalOpen, setDeclineModalOpen] = useState(false);
   const { submitting: approving, run: runApprove } = useSubmit();
   const { submitting: declining, run: runDecline } = useSubmit();
   const { submitting: acknowledging, run: runAcknowledge } = useSubmit();
@@ -268,34 +269,44 @@ function SubtaskDetails() {
       .catch(() => {});
   }, []);
 
-  const fetchSubtask = useCallback(() => {
-    setLoading(true);
-    const token = authToken();
-    fetch(`${API_URL}/deliverables/${subtaskId}`, {
-      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-      skipLoader: true,
-      _notifHandled: true,
-    })
-      .then((res) => {
-        if (res.ok) return res.json();
-        if (res.status === 404) {
-          setSubtask(null);
-          notify.error(t("This subtask has been deleted.", { defaultValue: "This subtask has been deleted." }));
-          setTimeout(() => navigate(rolePath("deliveries")), 1500);
-          return null;
-        }
-        return null;
-      })
-      .then((data) => {
-        if (!data) return;
+  const fetchSubtask = useCallback(async (refresh = false) => {
+    if (!subtaskId || isDeletingRef.current) return;
+    if (!refresh) setLoading(true);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/deliverables/${subtaskId}`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
+        _notifHandled: true,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
         setSubtask(data?.deliverable || null);
         setSubmitModalOpen(false);
-        setShowRejectForm(false);
         if (data?.deliverable?.files) setFiles(data.deliverable.files);
-      })
-      .catch(() => setSubtask(null))
-      .finally(() => setLoading(false));
-  }, [subtaskId, navigate, t]);
+      } else if (res.status === 404) {
+        setSubtask(null);
+        if (!isDeletingRef.current) {
+          notify.error(t("This subtask has been deleted.", { defaultValue: "This subtask has been deleted." }));
+          setTimeout(() => navigate(rolePath("deliveries")), 1500);
+        }
+      } else if (res.status === 403) {
+        setSubtask(null);
+        if (!isDeletingRef.current) {
+          notify.error(t("You don't have permission to view this subtask.", { defaultValue: "You don't have permission to view this subtask." }));
+          setTimeout(() => navigate(rolePath("deliveries")), 1500);
+        }
+      } else {
+        setSubtask(null);
+      }
+    } catch (err) {
+      console.error("Failed to fetch subtask", err);
+      setSubtask(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [subtaskId, navigate, t, notify]);
 
   useEffect(() => { fetchSubtask(); }, [fetchSubtask]);
 
@@ -324,22 +335,28 @@ function SubtaskDetails() {
     Promise.all([markRead, fetchNotes]);
   }, [subtask?.id, subtask?.unviewed_changes_count]);
 
+  const currentUserId = currentUser ? parseInt(currentUser.id, 10) : null;
   const isAdminOrManager = currentUser && ["admin", "manager", "super_admin"].includes(currentUser.role);
   const isSuperAdmin = currentUser && ["admin", "super_admin"].includes(currentUser.role);
   const isCreator = Boolean(
     subtask?.is_creator === true ||
-    (subtask && currentUser && (
-      parseInt(subtask.created_by, 10) === parseInt(currentUser.id, 10) ||
-      parseInt(subtask.assigned_by, 10) === parseInt(currentUser.id, 10) ||
-      parseInt(subtask.user_id, 10) === parseInt(currentUser.id, 10) ||
-      parseInt(subtask.creator_id, 10) === parseInt(currentUser.id, 10)
+    (currentUserId && (
+      parseInt(subtask?.created_by, 10) === currentUserId ||
+      parseInt(subtask?.assigned_by, 10) === currentUserId ||
+      parseInt(subtask?.user_id, 10) === currentUserId ||
+      parseInt(subtask?.creator_id, 10) === currentUserId ||
+      (subtask?.task && (
+        parseInt(subtask.task.assigned_by, 10) === currentUserId ||
+        parseInt(subtask.task.creator_id, 10) === currentUserId ||
+        parseInt(subtask.task.user_id, 10) === currentUserId
+      ))
     ))
   );
   const isRawAssignee = Boolean(
     subtask?.is_assignee ??
-    (subtask && currentUser && (
-      (subtask.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10)) ||
-      (subtask.assigned_to && parseInt(subtask.assigned_to, 10) === parseInt(currentUser.id, 10))
+    (currentUserId && (
+      (subtask?.assignees || []).some((a) => parseInt(a.id, 10) === currentUserId) ||
+      (subtask?.assigned_to && parseInt(subtask.assigned_to, 10) === currentUserId)
     ))
   );
 
@@ -351,58 +368,102 @@ function SubtaskDetails() {
           ? (() => { try { return JSON.parse(subtask.delegation_chain); } catch { return []; } })()
           : []);
 
-  const latestAcceptedDelegation = delegationChain.slice().reverse().find((d) => String(d?.status || "").toLowerCase() === "accepted");
+  const dbDelegations = Array.isArray(subtask?.task_delegations)
+    ? subtask.task_delegations
+    : Array.isArray(subtask?.delegations)
+      ? subtask.delegations
+      : [];
+
+  const latestActiveDelegation = delegationChain.slice().reverse().find((d) => 
+    ["accepted", "in_progress", "in-progress", "active", "pending_submission"].includes(String(d?.status || "").toLowerCase())
+  ) || dbDelegations.slice().reverse().find((d) => 
+    ["accepted", "in_progress", "in-progress", "active", "pending_submission"].includes(String(d?.status || "").toLowerCase())
+  );
+
+  const isCurrentUserActiveDelegatee = Boolean(
+    currentUserId && (
+      (latestActiveDelegation && parseInt(latestActiveDelegation?.delegated_to ?? latestActiveDelegation?.user_id, 10) === currentUserId) ||
+      delegationChain.some((d) => parseInt(d?.delegated_to ?? d?.user_id, 10) === currentUserId && ["accepted", "in_progress", "in-progress", "active", "pending_submission"].includes(String(d?.status || "").toLowerCase())) ||
+      dbDelegations.some((d) => parseInt(d?.delegated_to ?? d?.user_id, 10) === currentUserId && ["accepted", "in_progress", "in-progress", "active", "pending_submission"].includes(String(d?.status || "").toLowerCase()))
+    )
+  );
+
+  const transferorHasApproved = Boolean(subtask?.transferor_has_approved);
 
   const activeOwnerId = (() => {
     if (subtask?.current_owner != null) return parseInt(subtask.current_owner, 10);
     if (subtask?.current_owner_id != null) return parseInt(subtask.current_owner_id, 10);
-    if (!subtask?.transferor_has_approved && latestAcceptedDelegation?.delegated_to != null) {
-      return parseInt(latestAcceptedDelegation.delegated_to, 10);
+    if (!transferorHasApproved && latestActiveDelegation?.delegated_to != null) {
+      return parseInt(latestActiveDelegation.delegated_to, 10);
     }
     if (subtask?.assigned_to != null) return parseInt(subtask.assigned_to, 10);
     if (subtask?.assignees && subtask.assignees.length > 0) return parseInt(subtask.assignees[0].id, 10);
     return null;
   })();
 
+  const isTransferor = Boolean(
+    subtask?.is_transferor ||
+    delegationChain.some((d) => parseInt(d?.delegated_by, 10) === currentUserId && ["accepted", "pending", "in_progress"].includes(String(d?.status || "").toLowerCase())) ||
+    dbDelegations.some((d) => parseInt(d?.delegated_by, 10) === currentUserId && ["accepted", "pending", "in_progress"].includes(String(d?.status || "").toLowerCase()))
+  );
+  const isNextApprover = subtask?.is_next_approver ?? false;
+  const transferorReturnToSelf = subtask?.transferor_return_to_self ?? true;
+  const hasDelegationChain = subtask?.has_delegation_chain ?? (delegationChain.length > 0 || dbDelegations.length > 0);
+  const hasPendingDelegation = Boolean(
+    (subtask?.pending_delegation && currentUserId && parseInt(subtask.pending_delegation.delegated_to, 10) === currentUserId) ||
+    isDelegationPendingForMe(subtask, currentUser)
+  );
+  const isDelegatee = subtask?.is_delegatee ?? isCurrentUserActiveDelegatee;
+
   const myLatestDelegation = delegationChain.slice().reverse().find(
-    (d) => parseInt(d?.delegated_to, 10) === parseInt(currentUser?.id, 10)
+    (d) => parseInt(d?.delegated_to ?? d?.user_id, 10) === currentUserId
+  ) || dbDelegations.slice().reverse().find(
+    (d) => parseInt(d?.delegated_to ?? d?.user_id, 10) === currentUserId
   );
   const isDelegationRejectedByMe = Boolean(
     myLatestDelegation &&
     String(myLatestDelegation?.status || "").toLowerCase() === "rejected" &&
-    (activeOwnerId != null && activeOwnerId !== parseInt(currentUser?.id, 10))
+    (activeOwnerId != null && activeOwnerId !== currentUserId)
   );
   const isDelegationRevokedFromMe = Boolean(
     myLatestDelegation &&
     String(myLatestDelegation?.status || "").toLowerCase() === "revoked" &&
-    (activeOwnerId != null && activeOwnerId !== parseInt(currentUser?.id, 10))
+    (activeOwnerId != null && activeOwnerId !== currentUserId)
   );
   const isDelegationInactiveForMe = isDelegationRejectedByMe || isDelegationRevokedFromMe;
 
-  const isAssignee = Boolean(
-    !isDelegationInactiveForMe && (
-      (activeOwnerId != null && activeOwnerId === parseInt(currentUser?.id, 10)) ||
-      subtask?.is_assignee ||
-      subtask?.is_current_owner ||
-      (!activeOwnerId && isRawAssignee)
+  // Previous transferor check: user transferred the task away to someone else AND someone else is currently holding/working on it
+  const isPreviousTransferor = Boolean(
+    currentUserId &&
+    (activeOwnerId != null && activeOwnerId !== currentUserId) &&
+    !transferorHasApproved &&
+    !isCurrentUserActiveDelegatee &&
+    isTransferor
+  );
+
+  // Current Active Assignee / Current Owner:
+  const isCurrentActiveAssignee = Boolean(
+    currentUserId && !isPreviousTransferor && !isDelegationInactiveForMe && (
+      (activeOwnerId != null && activeOwnerId === currentUserId) ||
+      subtask?.is_current_owner === true ||
+      subtask?.is_assignee === true ||
+      isCurrentUserActiveDelegatee ||
+      (!activeOwnerId && isRawAssignee) ||
+      (activeOwnerId == null && isRawAssignee)
     )
   );
+
+  const isAssignee = isCurrentActiveAssignee && !isDelegationInactiveForMe;
   const isCurrentOwner = Boolean(
     !isDelegationInactiveForMe && (
-      subtask?.is_current_owner ??
-      (subtask?.current_owner && currentUser && parseInt(subtask.current_owner, 10) === parseInt(currentUser.id, 10)) ??
-      isAssignee
+      (activeOwnerId != null && activeOwnerId === currentUserId) ||
+      subtask?.is_current_owner === true ||
+      isCurrentActiveAssignee ||
+      isCurrentUserActiveDelegatee
     )
   );
-  const isFollower = (subtask?.followers || []).some((f) => parseInt(f.id, 10) === parseInt(currentUser?.id, 10));
-  const isOnlyFollower = isFollower && !isAdminOrManager && !isCreator && !isAssignee;
-  const isTransferor = subtask?.is_transferor ?? false;
-  const isNextApprover = subtask?.is_next_approver ?? false;
-  const transferorReturnToSelf = subtask?.transferor_return_to_self ?? true;
-  const transferorHasApproved = subtask?.transferor_has_approved ?? false;
-  const hasDelegationChain = subtask?.has_delegation_chain ?? false;
-  const hasPendingDelegation = Boolean(subtask?.pending_delegation && currentUser && parseInt(subtask.pending_delegation.delegated_to, 10) === parseInt(currentUser.id, 10));
-  const isDelegatee = subtask?.is_delegatee ?? false;
+  const isFollower = (subtask?.followers || []).some((f) => parseInt(f.id, 10) === currentUserId);
+  const isOnlyFollower = isFollower && !isAdminOrManager && !isCreator && !isAssignee && !isRawAssignee;
 
   const timerData = subtask?.timer || {
     state: subtask?.timer_state || "idle",
@@ -430,45 +491,92 @@ function SubtaskDetails() {
   }, [subtaskId]);
 
   const handleApprove = async () => {
+    const id = subtask?.id || subtaskId;
+    if (!id) return;
     await runApprove(async () => {
       try {
         const token = authToken();
-        const res = await fetch(`${API_URL}/deliverables/${subtaskId}/approve`, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` }, _notifHandled: true });
-        const data = await res.json();
-        if (res.ok) { publish('deliverable:updated', data.deliverable || data); publish('data:changed', { type: 'deliverable', action: 'updated' }); showSuccessMessage("Subtask", "approved"); fetchSubtask(); }
-        else { notify.error(data.message || t("Failed to approve", { defaultValue: "Failed to approve" })); }
-      } catch { notify.error(t("An error occurred", { defaultValue: "An error occurred" })); }
+        const res = await fetch(`${API_URL}/deliverables/${id}/approve`, {
+          method: "POST",
+          headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          _notifHandled: true,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          const updatedSubtask = data.deliverable || data;
+          setSubtask(updatedSubtask);
+          publish('deliverable:updated', updatedSubtask);
+          publish('data:changed', { type: 'deliverable', action: 'updated' });
+          if (updatedSubtask?.status === 'in_progress') {
+            notify.success(data.message || t("Transfer approved successfully. Subtask is now in progress and ready for submission to the original assigner.", { defaultValue: "Transfer approved successfully. Subtask is now in progress and ready for submission to the original assigner." }));
+          } else {
+            showSuccessMessage("Subtask", "approved");
+          }
+          fetchSubtask(true);
+        } else {
+          notify.error(data.message || t("Failed to approve", { defaultValue: "Failed to approve" }));
+        }
+      } catch (err) {
+        console.error("Failed to approve subtask", err);
+        notify.error(t("An error occurred", { defaultValue: "An error occurred" }));
+      }
     });
   };
 
-  const handleReject = async () => {
+  const handleDecline = async (comment) => {
+    const id = subtask?.id || subtaskId;
+    if (!id) return;
     await runDecline(async () => {
       try {
         const token = authToken();
-        const res = await fetch(`${API_URL}/deliverables/${subtaskId}/reject`, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ comment: rejectComment }), _notifHandled: true });
-        const data = await res.json();
-        if (res.ok) { publish('deliverable:updated', data.deliverable || data); publish('data:changed', { type: 'deliverable', action: 'updated' }); showSuccessMessage("Subtask", "declined"); setShowRejectForm(false); setRejectComment(""); fetchSubtask(); }
-        else { notify.error(data.message || t("Failed to decline", { defaultValue: "Failed to decline" })); }
-      } catch { notify.error(t("An error occurred", { defaultValue: "An error occurred" })); }
+        const res = await fetch(`${API_URL}/deliverables/${id}/reject`, {
+          method: "POST",
+          headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ comment }),
+          _notifHandled: true,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          const updatedSubtask = data.deliverable || { ...subtask, status: "declined" };
+          setSubtask(updatedSubtask);
+          publish('deliverable:updated', updatedSubtask);
+          publish('data:changed', { type: 'deliverable', action: 'updated' });
+          showSuccessMessage("Subtask", "declined");
+          setDeclineModalOpen(false);
+          fetchSubtask(true);
+        } else {
+          notify.error(data.message || t("Failed to decline", { defaultValue: "Failed to decline" }));
+        }
+      } catch (err) {
+        console.error("Failed to decline subtask", err);
+        notify.error(t("An error occurred", { defaultValue: "An error occurred" }));
+      }
     });
   };
+  const handleReject = handleDecline;
 
   const handleReopen = () => {
     setReopenDialogOpen(true);
   };
 
   const handleReopenSuccess = (updatedSubtask) => {
-    publish('deliverable:updated', updatedSubtask);
-    publish('data:changed', { type: 'deliverable', action: 'updated' });
+    if (updatedSubtask) {
+      setSubtask(updatedSubtask);
+      publish('deliverable:updated', updatedSubtask);
+      publish('data:changed', { type: 'deliverable', action: 'updated' });
+    }
     showSuccessMessage("Subtask", "reopened");
-    fetchSubtask();
+    setReopenDialogOpen(false);
+    fetchSubtask(true);
   };
 
   const handleAbandonSubmit = async (reason) => {
+    const id = subtask?.id || subtaskId;
+    if (!id) return;
     setAbandonSubmitting(true);
     try {
       const token = authToken();
-      const res = await fetch(`${API_URL}/deliverables/${subtaskId}/abandon`, {
+      const res = await fetch(`${API_URL}/deliverables/${id}/abandon`, {
         method: "POST",
         headers: {
           Accept: "application/json",
@@ -478,17 +586,20 @@ function SubtaskDetails() {
         body: JSON.stringify({ reason }),
         _notifHandled: true,
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        publish('deliverable:updated', data.deliverable || data);
+        const updatedSubtask = data.deliverable || data;
+        setSubtask(updatedSubtask);
+        publish('deliverable:updated', updatedSubtask);
         publish('data:changed', { type: 'deliverable', action: 'updated' });
         showSuccessMessage("Subtask", "abandoned");
         setAbandonModalOpen(false);
-        fetchSubtask();
+        fetchSubtask(true);
       } else {
         notify.error(data.message || t("Failed to abandon subtask.", { defaultValue: "Failed to abandon subtask." }));
       }
-    } catch {
+    } catch (err) {
+      console.error("Failed to abandon subtask", err);
       notify.error(t("An error occurred. Please try again.", { defaultValue: "An error occurred. Please try again." }));
     } finally {
       setAbandonSubmitting(false);
@@ -496,122 +607,189 @@ function SubtaskDetails() {
   };
 
   const handleAcknowledge = async () => {
+    const id = subtask?.id || subtaskId;
+    if (!id) return;
     await runAcknowledge(async () => {
       try {
         const token = authToken();
-        const res = await fetch(`${API_URL}/deliverables/${subtaskId}/acknowledge`, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` }, _notifHandled: true });
-        const data = await res.json();
-        if (res.ok) { publish('deliverable:updated', data.deliverable || data); publish('data:changed', { type: 'deliverable', action: 'updated' }); showSuccessMessage("Subtask", "acknowledged"); fetchSubtask(); }
-        else { notify.error(data.message || t("Failed to acknowledge", { defaultValue: "Failed to acknowledge" })); }
-      } catch { notify.error(t("An error occurred", { defaultValue: "An error occurred" })); }
+        const res = await fetch(`${API_URL}/deliverables/${id}/acknowledge`, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` }, _notifHandled: true });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          const updatedSubtask = data.deliverable || data;
+          setSubtask(updatedSubtask);
+          publish('deliverable:updated', updatedSubtask);
+          publish('data:changed', { type: 'deliverable', action: 'updated' });
+          showSuccessMessage("Subtask", "acknowledged");
+          fetchSubtask(true);
+        } else {
+          notify.error(data.message || t("Failed to acknowledge", { defaultValue: "Failed to acknowledge" }));
+        }
+      } catch (err) {
+        console.error("Failed to acknowledge subtask", err);
+        notify.error(t("An error occurred", { defaultValue: "An error occurred" }));
+      }
     });
   };
 
   const handleStartTimer = async () => {
+    const id = subtask?.id || subtaskId;
+    if (!id) return;
     await runStartTimer(async () => {
       try {
         const token = authToken();
-        const res = await fetch(`${API_URL}/deliverables/${subtaskId}/start-timer`, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` }, _notifHandled: true });
-        const data = await res.json();
-        if (res.ok) { publish('deliverable:updated', data.deliverable || data); publish('data:changed', { type: 'deliverable', action: 'updated' }); showSuccessMessage("Subtask", "timer started"); fetchSubtask(); }
-        else { notify.error(data.message || t("Failed to start timer", { defaultValue: "Failed to start timer" })); }
-      } catch { notify.error(t("An error occurred", { defaultValue: "An error occurred" })); }
+        const res = await fetch(`${API_URL}/deliverables/${id}/start-timer`, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` }, _notifHandled: true });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          const updatedSubtask = data.deliverable || data;
+          setSubtask(updatedSubtask);
+          publish('deliverable:updated', updatedSubtask);
+          publish('data:changed', { type: 'deliverable', action: 'updated' });
+          showSuccessMessage("Subtask", "timer started");
+          fetchSubtask(true);
+        } else {
+          notify.error(data.message || t("Failed to start timer", { defaultValue: "Failed to start timer" }));
+        }
+      } catch (err) {
+        console.error("Failed to start timer", err);
+        notify.error(t("An error occurred", { defaultValue: "An error occurred" }));
+      }
     });
   };
 
   const handlePause = async () => {
+    const id = subtask?.id || subtaskId;
+    if (!id) return;
     await runPause(async () => {
       try {
         const token = authToken();
-        const res = await fetch(`${API_URL}/deliverables/${subtaskId}/pause`, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ reason: "other" }), _notifHandled: true });
-        const data = await res.json();
-        if (res.ok) { publish('deliverable:updated', data.deliverable || data); publish('data:changed', { type: 'deliverable', action: 'updated' }); showSuccessMessage("Subtask", "paused"); fetchSubtask(); }
-        else { notify.error(data.message || t("Failed to pause", { defaultValue: "Failed to pause" })); }
-      } catch { notify.error(t("An error occurred", { defaultValue: "An error occurred" })); }
+        const res = await fetch(`${API_URL}/deliverables/${id}/pause`, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ reason: "other" }), _notifHandled: true });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          const updatedSubtask = data.deliverable || data;
+          setSubtask(updatedSubtask);
+          publish('deliverable:updated', updatedSubtask);
+          publish('data:changed', { type: 'deliverable', action: 'updated' });
+          showSuccessMessage("Subtask", "paused");
+          fetchSubtask(true);
+        } else {
+          notify.error(data.message || t("Failed to pause", { defaultValue: "Failed to pause" }));
+        }
+      } catch (err) {
+        console.error("Failed to pause subtask", err);
+        notify.error(t("An error occurred", { defaultValue: "An error occurred" }));
+      }
     });
   };
 
   const handleResume = async () => {
+    const id = subtask?.id || subtaskId;
+    if (!id) return;
     await runResume(async () => {
       try {
         const token = authToken();
-        const res = await fetch(`${API_URL}/deliverables/${subtaskId}/continue`, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` }, _notifHandled: true });
-        const data = await res.json();
-        if (res.ok) { publish('deliverable:updated', data.deliverable || data); publish('data:changed', { type: 'deliverable', action: 'updated' }); showSuccessMessage("Subtask", "resumed"); fetchSubtask(); }
-        else { notify.error(data.message || t("Failed to resume", { defaultValue: "Failed to resume" })); }
-      } catch { notify.error(t("An error occurred", { defaultValue: "An error occurred" })); }
+        const res = await fetch(`${API_URL}/deliverables/${id}/continue`, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` }, _notifHandled: true });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          const updatedSubtask = data.deliverable || data;
+          setSubtask(updatedSubtask);
+          publish('deliverable:updated', updatedSubtask);
+          publish('data:changed', { type: 'deliverable', action: 'updated' });
+          showSuccessMessage("Subtask", "resumed");
+          fetchSubtask(true);
+        } else {
+          notify.error(data.message || t("Failed to resume", { defaultValue: "Failed to resume" }));
+        }
+      } catch (err) {
+        console.error("Failed to resume subtask", err);
+        notify.error(t("An error occurred", { defaultValue: "An error occurred" }));
+      }
     });
   };
 
   const handleAssignerPause = async ({ reason, reason_detail }) => {
+    const id = subtask?.id || subtaskId;
+    if (!id) return;
     await runAssignerPause(async () => {
       try {
         const token = authToken();
-        const res = await fetch(`${API_URL}/deliverables/${subtaskId}/assigner-pause`, {
+        const res = await fetch(`${API_URL}/deliverables/${id}/assigner-pause`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ reason: reason_detail || reason }),
           _notifHandled: true,
         });
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (res.ok) {
-          publish('deliverable:updated', data.deliverable || data);
+          const updatedSubtask = data.deliverable || data;
+          setSubtask(updatedSubtask);
+          publish('deliverable:updated', updatedSubtask);
           publish('data:changed', { type: 'deliverable', action: 'updated' });
           showSuccessMessage("Subtask", "paused");
-          fetchSubtask();
+          fetchSubtask(true);
         } else {
           notify.error(data.message || t("Failed to pause subtask.", { defaultValue: "Failed to pause subtask." }));
         }
-      } catch {
+      } catch (err) {
+        console.error("Failed to pause subtask by assigner", err);
         notify.error(t("Failed to pause subtask.", { defaultValue: "Failed to pause subtask." }));
       }
     });
   };
 
   const handleAssignerResume = async () => {
+    const id = subtask?.id || subtaskId;
+    if (!id) return;
     await runAssignerResume(async () => {
       try {
         const token = authToken();
-        const res = await fetch(`${API_URL}/deliverables/${subtaskId}/assigner-resume`, {
+        const res = await fetch(`${API_URL}/deliverables/${id}/assigner-resume`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
           _notifHandled: true,
         });
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (res.ok) {
-          publish('deliverable:updated', data.deliverable || data);
+          const updatedSubtask = data.deliverable || data;
+          setSubtask(updatedSubtask);
+          publish('deliverable:updated', updatedSubtask);
           publish('data:changed', { type: 'deliverable', action: 'updated' });
           showSuccessMessage("Subtask", "resumed by assigner");
-          fetchSubtask();
+          fetchSubtask(true);
         } else {
           notify.error(data.message || t("Failed to resume subtask.", { defaultValue: "Failed to resume subtask." }));
         }
-      } catch {
+      } catch (err) {
+        console.error("Failed to resume subtask by assigner", err);
         notify.error(t("Failed to resume subtask.", { defaultValue: "Failed to resume subtask." }));
       }
     });
   };
 
   const handleRevokeDelegation = async () => {
+    const id = subtask?.id || subtaskId;
+    if (!id) return;
     await runRevoke(async () => {
       try {
         const token = authToken();
-        const res = await fetch(`${API_URL}/deliverables/${subtaskId}/revoke-delegation`, {
+        const res = await fetch(`${API_URL}/deliverables/${id}/revoke-delegation`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ delegation_id: subtask?.active_outgoing_delegation_id }),
           _notifHandled: true,
         });
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (res.ok) {
-          publish('deliverable:updated', data.deliverable || data);
+          const updatedSubtask = data.deliverable || data;
+          setSubtask(updatedSubtask);
+          publish('deliverable:updated', updatedSubtask);
           publish('data:changed', { type: 'deliverable', action: 'updated' });
           showSuccessMessage("Delegation", "revoked");
-          fetchSubtask();
+          fetchSubtask(true);
         } else {
           notify.error(data.message || t("Failed to revoke delegation.", { defaultValue: "Failed to revoke delegation." }));
         }
-      } catch {
+      } catch (err) {
+        console.error("Failed to revoke delegation", err);
         notify.error(t("Failed to revoke delegation.", { defaultValue: "Failed to revoke delegation." }));
       }
     });
@@ -654,48 +832,58 @@ function SubtaskDetails() {
   };
 
   const handleAcceptTransfer = async () => {
+    const id = subtask?.id || subtaskId;
+    if (!id) return;
     await runTaskAct(async () => {
       try {
         const token = authToken();
-        const res = await fetch(`${API_URL}/deliverables/${subtaskId}/accept-delegation`, {
+        const res = await fetch(`${API_URL}/deliverables/${id}/accept-delegation`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
           _notifHandled: true,
         });
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (res.ok) {
-          publish('deliverable:updated', data.deliverable || data);
+          const updatedSubtask = data.deliverable || data;
+          setSubtask(updatedSubtask);
+          publish('deliverable:updated', updatedSubtask);
           publish('data:changed', { type: 'deliverable', action: 'updated' });
           showSuccessMessage("Subtask Transfer", "accepted");
-          fetchSubtask();
+          fetchSubtask(true);
         } else {
           notify.error(data.message || t("Failed to accept transfer.", { defaultValue: "Failed to accept transfer." }));
         }
-      } catch {
+      } catch (err) {
+        console.error("Failed to accept transfer", err);
         notify.error(t("Failed to accept transfer.", { defaultValue: "Failed to accept transfer." }));
       }
     });
   };
 
   const handleSubmitToNext = async () => {
+    const id = subtask?.id || subtaskId;
+    if (!id) return;
     await runForwardSubtask(async () => {
       try {
         const token = authToken();
-        const res = await fetch(`${API_URL}/deliverables/${subtaskId}/submit-to-next`, {
+        const res = await fetch(`${API_URL}/deliverables/${id}/submit-to-next`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
           _notifHandled: true,
         });
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (res.ok) {
-          publish('deliverable:updated', data.deliverable || data);
+          const updatedSubtask = data.deliverable || data;
+          setSubtask(updatedSubtask);
+          publish('deliverable:updated', updatedSubtask);
           publish('data:changed', { type: 'deliverable', action: 'updated' });
           showSuccessMessage("Subtask", "submitted to next reviewer");
-          fetchSubtask();
+          fetchSubtask(true);
         } else {
           notify.error(data.message || t("Failed to submit to next reviewer.", { defaultValue: "Failed to submit to next reviewer." }));
         }
-      } catch {
+      } catch (err) {
+        console.error("Failed to submit to next reviewer", err);
         notify.error(t("Failed to submit to next reviewer.", { defaultValue: "Failed to submit to next reviewer." }));
       }
     });
@@ -742,6 +930,7 @@ function SubtaskDetails() {
   };
 
   const confirmDeleteSubtask = async () => {
+    isDeletingRef.current = true;
     setDeleteConfirmOpen(false);
     await runDelete(async () => {
       try {
@@ -757,80 +946,103 @@ function SubtaskDetails() {
           showSuccessMessage("Subtask", "deleted");
           navigate(-1);
         } else {
+          isDeletingRef.current = false;
           const data = await res.json().catch(() => ({}));
           notify.error(data.message || t("Failed to delete subtask.", { defaultValue: "Failed to delete subtask." }));
         }
       } catch {
+        isDeletingRef.current = false;
         notify.error(t("Failed to delete subtask.", { defaultValue: "Failed to delete subtask." }));
       }
     });
   };
 
   if (loading) return <DashboardLayout hideRightSidebar><div className="td-loading">{t("Loading subtask...", { defaultValue: "Loading subtask..." })}</div></DashboardLayout>;
-  if (!subtask) return <DashboardLayout hideRightSidebar><div className="td-loading td-error">{t("This subtask has been deleted. Redirecting...", { defaultValue: "This subtask has been deleted. Redirecting..." })}</div></DashboardLayout>;
+  if (!subtask) return <DashboardLayout hideRightSidebar><div className="td-loading td-error">{t("This subtask is not available. Redirecting...", { defaultValue: "This subtask is not available. Redirecting..." })}</div></DashboardLayout>;
 
   const ss = statusBgColor(subtask.status);
   const workflowEvents = Array.isArray(subtask.workflow_events) ? subtask.workflow_events : [];
   const subtaskStatus = (subtask?.status || "").toLowerCase();
-  const isTerminalOrSubmitted = ["submitted", "submitted_late", "approved", "abandoned"].includes(subtaskStatus);
+  const isTerminalOrSubmitted = ["submitted", "submitted_late", "approved", "abandoned", "completed"].includes(subtaskStatus);
 
   const canEdit = (readOnly || isOnlyFollower)
     ? false
-    : (subtask && currentUser && (isCreator || isAdminOrManager) && !["approved", "submitted", "submitted_late", "abandoned"].includes(subtaskStatus));
+    : (subtask && currentUser && (isCreator || isAdminOrManager) && !["approved", "completed", "submitted", "submitted_late", "abandoned"].includes(subtaskStatus));
 
   const canDelete = (readOnly || isOnlyFollower)
     ? false
     : (subtask && currentUser && (isCreator || isAdminOrManager));
 
   const isAssignerLocked = !!subtask?.assigner_paused;
-  const canAcknowledge = (readOnly || isOnlyFollower || isDelegationInactiveForMe)
+  const canAcknowledge = (readOnly || isOnlyFollower || isPreviousTransferor || isDelegationInactiveForMe)
     ? false
-    : (subtask && currentUser && isAssignee && ["pending", "reopened"].includes(subtaskStatus));
+    : (subtask && currentUser && (isCurrentActiveAssignee || isAssignee || isCurrentOwner) && ["pending", "reopened"].includes(subtaskStatus));
 
   const timerRunning = timerState === "running";
   const timerPaused = timerState === "paused";
 
-  const canStartTimer = (readOnly || isOnlyFollower || isDelegationInactiveForMe)
+  const canStartTimer = (readOnly || isOnlyFollower || isPreviousTransferor || isDelegationInactiveForMe)
     ? false
-    : (subtask && currentUser && (isAssignee || isCurrentOwner) && ["in_progress", "in-progress"].includes(subtaskStatus) && (!timerState || timerState === "idle") && !isAssignerLocked);
+    : (subtask && currentUser && (isCurrentActiveAssignee || isAssignee || isCurrentOwner) && !isTerminalOrSubmitted && (!timerState || timerState === "idle") && !isAssignerLocked);
 
   const canAssignerPause = (readOnly || isOnlyFollower)
     ? false
-    : (subtask && currentUser && isCreator && !subtask?.assigner_paused && ["pending", "in_progress", "reopened", "submitted"].includes(subtaskStatus) && subtaskStatus !== "paused");
+    : (subtask && currentUser && isCreator && !subtask?.assigner_paused && ["pending", "in_progress", "in-progress", "reopened", "submitted", "transferred"].includes(subtaskStatus) && subtaskStatus !== "paused");
 
-  const canTimerPause = (readOnly || isOnlyFollower || isDelegationInactiveForMe)
+  const canTimerPause = (readOnly || isOnlyFollower || isPreviousTransferor || isDelegationInactiveForMe)
     ? false
-    : (subtask && currentUser && (isAssignee || isCurrentOwner) && ["in_progress", "submitted"].includes(subtaskStatus) && timerRunning && !isAssignerLocked);
+    : (subtask && currentUser && (isCurrentActiveAssignee || isAssignee || isCurrentOwner) && !["completed", "approved", "abandoned"].includes(subtaskStatus) && timerRunning && !isAssignerLocked);
 
-  const canPause = (canTimerPause || canAssignerPause) && (!isTransferor || transferorHasApproved) && !subtask?.active_outgoing_delegation && !isDelegationInactiveForMe;
-  const canContinue = (readOnly || isOnlyFollower || isDelegationInactiveForMe)
+  const canPause = (canTimerPause || canAssignerPause) && (!isTransferor || transferorHasApproved) && !subtask?.active_outgoing_delegation && !isPreviousTransferor && !isDelegationInactiveForMe;
+  const canContinue = (readOnly || isOnlyFollower || isPreviousTransferor || isDelegationInactiveForMe)
     ? false
-    : (subtask && currentUser && (isAssignee || isCurrentOwner) && (subtaskStatus === "paused" || timerPaused) && !isAssignerLocked);
+    : (subtask && currentUser && (isCurrentActiveAssignee || isAssignee || isCurrentOwner) && (subtaskStatus === "paused" || timerPaused) && !isAssignerLocked);
 
   const canAssignerResume = (readOnly || isOnlyFollower)
     ? false
     : (subtask && currentUser && isCreator && subtask?.assigner_paused);
 
-  const canSubmitTask = !readOnly && !isTerminalOrSubmitted && !isOnlyFollower && !isDelegationInactiveForMe && (subtask?.can_submit === true || (isAssignee && ["in_progress", "reopened", "paused", "rejected"].includes(subtaskStatus)));
+  const isTransferorApproval = (isTransferor || subtask?.is_transferor) && !transferorHasApproved && (
+    subtask?.submission_stage === "awaiting_checkpoint" ||
+    subtask?.can_submit_to_next ||
+    (["submitted", "submitted_late"].includes(subtaskStatus) && (isNextApprover || isTransferor || subtask?.can_submit_to_next))
+  );
+
+  const hasPendingReview = Boolean(
+    subtask?.has_pending_review ||
+    (isTransferorApproval && ["submitted", "submitted_late"].includes(subtaskStatus)) ||
+    subtask?.can_submit_to_next ||
+    (subtask?.submission_stage === "awaiting_checkpoint" && (
+      parseInt(subtask?.current_reviewer_id, 10) === currentUserId ||
+      (isTransferor && !transferorHasApproved)
+    ))
+  );
+
+  const canSubmitTask = !readOnly &&
+    !isTerminalOrSubmitted &&
+    !isOnlyFollower &&
+    !isPreviousTransferor &&
+    !isDelegationInactiveForMe &&
+    !hasPendingReview &&
+    (isCurrentActiveAssignee || isAssignee || isCurrentOwner || subtask?.can_submit === true) &&
+    subtask?.can_submit !== false;
 
   const isAssignerOrCreator = isCreator || isSuperAdmin || isAdminOrManager || (currentUser && (
-    parseInt(subtask?.assigned_by, 10) === parseInt(currentUser.id, 10) ||
-    parseInt(subtask?.creator_id, 10) === parseInt(currentUser.id, 10) ||
-    parseInt(subtask?.created_by, 10) === parseInt(currentUser.id, 10) ||
-    parseInt(subtask?.original_assigner, 10) === parseInt(currentUser.id, 10) ||
-    parseInt(subtask?.user_id, 10) === parseInt(currentUser.id, 10) ||
+    parseInt(subtask?.assigned_by, 10) === currentUserId ||
+    parseInt(subtask?.creator_id, 10) === currentUserId ||
+    parseInt(subtask?.created_by, 10) === currentUserId ||
+    parseInt(subtask?.original_assigner, 10) === currentUserId ||
+    parseInt(subtask?.user_id, 10) === currentUserId ||
     (subtask?.task && (
-      parseInt(subtask.task.assigned_by, 10) === parseInt(currentUser.id, 10) ||
-      parseInt(subtask.task.creator_id, 10) === parseInt(currentUser.id, 10) ||
-      parseInt(subtask.task.user_id, 10) === parseInt(currentUser.id, 10)
+      parseInt(subtask.task.assigned_by, 10) === currentUserId ||
+      parseInt(subtask.task.creator_id, 10) === currentUserId ||
+      parseInt(subtask.task.user_id, 10) === currentUserId
     ))
   ));
 
-  const isTransferorApproval = (isTransferor || subtask?.is_transferor) && !transferorHasApproved && (subtask?.submission_stage === "awaiting_checkpoint" || subtask?.can_submit_to_next || ["submitted", "submitted_late"].includes(subtaskStatus));
-
   const canApprove = (readOnly || isOnlyFollower)
     ? false
-    : isTransferorApproval || ((isCreator || isSuperAdmin || isAdminOrManager || isAssignerOrCreator || subtask?.can_approve === true || isNextApprover) && (!subtask?.is_transferred || transferorHasApproved || subtask?.submission_stage === "awaiting_creator" || !hasDelegationChain));
+    : isTransferorApproval || ((isCreator || isSuperAdmin || isAdminOrManager || subtask?.can_approve === true || subtask?.is_next_approver) && (!subtask?.is_transferred || transferorHasApproved || subtask?.submission_stage === "awaiting_creator" || !hasDelegationChain));
 
   const canReopen = (readOnly || isOnlyFollower)
     ? false
@@ -842,9 +1054,18 @@ function SubtaskDetails() {
     : (isCreator || isSuperAdmin || isAdminOrManager || isAssignerOrCreator) &&
       ["pending", "in_progress", "in-progress", "reopened", "paused", "acknowledged"].includes(subtaskStatus);
 
-  const canAbandon = (readOnly || isOnlyFollower || isDelegationInactiveForMe)
+  const canAbandon = (readOnly || isOnlyFollower || isPreviousTransferor || isDelegationInactiveForMe)
     ? false
-    : (subtask && currentUser && (isAssignee || ((isCreator || isSuperAdmin || isAdminOrManager || isAssignerOrCreator) && !isDelegationInactiveForMe)) && !["abandoned", "approved", "completed", "submitted", "submitted_late"].includes(subtaskStatus));
+    : (subtask && currentUser && (isCurrentActiveAssignee || isAssignee || isCurrentOwner || ((isCreator || isSuperAdmin || isAdminOrManager || isAssignerOrCreator) && !isPreviousTransferor)) && !["abandoned", "approved", "completed", "submitted", "submitted_late"].includes(subtaskStatus));
+
+  const canTransfer = !readOnly &&
+    !isOnlyFollower &&
+    !isDelegationInactiveForMe &&
+    !isPreviousTransferor &&
+    (subtask?.can_delegate === true || (subtask?.allow_transfer !== false && (isAssignee || isCurrentOwner || isCurrentActiveAssignee))) &&
+    !["approved", "rejected", "pending", "submitted", "submitted_late", "abandoned", "completed"].includes(subtaskStatus) &&
+    !subtask?.active_outgoing_delegation &&
+    !hasPendingDelegation;
 
   const isApproved = subtask.status === "approved";
   const isRejected = ["rejected", "reopened"].includes(subtask.status);
@@ -939,7 +1160,7 @@ function SubtaskDetails() {
                       {deleting ? t("Deleting...", { defaultValue: "Deleting..." }) : t("Delete", { defaultValue: "Delete" })}
                     </button>
                   )}
-                  {!readOnly && !isDelegationInactiveForMe && (subtask?.can_delegate === true || (subtask?.allow_transfer !== false && (isAssignee || isCurrentOwner) && !isTransferor)) && !["approved", "rejected", "pending", "submitted"].includes(subtask?.status) && subtask?.my_status !== "submitted" && !subtask?.active_outgoing_delegation && !hasPendingDelegation && !isDelegatee && (
+                  {canTransfer && (
                     <button className="td-btn-outline" onClick={() => setTransferDialog(true)}>
                       <Users size={15} />
                       {t("Transfer", { defaultValue: "Transfer" })}
@@ -956,13 +1177,13 @@ function SubtaskDetails() {
                       {taskActing ? t("Acknowledging...", { defaultValue: "Acknowledging..." }) : t("Acknowledge Transfer", { defaultValue: "Acknowledge Transfer" })}
                     </button>
                   )}
-                  {canAcknowledge && !isTransferor && !subtask?.active_outgoing_delegation && !hasPendingDelegation && (
+                  {canAcknowledge && !subtask?.active_outgoing_delegation && !hasPendingDelegation && (
                     <button className="td-btn-primary" onClick={handleAcknowledge} disabled={acknowledging || isAssignerLocked} style={acknowledging || isAssignerLocked ? { opacity: 0.6, cursor: "not-allowed" } : {}}>
                       <CheckCircle2 size={15} />
                       {acknowledging ? t("Acknowledging...", { defaultValue: "Acknowledging..." }) : t("Acknowledge", { defaultValue: "Acknowledge" })}
                     </button>
                   )}
-                  {canStartTimer && (!isTransferor || transferorHasApproved) && !subtask?.active_outgoing_delegation && !hasPendingDelegation && (
+                  {canStartTimer && !subtask?.active_outgoing_delegation && !hasPendingDelegation && (
                     <button className="td-btn-primary" onClick={handleStartTimer} disabled={startingTimer || isAssignerLocked} style={{ backgroundColor: startingTimer || isAssignerLocked ? "var(--text-muted)" : "var(--color-primary)", borderColor: startingTimer || isAssignerLocked ? "var(--text-muted)" : "var(--color-primary)", opacity: startingTimer || isAssignerLocked ? 0.6 : 1, cursor: startingTimer || isAssignerLocked ? "not-allowed" : "pointer" }}>
                       <Play size={15} />
                       {startingTimer ? t("Starting...", { defaultValue: "Starting..." }) : t("Start", { defaultValue: "Start" })}
@@ -990,13 +1211,13 @@ function SubtaskDetails() {
                       {(pausing || assignerPausing) ? t("Pausing...", { defaultValue: "Pausing..." }) : t("Pause", { defaultValue: "Pause" })}
                     </button>
                   )}
-                  {canContinue && (!isTransferor || transferorHasApproved) && !subtask?.active_outgoing_delegation && !hasPendingDelegation && (
+                  {canContinue && !subtask?.active_outgoing_delegation && !hasPendingDelegation && (
                     <button className="td-btn-primary" onClick={handleResume} disabled={resuming} style={resuming ? { opacity: 0.6, cursor: "not-allowed" } : {}}>
                       <Play size={15} />
                       {resuming ? t("Resuming...", { defaultValue: "Resuming..." }) : t("Resume", { defaultValue: "Resume" })}
                     </button>
                   )}
-                  {canAssignerResume && !isTransferor && !subtask?.active_outgoing_delegation && (
+                  {canAssignerResume && !isPreviousTransferor && !subtask?.active_outgoing_delegation && (
                     <button className="td-btn-primary" onClick={handleAssignerResume} disabled={assignerResuming} style={{ backgroundColor: assignerResuming ? "var(--text-muted)" : "var(--color-success)", borderColor: assignerResuming ? "var(--text-muted)" : "var(--color-success)", opacity: assignerResuming ? 0.7 : 1, cursor: assignerResuming ? "not-allowed" : "pointer" }}>
                       <Play size={15} />
                       {assignerResuming ? t("Resuming...", { defaultValue: "Resuming..." }) : t("Resume", { defaultValue: "Resume" })}
@@ -1049,7 +1270,7 @@ function SubtaskDetails() {
                       onClick={handleApprove}
                     >
                       <CheckCircle2 size={15} />
-                      {approving ? t("Approving...", { defaultValue: "Approving..." }) : t("Approve Transfer", { defaultValue: "Approve Transfer" })}
+                      {approving ? t("Approving...", { defaultValue: "Approving..." }) : t("Approve Subtask", { defaultValue: "Approve Subtask" })}
                     </button>
                   )}
                   {!isTransferorApproval && canApprove && (["submitted", "submitted_late", "reopened"].includes(subtaskStatus)) && (
@@ -1063,12 +1284,12 @@ function SubtaskDetails() {
                       {approving ? t("Approving...", { defaultValue: "Approving..." }) : t("Approve Subtask", { defaultValue: "Approve Subtask" })}
                     </button>
                   )}
-                  {(isTransferorApproval || canApprove || subtask?.can_decline_submission) && (["submitted", "submitted_late"].includes(subtaskStatus)) && (
+                  {(isTransferorApproval || canApprove || subtask?.can_decline_submission) && (["submitted", "submitted_late"].includes(subtaskStatus) || isTransferorApproval) && (
                     <button
                       className="td-btn-danger"
                       style={{ background: "#dc2626", color: "#ffffff", border: "none", fontWeight: 600, padding: "8px 16px", borderRadius: "8px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}
                       disabled={declining}
-                      onClick={handleReject}
+                      onClick={() => setDeclineModalOpen(true)}
                     >
                       <XCircle size={15} />
                       {declining ? t("Declining...", { defaultValue: "Declining..." }) : t("Decline Subtask", { defaultValue: "Decline Subtask" })}
@@ -1122,21 +1343,6 @@ function SubtaskDetails() {
                     <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 14px", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#B45309", fontSize: "13px", fontWeight: 600, border: "1px solid #FCD34D" }}>
                       <XCircle size={14} />
                       {t("Transfer Revoked by Assigner", { defaultValue: "Transfer Revoked by Assigner" })}
-                    </span>
-                  )}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                  <h1 className="td-title">{subtask.title}</h1>
-                  {subtask.business_id && (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 700, background: '#f0fdf4', color: '#16a34a', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                      {subtask.business_id}
-                      <button
-                        onClick={() => { navigator.clipboard.writeText(subtask.business_id); notify.success(t("Subtask ID copied!", { defaultValue: "Subtask ID copied!" })); }}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
-                        title={t("Copy Subtask ID", { defaultValue: "Copy Subtask ID" })}
-                      >
-                        <Copy size={13} color="#16a34a" />
-                      </button>
                     </span>
                   )}
                 </div>
@@ -1277,18 +1483,6 @@ function SubtaskDetails() {
                         <div className="td-info-banner td-info-banner--success" style={{ marginTop: 20 }}>
                           <h3 className="td-card-title" style={{ color: "#166534" }}>{t("Approved", { defaultValue: "Approved" })}</h3>
                           {subtask.approved_by && <p style={{ color: "#166534", marginTop: 4, fontSize: 13 }}>{t("Approved by: {{name}}", { name: subtask.approved_by.name, defaultValue: `Approved by: ${subtask.approved_by.name}` })}</p>}
-                        </div>
-                      )}
-
-                      {/* Reject Form */}
-                      {!readOnly && showRejectForm && (
-                        <div className="td-card" style={{ padding: 16, marginTop: 20 }}>
-                          <label className="td-form-label">{t("Decline Comment", { defaultValue: "Decline Comment" })}</label>
-                          <textarea className="td-textarea" placeholder={t("Reason for decline...", { defaultValue: "Reason for decline..." })} value={rejectComment} onChange={(e) => setRejectComment(e.target.value)} />
-                          <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
-                            <button className="td-btn-danger" onClick={handleReject} disabled={declining}>{declining ? t("Declining...", { defaultValue: "Declining..." }) : t("Confirm Decline", { defaultValue: "Confirm Decline" })}</button>
-                            <button className="td-btn-outline" onClick={() => { setShowRejectForm(false); setRejectComment(""); }}>{t("Cancel", { defaultValue: "Cancel" })}</button>
-                          </div>
                         </div>
                       )}
                     </div>
@@ -1738,7 +1932,15 @@ function SubtaskDetails() {
         onClose={() => setTransferDialog(false)}
         task={subtask}
         entityType="deliverable"
-        onTransferSuccess={(updated) => { setSubtask(updated); showSuccessMessage("Subtask", "transferred"); }}
+        onTransferSuccess={(updated) => {
+          if (updated) {
+            setSubtask(updated);
+            publish('deliverable:updated', updated);
+            publish('data:changed', { type: 'deliverable', action: 'updated' });
+          }
+          fetchSubtask(true);
+          showSuccessMessage("Subtask", "transferred");
+        }}
       />
       {showEditModal && (
         <CreateDeliverableModel
@@ -1783,14 +1985,31 @@ function SubtaskDetails() {
         onSubmit={handleAbandonSubmit}
         loading={abandonSubmitting}
       />
+      <DeclineModal
+        isOpen={declineModalOpen}
+        onClose={() => setDeclineModalOpen(false)}
+        title={t("Decline Subtask", { defaultValue: "Decline Subtask" })}
+        subtitle={subtask?.title}
+        actionLabel={t("Decline Subtask", { defaultValue: "Decline Subtask" })}
+        placeholder={t("Please enter a reason for declining this subtask...", { defaultValue: "Please enter a reason for declining this subtask..." })}
+        onSubmit={handleReject}
+        loading={declining}
+      />
       <SubmitDeliverableModal
         isOpen={submitModalOpen}
         onClose={() => setSubmitModalOpen(false)}
         subtask={subtask}
         onSubmitSuccess={(updatedSubtask) => {
+          if (updatedSubtask) {
+            setSubtask((prev) => ({
+              ...(prev || {}),
+              ...(typeof updatedSubtask === "object" ? updatedSubtask : {}),
+              status: updatedSubtask?.status || "submitted",
+            }));
+          }
           publish('deliverable:updated', updatedSubtask || subtask);
           publish('data:changed', { type: 'deliverable', action: 'updated' });
-          fetchSubtask();
+          fetchSubtask(true);
         }}
       />
       {!readOnly && (

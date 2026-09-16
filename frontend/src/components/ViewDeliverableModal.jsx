@@ -111,16 +111,17 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
         _notifHandled: true,
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         showSuccessMessage("Subtask", "resubmitted");
         if (onSubmitSuccess) onSubmitSuccess(data.deliverable);
         onClose();
       } else {
-        notify.error(data.message || t("Failed to resubmit subtask.", { defaultValue: "Failed to resubmit subtask." }));
+        notify.error(data?.message || t("Failed to resubmit subtask.", { defaultValue: "Failed to resubmit subtask." }));
       }
-    } catch {
-      notify.error(t("An error occurred. Please try again.", { defaultValue: "An error occurred. Please try again." }));
+    } catch (err) {
+      console.error("Resubmit deliverable error:", err);
+      notify.error(err?.response?.data?.message || err?.message || t("An error occurred. Please try again.", { defaultValue: "An error occurred. Please try again." }));
     } finally {
       setSubmitting(false);
     }

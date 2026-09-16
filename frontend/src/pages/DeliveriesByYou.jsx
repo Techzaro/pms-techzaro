@@ -38,6 +38,7 @@ import { publish } from "../utils/eventBus";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
 import ConfirmModal from "../components/ConfirmModal";
+import DeclineModal from "../components/DeclineModal";
 import PauseReasonModal from "../components/PauseReasonModal";
 import ReopenDialog from "../components/ReopenDialog";
 import AbandonModal from "../components/AbandonModal";
@@ -96,6 +97,7 @@ function DeliveriesByYou() {
   const location = useLocation();
   const notify = useNotification();
   const [subtasks, setSubtasks] = useState([]);
+  const [counts, setCounts] = useState(null);
   const [orderedSubtasks, setOrderedSubtasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -133,6 +135,8 @@ function DeliveriesByYou() {
   const [deleteTargetId, setDeleteTargetId] = useState(null);
   const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
   const [reopenSubtask, setReopenSubtask] = useState(null);
+  const [declineSubtask, setDeclineSubtask] = useState(null);
+  const [declineSubtaskLoading, setDeclineSubtaskLoading] = useState(false);
   const [abandonSubtask, setAbandonSubtask] = useState(null);
   const [abandonSubtaskLoading, setAbandonSubtaskLoading] = useState(false);
   const [markCompletedSubtask, setMarkCompletedSubtask] = useState(null);
@@ -229,6 +233,9 @@ function DeliveriesByYou() {
           raw = Array.isArray(data?.deliverables) ? data.deliverables : (Array.isArray(data) ? data : []);
         }
         setSubtasks(raw);
+        if (data?.counts) {
+          setCounts(data.counts);
+        }
       })
       .catch(() => setSubtasks([]))
       .finally(() => setLoading(false));
@@ -366,23 +373,25 @@ function DeliveriesByYou() {
     }
   };
 
-  const handleReject = async (itemId) => {
+  const handleReject = async (itemId, comment) => {
     setActingId(itemId);
     setActingType("reject");
+    setDeclineSubtaskLoading(true);
     try {
       const token = authToken();
       const res = await fetch(`${API_URL}/deliverables/${itemId}/reject`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ comment: "Declined from list" }),
+        body: JSON.stringify({ comment }),
         _notifHandled: true,
       });
       const data = await res.json();
       if (res.ok) {
-        setSubtasks((prev) => prev.map((d) => d.id === itemId ? { ...d, status: "rejected", ...data.deliverable } : d));
-        publish('deliverable:updated', { id: itemId, status: 'rejected' });
+        setSubtasks((prev) => prev.map((d) => d.id === itemId ? { ...d, status: "declined", ...data.deliverable } : d));
+        publish('deliverable:updated', { id: itemId, status: 'declined' });
         publish('data:changed', { type: 'deliverable', action: 'updated' });
         showSuccessMessage("Subtask", "declined");
+        setDeclineSubtask(null);
       } else {
         notify.error(data.message || t("Failed to decline.", { defaultValue: "Failed to decline." }));
       }
@@ -391,6 +400,7 @@ function DeliveriesByYou() {
     } finally {
       setActingId(null);
       setActingType(null);
+      setDeclineSubtaskLoading(false);
     }
   };
 
@@ -552,24 +562,41 @@ function DeliveriesByYou() {
   const currentUser = getUser();
   const canCreateSubtask = currentUser && ["admin", "manager", "team_lead"].includes(currentUser.role);
 
-  const pendingStatuses = ["pending", "planned", "Planning", "Planned"];
-  const inProgressStatuses = ["in_progress", "In Progress", "In-progress"];
+  const pendingStatuses = useMemo(() => ["pending", "planned", "Planning", "Planned"], []);
+  const inProgressStatuses = useMemo(() => ["in_progress", "In Progress", "In-progress"], []);
 
-  const allCount = displayItems.length;
-  const dueTodayCount = displayItems.filter((i) => {
-    if (!i || !i.due_date) return false;
-    const d = new Date(i.due_date);
-    return !isNaN(d.getTime()) && d.toDateString() === new Date().toDateString();
-  }).length;
-  const pendingCount = displayItems.filter((i) => i && pendingStatuses.includes(i.status)).length;
-  const inProgressCount = displayItems.filter((i) => i && inProgressStatuses.includes(i.status)).length;
-  const pausedCount = displayItems.filter((i) => i && i.status === "paused").length;
-  const submittedCount = displayItems.filter((i) => i && i.status === "submitted").length;
-  const reopenedCount = displayItems.filter((i) => i && i.status === "reopened").length;
-  const transferredCount = displayItems.filter((i) => i && Array.isArray(i.delegation_chain) && i.delegation_chain.length > 0).length;
-  const approvedCount = displayItems.filter((i) => i && i.status === "approved").length;
-  const rejectedCount = displayItems.filter((i) => i && i.status === "rejected").length;
-  const abandonedCount = displayItems.filter((i) => i && (i.status === "abandoned" || i.status === "abandon_requested")).length;
+  const fallbackCounts = useMemo(() => {
+    const todayStr = new Date().toDateString();
+    return {
+      all: displayItems.length,
+      dueToday: displayItems.filter((i) => {
+        if (!i || !i.due_date) return false;
+        const d = new Date(i.due_date);
+        return !isNaN(d.getTime()) && d.toDateString() === todayStr;
+      }).length,
+      pending: displayItems.filter((i) => i && pendingStatuses.includes(i.status)).length,
+      inProgress: displayItems.filter((i) => i && inProgressStatuses.includes(i.status)).length,
+      paused: displayItems.filter((i) => i && i.status === "paused").length,
+      submitted: displayItems.filter((i) => i && i.status === "submitted").length,
+      reopened: displayItems.filter((i) => i && i.status === "reopened").length,
+      transferred: displayItems.filter((i) => i && Array.isArray(i.delegation_chain) && i.delegation_chain.length > 0).length,
+      approved: displayItems.filter((i) => i && (i.status === "approved" || i.status === "completed")).length,
+      rejected: displayItems.filter((i) => i && (i.status === "rejected" || i.status === "declined")).length,
+      abandoned: displayItems.filter((i) => i && (i.status === "abandoned" || i.status === "abandon_requested")).length,
+    };
+  }, [displayItems, pendingStatuses, inProgressStatuses]);
+
+  const allCount = counts?.all ?? fallbackCounts.all;
+  const dueTodayCount = (counts?.due_today ?? counts?.dueToday) ?? fallbackCounts.dueToday;
+  const pendingCount = counts?.pending ?? fallbackCounts.pending;
+  const inProgressCount = (counts?.in_progress ?? counts?.inProgress) ?? fallbackCounts.inProgress;
+  const pausedCount = counts?.paused ?? fallbackCounts.paused;
+  const submittedCount = counts?.submitted ?? fallbackCounts.submitted;
+  const reopenedCount = counts?.reopened ?? fallbackCounts.reopened;
+  const transferredCount = counts?.transferred ?? fallbackCounts.transferred;
+  const approvedCount = (counts?.approved ?? counts?.completed) ?? fallbackCounts.approved;
+  const rejectedCount = (counts?.rejected ?? counts?.declined) ?? fallbackCounts.rejected;
+  const abandonedCount = counts?.abandoned ?? fallbackCounts.abandoned;
 
   const searchFilteredItems = useMemo(() => {
     let list = displayItems;
@@ -1054,7 +1081,7 @@ function DeliveriesByYou() {
                                 </button>
                               )}
                               {canSubtaskDecline && (
-                                <button className="action-icon-btn action-submit" title={t("Decline", { defaultValue: "Decline" })} disabled={actingId === item.id} onClick={() => handleReject(item.id)} style={{ color: "#DC2626" }}>
+                                <button className="action-icon-btn action-submit" title={t("Decline", { defaultValue: "Decline" })} disabled={actingId === item.id} onClick={() => setDeclineSubtask(item)} style={{ color: "#DC2626" }}>
                                   <XCircle size={16} />
                                 </button>
                               )}
@@ -1213,6 +1240,19 @@ function DeliveriesByYou() {
           onClose={() => setAssignerPauseSubtask(null)}
           onConfirm={handleAssignerPauseSubmit}
           isAssigner
+        />
+      )}
+
+      {declineSubtask && (
+        <DeclineModal
+          isOpen={!!declineSubtask}
+          onClose={() => setDeclineSubtask(null)}
+          title={t("Decline Subtask", { defaultValue: "Decline Subtask" })}
+          subtitle={declineSubtask?.title}
+          actionLabel={t("Decline Subtask", { defaultValue: "Decline Subtask" })}
+          placeholder={t("Please enter a reason for declining this subtask...", { defaultValue: "Please enter a reason for declining this subtask..." })}
+          onSubmit={(comment) => handleReject(declineSubtask.id, comment)}
+          loading={declineSubtaskLoading}
         />
       )}
 

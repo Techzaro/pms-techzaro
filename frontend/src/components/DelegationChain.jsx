@@ -13,8 +13,8 @@ import { notify } from "../utils/notify";
 import { formatDateTime } from "../utils/formatDateTime";
 import ConfirmModal from "./ConfirmModal";
 
-function DelegationChain({ task, delegationChain = [], safeApprovalChain = [], onTaskUpdate }) {
-  const { t } = useTranslation(); // Added this because t() was being used but not defined
+function DelegationChain({ task, delegationChain = [], safeApprovalChain = [], approvalChain = [], onTaskUpdate }) {
+  const { t } = useTranslation();
   const currentUser = getUser();
   const [accepting, setAccepting] = useState(false);
   const [rejecting, setRejecting] = useState(false);
@@ -23,7 +23,19 @@ function DelegationChain({ task, delegationChain = [], safeApprovalChain = [], o
 
   const pendingDelegation = task?.pending_delegation;
   const isDelegatedToMe = pendingDelegation && parseInt(pendingDelegation.delegated_to, 10) === parseInt(currentUser?.id, 10);
-  const entity = (task?.task_id || task?.deliverable_id) ? "deliverables" : "tasks";
+  const isDeliverable = Boolean(
+    task?.task_id ||
+    task?.deliverable_id ||
+    task?.entity_type === "deliverable" ||
+    task?.subtask_number ||
+    task?.deliverable_number
+  );
+  const entity = isDeliverable ? "deliverables" : "tasks";
+  const effectiveApprovalChain = safeApprovalChain?.length
+    ? safeApprovalChain
+    : approvalChain?.length
+    ? approvalChain
+    : (task?.approval_chain || []);
 
   const handleAccept = async () => {
     if (!pendingDelegation) return;
@@ -245,12 +257,12 @@ function DelegationChain({ task, delegationChain = [], safeApprovalChain = [], o
       </div>
 
       {/* Approval chain from feature/time-zone */}
-      {safeApprovalChain?.length > 0 && (
+      {effectiveApprovalChain?.length > 0 && (
         <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid var(--border)" }}>
           <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "8px" }}>
             {t("Approval Route (reversed chain):", { defaultValue: "Approval Route (reversed chain):" })}
           </div>
-          {safeApprovalChain.map((approver, idx) => (
+          {effectiveApprovalChain.map((approver, idx) => (
             <div key={idx} style={{ fontSize: "12px", color: "var(--text-heading)", marginBottom: "4px" }}>
               {t("Level {{level}}", { defaultValue: `Level ${approver.level}`, level: approver.level })}: <strong>{approver.approver_name}</strong>
               <span className="badge" style={{

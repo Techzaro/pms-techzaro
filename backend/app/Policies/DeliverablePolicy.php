@@ -7,11 +7,17 @@ use App\Models\Project;
 use App\Models\Task;
 use App\Models\TaskDelegation;
 use App\Models\User;
+use App\Services\DelegationService;
 use Illuminate\Auth\Access\HandlesAuthorization;
 
 class DeliverablePolicy
 {
     use HandlesAuthorization;
+
+    public function __construct(private ?DelegationService $delegationService = null)
+    {
+        $this->delegationService ??= app(DelegationService::class);
+    }
 
     /**
      * Check if user and deliverable belong to the same organization/tenant.
@@ -31,6 +37,152 @@ class DeliverablePolicy
             // Container or request not bound (CLI / Unit tests)
         }
         return true;
+    }
+
+    /**
+     * Safe helper to check if user is a direct assignee of the deliverable.
+     */
+    protected function isDeliverableAssignee(User $user, Deliverable $deliverable): bool
+    {
+        $userId = (int) $user->id;
+        if ((int) $deliverable->assigned_to === $userId) {
+            return true;
+        }
+        if ($deliverable->relationLoaded('assignees')) {
+            return $deliverable->assignees ? $deliverable->assignees->contains('id', $userId) : false;
+        }
+        try {
+            return $deliverable->assignees()->where('users.id', $userId)->exists();
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Safely obtain the deliverable's parent task without triggering unloaded database queries.
+     */
+    protected function getDeliverableTask(Deliverable $deliverable): ?Task
+    {
+        if ($deliverable->relationLoaded('task')) {
+            return $deliverable->task;
+        }
+
+        if ($deliverable->task_id) {
+            try {
+                return Task::find($deliverable->task_id);
+            } catch (\Throwable $e) {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Determine whether the user is the creator of the deliverable or the assigner/creator of its parent task.
+     */
+    protected function isCreatorOrTaskAssigner(User $user, Deliverable $deliverable): bool
+    {
+        $userId = (int) $user->id;
+        if ((int) $deliverable->created_by === $userId) {
+            return true;
+        }
+
+        $task = $this->getDeliverableTask($deliverable);
+        if ($task && ((int) $task->assigned_by === $userId || (int) ($task->creator_id ?? 0) === $userId)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if user is an active participant in task_delegations table, delegation_chain, or approval_chain for this deliverable.
+     */
+    protected function isDelegationParticipant(User $user, Deliverable $deliverable): bool
+    {
+        $userId = (int) $user->id;
+
+        // 1. Check task_delegations table
+        try {
+            if (TaskDelegation::where('deliverable_id', $deliverable->id)
+                ->where(function ($q) use ($userId) {
+                    $q->where('delegated_by', $userId)
+                      ->orWhere('delegated_to', $userId);
+                })->exists()) {
+                return true;
+            }
+        } catch (\Throwable $e) {
+        }
+
+        // 2. Check JSON delegation_chain
+        $chain = is_string($deliverable->delegation_chain)
+            ? json_decode($deliverable->delegation_chain, true)
+            : $deliverable->delegation_chain;
+        if (! empty($chain) && is_iterable($chain)) {
+            foreach ($chain as $entry) {
+                if ((int) ($entry['delegated_by'] ?? 0) === $userId || (int) ($entry['delegated_to'] ?? 0) === $userId) {
+                    return true;
+                }
+            }
+        }
+
+        // 3. Check JSON approval_chain
+        $approvalChain = is_string($deliverable->approval_chain)
+            ? json_decode($deliverable->approval_chain, true)
+            : $deliverable->approval_chain;
+        if (! empty($approvalChain) && is_iterable($approvalChain)) {
+            foreach ($approvalChain as $entry) {
+                if ((int) ($entry['approver_id'] ?? 0) === $userId) {
+                    return true;
+                }
+            }
+        }
+
+        // 4. Check DelegationService
+        try {
+            if ($this->delegationService?->isInDeliverableDelegationChain($deliverable, $user)) {
+                return true;
+            }
+        } catch (\Throwable $e) {
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if user is the current active owner, assignee, or reviewer of the subtask.
+     */
+    protected function isCurrentOwnerOrReviewer(User $user, Deliverable $deliverable): bool
+    {
+        $userId = (int) $user->id;
+
+        if ((int) ($deliverable->current_owner ?? 0) === $userId) {
+            return true;
+        }
+
+        if ((int) ($deliverable->current_reviewer_id ?? 0) === $userId) {
+            return true;
+        }
+
+        if ((int) ($deliverable->assigned_to ?? 0) === $userId) {
+            return true;
+        }
+
+        if ($this->isDeliverableAssignee($user, $deliverable)) {
+            return true;
+        }
+
+        // Check if user is next approver via DelegationService
+        try {
+            $nextApprover = $this->delegationService?->getDeliverableApprover($deliverable);
+            if ($nextApprover && (int) $nextApprover === $userId) {
+                return true;
+            }
+        } catch (\Throwable $e) {
+        }
+
+        return false;
     }
 
     /**
@@ -57,48 +209,30 @@ class DeliverablePolicy
 
         $userId = (int) $user->id;
 
-        // Deliverable Creator
-        if ((int) $deliverable->created_by === $userId) {
+        // Deliverable Creator or Task Assigner
+        if ($this->isCreatorOrTaskAssigner($user, $deliverable)) {
             return true;
         }
 
-        // Deliverable Assignee
-        if ((int) $deliverable->assigned_to === $userId) {
+        // Deliverable Assignee / Current Owner / Reviewer
+        if ($this->isCurrentOwnerOrReviewer($user, $deliverable)) {
             return true;
         }
 
-        // Current Owner
-        if ($deliverable->current_owner && (int) $deliverable->current_owner === $userId) {
+        // Original Assigner / Past Owner / Transferor
+        if ($deliverable->original_assigner && (int) $deliverable->original_assigner === $userId) {
             return true;
         }
 
-        // Delegation Chain
-        if (! empty($deliverable->delegation_chain) && is_iterable($deliverable->delegation_chain)) {
-            foreach ($deliverable->delegation_chain as $entry) {
-                if ((int) ($entry['delegated_by'] ?? 0) === $userId || (int) ($entry['delegated_to'] ?? 0) === $userId) {
-                    return true;
-                }
-            }
-        }
-
-        // Task Assigner / Creator
-        $task = null;
-        if ($deliverable->relationLoaded('task')) {
-            $task = $deliverable->task;
-        } elseif ($deliverable->task_id) {
-            try {
-                $task = Task::find($deliverable->task_id);
-            } catch (\Throwable $e) {
-            }
-        }
-
-        if ($task && ((int) $task->assigned_by === $userId || (int) ($task->creator_id ?? 0) === $userId)) {
+        // Delegation Chain / Task Delegations / Approval Chain
+        if ($this->isDelegationParticipant($user, $deliverable)) {
             return true;
         }
 
-        // Task Assignee / Follower
+        // Parent Task Follower / Assignee / Delegation
+        $task = $this->getDeliverableTask($deliverable);
         if ($task) {
-            if ((int) $task->assigned_to === $userId) {
+            if ((int) $task->assigned_to === $userId || (int) ($task->current_owner ?? 0) === $userId) {
                 return true;
             }
             if ($task->relationLoaded('assignees')) {
@@ -125,9 +259,17 @@ class DeliverablePolicy
                 } catch (\Throwable $e) {
                 }
             }
+            $taskChain = is_string($task->delegation_chain) ? json_decode($task->delegation_chain, true) : $task->delegation_chain;
+            if (! empty($taskChain) && is_iterable($taskChain)) {
+                foreach ($taskChain as $tEntry) {
+                    if ((int) ($tEntry['delegated_by'] ?? 0) === $userId || (int) ($tEntry['delegated_to'] ?? 0) === $userId) {
+                        return true;
+                    }
+                }
+            }
         }
 
-        // Parent Project Member / Participant (Safe relationship check)
+        // Parent Project Member / Participant
         $project = null;
         if ($deliverable->relationLoaded('project')) {
             $project = $deliverable->project;
@@ -192,7 +334,6 @@ class DeliverablePolicy
 
     /**
      * Determine whether the user can update the deliverable.
-     * Strictly restricted to Assignees, Creators, and authorized roles (Admins/Managers).
      */
     public function update(User $user, Deliverable $deliverable): bool
     {
@@ -206,28 +347,18 @@ class DeliverablePolicy
 
         $userId = (int) $user->id;
 
-        // Deliverable Creator
-        if ((int) $deliverable->created_by === $userId) {
+        // Creator or Task Assigner
+        if ($this->isCreatorOrTaskAssigner($user, $deliverable)) {
             return true;
         }
 
-        // Deliverable Assignee / Current Owner
-        if ((int) $deliverable->assigned_to === $userId || ($deliverable->current_owner && (int) $deliverable->current_owner === $userId)) {
+        // Assignee or Current Owner or Reviewer
+        if ($this->isCurrentOwnerOrReviewer($user, $deliverable)) {
             return true;
         }
 
-        // Task Assigner / Creator
-        $task = null;
-        if ($deliverable->relationLoaded('task')) {
-            $task = $deliverable->task;
-        } elseif ($deliverable->task_id) {
-            try {
-                $task = Task::find($deliverable->task_id);
-            } catch (\Throwable $e) {
-            }
-        }
-
-        if ($task && ((int) $task->assigned_by === $userId || (int) ($task->creator_id ?? 0) === $userId)) {
+        // Active participant in delegation chain
+        if ($this->isDelegationParticipant($user, $deliverable)) {
             return true;
         }
 
@@ -242,17 +373,6 @@ class DeliverablePolicy
             }
         }
 
-        if (! $project && $task) {
-            if ($task->relationLoaded('project')) {
-                $project = $task->project;
-            } elseif ($task->project_id) {
-                try {
-                    $project = Project::find($task->project_id);
-                } catch (\Throwable $e) {
-                }
-            }
-        }
-
         if ($project && (int) $project->created_by === $userId) {
             return true;
         }
@@ -261,37 +381,27 @@ class DeliverablePolicy
     }
 
     /**
-     * Safely obtain the deliverable's parent task without triggering unloaded database queries.
+     * Determine whether the user can update status directly.
      */
-    protected function getDeliverableTask(Deliverable $deliverable): ?Task
+    public function updateStatus(User $user, Deliverable $deliverable): bool
     {
-        if ($deliverable->relationLoaded('task')) {
-            return $deliverable->task;
+        if (! $this->belongsToSameTenant($user, $deliverable)) {
+            return false;
         }
 
-        if ($deliverable->task_id) {
-            try {
-                return Task::find($deliverable->task_id);
-            } catch (\Throwable $e) {
-                return null;
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Determine whether the user is the creator of the deliverable or the assigner/creator of its parent task.
-     */
-    protected function isCreatorOrTaskAssigner(User $user, Deliverable $deliverable): bool
-    {
-        $userId = (int) $user->id;
-        if ((int) $deliverable->created_by === $userId) {
+        if (in_array($user->role, ['admin', 'super_admin', 'manager', 'team_lead'])) {
             return true;
         }
 
-        $task = $this->getDeliverableTask($deliverable);
-        if ($task && ((int) $task->assigned_by === $userId || (int) ($task->creator_id ?? 0) === $userId)) {
+        if ($this->isCreatorOrTaskAssigner($user, $deliverable)) {
+            return true;
+        }
+
+        if ($this->isCurrentOwnerOrReviewer($user, $deliverable)) {
+            return true;
+        }
+
+        if ($this->isDelegationParticipant($user, $deliverable)) {
             return true;
         }
 
@@ -323,14 +433,19 @@ class DeliverablePolicy
             return false;
         }
 
-        if (in_array($user->role, ['admin', 'manager', 'super_admin'])) {
+        if (in_array($user->role, ['admin', 'manager', 'super_admin', 'team_lead'])) {
             return true;
         }
 
-        $userId = (int) $user->id;
-        $isAssignee = (int) $deliverable->assigned_to === $userId || (int) ($deliverable->current_owner ?? 0) === $userId;
+        if ($this->isCurrentOwnerOrReviewer($user, $deliverable)) {
+            return true;
+        }
 
-        return $isAssignee || $this->isCreatorOrTaskAssigner($user, $deliverable);
+        if ($this->isDelegationParticipant($user, $deliverable)) {
+            return true;
+        }
+
+        return $this->isCreatorOrTaskAssigner($user, $deliverable);
     }
 
     /**
@@ -342,14 +457,19 @@ class DeliverablePolicy
             return false;
         }
 
-        if (in_array($user->role, ['admin', 'manager', 'super_admin'])) {
+        if (in_array($user->role, ['admin', 'manager', 'super_admin', 'team_lead'])) {
             return true;
         }
 
-        $userId = (int) $user->id;
-        $isAssignee = (int) $deliverable->assigned_to === $userId || (int) ($deliverable->current_owner ?? 0) === $userId;
+        if ($this->isCurrentOwnerOrReviewer($user, $deliverable)) {
+            return true;
+        }
 
-        return $isAssignee || $this->isCreatorOrTaskAssigner($user, $deliverable);
+        if ($this->isDelegationParticipant($user, $deliverable)) {
+            return true;
+        }
+
+        return $this->isCreatorOrTaskAssigner($user, $deliverable);
     }
 
     /**
@@ -377,6 +497,42 @@ class DeliverablePolicy
     }
 
     /**
+     * Request abandon deliverable.
+     */
+    public function requestAbandon(User $user, Deliverable $deliverable): bool
+    {
+        return $this->startTimer($user, $deliverable);
+    }
+
+    /**
+     * Approve abandon deliverable.
+     */
+    public function approveAbandon(User $user, Deliverable $deliverable): bool
+    {
+        if (! $this->belongsToSameTenant($user, $deliverable)) {
+            return false;
+        }
+
+        if (in_array($user->role, ['admin', 'manager', 'super_admin', 'team_lead'])) {
+            return true;
+        }
+
+        if ($this->isCreatorOrTaskAssigner($user, $deliverable)) {
+            return true;
+        }
+
+        return $this->isDelegationParticipant($user, $deliverable);
+    }
+
+    /**
+     * Decline abandon deliverable.
+     */
+    public function declineAbandon(User $user, Deliverable $deliverable): bool
+    {
+        return $this->approveAbandon($user, $deliverable);
+    }
+
+    /**
      * Assigner pause deliverable.
      */
     public function assignerPause(User $user, Deliverable $deliverable): bool
@@ -385,7 +541,7 @@ class DeliverablePolicy
             return false;
         }
 
-        if (in_array($user->role, ['admin', 'manager', 'super_admin'])) {
+        if (in_array($user->role, ['admin', 'manager', 'super_admin', 'team_lead'])) {
             return true;
         }
 
@@ -409,26 +565,15 @@ class DeliverablePolicy
             return false;
         }
 
-        if (in_array($user->role, ['admin', 'manager', 'super_admin'])) {
+        if (in_array($user->role, ['admin', 'manager', 'super_admin', 'team_lead'])) {
             return true;
         }
 
-        $userId = (int) $user->id;
-        $isAssignee = (int) $deliverable->assigned_to === $userId || (int) ($deliverable->current_owner ?? 0) === $userId;
-
-        return $isAssignee || $this->isCreatorOrTaskAssigner($user, $deliverable);
-    }
-
-    /**
-     * Approve deliverable.
-     */
-    public function approve(User $user, Deliverable $deliverable): bool
-    {
-        if (! $this->belongsToSameTenant($user, $deliverable)) {
-            return false;
+        if ($this->isCurrentOwnerOrReviewer($user, $deliverable)) {
+            return true;
         }
 
-        if (in_array($user->role, ['admin', 'manager', 'super_admin'])) {
+        if ($this->isDelegationParticipant($user, $deliverable)) {
             return true;
         }
 
@@ -436,7 +581,60 @@ class DeliverablePolicy
     }
 
     /**
-     * Reject deliverable.
+     * Determine whether the user can submit to next reviewer in delegation chain.
+     */
+    public function submitToNext(User $user, Deliverable $deliverable): bool
+    {
+        if (in_array($user->role, ['admin', 'manager', 'super_admin', 'team_lead'])) {
+            return true;
+        }
+
+        $userId = (int) $user->id;
+        $nextApprover = $this->delegationService?->getDeliverableApprover($deliverable);
+        if ($nextApprover && (int) $nextApprover === $userId) {
+            return true;
+        }
+
+        if ($this->isCurrentOwnerOrReviewer($user, $deliverable)) {
+            return true;
+        }
+
+        return $this->isDelegationParticipant($user, $deliverable);
+    }
+
+    /**
+     * Determine whether the user can approve the deliverable.
+     */
+    public function approve(User $user, Deliverable $deliverable): bool
+    {
+        if (! $this->belongsToSameTenant($user, $deliverable)) {
+            return false;
+        }
+
+        if (in_array($user->role, ['admin', 'manager', 'super_admin', 'team_lead'])) {
+            return true;
+        }
+
+        // Deliverable Creator or Task Assigner / Creator
+        if ($this->isCreatorOrTaskAssigner($user, $deliverable)) {
+            return true;
+        }
+
+        // Current Owner or Reviewer
+        if ($this->isCurrentOwnerOrReviewer($user, $deliverable)) {
+            return true;
+        }
+
+        // Active participant in task_delegations, delegation_chain, or approval_chain
+        if ($this->isDelegationParticipant($user, $deliverable)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Determine whether the user can reject/decline the deliverable.
      */
     public function reject(User $user, Deliverable $deliverable): bool
     {
@@ -452,12 +650,47 @@ class DeliverablePolicy
     }
 
     /**
+     * Self-approve deliverable.
+     */
+    public function selfApprove(User $user, Deliverable $deliverable): bool
+    {
+        return $this->approve($user, $deliverable);
+    }
+
+    /**
+     * Self-rework deliverable.
+     */
+    public function selfRework(User $user, Deliverable $deliverable): bool
+    {
+        return $this->approve($user, $deliverable);
+    }
+
+    /**
      * Delegate deliverable.
      */
     public function delegate(User $user, Deliverable $deliverable): bool
     {
-        $isOwner = (int) $deliverable->assigned_to === (int) $user->id || (int) ($deliverable->current_owner ?? 0) === (int) $user->id;
-        return $isOwner && $deliverable->allow_transfer !== false;
+        if (! $this->belongsToSameTenant($user, $deliverable)) {
+            return false;
+        }
+
+        if ($deliverable->allow_transfer === false) {
+            return false;
+        }
+
+        if (in_array($user->role, ['admin', 'manager', 'super_admin', 'team_lead'])) {
+            return true;
+        }
+
+        if ($this->isCreatorOrTaskAssigner($user, $deliverable)) {
+            return true;
+        }
+
+        if ($this->isCurrentOwnerOrReviewer($user, $deliverable)) {
+            return true;
+        }
+
+        return $this->isDelegationParticipant($user, $deliverable);
     }
 
     /**
@@ -465,14 +698,34 @@ class DeliverablePolicy
      */
     public function acceptDelegation(User $user, Deliverable $deliverable): bool
     {
-        if (in_array($user->role, ['admin', 'super_admin'])) {
+        if (in_array($user->role, ['admin', 'super_admin', 'manager', 'team_lead'])) {
             return true;
         }
 
-        return TaskDelegation::where('deliverable_id', $deliverable->id)
-            ->where('delegated_to', $user->id)
-            ->where('status', 'pending')
-            ->exists();
+        $userId = (int) $user->id;
+
+        try {
+            if (TaskDelegation::where('deliverable_id', $deliverable->id)
+                ->where('delegated_to', $userId)
+                ->whereIn('status', ['pending', 'in_progress', 'accepted'])
+                ->exists()) {
+                return true;
+            }
+        } catch (\Throwable $e) {
+        }
+
+        $chain = is_string($deliverable->delegation_chain)
+            ? json_decode($deliverable->delegation_chain, true)
+            : $deliverable->delegation_chain;
+        if (! empty($chain) && is_iterable($chain)) {
+            foreach ($chain as $entry) {
+                if ((int) ($entry['delegated_to'] ?? 0) === $userId) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -488,16 +741,33 @@ class DeliverablePolicy
      */
     public function revokeDelegation(User $user, Deliverable $deliverable): bool
     {
-        if (in_array($user->role, ['admin', 'super_admin'])) {
+        if (in_array($user->role, ['admin', 'super_admin', 'manager', 'team_lead'])) {
             return true;
         }
 
-        return TaskDelegation::where('deliverable_id', $deliverable->id)
-            ->where('delegated_by', $user->id)
-            ->where('status', 'pending')
-            ->exists()
-            || (int) $deliverable->created_by === (int) $user->id
-            || $this->isCreatorOrTaskAssigner($user, $deliverable);
+        $userId = (int) $user->id;
+
+        try {
+            if (TaskDelegation::where('deliverable_id', $deliverable->id)
+                ->where('delegated_by', $userId)
+                ->exists()) {
+                return true;
+            }
+        } catch (\Throwable $e) {
+        }
+
+        $chain = is_string($deliverable->delegation_chain)
+            ? json_decode($deliverable->delegation_chain, true)
+            : $deliverable->delegation_chain;
+        if (! empty($chain) && is_iterable($chain)) {
+            foreach ($chain as $entry) {
+                if ((int) ($entry['delegated_by'] ?? 0) === $userId) {
+                    return true;
+                }
+            }
+        }
+
+        return $this->isCreatorOrTaskAssigner($user, $deliverable);
     }
 
     /**
@@ -525,10 +795,18 @@ class DeliverablePolicy
             return false;
         }
 
-        if (in_array($user->role, ['admin', 'manager', 'super_admin'])) {
+        if (in_array($user->role, ['admin', 'manager', 'super_admin', 'team_lead'])) {
             return true;
         }
 
-        return $this->isCreatorOrTaskAssigner($user, $deliverable);
+        if ($this->isCreatorOrTaskAssigner($user, $deliverable)) {
+            return true;
+        }
+
+        if ($this->isCurrentOwnerOrReviewer($user, $deliverable)) {
+            return true;
+        }
+
+        return $this->isDelegationParticipant($user, $deliverable);
     }
 }

@@ -13,6 +13,7 @@ import { useEscapeKey } from "../hooks/useEscapeKey";
 import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import { notify } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
+import { isDeliverableItem } from "../utils/delegationUtils";
 import CustomSelect from "./CustomSelect";
 import "./TransferTaskDialog.css";
 
@@ -116,7 +117,7 @@ function TransferTaskDialog({ isOpen, onClose, task, entityType, onTransferSucce
           return_to_transferor: returnToTransferor,
         };
 
-        const isDeliverable = entityType === "deliverable" || (!task.task_number && task.task_id);
+        const isDeliverable = entityType === "deliverable" || isDeliverableItem(task);
         const endpoint = isDeliverable
           ? `${API_URL}/deliverables/${task.id}/delegate`
           : `${API_URL}/tasks/${task.id}/delegate`;
@@ -138,7 +139,12 @@ function TransferTaskDialog({ isOpen, onClose, task, entityType, onTransferSucce
           onTransferSuccess?.(data.task || data.deliverable, { isTransfer: true });
           onClose();
         } else {
-          notify.error(data.message || t("Failed to transfer task", { defaultValue: "Failed to transfer task" }));
+          notify.error(
+            data.message ||
+              (isDeliverable
+                ? t("Failed to transfer subtask", { defaultValue: "Failed to transfer subtask" })
+                : t("Failed to transfer task", { defaultValue: "Failed to transfer task" }))
+          );
         }
       } catch {
         notify.error(t("An error occurred while transferring", { defaultValue: "An error occurred while transferring" }));

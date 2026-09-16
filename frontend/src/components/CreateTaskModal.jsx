@@ -1109,7 +1109,7 @@ r.members.forEach((u) => map.set(String(u.id), u));
               <AutoSaveIndicator isSaving={isSaving} lastSaved={lastSaved} />
             </div>
             <div className="task-header-actions">
-              <button className="task-save-draft-btn" onClick={handleSaveDraftAndClose} type="button" disabled={!(form.title || "").trim()}>
+              <button className="task-save-draft-btn" onClick={handleSaveDraftAndClose} type="button">
                 {t("Save as Draft", { defaultValue: "Save as Draft" })}
               </button>
               <button className="task-create-more-btn" onClick={() => submitTask(true)} type="button" disabled={submitting}>

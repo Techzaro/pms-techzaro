@@ -564,8 +564,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/deliverables/{deliverable}', [DeliverableController::class, 'destroy']); // Delete deliverable
     });
 
-    // Deliverable review routes (admin, manager, team lead only)
-    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager,team_lead')->group(function () {
+    // Deliverable review routes
+    Route::middleware(\App\Http\Middleware\EnsureNotGuest::class)->group(function () {
         Route::post('/deliverables/{deliverable}/approve', [DeliverableController::class, 'approve']); // Approve deliverable
         Route::post('/deliverables/{deliverable}/reject', [DeliverableController::class, 'reject']); // Reject deliverable
         Route::post('/deliverables/{deliverable}/reopen', [DeliverableController::class, 'reopen']); // Reopen deliverable
