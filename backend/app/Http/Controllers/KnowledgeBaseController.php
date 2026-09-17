@@ -371,6 +371,24 @@ class KnowledgeBaseController extends Controller
     {
         $user = $request->user();
 
+        // Decode JSON inputs if passed as strings from FormData
+        if (is_string($request->input('tags'))) {
+            $decoded = json_decode($request->input('tags'), true);
+            if (is_array($decoded)) $request->merge(['tags' => $decoded]);
+        }
+        if (is_string($request->input('team_ids'))) {
+            $decoded = json_decode($request->input('team_ids'), true);
+            if (is_array($decoded)) $request->merge(['team_ids' => $decoded]);
+        }
+        if (is_string($request->input('user_ids'))) {
+            $decoded = json_decode($request->input('user_ids'), true);
+            if (is_array($decoded)) $request->merge(['user_ids' => $decoded]);
+        }
+        if (is_string($request->input('reference_links'))) {
+            $decoded = json_decode($request->input('reference_links'), true);
+            if (is_array($decoded)) $request->merge(['reference_links' => $decoded]);
+        }
+
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'slug' => 'nullable|string|max:255',
@@ -385,25 +403,78 @@ class KnowledgeBaseController extends Controller
             'tags' => 'nullable|array',
             'tags.*' => 'string|max:50',
             'file' => 'nullable|file|max:20480',
+            'files' => 'nullable|array',
+            'files.*' => 'file|max:20480',
             'reference_link' => 'nullable|string|max:2048',
+            'reference_links' => 'nullable|array',
+            'reference_links.*' => 'nullable|string|max:2048',
             'team_ids' => 'nullable|array',
             'team_ids.*' => 'integer|exists:teams,id',
             'user_ids' => 'nullable|array',
             'user_ids.*' => 'integer|exists:users,id',
         ]);
 
-        $filePath = null;
-        $fileName = null;
-        if ($request->hasFile('file')) {
-            $file = $request->file('file');
-            $fileName = $file->getClientOriginalName();
-            $org = $request->attributes->get('currentOrganization');
-            if ($org) {
-                $filePath = StorageDiskResolver::store($org, $file, 'knowledge_base');
-            } else {
-                $filePath = $file->store('knowledge_base', 'public');
+        $attachments = [];
+        $org = $request->attributes->get('currentOrganization');
+
+        // Multi files upload
+        if ($request->hasFile('files')) {
+            $files = $request->file('files');
+            if (!is_array($files)) {
+                $files = [$files];
+            }
+            foreach ($files as $f) {
+                if ($f && $f->isValid()) {
+                    $originalName = $f->getClientOriginalName();
+                    $storedPath = $org
+                        ? StorageDiskResolver::store($org, $f, 'knowledge_base')
+                        : $f->store('knowledge_base', 'public');
+                    $attachments[] = [
+                        'file_path' => $storedPath,
+                        'file_name' => $originalName,
+                        'file_size' => $f->getSize(),
+                        'mime_type' => $f->getMimeType(),
+                    ];
+                }
             }
         }
+
+        // Single file upload fallback
+        if ($request->hasFile('file')) {
+            $f = $request->file('file');
+            if ($f && $f->isValid()) {
+                $originalName = $f->getClientOriginalName();
+                $storedPath = $org
+                    ? StorageDiskResolver::store($org, $f, 'knowledge_base')
+                    : $f->store('knowledge_base', 'public');
+                $attachments[] = [
+                    'file_path' => $storedPath,
+                    'file_name' => $originalName,
+                    'file_size' => $f->getSize(),
+                    'mime_type' => $f->getMimeType(),
+                ];
+            }
+        }
+
+        $filePath = !empty($attachments) ? $attachments[0]['file_path'] : null;
+        $fileName = !empty($attachments) ? $attachments[0]['file_name'] : null;
+
+        // Process reference links
+        $referenceLinks = [];
+        if (!empty($validated['reference_links']) && is_array($validated['reference_links'])) {
+            foreach ($validated['reference_links'] as $link) {
+                $link = is_string($link) ? trim($link) : '';
+                if ($link !== '') {
+                    $referenceLinks[] = $link;
+                }
+            }
+        } elseif (!empty($validated['reference_link'])) {
+            $link = trim($validated['reference_link']);
+            if ($link !== '') {
+                $referenceLinks[] = $link;
+            }
+        }
+        $primaryRefLink = !empty($referenceLinks) ? $referenceLinks[0] : ($validated['reference_link'] ?? null);
 
         // Auto-match category name if category_id given
         $categoryName = $validated['category'] ?? 'General';
@@ -448,7 +519,9 @@ class KnowledgeBaseController extends Controller
             'tags' => $validated['tags'] ?? [],
             'file_path' => $filePath,
             'file_name' => $fileName,
-            'reference_link' => $validated['reference_link'] ?? null,
+            'attachments' => $attachments,
+            'reference_link' => $primaryRefLink,
+            'reference_links' => $referenceLinks,
             'created_by' => $user->id,
             'updated_by' => $user->id,
         ]);
@@ -464,6 +537,9 @@ class KnowledgeBaseController extends Controller
             'content' => $item->content,
             'file_path' => $item->file_path,
             'file_name' => $item->file_name,
+            'attachments' => $item->attachments,
+            'reference_link' => $item->reference_link,
+            'reference_links' => $item->reference_links,
             'change_summary' => 'Initial publication',
             'created_by' => $user->id,
         ]);
@@ -519,6 +595,18 @@ class KnowledgeBaseController extends Controller
                 $request->merge(['user_ids' => $decoded]);
             }
         }
+        if (is_string($request->input('reference_links'))) {
+            $decoded = json_decode($request->input('reference_links'), true);
+            if (is_array($decoded)) {
+                $request->merge(['reference_links' => $decoded]);
+            }
+        }
+        if (is_string($request->input('deleted_files'))) {
+            $decoded = json_decode($request->input('deleted_files'), true);
+            if (is_array($decoded)) {
+                $request->merge(['deleted_files' => $decoded]);
+            }
+        }
 
         $validated = $request->validate([
             'title' => 'sometimes|required|string|max:255',
@@ -537,26 +625,31 @@ class KnowledgeBaseController extends Controller
             'team_ids.*' => 'integer|exists:teams,id',
             'user_ids' => 'nullable|array',
             'user_ids.*' => 'integer|exists:users,id',
+            'file' => 'nullable|file|max:20480',
+            'files' => 'nullable|array',
+            'files.*' => 'file|max:20480',
             'reference_link' => 'nullable|string|max:2048',
+            'reference_links' => 'nullable|array',
+            'reference_links.*' => 'nullable|string|max:2048',
+            'deleted_files' => 'nullable|array',
+            'deleted_files.*' => 'string',
             'change_summary' => 'nullable|string|max:255',
         ]);
 
-        $filePath = $knowledgeBase->file_path;
-        $fileName = $knowledgeBase->file_name;
-
         $org = $request->attributes->get('currentOrganization');
+        $attachments = $knowledgeBase->attachments_list ?: [];
 
-        if ($request->boolean('delete_file') && $filePath) {
-            if ($org) {
-                StorageDiskResolver::delete($org, $filePath);
-            } else {
-                Storage::disk('public')->delete($filePath);
+        // Complete deletion of all files
+        if ($request->boolean('delete_file') || $request->boolean('delete_all_files')) {
+            foreach ($attachments as $att) {
+                if (!empty($att['file_path'])) {
+                    if ($org) {
+                        StorageDiskResolver::delete($org, $att['file_path']);
+                    } else {
+                        Storage::disk('public')->delete($att['file_path']);
+                    }
+                }
             }
-            $filePath = null;
-            $fileName = null;
-        }
-
-        if ($request->hasFile('file')) {
             if ($knowledgeBase->file_path) {
                 if ($org) {
                     StorageDiskResolver::delete($org, $knowledgeBase->file_path);
@@ -564,14 +657,86 @@ class KnowledgeBaseController extends Controller
                     Storage::disk('public')->delete($knowledgeBase->file_path);
                 }
             }
+            $attachments = [];
+        }
+
+        // Selective file deletions
+        $deletedFiles = $request->input('deleted_files') ?: [];
+        if (!empty($deletedFiles) && is_array($deletedFiles)) {
+            $keptAttachments = [];
+            foreach ($attachments as $att) {
+                $path = $att['file_path'] ?? '';
+                if (in_array($path, $deletedFiles, true)) {
+                    if ($org) {
+                        StorageDiskResolver::delete($org, $path);
+                    } else {
+                        Storage::disk('public')->delete($path);
+                    }
+                } else {
+                    $keptAttachments[] = $att;
+                }
+            }
+            $attachments = $keptAttachments;
+        }
+
+        // Single file upload fallback
+        if ($request->hasFile('file')) {
             $file = $request->file('file');
-            $fileName = $file->getClientOriginalName();
-            if ($org) {
-                $filePath = StorageDiskResolver::store($org, $file, 'knowledge_base');
-            } else {
-                $filePath = $file->store('knowledge_base', 'public');
+            if ($file && $file->isValid()) {
+                $originalName = $file->getClientOriginalName();
+                $filePath = $org
+                    ? StorageDiskResolver::store($org, $file, 'knowledge_base')
+                    : $file->store('knowledge_base', 'public');
+                $attachments[] = [
+                    'file_path' => $filePath,
+                    'file_name' => $originalName,
+                    'file_size' => $file->getSize(),
+                    'mime_type' => $file->getMimeType(),
+                ];
             }
         }
+
+        // Multiple files upload
+        if ($request->hasFile('files')) {
+            $files = $request->file('files');
+            if (!is_array($files)) {
+                $files = [$files];
+            }
+            foreach ($files as $file) {
+                if ($file && $file->isValid()) {
+                    $originalName = $file->getClientOriginalName();
+                    $filePath = $org
+                        ? StorageDiskResolver::store($org, $file, 'knowledge_base')
+                        : $file->store('knowledge_base', 'public');
+                    $attachments[] = [
+                        'file_path' => $filePath,
+                        'file_name' => $originalName,
+                        'file_size' => $file->getSize(),
+                        'mime_type' => $file->getMimeType(),
+                    ];
+                }
+            }
+        }
+
+        $attachments = array_values($attachments);
+        $primaryFilePath = !empty($attachments) ? $attachments[0]['file_path'] : null;
+        $primaryFileName = !empty($attachments) ? $attachments[0]['file_name'] : null;
+
+        // Process reference links
+        $referenceLinks = $knowledgeBase->reference_links_list ?: [];
+        if ($request->has('reference_links') && is_array($request->input('reference_links'))) {
+            $referenceLinks = [];
+            foreach ($request->input('reference_links') as $link) {
+                $link = is_string($link) ? trim($link) : '';
+                if ($link !== '') {
+                    $referenceLinks[] = $link;
+                }
+            }
+        } elseif ($request->has('reference_link')) {
+            $link = trim((string) $request->input('reference_link'));
+            $referenceLinks = $link !== '' ? [$link] : [];
+        }
+        $primaryRefLink = !empty($referenceLinks) ? $referenceLinks[0] : null;
 
         // Match category name
         $categoryName = $knowledgeBase->category;
@@ -609,8 +774,12 @@ class KnowledgeBaseController extends Controller
         $newTitle = $validated['title'] ?? $knowledgeBase->title;
         $newContent = array_key_exists('content', $validated) ? $validated['content'] : $knowledgeBase->content;
 
-        // Check if content or title changed to save a new version
-        $hasContentChanged = ($newTitle !== $knowledgeBase->title) || ($newContent !== $knowledgeBase->content);
+        // Check if content, title, attachments or links changed to save a new version
+        $hasContentChanged = ($newTitle !== $knowledgeBase->title) ||
+            ($newContent !== $knowledgeBase->content) ||
+            ($attachments !== ($knowledgeBase->attachments ?: [])) ||
+            ($referenceLinks !== ($knowledgeBase->reference_links ?: []));
+
         if ($hasContentChanged) {
             $latestVersionNumber = (int) $knowledgeBase->versions()->max('version_number') ?: 1;
             KbVersion::create([
@@ -618,10 +787,12 @@ class KnowledgeBaseController extends Controller
                 'version_number' => $latestVersionNumber + 1,
                 'title' => $newTitle,
                 'content' => $newContent,
-                'file_path' => $filePath,
-                'file_name' => $fileName,
-                'reference_link' => $validated['reference_link'] ?? null,
-                'change_summary' => $validated['change_summary'] ?? 'Updated article content',
+                'file_path' => $primaryFilePath,
+                'file_name' => $primaryFileName,
+                'attachments' => $attachments,
+                'reference_link' => $primaryRefLink,
+                'reference_links' => $referenceLinks,
+                'change_summary' => $validated['change_summary'] ?? 'Updated article content and resources',
                 'created_by' => $user->id,
             ]);
         }
@@ -637,9 +808,11 @@ class KnowledgeBaseController extends Controller
             'status' => $validated['status'] ?? $knowledgeBase->status ?? 'published',
             'is_pinned' => array_key_exists('is_pinned', $validated) ? (bool) $validated['is_pinned'] : (bool) ($knowledgeBase->is_pinned ?? false),
             'tags' => array_key_exists('tags', $validated) ? $validated['tags'] : $knowledgeBase->tags,
-            'file_path' => $filePath,
-            'file_name' => $fileName,
-            'reference_link' => $validated['reference_link'] ?? null,
+            'file_path' => $primaryFilePath,
+            'file_name' => $primaryFileName,
+            'attachments' => $attachments,
+            'reference_link' => $primaryRefLink,
+            'reference_links' => $referenceLinks,
             'updated_by' => $user->id,
         ];
 
@@ -711,6 +884,9 @@ class KnowledgeBaseController extends Controller
             'content' => $version->content,
             'file_path' => $version->file_path,
             'file_name' => $version->file_name,
+            'attachments' => $version->attachments,
+            'reference_link' => $version->reference_link,
+            'reference_links' => $version->reference_links,
             'updated_by' => $user->id,
         ]);
 
@@ -722,6 +898,9 @@ class KnowledgeBaseController extends Controller
             'content' => $version->content,
             'file_path' => $version->file_path,
             'file_name' => $version->file_name,
+            'attachments' => $version->attachments,
+            'reference_link' => $version->reference_link,
+            'reference_links' => $version->reference_links,
             'change_summary' => "Restored from version {$version->version_number}",
             'created_by' => $user->id,
         ]);
@@ -847,30 +1026,52 @@ class KnowledgeBaseController extends Controller
             $c++;
         }
 
-        // Duplicate file if present
-        $newFilePath = null;
-        $newFileName = $knowledgeBase->file_name;
-        if ($knowledgeBase->file_path) {
-            $ext = pathinfo($knowledgeBase->file_path, PATHINFO_EXTENSION);
-            $newFilePath = 'knowledge_base/' . Str::random(40) . ($ext ? '.' . $ext : '');
-            $org = $request->attributes->get('currentOrganization');
+        // Duplicate files if present
+        $newAttachments = [];
+        $attachments = $knowledgeBase->attachments_list ?: [];
+        $org = $request->attributes->get('currentOrganization');
+
+        foreach ($attachments as $att) {
+            $srcPath = $att['file_path'] ?? null;
+            if (!$srcPath) continue;
+            $ext = pathinfo($srcPath, PATHINFO_EXTENSION);
+            $newPath = 'knowledge_base/' . Str::random(40) . ($ext ? '.' . $ext : '');
+            $copied = false;
             if ($org) {
                 try {
-                    $content = StorageDiskResolver::get($org, $knowledgeBase->file_path);
+                    $content = StorageDiskResolver::get($org, $srcPath);
                     if ($content !== null) {
-                        StorageDiskResolver::put($org, $newFilePath, $content);
+                        StorageDiskResolver::put($org, $newPath, $content);
+                        $copied = true;
                     }
                 } catch (\Throwable $e) {
-                    $newFilePath = null;
+                    $copied = false;
                 }
             } else {
-                if (Storage::disk('public')->exists($knowledgeBase->file_path)) {
-                    Storage::disk('public')->copy($knowledgeBase->file_path, $newFilePath);
-                } else {
-                    $newFilePath = null;
+                $cleanSrc = ltrim($srcPath, '/');
+                if (str_starts_with($cleanSrc, 'storage/')) {
+                    $cleanSrc = substr($cleanSrc, 8);
+                }
+                if (Storage::disk('public')->exists($cleanSrc)) {
+                    Storage::disk('public')->copy($cleanSrc, $newPath);
+                    $copied = true;
+                } elseif (Storage::disk('public')->exists($srcPath)) {
+                    Storage::disk('public')->copy($srcPath, $newPath);
+                    $copied = true;
                 }
             }
+            if ($copied) {
+                $newAttachments[] = [
+                    'file_path' => $newPath,
+                    'file_name' => $att['file_name'] ?? basename($srcPath),
+                    'file_size' => $att['file_size'] ?? null,
+                    'mime_type' => $att['mime_type'] ?? null,
+                ];
+            }
         }
+
+        $newFilePath = !empty($newAttachments) ? $newAttachments[0]['file_path'] : null;
+        $newFileName = !empty($newAttachments) ? $newAttachments[0]['file_name'] : null;
 
         $duplicate = KnowledgeBase::create([
             'title' => $title,
@@ -887,7 +1088,9 @@ class KnowledgeBaseController extends Controller
             'tags' => $knowledgeBase->tags,
             'file_path' => $newFilePath,
             'file_name' => $newFileName,
+            'attachments' => $newAttachments,
             'reference_link' => $knowledgeBase->reference_link,
+            'reference_links' => $knowledgeBase->reference_links,
             'created_by' => $user->id,
             'updated_by' => $user->id,
         ]);
@@ -912,7 +1115,9 @@ class KnowledgeBaseController extends Controller
             'content' => $duplicate->content,
             'file_path' => $duplicate->file_path,
             'file_name' => $duplicate->file_name,
+            'attachments' => $duplicate->attachments,
             'reference_link' => $duplicate->reference_link,
+            'reference_links' => $duplicate->reference_links,
             'change_summary' => "Duplicated from #{$knowledgeBase->id} ({$knowledgeBase->title})",
             'created_by' => $user->id,
         ]);
@@ -1120,12 +1325,49 @@ class KnowledgeBaseController extends Controller
         $this->authorize('download_attachments', $knowledgeBase);
         $user = $request->user();
 
-        $filePath = $knowledgeBase->file_path;
+        $filePath = null;
+        $fileName = null;
+
+        $requestedPath = $request->query('file_path') ?: $request->query('path');
+        $requestedIndex = $request->query('index');
+
+        $attachmentsList = $knowledgeBase->attachments_list ?: [];
+
+        if ($requestedPath) {
+            foreach ($attachmentsList as $att) {
+                if (($att['file_path'] ?? '') === $requestedPath) {
+                    $filePath = $att['file_path'];
+                    $fileName = $att['file_name'] ?? basename($filePath);
+                    break;
+                }
+            }
+            if (!$filePath && $knowledgeBase->file_path === $requestedPath) {
+                $filePath = $knowledgeBase->file_path;
+                $fileName = $knowledgeBase->file_name ?: basename($filePath);
+            }
+        } elseif ($requestedIndex !== null && is_numeric($requestedIndex)) {
+            $idx = (int) $requestedIndex;
+            if (isset($attachmentsList[$idx])) {
+                $filePath = $attachmentsList[$idx]['file_path'] ?? null;
+                $fileName = $attachmentsList[$idx]['file_name'] ?? basename($filePath);
+            }
+        }
+
+        if (!$filePath) {
+            $filePath = $knowledgeBase->file_path;
+            $fileName = $knowledgeBase->file_name ?: ($filePath ? basename($filePath) : null);
+        }
+
+        if (!$filePath && !empty($attachmentsList)) {
+            $filePath = $attachmentsList[0]['file_path'] ?? null;
+            $fileName = $attachmentsList[0]['file_name'] ?? ($filePath ? basename($filePath) : null);
+        }
+
         if (!$filePath) {
             return response()->json(['success' => false, 'message' => 'No attachment found for this article.'], 404);
         }
 
-        $fileName = $knowledgeBase->file_name ?: basename($filePath);
+        $fileName = $fileName ?: basename($filePath);
         $org = $request->attributes->get('currentOrganization');
 
         // Log Activity

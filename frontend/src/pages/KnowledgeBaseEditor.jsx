@@ -10,6 +10,7 @@ import DOMPurify from "dompurify";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import CustomSelect from "../components/CustomSelect";
+import MultiSelectDropdown from "../components/MultiSelectDropdown";
 import ConfirmModal from "../components/ConfirmModal";
 import ShareKnowledgeModal from "../components/ShareKnowledgeModal";
 import UnifiedActivityFeed from "../components/UnifiedActivityFeed";
@@ -56,6 +57,8 @@ import {
   Archive,
   Share2,
   Link2,
+  Upload,
+  FileText,
 } from "lucide-react";
 
 // Register Font Whitelist for Quill
@@ -118,6 +121,7 @@ export default function KnowledgeBaseEditor() {
   const quillRef = useRef(null);
   const textColorInputRef = useRef(null);
   const textBgInputRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const isEditRoute = Boolean(id) && (location.pathname.includes("/edit/") || location.pathname.endsWith("/edit"));
   const isViewMode = Boolean(id) && !isEditRoute;
@@ -149,7 +153,8 @@ export default function KnowledgeBaseEditor() {
   const [isPinned, setIsPinned] = useState(false);
   const [tags, setTags] = useState([]);
   const [tagInput, setTagInput] = useState("");
-  const [referenceLink, setReferenceLink] = useState("");
+  // Reference Links State (Multiple)
+  const [referenceLinks, setReferenceLinks] = useState([""]);
   const [rawArticle, setRawArticle] = useState(null);
 
   // Category Creation Loading State
@@ -165,21 +170,50 @@ export default function KnowledgeBaseEditor() {
   const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
-  // Attachment State
-  const [file, setFile] = useState(null);
-  const [existingFilePath, setExistingFilePath] = useState(null);
-  const [existingFileName, setExistingFileName] = useState(null);
-  const [deleteExistingFile, setDeleteExistingFile] = useState(false);
-  const [downloadingAttachment, setDownloadingAttachment] = useState(false);
+  // Attachments State (Multiple)
+  const [files, setFiles] = useState([]); // newly staged File objects
+  const [existingFiles, setExistingFiles] = useState([]); // [{ file_path, file_name, file_size }]
+  const [deletedFiles, setDeletedFiles] = useState([]); // [file_path]
+  const [downloadingPath, setDownloadingPath] = useState(null);
 
-  const handleDownloadAttachment = async () => {
-    if (!id && !existingFilePath) return;
+  const parseReferenceLinks = (d) => {
+    if (Array.isArray(d?.reference_links) && d.reference_links.length > 0) {
+      return d.reference_links;
+    }
+    if (Array.isArray(d?.reference_links_list) && d.reference_links_list.length > 0) {
+      return d.reference_links_list;
+    }
+    if (d?.reference_link) {
+      try {
+        const parsed = JSON.parse(d.reference_link);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+      return [d.reference_link];
+    }
+    return [""];
+  };
+
+  const parseAttachments = (d) => {
+    if (Array.isArray(d?.attachments) && d.attachments.length > 0) {
+      return d.attachments;
+    }
+    if (Array.isArray(d?.attachments_list) && d.attachments_list.length > 0) {
+      return d.attachments_list;
+    }
+    if (d?.file_path) {
+      return [{ file_path: d.file_path, file_name: d.file_name || d.file_path.split("/").pop() }];
+    }
+    return [];
+  };
+
+  const handleDownloadFile = async (filePath, fileName) => {
+    if (!id && !filePath) return;
     try {
-      setDownloadingAttachment(true);
+      setDownloadingPath(filePath || "primary");
       const token = authToken();
       const endpoint = id
-        ? `${API_URL}/knowledge-base/${id}/download`
-        : `${API_URL}/storage/${existingFilePath}`;
+        ? `${API_URL}/knowledge-base/${id}/download?file_path=${encodeURIComponent(filePath || "")}`
+        : `${API_URL}/storage/${filePath}`;
 
       const res = await fetch(endpoint, {
         headers: {
@@ -199,7 +233,7 @@ export default function KnowledgeBaseEditor() {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = existingFileName || (existingFilePath ? existingFilePath.split("/").pop() : "document-attachment");
+      link.download = fileName || (filePath ? filePath.split("/").pop() : "document-attachment");
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -209,8 +243,45 @@ export default function KnowledgeBaseEditor() {
       console.error("Download failed", e);
       notify.error(t("Download failed.", { defaultValue: "Download failed." }));
     } finally {
-      setDownloadingAttachment(false);
+      setDownloadingPath(null);
     }
+  };
+
+  const handleFilesChange = (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const selected = Array.from(e.target.files);
+      setFiles((prev) => [...prev, ...selected]);
+      e.target.value = "";
+    }
+  };
+
+  const handleRemoveNewFile = (index) => {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleRemoveExistingFile = (filePath) => {
+    if (!filePath) return;
+    setDeletedFiles((prev) => [...prev, filePath]);
+    setExistingFiles((prev) => prev.filter((f) => f.file_path !== filePath));
+  };
+
+  const handleLinkChange = (index, value) => {
+    setReferenceLinks((prev) => {
+      const next = [...prev];
+      next[index] = value;
+      return next;
+    });
+  };
+
+  const handleAddLinkRow = () => {
+    setReferenceLinks((prev) => [...prev, ""]);
+  };
+
+  const handleRemoveLinkRow = (index) => {
+    setReferenceLinks((prev) => {
+      if (prev.length <= 1) return [""];
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   // Dynamic Options (Always fetched from API, strictly initial [])
@@ -286,9 +357,8 @@ export default function KnowledgeBaseEditor() {
     if (d.tags !== undefined) {
       setTags(Array.isArray(d.tags) ? d.tags : typeof d.tags === "string" ? JSON.parse(d.tags || "[]") : []);
     }
-    if (d.reference_link !== undefined) setReferenceLink(d.reference_link || "");
-    if (d.file_path !== undefined) setExistingFilePath(d.file_path || null);
-    if (d.file_name !== undefined) setExistingFileName(d.file_name || null);
+    setReferenceLinks(parseReferenceLinks(d));
+    setExistingFiles(parseAttachments(d));
   }, []);
 
   // Handle draft restoration from DraftCenter for create mode
@@ -355,9 +425,10 @@ export default function KnowledgeBaseEditor() {
           setIsPinned(Boolean(data.is_pinned));
           setIsFavorited(Boolean(data.is_favorited));
           setTags(Array.isArray(data.tags) ? data.tags : typeof data.tags === "string" ? JSON.parse(data.tags || "[]") : []);
-          setReferenceLink(data.reference_link || "");
-          setExistingFilePath(data.file_path || null);
-          setExistingFileName(data.file_name || null);
+          setReferenceLinks(parseReferenceLinks(data));
+          setExistingFiles(parseAttachments(data));
+          setFiles([]);
+          setDeletedFiles([]);
           currentDocIdRef.current = data.id;
           setSavingStatus("saved");
           setLastSavedTime(new Date());
@@ -500,8 +571,19 @@ export default function KnowledgeBaseEditor() {
             if (tag) fd.append("tags[]", tag);
           });
         }
-        if (referenceLink) {
-          fd.append("reference_link", referenceLink.trim());
+
+        // Multiple Reference Links
+        const validLinks = referenceLinks
+          .map((l) => (typeof l === "string" ? l.trim() : ""))
+          .filter(Boolean);
+
+        if (validLinks.length > 0) {
+          validLinks.forEach((link) => {
+            fd.append("reference_links[]", link);
+          });
+          fd.append("reference_link", validLinks[0]);
+        } else {
+          fd.append("reference_link", "");
         }
 
         if (Array.isArray(selectedTeamIds) && selectedTeamIds.length > 0) {
@@ -515,11 +597,18 @@ export default function KnowledgeBaseEditor() {
           });
         }
 
-        if (deleteExistingFile) {
-          fd.append("delete_file", "1");
+        // Deleted existing attachments
+        if (Array.isArray(deletedFiles) && deletedFiles.length > 0) {
+          deletedFiles.forEach((dPath) => {
+            fd.append("deleted_files[]", dPath);
+          });
         }
-        if (file) {
-          fd.append("file", file);
+
+        // Newly selected files
+        if (Array.isArray(files) && files.length > 0) {
+          files.forEach((f) => {
+            fd.append("files[]", f);
+          });
         }
 
         const activeId = currentDocIdRef.current;
@@ -538,6 +627,16 @@ export default function KnowledgeBaseEditor() {
         if (res.ok && data.success) {
           setSavingStatus("saved");
           setLastSavedTime(new Date());
+
+          const savedItem = data.data;
+          if (savedItem) {
+            setExistingFiles(parseAttachments(savedItem));
+            setFiles([]);
+            setDeletedFiles([]);
+            if (savedItem.reference_links || savedItem.reference_link) {
+              setReferenceLinks(parseReferenceLinks(savedItem));
+            }
+          }
 
           const savedDocId = data.data?.id || activeId;
           const finalStatus = overrideStatus || status;
@@ -593,13 +692,6 @@ export default function KnowledgeBaseEditor() {
             window.history.replaceState(null, "", rolePath(`knowledge-base/edit/${data.data.id}`));
           }
 
-          if (data.data?.file_path) {
-            setExistingFilePath(data.data.file_path);
-            setExistingFileName(data.data.file_name);
-            setFile(null);
-            setDeleteExistingFile(false);
-          }
-
           if (isManual) {
             notify.success(activeId ? t("Article updated successfully!", { defaultValue: "Article updated successfully!" }) : t("Article created successfully!", { defaultValue: "Article created successfully!" }));
           }
@@ -612,7 +704,7 @@ export default function KnowledgeBaseEditor() {
         if (isManual) notify.error(t("An error occurred while saving.", { defaultValue: "An error occurred while saving." }));
       }
     },
-    [title, content, categoryId, selectedCategoryOption, visibilityLevel, projectId, status, isPinned, tags, selectedTeamIds, selectedUserIds, deleteExistingFile, file]
+    [title, content, categoryId, selectedCategoryOption, visibilityLevel, projectId, status, isPinned, tags, selectedTeamIds, selectedUserIds, referenceLinks, deletedFiles, files]
   );
 
   // 4. Debounced Autosave (Triggers 2s after typing stops if document exists)
@@ -637,7 +729,7 @@ export default function KnowledgeBaseEditor() {
         clearTimeout(autosaveTimerRef.current);
       }
     };
-  }, [title, content, categoryId, visibilityLevel, projectId, isPinned, tags, saveArticle]);
+  }, [title, content, categoryId, visibilityLevel, projectId, isPinned, tags, referenceLinks, deletedFiles, files, saveArticle]);
 
   // 5. Version History Fetching
   const fetchVersions = async () => {
@@ -1213,39 +1305,117 @@ export default function KnowledgeBaseEditor() {
                 </div>
               )}
 
-              {/* ATTACHMENT DOWNLOAD */}
-              {existingFilePath && (
-                <div style={{ marginTop: "24px", padding: "14px 18px", background: "var(--bg-hover)", borderRadius: "8px", border: "1px solid var(--border-color)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "13px" }}>
-                    <Paperclip color="#2563eb" size={18} />
-                    <span style={{ fontWeight: 600 }}>{existingFileName || existingFilePath.split("/").pop()}</span>
+              {/* ATTACHMENTS DOWNLOAD SECTION (MULTIPLE) */}
+              {existingFiles.length > 0 && (
+                <div style={{ marginTop: "28px" }}>
+                  <h4 style={{ fontSize: "12px", fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "10px", display: "flex", alignItems: "center", gap: "6px", letterSpacing: "0.5px" }}>
+                    <Paperclip size={14} color="#2563eb" /> {t("Attachments ({{count}})", { count: existingFiles.length, defaultValue: `Attachments (${existingFiles.length})` })}
+                  </h4>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "10px" }}>
+                    {existingFiles.map((ef, idx) => (
+                      <div
+                        key={ef.file_path || idx}
+                        style={{
+                          padding: "12px 16px",
+                          background: "var(--bg-hover)",
+                          borderRadius: "8px",
+                          border: "1px solid var(--border-color)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: "10px",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "13px", overflow: "hidden", minWidth: 0 }}>
+                          <Paperclip color="#2563eb" size={18} style={{ flexShrink: 0 }} />
+                          <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={ef.file_name || ef.file_path}>
+                            {ef.file_name || ef.file_path.split("/").pop()}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadFile(ef.file_path, ef.file_name)}
+                          disabled={downloadingPath === ef.file_path}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            padding: "6px 14px",
+                            borderRadius: "6px",
+                            background: "#2563eb",
+                            color: "#ffffff",
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            border: "none",
+                            cursor: downloadingPath === ef.file_path ? "not-allowed" : "pointer",
+                            opacity: downloadingPath === ef.file_path ? 0.7 : 1,
+                            flexShrink: 0,
+                          }}
+                        >
+                          <Download size={13} /> {downloadingPath === ef.file_path ? t("Downloading...", { defaultValue: "Downloading..." }) : t("Download", { defaultValue: "Download" })}
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleDownloadAttachment}
-                    disabled={downloadingAttachment}
-                    style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "7px 16px", borderRadius: "6px", background: "#2563eb", color: "#ffffff", fontSize: "12px", fontWeight: 600, border: "none", cursor: downloadingAttachment ? "not-allowed" : "pointer", opacity: downloadingAttachment ? 0.7 : 1 }}
-                  >
-                    <Download size={14} /> {downloadingAttachment ? t("Downloading...", { defaultValue: "Downloading..." }) : t("Download File", { defaultValue: "Download File" })}
-                  </button>
                 </div>
               )}
 
-              {/* REFERENCE LINK */}
-              {referenceLink && (
-                <div style={{ marginTop: "16px", padding: "14px 18px", background: "var(--bg-hover)", borderRadius: "8px", border: "1px solid var(--border-color)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "13px", minWidth: 0, flex: 1, marginRight: "12px" }}>
-                    <ExternalLink color="#2563eb" size={18} style={{ flexShrink: 0 }} />
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase" }}>{t("Reference Link", { defaultValue: "Reference Link" })}</div>
-                      <a href={referenceLink} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb", textDecoration: "none", fontWeight: 500, wordBreak: "break-all" }}>
-                        {referenceLink}
-                      </a>
-                    </div>
+              {/* REFERENCE LINKS SECTION (MULTIPLE) */}
+              {referenceLinks.filter((l) => typeof l === "string" && l.trim().length > 0).length > 0 && (
+                <div style={{ marginTop: "24px" }}>
+                  <h4 style={{ fontSize: "12px", fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "10px", display: "flex", alignItems: "center", gap: "6px", letterSpacing: "0.5px" }}>
+                    <ExternalLink size={14} color="#2563eb" /> {t("Reference Links ({{count}})", { count: referenceLinks.filter((l) => typeof l === "string" && l.trim().length > 0).length, defaultValue: `Reference Links (${referenceLinks.filter((l) => typeof l === "string" && l.trim().length > 0).length})` })}
+                  </h4>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {referenceLinks.filter((l) => typeof l === "string" && l.trim().length > 0).map((link, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          padding: "12px 16px",
+                          background: "var(--bg-hover)",
+                          borderRadius: "8px",
+                          border: "1px solid var(--border-color)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: "12px",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "13px", minWidth: 0, flex: 1 }}>
+                          <ExternalLink color="#2563eb" size={16} style={{ flexShrink: 0 }} />
+                          <a
+                            href={link.startsWith("http") ? link : `https://${link}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: "#2563eb", textDecoration: "none", fontWeight: 500, wordBreak: "break-all", overflow: "hidden", textOverflow: "ellipsis" }}
+                          >
+                            {link}
+                          </a>
+                        </div>
+                        <a
+                          href={link.startsWith("http") ? link : `https://${link}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            padding: "6px 14px",
+                            borderRadius: "6px",
+                            background: "#eff6ff",
+                            color: "#1d4ed8",
+                            border: "1px solid #bfdbfe",
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            textDecoration: "none",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {t("Open Link", { defaultValue: "Open Link" })} <ExternalLink size={12} />
+                        </a>
+                      </div>
+                    ))}
                   </div>
-                  <a href={referenceLink} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "7px 16px", borderRadius: "6px", background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", fontSize: "12px", fontWeight: 600, textDecoration: "none", flexShrink: 0 }}>
-                    {t("Open Link", { defaultValue: "Open Link" })} <ExternalLink size={13} />
-                  </a>
                 </div>
               )}
             </div>
@@ -1441,20 +1611,7 @@ export default function KnowledgeBaseEditor() {
             {/* CORE CANVAS (TITLE & RICH TEXT) */}
             <div className="kb-editor-canvas">
               {/* ADVANCED TOOLBAR ACTION STRIP */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: "10px",
-                  padding: "8px 12px",
-                  background: "var(--bg-hover, #f8fafc)",
-                  borderRadius: "8px",
-                  border: "1px solid var(--border-color, #e2e8f0)",
-                  marginBottom: "12px",
-                  flexWrap: "wrap",
-                }}
-              >
+              <div className="kb-advanced-action-strip">
                 <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
                   <button
                     type="button"
@@ -1580,7 +1737,7 @@ export default function KnowledgeBaseEditor() {
                 autoFocus
               />
 
-              <div style={{ zoom: `${zoomLevel}%`, transformOrigin: "top left", transition: "zoom 0.15s ease" }}>
+              <div className="kb-quill-wrapper quill-editor-wrapper" style={{ zoom: `${zoomLevel}%`, transformOrigin: "top left", transition: "zoom 0.15s ease" }}>
                 <ReactQuill
                   ref={quillRef}
                   theme="snow"
@@ -1594,7 +1751,7 @@ export default function KnowledgeBaseEditor() {
             </div>
 
             {/* RIGHT SETTINGS SIDEBAR */}
-            <div style={{ width: "300px", borderLeft: "1px solid var(--border-color)", padding: "24px 20px", display: "flex", flexDirection: "column", gap: "20px", background: "var(--bg-card)" }}>
+            <div className="kb-editor-sidebar">
               <h4 style={{ margin: 0, fontSize: "13px", fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)", letterSpacing: "0.5px" }}>
                 {t("Document Settings", { defaultValue: "Document Settings" })}
               </h4>
@@ -1682,58 +1839,51 @@ export default function KnowledgeBaseEditor() {
                 <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
                   {t("Target Team", { defaultValue: "Target Team" })} <span style={{ color: "#ef4444" }}>*</span>
                 </label>
-                <select
-                  value={selectedTeamIds[0] || ""}
-                  onChange={(e) => setSelectedTeamIds(e.target.value ? [Number(e.target.value)] : [])}
-                  style={{ width: "100%", padding: "8px 10px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "13px", color: "var(--text-primary)" }}
-                >
-                  <option value="">{t("Select Team...", { defaultValue: "Select Team..." })}</option>
-                  {teams.map((tItem) => (
-                    <option key={tItem.id} value={tItem.id}>{tItem.name}</option>
-                  ))}
-                </select>
+                <CustomSelect
+                  name="target_team_id"
+                  value={selectedTeamIds[0] ? String(selectedTeamIds[0]) : ""}
+                  onChange={(val) => setSelectedTeamIds(val ? [Number(val)] : [])}
+                  placeholder={t("Select Team...", { defaultValue: "Select Team..." })}
+                  options={[
+                    { value: "", label: t("Select Team...", { defaultValue: "Select Team..." }) },
+                    ...teams.map((tItem) => ({ value: String(tItem.id), label: tItem.name })),
+                  ]}
+                />
               </div>
             )}
 
             {/* DYNAMIC SECONDARY: CUSTOM (TEAMS & USERS) */}
             {visibilityLevel === "custom" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                 <div>
-                  <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>
+                  <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
                     {t("Visible Teams", { defaultValue: "Visible Teams" })}
                   </label>
-                  <select
-                    multiple
-                    value={selectedTeamIds.map(String)}
-                    onChange={(e) => {
-                      const vals = Array.from(e.target.selectedOptions, (op) => Number(op.value));
-                      setSelectedTeamIds(vals);
-                    }}
-                    style={{ width: "100%", padding: "6px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "12px", height: "80px" }}
-                  >
-                    {teams.map((tItem) => (
-                      <option key={tItem.id} value={tItem.id}>{tItem.name}</option>
-                    ))}
-                  </select>
+                  <MultiSelectDropdown
+                    value={selectedTeamIds}
+                    onChange={(vals) => setSelectedTeamIds(vals.map(Number))}
+                    options={teams.map((tItem) => ({ value: tItem.id, label: tItem.name }))}
+                    placeholder={t("Select Teams...", { defaultValue: "Select Teams..." })}
+                    searchPlaceholder={t("Search teams...", { defaultValue: "Search teams..." })}
+                    showChips={true}
+                  />
                 </div>
 
                 <div>
-                  <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>
+                  <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
                     {t("Visible Users", { defaultValue: "Visible Users" })}
                   </label>
-                  <select
-                    multiple
-                    value={selectedUserIds.map(String)}
-                    onChange={(e) => {
-                      const vals = Array.from(e.target.selectedOptions, (op) => Number(op.value));
-                      setSelectedUserIds(vals);
-                    }}
-                    style={{ width: "100%", padding: "6px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--bg-card)", fontSize: "12px", height: "80px" }}
-                  >
-                    {usersList.map((u) => (
-                      <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
-                    ))}
-                  </select>
+                  <MultiSelectDropdown
+                    value={selectedUserIds}
+                    onChange={(vals) => setSelectedUserIds(vals.map(Number))}
+                    options={usersList.map((u) => ({
+                      value: u.id,
+                      label: `${u.name}${u.role ? ` (${u.role})` : ""}`,
+                    }))}
+                    placeholder={t("Select Users...", { defaultValue: "Select Users..." })}
+                    searchPlaceholder={t("Search users...", { defaultValue: "Search users..." })}
+                    showChips={true}
+                  />
                 </div>
               </div>
             )}
@@ -1775,65 +1925,301 @@ export default function KnowledgeBaseEditor() {
               </label>
             </div>
 
-            {/* FILE ATTACHMENT */}
+            {/* MULTIPLE ATTACHMENTS */}
             <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "16px" }}>
-              <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
-                {t("Attachment File", { defaultValue: "Attachment File" })}
-              </label>
-              {file || (existingFilePath && !deleteExistingFile) ? (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", background: "var(--bg-hover)", borderRadius: "6px", border: "1px solid var(--border-color)" }}>
-                  <span style={{ fontSize: "12px", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "160px" }}>
-                    {file ? file.name : (existingFileName || existingFilePath.split("/").pop())}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFile(null);
-                      if (existingFilePath) setDeleteExistingFile(true);
-                    }}
-                    style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444" }}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              ) : (
-                <input
-                  type="file"
-                  onChange={(e) => {
-                    if (e.target.files[0]) {
-                      setFile(e.target.files[0]);
-                      setDeleteExistingFile(false);
-                    }
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                <label style={{ fontSize: "12px", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px", margin: 0 }}>
+                  <Paperclip size={13} color="#2563eb" /> {t("Attachments", { defaultValue: "Attachments" })}
+                  {(existingFiles.length + files.length) > 0 && (
+                    <span style={{ fontSize: "11px", fontWeight: 700, background: "#eff6ff", color: "#2563eb", padding: "1px 6px", borderRadius: "10px" }}>
+                      {existingFiles.length + files.length}
+                    </span>
+                  )}
+                </label>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    color: "#2563eb",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "3px",
+                    padding: "2px 4px",
                   }}
-                  style={{ fontSize: "12px", width: "100%" }}
-                />
-              )}
-            </div>
+                >
+                  <Plus size={12} /> {t("Add Files", { defaultValue: "Add Files" })}
+                </button>
+              </div>
 
-            {/* REFERENCE / EXTERNAL LINK */}
-            <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "16px" }}>
-              <label style={{ fontSize: "12px", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
-                <ExternalLink size={13} color="#2563eb" /> {t("Reference / External Link", { defaultValue: "Reference / External Link" })}
-              </label>
               <input
-                type="url"
-                placeholder="https://docs.google.com/..."
-                value={referenceLink}
-                onChange={(e) => setReferenceLink(e.target.value)}
+                ref={fileInputRef}
+                type="file"
+                multiple
+                onChange={handleFilesChange}
+                style={{ display: "none" }}
+              />
+
+              {/* Existing & New Files List */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "8px" }}>
+                {/* Existing files */}
+                {existingFiles.map((att, idx) => {
+                  const fname = att.file_name || (att.file_path ? att.file_path.split("/").pop() : `File #${idx + 1}`);
+                  const isDownloading = downloadingPath === att.file_path;
+                  return (
+                    <div
+                      key={`existing-${att.file_path || idx}`}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "7px 10px",
+                        background: "var(--bg-hover)",
+                        borderRadius: "6px",
+                        border: "1px solid var(--border-color)",
+                        gap: "8px",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0, flex: 1 }}>
+                        <FileText size={14} color="#64748b" style={{ flexShrink: 0 }} />
+                        <span
+                          title={fname}
+                          style={{
+                            fontSize: "12px",
+                            fontWeight: 500,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            color: "var(--text-primary)",
+                          }}
+                        >
+                          {fname}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "4px", flexShrink: 0 }}>
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadFile(att.file_path, fname)}
+                          disabled={isDownloading}
+                          title={t("Download", { defaultValue: "Download" })}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            color: "#2563eb",
+                            padding: "2px",
+                            display: "inline-flex",
+                          }}
+                        >
+                          {isDownloading ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveExistingFile(att.file_path)}
+                          title={t("Remove file", { defaultValue: "Remove file" })}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            color: "#ef4444",
+                            padding: "2px",
+                            display: "inline-flex",
+                          }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Newly staged files */}
+                {files.map((fileObj, idx) => (
+                  <div
+                    key={`new-${fileObj.name}-${idx}`}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "7px 10px",
+                      background: "#f0fdf4",
+                      borderRadius: "6px",
+                      border: "1px solid #bbf7d0",
+                      gap: "8px",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0, flex: 1 }}>
+                      <FileText size={14} color="#16a34a" style={{ flexShrink: 0 }} />
+                      <span
+                        title={fileObj.name}
+                        style={{
+                          fontSize: "12px",
+                          fontWeight: 500,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          color: "#166534",
+                        }}
+                      >
+                        {fileObj.name}
+                      </span>
+                      <span style={{ fontSize: "10px", color: "#15803d", background: "#dcfce7", padding: "1px 4px", borderRadius: "3px", flexShrink: 0 }}>
+                        {fileObj.size ? `${(fileObj.size / 1024).toFixed(0)} KB` : "NEW"}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveNewFile(idx)}
+                      title={t("Remove file", { defaultValue: "Remove file" })}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        color: "#ef4444",
+                        padding: "2px",
+                        display: "inline-flex",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Upload Trigger Area */}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
                 style={{
                   width: "100%",
-                  padding: "8px 10px",
+                  padding: "8px 12px",
                   borderRadius: "6px",
-                  border: "1px solid var(--border-color)",
-                  background: "var(--bg-card)",
-                  color: "var(--text-primary)",
+                  border: "1px dashed var(--border-color)",
+                  background: "var(--bg-hover)",
+                  color: "var(--text-secondary)",
                   fontSize: "12px",
-                  boxSizing: "border-box",
-                  outline: "none",
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                  transition: "all 0.15s ease",
                 }}
-              />
+              >
+                <Upload size={13} /> {t("Upload Files...", { defaultValue: "Upload Files..." })}
+              </button>
               <span style={{ fontSize: "11px", color: "var(--text-muted)", display: "block", marginTop: "4px" }}>
-                {t("External specs, shared documents, or Figma links.", { defaultValue: "External specs, shared documents, or Figma links." })}
+                {t("Supported formats: PDF, Word, Excel, Images, ZIP (Multiple allowed)", { defaultValue: "Supported formats: PDF, Word, Excel, Images, ZIP (Multiple allowed)" })}
+              </span>
+            </div>
+
+            {/* MULTIPLE REFERENCE / EXTERNAL LINKS */}
+            <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "16px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                <label style={{ fontSize: "12px", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px", margin: 0 }}>
+                  <ExternalLink size={13} color="#2563eb" /> {t("Reference Links", { defaultValue: "Reference Links" })}
+                  {referenceLinks.filter((l) => l && l.trim()).length > 0 && (
+                    <span style={{ fontSize: "11px", fontWeight: 700, background: "#eff6ff", color: "#2563eb", padding: "1px 6px", borderRadius: "10px" }}>
+                      {referenceLinks.filter((l) => l && l.trim()).length}
+                    </span>
+                  )}
+                </label>
+                <button
+                  type="button"
+                  onClick={handleAddLinkRow}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    color: "#2563eb",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "3px",
+                    padding: "2px 4px",
+                  }}
+                >
+                  <Plus size={12} /> {t("Add Link", { defaultValue: "Add Link" })}
+                </button>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {referenceLinks.map((linkVal, idx) => {
+                  const isValidUrl = Boolean(linkVal && (linkVal.startsWith("http://") || linkVal.startsWith("https://")));
+                  return (
+                    <div key={`ref-link-${idx}`} style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                      <input
+                        type="url"
+                        placeholder="https://..."
+                        value={linkVal}
+                        onChange={(e) => handleLinkChange(idx, e.target.value)}
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          padding: "7px 9px",
+                          borderRadius: "6px",
+                          border: "1px solid var(--border-color)",
+                          background: "var(--bg-card)",
+                          color: "var(--text-primary)",
+                          fontSize: "12px",
+                          outline: "none",
+                        }}
+                      />
+                      {isValidUrl && (
+                        <a
+                          href={linkVal}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={t("Open Link", { defaultValue: "Open Link" })}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            padding: "6px",
+                            borderRadius: "6px",
+                            border: "1px solid var(--border-color)",
+                            background: "var(--bg-hover)",
+                            color: "#2563eb",
+                            textDecoration: "none",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <ExternalLink size={12} />
+                        </a>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveLinkRow(idx)}
+                        title={t("Remove Link", { defaultValue: "Remove Link" })}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: "6px",
+                          borderRadius: "6px",
+                          border: "1px solid var(--border-color)",
+                          background: "var(--bg-hover)",
+                          color: referenceLinks.length > 1 ? "#ef4444" : "var(--text-muted)",
+                          cursor: "pointer",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <span style={{ fontSize: "11px", color: "var(--text-muted)", display: "block", marginTop: "6px" }}>
+                {t("External specs, Figma designs, Google Docs, or Jira tickets.", { defaultValue: "External specs, Figma designs, Google Docs, or Jira tickets." })}
               </span>
             </div>
           </div>

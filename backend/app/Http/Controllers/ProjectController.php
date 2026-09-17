@@ -7,6 +7,7 @@ use App\Models\Deliverable;
 use App\Models\Event;
 use App\Models\KnowledgeBase;
 use App\Models\Project;
+use App\Models\Task;
 use App\Models\ProjectChange;
 use App\Models\ProjectFile;
 use App\Models\ProjectAccessCredential;
@@ -3068,5 +3069,316 @@ public function getEvents(Project $project): JsonResponse
         }
 
         return $tasks;
+    }
+
+    /**
+     * Check active tasks and subtasks/deliverables assigned to a member in a specific project.
+     * Active condition: status is NOT IN ['completed', 'approved', 'declined', 'rejected', 'abandoned', 'done', 'finished', 'cancelled', 'canceled'].
+     */
+    public function checkMemberActiveTasks(Request $request, Project $project, User $user): JsonResponse
+    {
+        $authUser = $request->user();
+        $isCreator = (int) $project->created_by === (int) $authUser->id;
+        $isAdminOrManager = in_array($authUser->role, ['admin', 'manager', 'super_admin']);
+
+        if (! $isCreator && ! $isAdminOrManager) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $inactiveStatuses = ['completed', 'approved', 'declined', 'rejected', 'abandoned', 'done', 'finished', 'cancelled', 'canceled'];
+
+        // 1. Active Tasks for this project assigned to $user
+        $activeTasks = Task::where('project_id', $project->id)
+            ->where(function ($q) use ($inactiveStatuses) {
+                $q->whereNull('status')
+                  ->orWhereNotIn(DB::raw('LOWER(status)'), $inactiveStatuses);
+            })
+            ->where(function ($q) use ($user) {
+                $q->where('assigned_to', $user->id)
+                  ->orWhere('current_owner', $user->id)
+                  ->orWhereHas('assignees', function ($aq) use ($user) {
+                      $aq->where('users.id', $user->id);
+                  });
+            })
+            ->get(['id', 'title', 'business_id', 'status', 'priority', 'assigned_to', 'current_owner']);
+
+        // 2. Active Deliverables (subtasks) for this project assigned to $user
+        $activeDeliverables = Deliverable::where(function ($dq) use ($project) {
+                $dq->where('project_id', $project->id)
+                   ->orWhereHas('task', fn ($tq) => $tq->where('project_id', $project->id));
+            })
+            ->where(function ($q) use ($inactiveStatuses) {
+                $q->whereNull('status')
+                  ->orWhereNotIn(DB::raw('LOWER(status)'), $inactiveStatuses);
+            })
+            ->where(function ($q) use ($user) {
+                $q->where('assigned_to', $user->id)
+                  ->orWhere('current_owner', $user->id)
+                  ->orWhereHas('assignees', function ($aq) use ($user) {
+                      $aq->where('users.id', $user->id);
+                  });
+            })
+            ->get(['id', 'title', 'business_id', 'status', 'priority', 'task_id', 'assigned_to', 'current_owner']);
+
+        $activeTasksCount = $activeTasks->count();
+        $activeDeliverablesCount = $activeDeliverables->count();
+        $totalActiveCount = $activeTasksCount + $activeDeliverablesCount;
+
+        return response()->json([
+            'success' => true,
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role,
+            ],
+            'project_id' => $project->id,
+            'active_tasks_count' => $activeTasksCount,
+            'active_deliverables_count' => $activeDeliverablesCount,
+            'total_active_count' => $totalActiveCount,
+            'tasks' => $activeTasks,
+            'deliverables' => $activeDeliverables,
+        ]);
+    }
+
+    /**
+     * Remove a member from a project with optional active task reassignment.
+     * If member has active tasks, reassign_to_user_id is mandatory.
+     */
+    public function removeAndReassignMember(Request $request, Project $project, User $user): JsonResponse
+    {
+        $authUser = $request->user();
+        $isCreator = (int) $project->created_by === (int) $authUser->id;
+        $isAdminOrManager = in_array($authUser->role, ['admin', 'manager', 'super_admin']);
+
+        if (! $isCreator && ! $isAdminOrManager) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        // Prevent removing the Project Manager / Creator without appointing another manager
+        $initialManager = (int) ($project->manager_id ?? $project->created_by ?? 0);
+        if ($initialManager > 0 && (int) $user->id === $initialManager) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You cannot remove the Project Manager until you select another manager in Project Settings.',
+            ], 422);
+        }
+
+        $inactiveStatuses = ['completed', 'approved', 'declined', 'rejected', 'abandoned', 'done', 'finished', 'cancelled', 'canceled'];
+
+        // Check active tasks
+        $activeTasks = Task::where('project_id', $project->id)
+            ->where(function ($q) use ($inactiveStatuses) {
+                $q->whereNull('status')
+                  ->orWhereNotIn(DB::raw('LOWER(status)'), $inactiveStatuses);
+            })
+            ->where(function ($q) use ($user) {
+                $q->where('assigned_to', $user->id)
+                  ->orWhere('current_owner', $user->id)
+                  ->orWhereHas('assignees', function ($aq) use ($user) {
+                      $aq->where('users.id', $user->id);
+                  });
+            })
+            ->get();
+
+        // Check active deliverables
+        $activeDeliverables = Deliverable::where(function ($dq) use ($project) {
+                $dq->where('project_id', $project->id)
+                   ->orWhereHas('task', fn ($tq) => $tq->where('project_id', $project->id));
+            })
+            ->where(function ($q) use ($inactiveStatuses) {
+                $q->whereNull('status')
+                  ->orWhereNotIn(DB::raw('LOWER(status)'), $inactiveStatuses);
+            })
+            ->where(function ($q) use ($user) {
+                $q->where('assigned_to', $user->id)
+                  ->orWhere('current_owner', $user->id)
+                  ->orWhereHas('assignees', function ($aq) use ($user) {
+                      $aq->where('users.id', $user->id);
+                  });
+            })
+            ->get();
+
+        $activeTasksCount = $activeTasks->count();
+        $activeDeliverablesCount = $activeDeliverables->count();
+        $totalActiveCount = $activeTasksCount + $activeDeliverablesCount;
+
+        $reassignToUserId = $request->input('reassign_to_user_id');
+
+        if ($totalActiveCount > 0 && empty($reassignToUserId)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This user has active tasks in this project. Please select another project member to reassign them to.',
+                'total_active_count' => $totalActiveCount,
+                'active_tasks_count' => $activeTasksCount,
+                'active_deliverables_count' => $activeDeliverablesCount,
+            ], 422);
+        }
+
+        $reassignUser = null;
+        if (! empty($reassignToUserId)) {
+            if ((int) $reassignToUserId === (int) $user->id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cannot reassign tasks to the member being removed.',
+                ], 422);
+            }
+            $reassignUser = User::find($reassignToUserId);
+            if (! $reassignUser) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'The selected reassignment user was not found.',
+                ], 422);
+            }
+        }
+
+        DB::beginTransaction();
+        try {
+            // 1. Reassign active tasks if reassignment target is provided
+            if ($reassignUser) {
+                foreach ($activeTasks as $task) {
+                    $taskUpdates = [];
+                    if ((int) $task->assigned_to === (int) $user->id) {
+                        $taskUpdates['assigned_to'] = $reassignUser->id;
+                    }
+                    if ((int) $task->current_owner === (int) $user->id) {
+                        $taskUpdates['current_owner'] = $reassignUser->id;
+                    }
+                    if (! empty($taskUpdates)) {
+                        $taskUpdates['updated_by'] = $authUser->id;
+                        $task->update($taskUpdates);
+                    }
+
+                    // Pivot task_user
+                    if (\Illuminate\Support\Facades\Schema::hasTable('task_user')) {
+                        if ($task->assignees()->where('users.id', $user->id)->exists()) {
+                            $task->assignees()->detach($user->id);
+                            if (! $task->assignees()->where('users.id', $reassignUser->id)->exists()) {
+                                $task->assignees()->attach($reassignUser->id, [
+                                    'created_at' => now(),
+                                    'updated_at' => now(),
+                                ]);
+                            }
+                        }
+                    }
+
+                    try {
+                        $task->workflowEvents()->create([
+                            'type' => 'reassigned',
+                            'user_id' => $authUser->id,
+                            'description' => "Task reassigned from {$user->name} to {$reassignUser->name} due to member removal from project {$project->title}",
+                            'created_at' => now(),
+                        ]);
+                    } catch (\Throwable $e) {}
+                }
+
+                // 2. Reassign active deliverables (subtasks)
+                foreach ($activeDeliverables as $deliv) {
+                    $delivUpdates = [];
+                    if ((int) $deliv->assigned_to === (int) $user->id) {
+                        $delivUpdates['assigned_to'] = $reassignUser->id;
+                    }
+                    if ((int) $deliv->current_owner === (int) $user->id) {
+                        $delivUpdates['current_owner'] = $reassignUser->id;
+                    }
+                    if (! empty($delivUpdates)) {
+                        $delivUpdates['updated_by'] = $authUser->id;
+                        $deliv->update($delivUpdates);
+                    }
+
+                    // Pivot deliverable_user
+                    if (\Illuminate\Support\Facades\Schema::hasTable('deliverable_user')) {
+                        if ($deliv->assignees()->where('users.id', $user->id)->exists()) {
+                            $deliv->assignees()->detach($user->id);
+                            if (! $deliv->assignees()->where('users.id', $reassignUser->id)->exists()) {
+                                $deliv->assignees()->attach($reassignUser->id, [
+                                    'created_at' => now(),
+                                    'updated_at' => now(),
+                                ]);
+                            }
+                        }
+                    }
+
+                    try {
+                        $deliv->workflowEvents()->create([
+                            'type' => 'reassigned',
+                            'user_id' => $authUser->id,
+                            'description' => "Deliverable reassigned from {$user->name} to {$reassignUser->name} due to member removal from project {$project->title}",
+                            'created_at' => now(),
+                        ]);
+                    } catch (\Throwable $e) {}
+                }
+            }
+
+            // 3. Detach member from project
+            $currentAssigned = $project->assigned_users ?? [];
+            if (is_string($currentAssigned)) {
+                $currentAssigned = json_decode($currentAssigned, true) ?? [];
+            }
+            $updatedAssigned = collect(is_array($currentAssigned) ? $currentAssigned : [])
+                ->map(fn ($id) => is_array($id) ? (int) ($id['id'] ?? 0) : (int) $id)
+                ->filter(fn ($id) => $id > 0 && $id !== (int) $user->id)
+                ->values()
+                ->all();
+
+            // If tasks were reassigned to a user not in assigned_users, add them
+            if ($reassignUser && ! in_array((int) $reassignUser->id, $updatedAssigned)) {
+                $updatedAssigned[] = (int) $reassignUser->id;
+            }
+
+            $project->assigned_users = $updatedAssigned;
+            $project->updated_by = $authUser->id;
+            $project->save();
+
+            // Pivot project_user
+            if (\Illuminate\Support\Facades\Schema::hasTable('project_user')) {
+                $project->users()->detach($user->id);
+                if ($reassignUser && ! $project->users()->where('users.id', $reassignUser->id)->exists()) {
+                    $project->users()->attach($reassignUser->id, [
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
+            }
+
+            // Remove from project visibility if present
+            try {
+                ProjectVisibility::where('project_id', $project->id)
+                    ->where('user_id', $user->id)
+                    ->delete();
+            } catch (\Throwable $e) {}
+
+            // Record Project workflow event
+            try {
+                $msg = "Member {$user->name} was removed from the project.";
+                if ($reassignUser) {
+                    $msg .= " Active tasks ({$activeTasks->count()}) and subtasks ({$activeDeliverables->count()}) were reassigned to {$reassignUser->name}.";
+                }
+                $project->workflowEvents()->create([
+                    'type' => 'member_removed',
+                    'user_id' => $authUser->id,
+                    'description' => $msg,
+                    'created_at' => now(),
+                ]);
+            } catch (\Throwable $e) {}
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => $reassignUser
+                    ? "Member {$user->name} removed and {$totalActiveCount} active item(s) reassigned to {$reassignUser->name}."
+                    : "Member {$user->name} removed successfully.",
+                'reassigned_tasks_count' => $activeTasks->count(),
+                'reassigned_deliverables_count' => $activeDeliverables->count(),
+            ]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            \Log::error("removeAndReassignMember failed: " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to remove member: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 }

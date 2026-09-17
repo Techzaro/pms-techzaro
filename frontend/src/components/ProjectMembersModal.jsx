@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import UserSelectDropdown from "./UserSelectDropdown";
+import ReassignMemberTasksModal from "./ReassignMemberTasksModal";
 import { authToken } from "../utils/auth";
 import { notify } from "../utils/notify";
 import API_URL from "../config/api";
@@ -17,6 +18,12 @@ export default function ProjectMembersModal({ isOpen, onClose, project, onSucces
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [originalMembersInfo, setOriginalMembersInfo] = useState([]);
+
+  // Active task reassignment states
+  const [memberToRemove, setMemberToRemove] = useState(null);
+  const [reassignModalOpen, setReassignModalOpen] = useState(false);
+  const [memberActiveTasksData, setMemberActiveTasksData] = useState(null);
+  const [reassignLoading, setReassignLoading] = useState(false);
 
   const isShared = project && (String(project.id || "").startsWith("shared_") || project.is_shared === true);
   const sharedResourceId = isShared ? String(project.shared_resource_id || project.id).replace("shared_", "") : null;
@@ -250,6 +257,85 @@ export default function ProjectMembersModal({ isOpen, onClose, project, onSucces
     }
   };
 
+  const handleBeforeRemoveMember = async (user) => {
+    if (!project?.id || !user) return true;
+    if (isShared && !isCollaborate) return true;
+
+    const userId = user._originalId || user.id;
+    const token = authToken();
+
+    try {
+      const res = await fetch(`${API_URL}/projects/${project.id}/members/${userId}/check-active-tasks`, {
+        headers: {
+          Accept: "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return true;
+      }
+
+      if (data.total_active_count > 0) {
+        setMemberActiveTasksData(data);
+        setMemberToRemove(user);
+        setReassignModalOpen(true);
+        return false; // PAUSE removal from local state
+      }
+
+      return true;
+    } catch (err) {
+      console.error("Error checking active tasks on member removal:", err);
+      return true;
+    }
+  };
+
+  const handleExecuteReassignAndRemove = async (reassignToUserId) => {
+    if (!project?.id || !memberToRemove) return;
+    setReassignLoading(true);
+    try {
+      const token = authToken();
+      const userId = memberToRemove._originalId || memberToRemove.id;
+      const res = await fetch(`${API_URL}/projects/${project.id}/members/${userId}/remove-and-reassign`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+        body: JSON.stringify({ reassign_to_user_id: reassignToUserId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || t("Failed to reassign tasks and remove member", { defaultValue: "Failed to reassign tasks and remove member" }));
+      }
+
+      // Update local assignedUsers state
+      setAssignedUsers((prev) => {
+        const current = prev.map((u) => Number(typeof u === "object" ? (u._originalId || u.id) : u));
+        const updated = current.filter((id) => id !== Number(userId));
+        if (reassignToUserId && !updated.includes(Number(reassignToUserId))) {
+          updated.push(Number(reassignToUserId));
+        }
+        return updated;
+      });
+
+      notify.success(data.message || t("Tasks reassigned and member removed successfully", { defaultValue: "Tasks reassigned and member removed successfully" }));
+      setReassignModalOpen(false);
+      setMemberToRemove(null);
+      setMemberActiveTasksData(null);
+      if (onSuccess) onSuccess();
+    } catch (err) {
+      notify.error(err.message || t("Error reassigning tasks and removing member", { defaultValue: "Error reassigning tasks and removing member" }));
+    } finally {
+      setReassignLoading(false);
+    }
+  };
+
+  const reassignCandidateMembers = (users || []).filter(
+    (u) => Number(u.id) !== Number(memberToRemove?._originalId || memberToRemove?.id)
+  );
+
   const managerOptions = users.filter(
     (u) =>
       u.role === "manager" ||
@@ -394,7 +480,7 @@ export default function ProjectMembersModal({ isOpen, onClose, project, onSucces
               selectedIds={assignedUsers}
               onChange={setAssignedUsers}
               placeholder={t("Select project members...", { defaultValue: "Select project members..." })}
-              onBeforeRemove={isShared && isCollaborate ? true : undefined}
+              onBeforeRemove={handleBeforeRemoveMember}
               autoOpen={isShared && isCollaborate}
             />
           </div>
@@ -432,6 +518,24 @@ export default function ProjectMembersModal({ isOpen, onClose, project, onSucces
             )}
           </div>
         </form>
+
+        <ReassignMemberTasksModal
+          isOpen={reassignModalOpen}
+          onClose={() => {
+            if (!reassignLoading) {
+              setReassignModalOpen(false);
+              setMemberToRemove(null);
+              setMemberActiveTasksData(null);
+            }
+          }}
+          memberToRemove={memberToRemove}
+          activeTasks={memberActiveTasksData?.active_tasks || []}
+          activeDeliverables={memberActiveTasksData?.active_deliverables || []}
+          totalActiveCount={memberActiveTasksData?.total_active_count || 0}
+          availableMembers={reassignCandidateMembers}
+          onConfirm={handleExecuteReassignAndRemove}
+          loading={reassignLoading}
+        />
       </div>
     </div>,
     document.body

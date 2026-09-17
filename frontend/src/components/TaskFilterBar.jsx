@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { IoSearchOutline, IoFilterOutline } from "react-icons/io5";
-import { Bookmark, Check, Trash2, Plus, Pencil, Save, X, RotateCcw, RefreshCw } from "lucide-react";
+import { Bookmark, Check, Trash2, Plus, Pencil, Save, X, RotateCcw, RefreshCw, CheckSquare } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
@@ -27,6 +27,8 @@ export default function TaskFilterBar({
   onSortChange,
   activeStatus = "",
   module = "tasks",
+  isBulkMode = false,
+  onToggleBulkMode,
 }) {
   const { t } = useTranslation();
   const [users, setUsers] = useState([]);
@@ -715,6 +717,34 @@ export default function TaskFilterBar({
               </div>
             )}
           </div>
+
+          {/* Bulk Action Toggle Button */}
+          {onToggleBulkMode && (
+            <button
+              type="button"
+              onClick={onToggleBulkMode}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                height: "38px",
+                padding: "0 14px",
+                borderRadius: "8px",
+                border: isBulkMode ? "1px solid #2563eb" : "1px solid var(--border-color, #cbd5e1)",
+                background: isBulkMode ? "var(--color-primary-bg, #eff6ff)" : "var(--bg-card, #ffffff)",
+                color: isBulkMode ? "var(--color-primary, #2563eb)" : "var(--text-primary, #334155)",
+                fontSize: "13px",
+                fontWeight: 600,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                transition: "all 0.15s ease",
+              }}
+              title={isBulkMode ? t("Exit Bulk Mode", { defaultValue: "Exit Bulk Mode" }) : t("Bulk Action", { defaultValue: "Bulk Action" })}
+            >
+              <CheckSquare size={15} style={{ color: isBulkMode ? "#2563eb" : "#4f46e5" }} />
+              <span>{t("Bulk Action", { defaultValue: "Bulk Action" })}</span>
+            </button>
+          )}
 
           <button
             type="button"

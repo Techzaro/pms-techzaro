@@ -1068,6 +1068,32 @@
   color: #475569;
 }
 
+.pd-member-remove-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  background: var(--bg-card, #fff);
+  color: var(--text-muted, #94a3b8);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-left: 4px;
+}
+
+.pd-member-remove-btn:hover {
+  background: #fef2f2;
+  color: #ef4444;
+  border-color: #fecaca;
+}
+
+.pd-member-remove-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .pd-task-form {
   margin-top: 8px;
 }

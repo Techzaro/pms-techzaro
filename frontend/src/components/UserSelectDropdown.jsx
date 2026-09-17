@@ -87,10 +87,16 @@ const UserSelectDropdown = ({
     return selectedIds.some((id) => String(typeof id === "object" ? id?.id : id) === strId);
   };
 
-  const toggleAll = () => {
+  const toggleAll = async () => {
     const filteredIds = filteredUsers.map((u) => String(u.id));
     const allSelected = filteredIds.every((id) => isUserSelected(id));
     if (allSelected) {
+      if (typeof onBeforeRemove === "function" || onBeforeRemove === true) {
+        for (const user of filteredUsers) {
+          await toggleUser(user.id);
+        }
+        return;
+      }
       onChange(selectedIds.filter((id) => !filteredIds.includes(String(typeof id === "object" ? id?.id : id))));
     } else {
       const currentStrIds = selectedIds.map((id) => String(typeof id === "object" ? id?.id : id));
@@ -98,9 +104,17 @@ const UserSelectDropdown = ({
     }
   };
 
-  const toggleUser = (userId) => {
+  const toggleUser = async (userId) => {
     const strId = String(typeof userId === "object" ? userId?.id : userId);
     if (isUserSelected(strId)) {
+      const userObj = (users || []).find((u) => String(u.id) === strId) || (typeof userId === "object" ? userId : { id: strId });
+      if (typeof onBeforeRemove === "function") {
+        const canProceed = await onBeforeRemove(userObj);
+        if (canProceed === false) return;
+      } else if (onBeforeRemove === true) {
+        const userName = userObj.name || (typeof userId === "object" && userId?.name) || "this member";
+        if (!window.confirm(t("Remove \"{{name}}\" from this project?", { name: userName, defaultValue: `Remove "${userName}" from this project?` }))) return;
+      }
       onChange(selectedIds.filter((id) => String(typeof id === "object" ? id?.id : id) !== strId));
     } else {
       const currentStrIds = selectedIds.map((id) => String(typeof id === "object" ? id?.id : id));
@@ -267,10 +281,6 @@ const UserSelectDropdown = ({
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (onBeforeRemove) {
-                        const userName = chipName || "this member";
-                        if (!window.confirm(t("Remove \"{{name}}\" from this project?", { name: userName, defaultValue: `Remove "${userName}" from this project?` }))) return;
-                      }
                       toggleUser(rawId);
                     }}
                     style={{

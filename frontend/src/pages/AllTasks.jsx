@@ -39,6 +39,7 @@ import AddNoteModal from "../components/AddNoteModal";
 import TaskMultiStatusBadges from "../components/TaskMultiStatusBadges";
 import TaskAssigneeCell from "../components/TaskAssigneeCell";
 import TaskFilterBar from "../components/TaskFilterBar";
+import BulkActionsToolbar from "../components/BulkActionsToolbar";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import { renderDynamicDates } from "../utils/tableDateUtils";
@@ -114,6 +115,33 @@ function AllTasks() {
   });
   const [showAll, setShowAll] = useState(false);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [isBulkMode, setIsBulkMode] = useState(false);
+  const [selectedItems, setSelectedItems] = useState([]);
+
+  const handleToggleBulkMode = useCallback(() => {
+    setIsBulkMode((prev) => {
+      if (prev) {
+        setSelectedItems([]);
+      }
+      return !prev;
+    });
+  }, []);
+
+  const handleToggleSelectItem = useCallback((id) => {
+    setSelectedItems((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  }, []);
+
+  const handleBulkComplete = useCallback(() => {
+    toast.info(t("Bulk action: Mark as completed triggered for {{count}} tasks.", { count: selectedItems.length, defaultValue: `Bulk action: Mark as completed triggered for ${selectedItems.length} tasks.` }));
+    console.log("Bulk complete tasks:", selectedItems);
+  }, [selectedItems, t]);
+
+  const handleBulkDelete = useCallback(() => {
+    toast.info(t("Bulk action: Delete triggered for {{count}} tasks.", { count: selectedItems.length, defaultValue: `Bulk action: Delete triggered for ${selectedItems.length} tasks.` }));
+    console.log("Bulk delete tasks:", selectedItems);
+  }, [selectedItems, t]);
 
   useEffect(() => {
     const p = searchParams.get("page");
@@ -936,11 +964,38 @@ function AllTasks() {
           });
           setPage(1);
         }}
+        isBulkMode={isBulkMode}
+        onToggleBulkMode={handleToggleBulkMode}
       />
 
       {/* TABLE */}
       <div className="container">
-        <div className="all-tasks-header">
+        <div className={`all-tasks-header ${isBulkMode ? "bulk-mode" : ""}`}>
+          {isBulkMode && (
+            <div className="col-bulk-check">
+              <input
+                type="checkbox"
+                checked={paginatedItems.length > 0 && paginatedItems.every((i) => selectedItems.includes(i.id))}
+                ref={(el) => {
+                  if (el) {
+                    const hasSome = paginatedItems.some((i) => selectedItems.includes(i.id));
+                    const hasAll = paginatedItems.length > 0 && paginatedItems.every((i) => selectedItems.includes(i.id));
+                    el.indeterminate = hasSome && !hasAll;
+                  }
+                }}
+                onChange={() => {
+                  const pageIds = paginatedItems.map((i) => i.id);
+                  const allSelected = pageIds.length > 0 && pageIds.every((id) => selectedItems.includes(id));
+                  if (allSelected) {
+                    setSelectedItems((prev) => prev.filter((id) => !pageIds.includes(id)));
+                  } else {
+                    setSelectedItems((prev) => Array.from(new Set([...prev, ...pageIds])));
+                  }
+                }}
+                aria-label={t("Select All", { defaultValue: "Select All" })}
+              />
+            </div>
+          )}
           <div style={{ fontSize: 12, fontWeight: 600 }}>{t("ID", { defaultValue: "ID" })}</div>
           <div style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("assigned_to")}>
             {t("Assigned To", { defaultValue: "Assigned To" })}
@@ -994,7 +1049,24 @@ function AllTasks() {
               const hasRevokedDelegation = Array.isArray(item.delegation_chain) && item.delegation_chain.some((d) => String(d.status).toLowerCase() === "revoked");
 
               return (
-                <div className={`all-tasks-row ${isInactiveForMe ? "delegation-rejected-row" : ""}`} key={uniqueKey} style={isInactiveForMe ? { opacity: 0.88 } : undefined}>
+                <div
+                  className={`all-tasks-row ${isBulkMode ? "bulk-mode" : ""} ${isInactiveForMe ? "delegation-rejected-row" : ""} ${selectedItems.includes(item.id) ? "row-selected" : ""}`}
+                  key={uniqueKey}
+                  style={isInactiveForMe ? { opacity: 0.88 } : undefined}
+                >
+                  {isBulkMode && (
+                    <div className="col-bulk-check" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedItems.includes(item.id)}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          handleToggleSelectItem(item.id);
+                        }}
+                        aria-label={`Select task ${item.id}`}
+                      />
+                    </div>
+                  )}
                   <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={item.id} businessId={item.business_id} />
 
                   {/* Assigned To */}
@@ -1479,6 +1551,20 @@ function AllTasks() {
             setTransferDialog({ open: false, task: null });
             fetchTasks();
             showSuccessMessage(t("Task", { defaultValue: "Task" }), t("transferred", { defaultValue: "transferred" }));
+          }}
+        />
+      )}
+
+      {isBulkMode && (
+        <BulkActionsToolbar
+          selectedCount={selectedItems.length}
+          activeTab={statusFilter || "All"}
+          onComplete={handleBulkComplete}
+          onDelete={handleBulkDelete}
+          onDeselectAll={() => setSelectedItems([])}
+          onCancel={() => {
+            setIsBulkMode(false);
+            setSelectedItems([]);
           }}
         />
       )}

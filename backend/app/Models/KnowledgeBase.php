@@ -28,7 +28,9 @@ class KnowledgeBase extends Model
         'organization',
         'file_path',
         'file_name',
+        'attachments',
         'reference_link',
+        'reference_links',
         'created_by',
         'updated_by',
     ];
@@ -37,7 +39,45 @@ class KnowledgeBase extends Model
         'is_pinned' => 'boolean',
         'views_count' => 'integer',
         'tags' => 'array',
+        'attachments' => 'array',
+        'reference_links' => 'array',
     ];
+
+    protected $appends = [
+        'attachments_list',
+        'reference_links_list',
+    ];
+
+    public function getAttachmentsListAttribute(): array
+    {
+        if (!empty($this->attachments) && is_array($this->attachments)) {
+            return $this->attachments;
+        }
+        if (!empty($this->file_path)) {
+            return [
+                [
+                    'file_path' => $this->file_path,
+                    'file_name' => $this->file_name ?: basename($this->file_path),
+                ]
+            ];
+        }
+        return [];
+    }
+
+    public function getReferenceLinksListAttribute(): array
+    {
+        if (!empty($this->reference_links) && is_array($this->reference_links)) {
+            return $this->reference_links;
+        }
+        if (!empty($this->reference_link)) {
+            $decoded = json_decode($this->reference_link, true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+            return [$this->reference_link];
+        }
+        return [];
+    }
 
     public function project(): BelongsTo
     {

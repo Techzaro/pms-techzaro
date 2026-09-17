@@ -16,6 +16,7 @@ import CustomSelect from "./CustomSelect";
 import MultiSelectDropdown from "./MultiSelectDropdown";
 import LoadingButton from "./LoadingButton";
 import ConfirmModal from "./ConfirmModal";
+import ReassignMemberTasksModal from "./ReassignMemberTasksModal";
 import { formatDateTime, toDatetimeLocal, toUTCIso, formatForMySQL, getNowDatetimeLocal } from "../utils/formatDateTime";
 import { publish } from "../utils/eventBus";
 import { notify, showSuccessMessage } from "../utils/notify";
@@ -78,6 +79,12 @@ const EditProjectModal = ({ project = {}, onClose, onProjectUpdated, restoreDraf
   });
   const [kbArticles, setKbArticles] = useState([]);
   const [eventsList, setEventsList] = useState([]);
+
+  // Active task reassignment states
+  const [memberToRemove, setMemberToRemove] = useState(null);
+  const [reassignModalOpen, setReassignModalOpen] = useState(false);
+  const [memberActiveTasksData, setMemberActiveTasksData] = useState(null);
+  const [reassignLoading, setReassignLoading] = useState(false);
 
   const [form, setForm] = useState({
     title: project?.title || "",
@@ -432,6 +439,88 @@ const EditProjectModal = ({ project = {}, onClose, onProjectUpdated, restoreDraf
     markDirty();
     setForm((prev) => ({ ...prev, assigned_users: ids }));
   };
+
+  const handleBeforeRemoveMember = async (user) => {
+    if (!project?.id || !user) return true;
+    if (isShared && !isCollaborate) return true;
+
+    const userId = user._originalId || user.id;
+    const token = authToken();
+
+    try {
+      const res = await fetch(`${API_URL}/projects/${project.id}/members/${userId}/check-active-tasks`, {
+        headers: {
+          Accept: "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return true;
+      }
+
+      if (data.total_active_count > 0) {
+        setMemberActiveTasksData(data);
+        setMemberToRemove(user);
+        setReassignModalOpen(true);
+        return false; // PAUSE removal from local state
+      }
+
+      return true;
+    } catch (err) {
+      console.error("Error checking active tasks on member removal:", err);
+      return true;
+    }
+  };
+
+  const handleExecuteReassignAndRemove = async (reassignToUserId) => {
+    if (!project?.id || !memberToRemove) return;
+    setReassignLoading(true);
+    try {
+      const token = authToken();
+      const userId = memberToRemove._originalId || memberToRemove.id;
+      const res = await fetch(`${API_URL}/projects/${project.id}/members/${userId}/remove-and-reassign`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+        body: JSON.stringify({ reassign_to_user_id: reassignToUserId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || t("Failed to reassign tasks and remove member", { defaultValue: "Failed to reassign tasks and remove member" }));
+      }
+
+      // Update local form.assigned_users state
+      markDirty();
+      setForm((prev) => {
+        const current = (prev.assigned_users || []).map((u) => Number(typeof u === "object" ? u.id : u));
+        const updated = current.filter((id) => id !== Number(userId));
+        if (reassignToUserId && !updated.includes(Number(reassignToUserId))) {
+          updated.push(Number(reassignToUserId));
+        }
+        return { ...prev, assigned_users: updated };
+      });
+
+      notify.success(data.message || t("Tasks reassigned and member removed successfully", { defaultValue: "Tasks reassigned and member removed successfully" }));
+      setReassignModalOpen(false);
+      setMemberToRemove(null);
+      setMemberActiveTasksData(null);
+      publish("project:updated", { id: project.id });
+      publish("data:changed", { type: "project", action: "updated" });
+      publish("data:changed", { type: "task", action: "updated" });
+    } catch (err) {
+      notify.error(err.message || t("Error reassigning tasks and removing member", { defaultValue: "Error reassigning tasks and removing member" }));
+    } finally {
+      setReassignLoading(false);
+    }
+  };
+
+  const reassignCandidateMembers = (allUsers || []).filter(
+    (u) => Number(u.id) !== Number(memberToRemove?._originalId || memberToRemove?.id)
+  );
 
   const handleAddPhase = () => {
     if (!phaseName.trim() || !phaseDate) return;
@@ -1437,6 +1526,7 @@ const EditProjectModal = ({ project = {}, onClose, onProjectUpdated, restoreDraf
                 selectedIds={form.assigned_users}
                 onChange={handleAssignedUsersChange}
                 placeholder={t("Click to select members", { defaultValue: "Click to select members" })}
+                onBeforeRemove={handleBeforeRemoveMember}
               />
             </div>
 
@@ -1672,6 +1762,24 @@ const EditProjectModal = ({ project = {}, onClose, onProjectUpdated, restoreDraf
         confirmText={t("Delete")}
         cancelText={t("Cancel")}
         danger
+      />
+
+      <ReassignMemberTasksModal
+        isOpen={reassignModalOpen}
+        onClose={() => {
+          if (!reassignLoading) {
+            setReassignModalOpen(false);
+            setMemberToRemove(null);
+            setMemberActiveTasksData(null);
+          }
+        }}
+        memberToRemove={memberToRemove}
+        activeTasks={memberActiveTasksData?.active_tasks || []}
+        activeDeliverables={memberActiveTasksData?.active_deliverables || []}
+        totalActiveCount={memberActiveTasksData?.total_active_count || 0}
+        availableMembers={reassignCandidateMembers}
+        onConfirm={handleExecuteReassignAndRemove}
+        loading={reassignLoading}
       />
 
       {ConfirmDialog}

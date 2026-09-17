@@ -19,12 +19,17 @@ class KbVersion extends Model
         'content',
         'file_path',
         'file_name',
+        'attachments',
+        'reference_link',
+        'reference_links',
         'change_summary',
         'created_by',
     ];
 
     protected $casts = [
         'version_number' => 'integer',
+        'attachments' => 'array',
+        'reference_links' => 'array',
     ];
 
     public function knowledgeBase(): BelongsTo

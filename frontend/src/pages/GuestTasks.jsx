@@ -17,9 +17,10 @@ import { Link, useNavigate, useSearchParams, useLocation } from "react-router-do
 import { useTranslation } from "react-i18next";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
-import { ArrowUpRight, CheckCircle2, Lock, Pause, Play, StickyNote, Sliders, XCircle, RotateCcw, AlertOctagon, Trash2, Users } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, Lock, Pause, Play, StickyNote, Sliders, XCircle, RotateCcw, AlertOctagon, Trash2, Users, CheckSquare } from "lucide-react";
 import { showSuccessMessage, notify, toast } from "../utils/notify";
 import { publish } from "../utils/eventBus";
+import BulkActionsToolbar from "../components/BulkActionsToolbar";
 import SubmitTaskModal from "../components/SubmitTaskModal";
 import ConfirmModal from "../components/ConfirmModal";
 import DeclineModal from "../components/DeclineModal";
@@ -124,6 +125,33 @@ function GuestTasks() {
   });
   const [showAll, setShowAll] = useState(false);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [isBulkMode, setIsBulkMode] = useState(false);
+  const [selectedItems, setSelectedItems] = useState([]);
+
+  const handleToggleBulkMode = useCallback(() => {
+    setIsBulkMode((prev) => {
+      if (prev) {
+        setSelectedItems([]);
+      }
+      return !prev;
+    });
+  }, []);
+
+  const handleToggleSelectItem = useCallback((id) => {
+    setSelectedItems((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  }, []);
+
+  const handleBulkComplete = useCallback(() => {
+    toast.info(t("Bulk action: Mark as completed triggered for {{count}} tasks.", { count: selectedItems.length, defaultValue: `Bulk action: Mark as completed triggered for ${selectedItems.length} tasks.` }));
+    console.log("Bulk complete tasks:", selectedItems);
+  }, [selectedItems, t]);
+
+  const handleBulkDelete = useCallback(() => {
+    toast.info(t("Bulk action: Delete triggered for {{count}} tasks.", { count: selectedItems.length, defaultValue: `Bulk action: Delete triggered for ${selectedItems.length} tasks.` }));
+    console.log("Bulk delete tasks:", selectedItems);
+  }, [selectedItems, t]);
 
   useEffect(() => {
     const p = searchParams.get("page");
@@ -871,23 +899,75 @@ function GuestTasks() {
         containerClassName="task-progress"
       />
 
-      {/* SEARCH BAR */}
-      <div className="tasks-search-bar">
-        <IoSearchOutline fontSize={"20px"} />
-        <input
-          type="text"
-          placeholder={t("Search by task name or user name", { defaultValue: "Search by task name or user name" })}
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            handlePageChange(1);
+      {/* SEARCH BAR & BULK ACTION */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px", marginBottom: "16px" }}>
+        <div className="tasks-search-bar" style={{ marginBottom: 0 }}>
+          <IoSearchOutline fontSize={"20px"} />
+          <input
+            type="text"
+            placeholder={t("Search by task name or user name", { defaultValue: "Search by task name or user name" })}
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              handlePageChange(1);
+            }}
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={handleToggleBulkMode}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+            height: "38px",
+            padding: "0 14px",
+            borderRadius: "8px",
+            border: isBulkMode ? "1px solid #2563eb" : "1px solid var(--border-color, #cbd5e1)",
+            background: isBulkMode ? "var(--color-primary-bg, #eff6ff)" : "var(--bg-card, #ffffff)",
+            color: isBulkMode ? "var(--color-primary, #2563eb)" : "var(--text-primary, #334155)",
+            fontSize: "13px",
+            fontWeight: 600,
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+            transition: "all 0.15s ease",
           }}
-        />
+          title={isBulkMode ? t("Exit Bulk Mode", { defaultValue: "Exit Bulk Mode" }) : t("Bulk Action", { defaultValue: "Bulk Action" })}
+        >
+          <CheckSquare size={15} style={{ color: isBulkMode ? "#2563eb" : "#4f46e5" }} />
+          <span>{t("Bulk Action", { defaultValue: "Bulk Action" })}</span>
+        </button>
       </div>
 
       {/* TABLE */}
       <div className="container">
-        <div className="table-header1">
+        <div className={`table-header1 ${isBulkMode ? "bulk-mode" : ""}`}>
+          {isBulkMode && (
+            <div className="col-bulk-check">
+              <input
+                type="checkbox"
+                checked={paginatedItems.length > 0 && paginatedItems.every((i) => selectedItems.includes(i.id))}
+                ref={(el) => {
+                  if (el) {
+                    const hasSome = paginatedItems.some((i) => selectedItems.includes(i.id));
+                    const hasAll = paginatedItems.length > 0 && paginatedItems.every((i) => selectedItems.includes(i.id));
+                    el.indeterminate = hasSome && !hasAll;
+                  }
+                }}
+                onChange={() => {
+                  const pageIds = paginatedItems.map((i) => i.id);
+                  const allSelected = pageIds.length > 0 && pageIds.every((id) => selectedItems.includes(id));
+                  if (allSelected) {
+                    setSelectedItems((prev) => prev.filter((id) => !pageIds.includes(id)));
+                  } else {
+                    setSelectedItems((prev) => Array.from(new Set([...prev, ...pageIds])));
+                  }
+                }}
+                aria-label={t("Select All", { defaultValue: "Select All" })}
+              />
+            </div>
+          )}
           <div style={{ fontSize: 12, fontWeight: 600 }}>{t("ID", { defaultValue: "ID" })}</div>
           <div style={{ cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("assigned_by")}>
             {t("Assigned by", { defaultValue: "Assigned by" })}
@@ -931,7 +1011,24 @@ function GuestTasks() {
               const hasRevokedDelegation = Array.isArray(item.delegation_chain) && item.delegation_chain.some((d) => String(d.status).toLowerCase() === "revoked");
 
               return (
-                <div className={`taskby-row ${isInactiveForMe ? "delegation-rejected-row" : ""}`} key={item.sortableId} style={isInactiveForMe ? { opacity: 0.88 } : undefined}>
+                <div
+                  className={`taskby-row ${isBulkMode ? "bulk-mode" : ""} ${isInactiveForMe ? "delegation-rejected-row" : ""} ${selectedItems.includes(item.id) ? "row-selected" : ""}`}
+                  key={item.sortableId}
+                  style={isInactiveForMe ? { opacity: 0.88 } : undefined}
+                >
+                  {isBulkMode && (
+                    <div className="col-bulk-check" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedItems.includes(item.id)}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          handleToggleSelectItem(item.id);
+                        }}
+                        aria-label={`Select task ${item.id}`}
+                      />
+                    </div>
+                  )}
                   <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={item.id} businessId={item.business_id} />
                   <div className="col-assigned-to">
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -1412,6 +1509,19 @@ function GuestTasks() {
         />
       )}
 
+      {isBulkMode && (
+        <BulkActionsToolbar
+          selectedCount={selectedItems.length}
+          activeTab={statusFilter || "All"}
+          onComplete={handleBulkComplete}
+          onDelete={handleBulkDelete}
+          onDeselectAll={() => setSelectedItems([])}
+          onCancel={() => {
+            setIsBulkMode(false);
+            setSelectedItems([]);
+          }}
+        />
+      )}
     </DashboardLayout>
   );
 }

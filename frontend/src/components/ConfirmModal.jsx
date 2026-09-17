@@ -22,13 +22,33 @@ import "./ConfirmModal.css";
  * @param {string} [confirmColor] - Custom confirm button color (overrides danger default)
  * @param {boolean} [danger=false] - If true, uses red color scheme for destructive actions
  */
-function ConfirmModal({ isOpen, onClose, onConfirm, title, message, confirmText = "Confirm", cancelText = "Cancel", confirmColor, danger = false }) {
+function ConfirmModal({
+  isOpen,
+  onClose,
+  onCancel,
+  onConfirm,
+  title,
+  message,
+  confirmText,
+  confirmLabel,
+  cancelText,
+  cancelLabel,
+  confirmColor,
+  danger = false,
+  isDestructive = false,
+  isLoading = false,
+}) {
   const { t } = useTranslation();
-  useEscapeKey(isOpen, onClose);
+  const handleCloseCallback = onClose || onCancel || (() => {});
+  useEscapeKey(isOpen, handleCloseCallback);
 
-  // Resolve the confirm button color: explicit color > danger red > default blue
-  const resolvedColor = confirmColor || (danger ? "#ef4444" : "#3b82f6");
+  const isDanger = danger || isDestructive;
+  const resolvedColor = confirmColor || (isDanger ? "#ef4444" : "#3b82f6");
   const [processing, setProcessing] = useState(false);
+
+  const resolvedConfirmText = confirmText || confirmLabel || "Confirm";
+  const resolvedCancelText = cancelText || cancelLabel || "Cancel";
+  const isCurrentlyProcessing = processing || isLoading;
 
   useEffect(() => {
     if (isOpen) {
@@ -44,11 +64,10 @@ function ConfirmModal({ isOpen, onClose, onConfirm, title, message, confirmText 
   if (!isOpen) return null;
 
   const handleConfirm = async () => {
-    if (processing) return;
+    if (isCurrentlyProcessing || !onConfirm) return;
     setProcessing(true);
     try {
       if (onConfirm.length > 0) {
-        // onConfirm expects a done() callback
         await new Promise((resolve) => {
           onConfirm(() => { setProcessing(false); resolve(); });
         });
@@ -61,8 +80,8 @@ function ConfirmModal({ isOpen, onClose, onConfirm, title, message, confirmText 
   };
 
   const handleClose = () => {
-    if (processing) return;
-    onClose();
+    if (isCurrentlyProcessing) return;
+    handleCloseCallback();
   };
 
   return createPortal(
@@ -78,14 +97,14 @@ function ConfirmModal({ isOpen, onClose, onConfirm, title, message, confirmText 
         <h3 id="cm-title">{t(title)}</h3>
         <p id="cm-message">{t(message)}</p>
         <div className="cm-actions">
-          <button className="cm-cancel-btn" onClick={handleClose} disabled={processing}>{t(cancelText)}</button>
+          <button className="cm-cancel-btn" onClick={handleClose} disabled={isCurrentlyProcessing}>{t(resolvedCancelText)}</button>
           <button
-            className={`cm-confirm-btn ${danger ? "cm-confirm-btn--danger" : ""} ${processing ? "cm-confirm-btn--processing" : ""}`}
+            className={`cm-confirm-btn ${isDanger ? "cm-confirm-btn--danger" : ""} ${isCurrentlyProcessing ? "cm-confirm-btn--processing" : ""}`}
             style={{ background: resolvedColor }}
             onClick={handleConfirm}
-            disabled={processing}
+            disabled={isCurrentlyProcessing}
           >
-            {processing ? t("Processing...") : t(confirmText)}
+            {isCurrentlyProcessing ? t("Processing...") : t(resolvedConfirmText)}
           </button>
         </div>
       </div>

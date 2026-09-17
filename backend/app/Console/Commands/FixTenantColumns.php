@@ -105,6 +105,8 @@ class FixTenantColumns extends Command
             ['name' => 'views_count',                   'definition' => "BIGINT UNSIGNED DEFAULT 0"],
             ['name' => 'tags',                          'definition' => "JSON NULL"],
             ['name' => 'reference_link',                'definition' => "VARCHAR(2048) NULL AFTER `file_name`"],
+            ['name' => 'attachments',                   'definition' => "JSON NULL AFTER `file_name`"],
+            ['name' => 'reference_links',               'definition' => "JSON NULL AFTER `reference_link`"],
         ],
         'events' => [
             ['name' => 'organizer_id',                  'definition' => "BIGINT UNSIGNED NULL AFTER `user_id`"],

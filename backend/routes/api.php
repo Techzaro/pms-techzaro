@@ -341,6 +341,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/projects', [ProjectController::class, 'index']);
     Route::get('/projects/{project}', [ProjectController::class, 'show']);
     Route::get('/projects/{project}/members', [ProjectController::class, 'getMembers']);
+    Route::get('/projects/{project}/members/{user}/check-active-tasks', [ProjectController::class, 'checkMemberActiveTasks']);
+    Route::post('/projects/{project}/members/{user}/remove-and-reassign', [ProjectController::class, 'removeAndReassignMember']);
+    Route::delete('/projects/{project}/members/{user}', [ProjectController::class, 'removeAndReassignMember']);
     Route::get('/projects/{project}/collaborate-users', [TaskController::class, 'getCollaborateUsers']);
     Route::get('/projects/{project}/tasks', [ProjectController::class, 'getTasks']);
     Route::post('/projects/{project}/changes/mark-read', [ProjectController::class, 'markChangesRead']);

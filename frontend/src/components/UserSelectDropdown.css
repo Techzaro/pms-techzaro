@@ -188,19 +188,18 @@
 }
 
 .usd-item--selected {
-  background: #f0f4ff;
+  background: #eff6ff;
+  color: #1d4ed8;
 }
 
 .usd-item--highlighted {
-  background: #4a4a4a !important;
-  color: #fff !important;
+  background: var(--bg-hover, #f1f5f9) !important;
+  color: var(--text-primary, #0f172a) !important;
 }
-.usd-item--highlighted * {
-  color: #fff !important;
-}
-.usd-item--highlighted .usd-role,
-.usd-item--highlighted .usd-dept {
-  background: rgba(255,255,255,0.2) !important;
+
+.usd-item--selected.usd-item--highlighted {
+  background: #dbeafe !important;
+  color: #1e40af !important;
 }
 
 .usd-item-left {

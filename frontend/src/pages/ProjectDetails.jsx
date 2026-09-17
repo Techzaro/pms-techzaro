@@ -75,6 +75,7 @@ import ActionPopover from "../components/ActionPopover";
 import Pagination from "../components/Pagination";
 import UnifiedActivityFeed from "../components/UnifiedActivityFeed";
 import ProjectMembersModal from "../components/ProjectMembersModal";
+import ReassignMemberTasksModal from "../components/ReassignMemberTasksModal";
 import TaskAssigneeCell from "../components/TaskAssigneeCell";
 import "../components/ActionPopover.css";
 import { formatDateTimeShort, formatDateTime, formatDateTimeInline } from "../utils/formatDateTime";
@@ -438,6 +439,15 @@ function ProjectDetails() {
   const [savingManager, setSavingManager] = useState(false);
   const [mgrHighlightedIndex, setMgrHighlightedIndex] = useState(0);
   const mgrListRef = useRef(null);
+
+  // Member removal & task reassignment states
+  const [memberToRemove, setMemberToRemove] = useState(null);
+  const [checkingMemberTasks, setCheckingMemberTasks] = useState(false);
+  const [simpleRemoveConfirmOpen, setSimpleRemoveConfirmOpen] = useState(false);
+  const [activeTasksWarningOpen, setActiveTasksWarningOpen] = useState(false);
+  const [reassignModalOpen, setReassignModalOpen] = useState(false);
+  const [memberActiveTasksData, setMemberActiveTasksData] = useState(null);
+  const [removingMemberLoading, setRemovingMemberLoading] = useState(false);
 
   const memberCount = useMemo(() => {
     if (!project) return 0;
@@ -1355,6 +1365,128 @@ function ProjectDetails() {
     setUnlinkEventConfirmOpen(false);
     setUnlinkEventId(null);
     await handleUnlinkEvent(id);
+  };
+
+  const reassignCandidateMembers = useMemo(() => {
+    if (!project) return [];
+    const list = [];
+    const seen = new Set();
+
+    if (project.creator && project.creator.id) {
+      list.push(project.creator);
+      seen.add(Number(project.creator.id));
+    }
+
+    (project.members || []).forEach((m) => {
+      if (m && m.id && !seen.has(Number(m.id))) {
+        list.push(m);
+        seen.add(Number(m.id));
+      }
+    });
+
+    return list.filter((m) => memberToRemove ? Number(m.id) !== Number(memberToRemove.id) : true);
+  }, [project, memberToRemove]);
+
+  const handleInitiateRemoveMember = async (member) => {
+    if (!project || !member) return;
+    setMemberToRemove(member);
+    setCheckingMemberTasks(true);
+
+    try {
+      const token = authToken();
+      const res = await fetch(`${API}/projects/${project.id}/members/${member.id}/check-active-tasks`, {
+        headers: {
+          Accept: "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || t("Failed to check active tasks", { defaultValue: "Failed to check active tasks" }));
+      }
+
+      setMemberActiveTasksData(data);
+
+      if (data.total_active_count > 0) {
+        setActiveTasksWarningOpen(true);
+      } else {
+        setSimpleRemoveConfirmOpen(true);
+      }
+    } catch (err) {
+      notify.error(err.message || t("Error checking active tasks for member", { defaultValue: "Error checking active tasks for member" }));
+    } finally {
+      setCheckingMemberTasks(false);
+    }
+  };
+
+  const handleConfirmSimpleRemoval = async () => {
+    if (!project || !memberToRemove) return;
+    setRemovingMemberLoading(true);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API}/projects/${project.id}/members/${memberToRemove.id}/remove-and-reassign`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || t("Failed to remove member", { defaultValue: "Failed to remove member" }));
+      }
+      showSuccessMessage(t("Member", { defaultValue: "Member" }), t("removed successfully", { defaultValue: "removed successfully" }));
+      setSimpleRemoveConfirmOpen(false);
+      setMemberToRemove(null);
+      setMemberActiveTasksData(null);
+      loadProject();
+      publish("project:updated", { id: project.id });
+      publish("data:changed", { type: "project", action: "updated" });
+    } catch (err) {
+      notify.error(err.message || t("Error removing member", { defaultValue: "Error removing member" }));
+    } finally {
+      setRemovingMemberLoading(false);
+    }
+  };
+
+  const handleConfirmWarningAndOpenReassign = () => {
+    setActiveTasksWarningOpen(false);
+    setReassignModalOpen(true);
+  };
+
+  const handleExecuteReassignAndRemove = async (reassignToUserId) => {
+    if (!project || !memberToRemove) return;
+    setRemovingMemberLoading(true);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API}/projects/${project.id}/members/${memberToRemove.id}/remove-and-reassign`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+        body: JSON.stringify({ reassign_to_user_id: reassignToUserId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || t("Failed to reassign tasks and remove member", { defaultValue: "Failed to reassign tasks and remove member" }));
+      }
+      showSuccessMessage(t("Member removed and tasks reassigned successfully", { defaultValue: "Member removed and tasks reassigned successfully" }));
+      setReassignModalOpen(false);
+      setMemberToRemove(null);
+      setMemberActiveTasksData(null);
+      loadProject();
+      publish("project:updated", { id: project.id });
+      publish("data:changed", { type: "project", action: "updated" });
+      publish("data:changed", { type: "task", action: "updated" });
+    } catch (err) {
+      notify.error(err.message || t("Error reassigning and removing member", { defaultValue: "Error reassigning and removing member" }));
+    } finally {
+      setRemovingMemberLoading(false);
+    }
   };
 
   const { submitting: milestoneToggling, run: runMilestoneToggle } = useSubmit();
@@ -2509,6 +2641,20 @@ function ProjectDetails() {
                                 <div className="pd-member-right">
                                   {m.department && <span className="pd-member-dept">{m.department}</span>}
                                   <span className="pd-badge-member">{t("Member", { defaultValue: "Member" })}</span>
+                                  {((!isShared && isAdminOrManager) || isCollaborate) && !isViewOnlyUser && (
+                                    <button
+                                      type="button"
+                                      className="pd-member-remove-btn"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleInitiateRemoveMember(m);
+                                      }}
+                                      title={t("Remove member from project", { defaultValue: "Remove member from project" })}
+                                      disabled={checkingMemberTasks}
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             )}
@@ -3530,6 +3676,66 @@ function ProjectDetails() {
         onClose={() => setShowProjectMembersModal(false)}
         project={project}
         onSuccess={loadProject}
+      />
+
+      {/* Simple Confirm Removal Modal when user has 0 active tasks */}
+      <ConfirmModal
+        isOpen={simpleRemoveConfirmOpen}
+        title={t("Remove Member from Project", { defaultValue: "Remove Member from Project" })}
+        message={t("Are you sure you want to remove {{name}} from this project?", {
+          name: memberToRemove?.name || t("this member", { defaultValue: "this member" }),
+          defaultValue: `Are you sure you want to remove ${memberToRemove?.name || "this member"} from this project?`,
+        })}
+        confirmText={t("Remove", { defaultValue: "Remove" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        danger={true}
+        onConfirm={handleConfirmSimpleRemoval}
+        onClose={() => {
+          if (!removingMemberLoading) {
+            setSimpleRemoveConfirmOpen(false);
+            setMemberToRemove(null);
+            setMemberActiveTasksData(null);
+          }
+        }}
+      />
+
+      {/* Warning Modal when member has active tasks, warning PM and prompting reassignment */}
+      <ConfirmModal
+        isOpen={activeTasksWarningOpen}
+        title={t("Active Tasks Detected", { defaultValue: "Active Tasks Detected" })}
+        message={t("{{name}} currently has {{count}} active task(s)/deliverable(s) in this project. You must reassign these tasks to another member before removing them.", {
+          name: memberToRemove?.name || t("This member", { defaultValue: "This member" }),
+          count: memberActiveTasksData?.total_active_count || 0,
+          defaultValue: `${memberToRemove?.name || "This member"} currently has ${memberActiveTasksData?.total_active_count || 0} active task(s)/deliverable(s) in this project. You must reassign these tasks to another member before removing them.`,
+        })}
+        confirmText={t("Proceed to Reassign", { defaultValue: "Proceed to Reassign" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        danger={false}
+        onConfirm={handleConfirmWarningAndOpenReassign}
+        onClose={() => {
+          setActiveTasksWarningOpen(false);
+          setMemberToRemove(null);
+          setMemberActiveTasksData(null);
+        }}
+      />
+
+      {/* Reassign & Remove Modal */}
+      <ReassignMemberTasksModal
+        isOpen={reassignModalOpen}
+        onClose={() => {
+          if (!removingMemberLoading) {
+            setReassignModalOpen(false);
+            setMemberToRemove(null);
+            setMemberActiveTasksData(null);
+          }
+        }}
+        memberToRemove={memberToRemove}
+        activeTasks={memberActiveTasksData?.active_tasks || []}
+        activeDeliverables={memberActiveTasksData?.active_deliverables || []}
+        totalActiveCount={memberActiveTasksData?.total_active_count || 0}
+        availableMembers={reassignCandidateMembers}
+        onConfirm={handleExecuteReassignAndRemove}
+        loading={removingMemberLoading}
       />
 
       {showLinkKbModal && createPortal(
