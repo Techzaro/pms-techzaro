@@ -1134,12 +1134,12 @@ if (!editUser.employee_code.trim()) errors.employee_code = t("Employee Code is r
         <div className="profile">
           <div className="profile-layout">
         <Breadcrumb items={breadcrumbs} />
-            <div className="profile-header-profile" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
+            <div className="profile-header-profile" style={{ position: "relative", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
               <div>
                 <h1>{user?.role === "guest" ? t("Guest Profile", { defaultValue: "Guest Profile" }) : t("User Profile", { defaultValue: "User Profile" })}</h1>
                 <p>{user?.role === "guest" ? t("View and manage guest information and account settings.", { defaultValue: "View and manage guest information and account settings." }) : t("View and manage your personal information and account settings.", { defaultValue: "View and manage your personal information and account settings." })}</p>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, position: "relative", zIndex: 10 }}>
                 <button
                   type="button"
                   onClick={handleBack}

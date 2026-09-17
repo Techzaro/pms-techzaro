@@ -825,26 +825,27 @@ class TaskController extends Controller
                 ->get()->keyBy('task_id');
         }
 
-        $expandedTasks = collect();
-        foreach ($tasks as $task) {
+        $tasks->transform(function ($task) use ($dlvStats, $user, $userId) {
+            $task->item_type = 'task';
             $stats = $dlvStats->get($task->id);
+            $total = $stats ? (int) $stats->total : 0;
+            $completed = $stats ? (int) $stats->completed : 0;
+            $pending = $stats ? (int) $stats->pending : 0;
+            $task->total_deliverables = $total;
+            $task->completed_deliverables = $completed;
+            $task->pending_deliverables_count = $pending;
             $isTerminal = in_array(strtolower($task->status ?? ''), ['completed', 'approved', 'done']);
-            $progress = $stats ? [
-                'total' => (int) $stats->total,
-                'completed' => (int) $stats->completed,
-                'pending' => (int) $stats->pending,
-                'progress' => (($stats->total ?? 0) > 0 ? (int) round((($stats->completed ?? 0) / $stats->total) * 100) : ($isTerminal ? 100 : 0)),
-            ] : ['total' => 0, 'completed' => 0, 'pending' => 0, 'progress' => $isTerminal ? 100 : 0];
+            $task->deliverables_progress = $total > 0 ? (int) round(($completed / $total) * 100) : ($isTerminal ? 100 : 0);
+
+            if ($task->submission_stage === 'awaiting_checkpoint' && !in_array(strtolower((string)$task->status), ['completed', 'approved', 'declined', 'abandoned'], true)) {
+                $task->status = 'in_progress';
+            }
 
             // Check delegation chain for OA visibility
             $delegationChain = $task->delegation_chain ?? [];
-            $latestDelegation = null;
-            if (! empty($delegationChain)) {
-                $latestDelegation = end($delegationChain);
-            }
+            $latestDelegation = !empty($delegationChain) ? end($delegationChain) : null;
 
-            // For "Assigned By You", a transferor must see the assignment they made,
-            // not whichever transfer happened latest farther down the chain.
+            // For "Assigned By You", a transferor must see the assignment they made
             $viewerDelegation = null;
             foreach (array_reverse($delegationChain) as $entry) {
                 if ((int) ($entry['delegated_by'] ?? 0) === (int) $userId
@@ -853,141 +854,63 @@ class TaskController extends Controller
                     break;
                 }
             }
-            $isViewerTransferor = $viewerDelegation !== null;
             $visibleDelegation = $viewerDelegation ?? $latestDelegation;
             $hasActiveDelegation = $visibleDelegation
                 && in_array(strtolower((string) ($visibleDelegation['status'] ?? '')), ['pending', 'accepted'], true);
             $delegationReturnToTransferor = $hasActiveDelegation ? ($visibleDelegation['return_to_transferor'] ?? true) : true;
 
-            $delegationTransfereeId = $hasActiveDelegation ? (int) $visibleDelegation['delegated_to'] : null;
-            $delegationTransferorId = $hasActiveDelegation ? (int) $visibleDelegation['delegated_by'] : null;
-
-            $assignees = $task->assignees->isEmpty() ? collect([null]) : $task->assignees;
-            $rowCreated = false;
-            foreach ($assignees as $assignee) {
-                // Skip self-assignment: if assignee == assigner, it's a personal task, not "Assigned By You".
-                // For cross-org tasks, assignee IDs come from a different DB so integer IDs can collide
-                // (e.g. both Dummy.id=1 and Test.id=1). Only skip when both are from the SAME org.
-                $isExternalAssignee = !empty($assignee->is_external) || !empty($assignee->organization_id);
-                if ($assignee && !$isExternalAssignee && (int) $assignee->id === (int) $task->assigned_by) {
-                    continue;
+            // Transferor flags
+            $isTransferor = false;
+            foreach ($delegationChain as $entry) {
+                if ((int) ($entry['delegated_by'] ?? 0) === (int) $user->id && ($entry['status'] ?? '') === 'accepted') {
+                    $isTransferor = true;
+                    break;
                 }
-                if (! $assignee && (int) $task->assigned_to === (int) $task->assigned_by) {
-                    continue;
+            }
+            $task->is_transferor = $isTransferor;
+            $task->transferor_return_to_self = true;
+            $task->transferor_has_approved = false;
+            foreach ($delegationChain as $entry) {
+                if ((int) ($entry['delegated_by'] ?? 0) === (int) $user->id && ($entry['status'] ?? '') === 'accepted') {
+                    $task->transferor_return_to_self = $entry['return_to_transferor'] ?? true;
+                    break;
                 }
-                if ($isDueTodayFilter && $assignee) {
-                    $effectiveDueDate = ($assignee->pivot->due_date ?? null) ?: $task->end_date;
-                    if (! $effectiveDueDate || Carbon::parse($effectiveDueDate)->toDateString() !== today()->toDateString()) {
-                        continue;
-                    }
+            }
+            $approvalChain = $task->approval_chain ?? [];
+            foreach ($approvalChain as $aEntry) {
+                if ((int) ($aEntry['approver_id'] ?? 0) === (int) $user->id && ($aEntry['status'] ?? '') === 'approved') {
+                    $task->transferor_has_approved = true;
+                    break;
                 }
-                // When delegation exists, show only the relevant assignee's row
-                if ($delegationTransfereeId && $assignee) {
-                    if ($isViewerTransferor) {
-                        // This page represents the current user's outgoing assignment.
-                        if ((int) $assignee->id !== $delegationTransfereeId) {
-                            continue;
-                        }
-                    } elseif ($delegationReturnToTransferor) {
-                        // return_to_transferor=true → show the transferor
-                        if ((int) $assignee->id !== $delegationTransferorId) {
-                            continue;
-                        }
-                    } else {
-                        // return_to_transferor=false → show the transferee
-                        // If the transferee is not in the assignees list, skip and create virtual row later
-                        if ((int) $assignee->id !== $delegationTransfereeId) {
-                            continue;
-                        }
-                    }
-                }
-
-                $clone = clone $task;
-                $clone->setRelation('assignees', $assignee ? collect([$assignee]) : collect());
-                $clone->item_type = 'task';
-                if ($task->submission_stage === 'awaiting_checkpoint' && !in_array(strtolower((string)$task->status), ['completed', 'approved', 'declined', 'abandoned'], true)) {
-                    $clone->status = 'in_progress';
-                }
-                $clone->total_deliverables = $progress['total'];
-                $clone->completed_deliverables = $progress['completed'];
-                $clone->pending_deliverables_count = $progress['pending'];
-                $clone->deliverables_progress = $progress['progress'];
-                // Transferor flags
-                $isTransferor = false;
-                $chain = $task->delegation_chain ?? [];
-                foreach ($chain as $entry) {
-                    if ((int) $entry['delegated_by'] === (int) $user->id && $entry['status'] === 'accepted') {
-                        $isTransferor = true;
-                        break;
-                    }
-                }
-                $clone->is_transferor = $isTransferor;
-                $clone->transferor_return_to_self = true;
-                $clone->transferor_has_approved = false;
-                foreach ($chain as $entry) {
-                    if ((int) $entry['delegated_by'] === (int) $user->id && $entry['status'] === 'accepted') {
-                        $clone->transferor_return_to_self = $entry['return_to_transferor'] ?? true;
-                        break;
-                    }
-                }
-                $approvalChain = $task->approval_chain ?? [];
-                foreach ($approvalChain as $aEntry) {
-                    if ((int) $aEntry['approver_id'] === (int) $user->id && $aEntry['status'] === 'approved') {
-                        $clone->transferor_has_approved = true;
-                        break;
-                    }
-                }
-                // Set transferred_by_name for the transferee
-                $clone->transferred_by_name = null;
-                foreach ($chain as $entry) {
-                    if ((int) $entry['delegated_to'] === (int) $user->id && $entry['status'] === 'accepted') {
-                        $clone->transferred_by_name = $entry['delegated_by_name'];
-                    }
-                }
-                // Set delegation flags for OA view
-                $clone->has_direct_to_oa_delegation = false;
-                $clone->delegator_name = null;
-                $clone->is_transferee = false;
-                if ($hasActiveDelegation && ! $delegationReturnToTransferor) {
-                    $clone->has_direct_to_oa_delegation = true;
-                    $clone->delegator_name = $visibleDelegation['delegated_by_name'] ?? null;
-                    $clone->is_transferee = true;
-                }
-                $clone->current_owner_id = $task->current_owner;
-                $clone->current_owner_name = $task->currentOwner?->name;
-                $expandedTasks->push($clone);
-                $rowCreated = true;
             }
 
-            // If no row was created for Direct to OA delegation, create a virtual transferee row
-            if (! $rowCreated && $hasActiveDelegation && ($isViewerTransferor || ! $delegationReturnToTransferor)) {
-                $clone = clone $task;
-                $clone->setRelation('assignees', collect());
-                $clone->item_type = 'task';
-                if ($task->submission_stage === 'awaiting_checkpoint' && !in_array(strtolower((string)$task->status), ['completed', 'approved', 'declined', 'abandoned'], true)) {
-                    $clone->status = 'in_progress';
+            // Set transferred_by_name for the transferee
+            $task->transferred_by_name = null;
+            foreach ($delegationChain as $entry) {
+                if ((int) ($entry['delegated_to'] ?? 0) === (int) $user->id && ($entry['status'] ?? '') === 'accepted') {
+                    $task->transferred_by_name = $entry['delegated_by_name'] ?? null;
                 }
-                $clone->total_deliverables = $progress['total'];
-                $clone->completed_deliverables = $progress['completed'];
-                $clone->pending_deliverables_count = $progress['pending'];
-                $clone->deliverables_progress = $progress['progress'];
-                $clone->is_transferor = false;
-                $clone->transferor_return_to_self = false;
-                $clone->transferor_has_approved = false;
-                $clone->transferred_by_name = null;
-                $clone->has_direct_to_oa_delegation = true;
-                $clone->delegator_name = $visibleDelegation['delegated_by_name'] ?? null;
-                $clone->is_transferee = true;
-                $clone->current_owner_id = (int) $visibleDelegation['delegated_to'];
-                $clone->current_owner_name = $visibleDelegation['delegated_to_name'] ?? null;
-                $expandedTasks->push($clone);
             }
-        }
+
+            // Set delegation flags for OA view
+            $task->has_direct_to_oa_delegation = false;
+            $task->delegator_name = null;
+            $task->is_transferee = false;
+            if ($hasActiveDelegation && !$delegationReturnToTransferor) {
+                $task->has_direct_to_oa_delegation = true;
+                $task->delegator_name = $visibleDelegation['delegated_by_name'] ?? null;
+                $task->is_transferee = true;
+            }
+            $task->current_owner_id = $task->current_owner;
+            $task->current_owner_name = $task->currentOwner?->name;
+
+            return $task;
+        });
 
         $deliverables = $delivQuery->get();
         $deliverables->transform(fn ($d) => $this->formatDeliverableAsListItem($d, $user));
 
-        $allItems = $expandedTasks->concat($deliverables)->concat($sharedTasks)->sortByDesc('created_at')->values();
+        $allItems = $tasks->concat($deliverables)->concat($sharedTasks)->sortByDesc('created_at')->values();
 
         return response()->json([
             'success' => true,
@@ -7227,48 +7150,93 @@ $routing = $this->delegationService->routingPayload($task, $user);
             $hasDueToday = false;
             $hasTransferred = false;
             $hasReopened = false;
+            $includesPending = false;
+
+            $statusGroups = [
+                'pending' => [
+                    'Pending', 'pending', 'planned', 'Planning', 'Planned', 'draft', 'Draft',
+                    'todo', 'Todo', 'to_do', 'To_Do', 'to-do', 'To-Do', 'TODO', 'TO_DO', 'new', 'New', 'NEW',
+                    'not_started', 'Not Started', 'not started', 'not-started', 'Not-Started', 'NOT_STARTED',
+                    'unassigned', 'Unassigned', 'UNASSIGNED', 'reopened', 'Reopened', 'REOPENED',
+                ],
+                'in_progress' => [
+                    'In Progress', 'in_progress', 'in progress', 'in-progress', 'In-Progress', 'IN_PROGRESS',
+                    'doing', 'Doing', 'working', 'Working', 'underway', 'Underway', 'under_way', 'Under Way',
+                    'acknowledged', 'Acknowledged', 'started', 'Started',
+                ],
+                'submitted' => [
+                    'Submitted', 'submitted', 'review', 'Review', 'in_review', 'In Review', 'In_Review',
+                    'under_review', 'Under Review', 'Under_Review', 'submitted_late', 'Submitted Late',
+                    'awaiting_approval', 'Awaiting Approval', 'awaiting_checkpoint',
+                ],
+                'completed' => [
+                    'Approved', 'approved', 'completed', 'Completed', 'done', 'Done', 'finished', 'Finished', 'closed', 'Closed',
+                ],
+                'paused' => [
+                    'Paused', 'paused', 'pause', 'Pause', 'hold', 'Hold', 'on_hold', 'On Hold', 'on hold', 'on-hold', 'On-Hold',
+                ],
+                'declined' => [
+                    'Declined', 'declined', 'rejected', 'Rejected', 'failed', 'Failed', 'rework_required', 'Rework Required',
+                ],
+                'abandoned' => [
+                    'Abandoned', 'abandoned', 'abandon_requested', 'Abandon Requested', 'Abandon_Requested', 'cancelled', 'Cancelled', 'canceled', 'Canceled',
+                ],
+            ];
+
             foreach ($rawStatuses as $st) {
-                $stLower = strtolower(trim((string) $st));
+                $st = trim((string) $st);
+                $stLower = strtolower($st);
+
                 if ($stLower === 'due_today') {
                     $hasDueToday = true;
                 } elseif ($stLower === 'transferred') {
                     $hasTransferred = true;
                 } elseif ($stLower === 'reopened') {
                     $hasReopened = true;
-                } elseif (in_array($stLower, ['pending', 'planned', 'planning'])) {
-                    $expandedStatuses = array_merge($expandedStatuses, ['pending', 'planned', 'Planning', 'Planned']);
-                } elseif (in_array($stLower, ['in_progress', 'in progress', 'in-progress', 'doing'])) {
-                    $expandedStatuses = array_merge($expandedStatuses, ['In Progress', 'in_progress', 'in-progress']);
-                } elseif (in_array($stLower, ['submitted', 'review', 'in_review'])) {
-                    $expandedStatuses = array_merge($expandedStatuses, ['submitted', 'Submitted']);
-                } elseif (in_array($stLower, ['approved', 'completed', 'done'])) {
-                    $expandedStatuses = array_merge($expandedStatuses, ['Approved', 'approved', 'completed', 'done']);
-                } elseif (in_array($stLower, ['paused', 'pause'])) {
-                    $expandedStatuses = array_merge($expandedStatuses, ['Paused', 'paused', 'pause']);
-                } elseif (in_array($stLower, ['declined', 'rejected', 'failed'])) {
-                    $expandedStatuses = array_merge($expandedStatuses, ['declined', 'rejected']);
-                } elseif (in_array($stLower, ['abandoned', 'abandon_requested'])) {
-                    $expandedStatuses = array_merge($expandedStatuses, ['abandoned', 'abandon_requested']);
+                } elseif (in_array($stLower, ['pending', 'planned', 'planning', 'draft', 'todo', 'to_do', 'to-do', 'new', 'not_started', 'not started', 'not-started', 'unassigned'], true)) {
+                    $includesPending = true;
+                    $expandedStatuses = array_merge($expandedStatuses, $statusGroups['pending']);
+                } elseif (in_array($stLower, ['in_progress', 'in progress', 'in-progress', 'doing', 'working', 'underway', 'under_way', 'acknowledged', 'started'], true)) {
+                    $expandedStatuses = array_merge($expandedStatuses, $statusGroups['in_progress']);
+                } elseif (in_array($stLower, ['submitted', 'review', 'in_review', 'under_review', 'submitted_late', 'awaiting_approval', 'awaiting_checkpoint'], true)) {
+                    $expandedStatuses = array_merge($expandedStatuses, $statusGroups['submitted']);
+                } elseif (in_array($stLower, ['approved', 'completed', 'done', 'finished', 'closed'], true)) {
+                    $expandedStatuses = array_merge($expandedStatuses, $statusGroups['completed']);
+                } elseif (in_array($stLower, ['paused', 'pause', 'hold', 'on_hold', 'on hold', 'on-hold'], true)) {
+                    $expandedStatuses = array_merge($expandedStatuses, $statusGroups['paused']);
+                } elseif (in_array($stLower, ['declined', 'rejected', 'failed', 'rework_required'], true)) {
+                    $expandedStatuses = array_merge($expandedStatuses, $statusGroups['declined']);
+                } elseif (in_array($stLower, ['abandoned', 'abandon_requested', 'cancelled', 'canceled'], true)) {
+                    $expandedStatuses = array_merge($expandedStatuses, $statusGroups['abandoned']);
                 } elseif (! empty($st)) {
                     $expandedStatuses[] = $st;
                 }
             }
+
             $expandedStatuses = array_values(array_unique($expandedStatuses));
             if (! empty($expandedStatuses) || $hasDueToday || $hasTransferred || $hasReopened) {
-                $query->where(function ($sq) use ($expandedStatuses, $hasDueToday, $hasTransferred, $hasReopened) {
+                $query->where(function ($sq) use ($expandedStatuses, $hasDueToday, $hasTransferred, $hasReopened, $includesPending) {
                     $hasCondition = false;
                     if (! empty($expandedStatuses)) {
-                        $sq->whereIn('deliverables.status', $expandedStatuses);
+                        if ($includesPending) {
+                            $sq->where(function ($pq) use ($expandedStatuses) {
+                                $pq->whereIn('deliverables.status', $expandedStatuses)
+                                   ->orWhereNull('deliverables.status')
+                                   ->orWhere('deliverables.status', '');
+                            });
+                        } else {
+                            $sq->whereIn('deliverables.status', $expandedStatuses);
+                        }
                         $hasCondition = true;
                     }
                     if ($hasDueToday) {
                         $today = now()->toDateString();
                         if ($hasCondition) {
                             $sq->orWhere(function ($dq) use ($today) {
-                                $dq->whereDate('due_date', $today)->whereNotIn('status', ['approved', 'completed', 'done', 'abandoned']);
+                                $dq->whereDate('deliverables.due_date', $today)->whereNotIn('deliverables.status', ['approved', 'completed', 'done', 'abandoned', 'Approved', 'Completed', 'Done', 'Abandoned', 'closed', 'Closed']);
                             });
                         } else {
-                            $sq->whereDate('due_date', $today)->whereNotIn('status', ['approved', 'completed', 'done', 'abandoned']);
+                            $sq->whereDate('deliverables.due_date', $today)->whereNotIn('deliverables.status', ['approved', 'completed', 'done', 'abandoned', 'Approved', 'Completed', 'Done', 'Abandoned', 'closed', 'Closed']);
                             $hasCondition = true;
                         }
                     }
@@ -7290,6 +7258,7 @@ $routing = $this->delegationService->routingPayload($task, $user);
                         $reopenedClause = function ($rq) {
                             $rq->where('deliverables.is_reopened', true)
                                ->orWhere('deliverables.status', 'reopened')
+                               ->orWhere('deliverables.status', 'Reopened')
                                ->orWhere('deliverables.reopen_count', '>', 0)
                                ->orWhereNotNull('deliverables.reopened_at');
                         };
@@ -7325,6 +7294,38 @@ $routing = $this->delegationService->routingPayload($task, $user);
             $hasDueToday = false;
             $hasTransferred = false;
             $hasReopened = false;
+            $includesPending = false;
+
+            $statusGroups = [
+                'pending' => [
+                    'Pending', 'pending', 'planned', 'Planning', 'Planned', 'draft', 'Draft',
+                    'todo', 'Todo', 'to_do', 'To_Do', 'to-do', 'To-Do', 'TODO', 'TO_DO', 'new', 'New', 'NEW',
+                    'not_started', 'Not Started', 'not started', 'not-started', 'Not-Started', 'NOT_STARTED',
+                    'unassigned', 'Unassigned', 'UNASSIGNED', 'reopened', 'Reopened', 'REOPENED',
+                ],
+                'in_progress' => [
+                    'In Progress', 'in_progress', 'in progress', 'in-progress', 'In-Progress', 'IN_PROGRESS',
+                    'doing', 'Doing', 'working', 'Working', 'underway', 'Underway', 'under_way', 'Under Way',
+                    'acknowledged', 'Acknowledged', 'started', 'Started',
+                ],
+                'submitted' => [
+                    'Submitted', 'submitted', 'review', 'Review', 'in_review', 'In Review', 'In_Review',
+                    'under_review', 'Under Review', 'Under_Review', 'submitted_late', 'Submitted Late',
+                    'awaiting_approval', 'Awaiting Approval', 'awaiting_checkpoint',
+                ],
+                'completed' => [
+                    'Approved', 'approved', 'completed', 'Completed', 'done', 'Done', 'finished', 'Finished', 'closed', 'Closed',
+                ],
+                'paused' => [
+                    'Paused', 'paused', 'pause', 'Pause', 'hold', 'Hold', 'on_hold', 'On Hold', 'on hold', 'on-hold', 'On-Hold',
+                ],
+                'declined' => [
+                    'Declined', 'declined', 'rejected', 'Rejected', 'failed', 'Failed', 'rework_required', 'Rework Required',
+                ],
+                'abandoned' => [
+                    'Abandoned', 'abandoned', 'abandon_requested', 'Abandon Requested', 'Abandon_Requested', 'cancelled', 'Cancelled', 'canceled', 'Canceled',
+                ],
+            ];
 
             foreach ($rawStatuses as $st) {
                 $st = trim((string) $st);
@@ -7336,20 +7337,21 @@ $routing = $this->delegationService->routingPayload($task, $user);
                     $hasTransferred = true;
                 } elseif ($stLower === 'reopened') {
                     $hasReopened = true;
-                } elseif (in_array($stLower, ['pending', 'planned', 'planning'])) {
-                    $expandedStatuses = array_merge($expandedStatuses, ['Pending', 'pending', 'planned', 'Planning', 'Planned']);
-                } elseif (in_array($stLower, ['in_progress', 'in progress', 'in-progress', 'doing'])) {
-                    $expandedStatuses = array_merge($expandedStatuses, ['In Progress', 'in_progress', 'in-progress', 'doing']);
-                } elseif (in_array($stLower, ['submitted', 'review', 'in_review'])) {
-                    $expandedStatuses = array_merge($expandedStatuses, ['Submitted', 'submitted', 'review', 'in_review']);
-                } elseif (in_array($stLower, ['approved', 'completed', 'done'])) {
-                    $expandedStatuses = array_merge($expandedStatuses, ['Approved', 'approved', 'completed', 'done']);
-                } elseif (in_array($stLower, ['paused', 'pause'])) {
-                    $expandedStatuses = array_merge($expandedStatuses, ['Paused', 'paused', 'pause']);
-                } elseif (in_array($stLower, ['declined', 'rejected', 'failed'])) {
-                    $expandedStatuses = array_merge($expandedStatuses, ['Declined', 'declined', 'rejected', 'failed']);
-                } elseif (in_array($stLower, ['abandoned', 'abandon_requested'])) {
-                    $expandedStatuses = array_merge($expandedStatuses, ['Abandoned', 'abandoned', 'abandon_requested']);
+                } elseif (in_array($stLower, ['pending', 'planned', 'planning', 'draft', 'todo', 'to_do', 'to-do', 'new', 'not_started', 'not started', 'not-started', 'unassigned'], true)) {
+                    $includesPending = true;
+                    $expandedStatuses = array_merge($expandedStatuses, $statusGroups['pending']);
+                } elseif (in_array($stLower, ['in_progress', 'in progress', 'in-progress', 'doing', 'working', 'underway', 'under_way', 'acknowledged', 'started'], true)) {
+                    $expandedStatuses = array_merge($expandedStatuses, $statusGroups['in_progress']);
+                } elseif (in_array($stLower, ['submitted', 'review', 'in_review', 'under_review', 'submitted_late', 'awaiting_approval', 'awaiting_checkpoint'], true)) {
+                    $expandedStatuses = array_merge($expandedStatuses, $statusGroups['submitted']);
+                } elseif (in_array($stLower, ['approved', 'completed', 'done', 'finished', 'closed'], true)) {
+                    $expandedStatuses = array_merge($expandedStatuses, $statusGroups['completed']);
+                } elseif (in_array($stLower, ['paused', 'pause', 'hold', 'on_hold', 'on hold', 'on-hold'], true)) {
+                    $expandedStatuses = array_merge($expandedStatuses, $statusGroups['paused']);
+                } elseif (in_array($stLower, ['declined', 'rejected', 'failed', 'rework_required'], true)) {
+                    $expandedStatuses = array_merge($expandedStatuses, $statusGroups['declined']);
+                } elseif (in_array($stLower, ['abandoned', 'abandon_requested', 'cancelled', 'canceled'], true)) {
+                    $expandedStatuses = array_merge($expandedStatuses, $statusGroups['abandoned']);
                 } elseif (! empty($st)) {
                     $expandedStatuses[] = $st;
                 }
@@ -7357,20 +7359,28 @@ $routing = $this->delegationService->routingPayload($task, $user);
 
             $expandedStatuses = array_values(array_unique($expandedStatuses));
             if (! empty($expandedStatuses) || $hasDueToday || $hasTransferred || $hasReopened) {
-                $query->where(function ($sq) use ($expandedStatuses, $hasDueToday, $hasTransferred, $hasReopened) {
+                $query->where(function ($sq) use ($expandedStatuses, $hasDueToday, $hasTransferred, $hasReopened, $includesPending) {
                     $hasCondition = false;
                     if (! empty($expandedStatuses)) {
-                        $sq->whereIn('tasks.status', $expandedStatuses);
+                        if ($includesPending) {
+                            $sq->where(function ($pq) use ($expandedStatuses) {
+                                $pq->whereIn('tasks.status', $expandedStatuses)
+                                   ->orWhereNull('tasks.status')
+                                   ->orWhere('tasks.status', '');
+                            });
+                        } else {
+                            $sq->whereIn('tasks.status', $expandedStatuses);
+                        }
                         $hasCondition = true;
                     }
                     if ($hasDueToday) {
                         $today = now()->toDateString();
                         if ($hasCondition) {
                             $sq->orWhere(function ($dq) use ($today) {
-                                $dq->whereDate('tasks.end_date', $today)->whereNotIn('tasks.status', ['approved', 'completed', 'done', 'abandoned']);
+                                $dq->whereDate('tasks.end_date', $today)->whereNotIn('tasks.status', ['approved', 'completed', 'done', 'abandoned', 'Approved', 'Completed', 'Done', 'Abandoned', 'closed', 'Closed']);
                             });
                         } else {
-                            $sq->whereDate('tasks.end_date', $today)->whereNotIn('tasks.status', ['approved', 'completed', 'done', 'abandoned']);
+                            $sq->whereDate('tasks.end_date', $today)->whereNotIn('tasks.status', ['approved', 'completed', 'done', 'abandoned', 'Approved', 'Completed', 'Done', 'Abandoned', 'closed', 'Closed']);
                             $hasCondition = true;
                         }
                     }
@@ -7394,6 +7404,7 @@ $routing = $this->delegationService->routingPayload($task, $user);
                             $rq->where('tasks.is_reopened', true)
                                ->orWhereJsonContains('tasks.states', 'Reopened')->orWhereJsonContains('tasks.states', 'reopened')
                                ->orWhere('tasks.status', 'reopened')
+                               ->orWhere('tasks.status', 'Reopened')
                                ->orWhere('tasks.reopen_count', '>', 0)
                                ->orWhereNotNull('tasks.reopened_at');
                         };
@@ -9123,10 +9134,10 @@ $routing = $this->delegationService->routingPayload($task, $user);
         // Task Due Today count: end_date = today and status not in terminal/abandoned
         $taskDueTodayCount = (clone $taskCountQuery)
             ->whereDate('tasks.end_date', $today)
-            ->whereNotIn('tasks.status', ['completed', 'approved', 'done', 'abandoned', 'Completed', 'Approved', 'Done', 'Abandoned'])
+            ->whereNotIn('tasks.status', ['completed', 'approved', 'done', 'abandoned', 'Completed', 'Approved', 'Done', 'Abandoned', 'closed', 'Closed'])
             ->count();
 
-        // Task Reopened count
+        // Task Reopened count (independent modifier metric)
         $taskReopenedCount = (clone $taskCountQuery)
             ->where(function ($rq) {
                 $rq->where('tasks.is_reopened', true)
@@ -9137,7 +9148,7 @@ $routing = $this->delegationService->routingPayload($task, $user);
             })
             ->count();
 
-        // Task Transferred count
+        // Task Transferred count (independent modifier metric)
         $taskTransferredCount = (clone $taskCountQuery)
             ->where(function ($tq) {
                 $tq->where('tasks.is_transferred', true)
@@ -9164,7 +9175,7 @@ $routing = $this->delegationService->routingPayload($task, $user);
 
             $delivDueTodayCount = (clone $delivCountQuery)
                 ->whereDate('deliverables.due_date', $today)
-                ->whereNotIn('deliverables.status', ['approved', 'completed', 'done', 'abandoned', 'Approved', 'Completed', 'Done', 'Abandoned'])
+                ->whereNotIn('deliverables.status', ['approved', 'completed', 'done', 'abandoned', 'Approved', 'Completed', 'Done', 'Abandoned', 'closed', 'Closed'])
                 ->count();
 
             $delivReopenedCount = (clone $delivCountQuery)
@@ -9205,29 +9216,40 @@ $routing = $this->delegationService->routingPayload($task, $user);
             'transferred' => $taskTransferredCount + $delivTransferredCount,
         ];
 
+        $statusGroups = [
+            'pending' => ['pending', 'planned', 'planning', 'draft', 'todo', 'to_do', 'to-do', 'new', 'not_started', 'not started', 'not-started', 'unassigned', 'reopened', ''],
+            'in_progress' => ['in_progress', 'in progress', 'in-progress', 'doing', 'working', 'underway', 'under_way', 'acknowledged', 'started'],
+            'paused' => ['paused', 'pause', 'hold', 'on_hold', 'on hold', 'on-hold'],
+            'submitted' => ['submitted', 'review', 'in_review', 'under_review', 'submitted_late', 'awaiting_approval', 'awaiting_checkpoint'],
+            'completed' => ['completed', 'approved', 'done', 'finished', 'closed'],
+            'declined' => ['declined', 'rejected', 'failed', 'rework_required'],
+            'abandoned' => ['abandoned', 'abandon_requested', 'cancelled', 'canceled'],
+        ];
+
         // Aggregate task status counts
         foreach ($taskStatusCounts as $rawStatus => $cnt) {
             $cnt = (int) $cnt;
             $counts['all'] += $cnt;
             $st = strtolower(trim((string) $rawStatus));
 
-            if (in_array($st, ['pending', 'planned', 'planning'])) {
-                $counts['pending'] += $cnt;
-            } elseif (in_array($st, ['in_progress', 'in progress', 'in-progress', 'doing'])) {
+            if (in_array($st, $statusGroups['in_progress'], true)) {
                 $counts['in_progress'] += $cnt;
                 $counts['inProgress'] += $cnt;
-            } elseif (in_array($st, ['paused', 'pause', 'hold', 'on_hold'])) {
+            } elseif (in_array($st, $statusGroups['paused'], true)) {
                 $counts['paused'] += $cnt;
-            } elseif (in_array($st, ['submitted', 'review', 'in_review', 'under_review'])) {
+            } elseif (in_array($st, $statusGroups['submitted'], true)) {
                 $counts['submitted'] += $cnt;
-            } elseif (in_array($st, ['completed', 'approved', 'done'])) {
+            } elseif (in_array($st, $statusGroups['completed'], true)) {
                 $counts['completed'] += $cnt;
                 $counts['approved'] += $cnt;
-            } elseif (in_array($st, ['declined', 'rejected', 'failed'])) {
+            } elseif (in_array($st, $statusGroups['declined'], true)) {
                 $counts['declined'] += $cnt;
                 $counts['rejected'] += $cnt;
-            } elseif (in_array($st, ['abandoned', 'abandon_requested'])) {
+            } elseif (in_array($st, $statusGroups['abandoned'], true)) {
                 $counts['abandoned'] += $cnt;
+            } else {
+                // Sums ALL pending variants, reopened, todo, draft, not_started, unassigned, and null/empty
+                $counts['pending'] += $cnt;
             }
         }
 
@@ -9237,23 +9259,23 @@ $routing = $this->delegationService->routingPayload($task, $user);
             $counts['all'] += $cnt;
             $st = strtolower(trim((string) $rawStatus));
 
-            if (in_array($st, ['pending', 'planned', 'planning'])) {
-                $counts['pending'] += $cnt;
-            } elseif (in_array($st, ['in_progress', 'in progress', 'in-progress', 'doing'])) {
+            if (in_array($st, $statusGroups['in_progress'], true)) {
                 $counts['in_progress'] += $cnt;
                 $counts['inProgress'] += $cnt;
-            } elseif (in_array($st, ['paused', 'pause', 'hold', 'on_hold'])) {
+            } elseif (in_array($st, $statusGroups['paused'], true)) {
                 $counts['paused'] += $cnt;
-            } elseif (in_array($st, ['submitted', 'review', 'in_review', 'under_review'])) {
+            } elseif (in_array($st, $statusGroups['submitted'], true)) {
                 $counts['submitted'] += $cnt;
-            } elseif (in_array($st, ['completed', 'approved', 'done'])) {
+            } elseif (in_array($st, $statusGroups['completed'], true)) {
                 $counts['completed'] += $cnt;
                 $counts['approved'] += $cnt;
-            } elseif (in_array($st, ['declined', 'rejected', 'failed'])) {
+            } elseif (in_array($st, $statusGroups['declined'], true)) {
                 $counts['declined'] += $cnt;
                 $counts['rejected'] += $cnt;
-            } elseif (in_array($st, ['abandoned', 'abandon_requested'])) {
+            } elseif (in_array($st, $statusGroups['abandoned'], true)) {
                 $counts['abandoned'] += $cnt;
+            } else {
+                $counts['pending'] += $cnt;
             }
         }
 
@@ -9271,31 +9293,31 @@ $routing = $this->delegationService->routingPayload($task, $user);
                         $isDueToday = Carbon::parse($endDate)->toDateString() === $today;
                     } catch (\Throwable $e) {}
                 }
-                $isCompletedOrApproved = in_array($statusLower, ['completed', 'approved', 'done']);
-                $isAbandoned = in_array($statusLower, ['abandoned', 'abandon_requested']);
+                $isCompletedOrApproved = in_array($statusLower, $statusGroups['completed'], true);
+                $isAbandoned = in_array($statusLower, $statusGroups['abandoned'], true);
 
                 if ($isDueToday && !$isCompletedOrApproved && !$isAbandoned) {
                     $counts['due_today']++;
                     $counts['dueToday']++;
                 }
 
-                if (in_array($statusLower, ['pending', 'planned', 'planning'])) {
-                    $counts['pending']++;
-                } elseif (in_array($statusLower, ['in_progress', 'in progress', 'in-progress', 'doing'])) {
+                if (in_array($statusLower, $statusGroups['in_progress'], true)) {
                     $counts['in_progress']++;
                     $counts['inProgress']++;
-                } elseif (in_array($statusLower, ['paused', 'pause', 'hold', 'on_hold'])) {
+                } elseif (in_array($statusLower, $statusGroups['paused'], true)) {
                     $counts['paused']++;
-                } elseif (in_array($statusLower, ['submitted', 'review', 'in_review', 'under_review'])) {
+                } elseif (in_array($statusLower, $statusGroups['submitted'], true)) {
                     $counts['submitted']++;
                 } elseif ($isCompletedOrApproved) {
                     $counts['completed']++;
                     $counts['approved']++;
-                } elseif (in_array($statusLower, ['declined', 'rejected', 'failed'])) {
+                } elseif (in_array($statusLower, $statusGroups['declined'], true)) {
                     $counts['declined']++;
                     $counts['rejected']++;
                 } elseif ($isAbandoned) {
                     $counts['abandoned']++;
+                } else {
+                    $counts['pending']++;
                 }
 
                 $isReopened = is_array($item) ? (!empty($item['is_reopened']) || $statusLower === 'reopened') : (!empty($item->is_reopened) || $statusLower === 'reopened');
@@ -9341,7 +9363,17 @@ $routing = $this->delegationService->routingPayload($task, $user);
 
         $todayStr = Carbon::today()->toDateString();
 
-        return $sharedTasks->filter(function ($item) use ($normalizedStatuses, $todayStr) {
+        $statusGroups = [
+            'pending' => ['pending', 'planned', 'planning', 'draft', 'todo', 'to_do', 'to-do', 'new', 'not_started', 'not started', 'not-started', 'unassigned', 'reopened', ''],
+            'in_progress' => ['in_progress', 'in progress', 'in-progress', 'doing', 'working', 'underway', 'under_way', 'acknowledged', 'started'],
+            'paused' => ['paused', 'pause', 'hold', 'on_hold', 'on hold', 'on-hold'],
+            'submitted' => ['submitted', 'review', 'in_review', 'under_review', 'submitted_late', 'awaiting_approval', 'awaiting_checkpoint'],
+            'completed' => ['completed', 'approved', 'done', 'finished', 'closed'],
+            'declined' => ['declined', 'rejected', 'failed', 'rework_required'],
+            'abandoned' => ['abandoned', 'abandon_requested', 'cancelled', 'canceled'],
+        ];
+
+        return $sharedTasks->filter(function ($item) use ($normalizedStatuses, $todayStr, $statusGroups) {
             $rawStatus = is_array($item) ? ($item['status'] ?? '') : ($item->status ?? '');
             $st = strtolower(trim((string) $rawStatus));
 
@@ -9354,23 +9386,23 @@ $routing = $this->delegationService->routingPayload($task, $user);
                     if ($endDate) {
                         try {
                             $isToday = Carbon::parse($endDate)->toDateString() === $todayStr;
-                            $isCompleted = in_array($st, ['completed', 'approved', 'done', 'abandoned']);
+                            $isCompleted = in_array($st, $statusGroups['completed'], true) || in_array($st, $statusGroups['abandoned'], true);
                             if ($isToday && !$isCompleted) return true;
                         } catch (\Throwable $e) {}
                     }
-                } elseif ($filterStatus === 'pending' && in_array($st, ['pending', 'planned', 'planning'])) {
+                } elseif ($filterStatus === 'pending' && in_array($st, $statusGroups['pending'], true)) {
                     return true;
-                } elseif ($filterStatus === 'in_progress' && in_array($st, ['in_progress', 'in progress', 'in-progress', 'doing'])) {
+                } elseif ($filterStatus === 'in_progress' && in_array($st, $statusGroups['in_progress'], true)) {
                     return true;
-                } elseif ($filterStatus === 'submitted' && in_array($st, ['submitted', 'review', 'in_review', 'under_review'])) {
+                } elseif ($filterStatus === 'submitted' && in_array($st, $statusGroups['submitted'], true)) {
                     return true;
-                } elseif (in_array($filterStatus, ['completed', 'approved']) && in_array($st, ['completed', 'approved', 'done'])) {
+                } elseif (in_array($filterStatus, ['completed', 'approved'], true) && in_array($st, $statusGroups['completed'], true)) {
                     return true;
-                } elseif ($filterStatus === 'paused' && in_array($st, ['paused', 'pause', 'hold', 'on_hold'])) {
+                } elseif ($filterStatus === 'paused' && in_array($st, $statusGroups['paused'], true)) {
                     return true;
-                } elseif (in_array($filterStatus, ['declined', 'rejected']) && in_array($st, ['declined', 'rejected', 'failed'])) {
+                } elseif (in_array($filterStatus, ['declined', 'rejected'], true) && in_array($st, $statusGroups['declined'], true)) {
                     return true;
-                } elseif ($filterStatus === 'abandoned' && in_array($st, ['abandoned', 'abandon_requested'])) {
+                } elseif ($filterStatus === 'abandoned' && in_array($st, $statusGroups['abandoned'], true)) {
                     return true;
                 } elseif ($filterStatus === 'reopened') {
                     $isReopened = is_array($item) ? (!empty($item['is_reopened']) || $st === 'reopened') : (!empty($item->is_reopened) || $st === 'reopened');

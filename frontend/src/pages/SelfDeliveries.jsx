@@ -63,7 +63,7 @@ import "../pages/Task.css";
 const STATUS_COLORS = {
   pending: "#FEF3C7",
   in_progress: "#DBEAFE",
-  paused: "#FEF3C7",
+  paused: "#FFEDD5",
   submitted: "#DBEAFE",
   reopened: "#EDE9FE",
   approved: "#DCFCE7",
@@ -76,7 +76,7 @@ const STATUS_COLORS = {
 const STATUS_TEXT_COLORS = {
   pending: "#92400E",
   in_progress: "#1E40AF",
-  paused: "#92400E",
+  paused: "#C2410C",
   submitted: "#1E40AF",
   reopened: "#5B21B6",
   approved: "#166534",
@@ -136,6 +136,10 @@ function SelfDeliveries() {
   const [assignerPauseSubtask, setAssignerPauseSubtask] = useState(null);
   const [deleteSubtaskTargetId, setDeleteSubtaskTargetId] = useState(null);
   const [deleteSubtaskConfirmOpen, setDeleteSubtaskConfirmOpen] = useState(false);
+  const [resumeConfirmOpen, setResumeConfirmOpen] = useState(false);
+  const [resumeSubtaskItem, setResumeSubtaskItem] = useState(null);
+  const [startTimerConfirmOpen, setStartTimerConfirmOpen] = useState(false);
+  const [startTimerSubtaskItem, setStartTimerSubtaskItem] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [page, setPage] = useState(() => {
     const p = searchParams.get("page");
@@ -293,6 +297,7 @@ function SelfDeliveries() {
       const data = await res.json();
       if (res.ok) {
         setSubtasks((prev) => prev.map((d) => d.id === itemId ? { ...d, status: "paused", ...data.deliverable } : d));
+        fetchSubtasks();
         publish('deliverable:updated', { id: itemId, status: 'paused' });
         publish('data:changed', { type: 'deliverable', action: 'updated' });
         showSuccessMessage("Subtask", "paused");
@@ -319,7 +324,8 @@ function SelfDeliveries() {
       });
       const data = await res.json();
       if (res.ok) {
-        setSubtasks((prev) => prev.map((d) => d.id === itemId ? { ...d, status: "in_progress", ...data.deliverable } : d));
+        setSubtasks((prev) => prev.map((d) => d.id === itemId ? { ...d, status: "in_progress", assigner_paused: false, ...data.deliverable } : d));
+        fetchSubtasks();
         publish('deliverable:updated', { id: itemId, status: 'in_progress' });
         publish('data:changed', { type: 'deliverable', action: 'updated' });
         showSuccessMessage("Subtask", "resumed");
@@ -347,6 +353,7 @@ function SelfDeliveries() {
       const data = await res.json();
       if (res.ok) {
         setSubtasks((prev) => Array.isArray(prev) ? prev.map((d) => d.id === itemId ? { ...d, status: "in_progress", ...data.deliverable } : d) : []);
+        fetchSubtasks();
         publish('deliverable:updated', { id: itemId, status: 'in_progress' });
         publish('data:changed', { type: 'deliverable', action: 'updated' });
         showSuccessMessage("Subtask", "acknowledged");
@@ -373,7 +380,8 @@ function SelfDeliveries() {
       });
       const data = await res.json();
       if (res.ok) {
-        setSubtasks((prev) => Array.isArray(prev) ? prev.map((d) => d.id === itemId ? { ...d, status: "in_progress", ...data.deliverable } : d) : []);
+        setSubtasks((prev) => Array.isArray(prev) ? prev.map((d) => d.id === itemId ? { ...d, status: "in_progress", timer_state: "running", timer: { ...(d.timer || {}), state: "running" }, ...data.deliverable } : d) : []);
+        fetchSubtasks();
         publish('deliverable:updated', { id: itemId, status: 'in_progress' });
         publish('data:changed', { type: 'deliverable', action: 'updated' });
         showSuccessMessage("Subtask", "timer started");
@@ -401,6 +409,7 @@ function SelfDeliveries() {
       const data = await res.json();
       if (res.ok) {
         setSubtasks((prev) => Array.isArray(prev) ? prev.map((d) => d.id === itemId ? { ...d, status: "approved", ...data.deliverable } : d) : []);
+        fetchSubtasks();
         publish('deliverable:updated', { id: itemId, status: 'approved' });
         publish('data:changed', { type: 'deliverable', action: 'updated' });
         showSuccessMessage("Subtask", "approved");
@@ -430,6 +439,7 @@ function SelfDeliveries() {
       const data = await res.json();
       if (res.ok) {
         setSubtasks((prev) => Array.isArray(prev) ? prev.map((d) => d.id === itemId ? { ...d, status: "declined", ...data.deliverable } : d) : []);
+        fetchSubtasks();
         publish('deliverable:updated', { id: itemId, status: 'declined' });
         publish('data:changed', { type: 'deliverable', action: 'updated' });
         showSuccessMessage("Subtask", "declined");
@@ -461,6 +471,7 @@ function SelfDeliveries() {
       if (res.ok) {
         const updated = resData.deliverable || resData.subtask || resData;
         setSubtasks((prev) => Array.isArray(prev) ? prev.map((d) => d.id === subtaskId ? { ...d, assigner_paused: true, ...updated } : d) : []);
+        fetchSubtasks();
         publish('deliverable:updated', updated);
         publish('data:changed', { type: 'deliverable', action: 'updated' });
         showSuccessMessage("Subtask", "paused");
@@ -486,6 +497,7 @@ function SelfDeliveries() {
       if (res.ok) {
         const updated = data.deliverable || data.subtask || data;
         setSubtasks((prev) => Array.isArray(prev) ? prev.map((d) => d.id === subtaskId ? { ...d, assigner_paused: false, ...updated } : d) : []);
+        fetchSubtasks();
         publish('deliverable:updated', updated);
         publish('data:changed', { type: 'deliverable', action: 'updated' });
         showSuccessMessage("Subtask", "resumed");
@@ -496,6 +508,18 @@ function SelfDeliveries() {
       notify.error(t("Failed to resume subtask.", { defaultValue: "Failed to resume subtask." }));
     } finally {
       setActingId(null);
+    }
+  };
+
+  const handleConfirmResume = async () => {
+    if (!resumeSubtaskItem) return;
+    const item = resumeSubtaskItem;
+    setResumeConfirmOpen(false);
+    setResumeSubtaskItem(null);
+    if (item.assigner_paused) {
+      await handleAssignerResume(item.id);
+    } else {
+      await handleResume(item.id);
     }
   };
 
@@ -518,6 +542,7 @@ function SelfDeliveries() {
       if (res.ok) {
         const updated = data.deliverable || data;
         setSubtasks((prev) => Array.isArray(prev) ? prev.map((d) => d.id === abandonSubtask.id ? { ...d, ...updated } : d) : []);
+        fetchSubtasks();
         publish('deliverable:updated', updated);
         publish('data:changed', { type: 'deliverable', action: 'updated' });
         showSuccessMessage("Subtask", "abandoned");
@@ -551,6 +576,7 @@ function SelfDeliveries() {
       });
       if (res.ok) {
         setSubtasks((prev) => Array.isArray(prev) ? prev.filter((d) => d.id !== subtaskId) : []);
+        fetchSubtasks();
         publish('deliverable:deleted', { id: subtaskId });
         publish('data:changed', { type: 'deliverable', action: 'deleted' });
         showSuccessMessage("Subtask", "deleted");
@@ -1074,7 +1100,7 @@ function SelfDeliveries() {
                           const canSubtaskAssignerPause = !isSubtaskOnlyFollower && isSubtaskAssignerOrCreator && !isSubtaskAssignerLocked && ["pending", "in_progress", "reopened", "paused", "submitted"].includes(sStatus);
                           const canSubtaskAssignerResume = !isSubtaskOnlyFollower && isSubtaskAssignerOrCreator && isSubtaskAssignerLocked;
                           const canSubtaskAcknowledge = !isSubtaskOnlyFollower && (isSubtaskAssignee || isSubtaskCurrentOwner) && sStatus === "pending" && !isSubtaskAssignerLocked && !isSubtaskTransferor;
-                          const canSubtaskStartTimer = !isSubtaskOnlyFollower && (isSubtaskAssignee || isSubtaskCurrentOwner) && ["in_progress", "in-progress", "reopened"].includes(sStatus) && (!item.timer_state || item.timer_state === "idle" || !item.timer?.state || item.timer?.state === "idle") && !isSubtaskAssignerLocked && !isSubtaskTransferor;
+                          const canSubtaskStartTimer = !isSubtaskOnlyFollower && (isSubtaskAssignee || isSubtaskCurrentOwner) && ["in_progress", "in-progress", "reopened", "acknowledged"].includes(sStatus) && (!item.timer_state || item.timer_state === "idle" || !item.timer?.state || item.timer?.state === "idle") && !isSubtaskAssignerLocked && !isSubtaskTransferor && sStatus !== "paused" && item.timer_state !== "running" && item.timer?.state !== "running";
                           const canSubtaskTimerPause = !isSubtaskOnlyFollower && (isSubtaskAssignee || isSubtaskCurrentOwner) && ["in_progress", "submitted"].includes(sStatus) && (item.timer_state === "running" || item.timer?.state === "running") && !isSubtaskAssignerLocked;
                           const canSubtaskTimerResume = !isSubtaskOnlyFollower && (isSubtaskAssignee || isSubtaskCurrentOwner) && (sStatus === "paused" || item.timer_state === "paused" || item.timer?.state === "paused") && !isSubtaskAssignerLocked;
                           const canSubtaskSubmit = !isSubtaskOnlyFollower && (item.can_submit === true || (isSubtaskAssignee && ["in_progress", "reopened", "paused", "rejected", "rework_required"].includes(sStatus))) && !isSubtaskAssignerLocked && !isSubtaskTransferor;
@@ -1151,10 +1177,13 @@ function SelfDeliveries() {
                                   className="action-icon-btn"
                                   title={t("Resume", { defaultValue: "Resume" })}
                                   disabled={actingId === item.id}
-                                  onClick={() => handleAssignerResume(item.id)}
+                                  onClick={() => {
+                                    setResumeSubtaskItem(item);
+                                    setResumeConfirmOpen(true);
+                                  }}
                                   style={{ color: "#059669", cursor: actingId === item.id ? "not-allowed" : "pointer" }}
                                 >
-                                  <Lock size={16} />
+                                  <Play size={16} />
                                 </button>
                               )}
                               {canSubtaskAcknowledge && (
@@ -1163,7 +1192,16 @@ function SelfDeliveries() {
                                 </button>
                               )}
                               {canSubtaskStartTimer && (
-                                <button className="action-icon-btn action-submit" title={t("Start Timer", { defaultValue: "Start Timer" })} disabled={actingId === item.id} onClick={() => handleStartTimer(item.id)} style={{ color: "#2563eb" }}>
+                                <button
+                                  className="action-icon-btn action-submit"
+                                  title={t("Start Subtask Timer", { defaultValue: "Start Subtask Timer" })}
+                                  disabled={actingId === item.id}
+                                  onClick={() => {
+                                    setStartTimerSubtaskItem(item);
+                                    setStartTimerConfirmOpen(true);
+                                  }}
+                                  style={{ color: "#2563EB", cursor: actingId === item.id ? "not-allowed" : "pointer" }}
+                                >
                                   <Play size={16} />
                                 </button>
                               )}
@@ -1173,7 +1211,16 @@ function SelfDeliveries() {
                                 </button>
                               )}
                               {canSubtaskTimerResume && (
-                                <button className="action-icon-btn action-submit" title={t("Resume", { defaultValue: "Resume" })} disabled={actingId === item.id} onClick={() => handleResume(item.id)} style={{ color: "#059669" }}>
+                                <button
+                                  className="action-icon-btn action-submit"
+                                  title={t("Resume", { defaultValue: "Resume" })}
+                                  disabled={actingId === item.id}
+                                  onClick={() => {
+                                    setResumeSubtaskItem(item);
+                                    setResumeConfirmOpen(true);
+                                  }}
+                                  style={{ color: "#059669" }}
+                                >
                                   <Play size={16} />
                                 </button>
                               )}
@@ -1337,6 +1384,39 @@ function SelfDeliveries() {
         confirmText={t("Delete", { defaultValue: "Delete" })}
         cancelText={t("Cancel", { defaultValue: "Cancel" })}
         danger
+      />
+
+      <ConfirmModal
+        isOpen={startTimerConfirmOpen}
+        onClose={() => {
+          setStartTimerConfirmOpen(false);
+          setStartTimerSubtaskItem(null);
+        }}
+        onConfirm={async () => {
+          if (!startTimerSubtaskItem) return;
+          await handleStartTimer(startTimerSubtaskItem.id);
+          setStartTimerConfirmOpen(false);
+          setStartTimerSubtaskItem(null);
+        }}
+        title={t("Start Subtask Timer", { defaultValue: "Start Subtask Timer" })}
+        message={t("Are you sure you want to start the timer for this subtask?", { defaultValue: "Are you sure you want to start the timer for this subtask?" })}
+        confirmText={t("Start Timer", { defaultValue: "Start Timer" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        confirmColor="#2563EB"
+      />
+
+      <ConfirmModal
+        isOpen={resumeConfirmOpen}
+        onClose={() => {
+          setResumeConfirmOpen(false);
+          setResumeSubtaskItem(null);
+        }}
+        onConfirm={handleConfirmResume}
+        title={t("Resume Subtask", { defaultValue: "Resume Subtask" })}
+        message={t("Are you sure you want to resume this subtask?", { defaultValue: "Are you sure you want to resume this subtask?" })}
+        confirmText={t("Resume", { defaultValue: "Resume" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        confirmColor="#16A34A"
       />
     </DashboardLayout>
   );

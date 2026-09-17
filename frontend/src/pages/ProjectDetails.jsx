@@ -75,6 +75,7 @@ import ActionPopover from "../components/ActionPopover";
 import Pagination from "../components/Pagination";
 import UnifiedActivityFeed from "../components/UnifiedActivityFeed";
 import ProjectMembersModal from "../components/ProjectMembersModal";
+import TaskAssigneeCell from "../components/TaskAssigneeCell";
 import "../components/ActionPopover.css";
 import { formatDateTimeShort, formatDateTime, formatDateTimeInline } from "../utils/formatDateTime";
 import { renderDynamicDates } from "../utils/tableDateUtils";
@@ -2023,7 +2024,25 @@ function ProjectDetails() {
                                       return (
                                         <div className={`ptt-row ${currentUser?.role === "guest" ? "ptt-row--guest" : ""}`} key={tItem.id}>
                                           <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={tItem.id} businessId={tItem.business_id} />
-                                          {currentUser?.role !== "guest" && <div>{isShared || isCreator || isAdminOrManager ? ((tItem.assignees || []).map((a) => a.name).join(", ") || "—") : (tItem.assigner?.name || "—")}</div>}
+                                           {currentUser?.role !== "guest" && (
+                                             <div>
+                                               {isShared || isCreator || isAdminOrManager ? (
+                                                 <TaskAssigneeCell
+                                                   assignees={tItem.assignees}
+                                                   assignee={tItem.assignee}
+                                                   showRole={false}
+                                                   avatarSize={24}
+                                                 />
+                                               ) : (
+                                                 <TaskAssigneeCell
+                                                   assignee={tItem.assigner}
+                                                   showRole={false}
+                                                   avatarSize={24}
+                                                   fallbackName="System"
+                                                 />
+                                               )}
+                                             </div>
+                                           )}
                                           <div className="ptt-col-name">
                                             <Link to={rolePath(`tasks/task-details/${isShared ? `shared_${tItem.shared_resource_id || tItem.id}` : tItem.id}`)} state={{ from: "project", projectId: project?.id || projectId, projectTitle: project?.title, returnUrl: location.pathname + (location.search || "?tab=tasks") }} className="ptt-task-link">
                                              {tItem.title}

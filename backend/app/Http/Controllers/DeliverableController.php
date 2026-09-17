@@ -3811,36 +3811,83 @@ class DeliverableController extends Controller
             $expandedStatuses = [];
             $hasDueToday = false;
             $hasTransferred = false;
+            $hasReopened = false;
+            $includesPending = false;
+
+            $statusGroups = [
+                'pending' => [
+                    'Pending', 'pending', 'planned', 'Planning', 'Planned', 'draft', 'Draft',
+                    'todo', 'Todo', 'to_do', 'To_Do', 'to-do', 'To-Do', 'TODO', 'TO_DO', 'new', 'New', 'NEW',
+                    'not_started', 'Not Started', 'not started', 'not-started', 'Not-Started', 'NOT_STARTED',
+                    'unassigned', 'Unassigned', 'UNASSIGNED', 'reopened', 'Reopened', 'REOPENED',
+                ],
+                'in_progress' => [
+                    'In Progress', 'in_progress', 'in progress', 'in-progress', 'In-Progress', 'IN_PROGRESS',
+                    'doing', 'Doing', 'working', 'Working', 'underway', 'Underway', 'under_way', 'Under Way',
+                    'acknowledged', 'Acknowledged', 'started', 'Started',
+                ],
+                'submitted' => [
+                    'Submitted', 'submitted', 'review', 'Review', 'in_review', 'In Review', 'In_Review',
+                    'under_review', 'Under Review', 'Under_Review', 'submitted_late', 'Submitted Late',
+                    'awaiting_approval', 'Awaiting Approval', 'awaiting_checkpoint',
+                ],
+                'completed' => [
+                    'Approved', 'approved', 'completed', 'Completed', 'done', 'Done', 'finished', 'Finished', 'closed', 'Closed',
+                ],
+                'paused' => [
+                    'Paused', 'paused', 'pause', 'Pause', 'hold', 'Hold', 'on_hold', 'On Hold', 'on hold', 'on-hold', 'On-Hold',
+                ],
+                'declined' => [
+                    'Declined', 'declined', 'rejected', 'Rejected', 'failed', 'Failed', 'rework_required', 'Rework Required',
+                ],
+                'abandoned' => [
+                    'Abandoned', 'abandoned', 'abandon_requested', 'Abandon Requested', 'Abandon_Requested', 'cancelled', 'Cancelled', 'canceled', 'Canceled',
+                ],
+            ];
+
             foreach ($rawStatuses as $st) {
                 $st = trim((string) $st);
-                if ($st === 'due_today') {
+                $stLower = strtolower($st);
+
+                if ($stLower === 'due_today') {
                     $hasDueToday = true;
-                } elseif ($st === 'transferred') {
+                } elseif ($stLower === 'transferred') {
                     $hasTransferred = true;
-                } elseif ($st === 'pending') {
-                    $expandedStatuses = array_merge($expandedStatuses, ['pending', 'planned', 'Planning', 'Planned']);
-                } elseif ($st === 'in_progress') {
-                    $expandedStatuses = array_merge($expandedStatuses, ['in_progress', 'In Progress', 'in-progress']);
-                } elseif ($st === 'paused') {
-                    $expandedStatuses = array_merge($expandedStatuses, ['paused', 'pause', 'Pause']);
-                } elseif ($st === 'rejected' || $st === 'declined') {
-                    $expandedStatuses[] = 'rejected';
-                    $expandedStatuses[] = 'declined';
-                } elseif ($st === 'abandoned') {
-                    $expandedStatuses[] = 'abandoned';
-                    $expandedStatuses[] = 'abandon_requested';
-                } elseif ($st === 'approved') {
-                    $expandedStatuses[] = 'approved';
-                    $expandedStatuses[] = 'completed';
+                } elseif ($stLower === 'reopened') {
+                    $hasReopened = true;
+                } elseif (in_array($stLower, ['pending', 'planned', 'planning', 'draft', 'todo', 'to_do', 'to-do', 'new', 'not_started', 'not started', 'not-started', 'unassigned'], true)) {
+                    $includesPending = true;
+                    $expandedStatuses = array_merge($expandedStatuses, $statusGroups['pending']);
+                } elseif (in_array($stLower, ['in_progress', 'in progress', 'in-progress', 'doing', 'working', 'underway', 'under_way', 'acknowledged', 'started'], true)) {
+                    $expandedStatuses = array_merge($expandedStatuses, $statusGroups['in_progress']);
+                } elseif (in_array($stLower, ['submitted', 'review', 'in_review', 'under_review', 'submitted_late', 'awaiting_approval', 'awaiting_checkpoint'], true)) {
+                    $expandedStatuses = array_merge($expandedStatuses, $statusGroups['submitted']);
+                } elseif (in_array($stLower, ['approved', 'completed', 'done', 'finished', 'closed'], true)) {
+                    $expandedStatuses = array_merge($expandedStatuses, $statusGroups['completed']);
+                } elseif (in_array($stLower, ['paused', 'pause', 'hold', 'on_hold', 'on hold', 'on-hold'], true)) {
+                    $expandedStatuses = array_merge($expandedStatuses, $statusGroups['paused']);
+                } elseif (in_array($stLower, ['declined', 'rejected', 'failed', 'rework_required'], true)) {
+                    $expandedStatuses = array_merge($expandedStatuses, $statusGroups['declined']);
+                } elseif (in_array($stLower, ['abandoned', 'abandon_requested', 'cancelled', 'canceled'], true)) {
+                    $expandedStatuses = array_merge($expandedStatuses, $statusGroups['abandoned']);
                 } elseif (! empty($st)) {
                     $expandedStatuses[] = $st;
                 }
             }
+
             $expandedStatuses = array_values(array_unique($expandedStatuses));
-            $query->where(function ($sq) use ($expandedStatuses, $hasDueToday, $hasTransferred) {
+            $query->where(function ($sq) use ($expandedStatuses, $hasDueToday, $hasTransferred, $hasReopened, $includesPending) {
                 $hasCondition = false;
                 if (! empty($expandedStatuses)) {
-                    $sq->whereIn('status', $expandedStatuses);
+                    if ($includesPending) {
+                        $sq->where(function ($pq) use ($expandedStatuses) {
+                            $pq->whereIn('status', $expandedStatuses)
+                               ->orWhereNull('status')
+                               ->orWhere('status', '');
+                        });
+                    } else {
+                        $sq->whereIn('status', $expandedStatuses);
+                    }
                     $hasCondition = true;
                 }
                 if ($hasDueToday) {
@@ -3860,6 +3907,22 @@ class DeliverableController extends Controller
                         });
                     } else {
                         $sq->whereNotNull('delegation_chain')->where('delegation_chain', '!=', '[]');
+                        $hasCondition = true;
+                    }
+                }
+                if ($hasReopened) {
+                    $reopenedClause = function ($rq) {
+                        $rq->where('is_reopened', true)
+                           ->orWhere('status', 'reopened')
+                           ->orWhere('status', 'Reopened')
+                           ->orWhere('reopen_count', '>', 0)
+                           ->orWhereNotNull('reopened_at');
+                    };
+                    if ($hasCondition) {
+                        $sq->orWhere($reopenedClause);
+                    } else {
+                        $sq->where($reopenedClause);
+                        $hasCondition = true;
                     }
                 }
             });
@@ -4654,10 +4717,10 @@ class DeliverableController extends Controller
         // Due today count: due_date = today and status not in approved/completed/done/abandoned
         $dueTodayCount = (clone $countQuery)
             ->whereDate('deliverables.due_date', $today)
-            ->whereNotIn('deliverables.status', ['approved', 'completed', 'done', 'abandoned', 'Approved', 'Completed', 'Done', 'Abandoned'])
+            ->whereNotIn('deliverables.status', ['approved', 'completed', 'done', 'abandoned', 'Approved', 'Completed', 'Done', 'Abandoned', 'closed', 'Closed'])
             ->count();
 
-        // Reopened count
+        // Reopened count (independent modifier metric)
         $reopenedCount = (clone $countQuery)
             ->where(function ($rq) {
                 $rq->where('deliverables.is_reopened', true)
@@ -4668,7 +4731,7 @@ class DeliverableController extends Controller
             })
             ->count();
 
-        // Transferred count
+        // Transferred count (independent modifier metric)
         $transferredCount = (clone $countQuery)
             ->where(function ($tq) {
                 $tq->where('deliverables.is_transferred', true)
@@ -4696,28 +4759,39 @@ class DeliverableController extends Controller
             'transferred' => $transferredCount,
         ];
 
+        $statusGroups = [
+            'pending' => ['pending', 'planned', 'planning', 'draft', 'todo', 'to_do', 'to-do', 'new', 'not_started', 'not started', 'not-started', 'unassigned', 'reopened', ''],
+            'in_progress' => ['in_progress', 'in progress', 'in-progress', 'doing', 'working', 'underway', 'under_way', 'acknowledged', 'started'],
+            'paused' => ['paused', 'pause', 'hold', 'on_hold', 'on hold', 'on-hold'],
+            'submitted' => ['submitted', 'review', 'in_review', 'under_review', 'submitted_late', 'awaiting_approval', 'awaiting_checkpoint'],
+            'completed' => ['completed', 'approved', 'done', 'finished', 'closed'],
+            'declined' => ['declined', 'rejected', 'failed', 'rework_required'],
+            'abandoned' => ['abandoned', 'abandon_requested', 'cancelled', 'canceled'],
+        ];
+
         foreach ($statusCounts as $rawStatus => $cnt) {
             $cnt = (int) $cnt;
             $counts['all'] += $cnt;
             $st = strtolower(trim((string) $rawStatus));
 
-            if (in_array($st, ['pending', 'planned', 'planning'])) {
-                $counts['pending'] += $cnt;
-            } elseif (in_array($st, ['in_progress', 'in progress', 'in-progress', 'doing'])) {
+            if (in_array($st, $statusGroups['in_progress'], true)) {
                 $counts['in_progress'] += $cnt;
                 $counts['inProgress'] += $cnt;
-            } elseif (in_array($st, ['paused', 'pause', 'hold', 'on_hold'])) {
+            } elseif (in_array($st, $statusGroups['paused'], true)) {
                 $counts['paused'] += $cnt;
-            } elseif (in_array($st, ['submitted', 'review', 'in_review', 'under_review'])) {
+            } elseif (in_array($st, $statusGroups['submitted'], true)) {
                 $counts['submitted'] += $cnt;
-            } elseif (in_array($st, ['completed', 'approved', 'done'])) {
+            } elseif (in_array($st, $statusGroups['completed'], true)) {
                 $counts['completed'] += $cnt;
                 $counts['approved'] += $cnt;
-            } elseif (in_array($st, ['declined', 'rejected', 'failed'])) {
+            } elseif (in_array($st, $statusGroups['declined'], true)) {
                 $counts['declined'] += $cnt;
                 $counts['rejected'] += $cnt;
-            } elseif (in_array($st, ['abandoned', 'abandon_requested'])) {
+            } elseif (in_array($st, $statusGroups['abandoned'], true)) {
                 $counts['abandoned'] += $cnt;
+            } else {
+                // Sums ALL pending variants, reopened, todo, draft, not_started, unassigned, and null/empty
+                $counts['pending'] += $cnt;
             }
         }
 

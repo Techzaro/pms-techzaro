@@ -486,9 +486,9 @@ function Admin() {
     { title: "Active Projects", value: String(summaryData.active_projects ?? 0), icon: "/Vector-5.svg", valueColor: "var(--color-blue)", bgColor: "var(--color-blue-bg)", filter: "active-projects" },
     { title: "In Progress Tasks", value: String(summaryData.in_progress_tasks ?? summaryData.in_progress ?? 0), icon: "/Vector-3.svg", valueColor: "#2563EB", bgColor: "#EFF6FF", filter: "in-progress-tasks" },
     { title: "Tasks Due Today", value: String(summaryData.tasks_due_today ?? 0), icon: "/Vector-1%20(3).svg", valueColor: "var(--color-danger)", bgColor: "var(--color-danger-bg)", filter: "tasks-due-today" },
-    { title: "Approved Tasks", value: String(summaryData.approved_tasks ?? 0), icon: "/Vector-2.svg", valueColor: "var(--color-success)", bgColor: "var(--color-success-bg)", filter: "approved-tasks" },
+    { title: "Submitted Tasks", value: String(summaryData.submitted_tasks ?? summaryData.submitted ?? 0), icon: "/Vector-2.svg", valueColor: "#7C3AED", bgColor: "#EDE9FE", filter: "submitted-tasks" },
     { title: "Pending Tasks", value: String(summaryData.pending_tasks ?? 0), icon: "/Vector-3.svg", valueColor: "var(--color-warning)", bgColor: "var(--color-warning-bg)", filter: "pending-tasks" },
-  ], [summaryData.active_projects, summaryData.in_progress_tasks, summaryData.in_progress, summaryData.tasks_due_today, summaryData.approved_tasks, summaryData.pending_tasks]);
+  ], [summaryData.active_projects, summaryData.in_progress_tasks, summaryData.in_progress, summaryData.tasks_due_today, summaryData.submitted_tasks, summaryData.submitted, summaryData.pending_tasks]);
 
   // Navigate to filtered list when a summary card is clicked
   // For all roles: "my" = incoming (tasks), "user" = outgoing (taskby)
@@ -500,7 +500,7 @@ function Admin() {
       const basePath = rolePath(isOutgoing ? "taskby" : "tasks");
       if (card.filter === "in-progress-tasks") navigate(`${basePath}?status=in_progress`);
       else if (card.filter === "tasks-due-today") navigate(`${basePath}?filter=due_today`);
-      else if (card.filter === "approved-tasks") navigate(`${basePath}?status=approved`);
+      else if (card.filter === "submitted-tasks") navigate(`${basePath}?status=submitted`);
       else if (card.filter === "pending-tasks") navigate(`${basePath}?status=pending`);
     }
   }, [navigate, dashboardMode]);

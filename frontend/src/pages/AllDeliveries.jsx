@@ -12,22 +12,33 @@
  *
  * This page is strictly read-only — no edit, submit, or workflow actions.
  */
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
+import { publish } from "../utils/eventBus";
+import { showSuccessMessage, notify, toast } from "../utils/notify";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import DraggableStatusBadges from "../components/DraggableStatusBadges";
 import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
-import { ArrowUpRight, StickyNote, XCircle } from "lucide-react";
+import { ArrowUpRight, StickyNote, XCircle, Pencil, Trash2, Lock, CheckCircle2, AlertOctagon, RotateCcw, Users, Pause, Play } from "lucide-react";
+import CreateDeliverableModel from "../components/layout/CreateDeliverableModel";
+import ConfirmModal from "../components/ConfirmModal";
+import DeclineModal from "../components/DeclineModal";
+import PauseReasonModal from "../components/PauseReasonModal";
+import ReopenDialog from "../components/ReopenDialog";
+import AbandonModal from "../components/AbandonModal";
+import MarkTaskCompletedModal from "../components/MarkTaskCompletedModal";
+import TransferTaskDialog from "../components/TransferTaskDialog";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
 import ActionPopover from "../components/ActionPopover";
 import AddNoteModal from "../components/AddNoteModal";
 import TaskMultiStatusBadges from "../components/TaskMultiStatusBadges";
+import TaskAssigneeCell from "../components/TaskAssigneeCell";
 import TaskFilterBar from "../components/TaskFilterBar";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
@@ -41,7 +52,7 @@ import "../pages/Deliveries.css";
 const STATUS_COLORS = {
   pending: "#FEF3C7",
   in_progress: "#DBEAFE",
-  paused: "#FEF3C7",
+  paused: "#FFEDD5",
   submitted: "#DBEAFE",
   reopened: "#EDE9FE",
   approved: "#DCFCE7",
@@ -53,7 +64,7 @@ const STATUS_COLORS = {
 const STATUS_TEXT_COLORS = {
   pending: "#92400E",
   in_progress: "#1E40AF",
-  paused: "#92400E",
+  paused: "#C2410C",
   submitted: "#1E40AF",
   reopened: "#5B21B6",
   approved: "#166534",
@@ -114,6 +125,23 @@ function AllDeliveries() {
   });
   const [orderedItems, setOrderedItems] = useState([]);
   const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
+
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editItem, setEditItem] = useState(null);
+  const [reopenSubtask, setReopenSubtask] = useState(null);
+  const [abandonSubtask, setAbandonSubtask] = useState(null);
+  const [abandonSubtaskLoading, setAbandonSubtaskLoading] = useState(false);
+  const [markCompletedSubtask, setMarkCompletedSubtask] = useState(null);
+  const [transferSubtask, setTransferSubtask] = useState(null);
+  const [assignerPauseSubtask, setAssignerPauseSubtask] = useState(null);
+  const [declineSubtask, setDeclineSubtask] = useState(null);
+  const [declineSubtaskLoading, setDeclineSubtaskLoading] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState(null);
+  const [resumeConfirmOpen, setResumeConfirmOpen] = useState(false);
+  const [resumeSubtaskItem, setResumeSubtaskItem] = useState(null);
+  const [actingId, setActingId] = useState(null);
+  const [actingType, setActingType] = useState(null);
 
   const [page, setPage] = useState(() => {
     const p = searchParams.get("page");
@@ -214,6 +242,199 @@ function AllDeliveries() {
   useAutoRefresh(fetchDeliverables, {
     events: ['deliverable:created', 'deliverable:updated', 'deliverable:deleted', 'data:changed'],
   });
+
+  const handleDelete = (itemId) => {
+    setDeleteTargetId(itemId);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    const subtaskId = deleteTargetId;
+    setDeleteConfirmOpen(false);
+    setDeleteTargetId(null);
+    setActingId(subtaskId);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/deliverables/${subtaskId}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      if (res.ok) {
+        setItems((prev) => prev.filter((d) => d.id !== subtaskId));
+        fetchDeliverables();
+        publish('deliverable:deleted', { id: subtaskId });
+        publish('data:changed', { type: 'deliverable', action: 'deleted' });
+        showSuccessMessage("Subtask", "deleted");
+      } else {
+        const data = await res.json().catch(() => ({}));
+        notify.error(data.message || t("Failed to delete subtask.", { defaultValue: "Failed to delete subtask." }));
+      }
+    } catch {
+      notify.error(t("Failed to delete subtask.", { defaultValue: "Failed to delete subtask." }));
+    } finally {
+      setActingId(null);
+    }
+  };
+
+  const handleApprove = async (itemId) => {
+    setActingId(itemId);
+    setActingType("approve");
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/deliverables/${itemId}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const updatedObj = data.deliverable || data.subtask || {};
+        setItems((prev) => prev.map((d) => d.id === itemId ? { ...d, status: "approved", ...updatedObj } : d));
+        fetchDeliverables();
+        publish('deliverable:updated', { id: itemId, status: 'approved', ...updatedObj });
+        publish('data:changed', { type: 'deliverable', action: 'updated' });
+        showSuccessMessage("Subtask", "approved");
+      } else {
+        notify.error(data.message || t("Failed to approve.", { defaultValue: "Failed to approve." }));
+      }
+    } catch {
+      notify.error(t("Failed to approve.", { defaultValue: "Failed to approve." }));
+    } finally {
+      setActingId(null);
+      setActingType(null);
+    }
+  };
+
+  const handleReject = async (itemId, comment) => {
+    setActingId(itemId);
+    setActingType("reject");
+    setDeclineSubtaskLoading(true);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/deliverables/${itemId}/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ comment }),
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const updatedObj = data.deliverable || data.subtask || {};
+        setItems((prev) => prev.map((d) => d.id === itemId ? { ...d, status: "declined", ...updatedObj } : d));
+        fetchDeliverables();
+        publish('deliverable:updated', { id: itemId, status: 'declined', ...updatedObj });
+        publish('data:changed', { type: 'deliverable', action: 'updated' });
+        showSuccessMessage("Subtask", "declined");
+        setDeclineSubtask(null);
+      } else {
+        notify.error(data.message || t("Failed to decline.", { defaultValue: "Failed to decline." }));
+      }
+    } catch {
+      notify.error(t("Failed to decline.", { defaultValue: "Failed to decline." }));
+    } finally {
+      setActingId(null);
+      setActingType(null);
+      setDeclineSubtaskLoading(false);
+    }
+  };
+
+  const handleAssignerPauseSubmit = async (data) => {
+    if (!assignerPauseSubtask?.id) return;
+    const subtaskId = assignerPauseSubtask.id;
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/deliverables/${subtaskId}/assigner-pause`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ reason: data.reason_detail || data.reason }),
+        _notifHandled: true,
+      });
+      const resData = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const updated = resData.deliverable || resData.subtask || resData;
+        setItems((prev) => prev.map((d) => d.id === subtaskId ? { ...d, assigner_paused: true, ...updated } : d));
+        fetchDeliverables();
+        publish('deliverable:updated', updated);
+        publish('data:changed', { type: 'deliverable', action: 'updated' });
+        showSuccessMessage("Subtask", "paused");
+        setAssignerPauseSubtask(null);
+      } else {
+        notify.error(resData.message || t("Failed to pause subtask.", { defaultValue: "Failed to pause subtask." }));
+      }
+    } catch {
+      notify.error(t("Failed to pause subtask.", { defaultValue: "Failed to pause subtask." }));
+    }
+  };
+
+  const handleAssignerResume = async (subtaskId) => {
+    setActingId(subtaskId);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/deliverables/${subtaskId}/assigner-resume`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const updated = data.deliverable || data.subtask || data;
+        setItems((prev) => prev.map((d) => d.id === subtaskId ? { ...d, assigner_paused: false, ...updated } : d));
+        fetchDeliverables();
+        publish('deliverable:updated', updated);
+        publish('data:changed', { type: 'deliverable', action: 'updated' });
+        showSuccessMessage("Subtask", "resumed");
+      } else {
+        notify.error(data.message || t("Failed to resume subtask.", { defaultValue: "Failed to resume subtask." }));
+      }
+    } catch {
+      notify.error(t("Failed to resume subtask.", { defaultValue: "Failed to resume subtask." }));
+    } finally {
+      setActingId(null);
+    }
+  };
+
+  const handleConfirmResume = async () => {
+    if (!resumeSubtaskItem) return;
+    const item = resumeSubtaskItem;
+    setResumeConfirmOpen(false);
+    setResumeSubtaskItem(null);
+    await handleAssignerResume(item.id);
+  };
+
+  const handleAbandon = async (reason) => {
+    if (!abandonSubtask?.id) return;
+    setAbandonSubtaskLoading(true);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/deliverables/${abandonSubtask.id}/abandon`, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ reason }),
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const updated = data.deliverable || data;
+        setItems((prev) => prev.map((d) => d.id === abandonSubtask.id ? { ...d, ...updated } : d));
+        fetchDeliverables();
+        publish('deliverable:updated', updated);
+        publish('data:changed', { type: 'deliverable', action: 'updated' });
+        showSuccessMessage("Subtask", "abandoned");
+        setAbandonSubtask(null);
+      } else {
+        notify.error(data.message || t("Failed to abandon subtask.", { defaultValue: "Failed to abandon subtask." }));
+      }
+    } catch {
+      notify.error(t("An error occurred. Please try again.", { defaultValue: "An error occurred. Please try again." }));
+    } finally {
+      setAbandonSubtaskLoading(false);
+    }
+  };
 
   useEffect(() => {
     setOrderedItems(items);
@@ -599,15 +820,14 @@ function AllDeliveries() {
 
                     {/* Assigned To */}
                     <div className="col-assigned-to">
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <div className="avatar" style={{ background: assigneeColors.bg, color: assigneeColors.text }}>
-                          {getInitials(item.assignee?.name)}
-                        </div>
-                        <div style={{ minWidth: 0 }}>
-                          <div className="user-name">{item.assignee?.name || t("Unassigned", { defaultValue: "Unassigned" })}</div>
-                          <div className="user-role">{item.assignee?.role || ""}</div>
-                        </div>
-                      </div>
+                      <TaskAssigneeCell
+                        assignees={item.assignees}
+                        assignee={item.assignee}
+                        isDirectToOa={Boolean(item.has_direct_to_oa_delegation && item.current_owner_name && item.current_owner_id)}
+                        currentOwnerName={item.current_owner_name}
+                        delegatorName={item.delegator_name}
+                        isTransferee={Boolean(item.is_transferee)}
+                      />
                     </div>
 
                     {/* Assigned By (Creator) */}
@@ -739,20 +959,146 @@ function AllDeliveries() {
                             state: {
                               subtaskIds: deliverableIdList,
                               from: 'all-deliverables',
-                              readOnly: true,
                               page,
                               returnUrl
                             }
                           });
                         }}
                       >
-                        <button
-                          className="action-icon-btn action-note"
-                          title={t("Add Note", { defaultValue: "Add Note" })}
-                          onClick={() => setNoteModal({ open: true, itemId: item.id })}
-                        >
-                          <StickyNote size={16} />
-                        </button>
+                        {(() => {
+                          const sStatus = (item.status || "").toLowerCase();
+                          const isSubtaskCreator = Boolean(
+                            item.is_creator === true ||
+                            (currentUser && (
+                              parseInt(item.created_by, 10) === parseInt(currentUser.id, 10) ||
+                              parseInt(item.assigned_by, 10) === parseInt(currentUser.id, 10) ||
+                              parseInt(item.user_id, 10) === parseInt(currentUser.id, 10) ||
+                              parseInt(item.creator_id, 10) === parseInt(currentUser.id, 10)
+                            ))
+                          );
+                          const isSubtaskAssignee = Boolean(
+                            item.is_assignee ??
+                            (currentUser && (
+                              (item.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10)) ||
+                              (item.assigned_to && parseInt(item.assigned_to, 10) === parseInt(currentUser.id, 10))
+                            ))
+                          );
+                          const isSubtaskCurrentOwner = Boolean(
+                            item.is_current_owner ??
+                            (item.current_owner && currentUser && parseInt(item.current_owner, 10) === parseInt(currentUser.id, 10)) ??
+                            isSubtaskAssignee
+                          );
+                          const isSubtaskFollower = (item.followers || []).some((f) => parseInt(f.id, 10) === parseInt(currentUser?.id, 10));
+                          const isSubtaskOnlyFollower = isSubtaskFollower && !["admin", "manager", "super_admin"].includes(currentUser?.role) && !isSubtaskCreator && !isSubtaskAssignee;
+                          const isSubtaskTransferor = item.is_transferor ?? false;
+                          const subtaskTransferorHasApproved = item.transferor_has_approved ?? false;
+                          const isSubtaskTransferorApproval = (isSubtaskTransferor || item.is_transferor) && !subtaskTransferorHasApproved && (item.submission_stage === "awaiting_checkpoint" || item.can_submit_to_next || ["submitted", "submitted_late"].includes(sStatus));
+                          const isSubtaskAssignerOrCreator = isSubtaskCreator || ["admin", "manager", "super_admin"].includes(currentUser?.role) || (currentUser && (
+                            parseInt(item.assigned_by, 10) === parseInt(currentUser.id, 10) ||
+                            parseInt(item.created_by, 10) === parseInt(currentUser.id, 10) ||
+                            parseInt(item.creator_id, 10) === parseInt(currentUser.id, 10) ||
+                            parseInt(item.user_id, 10) === parseInt(currentUser.id, 10)
+                          ));
+
+                          const canSubtaskEdit = !isSubtaskOnlyFollower && isSubtaskAssignerOrCreator && !["approved", "completed", "submitted", "submitted_late", "abandoned"].includes(sStatus);
+                          const canSubtaskDelete = !isSubtaskOnlyFollower && isSubtaskAssignerOrCreator;
+                          const canSubtaskApprove = !isSubtaskOnlyFollower && (isSubtaskTransferorApproval || ((isSubtaskAssignerOrCreator || item.can_approve === true || item.is_next_approver) && (!item.is_transferred || subtaskTransferorHasApproved || item.submission_stage === "awaiting_creator" || !item.has_delegation_chain)));
+                          const canSubtaskDecline = !isSubtaskOnlyFollower && (isSubtaskTransferorApproval || canSubtaskApprove || item.can_decline_submission || isSubtaskAssignerOrCreator) && ["submitted", "submitted_late"].includes(sStatus);
+                          const canSubtaskReopen = !isSubtaskOnlyFollower && ((isSubtaskAssignerOrCreator || item.can_decline_submission || isSubtaskTransferorApproval || canSubtaskApprove) && ["completed", "declined", "abandoned", "approved", "submitted", "submitted_late", "rejected"].includes(sStatus));
+                          const canSubtaskAbandon = !isSubtaskOnlyFollower && (isSubtaskAssignee || isSubtaskCurrentOwner || isSubtaskAssignerOrCreator) && !["abandoned", "approved", "completed", "submitted", "submitted_late"].includes(sStatus);
+                          const canSubtaskMarkCompleted = !isSubtaskOnlyFollower && isSubtaskAssignerOrCreator && ["pending", "in_progress", "in-progress", "reopened", "paused", "acknowledged"].includes(sStatus);
+                          const canSubtaskTransfer = !isSubtaskOnlyFollower && (item.can_delegate === true || (item.allow_transfer !== false && (isSubtaskAssignee || isSubtaskCurrentOwner || isSubtaskAssignerOrCreator) && !isSubtaskTransferor)) && !["approved", "rejected", "pending", "submitted"].includes(sStatus) && !item.active_outgoing_delegation && !isSubtaskTransferor;
+
+                          const isSubtaskAssignerLocked = !!item.assigner_paused;
+                          const canSubtaskAssignerPause = !isSubtaskOnlyFollower && isSubtaskAssignerOrCreator && !isSubtaskAssignerLocked && ["pending", "in_progress", "reopened", "paused", "submitted"].includes(sStatus);
+                          const canSubtaskAssignerResume = !isSubtaskOnlyFollower && isSubtaskAssignerOrCreator && isSubtaskAssignerLocked;
+
+                          return (
+                            <>
+                              <button
+                                className="action-icon-btn action-note"
+                                title={t("Add Note", { defaultValue: "Add Note" })}
+                                onClick={() => setNoteModal({ open: true, itemId: item.id })}
+                              >
+                                <StickyNote size={14} />
+                              </button>
+                              {canSubtaskEdit && (
+                                <button
+                                  className="action-icon-btn action-edit"
+                                  title={t("Edit Subtask", { defaultValue: "Edit Subtask" })}
+                                  onClick={() => { setEditItem(item); setShowEditModal(true); }}
+                                >
+                                  <Pencil size={16} />
+                                </button>
+                              )}
+                              {canSubtaskDelete && (
+                                <button
+                                  className="action-icon-btn action-delete"
+                                  title={t("Delete Subtask", { defaultValue: "Delete Subtask" })}
+                                  disabled={actingId === item.id}
+                                  onClick={() => handleDelete(item.id)}
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
+                              {canSubtaskApprove && (["submitted", "submitted_late", "reopened"].includes(sStatus)) && (
+                                <button className="action-icon-btn action-submit" title={t("Approve", { defaultValue: "Approve" })} disabled={actingId === item.id} onClick={() => handleApprove(item.id)} style={{ color: "#16A34A" }}>
+                                  <CheckCircle2 size={16} />
+                                </button>
+                              )}
+                              {canSubtaskDecline && (
+                                <button className="action-icon-btn action-submit" title={t("Decline", { defaultValue: "Decline" })} disabled={actingId === item.id} onClick={() => setDeclineSubtask(item)} style={{ color: "#DC2626" }}>
+                                  <XCircle size={16} />
+                                </button>
+                              )}
+                              {canSubtaskReopen && (
+                                <button className="action-icon-btn" title={t("Reopen Subtask", { defaultValue: "Reopen Subtask" })} onClick={() => setReopenSubtask(item)} style={{ color: "#2563EB" }}>
+                                  <RotateCcw size={16} />
+                                </button>
+                              )}
+                              {canSubtaskAbandon && (
+                                <button className="action-icon-btn" title={["admin", "manager"].includes(currentUser?.role) ? t("Abandon Subtask", { defaultValue: "Abandon Subtask" }) : t("Request Abandon", { defaultValue: "Request Abandon" })} onClick={() => setAbandonSubtask(item)} style={{ color: "#F59E0B" }}>
+                                  <AlertOctagon size={16} />
+                                </button>
+                              )}
+                              {canSubtaskMarkCompleted && (
+                                <button className="action-icon-btn" title={t("Mark as Completed", { defaultValue: "Mark as Completed" })} onClick={() => setMarkCompletedSubtask(item)} style={{ color: "#059669" }}>
+                                  <CheckCircle2 size={16} />
+                                </button>
+                              )}
+                              {canSubtaskTransfer && (
+                                <button className="action-icon-btn" title={t("Transfer Subtask", { defaultValue: "Transfer Subtask" })} onClick={() => setTransferSubtask(item)} style={{ color: "#2563EB" }}>
+                                  <Users size={16} />
+                                </button>
+                              )}
+                              {canSubtaskAssignerPause && (
+                                <button
+                                  className="action-icon-btn"
+                                  title={t("Pause", { defaultValue: "Pause" })}
+                                  disabled={actingId === item.id}
+                                  onClick={() => setAssignerPauseSubtask(item)}
+                                  style={{ color: "#7C3AED", cursor: actingId === item.id ? "not-allowed" : "pointer" }}
+                                >
+                                  <Pause size={16} />
+                                </button>
+                              )}
+                              {canSubtaskAssignerResume && (
+                                <button
+                                  className="action-icon-btn"
+                                  title={t("Resume", { defaultValue: "Resume" })}
+                                  disabled={actingId === item.id}
+                                  onClick={() => {
+                                    setResumeSubtaskItem(item);
+                                    setResumeConfirmOpen(true);
+                                  }}
+                                  style={{ color: "#059669", cursor: actingId === item.id ? "not-allowed" : "pointer" }}
+                                >
+                                  <Play size={16} />
+                                </button>
+                              )}
+                            </>
+                          );
+                        })()}
                       </ActionPopover>
                     </div>
                   </div>
@@ -773,12 +1119,126 @@ function AllDeliveries() {
         />
       )}
 
+      {showEditModal && editItem && (
+        <CreateDeliverableModel
+          onClose={(refresh) => { setShowEditModal(false); setEditItem(null); if (refresh) fetchDeliverables(); }}
+          projectId={editItem.project_id}
+          taskId={editItem.task_id}
+          editMode={true}
+          editData={editItem}
+        />
+      )}
+
       <AddNoteModal
         isOpen={noteModal.open}
         onClose={() => setNoteModal({ open: false, itemId: null })}
         itemType="deliverable"
         itemId={noteModal.itemId}
         onSaved={fetchDeliverables}
+      />
+
+      {reopenSubtask && (
+        <ReopenDialog
+          isOpen={!!reopenSubtask}
+          onClose={() => setReopenSubtask(null)}
+          subtask={reopenSubtask}
+          onReopenSuccess={(updated) => {
+            setReopenSubtask(null);
+            setItems((prev) => prev.map((d) => d.id === reopenSubtask.id ? { ...d, ...updated } : d));
+            publish('deliverable:updated', updated);
+            publish('data:changed', { type: 'deliverable', action: 'updated' });
+            showSuccessMessage("Subtask", "reopened");
+          }}
+        />
+      )}
+
+      {abandonSubtask && (
+        <AbandonModal
+          isOpen={!!abandonSubtask}
+          onClose={() => setAbandonSubtask(null)}
+          title={t("Abandon Subtask", { defaultValue: "Abandon Subtask" })}
+          subtitle={abandonSubtask?.title}
+          actionLabel={t("Abandon Subtask", { defaultValue: "Abandon Subtask" })}
+          onSubmit={handleAbandon}
+          loading={abandonSubtaskLoading}
+        />
+      )}
+
+      {markCompletedSubtask && (
+        <MarkTaskCompletedModal
+          isOpen={!!markCompletedSubtask}
+          onClose={() => setMarkCompletedSubtask(null)}
+          task={markCompletedSubtask}
+          entityType="deliverable"
+          onCompleteSuccess={(updated) => {
+            setMarkCompletedSubtask(null);
+            setItems((prev) => prev.map((d) => d.id === markCompletedSubtask.id ? { ...d, ...updated } : d));
+            publish('deliverable:updated', updated);
+            publish('data:changed', { type: 'deliverable', action: 'updated' });
+            showSuccessMessage("Subtask", "completed");
+          }}
+        />
+      )}
+
+      {transferSubtask && (
+        <TransferTaskDialog
+          isOpen={!!transferSubtask}
+          onClose={() => setTransferSubtask(null)}
+          task={transferSubtask}
+          entityType="deliverable"
+          onTransferSuccess={() => {
+            setTransferSubtask(null);
+            fetchDeliverables();
+            showSuccessMessage("Subtask", "transferred");
+          }}
+        />
+      )}
+
+      {assignerPauseSubtask && (
+        <PauseReasonModal
+          isOpen={!!assignerPauseSubtask}
+          onClose={() => setAssignerPauseSubtask(null)}
+          onConfirm={handleAssignerPauseSubmit}
+          isAssigner
+        />
+      )}
+
+      {declineSubtask && (
+        <DeclineModal
+          isOpen={!!declineSubtask}
+          onClose={() => setDeclineSubtask(null)}
+          title={t("Decline Subtask", { defaultValue: "Decline Subtask" })}
+          subtitle={declineSubtask?.title}
+          actionLabel={t("Decline Subtask", { defaultValue: "Decline Subtask" })}
+          placeholder={t("Please enter a reason for declining this subtask...", { defaultValue: "Please enter a reason for declining this subtask..." })}
+          onSubmit={(comment) => handleReject(declineSubtask.id, comment)}
+          loading={declineSubtaskLoading}
+        />
+      )}
+
+      <ConfirmModal
+        isOpen={deleteConfirmOpen}
+        onClose={() => { setDeleteConfirmOpen(false); setDeleteTargetId(null); }}
+        onConfirm={confirmDelete}
+        title={t("Delete Subtask", { defaultValue: "Delete Subtask" })}
+        message={t("Are you sure you want to delete this subtask? This action cannot be undone.", { defaultValue: "Are you sure you want to delete this subtask? This action cannot be undone." })}
+        confirmText={t("Delete", { defaultValue: "Delete" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        danger
+      />
+
+      <ConfirmModal
+        isOpen={resumeConfirmOpen}
+        onClose={() => {
+          setResumeConfirmOpen(false);
+          setResumeSubtaskItem(null);
+        }}
+        onConfirm={handleConfirmResume}
+        title={t("Resume Subtask", { defaultValue: "Resume Subtask" })}
+        message={t("Are you sure you want to resume this subtask?", { defaultValue: "Are you sure you want to resume this subtask?" })}
+        confirmText={t("Resume", { defaultValue: "Resume" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        confirmColor="#16A34A"
       />
     </DashboardLayout>
   );

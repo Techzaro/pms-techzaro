@@ -94,6 +94,7 @@ import FileUploadSection from "../components/FileUploadSection";
 import "../components/layout/ActivityHighlight.css";
 import "./TaskDetails.css";
 import "./Deliveries.css";
+import "./ProjectDetails.css";
 
 const API_BASE = API_URL.replace(/\/api\/?$/, "");
 
@@ -196,10 +197,12 @@ function formatShortDate(dateString) {
   return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-function CredentialRow({ credential, onDelete }) {
+function CredentialRow({ credential, onDelete, onEdit, isGuest, isShared, currentUserRole, canManage }) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const [copiedUser, setCopiedUser] = useState(false);
+  const role = currentUserRole || getUser()?.role || "";
+  const allowManage = canManage !== undefined ? canManage : (!isGuest && !isShared && (role === "admin" || role === "manager"));
 
   const copyPassword = async () => {
     try {
@@ -239,56 +242,77 @@ function CredentialRow({ credential, onDelete }) {
     }
   };
 
+  const displayName = credential.website_name || credential.title || credential.name || t("Credential", { defaultValue: "Credential" });
+  const displayUrl = credential.website_url || credential.url || "";
+
   return (
-    <div className="td-cred-card">
-      <div className="td-cred-header">
-        <div className="td-cred-website">
+    <div className="pd-cred-card">
+      <div className="pd-cred-header">
+        <div className="pd-cred-website">
           <Globe size={18} />
-          <span className="td-cred-name">{credential.website_name}</span>
-          {credential.website_url && (
-            <a href={credential.website_url} target="_blank" rel="noopener noreferrer" className="td-cred-link">{t("Visit", { defaultValue: "Visit" })}</a>
+          <span className="pd-cred-name">{displayName}</span>
+          {displayUrl && (
+            <a
+              href={displayUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="pd-cred-link"
+            >
+              {t("Visit", { defaultValue: "Visit" })}
+            </a>
           )}
         </div>
-        {onDelete && (
-          <button className="td-cred-delete" onClick={onDelete} title={t("Delete credential", { defaultValue: "Delete credential" })}>
-            <Trash2 size={14} />
-          </button>
-        )}
+        <div className="pd-cred-actions">
+          {allowManage && (
+            <>
+              {onEdit && (
+                <button className="pd-cred-edit" onClick={() => onEdit(credential)} title={t("Edit credential", { defaultValue: "Edit credential" })}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+                </button>
+              )}
+              {onDelete && (
+                <button className="pd-cred-delete" onClick={onDelete} title={t("Delete credential", { defaultValue: "Delete credential" })}>
+                  <Trash2 size={14} />
+                </button>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
-      <div className="td-cred-fields">
-        <div className="td-cred-field">
+      <div className="pd-cred-fields">
+        <div className="pd-cred-field">
           <label>{t("Username / Email", { defaultValue: "Username / Email" })}</label>
-          <div className="td-cred-value-row">
-            <span className="td-cred-value">{credential.username}</span>
-            <button className={`td-cred-copy ${copiedUser ? "td-cred-copied" : ""}`} onClick={copyUsername} title={t("Copy username", { defaultValue: "Copy username" })}>
+          <div className="pd-cred-value-row">
+            <span className="pd-cred-value">{credential.username}</span>
+            <button className={`pd-cred-copy ${copiedUser ? "pd-cred-copied" : ""}`} onClick={copyUsername} title={t("Copy username", { defaultValue: "Copy username" })}>
               {copiedUser ? <Check size={14} /> : <Copy size={14} />}
             </button>
           </div>
         </div>
 
-        <div className="td-cred-field">
+        <div className="pd-cred-field">
           <label>{t("Password", { defaultValue: "Password" })}</label>
-          <div className="td-cred-value-row">
-            <span className="td-cred-value">{"\u2022".repeat(12)}</span>
-            <button className={`td-cred-copy ${copied ? "td-cred-copied" : ""}`} onClick={copyPassword} title={t("Copy password", { defaultValue: "Copy password" })}>
+          <div className="pd-cred-value-row">
+            <span className="pd-cred-value pd-cred-password">{"\u2022".repeat(12)}</span>
+            <button className={`pd-cred-copy ${copied ? "pd-cred-copied" : ""}`} onClick={copyPassword} title={t("Copy password", { defaultValue: "Copy password" })}>
               {copied ? <Check size={14} /> : <Copy size={14} />}
             </button>
           </div>
-          <span className="td-cred-hint">{copied ? t("Copied!", { defaultValue: "Copied!" }) : t("Click copy to use this password", { defaultValue: "Click copy to use this password" })}</span>
+          <span className="pd-cred-hint">{copied ? t("Copied!", { defaultValue: "Copied!" }) : t("Click copy to use this password", { defaultValue: "Click copy to use this password" })}</span>
         </div>
 
-        {credential.assigned_users && credential.assigned_users.length > 0 && (
-          <div className="td-cred-field">
-            <label>{t("Assigned To", { defaultValue: "Assigned To" })}</label>
-            <div className="td-cred-assigned">
-              {credential.assigned_users.map((u) => (
-                <span key={u.id} className="td-cred-badge">{u.name}</span>
-              ))}
-            </div>
+        <div className="pd-cred-field">
+          <label>{t("Assigned To", { defaultValue: "Assigned To" })}</label>
+          <div className="pd-cred-assigned">
+            {(credential.assigned_users || []).map((u) => (
+              <span key={u.id} className="pd-cred-user-badge">
+                {u.name}
+              </span>
+            ))}
           </div>
-        )}
         </div>
+      </div>
     </div>
   );
 }
@@ -346,6 +370,7 @@ function TaskDetails() {
   const [overviewSearch, setOverviewSearch] = useState("");
   const [accessSearch, setAccessSearch] = useState("");
   const [showAddAccessModal, setShowAddAccessModal] = useState(false);
+  const [editingCredential, setEditingCredential] = useState(null);
   const [accessCredentials, setAccessCredentials] = useState([]);
   const [loadingCredentials, setLoadingCredentials] = useState(false);
   const [deleteCredentialConfirmOpen, setDeleteCredentialConfirmOpen] = useState(false);
@@ -924,7 +949,8 @@ function TaskDetails() {
     if (!task) return;
     // Skip API for shared tasks
     if (isSharedTask) {
-      setAccessCredentials([]);
+      const creds = task.accessCredentials || task.access_credentials || [];
+      setAccessCredentials(Array.isArray(creds) ? creds : (creds?.data || []));
       setLoadingCredentials(false);
       return;
     }
@@ -943,7 +969,7 @@ function TaskDetails() {
     } finally {
       setLoadingCredentials(false);
     }
-  }, [task]);
+  }, [task, isSharedTask]);
 
   const deleteAccessCredential = async (credentialId) => {
     if (!task) return;
@@ -955,8 +981,10 @@ function TaskDetails() {
       });
       if (!res.ok) throw new Error("Failed to delete access credential");
       fetchAccessCredentials();
+      showSuccessMessage("Access credential", "deleted");
     } catch (err) {
       console.error("Delete access credential error:", err);
+      notify.error(t("Failed to delete access credential", { defaultValue: "Failed to delete access credential" }));
     }
   };
 
@@ -2630,47 +2658,58 @@ function TaskDetails() {
                   {tab === "files" && <FileUploadSection entityType="task" entityId={task.id} files={files} onReorder={handleFileReorder} onFilesChange={() => fetchTask(true)} readOnly={readOnly} />}
 
                   {tab === "access" && (
-                    <div className="td-access-section">
-                      <div className="td-section-header">
-                        <h2 className="td-section-title">{t("Task Access Credentials", { defaultValue: "Task Access Credentials" })}</h2>
-                        <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                          <input type="text" placeholder={t("Search by credential name, URL, or username...", { defaultValue: "Search by credential name, URL, or username..." })} value={accessSearch} onChange={(e) => setAccessSearch(e.target.value)} />
-                        </div>
-                        {!readOnly && isCreator && (
-                          <button className="td-access-add-btn" onClick={() => setShowAddAccessModal(true)}>
-                            <Plus size={16} /> {t("Add Access", { defaultValue: "Add Access" })}
-                          </button>
-                        )}
-                      </div>
-                      {loadingCredentials ? (
-                        <p className="td-muted">{t("Loading credentials...", { defaultValue: "Loading credentials..." })}</p>
-                      ) : accessCredentials.length === 0 ? (
-                        <p className="td-muted">{t('No access credentials added yet. Click "Add Access" to store login details.', { defaultValue: 'No access credentials added yet. Click "Add Access" to store login details.' })}</p>
-                      ) : (
-                        <div className="td-credentials-list">
-                          {accessCredentials.filter((cred) => {
-                            if (!accessSearch) return true;
-                            const q = accessSearch.toLowerCase();
-                            return (cred.name || "").toLowerCase().includes(q) || (cred.url || "").toLowerCase().includes(q) || (cred.username || "").toLowerCase().includes(q);
-                          }).map((cred) => (
-                            <CredentialRow
-                              key={cred.id}
-                              credential={cred}
-                              onDelete={!readOnly && isCreator ? () => {
-                                setPendingDeleteCredential(cred.id);
-                                setDeleteCredentialConfirmOpen(true);
-                              } : undefined}
-                            />
-                          ))}
-                          {accessSearch && accessCredentials.filter((cred) => {
-                            const q = accessSearch.toLowerCase();
-                            return (cred.name || "").toLowerCase().includes(q) || (cred.url || "").toLowerCase().includes(q) || (cred.username || "").toLowerCase().includes(q);
-                          }).length === 0 && (
-                            <p className="td-muted" style={{ textAlign: "center" }}>{t("No credentials match your search.", { defaultValue: "No credentials match your search." })}</p>
+                    <div className="pd-tab-panel">
+                      <section className="pd-card-flat">
+                        <div className="pd-card-flat__head">
+                          <h2 className="pd-block-title pd-block-title--inline">{t("Task Access Credentials", { defaultValue: "Task Access Credentials" })}</h2>
+                          <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                            <input type="text" placeholder={t("Search by title, username, or URL...", { defaultValue: "Search by title, username, or URL..." })} value={accessSearch} onChange={(e) => setAccessSearch(e.target.value)} />
+                          </div>
+                          {!readOnly && !isSharedTask && (isAdminOrManager || isCreator) && (
+                            <button type="button" className="pd-btn-tx pd-btn-tx--primary" onClick={() => setShowAddAccessModal(true)} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              <Plus size={16} /> {t("Add Access", { defaultValue: "Add Access" })}
+                            </button>
                           )}
                         </div>
-                      )}
+                        <p className="pd-muted" style={{ margin: "0 0 16px" }}>
+                          {t("Store and manage login credentials for task-related websites. Passwords are encrypted and only visible to assigned users.", { defaultValue: "Store and manage login credentials for task-related websites. Passwords are encrypted and only visible to assigned users." })}
+                        </p>
+
+                        {loadingCredentials ? (
+                          <p className="pd-muted">{t("Loading credentials...", { defaultValue: "Loading credentials..." })}</p>
+                        ) : accessCredentials.length === 0 ? (
+                          <p className="pd-muted">{t("No access credentials added yet. Click \"Add Access\" to store login details.", { defaultValue: "No access credentials added yet. Click \"Add Access\" to store login details." })}</p>
+                        ) : (() => {
+                          const filteredAccess = accessSearch ? accessCredentials.filter((cred) => {
+                            const q = accessSearch.toLowerCase();
+                            return (cred.website_name || cred.title || cred.name || "").toLowerCase().includes(q) ||
+                                   (cred.username || "").toLowerCase().includes(q) ||
+                                   (cred.website_url || cred.url || "").toLowerCase().includes(q);
+                          }) : accessCredentials;
+                          return filteredAccess.length === 0 ? (
+                            <p className="pd-muted">{t("No access credentials match your search.", { defaultValue: "No access credentials match your search." })}</p>
+                          ) : (
+                            <div className="pd-credentials-list">
+                              {filteredAccess.map((cred) => (
+                                <CredentialRow
+                                  key={cred.id}
+                                  credential={cred}
+                                  onDelete={() => {
+                                    setPendingDeleteCredential(cred.id);
+                                    setDeleteCredentialConfirmOpen(true);
+                                  }}
+                                  onEdit={(c) => setEditingCredential(c)}
+                                  isGuest={currentUser?.role === "guest"}
+                                  isShared={isSharedTask}
+                                  currentUserRole={currentUser?.role}
+                                  canManage={!readOnly && !isSharedTask && (isAdminOrManager || isCreator)}
+                                />
+                              ))}
+                            </div>
+                          );
+                        })()}
+                      </section>
                     </div>
                   )}
 
@@ -3231,12 +3270,14 @@ function TaskDetails() {
       />
 
       <AddAccessModal
-        isOpen={showAddAccessModal}
-        onClose={() => setShowAddAccessModal(false)}
+        isOpen={showAddAccessModal || !!editingCredential}
+        onClose={() => { setShowAddAccessModal(false); setEditingCredential(null); }}
         taskId={task?.id}
+        projectId={task?.project_id || task?.project?.id}
         projectName={task?.title || ""}
-        onSuccess={fetchAccessCredentials}
+        onSuccess={() => { fetchAccessCredentials(); setEditingCredential(null); }}
         files={task?.files || []}
+        credential={editingCredential}
       />
 
       <ConfirmModal

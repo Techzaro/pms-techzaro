@@ -262,20 +262,38 @@ class Task extends Model
                     $hasTransferred = true;
                 } elseif ($stLower === 'reopened') {
                     $hasReopened = true;
-                } elseif (in_array($stLower, ['pending', 'planned', 'planning'])) {
-                    $expandedStatuses = array_merge($expandedStatuses, ['Pending', 'pending', 'planned', 'Planning', 'Planned']);
-                } elseif (in_array($stLower, ['in_progress', 'in progress', 'in-progress', 'doing'])) {
-                    $expandedStatuses = array_merge($expandedStatuses, ['In Progress', 'in_progress', 'in-progress', 'doing']);
-                } elseif (in_array($stLower, ['submitted', 'review', 'in_review'])) {
-                    $expandedStatuses = array_merge($expandedStatuses, ['Submitted', 'submitted', 'review', 'in_review']);
-                } elseif (in_array($stLower, ['approved', 'completed', 'done'])) {
-                    $expandedStatuses = array_merge($expandedStatuses, ['Approved', 'approved', 'completed', 'done']);
-                } elseif (in_array($stLower, ['paused', 'pause'])) {
-                    $expandedStatuses = array_merge($expandedStatuses, ['Paused', 'paused', 'pause']);
+                } elseif (in_array($stLower, ['pending', 'planned', 'planning', 'draft', 'todo', 'to_do', 'new', 'not_started', 'not started', 'unassigned'])) {
+                    $expandedStatuses = array_merge($expandedStatuses, [
+                        'Pending', 'pending', 'planned', 'Planning', 'Planned', 'draft', 'Draft',
+                        'todo', 'Todo', 'to_do', 'To_Do', 'new', 'New', 'not_started', 'Not Started',
+                        'not_started', 'unassigned', 'Unassigned'
+                    ]);
+                } elseif (in_array($stLower, ['in_progress', 'in progress', 'in-progress', 'doing', 'working', 'underway', 'acknowledged'])) {
+                    $expandedStatuses = array_merge($expandedStatuses, [
+                        'In Progress', 'in_progress', 'in progress', 'in-progress', 'In-Progress',
+                        'doing', 'Doing', 'working', 'underway', 'acknowledged'
+                    ]);
+                } elseif (in_array($stLower, ['submitted', 'review', 'in_review', 'under_review', 'submitted_late'])) {
+                    $expandedStatuses = array_merge($expandedStatuses, [
+                        'Submitted', 'submitted', 'review', 'Review', 'in_review', 'In Review',
+                        'under_review', 'Under Review', 'submitted_late'
+                    ]);
+                } elseif (in_array($stLower, ['approved', 'completed', 'done', 'finished'])) {
+                    $expandedStatuses = array_merge($expandedStatuses, [
+                        'Approved', 'approved', 'completed', 'Completed', 'done', 'Done', 'finished', 'Finished'
+                    ]);
+                } elseif (in_array($stLower, ['paused', 'pause', 'hold', 'on_hold', 'on hold', 'on-hold'])) {
+                    $expandedStatuses = array_merge($expandedStatuses, [
+                        'Paused', 'paused', 'pause', 'Pause', 'hold', 'Hold', 'on_hold', 'On Hold', 'on-hold'
+                    ]);
                 } elseif (in_array($stLower, ['declined', 'rejected', 'failed'])) {
-                    $expandedStatuses = array_merge($expandedStatuses, ['Declined', 'declined', 'rejected', 'failed']);
-                } elseif (in_array($stLower, ['abandoned', 'abandon_requested'])) {
-                    $expandedStatuses = array_merge($expandedStatuses, ['Abandoned', 'abandoned', 'abandon_requested']);
+                    $expandedStatuses = array_merge($expandedStatuses, [
+                        'Declined', 'declined', 'rejected', 'Rejected', 'failed', 'Failed'
+                    ]);
+                } elseif (in_array($stLower, ['abandoned', 'abandon_requested', 'cancelled', 'canceled'])) {
+                    $expandedStatuses = array_merge($expandedStatuses, [
+                        'Abandoned', 'abandoned', 'abandon_requested', 'Abandon Requested', 'cancelled', 'canceled'
+                    ]);
                 } elseif (! empty($st)) {
                     $expandedStatuses[] = $st;
                 }

@@ -1483,6 +1483,15 @@ class UserController extends Controller
     public function getTeamUsers(Request $request)
     {
         $user = $request->user();
+        $projectId = $request->input('project_id');
+
+        if ($projectId) {
+            $project = Project::find($projectId);
+            if ($project) {
+                $members = $project->getMembers();
+                return response()->json(['success' => true, 'users' => $members, 'data' => $members]);
+            }
+        }
 
         if ($user->role === 'guest') {
             // Guest can only see admin/manager + team members of their projects
@@ -1515,7 +1524,7 @@ class UserController extends Controller
                 ->get();
         }
 
-        return response()->json(['success' => true, 'users' => $users]);
+        return response()->json(['success' => true, 'users' => $users, 'data' => $users]);
     }
 
     /**

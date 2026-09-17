@@ -20,10 +20,10 @@ import { Link, useNavigate, useSearchParams, useLocation } from "react-router-do
 import { useTranslation } from "react-i18next";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
-import { ArrowUpRight, CheckCircle2, Lock, Pause, Play, StickyNote, ChevronDown, XCircle, RotateCcw, AlertOctagon, Sliders, Trash2 } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, Lock, Pause, Play, StickyNote, ChevronDown, XCircle, RotateCcw, AlertOctagon, Sliders, Trash2, Users } from "lucide-react";
 import { publish } from "../utils/eventBus";
 import { useNotification } from "../context/NotificationContext";
-import { showSuccessMessage, notify, toast } from "../utils/notify";
+import { showSuccessMessage, toast } from "../utils/notify";
 import CreateTaskModal from "../components/CreateTaskModal";
 import SubmitTaskModal from "../components/SubmitTaskModal";
 import SubmitDeliverableModal from "../components/SubmitDeliverableModal"; // Added missing import
@@ -38,6 +38,7 @@ import ActionPopover from "../components/ActionPopover";
 import TaskReopenDialog from "../components/TaskReopenDialog";
 import AbandonModal from "../components/AbandonModal";
 import MarkTaskCompletedModal from "../components/MarkTaskCompletedModal";
+import TransferTaskDialog from "../components/TransferTaskDialog";
 import TaskNotesPopover from "../components/TaskNotesPopover";
 import AddNoteModal from "../components/AddNoteModal";
 import TaskMultiStatusBadges from "../components/TaskMultiStatusBadges";
@@ -54,7 +55,7 @@ import "../pages/Task.css";
 const STATUS_COLORS = {
   pending: "#FEF3C7",
   in_progress: "#DBEAFE",
-  paused: "#FEF3C7",
+  paused: "#FFEDD5",
   submitted: "#DBEAFE",
   reopened: "#EDE9FE",
   approved: "#DCFCE7",
@@ -66,7 +67,7 @@ const STATUS_COLORS = {
 const STATUS_TEXT_COLORS = {
   pending: "#92400E",
   in_progress: "#1E40AF",
-  paused: "#92400E",
+  paused: "#C2410C",
   submitted: "#1E40AF",
   reopened: "#5B21B6",
   approved: "#166534",
@@ -108,6 +109,8 @@ const SelfTasks = () => {
   const [pauseModalTaskId, setPauseModalTaskId] = useState(null);
   const [resumeConfirmOpen, setResumeConfirmOpen] = useState(false);
   const [resumeTaskItem, setResumeTaskItem] = useState(null);
+  const [startTimerConfirmOpen, setStartTimerConfirmOpen] = useState(false);
+  const [startTimerTaskItem, setStartTimerTaskItem] = useState(null);
   const [acknowledgeConfirmOpen, setAcknowledgeConfirmOpen] = useState(false);
   const [acknowledgeTaskItem, setAcknowledgeTaskItem] = useState(null);
   const [approveConfirmOpen, setApproveConfirmOpen] = useState(false);
@@ -118,6 +121,7 @@ const SelfTasks = () => {
   const [abandonTask, setAbandonTask] = useState(null);
   const [markCompletedTask, setMarkCompletedTask] = useState(null);
   const [abandoning, setAbandoning] = useState(false);
+  const [transferDialog, setTransferDialog] = useState({ open: false, task: null });
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -276,6 +280,7 @@ const SelfTasks = () => {
             item.id === actualTaskId ? { ...item, status: "in_progress", ...updatedObj } : item
           )
         );
+        fetchTasks();
         if (isDeliverable) {
           publish('deliverable:updated', { id: actualTaskId, status: 'in_progress', ...updatedObj });
           publish('data:changed', { type: 'deliverable', action: 'updated' });
@@ -321,9 +326,10 @@ const SelfTasks = () => {
         const updatedObj = data.deliverable || data.task || {};
         setItems((prev) =>
           prev.map((item) =>
-            item.id === actualTaskId ? { ...item, status: "in_progress", ...updatedObj } : item
+            item.id === actualTaskId ? { ...item, status: "in_progress", timer_state: "running", timer: { ...(item.timer || {}), state: "running" }, ...updatedObj } : item
           )
         );
+        fetchTasks();
         if (isDeliverable) {
           publish('deliverable:updated', { id: actualTaskId, status: 'in_progress', ...updatedObj });
           publish('data:changed', { type: 'deliverable', action: 'updated' });
@@ -365,9 +371,10 @@ const SelfTasks = () => {
         const updatedObj = data.deliverable || data.task || {};
         setItems((prev) =>
           prev.map((item) =>
-            item.id === actualTaskId ? { ...item, status: "in_progress", ...updatedObj } : item
+            item.id === actualTaskId ? { ...item, status: "in_progress", assigner_paused: false, ...updatedObj } : item
           )
         );
+        fetchTasks();
         if (isDeliverable) {
           publish('deliverable:updated', { id: actualTaskId, status: 'in_progress', ...updatedObj });
           publish('data:changed', { type: 'deliverable', action: 'updated' });
@@ -409,6 +416,7 @@ const SelfTasks = () => {
             item.id === actualTaskId ? { ...item, status: "paused", ...updatedObj } : item
           )
         );
+        fetchTasks();
         if (isDeliverable) {
           publish('deliverable:updated', { id: actualTaskId, status: 'paused', ...updatedObj });
           publish('data:changed', { type: 'deliverable', action: 'updated' });
@@ -451,6 +459,7 @@ const SelfTasks = () => {
             item.id === actualTaskId ? { ...item, status: "approved", ...updatedObj } : item
           )
         );
+        fetchTasks();
         if (isDeliverable) {
           publish('deliverable:updated', { id: actualTaskId, status: 'approved', ...updatedObj });
           publish('data:changed', { type: 'deliverable', action: 'updated' });
@@ -493,6 +502,7 @@ const SelfTasks = () => {
             item.id === taskId ? { ...item, status: "rejected", ...updatedObj } : item
           )
         );
+        fetchTasks();
         if (isDeliverable) {
           publish('deliverable:updated', { id: taskId, status: 'rejected', ...updatedObj });
           publish('data:changed', { type: 'deliverable', action: 'updated' });
@@ -547,6 +557,7 @@ const SelfTasks = () => {
             item.id === taskId ? { ...item, status: "abandoned", ...updatedObj } : item
           )
         );
+        fetchTasks();
         if (isDeliverable) {
           publish('deliverable:updated', { id: taskId, status: 'abandoned', ...updatedObj });
           publish('data:changed', { type: 'deliverable', action: 'updated' });
@@ -577,6 +588,7 @@ const SelfTasks = () => {
         item.id === taskId ? { ...item, status: "pending", ...(updatedTask || {}) } : item
       )
     );
+    fetchTasks();
     if (isDeliverable) {
       publish('deliverable:updated', { id: taskId, status: 'pending', ...(updatedTask || {}) });
       publish('data:changed', { type: 'deliverable', action: 'updated' });
@@ -599,6 +611,7 @@ const SelfTasks = () => {
         item.id === taskId ? { ...item, status: "completed", ...(updatedTask || {}) } : item
       )
     );
+    fetchTasks();
     if (isDeliverable) {
       publish('deliverable:updated', { id: taskId, status: 'completed', ...(updatedTask || {}) });
       publish('data:changed', { type: 'deliverable', action: 'updated' });
@@ -639,6 +652,7 @@ const SelfTasks = () => {
       if (res.ok) {
         setItems((prev) => prev.filter((item) => String(item.id) !== String(taskId)));
         setOrderedItems((prev) => prev.filter((item) => String(item.id) !== String(taskId)));
+        fetchTasks();
         if (isDeliverable) {
           publish('deliverable:deleted', { id: taskId });
           publish('data:changed', { type: 'deliverable', action: 'deleted' });
@@ -1268,81 +1282,110 @@ const SelfTasks = () => {
                             </span>
                           );
                         }
-                        if (item.status === "pending") {
-                          return (
-                            <button
-                              className="action-icon-btn action-submit"
-                              title={isDeliverableItem(item) ? t("Acknowledge Subtask", { defaultValue: "Acknowledge Subtask" }) : t("Acknowledge Task", { defaultValue: "Acknowledge Task" })}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                setAcknowledgeTaskItem(item);
-                                setAcknowledgeConfirmOpen(true);
-                              }}
-                              style={{ color: "#2563EB" }}
-                            >
-                              <CheckCircle2 size={16} />
-                            </button>
-                          );
-                        }
-                        if (item.status === "in_progress" && (!item.timer || item.timer?.state === "idle" || !item.timer?.state)) {
-                          return (
-                            <button className="action-icon-btn action-submit" title={t("Start Timer", { defaultValue: "Start Timer" })} onClick={(e) => handleStartTimer(e, item)} style={{ color: "#2563eb" }}>
-                              <Play size={16} />
-                            </button>
-                          );
-                        }
-                        if (["in_progress", "submitted"].includes(item.status?.toLowerCase()) && item.timer?.state === "running" && !item.assigner_paused) {
-                          return (
-                            <button
-                              className="action-icon-btn action-submit"
-                              title={isDeliverableItem(item) ? t("Pause Subtask", { defaultValue: "Pause Subtask" }) : t("Pause Task", { defaultValue: "Pause Task" })}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                setPauseModalTaskId(item);
-                                setPauseModalOpen(true);
-                              }}
-                              style={{ color: "#D97706" }}
-                            >
-                              <Pause size={16} />
-                            </button>
-                          );
-                        }
-                        if (item.status === "paused" || item.timer?.state === "paused") {
-                          return (
-                            <button
-                              className="action-icon-btn action-submit"
-                              title={isDeliverableItem(item) ? t("Resume Subtask", { defaultValue: "Resume Subtask" }) : t("Resume Task", { defaultValue: "Resume Task" })}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                setResumeTaskItem(item);
-                                setResumeConfirmOpen(true);
-                              }}
-                              style={{ color: "#059669" }}
-                            >
-                              <Play size={16} />
-                            </button>
-                          );
-                        }
-                        if ((item.status === "in_progress" || item.status === "reopened") && myPivotStatus !== "submitted") {
-                          return (
-                            <div style={{ position: "relative", display: "inline-flex" }}>
-                              <button 
-                                className="action-icon-btn action-submit" 
-                                title={!isDeliverableItem(item) && item.pending_deliverables_count > 0 ? t("Submit all subtasks first", { defaultValue: "Submit all subtasks first" }) : (isDeliverableItem(item) ? t("Submit Subtask", { defaultValue: "Submit Subtask" }) : t("Submit Task", { defaultValue: "Submit Task" }))} 
-                                disabled={!isDeliverableItem(item) && item.pending_deliverables_count > 0} 
-                                onClick={(e) => { e.stopPropagation(); (isDeliverableItem(item) || !item.pending_deliverables_count) && setSubmitTaskModal({ open: true, task: item }); }} 
-                                style={!isDeliverableItem(item) && item.pending_deliverables_count > 0 ? { opacity: 0.4, cursor: "not-allowed" } : {}}
+                        const sStatus = (item.status || "").toLowerCase();
+                        const isPaused = (sStatus === "paused" || item.timer?.state === "paused" || item.timer_state === "paused");
+                        const isTimerRunning = (item.timer?.state === "running" || item.timer_state === "running");
+                        const canTrack = !item.assigner_paused;
+                        const isTerminal = ["approved", "completed", "rejected", "declined", "abandoned"].includes(sStatus);
+
+                        const canAcknowledge = item.status === "pending";
+                        const canStartTimer = canTrack && !isTerminal && !isPaused && !isTimerRunning && ["in_progress", "in-progress", "reopened", "acknowledged"].includes(sStatus);
+                        const canPause = canTrack && !isTerminal && !isPaused && isTimerRunning && ["in_progress", "in-progress", "submitted"].includes(sStatus);
+                        const canResume = canTrack && !isTerminal && isPaused;
+                        const canSubmit = !isTerminal && (sStatus === "in_progress" || sStatus === "reopened" || sStatus === "acknowledged") && myPivotStatus !== "submitted";
+
+                        return (
+                          <>
+                            {canAcknowledge && (
+                              <button
+                                className="action-icon-btn action-submit"
+                                title={isDeliverableItem(item) ? t("Acknowledge Subtask", { defaultValue: "Acknowledge Subtask" }) : t("Acknowledge Task", { defaultValue: "Acknowledge Task" })}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  setAcknowledgeTaskItem(item);
+                                  setAcknowledgeConfirmOpen(true);
+                                }}
+                                style={{ color: "#2563EB" }}
                               >
-                                <LuSend size={16} />
+                                <CheckCircle2 size={16} />
                               </button>
-                            </div>
-                          );
-                        }
-                        return null;
+                            )}
+
+                            {canStartTimer && (
+                              <button
+                                className="action-icon-btn action-submit"
+                                title={isDeliverableItem(item) ? t("Start Subtask Timer", { defaultValue: "Start Subtask Timer" }) : t("Start Task Timer", { defaultValue: "Start Task Timer" })}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  setStartTimerTaskItem(item);
+                                  setStartTimerConfirmOpen(true);
+                                }}
+                                style={{ color: "#2563EB" }}
+                              >
+                                <Play size={16} />
+                              </button>
+                            )}
+
+                            {canPause && (
+                              <button
+                                className="action-icon-btn action-submit"
+                                title={isDeliverableItem(item) ? t("Pause Subtask", { defaultValue: "Pause Subtask" }) : t("Pause Task", { defaultValue: "Pause Task" })}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  setPauseModalTaskId(item);
+                                  setPauseModalOpen(true);
+                                }}
+                                style={{ color: "#D97706" }}
+                              >
+                                <Pause size={16} />
+                              </button>
+                            )}
+
+                            {canResume && (
+                              <button
+                                className="action-icon-btn action-submit"
+                                title={isDeliverableItem(item) ? t("Resume Subtask", { defaultValue: "Resume Subtask" }) : t("Resume Task", { defaultValue: "Resume Task" })}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  setResumeTaskItem(item);
+                                  setResumeConfirmOpen(true);
+                                }}
+                                style={{ color: "#059669" }}
+                              >
+                                <Play size={16} />
+                              </button>
+                            )}
+
+                            {canSubmit && (
+                              <div style={{ position: "relative", display: "inline-flex" }}>
+                                <button 
+                                  className="action-icon-btn action-submit" 
+                                  title={!isDeliverableItem(item) && item.pending_deliverables_count > 0 ? t("Submit all subtasks first", { defaultValue: "Submit all subtasks first" }) : (isDeliverableItem(item) ? t("Submit Subtask", { defaultValue: "Submit Subtask" }) : t("Submit Task", { defaultValue: "Submit Task" }))} 
+                                  disabled={!isDeliverableItem(item) && item.pending_deliverables_count > 0} 
+                                  onClick={(e) => { e.stopPropagation(); (isDeliverableItem(item) || !item.pending_deliverables_count) && setSubmitTaskModal({ open: true, task: item }); }} 
+                                  style={!isDeliverableItem(item) && item.pending_deliverables_count > 0 ? { opacity: 0.4, cursor: "not-allowed" } : {}}
+                                >
+                                  <LuSend size={16} />
+                                </button>
+                              </div>
+                            )}
+                          </>
+                        );
                       })()}
+                      {!["approved", "rejected", "pending", "submitted"].includes(item.status) && !item.is_transferor && (
+                        <button
+                          className="action-icon-btn"
+                          title={isDeliverableItem(item) ? t("Transfer Subtask", { defaultValue: "Transfer Subtask" }) : t("Transfer Task", { defaultValue: "Transfer Task" })}
+                          onClick={(e) => { e.stopPropagation(); setTransferDialog({ open: true, task: item }); }}
+                          style={{ color: "#2563EB", cursor: "pointer" }}
+                        >
+                          <Users size={16} />
+                        </button>
+                      )}
                       <button
                         className="action-icon-btn action-delete"
                         title={isDeliverableItem(item) ? t("Delete Subtask", { defaultValue: "Delete Subtask" }) : t("Delete Task", { defaultValue: "Delete Task" })}
@@ -1415,6 +1458,22 @@ const SelfTasks = () => {
       />
 
       <ConfirmModal
+        isOpen={startTimerConfirmOpen}
+        onClose={() => { setStartTimerConfirmOpen(false); setStartTimerTaskItem(null); }}
+        onConfirm={async () => {
+          if (!startTimerTaskItem) return;
+          await handleStartTimer(null, startTimerTaskItem);
+          setStartTimerConfirmOpen(false);
+          setStartTimerTaskItem(null);
+        }}
+        title={isDeliverableItem(startTimerTaskItem) ? t("Start Subtask Timer", { defaultValue: "Start Subtask Timer" }) : t("Start Task Timer", { defaultValue: "Start Task Timer" })}
+        message={isDeliverableItem(startTimerTaskItem) ? t("Are you sure you want to start the timer for this subtask?", { defaultValue: "Are you sure you want to start the timer for this subtask?" }) : t("Are you sure you want to start the timer for this task?", { defaultValue: "Are you sure you want to start the timer for this task?" })}
+        confirmText={t("Start Timer", { defaultValue: "Start Timer" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        confirmColor="#2563EB"
+      />
+
+      <ConfirmModal
         isOpen={resumeConfirmOpen}
         onClose={() => { setResumeConfirmOpen(false); setResumeTaskItem(null); }}
         onConfirm={async () => {
@@ -1423,8 +1482,8 @@ const SelfTasks = () => {
           setResumeConfirmOpen(false);
           setResumeTaskItem(null);
         }}
-        title={t("Resume Task", { defaultValue: "Resume Task" })}
-        message={t("Are you sure you want to resume this task?", { defaultValue: "Are you sure you want to resume this task?" })}
+        title={isDeliverableItem(resumeTaskItem) ? t("Resume Subtask", { defaultValue: "Resume Subtask" }) : t("Resume Task", { defaultValue: "Resume Task" })}
+        message={isDeliverableItem(resumeTaskItem) ? t("Are you sure you want to resume this subtask?", { defaultValue: "Are you sure you want to resume this subtask?" }) : t("Are you sure you want to resume this task?", { defaultValue: "Are you sure you want to resume this task?" })}
         confirmText={t("Resume", { defaultValue: "Resume" })}
         cancelText={t("Cancel", { defaultValue: "Cancel" })}
         confirmColor="#059669"
@@ -1524,6 +1583,19 @@ const SelfTasks = () => {
           task={markCompletedTask}
           entityType="task"
           onCompleteSuccess={handleDirectCompleteSuccess}
+        />
+      )}
+
+      {transferDialog.open && (
+        <TransferTaskDialog
+          isOpen={transferDialog.open}
+          onClose={() => setTransferDialog({ open: false, task: null })}
+          task={transferDialog.task}
+          onTransferSuccess={() => {
+            setTransferDialog({ open: false, task: null });
+            fetchTasks();
+            showSuccessMessage(t("Task", { defaultValue: "Task" }), t("transferred", { defaultValue: "transferred" }));
+          }}
         />
       )}
     </DashboardLayout>

@@ -2,28 +2,34 @@
  * All Tasks page component — Read-only view of all tasks within the user's visibility scope.
  *
  * Displays tasks based on role-based visibility:
-/**
- * All Tasks page component — Read-only view of all tasks within the user's visibility scope.
- *
- * Displays tasks based on role-based visibility:
  * - Admin: All tasks in the company
  * - Manager: Tasks within managed teams
  * - Team Lead: Tasks within their team
  * - Member: Tasks they are directly involved in
  *
- * This page is strictly read-only — no edit, submit, or workflow actions.
+ * This page provides full workflow actions matching permissions.
  */
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
 import DashboardLayout from "../components/layout/DashboardLayout";
+import { publish } from "../utils/eventBus";
 import Breadcrumb from "../components/Breadcrumb";
 import DraggableStatusBadges from "../components/DraggableStatusBadges";
 import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
-import { ArrowUpRight, StickyNote, Sliders, XCircle } from "lucide-react";
+import { IoSearchOutline, IoEyeOutline, IoCheckmarkCircle } from "react-icons/io5";
+import { ArrowUpRight, Lock, Pencil, StickyNote, Trash2, Sliders, CheckCircle2, XCircle, RotateCcw, AlertOctagon, Pause, Play, Users } from "lucide-react";
+import EditTaskModal from "../components/EditTaskModal";
+import DeleteRecurrenceModal from "../components/DeleteRecurrenceModal";
+import PauseReasonModal from "../components/PauseReasonModal";
+import ConfirmModal from "../components/ConfirmModal";
+import DeclineModal from "../components/DeclineModal";
+import TaskReopenDialog from "../components/TaskReopenDialog";
+import AbandonModal from "../components/AbandonModal";
+import MarkTaskCompletedModal from "../components/MarkTaskCompletedModal";
+import TransferTaskDialog from "../components/TransferTaskDialog";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
@@ -31,6 +37,7 @@ import ActionPopover from "../components/ActionPopover";
 import TaskNotesPopover from "../components/TaskNotesPopover";
 import AddNoteModal from "../components/AddNoteModal";
 import TaskMultiStatusBadges from "../components/TaskMultiStatusBadges";
+import TaskAssigneeCell from "../components/TaskAssigneeCell";
 import TaskFilterBar from "../components/TaskFilterBar";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
@@ -38,13 +45,14 @@ import { renderDynamicDates } from "../utils/tableDateUtils";
 import { formatDateTimeInline, formatDateOnly } from "../utils/formatDateTime";
 import { getUpdatedSinceThreshold } from "../utils/filterUtils";
 import { isDelegationRejectedByMe, isDelegationRevokedFromMe, isDeliverableItem } from "../utils/delegationUtils";
+import { showSuccessMessage, notify, toast } from "../utils/notify";
 import "../components/ActionPopover.css";
 import "../pages/Task.css";
 
 const STATUS_COLORS = {
   pending: "#FEF3C7",
   in_progress: "#DBEAFE",
-  paused: "#FEF3C7",
+  paused: "#FFEDD5",
   submitted: "#DBEAFE",
   reopened: "#EDE9FE",
   approved: "#DCFCE7",
@@ -56,7 +64,7 @@ const STATUS_COLORS = {
 const STATUS_TEXT_COLORS = {
   pending: "#92400E",
   in_progress: "#1E40AF",
-  paused: "#92400E",
+  paused: "#C2410C",
   submitted: "#1E40AF",
   reopened: "#5B21B6",
   approved: "#166534",
@@ -129,6 +137,27 @@ function AllTasks() {
   const [sortBy, setSortBy] = useState("");
   const [sortDirection, setSortDirection] = useState("desc");
   const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
+
+  const [editingTask, setEditingTask] = useState(null);
+  const [holdingTaskId, setHoldingTaskId] = useState(null);
+  const [resumingTaskId, setResumingTaskId] = useState(null);
+  const [pauseModalOpen, setPauseModalOpen] = useState(false);
+  const [pauseModalTaskId, setPauseModalTaskId] = useState(null);
+  const [resumeModalOpen, setResumeModalOpen] = useState(false);
+  const [resumeModalTask, setResumeModalTask] = useState(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState(null);
+  const [approveConfirmOpen, setApproveConfirmOpen] = useState(false);
+  const [approveTaskId, setApproveTaskId] = useState(null);
+  const [declineConfirmOpen, setDeclineConfirmOpen] = useState(false);
+  const [declineTaskItem, setDeclineTaskItem] = useState(null);
+  const [declineTaskLoading, setDeclineTaskLoading] = useState(false);
+  const [deleteRecurrenceTask, setDeleteRecurrenceTask] = useState(null);
+  const [reopenTask, setReopenTask] = useState(null);
+  const [abandonTask, setAbandonTask] = useState(null);
+  const [markCompletedTask, setMarkCompletedTask] = useState(null);
+  const [abandoning, setAbandoning] = useState(false);
+  const [transferDialog, setTransferDialog] = useState({ open: false, task: null });
 
   const [advancedFilters, setAdvancedFilters] = useState({
     user_id: [],
@@ -332,6 +361,328 @@ function AllTasks() {
   useAutoRefresh(() => { fetchTasks(); }, {
     events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
   });
+
+  const handleDelete = (e, item) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    const isDeliverable = isDeliverableItem(item);
+    if (!isDeliverable && (item.task_type === "recurring" || !!item.recurrence_settings)) {
+      setDeleteRecurrenceTask(item);
+    } else {
+      setDeleteTargetId(item.id);
+      setDeleteConfirmOpen(true);
+    }
+  };
+
+  const confirmDelete = async () => {
+    const taskId = deleteTargetId;
+    setDeleteConfirmOpen(false);
+    setDeleteTargetId(null);
+    try {
+      const token = authToken();
+      const item = items.find((i) => i.id === taskId);
+      const isDeliverable = isDeliverableItem(item);
+      const endpoint = isDeliverable ? `${API_URL}/deliverables/${taskId}` : `${API_URL}/tasks/${taskId}`;
+      const res = await fetch(endpoint, {
+        method: "DELETE",
+        headers: { Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        _notifHandled: true,
+      });
+      if (res.ok) {
+        setItems((prev) => prev.filter((item) => String(item.id) !== String(taskId)));
+        fetchTasks();
+        if (isDeliverable) {
+          publish('deliverable:deleted', { id: taskId });
+          publish('data:changed', { type: 'deliverable', action: 'deleted' });
+          toast.success(t("Subtask deleted successfully", { defaultValue: "Subtask deleted successfully" }));
+        } else {
+          publish('task:deleted', { id: taskId });
+          publish('data:changed', { type: 'task', action: 'deleted' });
+          toast.success(t("Task deleted successfully", { defaultValue: "Task deleted successfully" }));
+        }
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.message || t("Failed to delete.", { defaultValue: "Failed to delete." }));
+      }
+    } catch {
+      toast.error(t("Failed to delete.", { defaultValue: "Failed to delete." }));
+    }
+  };
+
+  const handleAssignerPause = async (taskOrId, data) => {
+    const item = typeof taskOrId === 'object' && taskOrId !== null ? taskOrId : (items.find(i => String(i.id) === String(taskOrId)) || null);
+    const taskId = item ? item.id : taskOrId;
+    const isDeliverable = isDeliverableItem(item);
+    try {
+      setHoldingTaskId(taskId);
+      const token = authToken();
+      const endpoint = isDeliverable ? `${API_URL}/deliverables/${taskId}/pause` : `${API_URL}/tasks/${taskId}/assigner-pause`;
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        body: JSON.stringify({ reason: data?.reason_detail || data?.reason || "other", reason_detail: data?.reason_detail || "Paused by assigner" }),
+        _notifHandled: true,
+      });
+      const resData = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const updatedObj = resData.deliverable || resData.task || {};
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === taskId ? { ...item, status: "paused", assigner_paused: true, ...updatedObj } : item
+          )
+        );
+        fetchTasks();
+        if (isDeliverable) {
+          publish('deliverable:updated', { id: taskId, status: 'paused', ...updatedObj });
+          publish('data:changed', { type: 'deliverable', action: 'updated' });
+          showSuccessMessage(t("Subtask", { defaultValue: "Subtask" }), t("paused", { defaultValue: "paused" }));
+        } else {
+          publish('task:updated', { id: taskId, status: 'paused', ...updatedObj });
+          publish('data:changed', { type: 'task', action: 'updated' });
+          showSuccessMessage(t("Task", { defaultValue: "Task" }), t("paused", { defaultValue: "paused" }));
+        }
+      } else {
+        notify.error(resData?.message || t("Failed to pause.", { defaultValue: "Failed to pause." }));
+      }
+    } catch {
+      notify.error(t("Failed to pause.", { defaultValue: "Failed to pause." }));
+    } finally {
+      setHoldingTaskId(null);
+    }
+  };
+
+  const handleAssignerResume = async (taskOrId) => {
+    const item = typeof taskOrId === 'object' && taskOrId !== null ? taskOrId : (items.find(i => String(i.id) === String(taskOrId)) || null);
+    const taskId = item ? item.id : taskOrId;
+    const isDeliverable = isDeliverableItem(item);
+    try {
+      setResumingTaskId(taskId);
+      const token = authToken();
+      const endpoint = isDeliverable ? `${API_URL}/deliverables/${taskId}/resume` : `${API_URL}/tasks/${taskId}/assigner-resume`;
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const updatedObj = data.deliverable || data.task || {};
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === taskId ? { ...item, status: "in_progress", assigner_paused: false, ...updatedObj } : item
+          )
+        );
+        fetchTasks();
+        if (isDeliverable) {
+          publish('deliverable:updated', { id: taskId, status: 'in_progress', ...updatedObj });
+          publish('data:changed', { type: 'deliverable', action: 'updated' });
+          showSuccessMessage(t("Subtask", { defaultValue: "Subtask" }), t("resumed", { defaultValue: "resumed" }));
+        } else {
+          publish('task:updated', { id: taskId, status: 'in_progress', ...updatedObj });
+          publish('data:changed', { type: 'task', action: 'updated' });
+          showSuccessMessage(t("Task", { defaultValue: "Task" }), t("resumed", { defaultValue: "resumed" }));
+        }
+      } else {
+        notify.error(data?.message || t("Failed to resume.", { defaultValue: "Failed to resume." }));
+      }
+    } catch {
+      notify.error(t("Failed to resume.", { defaultValue: "Failed to resume." }));
+    } finally {
+      setResumingTaskId(null);
+    }
+  };
+
+  const handleDirectApprove = async (e, taskOrId) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    const item = typeof taskOrId === 'object' && taskOrId !== null ? taskOrId : (items.find(i => String(i.id) === String(taskOrId)) || null);
+    const actualTaskId = item ? item.id : taskOrId;
+    const isDeliverable = isDeliverableItem(item);
+    const endpoint = isDeliverable ? `${API_URL}/deliverables/${actualTaskId}/approve` : `${API_URL}/tasks/${actualTaskId}/approve`;
+
+    try {
+      const token = authToken();
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const updatedObj = data.deliverable || data.task || {};
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === actualTaskId ? { ...item, status: "approved", ...updatedObj } : item
+          )
+        );
+        fetchTasks();
+        if (isDeliverable) {
+          publish('deliverable:updated', { id: actualTaskId, status: 'approved', ...updatedObj });
+          publish('data:changed', { type: 'deliverable', action: 'updated' });
+          showSuccessMessage(t("Subtask", { defaultValue: "Subtask" }), t("approved", { defaultValue: "approved" }));
+        } else {
+          publish('task:updated', { id: actualTaskId, status: 'approved', ...updatedObj });
+          publish('data:changed', { type: 'task', action: 'updated' });
+          showSuccessMessage(t("Task", { defaultValue: "Task" }), t("approved", { defaultValue: "approved" }));
+        }
+      } else {
+        notify.error(data.message || t("Failed to approve.", { defaultValue: "Failed to approve." }));
+      }
+    } catch {
+      notify.error(t("An error occurred while approving.", { defaultValue: "An error occurred while approving." }));
+    }
+  };
+
+  const confirmDirectApprove = async () => {
+    if (!approveTaskId) return;
+    const itemOrId = approveTaskId;
+    setApproveConfirmOpen(false);
+    setApproveTaskId(null);
+    await handleDirectApprove(null, itemOrId);
+  };
+
+  const handleDirectDecline = async (e, task, comment) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    const taskId = task.id;
+    const isDeliverable = isDeliverableItem(task);
+    setDeclineTaskLoading(true);
+    try {
+      const token = authToken();
+      const endpoint = isDeliverable ? `${API_URL}/deliverables/${taskId}/reject` : `${API_URL}/tasks/${taskId}/reject`;
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        body: JSON.stringify({ comment }),
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const updatedObj = data.deliverable || data.task || {};
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === taskId ? { ...item, status: "declined", ...updatedObj } : item
+          )
+        );
+        fetchTasks();
+        if (isDeliverable) {
+          publish('deliverable:updated', { id: taskId, status: 'declined', ...updatedObj });
+          publish('data:changed', { type: 'deliverable', action: 'updated' });
+          showSuccessMessage(t("Subtask", { defaultValue: "Subtask" }), t("declined", { defaultValue: "declined" }));
+        } else {
+          publish('task:updated', { id: taskId, status: 'declined', ...updatedObj });
+          publish('data:changed', { type: 'task', action: 'updated' });
+          showSuccessMessage(t("Task", { defaultValue: "Task" }), t("declined", { defaultValue: "declined" }));
+        }
+        setDeclineTaskItem(null);
+      } else {
+        notify.error(data.message || t("Failed to decline.", { defaultValue: "Failed to decline." }));
+      }
+    } catch {
+      notify.error(t("An error occurred while declining.", { defaultValue: "An error occurred while declining." }));
+    } finally {
+      setDeclineTaskLoading(false);
+    }
+  };
+
+  const handleDirectAbandonSubmit = async (reason) => {
+    if (!abandonTask) return;
+    setAbandoning(true);
+    const taskId = abandonTask.id;
+    const isDeliverable = isDeliverableItem(abandonTask);
+    const isUserAdminOrManager = ["admin", "manager"].includes(currentUser?.role);
+    const endpoint = isDeliverable 
+      ? `${API_URL}/deliverables/${taskId}/abandon`
+      : (isUserAdminOrManager ? `${API_URL}/tasks/${taskId}/abandon` : `${API_URL}/tasks/${taskId}/request-abandon`);
+
+    try {
+      const token = authToken();
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        body: JSON.stringify({ reason }),
+        _notifHandled: true,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const updatedObj = data.deliverable || data.task || {};
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === taskId ? { ...item, status: "abandoned", ...updatedObj } : item
+          )
+        );
+        fetchTasks();
+        if (isDeliverable) {
+          publish('deliverable:updated', { id: taskId, status: 'abandoned', ...updatedObj });
+          publish('data:changed', { type: 'deliverable', action: 'updated' });
+          showSuccessMessage(t("Subtask", { defaultValue: "Subtask" }), t("abandoned", { defaultValue: "abandoned" }));
+        } else {
+          publish('task:updated', { id: taskId, status: 'abandoned', ...updatedObj });
+          publish('data:changed', { type: 'task', action: 'updated' });
+          showSuccessMessage(t("Task", { defaultValue: "Task" }), isUserAdminOrManager ? t("abandoned", { defaultValue: "abandoned" }) : t("abandon requested", { defaultValue: "abandon requested" }));
+        }
+        setAbandonTask(null);
+      } else {
+        notify.error(data.message || t("Failed to abandon.", { defaultValue: "Failed to abandon." }));
+      }
+    } catch {
+      notify.error(t("Failed to abandon.", { defaultValue: "Failed to abandon." }));
+    } finally {
+      setAbandoning(false);
+    }
+  };
+
+  const handleDirectReopenSuccess = (updatedTask) => {
+    if (!updatedTask && !reopenTask) return;
+    const taskItem = updatedTask || reopenTask;
+    const taskId = taskItem.id;
+    const isDeliverable = isDeliverableItem(taskItem);
+    setReopenTask(null);
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === taskId ? { ...item, status: "reopened", ...(updatedTask || {}) } : item
+      )
+    );
+    if (isDeliverable) {
+      publish('deliverable:updated', { id: taskId, status: 'reopened', ...(updatedTask || {}) });
+      publish('data:changed', { type: 'deliverable', action: 'updated' });
+      showSuccessMessage(t("Subtask", { defaultValue: "Subtask" }), t("reopened", { defaultValue: "reopened" }));
+    } else {
+      publish('task:updated', { id: taskId, status: 'reopened', ...(updatedTask || {}) });
+      publish('data:changed', { type: 'task', action: 'updated' });
+      showSuccessMessage(t("Task", { defaultValue: "Task" }), t("reopened", { defaultValue: "reopened" }));
+    }
+    fetchTasks();
+  };
+
+  const handleDirectCompleteSuccess = (updatedTask) => {
+    if (!updatedTask && !markCompletedTask) return;
+    const taskItem = updatedTask || markCompletedTask;
+    const taskId = taskItem.id;
+    const isDeliverable = isDeliverableItem(taskItem);
+    setMarkCompletedTask(null);
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === taskId ? { ...item, status: "completed", ...(updatedTask || {}) } : item
+      )
+    );
+    if (isDeliverable) {
+      publish('deliverable:updated', { id: taskId, status: 'completed', ...(updatedTask || {}) });
+      publish('data:changed', { type: 'deliverable', action: 'updated' });
+      showSuccessMessage(t("Subtask", { defaultValue: "Subtask" }), t("completed", { defaultValue: "completed" }));
+    } else {
+      publish('task:updated', { id: taskId, status: 'completed', ...(updatedTask || {}) });
+      publish('data:changed', { type: 'task', action: 'updated' });
+      showSuccessMessage(t("Task", { defaultValue: "Task" }), t("completed", { defaultValue: "completed" }));
+    }
+    fetchTasks();
+  };
 
   useEffect(() => {
     setOrderedItems(items);
@@ -648,15 +999,14 @@ function AllTasks() {
 
                   {/* Assigned To */}
                   <div className="col-assigned-to">
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <div className="avatar" style={{ background: assigneeColors.bg, color: assigneeColors.text }}>
-                        {getInitials(primaryAssignee?.name)}
-                      </div>
-                      <div style={{ minWidth: 0 }}>
-                        <div className="user-name">{primaryAssignee?.name || t("Unassigned", { defaultValue: "Unassigned" })}</div>
-                        <div className="user-role">{primaryAssignee?.role ? t(primaryAssignee.role, { defaultValue: primaryAssignee.role }) : ""}</div>
-                      </div>
-                    </div>
+                    <TaskAssigneeCell
+                      assignees={item.assignees}
+                      assignee={item.assignee}
+                      isDirectToOa={Boolean(item.has_direct_to_oa_delegation && item.current_owner_name && item.current_owner_id)}
+                      currentOwnerName={item.current_owner_name}
+                      delegatorName={item.delegator_name}
+                      isTransferee={Boolean(item.is_transferee)}
+                    />
                   </div>
 
                   {/* Assigned By */}
@@ -815,8 +1165,181 @@ function AllTasks() {
                         title={t("Add Note", { defaultValue: "Add Note" })}
                         onClick={() => setNoteModal({ open: true, itemId: item.id })}
                       >
-                        <StickyNote size={16} />
+                        <StickyNote size={14} />
                       </button>
+                      {(() => {
+                        const sStatus = (item.status || "").toLowerCase();
+                        const isUserAdminOrManager = ["admin", "manager", "super_admin"].includes(currentUser?.role);
+                        const isCreator = Boolean(
+                          currentUser && (
+                            parseInt(item.created_by, 10) === parseInt(currentUser.id, 10) ||
+                            parseInt(item.assigned_by, 10) === parseInt(currentUser.id, 10) ||
+                            parseInt(item.creator_id, 10) === parseInt(currentUser.id, 10) ||
+                            parseInt(item.user_id, 10) === parseInt(currentUser.id, 10)
+                          )
+                        );
+                        const isAssignee = Boolean(
+                          item.is_assignee ??
+                          (currentUser && (
+                            (item.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10)) ||
+                            (item.assigned_to && parseInt(item.assigned_to, 10) === parseInt(currentUser.id, 10))
+                          ))
+                        );
+                        const isCurrentOwner = Boolean(
+                          item.is_current_owner ??
+                          (item.current_owner && currentUser && parseInt(item.current_owner, 10) === parseInt(currentUser.id, 10)) ??
+                          isAssignee
+                        );
+                        const isFollower = (item.followers || []).some((f) => parseInt(f.id, 10) === parseInt(currentUser?.id, 10));
+                        const isOnlyFollower = isFollower && !isUserAdminOrManager && !isCreator && !isAssignee;
+                        const isTransferor = item.is_transferor ?? false;
+                        const transferorHasApproved = item.transferor_has_approved ?? false;
+                        const isTransferorApproval = (isTransferor || item.is_transferor) && !transferorHasApproved && (item.submission_stage === "awaiting_checkpoint" || item.can_submit_to_next || ["submitted", "submitted_late"].includes(sStatus));
+                        const isAssignerOrCreator = isCreator || isUserAdminOrManager;
+
+                        const isRecurrence = item.task_type === "recurring" || !!item.recurrence_settings;
+                        const recEnd = item.recurrence_end_date || item.end_date;
+                        const isRecurrenceActive = isRecurrence ? (!recEnd || new Date(recEnd) > new Date()) : true;
+
+                        const canEdit = !item.is_shared && !isOnlyFollower && isAssignerOrCreator && !["approved", "completed", "submitted", "submitted_late", "abandoned"].includes(sStatus) && (!isRecurrence || isRecurrenceActive);
+                        const canDelete = !item.is_shared && !isOnlyFollower && isAssignerOrCreator && (!isRecurrence || isRecurrenceActive);
+                        const canApprove = !isOnlyFollower && (isTransferorApproval || ((isAssignerOrCreator || item.can_approve === true || item.is_next_approver) && (!item.is_transferred || transferorHasApproved || item.submission_stage === "awaiting_creator" || !item.has_delegation_chain))) && ["submitted", "submitted_late", "reopened", "in_review", "under_review", "ready_for_review", "awaiting_approval"].includes(sStatus);
+                        const canDecline = !isOnlyFollower && (isTransferorApproval || canApprove || item.can_decline_submission || isAssignerOrCreator) && ["submitted", "submitted_late", "in_review", "under_review", "ready_for_review", "awaiting_approval"].includes(sStatus);
+                        const canReopen = !isOnlyFollower && (isAssignerOrCreator || item.can_decline_submission || isTransferorApproval || canApprove) && ["completed", "declined", "abandoned", "approved", "submitted", "submitted_late", "rejected"].includes(sStatus);
+                        const canAbandon = !isOnlyFollower && (isAssignee || isCurrentOwner || isAssignerOrCreator) && !["abandoned", "approved", "completed"].includes(sStatus);
+                        const canMarkCompleted = !isOnlyFollower && isAssignerOrCreator && ["pending", "in_progress", "in-progress", "reopened", "paused", "acknowledged"].includes(sStatus);
+                        const canTransfer = !item.is_shared && !isOnlyFollower && (item.can_delegate === true || (item.allow_transfer !== false && (isAssignee || isCurrentOwner || isAssignerOrCreator) && !isTransferor)) && !["approved", "rejected", "pending", "submitted", "submitted_late", "abandoned", "completed"].includes(sStatus) && item.my_status !== "submitted" && !item.active_outgoing_delegation && !item.pending_delegation;
+                        const canAssignerPause = !isOnlyFollower && isAssignerOrCreator && !item.assigner_paused && ["pending", "in_progress", "in-progress", "reopened", "paused", "submitted", "transferred"].includes(sStatus) && sStatus !== "paused";
+                        const canAssignerResume = !isOnlyFollower && isAssignerOrCreator && Boolean(item.assigner_paused);
+
+                        return (
+                          <>
+                            {canEdit && (
+                              <button
+                                className="action-icon-btn action-edit"
+                                title={isDeliverableItem(item) ? t("Edit Subtask", { defaultValue: "Edit Subtask" }) : t("Edit", { defaultValue: "Edit" })}
+                                onClick={async () => {
+                                  try {
+                                    const token = authToken();
+                                    const res = await fetch(`${API_URL}/tasks/${item.id}`, {
+                                      headers: { Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+                                    });
+                                    if (res.ok) {
+                                      const data = await res.json();
+                                      setEditingTask(data.task || item);
+                                    } else {
+                                      setEditingTask(item);
+                                    }
+                                  } catch {
+                                    setEditingTask(item);
+                                  }
+                                }}
+                              >
+                                <Pencil size={16} />
+                              </button>
+                            )}
+                            {canDelete && (
+                              <button
+                                className="action-icon-btn action-delete"
+                                title={isDeliverableItem(item) ? t("Delete Subtask", { defaultValue: "Delete Subtask" }) : t("Delete", { defaultValue: "Delete" })}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  if (isRecurrence) {
+                                    setDeleteRecurrenceTask(item);
+                                  } else {
+                                    handleDelete(e, item);
+                                  }
+                                }}
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
+                            {canApprove && (
+                              <button
+                                className="action-icon-btn"
+                                title={isDeliverableItem(item) ? t("Approve Subtask", { defaultValue: "Approve Subtask" }) : t("Approve Task", { defaultValue: "Approve Task" })}
+                                style={{ color: "#16A34A" }}
+                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setApproveTaskId(item); setApproveConfirmOpen(true); }}
+                              >
+                                <CheckCircle2 size={16} />
+                              </button>
+                            )}
+                            {canDecline && (
+                              <button
+                                className="action-icon-btn"
+                                title={isDeliverableItem(item) ? t("Decline Subtask", { defaultValue: "Decline Subtask" }) : t("Decline Task", { defaultValue: "Decline Task" })}
+                                style={{ color: "#DC2626" }}
+                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setDeclineTaskItem(item); }}
+                              >
+                                <XCircle size={16} />
+                              </button>
+                            )}
+                            {canReopen && (
+                              <button
+                                className="action-icon-btn"
+                                title={isDeliverableItem(item) ? t("Reopen Subtask", { defaultValue: "Reopen Subtask" }) : t("Reopen Task", { defaultValue: "Reopen Task" })}
+                                style={{ color: "#2563EB" }}
+                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setReopenTask(item); }}
+                              >
+                                <RotateCcw size={16} />
+                              </button>
+                            )}
+                            {canAbandon && (
+                              <button
+                                className="action-icon-btn"
+                                title={isUserAdminOrManager ? (isDeliverableItem(item) ? t("Abandon Subtask", { defaultValue: "Abandon Subtask" }) : t("Abandon Task", { defaultValue: "Abandon Task" })) : t("Request Abandon", { defaultValue: "Request Abandon" })}
+                                style={{ color: "#F59E0B" }}
+                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setAbandonTask(item); }}
+                              >
+                                <AlertOctagon size={16} />
+                              </button>
+                            )}
+                            {canMarkCompleted && (
+                              <button
+                                className="action-icon-btn"
+                                title={t("Mark as Completed", { defaultValue: "Mark as Completed" })}
+                                style={{ color: "#059669" }}
+                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setMarkCompletedTask(item); }}
+                              >
+                                <IoCheckmarkCircle size={16} />
+                              </button>
+                            )}
+                            {canTransfer && (
+                              <button
+                                className="action-icon-btn"
+                                title={isDeliverableItem(item) ? t("Transfer Subtask", { defaultValue: "Transfer Subtask" }) : t("Transfer Task", { defaultValue: "Transfer Task" })}
+                                onClick={(e) => { e.stopPropagation(); setTransferDialog({ open: true, task: item }); }}
+                                style={{ color: "#2563EB", cursor: "pointer" }}
+                              >
+                                <Users size={16} />
+                              </button>
+                            )}
+                            {canAssignerPause && (
+                              <button
+                                className="action-icon-btn"
+                                title={isDeliverableItem(item) ? t("Pause Subtask", { defaultValue: "Pause Subtask" }) : t("Pause", { defaultValue: "Pause" })}
+                                disabled={holdingTaskId === item.id}
+                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setPauseModalTaskId(item); setPauseModalOpen(true); }}
+                                style={{ color: "#7C3AED", cursor: holdingTaskId === item.id ? "not-allowed" : "pointer" }}
+                              >
+                                <Pause size={16} />
+                              </button>
+                            )}
+                            {canAssignerResume && (
+                              <button
+                                className="action-icon-btn"
+                                title={isDeliverableItem(item) ? t("Resume Subtask", { defaultValue: "Resume Subtask" }) : t("Resume", { defaultValue: "Resume" })}
+                                disabled={resumingTaskId === item.id}
+                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setResumeModalTask(item); setResumeModalOpen(true); }}
+                                style={{ color: "#059669", cursor: resumingTaskId === item.id ? "not-allowed" : "pointer" }}
+                              >
+                                <Play size={16} />
+                              </button>
+                            )}
+                          </>
+                        );
+                      })()}
                     </ActionPopover>
                   </div>
                 </div>
@@ -836,6 +1359,36 @@ function AllTasks() {
         />
       )}
 
+      {editingTask && (
+        <EditTaskModal
+          task={editingTask}
+          onClose={(refresh) => { setEditingTask(null); if (refresh) fetchTasks(); }}
+        />
+      )}
+
+      <PauseReasonModal
+        isOpen={pauseModalOpen}
+        onClose={() => { setPauseModalOpen(false); setPauseModalTaskId(null); }}
+        onConfirm={async (data) => { await handleAssignerPause(pauseModalTaskId, data); setPauseModalOpen(false); setPauseModalTaskId(null); }}
+        isAssigner
+      />
+
+      <ConfirmModal
+        isOpen={resumeModalOpen}
+        onClose={() => { setResumeModalOpen(false); setResumeModalTask(null); }}
+        onConfirm={async () => {
+          if (!resumeModalTask) return;
+          await handleAssignerResume(resumeModalTask.id);
+          setResumeModalOpen(false);
+          setResumeModalTask(null);
+        }}
+        title={isDeliverableItem(resumeModalTask) ? t("Resume Subtask", { defaultValue: "Resume Subtask" }) : t("Resume Task", { defaultValue: "Resume Task" })}
+        message={isDeliverableItem(resumeModalTask) ? t("Are you sure you want to resume this subtask?", { defaultValue: "Are you sure you want to resume this subtask?" }) : t("Are you sure you want to resume this task?", { defaultValue: "Are you sure you want to resume this task?" })}
+        confirmText={t("Resume", { defaultValue: "Resume" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        confirmColor="#059669"
+      />
+
       <AddNoteModal
         isOpen={noteModal.open}
         onClose={() => setNoteModal({ open: false, itemId: null })}
@@ -843,6 +1396,92 @@ function AllTasks() {
         itemId={noteModal.itemId}
         onSaved={fetchTasks}
       />
+
+      <ConfirmModal
+        isOpen={deleteConfirmOpen}
+        onClose={() => { setDeleteConfirmOpen(false); setDeleteTargetId(null); }}
+        onConfirm={confirmDelete}
+        title={t("Confirm Deletion", { defaultValue: "Confirm Deletion" })}
+        message={t("Are you sure you want to delete this task? This action cannot be undone.", { defaultValue: "Are you sure you want to delete this task? This action cannot be undone." })}
+        confirmText={t("Delete", { defaultValue: "Delete" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        danger
+      />
+
+      <ConfirmModal
+        isOpen={approveConfirmOpen}
+        onClose={() => { setApproveConfirmOpen(false); setApproveTaskId(null); }}
+        onConfirm={confirmDirectApprove}
+        title={t("Approve Task", { defaultValue: "Approve Task" })}
+        message={t("Are you sure you want to approve this task?", { defaultValue: "Are you sure you want to approve this task?" })}
+        confirmText={t("Approve", { defaultValue: "Approve" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        confirmColor="#16A34A"
+      />
+
+      {declineTaskItem && (
+        <DeclineModal
+          isOpen={!!declineTaskItem}
+          onClose={() => setDeclineTaskItem(null)}
+          title={t("Decline Task", { defaultValue: "Decline Task" })}
+          subtitle={declineTaskItem?.title}
+          actionLabel={t("Decline Task", { defaultValue: "Decline Task" })}
+          placeholder={t("Please enter a reason for declining this task...", { defaultValue: "Please enter a reason for declining this task..." })}
+          onSubmit={(comment) => handleDirectDecline(null, declineTaskItem, comment)}
+          loading={declineTaskLoading}
+        />
+      )}
+
+      <DeleteRecurrenceModal
+        isOpen={!!deleteRecurrenceTask}
+        onClose={() => setDeleteRecurrenceTask(null)}
+        task={deleteRecurrenceTask}
+        onSuccess={fetchTasks}
+      />
+
+      {reopenTask && (
+        <TaskReopenDialog
+          isOpen={!!reopenTask}
+          onClose={() => setReopenTask(null)}
+          task={reopenTask}
+          onReopenSuccess={handleDirectReopenSuccess}
+        />
+      )}
+
+      {abandonTask && (
+        <AbandonModal
+          isOpen={!!abandonTask}
+          onClose={() => setAbandonTask(null)}
+          title={["admin", "manager"].includes(currentUser?.role) ? t("Abandon Task", { defaultValue: "Abandon Task" }) : t("Request Abandon", { defaultValue: "Request Abandon" })}
+          subtitle={t("Provide justification for abandoning this task.", { defaultValue: "Provide justification for abandoning this task." })}
+          actionLabel={["admin", "manager"].includes(currentUser?.role) ? t("Abandon", { defaultValue: "Abandon" }) : t("Submit Request", { defaultValue: "Submit Request" })}
+          onSubmit={handleDirectAbandonSubmit}
+          loading={abandoning}
+        />
+      )}
+
+      {markCompletedTask && (
+        <MarkTaskCompletedModal
+          isOpen={!!markCompletedTask}
+          onClose={() => setMarkCompletedTask(null)}
+          task={markCompletedTask}
+          entityType="task"
+          onCompleteSuccess={handleDirectCompleteSuccess}
+        />
+      )}
+
+      {transferDialog.open && transferDialog.task && (
+        <TransferTaskDialog
+          isOpen={transferDialog.open}
+          onClose={() => setTransferDialog({ open: false, task: null })}
+          task={transferDialog.task}
+          onTransferSuccess={() => {
+            setTransferDialog({ open: false, task: null });
+            fetchTasks();
+            showSuccessMessage(t("Task", { defaultValue: "Task" }), t("transferred", { defaultValue: "transferred" }));
+          }}
+        />
+      )}
     </DashboardLayout>
   );
 }

@@ -71,21 +71,40 @@ function ReopenDialog({ isOpen, onClose, subtask, onReopenSuccess }) {
   const fetchUsers = async () => {
     try {
       const token = authToken();
-      const res = await fetch(`${API_URL}/team-users`, {
+      const projectId = subtask?.project_id || subtask?.project?.id || subtask?.task?.project_id || subtask?.task?.project?.id;
+      const isShared = projectId && String(projectId).startsWith("shared_");
+      let url = `${API_URL}/team-users`;
+      if (isShared) {
+        const sharedResourceId = String(projectId).replace("shared_", "");
+        url = `${API_URL}/sharing/resources/${sharedResourceId}/members`;
+      } else if (projectId) {
+        url = `${API_URL}/projects/${projectId}/members`;
+      }
+
+      const res = await fetch(url, {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const data = await res.json();
-        const usersList = data.users || data.data || data || [];
+        const usersList = Array.isArray(data) ? data : (data.members || data.users || data.data || []);
         const existingIds = new Set(usersList.map((u) => u.id));
         const combined = [...usersList];
-        if (subtask?.assignee && !existingIds.has(subtask.assignee.id)) {
+        if (subtask?.assignees && Array.isArray(subtask.assignees)) {
+          subtask.assignees.forEach((a) => {
+            if (!existingIds.has(a.id)) {
+              combined.push(a);
+              existingIds.add(a.id);
+            }
+          });
+        } else if (subtask?.assignee && !existingIds.has(subtask.assignee.id)) {
           combined.push(subtask.assignee);
         }
         setAvailableUsers(combined);
       }
     } catch {
-      if (subtask?.assignee) {
+      if (subtask?.assignees && Array.isArray(subtask.assignees)) {
+        setAvailableUsers(subtask.assignees);
+      } else if (subtask?.assignee) {
         setAvailableUsers([subtask.assignee]);
       }
     }

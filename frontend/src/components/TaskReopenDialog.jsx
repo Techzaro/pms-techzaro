@@ -72,12 +72,22 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
   const fetchUsers = async () => {
     try {
       const token = authToken();
-      const res = await fetch(`${API_URL}/team-users`, {
+      const projectId = task?.project_id || task?.project?.id;
+      const isShared = projectId && String(projectId).startsWith("shared_");
+      let url = `${API_URL}/team-users`;
+      if (isShared) {
+        const sharedResourceId = String(projectId).replace("shared_", "");
+        url = `${API_URL}/sharing/resources/${sharedResourceId}/members`;
+      } else if (projectId) {
+        url = `${API_URL}/projects/${projectId}/members`;
+      }
+
+      const res = await fetch(url, {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const data = await res.json();
-        const usersList = data.users || data.data || data || [];
+        const usersList = Array.isArray(data) ? data : (data.members || data.users || data.data || []);
         // Ensure task assignees are in the list if not already
         const existingIds = new Set(usersList.map((u) => u.id));
         const combined = [...usersList];
@@ -88,6 +98,8 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
               existingIds.add(a.id);
             }
           });
+        } else if (task?.assignee && !existingIds.has(task.assignee.id)) {
+          combined.push(task.assignee);
         }
         setAvailableUsers(combined);
       }
@@ -95,6 +107,8 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
       // fallback to task assignees
       if (task?.assignees && Array.isArray(task.assignees)) {
         setAvailableUsers(task.assignees);
+      } else if (task?.assignee) {
+        setAvailableUsers([task.assignee]);
       }
     }
   };

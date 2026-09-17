@@ -18,7 +18,7 @@ import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
 import { CheckCircle2, Lock, Pause, Play, StickyNote, Users, ArrowUpRight, ChevronDown, XCircle, RotateCcw, AlertOctagon, Sliders, Pin, Trash2 } from "lucide-react";
 import { usePinnedTasks, togglePinTask, isTaskPinned } from "../utils/pinnedTasks";
-import { showSuccessMessage, notify, toast } from "../utils/notify";
+import { showSuccessMessage, toast, notify } from "../utils/notify";
 import { publish } from "../utils/eventBus";
 import CreateTaskModal from "../components/CreateTaskModal";
 import EditTaskModal from "../components/EditTaskModal";
@@ -65,7 +65,7 @@ function canUserPauseResume(item, currentUser) {
 const STATUS_COLORS = {
   pending: "#FEF3C7",
   in_progress: "#DBEAFE",
-  paused: "#FEF3C7",
+  paused: "#FFEDD5",
   submitted: "#DBEAFE",
   reopened: "#EDE9FE",
   approved: "#DCFCE7",
@@ -77,7 +77,7 @@ const STATUS_COLORS = {
 const STATUS_TEXT_COLORS = {
   pending: "#92400E",
   in_progress: "#1E40AF",
-  paused: "#92400E",
+  paused: "#C2410C",
   submitted: "#1E40AF",
   reopened: "#5B21B6",
   approved: "#166534",
@@ -154,6 +154,8 @@ function Tasks() {
   const [pauseModalTaskId, setPauseModalTaskId] = useState(null);
   const [resumeConfirmOpen, setResumeConfirmOpen] = useState(false);
   const [resumeTaskItem, setResumeTaskItem] = useState(null);
+  const [startTimerConfirmOpen, setStartTimerConfirmOpen] = useState(false);
+  const [startTimerTaskItem, setStartTimerTaskItem] = useState(null);
   const [acknowledgeConfirmOpen, setAcknowledgeConfirmOpen] = useState(false);
   const [acknowledgeTaskItem, setAcknowledgeTaskItem] = useState(null);
   const [approveConfirmOpen, setApproveConfirmOpen] = useState(false);
@@ -433,7 +435,7 @@ function Tasks() {
     }
   }, [location.state, items]);
 
-  useAutoRefresh(() => { fetchTasks(); fetchSharedTasks(); }, {
+  useAutoRefresh(() => { fetchTasks(); }, {
     events: ['task:created', 'task:updated', 'task:deleted', 'data:changed', 'sharing:changed'],
   });
 
@@ -614,6 +616,7 @@ function Tasks() {
             i.id === taskId ? { ...i, status: "approved", ...updatedObj } : i
           )
         );
+        fetchTasks();
         publish(isDeliverable ? 'deliverable:updated' : 'task:updated', { id: taskId, status: 'approved', ...updatedObj });
         publish('data:changed', { type: isDeliverable ? 'deliverable' : 'task', action: 'updated' });
         showSuccessMessage(isDeliverable ? t("Subtask", { defaultValue: "Subtask" }) : t("Task", { defaultValue: "Task" }), t("approved", { defaultValue: "approved" }));
@@ -651,6 +654,7 @@ function Tasks() {
             i.id === taskId ? { ...i, status: "declined", ...updatedObj } : i
           )
         );
+        fetchTasks();
         publish(isDeliverable ? 'deliverable:updated' : 'task:updated', { id: taskId, status: 'declined', ...updatedObj });
         publish('data:changed', { type: isDeliverable ? 'deliverable' : 'task', action: 'updated' });
         showSuccessMessage(isDeliverable ? t("Subtask", { defaultValue: "Subtask" }) : t("Task", { defaultValue: "Task" }), t("declined", { defaultValue: "declined" }));
@@ -699,6 +703,7 @@ function Tasks() {
             i.id === taskId ? { ...i, status: "abandoned", ...updatedObj } : i
           )
         );
+        fetchTasks();
         publish(isDeliverable ? 'deliverable:updated' : 'task:updated', { id: taskId, status: 'abandoned', ...updatedObj });
         publish('data:changed', { type: isDeliverable ? 'deliverable' : 'task', action: 'updated' });
         showSuccessMessage(isDeliverable ? t("Subtask", { defaultValue: "Subtask" }) : t("Task", { defaultValue: "Task" }), isUserAdminOrManager ? t("abandoned", { defaultValue: "abandoned" }) : t("abandon requested", { defaultValue: "abandon requested" }));
@@ -723,6 +728,7 @@ function Tasks() {
         i.id === taskId ? { ...i, status: "pending", ...(updatedTask || {}) } : i
       )
     );
+    fetchTasks();
     publish(isDeliverable ? 'deliverable:updated' : 'task:updated', { id: taskId, status: 'pending', ...(updatedTask || {}) });
     publish('data:changed', { type: isDeliverable ? 'deliverable' : 'task', action: 'updated' });
     showSuccessMessage(isDeliverable ? t("Subtask", { defaultValue: "Subtask" }) : t("Task", { defaultValue: "Task" }), t("reopened", { defaultValue: "reopened" }));
@@ -739,6 +745,7 @@ function Tasks() {
         i.id === taskId ? { ...i, status: "completed", ...(updatedTask || {}) } : i
       )
     );
+    fetchTasks();
     publish(isDeliverable ? 'deliverable:updated' : 'task:updated', { id: taskId, status: 'completed', ...(updatedTask || {}) });
     publish('data:changed', { type: isDeliverable ? 'deliverable' : 'task', action: 'updated' });
     showSuccessMessage(isDeliverable ? t("Subtask", { defaultValue: "Subtask" }) : t("Task", { defaultValue: "Task" }), t("marked as completed", { defaultValue: "marked as completed" }));
@@ -770,6 +777,7 @@ function Tasks() {
             i.id === actualTaskId ? { ...i, status: "in_progress", ...updatedObj } : i
           )
         );
+        fetchTasks();
         if (isDeliverable) {
           publish('deliverable:updated', { id: actualTaskId, status: 'in_progress', ...updatedObj });
           publish('data:changed', { type: 'deliverable', action: 'updated' });
@@ -814,9 +822,10 @@ function Tasks() {
         const updatedObj = data.deliverable || data.task || {};
         setItems((prev) =>
           prev.map((i) =>
-            i.id === taskId ? { ...i, status: "in_progress", ...updatedObj } : i
+            i.id === taskId ? { ...i, status: "in_progress", timer_state: "running", timer: { ...(i.timer || {}), state: "running" }, ...updatedObj } : i
           )
         );
+        fetchTasks();
         publish(isDeliverable ? 'deliverable:updated' : 'task:updated', { id: taskId, status: 'in_progress', ...updatedObj });
         publish('data:changed', { type: isDeliverable ? 'deliverable' : 'task', action: 'updated' });
         showSuccessMessage(isDeliverable ? t("Subtask", { defaultValue: "Subtask" }) : t("Task", { defaultValue: "Task" }), t("timer started", { defaultValue: "timer started" }));
@@ -851,9 +860,10 @@ function Tasks() {
         const updatedObj = data.deliverable || data.task || {};
         setItems((prev) =>
           prev.map((i) =>
-            i.id === actualTaskId ? { ...i, status: "in_progress", ...updatedObj } : i
+            i.id === actualTaskId ? { ...i, status: "in_progress", assigner_paused: false, ...updatedObj } : i
           )
         );
+        fetchTasks();
         publish(isDeliverable ? 'deliverable:updated' : 'task:updated', { id: actualTaskId, status: 'in_progress', ...updatedObj });
         publish('data:changed', { type: isDeliverable ? 'deliverable' : 'task', action: 'updated' });
         showSuccessMessage(isDeliverable ? t("Subtask", { defaultValue: "Subtask" }) : t("Task", { defaultValue: "Task" }), t("resumed", { defaultValue: "resumed" }));
@@ -888,6 +898,7 @@ function Tasks() {
             i.id === taskId ? { ...i, status: "paused", ...updatedObj } : i
           )
         );
+        fetchTasks();
         publish(isDeliverable ? 'deliverable:updated' : 'task:updated', { id: taskId, status: 'paused', ...updatedObj });
         publish('data:changed', { type: isDeliverable ? 'deliverable' : 'task', action: 'updated' });
         showSuccessMessage(isDeliverable ? t("Subtask", { defaultValue: "Subtask" }) : t("Task", { defaultValue: "Task" }), t("paused", { defaultValue: "paused" }));
@@ -927,6 +938,7 @@ function Tasks() {
       if (res.ok) {
         setItems((prev) => prev.filter((i) => String(i.id) !== String(taskId)));
         setOrderedItems((prev) => prev.filter((i) => String(i.id) !== String(taskId)));
+        fetchTasks();
         publish(isDeliverable ? 'deliverable:deleted' : 'task:deleted', { id: taskId });
         publish('data:changed', { type: isDeliverable ? 'deliverable' : 'task', action: 'deleted' });
         toast.success(isDeliverable ? t("Subtask deleted successfully", { defaultValue: "Subtask deleted successfully" }) : t("Task deleted successfully", { defaultValue: "Task deleted successfully" }));
@@ -1381,80 +1393,99 @@ function Tasks() {
                             </span>
                           );
                         }
-                        if (item.status === "pending") {
-                          return (
-                            <button
-                              className="action-icon-btn action-submit"
-                              title={isDeliverableItem(item) ? t("Acknowledge Subtask", { defaultValue: "Acknowledge Subtask" }) : t("Acknowledge Task", { defaultValue: "Acknowledge Task" })}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                setAcknowledgeTaskItem(item);
-                                setAcknowledgeConfirmOpen(true);
-                              }}
-                              style={{ color: "#2563EB" }}
-                            >
-                              <CheckCircle2 size={16} />
-                            </button>
-                          );
-                        }
-                        if (item.status === "in_progress" && (!item.timer || item.timer?.state === "idle" || !item.timer?.state) && canUserPauseResume(item, currentUser)) {
-                          return (
-                            <button className="action-icon-btn action-submit" title={t("Start Timer", { defaultValue: "Start Timer" })} onClick={(e) => handleStartTimer(e, item)} style={{ color: "#2563eb" }}>
-                              <Play size={16} />
-                            </button>
-                          );
-                        }
-                        if (["in_progress", "submitted"].includes(item.status?.toLowerCase()) && item.timer?.state === "running" && !item.assigner_paused && canUserPauseResume(item, currentUser)) {
-                          return (
-                            <button
-                              className="action-icon-btn action-submit"
-                              title={isDeliverableItem(item) ? t("Pause Subtask", { defaultValue: "Pause Subtask" }) : t("Pause Task", { defaultValue: "Pause Task" })}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                setPauseModalTaskId(item);
-                                setPauseModalOpen(true);
-                              }}
-                              style={{ color: "#D97706" }}
-                            >
-                              <Pause size={16} />
-                            </button>
-                          );
-                        }
-                        if ((item.status === "paused" || item.timer?.state === "paused") && canUserPauseResume(item, currentUser)) {
-                          return (
-                            <button
-                              className="action-icon-btn action-submit"
-                              title={isDeliverableItem(item) ? t("Resume Subtask", { defaultValue: "Resume Subtask" }) : t("Resume Task", { defaultValue: "Resume Task" })}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                setResumeTaskItem(item);
-                                setResumeConfirmOpen(true);
-                              }}
-                              style={{ color: "#059669" }}
-                            >
-                              <Play size={16} />
-                            </button>
-                          );
-                        }
-                        if ((item.status === "in_progress" || item.status === "reopened") && myPivotStatus !== "submitted") {
-                          return (
-                            <div style={{ position: "relative", display: "inline-flex" }}>
+                        const sStatus = (item.status || "").toLowerCase();
+                        const isPaused = (sStatus === "paused" || item.timer?.state === "paused" || item.timer_state === "paused");
+                        const isTimerRunning = (item.timer?.state === "running" || item.timer_state === "running");
+                        const canTrack = canUserPauseResume(item, currentUser) && !item.assigner_paused;
+                        const isTerminal = ["approved", "completed", "rejected", "declined", "abandoned"].includes(sStatus);
+
+                        const canAcknowledge = item.status === "pending";
+                        const canStartTimer = canTrack && !isTerminal && !isPaused && !isTimerRunning && ["in_progress", "in-progress", "reopened", "acknowledged"].includes(sStatus);
+                        const canPause = canTrack && !isTerminal && !isPaused && isTimerRunning && ["in_progress", "in-progress", "submitted"].includes(sStatus);
+                        const canResume = canTrack && !isTerminal && isPaused;
+                        const canSubmit = !isTerminal && (sStatus === "in_progress" || sStatus === "reopened" || sStatus === "acknowledged") && myPivotStatus !== "submitted";
+
+                        return (
+                          <>
+                            {canAcknowledge && (
                               <button
                                 className="action-icon-btn action-submit"
-                                title={!isDeliverableItem(item) && item.pending_deliverables_count > 0 ? t("Submit all subtasks first", { defaultValue: "Submit all subtasks first" }) : item.status === "paused" || item.assigner_paused ? t("Task is paused. Resume first.", { defaultValue: "Task is paused. Resume first." }) : (isDeliverableItem(item) ? t("Submit Subtask", { defaultValue: "Submit Subtask" }) : t("Submit Task", { defaultValue: "Submit Task" }))}
-                                disabled={(!isDeliverableItem(item) && item.pending_deliverables_count > 0) || item.status === "paused" || item.assigner_paused}
-                                onClick={(e) => { e.stopPropagation(); (isDeliverableItem(item) || !item.pending_deliverables_count) && item.status !== "paused" && !item.assigner_paused && setSubmitTaskModal({ open: true, task: item }); }}
-                                style={(!isDeliverableItem(item) && item.pending_deliverables_count > 0) || item.status === "paused" || item.assigner_paused ? { opacity: 0.4, cursor: "not-allowed" } : {}}
+                                title={isDeliverableItem(item) ? t("Acknowledge Subtask", { defaultValue: "Acknowledge Subtask" }) : t("Acknowledge Task", { defaultValue: "Acknowledge Task" })}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  setAcknowledgeTaskItem(item);
+                                  setAcknowledgeConfirmOpen(true);
+                                }}
+                                style={{ color: "#2563EB" }}
                               >
-                                <LuSend size={16} />
+                                <CheckCircle2 size={16} />
                               </button>
-                            </div>
-                          );
-                        }
-                        return null;
+                            )}
+
+                            {canStartTimer && (
+                              <button
+                                className="action-icon-btn action-submit"
+                                title={isDeliverableItem(item) ? t("Start Subtask Timer", { defaultValue: "Start Subtask Timer" }) : t("Start Task Timer", { defaultValue: "Start Task Timer" })}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  setStartTimerTaskItem(item);
+                                  setStartTimerConfirmOpen(true);
+                                }}
+                                style={{ color: "#2563EB" }}
+                              >
+                                <Play size={16} />
+                              </button>
+                            )}
+
+                            {canPause && (
+                              <button
+                                className="action-icon-btn action-submit"
+                                title={isDeliverableItem(item) ? t("Pause Subtask", { defaultValue: "Pause Subtask" }) : t("Pause Task", { defaultValue: "Pause Task" })}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  setPauseModalTaskId(item);
+                                  setPauseModalOpen(true);
+                                }}
+                                style={{ color: "#D97706" }}
+                              >
+                                <Pause size={16} />
+                              </button>
+                            )}
+
+                            {canResume && (
+                              <button
+                                className="action-icon-btn action-submit"
+                                title={isDeliverableItem(item) ? t("Resume Subtask", { defaultValue: "Resume Subtask" }) : t("Resume Task", { defaultValue: "Resume Task" })}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  setResumeTaskItem(item);
+                                  setResumeConfirmOpen(true);
+                                }}
+                                style={{ color: "#059669" }}
+                              >
+                                <Play size={16} />
+                              </button>
+                            )}
+
+                            {canSubmit && (
+                              <div style={{ position: "relative", display: "inline-flex" }}>
+                                <button
+                                  className="action-icon-btn action-submit"
+                                  title={!isDeliverableItem(item) && item.pending_deliverables_count > 0 ? t("Submit all subtasks first", { defaultValue: "Submit all subtasks first" }) : item.status === "paused" || item.assigner_paused ? t("Task is paused. Resume first.", { defaultValue: "Task is paused. Resume first." }) : (isDeliverableItem(item) ? t("Submit Subtask", { defaultValue: "Submit Subtask" }) : t("Submit Task", { defaultValue: "Submit Task" }))}
+                                  disabled={(!isDeliverableItem(item) && item.pending_deliverables_count > 0) || item.status === "paused" || item.assigner_paused}
+                                  onClick={(e) => { e.stopPropagation(); (isDeliverableItem(item) || !item.pending_deliverables_count) && item.status !== "paused" && !item.assigner_paused && setSubmitTaskModal({ open: true, task: item }); }}
+                                  style={(!isDeliverableItem(item) && item.pending_deliverables_count > 0) || item.status === "paused" || item.assigner_paused ? { opacity: 0.4, cursor: "not-allowed" } : {}}
+                                >
+                                  <LuSend size={16} />
+                                </button>
+                              </div>
+                            )}
+                          </>
+                        );
                       })()}
                       {(() => {
                         if (item.is_shared) return null;
@@ -1545,6 +1576,22 @@ function Tasks() {
       />
 
       <ConfirmModal
+        isOpen={startTimerConfirmOpen}
+        onClose={() => { setStartTimerConfirmOpen(false); setStartTimerTaskItem(null); }}
+        onConfirm={async () => {
+          if (!startTimerTaskItem) return;
+          await handleStartTimer(null, startTimerTaskItem);
+          setStartTimerConfirmOpen(false);
+          setStartTimerTaskItem(null);
+        }}
+        title={isDeliverableItem(startTimerTaskItem) ? t("Start Subtask Timer", { defaultValue: "Start Subtask Timer" }) : t("Start Task Timer", { defaultValue: "Start Task Timer" })}
+        message={isDeliverableItem(startTimerTaskItem) ? t("Are you sure you want to start the timer for this subtask?", { defaultValue: "Are you sure you want to start the timer for this subtask?" }) : t("Are you sure you want to start the timer for this task?", { defaultValue: "Are you sure you want to start the timer for this task?" })}
+        confirmText={t("Start Timer", { defaultValue: "Start Timer" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        confirmColor="#2563EB"
+      />
+
+      <ConfirmModal
         isOpen={resumeConfirmOpen}
         onClose={() => { setResumeConfirmOpen(false); setResumeTaskItem(null); }}
         onConfirm={async () => {
@@ -1553,8 +1600,8 @@ function Tasks() {
           setResumeConfirmOpen(false);
           setResumeTaskItem(null);
         }}
-        title={t("Resume Task", { defaultValue: "Resume Task" })}
-        message={t("Are you sure you want to resume this task?", { defaultValue: "Are you sure you want to resume this task?" })}
+        title={isDeliverableItem(resumeTaskItem) ? t("Resume Subtask", { defaultValue: "Resume Subtask" }) : t("Resume Task", { defaultValue: "Resume Task" })}
+        message={isDeliverableItem(resumeTaskItem) ? t("Are you sure you want to resume this subtask?", { defaultValue: "Are you sure you want to resume this subtask?" }) : t("Are you sure you want to resume this task?", { defaultValue: "Are you sure you want to resume this task?" })}
         confirmText={t("Resume", { defaultValue: "Resume" })}
         cancelText={t("Cancel", { defaultValue: "Cancel" })}
         confirmColor="#059669"

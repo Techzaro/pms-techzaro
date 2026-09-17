@@ -211,27 +211,45 @@ class Deliverable extends Model
                 $hasTransferred = false;
                 $hasReopened = false;
                 foreach ($statuses as $st) {
-                    if ($st === 'due_today') {
+                    $stLower = strtolower(trim((string) $st));
+                    if ($stLower === 'due_today') {
                         $hasDueToday = true;
-                    } elseif ($st === 'transferred') {
+                    } elseif ($stLower === 'transferred') {
                         $hasTransferred = true;
-                    } elseif ($st === 'reopened') {
+                    } elseif ($stLower === 'reopened') {
                         $hasReopened = true;
-                    } elseif ($st === 'pending') {
-                        $expandedStatuses = array_merge($expandedStatuses, ['pending', 'planned', 'Planning', 'Planned']);
-                    } elseif ($st === 'in_progress') {
-                        $expandedStatuses = array_merge($expandedStatuses, ['in_progress', 'In Progress', 'in-progress']);
-                    } elseif ($st === 'paused') {
-                        $expandedStatuses = array_merge($expandedStatuses, ['paused', 'pause', 'Pause']);
-                    } elseif ($st === 'rejected' || $st === 'declined') {
-                        $expandedStatuses[] = 'rejected';
-                        $expandedStatuses[] = 'declined';
-                    } elseif ($st === 'abandoned') {
-                        $expandedStatuses[] = 'abandoned';
-                        $expandedStatuses[] = 'abandon_requested';
-                    } elseif ($st === 'approved') {
-                        $expandedStatuses[] = 'approved';
-                        $expandedStatuses[] = 'completed';
+                    } elseif (in_array($stLower, ['pending', 'planned', 'planning', 'draft', 'todo', 'to_do', 'new', 'not_started', 'not started', 'unassigned'])) {
+                        $expandedStatuses = array_merge($expandedStatuses, [
+                            'pending', 'Pending', 'planned', 'Planning', 'Planned', 'draft', 'Draft',
+                            'todo', 'Todo', 'to_do', 'To_Do', 'new', 'New', 'not_started', 'Not Started',
+                            'not_started', 'unassigned', 'Unassigned'
+                        ]);
+                    } elseif (in_array($stLower, ['in_progress', 'in progress', 'in-progress', 'doing', 'working', 'underway', 'acknowledged'])) {
+                        $expandedStatuses = array_merge($expandedStatuses, [
+                            'In Progress', 'in_progress', 'in progress', 'in-progress', 'In-Progress',
+                            'doing', 'Doing', 'working', 'underway', 'acknowledged'
+                        ]);
+                    } elseif (in_array($stLower, ['submitted', 'review', 'in_review', 'under_review', 'submitted_late'])) {
+                        $expandedStatuses = array_merge($expandedStatuses, [
+                            'submitted', 'Submitted', 'review', 'Review', 'in_review', 'In Review',
+                            'under_review', 'Under Review', 'submitted_late'
+                        ]);
+                    } elseif (in_array($stLower, ['approved', 'completed', 'done', 'finished'])) {
+                        $expandedStatuses = array_merge($expandedStatuses, [
+                            'approved', 'Approved', 'completed', 'Completed', 'done', 'Done', 'finished', 'Finished'
+                        ]);
+                    } elseif (in_array($stLower, ['paused', 'pause', 'hold', 'on_hold', 'on hold', 'on-hold'])) {
+                        $expandedStatuses = array_merge($expandedStatuses, [
+                            'paused', 'Paused', 'pause', 'Pause', 'hold', 'Hold', 'on_hold', 'On Hold', 'on-hold'
+                        ]);
+                    } elseif (in_array($stLower, ['declined', 'rejected', 'failed'])) {
+                        $expandedStatuses = array_merge($expandedStatuses, [
+                            'declined', 'Declined', 'rejected', 'Rejected', 'failed', 'Failed'
+                        ]);
+                    } elseif (in_array($stLower, ['abandoned', 'abandon_requested', 'cancelled', 'canceled'])) {
+                        $expandedStatuses = array_merge($expandedStatuses, [
+                            'abandoned', 'Abandoned', 'abandon_requested', 'Abandon Requested', 'cancelled', 'canceled'
+                        ]);
                     } elseif (! empty($st)) {
                         $expandedStatuses[] = $st;
                     }

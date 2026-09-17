@@ -80,222 +80,222 @@ class DashboardController extends Controller
     /**
      * Compute dashboard summary stats (not cached).
      *
-     * Admin/manager users see stats across all projects/tasks they created.
-     * Regular users see stats for their assigned tasks and visible projects.
+     * Mirrors the exact base query and status dictionaries used in TaskController
+     * list endpoints (assignedByMe for Assigner view, myTasks for Assignee view)
+     * and aggregates both Tasks and Deliverables (Subtasks).
      *
      * @param  User  $user  The authenticated user.
      * @param  string  $role  The user's role.
      * @param  array  $projectIds  IDs of projects visible to the user.
+     * @param  string  $mode  Dashboard view mode ('user' = Assigner / outgoing, 'my' = Assignee / incoming).
      * @return array Summary stats.
      */
     private function computeSummary(User $user, string $role, array $projectIds, string $mode = 'user'): array
     {
-        $isAdminOrManager = in_array($role, ['admin', 'manager']);
-        $isAssignerView = ($mode === 'user'); // user mode = assigner (tasks assigned BY), my mode = assignee (tasks assigned TO)
+        $isAdminOrManager = in_array($role, ['admin', 'manager', 'super_admin']);
+        $isAssignerView = ($mode === 'user');
+        $userId = $user->id;
+        $today = Carbon::today()->toDateString();
 
+        // 1. Active Projects Count
         if ($isAssignerView) {
-            // ═══════════════════════════════════════════════
-            // ASSIGNER VIEW — tasks assigned BY this user
-            // ═══════════════════════════════════════════════
-
-            if ($isAdminOrManager) {
-                $pendingStatuses = ['pending','in_progress','In Progress','In-progress','planned','Planning','submitted','reopened','rejected'];
-                $onlyPendingStatuses = ['pending','planned','Planning'];
-
-                $activeProjects = Project::whereIn('id', $projectIds)
+            $activeProjects = $isAdminOrManager
+                ? Project::whereIn('id', $projectIds)
+                    ->whereIn('status', ['Planning', 'In-progress', 'in_progress', 'planned', 'active'])->count()
+                : Project::where('created_by', $userId)
                     ->whereIn('status', ['Planning', 'In-progress', 'in_progress', 'planned', 'active'])->count();
-
-                $tasksDueToday = DB::table('tasks')
-                    ->join('task_user', 'tasks.id', '=', 'task_user.task_id')
-                    ->where('tasks.assigned_by', $user->id)
-                    ->whereColumn('task_user.user_id', '!=', 'tasks.assigned_by')
-                    ->whereRaw('DATE(COALESCE(task_user.due_date, tasks.end_date)) = ?', [today()->toDateString()])
-                    ->whereNotIn('tasks.status', $this->dueTodayCompletedStatuses())
-                    ->count('tasks.id');
-
-                $tasksDueToday += Task::where('assigned_by', $user->id)
-                    ->where('assigned_to', '!=', DB::raw('assigned_by'))
-                    ->whereNotIn('id', function ($q) {
-                        $q->select('task_id')->from('task_user');
-                    })
-                    ->whereDate('end_date', today())
-                    ->whereNotIn('status', $this->dueTodayCompletedStatuses())
-                    ->count();
-
-                $taskStats = DB::table('tasks')
-                    ->join('task_user', 'tasks.id', '=', 'task_user.task_id')
-                    ->where('tasks.assigned_by', $user->id)
-                    ->whereColumn('task_user.user_id', '!=', 'tasks.assigned_by')
-                    ->selectRaw("
-                        COUNT(*) as total,
-                        SUM(CASE WHEN tasks.status IN ('completed','done','approved') THEN 1 ELSE 0 END) as completed,
-                        SUM(CASE WHEN tasks.status = 'approved' THEN 1 ELSE 0 END) as approved,
-                        SUM(CASE WHEN tasks.status IN ('".implode("','", $onlyPendingStatuses)."') THEN 1 ELSE 0 END) as pending
-                    ")->first();
-
-                $taskAssignedToCount = Task::where('assigned_by', $user->id)
-                    ->where('assigned_to', '!=', DB::raw('assigned_by'))
-                    ->whereNotIn('id', function ($q) {
-                        $q->select('task_id')->from('task_user');
-                    })
-                    ->selectRaw("
-                        COUNT(*) as total,
-                        SUM(CASE WHEN tasks.status IN ('completed','done','approved') THEN 1 ELSE 0 END) as completed,
-                        SUM(CASE WHEN tasks.status = 'approved' THEN 1 ELSE 0 END) as approved,
-                        SUM(CASE WHEN tasks.status IN ('".implode("','", $onlyPendingStatuses)."') THEN 1 ELSE 0 END) as pending
-                    ")->first();
-
-                $expandedTaskTotal = (int) $taskStats->total + (int) $taskAssignedToCount->total;
-                $expandedTaskCompleted = (int) $taskStats->completed + (int) $taskAssignedToCount->completed;
-                $expandedTaskApproved = (int) $taskStats->approved + (int) $taskAssignedToCount->approved;
-                $expandedTaskPending = (int) $taskStats->pending + (int) $taskAssignedToCount->pending;
-
-                return [
-                    'active_projects' => $activeProjects,
-                    'tasks_due_today' => $tasksDueToday,
-                    'completed_tasks' => $expandedTaskCompleted,
-                    'approved_tasks' => $expandedTaskApproved,
-                    'pending_tasks' => $expandedTaskPending,
-                    'total_tasks' => $expandedTaskTotal,
-                ];
-            } else {
-                // Regular user assigner view — tasks they assigned to others
-                $pendingStatuses = ['pending','in_progress','In Progress','In-progress','planned','Planning','submitted','reopened','rejected'];
-                $onlyPendingStatuses = ['pending','planned','Planning'];
-
-                $activeProjects = Project::where('created_by', $user->id)
-                    ->whereIn('status', ['Planning', 'In-progress', 'in_progress', 'planned', 'active'])->count();
-
-                $tasksDueToday = DB::table('tasks')
-                    ->join('task_user', 'tasks.id', '=', 'task_user.task_id')
-                    ->where('tasks.assigned_by', $user->id)
-                    ->whereColumn('task_user.user_id', '!=', 'tasks.assigned_by')
-                    ->whereRaw('DATE(COALESCE(task_user.due_date, tasks.end_date)) = ?', [today()->toDateString()])
-                    ->whereNotIn('tasks.status', $this->dueTodayCompletedStatuses())
-                    ->count('tasks.id');
-
-                $tasksDueToday += Task::where('assigned_by', $user->id)
-                    ->where('assigned_to', '!=', DB::raw('assigned_by'))
-                    ->whereNotIn('id', function ($q) {
-                        $q->select('task_id')->from('task_user');
-                    })
-                    ->whereDate('end_date', today())
-                    ->whereNotIn('status', $this->dueTodayCompletedStatuses())
-                    ->count();
-
-                $taskStats = DB::table('tasks')
-                    ->join('task_user', 'tasks.id', '=', 'task_user.task_id')
-                    ->where('tasks.assigned_by', $user->id)
-                    ->whereColumn('task_user.user_id', '!=', 'tasks.assigned_by')
-                    ->selectRaw("
-                        COUNT(*) as total,
-                        SUM(CASE WHEN tasks.status IN ('completed','done','approved') THEN 1 ELSE 0 END) as completed,
-                        SUM(CASE WHEN tasks.status = 'approved' THEN 1 ELSE 0 END) as approved,
-                        SUM(CASE WHEN tasks.status IN ('".implode("','", $onlyPendingStatuses)."') THEN 1 ELSE 0 END) as pending
-                    ")->first();
-
-                $taskAssignedToCount = Task::where('assigned_by', $user->id)
-                    ->where('assigned_to', '!=', DB::raw('assigned_by'))
-                    ->whereNotIn('id', function ($q) {
-                        $q->select('task_id')->from('task_user');
-                    })
-                    ->selectRaw("
-                        COUNT(*) as total,
-                        SUM(CASE WHEN tasks.status IN ('completed','done','approved') THEN 1 ELSE 0 END) as completed,
-                        SUM(CASE WHEN tasks.status = 'approved' THEN 1 ELSE 0 END) as approved,
-                        SUM(CASE WHEN tasks.status IN ('".implode("','", $onlyPendingStatuses)."') THEN 1 ELSE 0 END) as pending
-                    ")->first();
-
-                $expandedTaskTotal = (int) $taskStats->total + (int) $taskAssignedToCount->total;
-                $expandedTaskCompleted = (int) $taskStats->completed + (int) $taskAssignedToCount->completed;
-                $expandedTaskApproved = (int) $taskStats->approved + (int) $taskAssignedToCount->approved;
-                $expandedTaskPending = (int) $taskStats->pending + (int) $taskAssignedToCount->pending;
-
-                return [
-                    'active_projects' => $activeProjects,
-                    'tasks_due_today' => $tasksDueToday,
-                    'completed_tasks' => $expandedTaskCompleted,
-                    'approved_tasks' => $expandedTaskApproved,
-                    'pending_tasks' => $expandedTaskPending,
-                    'total_tasks' => $expandedTaskTotal,
-                ];
-            }
-        }
-
-        // ═══════════════════════════════════════════════
-        // ASSIGNEE VIEW — tasks assigned TO this user
-        // ═══════════════════════════════════════════════
-
-        if ($isAdminOrManager) {
-            // Admin/Manager assignee view — tasks assigned to them by others
-            $pendingStatuses = ['pending','in_progress','In Progress','In-progress','planned','Planning','submitted','reopened','rejected'];
-            $onlyPendingStatuses = ['pending','planned','Planning'];
-
+        } else {
             $activeProjects = Project::whereIn('id', $projectIds)
                 ->whereIn('status', ['Planning', 'In-progress', 'in_progress', 'planned', 'active'])->count();
+        }
 
-            $tasksDueToday = Task::where(function ($q) use ($user) {
-                    $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
-                      ->orWhere('assigned_to', $user->id);
-                })
-                ->where('assigned_by', '!=', $user->id)
-                ->whereRaw('DATE(COALESCE((SELECT pu.due_date FROM task_user pu WHERE pu.task_id = tasks.id AND pu.user_id = ? LIMIT 1), tasks.end_date)) = ?', [$user->id, today()->toDateString()])
-                ->whereNotIn('status', $this->dueTodayCompletedStatuses())
-                ->count();
-
-            $taskStats = Task::where(function ($q) use ($user) {
-                    $q->where('assigned_to', $user->id)
-                      ->orWhereHas('assignees', fn ($q) => $q->where('users.id', $user->id));
-                })
-                ->where('assigned_by', '!=', $user->id)
-                ->selectRaw("
-                    COUNT(*) as total,
-                    SUM(CASE WHEN status IN ('completed','done','approved') THEN 1 ELSE 0 END) as completed,
-                    SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved,
-                    SUM(CASE WHEN status IN ('".implode("','", $onlyPendingStatuses)."') THEN 1 ELSE 0 END) as pending
-                ")->first();
-
+        // Guests have 0 tasks/deliverables
+        if ($role === 'guest') {
             return [
                 'active_projects' => $activeProjects,
-                'tasks_due_today' => $tasksDueToday,
-                'completed_tasks' => (int) $taskStats->completed,
-                'approved_tasks' => (int) $taskStats->approved,
-                'pending_tasks' => (int) $taskStats->pending,
-                'total_tasks' => (int) $taskStats->total,
+                'tasks_due_today' => 0,
+                'in_progress_tasks' => 0,
+                'in_progress' => 0,
+                'submitted_tasks' => 0,
+                'submitted' => 0,
+                'completed_tasks' => 0,
+                'pending_tasks' => 0,
+                'total_tasks' => 0,
             ];
         }
 
-        // Regular user assignee view (existing behavior)
-        $activeProjects = Project::whereIn('id', $projectIds)
-            ->whereIn('status', ['Planning', 'In-progress', 'in_progress', 'planned', 'active'])
-            ->count();
+        // 2. Exact Mirror Base Queries from TaskController / DeliverableController
+        if ($isAssignerView) {
+            // ═══════════════════════════════════════════════
+            // ASSIGNER VIEW — tasks/deliverables assigned BY this user to others
+            // Mirrors TaskController@assignedByMe / DeliverableController@assignedByMe
+            // ═══════════════════════════════════════════════
+            $tasksQuery = Task::where(function ($query) use ($userId) {
+                $query->where(function ($createdQuery) use ($userId) {
+                    $createdQuery->where('assigned_by', $userId)
+                        ->where(function ($assigneeQuery) {
+                            $assigneeQuery->whereColumn('assigned_by', '!=', 'assigned_to')
+                                ->orWhereNull('assigned_to');
+                        });
+                })->orWhereHas('delegations', function ($delegationQuery) use ($userId) {
+                    $delegationQuery->whereNull('deliverable_id')
+                        ->where('delegated_by', $userId)
+                        ->whereIn('status', ['pending', 'accepted']);
+                });
+            });
 
-        $tasksDueToday = Task::whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
-            ->where('assigned_by', '!=', $user->id)
-            ->whereRaw('DATE(COALESCE((SELECT pu.due_date FROM task_user pu WHERE pu.task_id = tasks.id AND pu.user_id = ? LIMIT 1), tasks.end_date)) = ?', [$user->id, today()->toDateString()])
-            ->whereNotIn('status', $this->dueTodayCompletedStatuses())
-            ->count();
+            $delivQuery = Deliverable::where(function ($query) use ($userId) {
+                $query->where(function ($createdQuery) use ($userId) {
+                    $createdQuery->where('created_by', $userId)
+                        ->where(function ($assigneeQuery) {
+                            $assigneeQuery->whereColumn('created_by', '!=', 'assigned_to')
+                                ->orWhereNull('assigned_to');
+                        });
+                })->orWhereHas('delegations', function ($delegationQuery) use ($userId) {
+                    $delegationQuery->where('delegated_by', $userId)
+                        ->whereIn('status', ['pending', 'accepted']);
+                });
+            });
 
-        $onlyPendingStatuses = ['pending','planned','Planning'];
+            // Tasks Due Today
+            $tasksDueToday = (clone $tasksQuery)->reorder()
+                ->whereDate('tasks.end_date', $today)
+                ->whereNotIn('tasks.status', ['completed', 'approved', 'done', 'abandoned', 'Completed', 'Approved', 'Done', 'Abandoned', 'closed', 'Closed'])
+                ->count();
 
-        $taskStats = Task::where(function ($q) use ($user) {
-            $q->where('assigned_by', $user->id)
-                ->orWhere('assigned_to', $user->id)
-                ->orWhereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id));
-        })->selectRaw("
-            COUNT(*) as total,
-            SUM(CASE WHEN status IN ('completed','done','approved') THEN 1 ELSE 0 END) as completed,
-            SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved,
-            SUM(CASE WHEN status IN ('".implode("','", $onlyPendingStatuses)."') THEN 1 ELSE 0 END) as pending
-        ")->first();
+            // Deliverables Due Today
+            $delivDueToday = (clone $delivQuery)->reorder()
+                ->whereDate('deliverables.due_date', $today)
+                ->whereNotIn('deliverables.status', ['approved', 'completed', 'done', 'abandoned', 'Approved', 'Completed', 'Done', 'Abandoned', 'closed', 'Closed'])
+                ->count();
+        } else {
+            // ═══════════════════════════════════════════════
+            // ASSIGNEE VIEW — tasks/deliverables assigned TO this user by others
+            // Mirrors TaskController@myTasks / DeliverableController@index
+            // ═══════════════════════════════════════════════
+            $tasksQuery = Task::where(function ($q) use ($userId) {
+                $q->whereHas('assignees', fn ($q) => $q->where('users.id', $userId))
+                    ->orWhere('assigned_to', $userId);
+            })
+                ->whereDoesntHave('delegations', function ($q) use ($userId) {
+                    $q->whereNull('deliverable_id')
+                        ->where('delegated_by', $userId)
+                        ->whereIn('status', ['pending', 'accepted']);
+                });
+
+            $delivQuery = Deliverable::where(function ($q) use ($userId) {
+                $q->whereHas('assignees', fn ($q) => $q->where('users.id', $userId))
+                    ->orWhere('assigned_to', $userId);
+            })
+                ->where('created_by', '!=', $userId)
+                ->whereDoesntHave('delegations', function ($q) use ($userId) {
+                    $q->where('delegated_by', $userId)
+                        ->whereIn('status', ['pending', 'accepted']);
+                });
+
+            // Tasks Due Today (considering per-user due date on pivot)
+            $tasksDueToday = (clone $tasksQuery)->reorder()
+                ->where(function ($q) use ($userId, $today) {
+                    $q->whereDate('tasks.end_date', $today)
+                      ->orWhereHas('assignees', function ($aq) use ($userId, $today) {
+                          $aq->where('users.id', $userId)
+                             ->whereDate('task_user.due_date', $today);
+                      });
+                })
+                ->whereNotIn('tasks.status', ['completed', 'approved', 'done', 'abandoned', 'Completed', 'Approved', 'Done', 'Abandoned', 'closed', 'Closed'])
+                ->count();
+
+            // Deliverables Due Today
+            $delivDueToday = (clone $delivQuery)->reorder()
+                ->whereDate('deliverables.due_date', $today)
+                ->whereNotIn('deliverables.status', ['approved', 'completed', 'done', 'abandoned', 'Approved', 'Completed', 'Done', 'Abandoned', 'closed', 'Closed'])
+                ->count();
+        }
+
+        $totalDueToday = $tasksDueToday + $delivDueToday;
+
+        // 3. Status Grouping aggregation from SQL
+        $taskStatusCounts = (clone $tasksQuery)->reorder()
+            ->select('tasks.status', DB::raw('count(*) as aggregate'))
+            ->groupBy('tasks.status')
+            ->pluck('aggregate', 'tasks.status')
+            ->toArray();
+
+        $delivStatusCounts = (clone $delivQuery)->reorder()
+            ->select('deliverables.status', DB::raw('count(*) as aggregate'))
+            ->groupBy('deliverables.status')
+            ->pluck('aggregate', 'deliverables.status')
+            ->toArray();
+
+        // 4. Exact 1:1 Status Dictionaries matching TaskController
+        $inProgressList = [
+            'in_progress', 'in progress', 'in-progress', 'doing', 'working',
+            'underway', 'under_way', 'acknowledged', 'started', 'active',
+        ];
+        $submittedList = [
+            'submitted', 'review', 'in_review', 'under_review', 'submitted_late',
+            'awaiting_approval', 'awaiting_checkpoint', 'ready_for_review',
+        ];
+        $completedList = [
+            'completed', 'approved', 'done', 'finished', 'closed',
+        ];
+        $pausedList = [
+            'paused', 'pause', 'hold', 'on_hold', 'on hold', 'on-hold',
+        ];
+        $declinedList = [
+            'declined', 'rejected', 'failed', 'rework_required',
+        ];
+        $abandonedList = [
+            'abandoned', 'abandon_requested', 'cancelled', 'canceled',
+        ];
+
+        $counts = [
+            'pending' => 0,
+            'in_progress' => 0,
+            'submitted' => 0,
+            'completed' => 0,
+            'paused' => 0,
+            'declined' => 0,
+            'abandoned' => 0,
+            'total' => 0,
+        ];
+
+        foreach ([$taskStatusCounts, $delivStatusCounts] as $statusArray) {
+            foreach ($statusArray as $rawStatus => $cnt) {
+                $cnt = (int) $cnt;
+                $counts['total'] += $cnt;
+                $st = strtolower(trim((string) $rawStatus));
+
+                if (in_array($st, $inProgressList, true)) {
+                    $counts['in_progress'] += $cnt;
+                } elseif (in_array($st, $submittedList, true)) {
+                    $counts['submitted'] += $cnt;
+                } elseif (in_array($st, $completedList, true)) {
+                    $counts['completed'] += $cnt;
+                } elseif (in_array($st, $pausedList, true)) {
+                    $counts['paused'] += $cnt;
+                } elseif (in_array($st, $declinedList, true)) {
+                    $counts['declined'] += $cnt;
+                } elseif (in_array($st, $abandonedList, true)) {
+                    $counts['abandoned'] += $cnt;
+                } else {
+                    // Catches 'pending', 'planned', 'planning', 'draft', 'todo', 'to_do', 'to-do', 'new',
+                    // 'not_started', 'not started', 'not-started', 'unassigned', 'reopened', '', null, etc.
+                    $counts['pending'] += $cnt;
+                }
+            }
+        }
 
         return [
             'active_projects' => $activeProjects,
-            'tasks_due_today' => $tasksDueToday,
-            'completed_tasks' => (int) $taskStats->completed,
-            'approved_tasks' => (int) $taskStats->approved,
-            'pending_tasks' => (int) $taskStats->pending,
-            'total_tasks' => (int) $taskStats->total,
+            'tasks_due_today' => $totalDueToday,
+            'in_progress_tasks' => $counts['in_progress'],
+            'in_progress' => $counts['in_progress'],
+            'submitted_tasks' => $counts['submitted'],
+            'submitted' => $counts['submitted'],
+            'completed_tasks' => $counts['completed'],
+            'pending_tasks' => $counts['pending'],
+            'total_tasks' => $counts['total'],
         ];
     }
 

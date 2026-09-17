@@ -1027,22 +1027,65 @@ function SubtaskDetails() {
     (isCurrentActiveAssignee || isAssignee || isCurrentOwner || subtask?.can_submit === true) &&
     subtask?.can_submit !== false;
 
-  const isAssignerOrCreator = isCreator || isSuperAdmin || isAdminOrManager || (currentUser && (
-    parseInt(subtask?.assigned_by, 10) === currentUserId ||
-    parseInt(subtask?.creator_id, 10) === currentUserId ||
-    parseInt(subtask?.created_by, 10) === currentUserId ||
-    parseInt(subtask?.original_assigner, 10) === currentUserId ||
-    parseInt(subtask?.user_id, 10) === currentUserId ||
-    (subtask?.task && (
-      parseInt(subtask.task.assigned_by, 10) === currentUserId ||
-      parseInt(subtask.task.creator_id, 10) === currentUserId ||
-      parseInt(subtask.task.user_id, 10) === currentUserId
+  const isAssignerOrCreator = Boolean(
+    isCreator || isSuperAdmin || isAdminOrManager || (currentUser && (
+      parseInt(subtask?.assigned_by, 10) === currentUserId ||
+      parseInt(subtask?.creator_id, 10) === currentUserId ||
+      parseInt(subtask?.created_by, 10) === currentUserId ||
+      parseInt(subtask?.original_assigner, 10) === currentUserId ||
+      parseInt(subtask?.user_id, 10) === currentUserId ||
+      (subtask?.task && (
+        parseInt(subtask.task.assigned_by, 10) === currentUserId ||
+        parseInt(subtask.task.creator_id, 10) === currentUserId ||
+        parseInt(subtask.task.user_id, 10) === currentUserId
+      ))
     ))
-  ));
+  );
+
+  const isCurrentReviewer = Boolean(
+    currentUserId && (
+      (subtask?.current_reviewer_id && parseInt(subtask.current_reviewer_id, 10) === currentUserId) ||
+      (subtask?.current_owner && parseInt(subtask.current_owner, 10) === currentUserId) ||
+      (subtask?.current_owner_id && parseInt(subtask.current_owner_id, 10) === currentUserId) ||
+      (activeOwnerId != null && activeOwnerId === currentUserId) ||
+      subtask?.is_current_owner === true
+    )
+  );
+
+  const canReview = !readOnly && !isOnlyFollower && Boolean(
+    isAdminOrManager ||
+    isSuperAdmin ||
+    isAssignerOrCreator ||
+    isTransferorApproval ||
+    isCurrentReviewer ||
+    isCurrentOwner ||
+    subtask?.can_approve === true ||
+    subtask?.can_review === true ||
+    subtask?.can_decline_submission === true ||
+    subtask?.is_next_approver ||
+    (isTransferor && !transferorHasApproved)
+  );
 
   const canApprove = (readOnly || isOnlyFollower)
     ? false
-    : isTransferorApproval || ((isCreator || isSuperAdmin || isAdminOrManager || subtask?.can_approve === true || subtask?.is_next_approver) && (!subtask?.is_transferred || transferorHasApproved || subtask?.submission_stage === "awaiting_creator" || !hasDelegationChain));
+    : Boolean(
+        isTransferorApproval ||
+        canReview ||
+        subtask?.can_approve === true ||
+        subtask?.is_next_approver ||
+        ((isAssignerOrCreator || isCreator || isSuperAdmin || isAdminOrManager) &&
+         (!subtask?.is_transferred || transferorHasApproved || subtask?.submission_stage === "awaiting_creator" || !hasDelegationChain))
+      );
+
+  const canDecline = (readOnly || isOnlyFollower)
+    ? false
+    : Boolean(
+        canReview ||
+        canApprove ||
+        isTransferorApproval ||
+        subtask?.can_decline_submission === true ||
+        isAssignerOrCreator
+      );
 
   const canReopen = (readOnly || isOnlyFollower)
     ? false
@@ -1056,7 +1099,12 @@ function SubtaskDetails() {
 
   const canAbandon = (readOnly || isOnlyFollower || isPreviousTransferor || isDelegationInactiveForMe)
     ? false
-    : (subtask && currentUser && (isCurrentActiveAssignee || isAssignee || isCurrentOwner || ((isCreator || isSuperAdmin || isAdminOrManager || isAssignerOrCreator) && !isPreviousTransferor)) && !["abandoned", "approved", "completed", "submitted", "submitted_late"].includes(subtaskStatus));
+    : Boolean(
+        subtask &&
+        currentUser &&
+        (isCurrentActiveAssignee || isAssignee || isCurrentOwner || ((isCreator || isSuperAdmin || isAdminOrManager || isAssignerOrCreator) && !isPreviousTransferor)) &&
+        !["abandoned", "approved", "completed"].includes(subtaskStatus)
+      );
 
   const canTransfer = !readOnly &&
     !isOnlyFollower &&
@@ -1262,7 +1310,7 @@ function SubtaskDetails() {
                       {t("Mark as Completed", { defaultValue: "Mark as Completed" })}
                     </button>
                   )}
-                  {isTransferorApproval && (
+                  {(isTransferorApproval || (canApprove && ["submitted", "submitted_late", "reopened", "in_review", "under_review", "ready_for_review", "awaiting_approval"].includes(subtaskStatus))) && (
                     <button
                       className="td-btn-success"
                       style={{ background: "#16a34a", color: "#ffffff", border: "none", fontWeight: 600, padding: "8px 16px", borderRadius: "8px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}
@@ -1270,21 +1318,10 @@ function SubtaskDetails() {
                       onClick={handleApprove}
                     >
                       <CheckCircle2 size={15} />
-                      {approving ? t("Approving...", { defaultValue: "Approving..." }) : t("Approve Subtask", { defaultValue: "Approve Subtask" })}
+                      {approving ? t("Approving...", { defaultValue: "Approving..." }) : (isTransferorApproval ? t("Approve Transfer", { defaultValue: "Approve Transfer" }) : t("Approve Subtask", { defaultValue: "Approve Subtask" }))}
                     </button>
                   )}
-                  {!isTransferorApproval && canApprove && (["submitted", "submitted_late", "reopened"].includes(subtaskStatus)) && (
-                    <button
-                      className="td-btn-success"
-                      style={{ background: "#16a34a", color: "#ffffff", border: "none", fontWeight: 600, padding: "8px 16px", borderRadius: "8px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}
-                      disabled={approving}
-                      onClick={handleApprove}
-                    >
-                      <CheckCircle2 size={15} />
-                      {approving ? t("Approving...", { defaultValue: "Approving..." }) : t("Approve Subtask", { defaultValue: "Approve Subtask" })}
-                    </button>
-                  )}
-                  {(isTransferorApproval || canApprove || subtask?.can_decline_submission) && (["submitted", "submitted_late"].includes(subtaskStatus) || isTransferorApproval) && (
+                  {(isTransferorApproval || (canDecline && ["submitted", "submitted_late", "reopened", "in_review", "under_review", "ready_for_review", "awaiting_approval"].includes(subtaskStatus))) && (
                     <button
                       className="td-btn-danger"
                       style={{ background: "#dc2626", color: "#ffffff", border: "none", fontWeight: 600, padding: "8px 16px", borderRadius: "8px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}

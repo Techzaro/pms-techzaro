@@ -6,7 +6,7 @@ import { isDelegationRejectedByMe, isDelegationRevokedFromMe } from "../utils/de
 export const STATUS_COLORS = {
   Pending: "#FEF3C7",
   "In Progress": "#DBEAFE",
-  Paused: "#FEF3C7",
+  Paused: "#FFEDD5",
   Submitted: "#DBEAFE",
   Approved: "#DCFCE7",
   Declined: "#FEE2E2",
@@ -14,9 +14,9 @@ export const STATUS_COLORS = {
   pending: "#FEF3C7",
   in_progress: "#DBEAFE",
   "in-progress": "#DBEAFE",
-  paused: "#FEF3C7",
+  paused: "#FFEDD5",
   submitted: "#DBEAFE",
-  reopened: "#FEF3C7",
+  reopened: "#EDE9FE",
   approved: "#DCFCE7",
   rejected: "#FEE2E2",
   declined: "#FEE2E2",
@@ -24,13 +24,13 @@ export const STATUS_COLORS = {
   abandoned: "#FEE2E2",
   Planning: "#FEF3C7",
   Completed: "#DCFCE7",
-  Pause: "#FEF3C7",
+  Pause: "#FFEDD5",
 };
 
 export const STATUS_TEXT_COLORS = {
   Pending: "#92400E",
   "In Progress": "#1E40AF",
-  Paused: "#92400E",
+  Paused: "#C2410C",
   Submitted: "#1E40AF",
   Approved: "#166534",
   Declined: "#991B1B",
@@ -38,9 +38,9 @@ export const STATUS_TEXT_COLORS = {
   pending: "#92400E",
   in_progress: "#1E40AF",
   "in-progress": "#1E40AF",
-  paused: "#92400E",
+  paused: "#C2410C",
   submitted: "#1E40AF",
-  reopened: "#92400E",
+  reopened: "#5B21B6",
   approved: "#166534",
   rejected: "#991B1B",
   declined: "#991B1B",
@@ -48,7 +48,7 @@ export const STATUS_TEXT_COLORS = {
   abandoned: "#991B1B",
   Planning: "#92400E",
   Completed: "#166534",
-  Pause: "#92400E",
+  Pause: "#C2410C",
 };
 
 export const STATUS_LABELS = {
@@ -94,14 +94,16 @@ export function getEffectiveStatus(item) {
   ) {
     return "in_progress";
   }
-  const st = String(item?.my_status || item?.status || "pending").toLowerCase();
-  if (st === "pause") return "paused";
-  if (st === "in-progress" || st === "acknowledged") return "in_progress";
-  if (st === "submitted_late") return "submitted";
-  if (st === "completed") return "approved";
-  if (st === "rejected") return "declined";
+  const st = String(item?.my_status || item?.status || "pending").toLowerCase().trim();
+  if (st === "pause" || st === "hold" || st === "on_hold" || st === "on hold" || st === "on-hold") return "paused";
+  if (st === "in-progress" || st === "in progress" || st === "acknowledged" || st === "doing" || st === "working" || st === "underway") return "in_progress";
+  if (st === "submitted_late" || st === "review" || st === "in_review" || st === "under_review") return "submitted";
+  if (["completed", "done", "finished"].includes(st)) return "approved";
+  if (["rejected", "failed"].includes(st)) return "declined";
+  if (["abandon_requested", "cancelled", "canceled"].includes(st)) return "abandoned";
+  if (["planned", "planning", "draft", "todo", "to_do", "new", "not_started", "not started", "unassigned"].includes(st)) return "pending";
   if (st === "reopened") return "pending";
-  return st;
+  return st || "pending";
 }
 
 export function formatStatus(status) {

@@ -54,6 +54,7 @@ import Pagination from "../components/Pagination";
 import ActionPopover from "../components/ActionPopover";
 import AddNoteModal from "../components/AddNoteModal";
 import TaskMultiStatusBadges from "../components/TaskMultiStatusBadges";
+import TaskAssigneeCell from "../components/TaskAssigneeCell";
 import TaskFilterBar from "../components/TaskFilterBar";
 import { getUpdatedSinceThreshold } from "../utils/filterUtils";
 import "../components/ActionPopover.css";
@@ -64,7 +65,7 @@ import "../pages/Task.css";
 const STATUS_COLORS = {
   pending: "#FEF3C7",
   in_progress: "#DBEAFE",
-  paused: "#FEF3C7",
+  paused: "#FFEDD5",
   submitted: "#DBEAFE",
   reopened: "#EDE9FE",
   approved: "#DCFCE7",
@@ -77,7 +78,7 @@ const STATUS_COLORS = {
 const STATUS_TEXT_COLORS = {
   pending: "#92400E",
   in_progress: "#1E40AF",
-  paused: "#92400E",
+  paused: "#C2410C",
   submitted: "#1E40AF",
   reopened: "#5B21B6",
   approved: "#166534",
@@ -143,6 +144,8 @@ function DeliveriesByYou() {
   const [transferSubtask, setTransferSubtask] = useState(null);
   const [assignerPauseSubtask, setAssignerPauseSubtask] = useState(null);
   const [submitModal, setSubmitModal] = useState({ open: false, subtask: null });
+  const [resumeConfirmOpen, setResumeConfirmOpen] = useState(false);
+  const [resumeSubtaskItem, setResumeSubtaskItem] = useState(null);
   const [page, setPage] = useState(() => {
     const p = searchParams.get("page");
     return p ? Math.max(1, parseInt(p, 10) || 1) : 1;
@@ -181,6 +184,7 @@ function DeliveriesByYou() {
   // Fetch subtasks assigned by the current user from API
   const fetchSubtasks = () => {
     setLoading(true);
+    setSubtasks([]);
     const token = authToken();
     const params = new URLSearchParams();
     if (debouncedSearch) params.append("search", debouncedSearch);
@@ -283,6 +287,8 @@ function DeliveriesByYou() {
     if (filter === statusFilter && filter === "") {
       setShowAll(!showAll);
     } else {
+      setLoading(true);
+      setSubtasks([]);
       setStatusFilter(filter);
       setShowAll(false);
       setPage(1);
@@ -331,6 +337,7 @@ function DeliveriesByYou() {
       });
       if (res.ok) {
         setSubtasks((prev) => prev.filter((d) => d.id !== itemId));
+        fetchSubtasks();
         publish('deliverable:deleted', { id: itemId });
         publish('data:changed', { type: 'deliverable', action: 'deleted' });
         showSuccessMessage("Subtask", "deleted");
@@ -359,6 +366,7 @@ function DeliveriesByYou() {
       const data = await res.json();
       if (res.ok) {
         setSubtasks((prev) => prev.map((d) => d.id === itemId ? { ...d, status: "approved", ...data.deliverable } : d));
+        fetchSubtasks();
         publish('deliverable:updated', { id: itemId, status: 'approved' });
         publish('data:changed', { type: 'deliverable', action: 'updated' });
         showSuccessMessage("Subtask", "approved");
@@ -388,6 +396,7 @@ function DeliveriesByYou() {
       const data = await res.json();
       if (res.ok) {
         setSubtasks((prev) => prev.map((d) => d.id === itemId ? { ...d, status: "declined", ...data.deliverable } : d));
+        fetchSubtasks();
         publish('deliverable:updated', { id: itemId, status: 'declined' });
         publish('data:changed', { type: 'deliverable', action: 'updated' });
         showSuccessMessage("Subtask", "declined");
@@ -418,6 +427,7 @@ function DeliveriesByYou() {
       const data = await res.json();
       if (res.ok) {
         setSubtasks((prev) => prev.map((d) => d.id === itemId ? { ...d, assigner_paused: true, ...data.deliverable } : d));
+        fetchSubtasks();
         publish('deliverable:updated', { id: itemId });
         publish('data:changed', { type: 'deliverable', action: 'updated' });
         showSuccessMessage("Subtask", "paused");
@@ -445,6 +455,7 @@ function DeliveriesByYou() {
       const data = await res.json();
       if (res.ok) {
         setSubtasks((prev) => prev.map((d) => d.id === itemId ? { ...d, assigner_paused: false, ...data.deliverable } : d));
+        fetchSubtasks();
         publish('deliverable:updated', { id: itemId });
         publish('data:changed', { type: 'deliverable', action: 'updated' });
         showSuccessMessage("Subtask", "resumed");
@@ -457,6 +468,14 @@ function DeliveriesByYou() {
       setActingId(null);
       setActingType(null);
     }
+  };
+
+  const handleConfirmResume = async () => {
+    if (!resumeSubtaskItem) return;
+    const item = resumeSubtaskItem;
+    setResumeConfirmOpen(false);
+    setResumeSubtaskItem(null);
+    await handleAssignerResume(item.id);
   };
 
   const handleAssignerPauseSubmit = async (data) => {
@@ -474,6 +493,7 @@ function DeliveriesByYou() {
       if (res.ok) {
         const updated = resData.deliverable || resData.subtask || resData;
         setSubtasks((prev) => prev.map((d) => d.id === subtaskId ? { ...d, assigner_paused: true, ...updated } : d));
+        fetchSubtasks();
         publish('deliverable:updated', updated);
         publish('data:changed', { type: 'deliverable', action: 'updated' });
         showSuccessMessage("Subtask", "paused");
@@ -505,6 +525,7 @@ function DeliveriesByYou() {
       if (res.ok) {
         const updated = data.deliverable || data;
         setSubtasks((prev) => prev.map((d) => d.id === abandonSubtask.id ? { ...d, ...updated } : d));
+        fetchSubtasks();
         publish('deliverable:updated', updated);
         publish('data:changed', { type: 'deliverable', action: 'updated' });
         showSuccessMessage("Subtask", "abandoned");
@@ -562,8 +583,13 @@ function DeliveriesByYou() {
   const currentUser = getUser();
   const canCreateSubtask = currentUser && ["admin", "manager", "team_lead"].includes(currentUser.role);
 
-  const pendingStatuses = useMemo(() => ["pending", "planned", "Planning", "Planned"], []);
-  const inProgressStatuses = useMemo(() => ["in_progress", "In Progress", "In-progress"], []);
+  const pendingStatuses = useMemo(() => ["pending", "planned", "planning", "draft", "todo", "to_do", "new", "not_started", "unassigned", "Pending", "Planned", "Planning", "Draft", "Todo", "To_Do", "New", "Not_Started", "Unassigned"], []);
+  const inProgressStatuses = useMemo(() => ["in_progress", "In Progress", "In-progress", "in-progress", "reopened", "Reopened", "doing", "working", "underway", "acknowledged"], []);
+  const pausedStatuses = useMemo(() => ["paused", "Paused", "pause", "Pause", "hold", "on_hold", "On Hold"], []);
+  const submittedStatuses = useMemo(() => ["submitted", "Submitted", "review", "in_review", "under_review", "submitted_late"], []);
+  const completedStatuses = useMemo(() => ["completed", "approved", "done", "finished", "Completed", "Approved", "Done", "Finished"], []);
+  const declinedStatuses = useMemo(() => ["declined", "rejected", "failed", "Declined", "Rejected", "Failed"], []);
+  const abandonedStatuses = useMemo(() => ["abandoned", "abandon_requested", "cancelled", "canceled", "Abandoned", "Abandon Requested"], []);
 
   const fallbackCounts = useMemo(() => {
     const todayStr = new Date().toDateString();
@@ -576,15 +602,15 @@ function DeliveriesByYou() {
       }).length,
       pending: displayItems.filter((i) => i && pendingStatuses.includes(i.status)).length,
       inProgress: displayItems.filter((i) => i && inProgressStatuses.includes(i.status)).length,
-      paused: displayItems.filter((i) => i && i.status === "paused").length,
-      submitted: displayItems.filter((i) => i && i.status === "submitted").length,
-      reopened: displayItems.filter((i) => i && i.status === "reopened").length,
+      paused: displayItems.filter((i) => i && pausedStatuses.includes(i.status)).length,
+      submitted: displayItems.filter((i) => i && submittedStatuses.includes(i.status)).length,
+      reopened: displayItems.filter((i) => i && (i.status === "reopened" || i.is_reopened)).length,
       transferred: displayItems.filter((i) => i && Array.isArray(i.delegation_chain) && i.delegation_chain.length > 0).length,
-      approved: displayItems.filter((i) => i && (i.status === "approved" || i.status === "completed")).length,
-      rejected: displayItems.filter((i) => i && (i.status === "rejected" || i.status === "declined")).length,
-      abandoned: displayItems.filter((i) => i && (i.status === "abandoned" || i.status === "abandon_requested")).length,
+      approved: displayItems.filter((i) => i && completedStatuses.includes(i.status)).length,
+      rejected: displayItems.filter((i) => i && declinedStatuses.includes(i.status)).length,
+      abandoned: displayItems.filter((i) => i && abandonedStatuses.includes(i.status)).length,
     };
-  }, [displayItems, pendingStatuses, inProgressStatuses]);
+  }, [displayItems, pendingStatuses, inProgressStatuses, pausedStatuses, submittedStatuses, completedStatuses, declinedStatuses, abandonedStatuses]);
 
   const allCount = counts?.all ?? fallbackCounts.all;
   const dueTodayCount = (counts?.due_today ?? counts?.dueToday) ?? fallbackCounts.dueToday;
@@ -888,20 +914,14 @@ function DeliveriesByYou() {
                   <div className={`deliveries-table-row ${isInactiveForMe ? "delegation-rejected-row" : ""}`} key={`subtask-${item.id}-${index}`} style={isInactiveForMe ? { opacity: 0.88 } : undefined}>
                     <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={item.id} businessId={item.business_id} color="#16a34a" />
                     <div>
-                      <div className="user-box">
-                        <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
-                          {getInitials(primaryAssignee?.name)}
-                        </div>
-                        <div>
-                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                            <div className="user-name">{primaryAssignee?.name || t("Unassigned", { defaultValue: "Unassigned" })}</div>
-                            {item.is_transferee && (
-                              <span style={{ fontSize: "10px", fontWeight: 600, color: "#6B7280", background: "#F3F4F6", padding: "1px 6px", borderRadius: "4px", border: "1px solid #D1D5DB" }}>{t("Transferee", { defaultValue: "Transferee" })}</span>
-                            )}
-                          </div>
-                          <div className="user-role">{primaryAssignee?.role ? primaryAssignee.role.replace("_", " ") : ""}</div>
-                        </div>
-                      </div>
+                      <TaskAssigneeCell
+                        assignees={item.assignees}
+                        assignee={item.assignee}
+                        isDirectToOa={Boolean(item.has_direct_to_oa_delegation && item.current_owner_name && item.current_owner_id)}
+                        currentOwnerName={item.current_owner_name}
+                        delegatorName={item.delegator_name}
+                        isTransferee={Boolean(item.is_transferee)}
+                      />
                     </div>
                     <div>
                       <div className="user-box">
@@ -1121,10 +1141,13 @@ function DeliveriesByYou() {
                                   className="action-icon-btn"
                                   title={t("Resume", { defaultValue: "Resume" })}
                                   disabled={actingId === item.id}
-                                  onClick={() => handleAssignerResume(item.id)}
+                                  onClick={() => {
+                                    setResumeSubtaskItem(item);
+                                    setResumeConfirmOpen(true);
+                                  }}
                                   style={{ color: "#059669", cursor: actingId === item.id ? "not-allowed" : "pointer" }}
                                 >
-                                  <Lock size={16} />
+                                  <Play size={16} />
                                 </button>
                               )}
                             </>
@@ -1265,6 +1288,20 @@ function DeliveriesByYou() {
         confirmText={t("Delete", { defaultValue: "Delete" })}
         cancelText={t("Cancel", { defaultValue: "Cancel" })}
         danger
+      />
+
+      <ConfirmModal
+        isOpen={resumeConfirmOpen}
+        onClose={() => {
+          setResumeConfirmOpen(false);
+          setResumeSubtaskItem(null);
+        }}
+        onConfirm={handleConfirmResume}
+        title={t("Resume Subtask", { defaultValue: "Resume Subtask" })}
+        message={t("Are you sure you want to resume this subtask?", { defaultValue: "Are you sure you want to resume this subtask?" })}
+        confirmText={t("Resume", { defaultValue: "Resume" })}
+        cancelText={t("Cancel", { defaultValue: "Cancel" })}
+        confirmColor="#16A34A"
       />
     </DashboardLayout>
   );
