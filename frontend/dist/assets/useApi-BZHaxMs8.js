@@ -1,1 +1,0 @@
-import{Tn as e,Z as t}from"./index-BhKv9kLh.js";function n(n,r,i,a={}){return e({queryKey:Array.isArray(n)?n:[n,i],queryFn:()=>t.get(r,i),...a})}export{n as t};
