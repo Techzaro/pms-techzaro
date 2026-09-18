@@ -46,7 +46,7 @@ import { usePersonalization } from "../context/PersonalizationContext";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import { renderDynamicDates } from "../utils/tableDateUtils";
 import { formatDateTimeInline } from "../utils/formatDateTime";
-import { getUpdatedSinceThreshold, matchStatusFilter } from "../utils/filterUtils";
+import { getUpdatedSinceThreshold, matchStatusFilter, mutateStatusCounts, decrementStatusCount, incrementStatusCount } from "../utils/filterUtils";
 import { isDelegationRejectedByMe, isDelegationRevokedFromMe, isDeliverableItem } from "../utils/delegationUtils";
 import "../components/ActionPopover.css";
 import "../pages/Task.css";
@@ -276,6 +276,11 @@ function Tasks() {
   const selectStatusFilter = (status) => {
     setStatusFilter(status);
     setPage(1);
+    setAdvancedFilters((prev) => ({
+      ...prev,
+      statuses: [],
+      status: [],
+    }));
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       if (status) {
@@ -283,6 +288,7 @@ function Tasks() {
       } else {
         next.delete("status");
       }
+      next.delete("statuses");
       next.delete("page");
       return next;
     });
@@ -364,10 +370,17 @@ function Tasks() {
         params.append("priority", prioList.join(","));
       }
 
-      const creatorList = Array.isArray(advancedFilters.created_by) ? advancedFilters.created_by : [];
+      const rawCreator = advancedFilters.created_by || advancedFilters.creator_ids || advancedFilters.assigned_by || [];
+      const creatorList = (Array.isArray(rawCreator) ? rawCreator : [rawCreator]).map(Number).filter(Boolean);
       if (creatorList.length > 0) {
-        creatorList.forEach((cr) => params.append("created_by[]", cr));
+        creatorList.forEach((cr) => {
+          params.append("created_by[]", cr);
+          params.append("creator_ids[]", cr);
+          params.append("assigned_by[]", cr);
+        });
         params.append("created_by", creatorList.join(","));
+        params.append("creator_ids", creatorList.join(","));
+        params.append("assigned_by", creatorList.join(","));
       }
 
       const followerList = Array.isArray(advancedFilters.follower_id) ? advancedFilters.follower_id : [];
@@ -472,56 +485,15 @@ function Tasks() {
   }, [items]);
 
   const baseItems = orderedItems.length ? orderedItems : items;
-  const pendingStatuses = useMemo(() => ["pending", "planned", "planning", "Pending", "Planned", "Planning"], []);
-  const inProgressStatuses = useMemo(() => ["in_progress", "In Progress", "In-progress", "reopened", "Reopened", "doing"], []);
-  const completedStatuses = useMemo(() => ["completed", "approved", "done", "Completed", "Approved", "Done"], []);
-  const pausedStatuses = useMemo(() => ["paused", "Paused", "hold", "on_hold"], []);
-  const submittedStatuses = useMemo(() => ["submitted", "Submitted", "review", "in_review", "under_review"], []);
-  const declinedStatuses = useMemo(() => ["declined", "rejected", "failed", "Declined", "Rejected", "Failed"], []);
-  const abandonedStatuses = useMemo(() => ["abandoned", "abandon_requested", "Abandoned", "Abandon Requested"], []);
 
-  // Single-pass status counts instead of 11 separate .filter() iterations
-  const taskStatusCounts = useMemo(() => {
-    const counts = { all: 0, dueToday: 0, pending: 0, inProgress: 0, paused: 0, submitted: 0, reopened: 0, transferred: 0, completed: 0, approved: 0, declined: 0, rejected: 0, abandoned: 0 };
-    const todayStr = new Date().toDateString();
-    for (const i of baseItems) {
-      counts.all++;
-      const d = i.end_date ? new Date(i.end_date) : null;
-      if (d && d.toDateString() === todayStr) counts.dueToday++;
-      if (pendingStatuses.includes(i.status)) counts.pending++;
-      if (inProgressStatuses.includes(i.status)) counts.inProgress++;
-      if (pausedStatuses.includes(i.status)) counts.paused++;
-      if (submittedStatuses.includes(i.status)) counts.submitted++;
-      if (i.status === "reopened") counts.reopened++;
-      if (i.delegation_chain && i.delegation_chain.length > 0) counts.transferred++;
-      if (completedStatuses.includes(i.status)) counts.completed++;
-      if (declinedStatuses.includes(i.status)) counts.declined++;
-      if (abandonedStatuses.includes(i.status)) counts.abandoned++;
-    }
-    counts.approved = counts.completed;
-    counts.rejected = counts.declined;
-    return counts;
-  }, [baseItems, pendingStatuses, inProgressStatuses, completedStatuses, pausedStatuses, submittedStatuses, declinedStatuses, abandonedStatuses]);
+  const getItemStatus = useCallback((item) => {
+    if (!item) return "pending";
+    if (item?.assigner_paused) return "paused";
+    return item?.status || "pending";
+  }, []);
 
-  const allCount = apiCounts?.all ?? taskStatusCounts.all;
-  const dueTodayCount = (apiCounts?.due_today ?? apiCounts?.dueToday) ?? taskStatusCounts.dueToday;
-  const pendingCount = apiCounts?.pending ?? taskStatusCounts.pending;
-  const inProgressCount = (apiCounts?.in_progress ?? apiCounts?.inProgress) ?? taskStatusCounts.inProgress;
-  const pausedCount = apiCounts?.paused ?? taskStatusCounts.paused;
-  const submittedCount = apiCounts?.submitted ?? taskStatusCounts.submitted;
-  const reopenedCount = apiCounts?.reopened ?? taskStatusCounts.reopened;
-  const transferredCount = apiCounts?.transferred ?? taskStatusCounts.transferred;
-  const completedCount = (apiCounts?.completed ?? apiCounts?.approved) ?? taskStatusCounts.completed;
-  const approvedCount = completedCount;
-  const declinedCount = (apiCounts?.declined ?? apiCounts?.rejected) ?? taskStatusCounts.declined;
-  const rejectedCount = declinedCount;
-  const abandonedCount = apiCounts?.abandoned ?? taskStatusCounts.abandoned;
-  const searchFilteredItems = useMemo(() => {
-    return baseItems;
-  }, [baseItems]);
-
-  const filteredItems = useMemo(() => {
-    let list = searchFilteredItems;
+  const preStatusFilteredItems = useMemo(() => {
+    let list = baseItems;
     const selectedPriorities = Array.isArray(advancedFilters.priority) && advancedFilters.priority.length > 0
       ? advancedFilters.priority
       : (Array.isArray(advancedFilters.priorities) && advancedFilters.priorities.length > 0 ? advancedFilters.priorities : []);
@@ -532,54 +504,6 @@ function Tasks() {
         if (!item) return false;
         const itemPrio = String(item.priority || "medium").toLowerCase();
         return prioLower.includes(itemPrio);
-      });
-    }
-
-    const selectedStatuses = Array.isArray(advancedFilters.statuses) && advancedFilters.statuses.length > 0
-      ? advancedFilters.statuses
-      : (Array.isArray(advancedFilters.status) && advancedFilters.status.length > 0 ? advancedFilters.status : []);
-
-    if (selectedStatuses.length > 0) {
-      list = list.filter((item) => matchStatusFilter(item?.status, selectedStatuses));
-    }
-
-    if (statusFilter) {
-      list = list.filter((item) => {
-        const sf = String(statusFilter).toLowerCase();
-        if (sf === "due_today") {
-          const dateVal = item.end_date || item.due_date || item.start_date;
-          if (!dateVal) return false;
-          const d = new Date(dateVal);
-          const now = new Date();
-          const isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
-          const isCompleted = completedStatuses.includes(item.status);
-          return isToday && !isCompleted;
-        }
-        if (sf === "pending") {
-          return pendingStatuses.includes(item.status);
-        }
-        if (sf === "in_progress") {
-          return inProgressStatuses.includes(item.status);
-        }
-        if (sf === "submitted") {
-          return submittedStatuses.includes(item.status);
-        }
-        if (sf === "completed" || sf === "approved") {
-          return completedStatuses.includes(item.status);
-        }
-        if (sf === "paused") {
-          return pausedStatuses.includes(item.status);
-        }
-        if (sf === "declined" || sf === "rejected") {
-          return declinedStatuses.includes(item.status);
-        }
-        if (sf === "abandoned") {
-          return abandonedStatuses.includes(item.status);
-        }
-        if (sf === "transferred") {
-          return item.delegation_chain && item.delegation_chain.length > 0;
-        }
-        return (item.status || "").toLowerCase() === sf;
       });
     }
 
@@ -599,7 +523,117 @@ function Tasks() {
     }
 
     return list;
-  }, [searchFilteredItems, statusFilter, advancedFilters.priority, advancedFilters.priorities, advancedFilters.statuses, advancedFilters.status, advancedFilters.updated_since, advancedFilters.updated_since_value, advancedFilters.updated_since_unit, completedStatuses, pendingStatuses, inProgressStatuses, submittedStatuses, pausedStatuses, declinedStatuses, abandonedStatuses]);
+  }, [baseItems, advancedFilters.priority, advancedFilters.priorities, advancedFilters.updated_since, advancedFilters.updated_since_value, advancedFilters.updated_since_unit]);
+
+  // Single-pass status counts
+  const clientCounts = useMemo(() => {
+    const counts = {
+      all: 0,
+      dueToday: 0,
+      due_today: 0,
+      pending: 0,
+      inProgress: 0,
+      in_progress: 0,
+      paused: 0,
+      submitted: 0,
+      completed: 0,
+      approved: 0,
+      declined: 0,
+      rejected: 0,
+      abandoned: 0,
+      reopened: 0,
+      transferred: 0,
+    };
+    const now = new Date();
+    const todayY = now.getFullYear();
+    const todayM = now.getMonth();
+    const todayD = now.getDate();
+
+    for (let idx = 0; idx < preStatusFilteredItems.length; idx++) {
+      const item = preStatusFilteredItems[idx];
+      if (!item) continue;
+      counts.all++;
+
+      const st = getItemStatus(item);
+
+      if (matchStatusFilter(st, ["pending"])) counts.pending++;
+      if (matchStatusFilter(st, ["in_progress"])) {
+        counts.inProgress++;
+        counts.in_progress++;
+      }
+      if (matchStatusFilter(st, ["paused"])) counts.paused++;
+      if (matchStatusFilter(st, ["submitted"])) counts.submitted++;
+      if (matchStatusFilter(st, ["completed"])) {
+        counts.completed++;
+        counts.approved++;
+      }
+      if (matchStatusFilter(st, ["declined"])) {
+        counts.declined++;
+        counts.rejected++;
+      }
+      if (matchStatusFilter(st, ["abandoned"])) counts.abandoned++;
+      if (matchStatusFilter(st, ["reopened"]) || item.is_reopened || item.reopened_at) counts.reopened++;
+      if (item.delegation_chain && item.delegation_chain.length > 0) counts.transferred++;
+
+      const dateVal = item.end_date || item.due_date || item.start_date;
+      if (dateVal) {
+        const d = new Date(dateVal);
+        if (d.getFullYear() === todayY && d.getMonth() === todayM && d.getDate() === todayD) {
+          if (!matchStatusFilter(st, ["completed", "abandoned"])) {
+            counts.dueToday++;
+            counts.due_today++;
+          }
+        }
+      }
+    }
+    return counts;
+  }, [preStatusFilteredItems, getItemStatus]);
+
+  const allCount = apiCounts?.all ?? clientCounts.all;
+  const pendingCount = apiCounts?.pending ?? clientCounts.pending;
+  const inProgressCount = (apiCounts?.in_progress ?? apiCounts?.inProgress) ?? clientCounts.inProgress;
+  const pausedCount = apiCounts?.paused ?? clientCounts.paused;
+  const submittedCount = apiCounts?.submitted ?? clientCounts.submitted;
+  const completedCount = (apiCounts?.completed ?? apiCounts?.approved) ?? clientCounts.completed;
+  const approvedCount = completedCount;
+  const declinedCount = (apiCounts?.declined ?? apiCounts?.rejected) ?? clientCounts.declined;
+  const rejectedCount = declinedCount;
+  const abandonedCount = apiCounts?.abandoned ?? clientCounts.abandoned;
+  const reopenedCount = apiCounts?.reopened ?? clientCounts.reopened;
+  const dueTodayCount = (apiCounts?.due_today ?? apiCounts?.dueToday) ?? clientCounts.dueToday;
+  const transferredCount = apiCounts?.transferred ?? clientCounts.transferred;
+
+  const filteredItems = useMemo(() => {
+    let list = preStatusFilteredItems;
+
+    const selectedStatuses = Array.isArray(advancedFilters.statuses) && advancedFilters.statuses.length > 0
+      ? advancedFilters.statuses
+      : (Array.isArray(advancedFilters.status) && advancedFilters.status.length > 0 ? advancedFilters.status : []);
+
+    // If top status badge is actively selected, it takes precedence and overrides dropdown checkboxes
+    if (statusFilter && statusFilter !== "") {
+      const sf = String(statusFilter).toLowerCase();
+      if (sf === "due_today") {
+        list = list.filter((item) => {
+          const dateVal = item.end_date || item.due_date || item.start_date;
+          if (!dateVal) return false;
+          const d = new Date(dateVal);
+          const now = new Date();
+          const isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+          const isCompletedOrAbandoned = matchStatusFilter(getItemStatus(item), ["completed", "abandoned"]);
+          return isToday && !isCompletedOrAbandoned;
+        });
+      } else if (sf === "transferred") {
+        list = list.filter((item) => item?.delegation_chain && item.delegation_chain.length > 0);
+      } else {
+        list = list.filter((item) => matchStatusFilter(getItemStatus(item), [sf]));
+      }
+    } else if (selectedStatuses.length > 0) {
+      list = list.filter((item) => matchStatusFilter(getItemStatus(item), selectedStatuses));
+    }
+
+    return list;
+  }, [preStatusFilteredItems, statusFilter, advancedFilters.statuses, advancedFilters.status, getItemStatus]);
 
   const taskIdList = useMemo(() => filteredItems.map((i) => i.id), [filteredItems]);
 
@@ -623,6 +657,8 @@ function Tasks() {
           : i
       )
     );
+    setApiCounts((prev) => mutateStatusCounts(prev, item?.status, "submitted"));
+    fetchTasks();
     publish(isDeliverable ? 'deliverable:updated' : 'task:updated', { id: targetId, ...(updated || {}) });
     publish('data:changed', { type: isDeliverable ? 'deliverable' : 'task', action: 'updated' });
     setSubmitTaskModal({ open: false, task: null });
@@ -652,6 +688,7 @@ function Tasks() {
             i.id === taskId ? { ...i, status: "approved", ...updatedObj } : i
           )
         );
+        setApiCounts((prev) => mutateStatusCounts(prev, item?.status, "completed"));
         fetchTasks();
         publish(isDeliverable ? 'deliverable:updated' : 'task:updated', { id: taskId, status: 'approved', ...updatedObj });
         publish('data:changed', { type: isDeliverable ? 'deliverable' : 'task', action: 'updated' });
@@ -690,6 +727,7 @@ function Tasks() {
             i.id === taskId ? { ...i, status: "declined", ...updatedObj } : i
           )
         );
+        setApiCounts((prev) => mutateStatusCounts(prev, item?.status, "declined"));
         fetchTasks();
         publish(isDeliverable ? 'deliverable:updated' : 'task:updated', { id: taskId, status: 'declined', ...updatedObj });
         publish('data:changed', { type: isDeliverable ? 'deliverable' : 'task', action: 'updated' });
@@ -739,6 +777,7 @@ function Tasks() {
             i.id === taskId ? { ...i, status: "abandoned", ...updatedObj } : i
           )
         );
+        setApiCounts((prev) => mutateStatusCounts(prev, item?.status, "abandoned"));
         fetchTasks();
         publish(isDeliverable ? 'deliverable:updated' : 'task:updated', { id: taskId, status: 'abandoned', ...updatedObj });
         publish('data:changed', { type: isDeliverable ? 'deliverable' : 'task', action: 'updated' });
@@ -761,11 +800,12 @@ function Tasks() {
     const isDeliverable = isDeliverableItem(item);
     setItems((prev) =>
       prev.map((i) =>
-        i.id === taskId ? { ...i, status: "pending", ...(updatedTask || {}) } : i
+        i.id === taskId ? { ...i, status: "reopened", ...(updatedTask || {}) } : i
       )
     );
+    setApiCounts((prev) => mutateStatusCounts(prev, item?.status, "reopened"));
     fetchTasks();
-    publish(isDeliverable ? 'deliverable:updated' : 'task:updated', { id: taskId, status: 'pending', ...(updatedTask || {}) });
+    publish(isDeliverable ? 'deliverable:updated' : 'task:updated', { id: taskId, status: 'reopened', ...(updatedTask || {}) });
     publish('data:changed', { type: isDeliverable ? 'deliverable' : 'task', action: 'updated' });
     showSuccessMessage(isDeliverable ? t("Subtask", { defaultValue: "Subtask" }) : t("Task", { defaultValue: "Task" }), t("reopened", { defaultValue: "reopened" }));
     setReopenTask(null);
@@ -781,6 +821,7 @@ function Tasks() {
         i.id === taskId ? { ...i, status: "completed", ...(updatedTask || {}) } : i
       )
     );
+    setApiCounts((prev) => mutateStatusCounts(prev, item?.status, "completed"));
     fetchTasks();
     publish(isDeliverable ? 'deliverable:updated' : 'task:updated', { id: taskId, status: 'completed', ...(updatedTask || {}) });
     publish('data:changed', { type: isDeliverable ? 'deliverable' : 'task', action: 'updated' });
@@ -813,6 +854,7 @@ function Tasks() {
             i.id === actualTaskId ? { ...i, status: "in_progress", ...updatedObj } : i
           )
         );
+        setApiCounts((prev) => mutateStatusCounts(prev, item?.status, "in_progress"));
         fetchTasks();
         if (isDeliverable) {
           publish('deliverable:updated', { id: actualTaskId, status: 'in_progress', ...updatedObj });
@@ -861,6 +903,7 @@ function Tasks() {
             i.id === taskId ? { ...i, status: "in_progress", timer_state: "running", timer: { ...(i.timer || {}), state: "running" }, ...updatedObj } : i
           )
         );
+        setApiCounts((prev) => mutateStatusCounts(prev, item?.status, "in_progress"));
         fetchTasks();
         publish(isDeliverable ? 'deliverable:updated' : 'task:updated', { id: taskId, status: 'in_progress', ...updatedObj });
         publish('data:changed', { type: isDeliverable ? 'deliverable' : 'task', action: 'updated' });
@@ -899,6 +942,7 @@ function Tasks() {
             i.id === actualTaskId ? { ...i, status: "in_progress", assigner_paused: false, ...updatedObj } : i
           )
         );
+        setApiCounts((prev) => mutateStatusCounts(prev, item?.status || "paused", "in_progress"));
         fetchTasks();
         publish(isDeliverable ? 'deliverable:updated' : 'task:updated', { id: actualTaskId, status: 'in_progress', ...updatedObj });
         publish('data:changed', { type: isDeliverable ? 'deliverable' : 'task', action: 'updated' });
@@ -934,6 +978,7 @@ function Tasks() {
             i.id === taskId ? { ...i, status: "paused", ...updatedObj } : i
           )
         );
+        setApiCounts((prev) => mutateStatusCounts(prev, item?.status || "pending", "paused"));
         fetchTasks();
         publish(isDeliverable ? 'deliverable:updated' : 'task:updated', { id: taskId, status: 'paused', ...updatedObj });
         publish('data:changed', { type: isDeliverable ? 'deliverable' : 'task', action: 'updated' });
@@ -974,6 +1019,7 @@ function Tasks() {
       if (res.ok) {
         setItems((prev) => prev.filter((i) => String(i.id) !== String(taskId)));
         setOrderedItems((prev) => prev.filter((i) => String(i.id) !== String(taskId)));
+        setApiCounts((prev) => decrementStatusCount(prev, item?.status));
         fetchTasks();
         publish(isDeliverable ? 'deliverable:deleted' : 'task:deleted', { id: taskId });
         publish('data:changed', { type: isDeliverable ? 'deliverable' : 'task', action: 'deleted' });
@@ -1101,6 +1147,14 @@ function Tasks() {
               if (key === "statuses" || key === "status") {
                 updated.statuses = val;
                 updated.status = val;
+                if (Array.isArray(val) && val.length > 0) {
+                  setStatusFilter("");
+                }
+              }
+              if (key === "created_by" || key === "creator_ids" || key === "assigned_by") {
+                updated.created_by = val;
+                updated.creator_ids = val;
+                updated.assigned_by = val;
               }
               return updated;
             });
@@ -1114,6 +1168,7 @@ function Tasks() {
               next.delete("status");
               return next;
             });
+            const appliedCreator = (appliedFilters?.created_by || appliedFilters?.creator_ids || appliedFilters?.assigned_by || []).map(Number).filter(Boolean);
             setAdvancedFilters((prev) => ({
               ...prev,
               statuses: appliedFilters?.statuses || appliedFilters?.status || [],
@@ -1122,7 +1177,9 @@ function Tasks() {
               priority: appliedFilters?.priority || appliedFilters?.priorities || [],
               user_id: appliedFilters?.user_id || appliedFilters?.assigned_to || [],
               project_id: appliedFilters?.project_id || [],
-              created_by: appliedFilters?.created_by || [],
+              created_by: appliedCreator,
+              creator_ids: appliedCreator,
+              assigned_by: appliedCreator,
               follower_id: appliedFilters?.follower_id || [],
               start_date: appliedFilters?.start_date || "",
               end_date: appliedFilters?.end_date || "",

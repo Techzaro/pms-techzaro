@@ -68,7 +68,7 @@ export const STATUS_LABELS = {
   paused: "Paused",
   submitted: "Submitted",
   submitted_late: "Submitted",
-  reopened: "Pending",
+  reopened: "Reopened",
   approved: "Completed",
   completed: "Completed",
   rejected: "Declined",
@@ -102,7 +102,7 @@ export function getEffectiveStatus(item) {
   if (["rejected", "failed"].includes(st)) return "declined";
   if (["abandon_requested", "cancelled", "canceled"].includes(st)) return "abandoned";
   if (["planned", "planning", "draft", "todo", "to_do", "new", "not_started", "not started", "unassigned"].includes(st)) return "pending";
-  if (st === "reopened") return "pending";
+  if (st === "reopened") return "reopened";
   return st || "pending";
 }
 

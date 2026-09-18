@@ -4710,11 +4710,14 @@ class DeliverableController extends Controller
         $today = Carbon::today()->toDateString();
         $countQuery = (clone $query)->setEagerLoads([])->reorder();
 
-        // Status grouped counts
+        // Status grouped counts (accounting for assigner_paused)
         $statusCounts = (clone $countQuery)
-            ->select('deliverables.status', DB::raw('count(*) as aggregate'))
-            ->groupBy('deliverables.status')
-            ->pluck('aggregate', 'deliverables.status')
+            ->select(
+                DB::raw("(CASE WHEN deliverables.assigner_paused = 1 THEN 'paused' ELSE deliverables.status END) as effective_status"),
+                DB::raw('count(*) as aggregate')
+            )
+            ->groupBy(DB::raw("(CASE WHEN deliverables.assigner_paused = 1 THEN 'paused' ELSE deliverables.status END)"))
+            ->pluck('aggregate', 'effective_status')
             ->toArray();
 
         // Due today count: due_date = today and status not in approved/completed/done/abandoned
@@ -4763,7 +4766,7 @@ class DeliverableController extends Controller
         ];
 
         $statusGroups = [
-            'pending' => ['pending', 'planned', 'planning', 'draft', 'todo', 'to_do', 'to-do', 'new', 'not_started', 'not started', 'not-started', 'unassigned', 'reopened', ''],
+            'pending' => ['pending', 'planned', 'planning', 'draft', 'todo', 'to_do', 'to-do', 'new', 'not_started', 'not started', 'not-started', 'unassigned', ''],
             'in_progress' => ['in_progress', 'in progress', 'in-progress', 'doing', 'working', 'underway', 'under_way', 'acknowledged', 'started'],
             'paused' => ['paused', 'pause', 'hold', 'on_hold', 'on hold', 'on-hold'],
             'submitted' => ['submitted', 'review', 'in_review', 'under_review', 'submitted_late', 'awaiting_approval', 'awaiting_checkpoint'],
@@ -4792,8 +4795,9 @@ class DeliverableController extends Controller
                 $counts['rejected'] += $cnt;
             } elseif (in_array($st, $statusGroups['abandoned'], true)) {
                 $counts['abandoned'] += $cnt;
-            } else {
-                // Sums ALL pending variants, reopened, todo, draft, not_started, unassigned, and null/empty
+            } elseif ($st === 'reopened') {
+                // Reopened is an independent metric and strictly bypasses pending
+            } elseif (in_array($st, $statusGroups['pending'], true) || $st === '' || $st === null) {
                 $counts['pending'] += $cnt;
             }
         }

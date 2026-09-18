@@ -7064,7 +7064,7 @@ $routing = $this->delegationService->routingPayload($task, $user);
         }
 
         // Creator Filter for Deliverables
-        $creatorIds = $request->input('created_by', $request->input('creator_id', $request->input('assigned_by', [])));
+        $creatorIds = $request->input('created_by', $request->input('creator_ids', $request->input('creator_id', $request->input('assigned_by', $request->input('assigner_id', $request->input('assigner_ids', []))))));
         if (is_string($creatorIds) && str_contains($creatorIds, ',')) {
             $creatorIds = explode(',', $creatorIds);
         }
@@ -7074,7 +7074,11 @@ $routing = $this->delegationService->routingPayload($task, $user);
         if (! empty($creatorIds) && is_array($creatorIds)) {
             $creatorIds = array_values(array_filter(array_map('intval', $creatorIds)));
             if (! empty($creatorIds)) {
-                $query->whereIn('deliverables.created_by', $creatorIds);
+                $query->where(function ($dq) use ($creatorIds) {
+                    $dq->whereIn('deliverables.created_by', $creatorIds)
+                       ->orWhereIn('deliverables.creator_id', $creatorIds)
+                       ->orWhereHas('task', fn ($tq) => $tq->whereIn('tasks.assigned_by', $creatorIds));
+                });
             }
         }
 
@@ -7154,6 +7158,7 @@ $routing = $this->delegationService->routingPayload($task, $user);
             $hasTransferred = false;
             $hasReopened = false;
             $includesPending = false;
+            $includesPaused = false;
 
             $statusGroups = [
                 'pending' => [
@@ -7209,6 +7214,7 @@ $routing = $this->delegationService->routingPayload($task, $user);
                 } elseif (in_array($stLower, ['approved', 'completed', 'done', 'finished', 'closed'], true)) {
                     $expandedStatuses = array_merge($expandedStatuses, $statusGroups['completed']);
                 } elseif (in_array($stLower, ['paused', 'pause', 'hold', 'on_hold', 'on hold', 'on-hold'], true)) {
+                    $includesPaused = true;
                     $expandedStatuses = array_merge($expandedStatuses, $statusGroups['paused']);
                 } elseif (in_array($stLower, ['declined', 'rejected', 'failed', 'rework_required'], true)) {
                     $expandedStatuses = array_merge($expandedStatuses, $statusGroups['declined']);
@@ -7221,18 +7227,43 @@ $routing = $this->delegationService->routingPayload($task, $user);
 
             $expandedStatuses = array_values(array_unique($expandedStatuses));
             if (! empty($expandedStatuses) || $hasDueToday || $hasTransferred || $hasReopened) {
-                $query->where(function ($sq) use ($expandedStatuses, $hasDueToday, $hasTransferred, $hasReopened, $includesPending) {
+                $query->where(function ($sq) use ($expandedStatuses, $hasDueToday, $hasTransferred, $hasReopened, $includesPending, $includesPaused) {
                     $hasCondition = false;
                     if (! empty($expandedStatuses)) {
-                        if ($includesPending) {
-                            $sq->where(function ($pq) use ($expandedStatuses) {
-                                $pq->whereIn('deliverables.status', $expandedStatuses)
-                                   ->orWhereNull('deliverables.status')
-                                   ->orWhere('deliverables.status', '');
-                            });
-                        } else {
-                            $sq->whereIn('deliverables.status', $expandedStatuses);
-                        }
+                        $sq->where(function ($stq) use ($expandedStatuses, $includesPending, $includesPaused) {
+                            if ($includesPaused) {
+                                $stq->where('deliverables.assigner_paused', 1)
+                                    ->orWhere(function ($subq) use ($expandedStatuses, $includesPending) {
+                                        $subq->where(function ($notPaused) {
+                                            $notPaused->where('deliverables.assigner_paused', 0)
+                                                      ->orWhereNull('deliverables.assigner_paused');
+                                        });
+                                        if ($includesPending) {
+                                            $subq->where(function ($pq) use ($expandedStatuses) {
+                                                $pq->whereIn('deliverables.status', $expandedStatuses)
+                                                   ->orWhereNull('deliverables.status')
+                                                   ->orWhere('deliverables.status', '');
+                                            });
+                                        } else {
+                                            $subq->whereIn('deliverables.status', $expandedStatuses);
+                                        }
+                                    });
+                            } else {
+                                $stq->where(function ($notPaused) {
+                                    $notPaused->where('deliverables.assigner_paused', 0)
+                                              ->orWhereNull('deliverables.assigner_paused');
+                                });
+                                if ($includesPending) {
+                                    $stq->where(function ($pq) use ($expandedStatuses) {
+                                        $pq->whereIn('deliverables.status', $expandedStatuses)
+                                           ->orWhereNull('deliverables.status')
+                                           ->orWhere('deliverables.status', '');
+                                    });
+                                } else {
+                                    $stq->whereIn('deliverables.status', $expandedStatuses);
+                                }
+                            }
+                        });
                         $hasCondition = true;
                     }
                     if ($hasDueToday) {
@@ -7304,6 +7335,7 @@ $routing = $this->delegationService->routingPayload($task, $user);
             $hasTransferred = false;
             $hasReopened = false;
             $includesPending = false;
+            $includesPaused = false;
 
             $statusGroups = [
                 'pending' => [
@@ -7359,6 +7391,7 @@ $routing = $this->delegationService->routingPayload($task, $user);
                 } elseif (in_array($stLower, ['approved', 'completed', 'done', 'finished', 'closed'], true)) {
                     $expandedStatuses = array_merge($expandedStatuses, $statusGroups['completed']);
                 } elseif (in_array($stLower, ['paused', 'pause', 'hold', 'on_hold', 'on hold', 'on-hold'], true)) {
+                    $includesPaused = true;
                     $expandedStatuses = array_merge($expandedStatuses, $statusGroups['paused']);
                 } elseif (in_array($stLower, ['declined', 'rejected', 'failed', 'rework_required'], true)) {
                     $expandedStatuses = array_merge($expandedStatuses, $statusGroups['declined']);
@@ -7371,18 +7404,43 @@ $routing = $this->delegationService->routingPayload($task, $user);
 
             $expandedStatuses = array_values(array_unique($expandedStatuses));
             if (! empty($expandedStatuses) || $hasDueToday || $hasTransferred || $hasReopened) {
-                $query->where(function ($sq) use ($expandedStatuses, $hasDueToday, $hasTransferred, $hasReopened, $includesPending) {
+                $query->where(function ($sq) use ($expandedStatuses, $hasDueToday, $hasTransferred, $hasReopened, $includesPending, $includesPaused) {
                     $hasCondition = false;
                     if (! empty($expandedStatuses)) {
-                        if ($includesPending) {
-                            $sq->where(function ($pq) use ($expandedStatuses) {
-                                $pq->whereIn('tasks.status', $expandedStatuses)
-                                   ->orWhereNull('tasks.status')
-                                   ->orWhere('tasks.status', '');
-                            });
-                        } else {
-                            $sq->whereIn('tasks.status', $expandedStatuses);
-                        }
+                        $sq->where(function ($stq) use ($expandedStatuses, $includesPending, $includesPaused) {
+                            if ($includesPaused) {
+                                $stq->where('tasks.assigner_paused', 1)
+                                    ->orWhere(function ($subq) use ($expandedStatuses, $includesPending) {
+                                        $subq->where(function ($notPaused) {
+                                            $notPaused->where('tasks.assigner_paused', 0)
+                                                      ->orWhereNull('tasks.assigner_paused');
+                                        });
+                                        if ($includesPending) {
+                                            $subq->where(function ($pq) use ($expandedStatuses) {
+                                                $pq->whereIn('tasks.status', $expandedStatuses)
+                                                   ->orWhereNull('tasks.status')
+                                                   ->orWhere('tasks.status', '');
+                                            });
+                                        } else {
+                                            $subq->whereIn('tasks.status', $expandedStatuses);
+                                        }
+                                    });
+                            } else {
+                                $stq->where(function ($notPaused) {
+                                    $notPaused->where('tasks.assigner_paused', 0)
+                                              ->orWhereNull('tasks.assigner_paused');
+                                });
+                                if ($includesPending) {
+                                    $stq->where(function ($pq) use ($expandedStatuses) {
+                                        $pq->whereIn('tasks.status', $expandedStatuses)
+                                           ->orWhereNull('tasks.status')
+                                           ->orWhere('tasks.status', '');
+                                    });
+                                } else {
+                                    $stq->whereIn('tasks.status', $expandedStatuses);
+                                }
+                            }
+                        });
                         $hasCondition = true;
                     }
                     if ($hasDueToday) {
@@ -7661,7 +7719,7 @@ $routing = $this->delegationService->routingPayload($task, $user);
         }
 
         // Creator / Assigner Filter
-        $creatorIds = $request->input('created_by', $request->input('creator_id', $request->input('assigned_by', [])));
+        $creatorIds = $request->input('created_by', $request->input('creator_ids', $request->input('creator_id', $request->input('assigned_by', $request->input('assigner_id', $request->input('assigner_ids', []))))));
         if (is_string($creatorIds) && str_contains($creatorIds, ',')) {
             $creatorIds = explode(',', $creatorIds);
         }
@@ -7673,7 +7731,8 @@ $routing = $this->delegationService->routingPayload($task, $user);
             if (! empty($creatorIds)) {
                 $query->where(function ($q) use ($creatorIds) {
                     $q->whereIn('tasks.assigned_by', $creatorIds)
-                      ->orWhereIn('tasks.created_by', $creatorIds);
+                      ->orWhereIn('tasks.creator_id', $creatorIds)
+                      ->orWhereIn('tasks.original_assigner', $creatorIds);
                 });
             }
         }
@@ -9136,11 +9195,14 @@ $routing = $this->delegationService->routingPayload($task, $user);
         $today = Carbon::today()->toDateString();
         $taskCountQuery = (clone $tasksQuery)->setEagerLoads([])->reorder();
 
-        // 1. Task SQL status counts
+        // 1. Task SQL status counts (accounting for assigner_paused)
         $taskStatusCounts = (clone $taskCountQuery)
-            ->select('tasks.status', DB::raw('count(*) as aggregate'))
-            ->groupBy('tasks.status')
-            ->pluck('aggregate', 'tasks.status')
+            ->select(
+                DB::raw("(CASE WHEN tasks.assigner_paused = 1 THEN 'paused' ELSE tasks.status END) as effective_status"),
+                DB::raw('count(*) as aggregate')
+            )
+            ->groupBy(DB::raw("(CASE WHEN tasks.assigner_paused = 1 THEN 'paused' ELSE tasks.status END)"))
+            ->pluck('aggregate', 'effective_status')
             ->toArray();
 
         // Task Due Today count: end_date = today and status not in terminal/abandoned
@@ -9170,7 +9232,7 @@ $routing = $this->delegationService->routingPayload($task, $user);
             })
             ->count();
 
-        // 2. Deliverable SQL counts (if $delivQuery provided)
+        // 2. Deliverable SQL counts (if $delivQuery provided, accounting for assigner_paused)
         $delivStatusCounts = [];
         $delivDueTodayCount = 0;
         $delivReopenedCount = 0;
@@ -9180,9 +9242,12 @@ $routing = $this->delegationService->routingPayload($task, $user);
             $delivCountQuery = (clone $delivQuery)->setEagerLoads([])->reorder();
 
             $delivStatusCounts = (clone $delivCountQuery)
-                ->select('deliverables.status', DB::raw('count(*) as aggregate'))
-                ->groupBy('deliverables.status')
-                ->pluck('aggregate', 'deliverables.status')
+                ->select(
+                    DB::raw("(CASE WHEN deliverables.assigner_paused = 1 THEN 'paused' ELSE deliverables.status END) as effective_status"),
+                    DB::raw('count(*) as aggregate')
+                )
+                ->groupBy(DB::raw("(CASE WHEN deliverables.assigner_paused = 1 THEN 'paused' ELSE deliverables.status END)"))
+                ->pluck('aggregate', 'effective_status')
                 ->toArray();
 
             $delivDueTodayCount = (clone $delivCountQuery)
@@ -9229,7 +9294,7 @@ $routing = $this->delegationService->routingPayload($task, $user);
         ];
 
         $statusGroups = [
-            'pending' => ['pending', 'planned', 'planning', 'draft', 'todo', 'to_do', 'to-do', 'new', 'not_started', 'not started', 'not-started', 'unassigned', 'reopened', ''],
+            'pending' => ['pending', 'planned', 'planning', 'draft', 'todo', 'to_do', 'to-do', 'new', 'not_started', 'not started', 'not-started', 'unassigned', ''],
             'in_progress' => ['in_progress', 'in progress', 'in-progress', 'doing', 'working', 'underway', 'under_way', 'acknowledged', 'started'],
             'paused' => ['paused', 'pause', 'hold', 'on_hold', 'on hold', 'on-hold'],
             'submitted' => ['submitted', 'review', 'in_review', 'under_review', 'submitted_late', 'awaiting_approval', 'awaiting_checkpoint'],
@@ -9259,8 +9324,9 @@ $routing = $this->delegationService->routingPayload($task, $user);
                 $counts['rejected'] += $cnt;
             } elseif (in_array($st, $statusGroups['abandoned'], true)) {
                 $counts['abandoned'] += $cnt;
-            } else {
-                // Sums ALL pending variants, reopened, todo, draft, not_started, unassigned, and null/empty
+            } elseif ($st === 'reopened') {
+                // Reopened is an independent metric and strictly bypasses pending
+            } elseif (in_array($st, $statusGroups['pending'], true) || $st === '' || $st === null) {
                 $counts['pending'] += $cnt;
             }
         }
@@ -9286,7 +9352,9 @@ $routing = $this->delegationService->routingPayload($task, $user);
                 $counts['rejected'] += $cnt;
             } elseif (in_array($st, $statusGroups['abandoned'], true)) {
                 $counts['abandoned'] += $cnt;
-            } else {
+            } elseif ($st === 'reopened') {
+                // Reopened is an independent metric and strictly bypasses pending
+            } elseif (in_array($st, $statusGroups['pending'], true) || $st === '' || $st === null) {
                 $counts['pending'] += $cnt;
             }
         }
@@ -9295,8 +9363,9 @@ $routing = $this->delegationService->routingPayload($task, $user);
         if ($extraItems && (is_array($extraItems) || $extraItems instanceof \Illuminate\Support\Collection)) {
             foreach ($extraItems as $item) {
                 $counts['all']++;
+                $isAssignerPaused = is_array($item) ? (!empty($item['assigner_paused'])) : (!empty($item->assigner_paused));
                 $rawStatus = is_array($item) ? ($item['status'] ?? '') : ($item->status ?? '');
-                $statusLower = strtolower(trim((string) $rawStatus));
+                $statusLower = $isAssignerPaused ? 'paused' : strtolower(trim((string) $rawStatus));
 
                 $endDate = is_array($item) ? ($item['end_date'] ?? $item['due_date'] ?? null) : ($item->end_date ?? $item->due_date ?? null);
                 $isDueToday = false;
@@ -9328,7 +9397,9 @@ $routing = $this->delegationService->routingPayload($task, $user);
                     $counts['rejected']++;
                 } elseif ($isAbandoned) {
                     $counts['abandoned']++;
-                } else {
+                } elseif ($statusLower === 'reopened') {
+                    // Reopened strictly bypasses pending
+                } elseif (in_array($statusLower, $statusGroups['pending'], true) || $statusLower === '' || $statusLower === null) {
                     $counts['pending']++;
                 }
 
@@ -9389,8 +9460,9 @@ $routing = $this->delegationService->routingPayload($task, $user);
         ];
 
         return $sharedTasks->filter(function ($item) use ($normalizedStatuses, $todayStr, $statusGroups) {
+            $isAssignerPaused = is_array($item) ? (!empty($item['assigner_paused'])) : (!empty($item->assigner_paused));
             $rawStatus = is_array($item) ? ($item['status'] ?? '') : ($item->status ?? '');
-            $st = strtolower(trim((string) $rawStatus));
+            $st = $isAssignerPaused ? 'paused' : strtolower(trim((string) $rawStatus));
 
             foreach ($normalizedStatuses as $filterStatus) {
                 if ($filterStatus === 'all' || $filterStatus === '') {

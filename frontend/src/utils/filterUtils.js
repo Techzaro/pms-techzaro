@@ -168,4 +168,130 @@ export function matchStatusFilter(itemStatus, selectedStatuses) {
   });
 }
 
+/**
+ * Resolves a raw status string into its canonical top badge key:
+ * 'pending', 'in_progress', 'submitted', 'completed', 'paused', 'declined', 'abandoned', 'reopened'.
+ *
+ * @param {string} rawStatus
+ * @returns {string}
+ */
+export function getCanonicalStatusKey(rawStatus) {
+  const s = String(rawStatus || "").toLowerCase().trim();
+  if (s === "reopened") return "reopened";
+  if (!s || STATUS_MAP.pending.includes(s) || s === "null" || s === "undefined") return "pending";
+  if (STATUS_MAP.in_progress.includes(s)) return "in_progress";
+  if (STATUS_MAP.submitted.includes(s)) return "submitted";
+  if (STATUS_MAP.completed.includes(s)) return "completed";
+  if (STATUS_MAP.paused.includes(s)) return "paused";
+  if (STATUS_MAP.declined.includes(s)) return "declined";
+  if (STATUS_MAP.abandoned.includes(s)) return "abandoned";
+  return s;
+}
+
+/**
+ * Optimistically updates a status counts object when a task transitions from oldRawStatus to newRawStatus.
+ *
+ * @param {Object} prevCounts - The current counts object (e.g. apiCounts or counts state)
+ * @param {string} oldRawStatus - The previous status of the item
+ * @param {string} newRawStatus - The new status of the item
+ * @returns {Object} Updated counts object
+ */
+export function mutateStatusCounts(prevCounts, oldRawStatus, newRawStatus) {
+  if (!prevCounts || typeof prevCounts !== "object") return prevCounts;
+
+  const oldKey = getCanonicalStatusKey(oldRawStatus);
+  const newKey = getCanonicalStatusKey(newRawStatus);
+
+  if (oldKey === newKey) return prevCounts;
+
+  const next = { ...prevCounts };
+
+  // Decrement old status count (handling alias keys)
+  if (oldKey === "in_progress") {
+    if (typeof next.in_progress === "number") next.in_progress = Math.max(0, next.in_progress - 1);
+    if (typeof next.inProgress === "number") next.inProgress = Math.max(0, next.inProgress - 1);
+  } else if (oldKey === "completed") {
+    if (typeof next.completed === "number") next.completed = Math.max(0, next.completed - 1);
+    if (typeof next.approved === "number") next.approved = Math.max(0, next.approved - 1);
+  } else if (oldKey === "declined") {
+    if (typeof next.declined === "number") next.declined = Math.max(0, next.declined - 1);
+    if (typeof next.rejected === "number") next.rejected = Math.max(0, next.rejected - 1);
+  } else {
+    if (typeof next[oldKey] === "number") next[oldKey] = Math.max(0, next[oldKey] - 1);
+  }
+
+  // Increment new status count (handling alias keys)
+  if (newKey === "in_progress") {
+    next.in_progress = (typeof next.in_progress === "number" ? next.in_progress : 0) + 1;
+    next.inProgress = (typeof next.inProgress === "number" ? next.inProgress : 0) + 1;
+  } else if (newKey === "completed") {
+    next.completed = (typeof next.completed === "number" ? next.completed : 0) + 1;
+    next.approved = (typeof next.approved === "number" ? next.approved : 0) + 1;
+  } else if (newKey === "declined") {
+    next.declined = (typeof next.declined === "number" ? next.declined : 0) + 1;
+    next.rejected = (typeof next.rejected === "number" ? next.rejected : 0) + 1;
+  } else {
+    next[newKey] = (typeof next[newKey] === "number" ? next[newKey] : 0) + 1;
+  }
+
+  return next;
+}
+
+/**
+ * Optimistically decrements a status count when an item is deleted.
+ *
+ * @param {Object} prevCounts
+ * @param {string} rawStatus
+ * @returns {Object}
+ */
+export function decrementStatusCount(prevCounts, rawStatus) {
+  if (!prevCounts || typeof prevCounts !== "object") return prevCounts;
+  const key = getCanonicalStatusKey(rawStatus);
+  const next = { ...prevCounts };
+  if (typeof next.all === "number") next.all = Math.max(0, next.all - 1);
+
+  if (key === "in_progress") {
+    if (typeof next.in_progress === "number") next.in_progress = Math.max(0, next.in_progress - 1);
+    if (typeof next.inProgress === "number") next.inProgress = Math.max(0, next.inProgress - 1);
+  } else if (key === "completed") {
+    if (typeof next.completed === "number") next.completed = Math.max(0, next.completed - 1);
+    if (typeof next.approved === "number") next.approved = Math.max(0, next.approved - 1);
+  } else if (key === "declined") {
+    if (typeof next.declined === "number") next.declined = Math.max(0, next.declined - 1);
+    if (typeof next.rejected === "number") next.rejected = Math.max(0, next.rejected - 1);
+  } else {
+    if (typeof next[key] === "number") next[key] = Math.max(0, next[key] - 1);
+  }
+  return next;
+}
+
+/**
+ * Optimistically increments a status count when an item is created.
+ *
+ * @param {Object} prevCounts
+ * @param {string} rawStatus
+ * @returns {Object}
+ */
+export function incrementStatusCount(prevCounts, rawStatus = "pending") {
+  if (!prevCounts || typeof prevCounts !== "object") return prevCounts;
+  const key = getCanonicalStatusKey(rawStatus);
+  const next = { ...prevCounts };
+  if (typeof next.all === "number") next.all += 1;
+
+  if (key === "in_progress") {
+    next.in_progress = (typeof next.in_progress === "number" ? next.in_progress : 0) + 1;
+    next.inProgress = (typeof next.inProgress === "number" ? next.inProgress : 0) + 1;
+  } else if (key === "completed") {
+    next.completed = (typeof next.completed === "number" ? next.completed : 0) + 1;
+    next.approved = (typeof next.approved === "number" ? next.approved : 0) + 1;
+  } else if (key === "declined") {
+    next.declined = (typeof next.declined === "number" ? next.declined : 0) + 1;
+    next.rejected = (typeof next.rejected === "number" ? next.rejected : 0) + 1;
+  } else {
+    next[key] = (typeof next[key] === "number" ? next[key] : 0) + 1;
+  }
+  return next;
+}
+
+
 

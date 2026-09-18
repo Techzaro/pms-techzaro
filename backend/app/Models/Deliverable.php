@@ -210,6 +210,8 @@ class Deliverable extends Model
                 $hasDueToday = false;
                 $hasTransferred = false;
                 $hasReopened = false;
+                $includesPending = false;
+                $includesPaused = false;
                 foreach ($statuses as $st) {
                     $stLower = strtolower(trim((string) $st));
                     if ($stLower === 'due_today') {
@@ -219,6 +221,7 @@ class Deliverable extends Model
                     } elseif ($stLower === 'reopened') {
                         $hasReopened = true;
                     } elseif (in_array($stLower, ['pending', 'planned', 'planning', 'draft', 'todo', 'to_do', 'new', 'not_started', 'not started', 'unassigned'])) {
+                        $includesPending = true;
                         $expandedStatuses = array_merge($expandedStatuses, [
                             'pending', 'Pending', 'planned', 'Planning', 'Planned', 'draft', 'Draft',
                             'todo', 'Todo', 'to_do', 'To_Do', 'new', 'New', 'not_started', 'Not Started',
@@ -239,6 +242,7 @@ class Deliverable extends Model
                             'approved', 'Approved', 'completed', 'Completed', 'done', 'Done', 'finished', 'Finished'
                         ]);
                     } elseif (in_array($stLower, ['paused', 'pause', 'hold', 'on_hold', 'on hold', 'on-hold'])) {
+                        $includesPaused = true;
                         $expandedStatuses = array_merge($expandedStatuses, [
                             'paused', 'Paused', 'pause', 'Pause', 'hold', 'Hold', 'on_hold', 'On Hold', 'on-hold'
                         ]);
@@ -256,10 +260,43 @@ class Deliverable extends Model
                 }
                 $expandedStatuses = array_values(array_unique($expandedStatuses));
                 if (! empty($expandedStatuses) || $hasDueToday || $hasTransferred || $hasReopened) {
-                    $query->where(function ($sq) use ($expandedStatuses, $hasDueToday, $hasTransferred, $hasReopened) {
+                    $query->where(function ($sq) use ($expandedStatuses, $hasDueToday, $hasTransferred, $hasReopened, $includesPending, $includesPaused) {
                         $hasCondition = false;
                         if (! empty($expandedStatuses)) {
-                            $sq->whereIn('status', $expandedStatuses);
+                            $sq->where(function ($stq) use ($expandedStatuses, $includesPending, $includesPaused) {
+                                if ($includesPaused) {
+                                    $stq->where('deliverables.assigner_paused', 1)
+                                        ->orWhere(function ($subq) use ($expandedStatuses, $includesPending) {
+                                            $subq->where(function ($notPaused) {
+                                                $notPaused->where('deliverables.assigner_paused', 0)
+                                                          ->orWhereNull('deliverables.assigner_paused');
+                                            });
+                                            if ($includesPending) {
+                                                $subq->where(function ($pq) use ($expandedStatuses) {
+                                                    $pq->whereIn('deliverables.status', $expandedStatuses)
+                                                       ->orWhereNull('deliverables.status')
+                                                       ->orWhere('deliverables.status', '');
+                                                });
+                                            } else {
+                                                $subq->whereIn('deliverables.status', $expandedStatuses);
+                                            }
+                                        });
+                                } else {
+                                    $stq->where(function ($notPaused) {
+                                        $notPaused->where('deliverables.assigner_paused', 0)
+                                                  ->orWhereNull('deliverables.assigner_paused');
+                                    });
+                                    if ($includesPending) {
+                                        $stq->where(function ($pq) use ($expandedStatuses) {
+                                            $pq->whereIn('deliverables.status', $expandedStatuses)
+                                               ->orWhereNull('deliverables.status')
+                                               ->orWhere('deliverables.status', '');
+                                        });
+                                    } else {
+                                        $stq->whereIn('deliverables.status', $expandedStatuses);
+                                    }
+                                }
+                            });
                             $hasCondition = true;
                         }
                         if ($hasDueToday) {
@@ -333,8 +370,17 @@ class Deliverable extends Model
             $query->where('task_id', $filters['task_id']);
         }
 
-        if (!empty($filters['created_by'])) {
-            $query->where('created_by', $filters['created_by']);
+        $creatorIds = $filters['created_by'] ?? $filters['creator_ids'] ?? $filters['creator_id'] ?? $filters['assigned_by'] ?? $filters['assigner_id'] ?? $filters['assigner_ids'] ?? null;
+        if (! empty($creatorIds)) {
+            $cids = is_array($creatorIds) ? $creatorIds : explode(',', (string) $creatorIds);
+            $cids = array_values(array_filter(array_map('intval', $cids)));
+            if (! empty($cids)) {
+                $query->where(function ($dq) use ($cids) {
+                    $dq->whereIn('created_by', $cids)
+                       ->orWhereIn('creator_id', $cids)
+                       ->orWhereHas('task', fn ($tq) => $tq->whereIn('tasks.assigned_by', $cids));
+                });
+            }
         }
 
         if (!empty($filters['search'])) {

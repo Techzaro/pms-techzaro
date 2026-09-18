@@ -201,6 +201,18 @@ function DeliveriesByYou() {
     if (advancedFilters.project_id && advancedFilters.project_id.length > 0) {
       params.append("project_id", Array.isArray(advancedFilters.project_id) ? advancedFilters.project_id.join(",") : advancedFilters.project_id);
     }
+    const rawCreator = advancedFilters.created_by || advancedFilters.creator_ids || advancedFilters.assigned_by || [];
+    const creatorList = (Array.isArray(rawCreator) ? rawCreator : [rawCreator]).map(Number).filter(Boolean);
+    if (creatorList.length > 0) {
+      creatorList.forEach((cr) => {
+        params.append("created_by[]", cr);
+        params.append("creator_ids[]", cr);
+        params.append("assigned_by[]", cr);
+      });
+      params.append("created_by", creatorList.join(","));
+      params.append("creator_ids", creatorList.join(","));
+      params.append("assigned_by", creatorList.join(","));
+    }
     const statusVal = advancedFilters.statuses?.length ? advancedFilters.statuses : advancedFilters.status;
     if (statusVal && statusVal.length > 0) {
       const stArr = Array.isArray(statusVal) ? statusVal : [statusVal];
@@ -656,6 +668,16 @@ function DeliveriesByYou() {
         return pids.includes(pid);
       });
     }
+    const rawCreatorFilter = advancedFilters.created_by || advancedFilters.creator_ids || advancedFilters.assigned_by || [];
+    const creatorIds = (Array.isArray(rawCreatorFilter) ? rawCreatorFilter : [rawCreatorFilter]).map(Number).filter(Boolean);
+    if (creatorIds.length > 0) {
+      list = list.filter((item) => {
+        if (!item) return false;
+        const cid = Number(item.created_by || item.creator?.id || item.creator_id);
+        const taskAssigner = Number(item.task?.assigned_by || item.task?.creator_id);
+        return (cid && creatorIds.includes(cid)) || (taskAssigner && creatorIds.includes(taskAssigner));
+      });
+    }
     const selectedStatuses = Array.isArray(advancedFilters.statuses) && advancedFilters.statuses.length > 0
       ? advancedFilters.statuses
       : (Array.isArray(advancedFilters.status) && advancedFilters.status.length > 0 ? advancedFilters.status : []);
@@ -810,6 +832,12 @@ function DeliveriesByYou() {
                 updated.statuses = val;
                 updated.status = val;
               }
+              if (key === "created_by" || key === "creator_ids" || key === "assigned_by") {
+                const cleaned = (Array.isArray(val) ? val : [val]).map(Number).filter(Boolean);
+                updated.created_by = cleaned;
+                updated.creator_ids = cleaned;
+                updated.assigned_by = cleaned;
+              }
               return updated;
             });
             handlePageChange(1);
@@ -822,6 +850,7 @@ function DeliveriesByYou() {
               next.delete("status");
               return next;
             });
+            const appliedCreator = (appliedFilters?.created_by || appliedFilters?.creator_ids || appliedFilters?.assigned_by || []).map(Number).filter(Boolean);
             setAdvancedFilters((prev) => ({
               ...prev,
               statuses: appliedFilters?.statuses || appliedFilters?.status || [],
@@ -831,7 +860,9 @@ function DeliveriesByYou() {
               priority: appliedFilters?.priority || appliedFilters?.priorities || [],
               user_id: appliedFilters?.user_id || appliedFilters?.assigned_to || [],
               project_id: appliedFilters?.project_id || [],
-              created_by: appliedFilters?.created_by || [],
+              created_by: appliedCreator,
+              creator_ids: appliedCreator,
+              assigned_by: appliedCreator,
               follower_id: appliedFilters?.follower_id || [],
               start_date: appliedFilters?.start_date || "",
               end_date: appliedFilters?.end_date || "",

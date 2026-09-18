@@ -211,6 +211,8 @@ export default function TaskFilterBar({
     isNonEmpty(filters?.assigned_to) ||
     isNonEmpty(filters?.project_id) ||
     isNonEmpty(filters?.created_by) ||
+    isNonEmpty(filters?.creator_ids) ||
+    isNonEmpty(filters?.assigned_by) ||
     isNonEmpty(filters?.follower_id) ||
     filters?.start_date ||
     filters?.end_date ||
@@ -254,6 +256,11 @@ export default function TaskFilterBar({
       finalStatuses = [formattedStatus];
     }
 
+    const creatorIdsList = toArray(filters?.created_by || filters?.creator_ids || filters?.assigned_by || filters?.creator_id)
+      .map((v) => (typeof v === "object" ? v?.id || v?.value : v))
+      .filter((v) => v !== undefined && v !== null && v !== "")
+      .map(Number);
+
     return {
       statuses: finalStatuses,
       states: toArray(filters?.states),
@@ -261,7 +268,9 @@ export default function TaskFilterBar({
       priority: toArray(filters?.priority || filters?.priorities),
       user_id: toArray(filters?.user_id || filters?.assigned_to),
       project_id: toArray(filters?.project_id),
-      created_by: toArray(filters?.created_by),
+      created_by: creatorIdsList,
+      creator_ids: creatorIdsList,
+      assigned_by: creatorIdsList,
       follower_id: toArray(filters?.follower_id),
       start_date: filters?.start_date || "",
       end_date: filters?.end_date || "",
@@ -1003,8 +1012,20 @@ export default function TaskFilterBar({
             </label>
             <MultiSelectDropdown
               size="sm"
-              value={toArray(filters?.created_by || filters?.assigned_by)}
-              onChange={(val) => onFilterChange && onFilterChange("created_by", val)}
+              value={toArray(filters?.created_by || filters?.creator_ids || filters?.assigned_by || filters?.creator_id)
+                .map((v) => (typeof v === "object" ? v?.id || v?.value : v))
+                .filter((v) => v !== undefined && v !== null && v !== "")
+                .map(Number)}
+              onChange={(val) => {
+                if (onFilterChange) {
+                  const cleanedVal = Array.isArray(val)
+                    ? val.map((v) => (typeof v === "object" ? v?.id || v?.value : v)).filter((v) => v !== undefined && v !== null && v !== "").map(Number)
+                    : (val !== undefined && val !== null && val !== "" ? [Number(val)] : []);
+                  onFilterChange("created_by", cleanedVal);
+                  onFilterChange("creator_ids", cleanedVal);
+                  onFilterChange("assigned_by", cleanedVal);
+                }
+              }}
               options={userOptions}
               placeholder={t("All Creators", { defaultValue: "All Creators" })}
               searchPlaceholder={t("Search creators...", { defaultValue: "Search creators..." })}

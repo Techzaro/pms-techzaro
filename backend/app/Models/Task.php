@@ -251,6 +251,8 @@ class Task extends Model
             $hasDueToday = false;
             $hasTransferred = false;
             $hasReopened = false;
+            $includesPending = false;
+            $includesPaused = false;
 
             foreach ($rawStatuses as $st) {
                 $st = trim((string) $st);
@@ -263,6 +265,7 @@ class Task extends Model
                 } elseif ($stLower === 'reopened') {
                     $hasReopened = true;
                 } elseif (in_array($stLower, ['pending', 'planned', 'planning', 'draft', 'todo', 'to_do', 'new', 'not_started', 'not started', 'unassigned'])) {
+                    $includesPending = true;
                     $expandedStatuses = array_merge($expandedStatuses, [
                         'Pending', 'pending', 'planned', 'Planning', 'Planned', 'draft', 'Draft',
                         'todo', 'Todo', 'to_do', 'To_Do', 'new', 'New', 'not_started', 'Not Started',
@@ -283,6 +286,7 @@ class Task extends Model
                         'Approved', 'approved', 'completed', 'Completed', 'done', 'Done', 'finished', 'Finished'
                     ]);
                 } elseif (in_array($stLower, ['paused', 'pause', 'hold', 'on_hold', 'on hold', 'on-hold'])) {
+                    $includesPaused = true;
                     $expandedStatuses = array_merge($expandedStatuses, [
                         'Paused', 'paused', 'pause', 'Pause', 'hold', 'Hold', 'on_hold', 'On Hold', 'on-hold'
                     ]);
@@ -301,10 +305,43 @@ class Task extends Model
 
             $expandedStatuses = array_values(array_unique($expandedStatuses));
             if (! empty($expandedStatuses) || $hasDueToday || $hasTransferred || $hasReopened) {
-                $query->where(function ($sq) use ($expandedStatuses, $hasDueToday, $hasTransferred, $hasReopened) {
+                $query->where(function ($sq) use ($expandedStatuses, $hasDueToday, $hasTransferred, $hasReopened, $includesPending, $includesPaused) {
                     $hasCondition = false;
                     if (! empty($expandedStatuses)) {
-                        $sq->whereIn('tasks.status', $expandedStatuses);
+                        $sq->where(function ($stq) use ($expandedStatuses, $includesPending, $includesPaused) {
+                            if ($includesPaused) {
+                                $stq->where('tasks.assigner_paused', 1)
+                                    ->orWhere(function ($subq) use ($expandedStatuses, $includesPending) {
+                                        $subq->where(function ($notPaused) {
+                                            $notPaused->where('tasks.assigner_paused', 0)
+                                                      ->orWhereNull('tasks.assigner_paused');
+                                        });
+                                        if ($includesPending) {
+                                            $subq->where(function ($pq) use ($expandedStatuses) {
+                                                $pq->whereIn('tasks.status', $expandedStatuses)
+                                                   ->orWhereNull('tasks.status')
+                                                   ->orWhere('tasks.status', '');
+                                            });
+                                        } else {
+                                            $subq->whereIn('tasks.status', $expandedStatuses);
+                                        }
+                                    });
+                            } else {
+                                $stq->where(function ($notPaused) {
+                                    $notPaused->where('tasks.assigner_paused', 0)
+                                              ->orWhereNull('tasks.assigner_paused');
+                                });
+                                if ($includesPending) {
+                                    $stq->where(function ($pq) use ($expandedStatuses) {
+                                        $pq->whereIn('tasks.status', $expandedStatuses)
+                                           ->orWhereNull('tasks.status')
+                                           ->orWhere('tasks.status', '');
+                                    });
+                                } else {
+                                    $stq->whereIn('tasks.status', $expandedStatuses);
+                                }
+                            }
+                        });
                         $hasCondition = true;
                     }
                     if ($hasDueToday) {
@@ -467,6 +504,18 @@ class Task extends Model
             $projectIds = array_values(array_filter(array_map('intval', $projectIds)));
             if (! empty($projectIds)) {
                 $query->whereIn('tasks.project_id', $projectIds);
+            }
+        }
+        $creatorIds = $filters['created_by'] ?? $filters['creator_ids'] ?? $filters['creator_id'] ?? $filters['assigned_by'] ?? $filters['assigner_id'] ?? $filters['assigner_ids'] ?? null;
+        if (! empty($creatorIds)) {
+            $cids = is_array($creatorIds) ? $creatorIds : explode(',', (string) $creatorIds);
+            $cids = array_values(array_filter(array_map('intval', $cids)));
+            if (! empty($cids)) {
+                $query->where(function ($q) use ($cids) {
+                    $q->whereIn('tasks.assigned_by', $cids)
+                      ->orWhereIn('tasks.creator_id', $cids)
+                      ->orWhereIn('tasks.original_assigner', $cids);
+                });
             }
         }
         if (! empty($filters['search'])) {
