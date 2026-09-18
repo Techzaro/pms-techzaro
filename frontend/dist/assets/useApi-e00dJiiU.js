@@ -1,1 +1,0 @@
-import{jn as e,rt as t}from"./index-Cg7_ue4k.js";function n(n,r,i,a={}){return e({queryKey:Array.isArray(n)?n:[n,i],queryFn:()=>t.get(r,i),...a})}export{n as t};
