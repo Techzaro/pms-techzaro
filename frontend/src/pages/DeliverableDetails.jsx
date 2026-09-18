@@ -294,7 +294,7 @@ function SubtaskDetails() {
       } else if (res.status === 403) {
         setSubtask(null);
         if (!isDeletingRef.current) {
-          notify.error(t("You don't have permission to view this subtask.", { defaultValue: "You don't have permission to view this subtask." }));
+          notify.error(t("You don't have permission to view this subtask.", { defaultValue: "You don't have permission to view this subtask." }), { toastId: "deliverable-403-error" });
           setTimeout(() => navigate(rolePath("deliveries")), 1500);
         }
       } else {

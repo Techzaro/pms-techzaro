@@ -4369,10 +4369,10 @@ $routing = $this->delegationService->routingPayload($task, $user);
         }
 
         // Visibility of a reopened route does not grant mutation rights. Only the
-        // submitter the review was returned to may correct and resubmit it.
+        // submitter the review was returned to (or the current assignee) may correct and resubmit it.
         if ($task->submission_stage === 'declined') {
             $returnedSubmitterId = (int) ($task->current_submitter_id ?: $task->current_owner ?: 0);
-            if ((int) $user->id !== $returnedSubmitterId || ! $isCurrentOwner) {
+            if (! $isAssignee && ((int) $user->id !== $returnedSubmitterId || ! $isCurrentOwner)) {
                 return response()->json(['success' => false, 'message' => 'This reopened task is waiting for the returned submitter to resubmit it'], 403);
             }
         }

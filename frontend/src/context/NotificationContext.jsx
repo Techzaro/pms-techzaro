@@ -45,15 +45,39 @@ export function NotificationProvider({ children }) {
    * @returns {number} Notification ID
    */
   const addNotification = useCallback(
-    (message, type = "success", duration = 4500) => {
+    (message, type = "success", duration = 4500, options = {}) => {
+      const opts = typeof duration === "object" && duration !== null ? duration : (typeof options === "object" && options !== null ? options : {});
+      const actualDuration = typeof duration === "number" ? duration : (typeof opts.duration === "number" ? opts.duration : 4500);
+      const toastId = opts.toastId || null;
+
+      if (toastId) {
+        let isDuplicate = false;
+        setNotifications((prev) => {
+          if (prev.some((n) => n.toastId === toastId)) {
+            isDuplicate = true;
+            return prev;
+          }
+          const id = ++notifId;
+          const notification = { id, toastId, message, type, visible: true };
+          if (actualDuration > 0) {
+            timersRef.current[id] = setTimeout(() => {
+              removeNotification(id);
+            }, actualDuration);
+          }
+          return [...prev, notification];
+        });
+        if (isDuplicate) return null;
+        return notifId;
+      }
+
       const id = ++notifId;
       const notification = { id, message, type, visible: true };
       setNotifications((prev) => [...prev, notification]);
 
-      if (duration > 0) {
+      if (actualDuration > 0) {
         timersRef.current[id] = setTimeout(() => {
           removeNotification(id);
-        }, duration);
+        }, actualDuration);
       }
 
       return id;
@@ -61,10 +85,10 @@ export function NotificationProvider({ children }) {
     [removeNotification]
   );
 
-  const success = useCallback((message, duration) => addNotification(message, "success", duration), [addNotification]);
-  const error = useCallback((message, duration) => addNotification(message, "error", duration), [addNotification]);
-  const warning = useCallback((message, duration) => addNotification(message, "warning", duration), [addNotification]);
-  const info = useCallback((message, duration) => addNotification(message, "info", duration), [addNotification]);
+  const success = useCallback((message, duration, options) => addNotification(message, "success", duration, options), [addNotification]);
+  const error = useCallback((message, duration, options) => addNotification(message, "error", duration, options), [addNotification]);
+  const warning = useCallback((message, duration, options) => addNotification(message, "warning", duration, options), [addNotification]);
+  const info = useCallback((message, duration, options) => addNotification(message, "info", duration, options), [addNotification]);
 
   /** Clears all notifications and their timers */
   const clearAll = useCallback(() => {

@@ -40,27 +40,31 @@ export const notify = {
   /**
    * Shows a success notification.
    * @param {string} msg - Message to display
-   * @param {number} [dur] - Duration in milliseconds
+   * @param {number|Object} [dur] - Duration in milliseconds or options object
+   * @param {Object} [opts] - Options object
    */
-  success: (msg, dur) => notifyRef.success?.(translateMsg(msg), dur),
+  success: (msg, dur, opts) => notifyRef.success?.(translateMsg(msg), dur, opts),
   /**
    * Shows an error notification.
    * @param {string} msg - Message to display
-   * @param {number} [dur] - Duration in milliseconds
+   * @param {number|Object} [dur] - Duration in milliseconds or options object
+   * @param {Object} [opts] - Options object
    */
-  error: (msg, dur) => notifyRef.error?.(translateMsg(msg), dur),
+  error: (msg, dur, opts) => notifyRef.error?.(translateMsg(msg), dur, opts),
   /**
    * Shows a warning notification.
    * @param {string} msg - Message to display
-   * @param {number} [dur] - Duration in milliseconds
+   * @param {number|Object} [dur] - Duration in milliseconds or options object
+   * @param {Object} [opts] - Options object
    */
-  warning: (msg, dur) => notifyRef.warning?.(translateMsg(msg), dur),
+  warning: (msg, dur, opts) => notifyRef.warning?.(translateMsg(msg), dur, opts),
   /**
    * Shows an info notification.
    * @param {string} msg - Message to display
-   * @param {number} [dur] - Duration in milliseconds
+   * @param {number|Object} [dur] - Duration in milliseconds or options object
+   * @param {Object} [opts] - Options object
    */
-  info: (msg, dur) => notifyRef.info?.(translateMsg(msg), dur),
+  info: (msg, dur, opts) => notifyRef.info?.(translateMsg(msg), dur, opts),
 };
 
 export const toast = notify;

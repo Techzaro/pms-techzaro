@@ -550,7 +550,7 @@ function TaskDetails() {
       } else if (res.status === 403) {
         setTask(null);
         if (!isDeletingRef.current) {
-          notify.error(t("You don't have permission to view this task.", { defaultValue: "You don't have permission to view this task." }));
+          notify.error(t("You don't have permission to view this task.", { defaultValue: "You don't have permission to view this task." }), { toastId: "task-403-error" });
           setTimeout(() => navigate(rolePath("tasks")), 1500);
         }
       } else if (res.status === 410) {
