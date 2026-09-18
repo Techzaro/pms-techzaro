@@ -5,8 +5,10 @@ namespace App\Console\Commands;
 use App\Models\Master\Organization;
 use App\Services\Saas\SchemaReferenceService;
 use Illuminate\Console\Command;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class SyncTenantSchema extends Command
 {
@@ -123,6 +125,31 @@ class SyncTenantSchema extends Command
 
         try {
             $pdo = DB::connection($connectionName)->getPdo();
+            $tenantConnection = $connectionName;
+
+            if (Schema::connection($tenantConnection)->hasTable('knowledge_bases')) {
+                if (!Schema::connection($tenantConnection)->hasColumn('knowledge_bases', 'attachments')) {
+                    Schema::connection($tenantConnection)->table('knowledge_bases', function (Blueprint $table) use ($tenantConnection) {
+                        $table->json('attachments')->nullable();
+                        if (!Schema::connection($tenantConnection)->hasColumn('knowledge_bases', 'reference_links')) {
+                            $table->json('reference_links')->nullable();
+                        }
+                    });
+                    $this->info("  ✅ Fallback: Added `attachments` & `reference_links` to knowledge_bases");
+                }
+            }
+
+            if (Schema::connection($tenantConnection)->hasTable('kb_versions')) {
+                if (!Schema::connection($tenantConnection)->hasColumn('kb_versions', 'attachments')) {
+                    Schema::connection($tenantConnection)->table('kb_versions', function (Blueprint $table) use ($tenantConnection) {
+                        $table->json('attachments')->nullable();
+                        if (!Schema::connection($tenantConnection)->hasColumn('kb_versions', 'reference_links')) {
+                            $table->json('reference_links')->nullable();
+                        }
+                    });
+                    $this->info("  ✅ Fallback: Added `attachments` & `reference_links` to kb_versions");
+                }
+            }
 
             // Get current tenant schema
             $currentSchema = $this->captureTenantSchema($pdo, $dbName);

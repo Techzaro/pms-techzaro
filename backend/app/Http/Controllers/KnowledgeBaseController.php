@@ -120,7 +120,7 @@ class KnowledgeBaseController extends Controller
                     ->orWhere('visibility_level', 'like', '%'.$term.'%')
                     ->orWhere('status', 'like', '%'.$term.'%')
                     ->orWhere('department', 'like', '%'.$term.'%')
-                    ->orWhere('reference_link', 'like', '%'.$term.'%')
+                    ->orWhere('reference_links', 'like', '%'.$term.'%')
                     ->orWhereHas('categoryRelation', fn ($cq) => $cq->where('name', 'like', '%'.$term.'%'))
                     ->orWhereHas('creator', fn ($uq) => $uq->where('name', 'like', '%'.$term.'%')->orWhere('email', 'like', '%'.$term.'%'))
                     ->orWhere('tags', 'like', '%'.$term.'%');
@@ -459,7 +459,7 @@ class KnowledgeBaseController extends Controller
         $filePath = !empty($attachments) ? $attachments[0]['file_path'] : null;
         $fileName = !empty($attachments) ? $attachments[0]['file_name'] : null;
 
-        // Process reference links
+        // Process reference links (cleanly map to reference_links JSON array, ignore old singular field from frontend)
         $referenceLinks = [];
         if (!empty($validated['reference_links']) && is_array($validated['reference_links'])) {
             foreach ($validated['reference_links'] as $link) {
@@ -469,12 +469,20 @@ class KnowledgeBaseController extends Controller
                 }
             }
         } elseif (!empty($validated['reference_link'])) {
-            $link = trim($validated['reference_link']);
-            if ($link !== '') {
-                $referenceLinks[] = $link;
+            $decoded = is_string($validated['reference_link']) ? json_decode($validated['reference_link'], true) : null;
+            if (is_array($decoded)) {
+                foreach ($decoded as $link) {
+                    $link = is_string($link) ? trim($link) : '';
+                    if ($link !== '') $referenceLinks[] = $link;
+                }
+            } else {
+                $link = trim($validated['reference_link']);
+                if ($link !== '') {
+                    $referenceLinks[] = $link;
+                }
             }
         }
-        $primaryRefLink = !empty($referenceLinks) ? $referenceLinks[0] : ($validated['reference_link'] ?? null);
+        $referenceLinks = array_values(array_unique($referenceLinks));
 
         // Auto-match category name if category_id given
         $categoryName = $validated['category'] ?? 'General';
@@ -517,10 +525,7 @@ class KnowledgeBaseController extends Controller
             'status' => $validated['status'] ?? 'published',
             'is_pinned' => $validated['is_pinned'] ?? false,
             'tags' => $validated['tags'] ?? [],
-            'file_path' => $filePath,
-            'file_name' => $fileName,
             'attachments' => $attachments,
-            'reference_link' => $primaryRefLink,
             'reference_links' => $referenceLinks,
             'created_by' => $user->id,
             'updated_by' => $user->id,
@@ -535,10 +540,7 @@ class KnowledgeBaseController extends Controller
             'version_number' => 1,
             'title' => $item->title,
             'content' => $item->content,
-            'file_path' => $item->file_path,
-            'file_name' => $item->file_name,
             'attachments' => $item->attachments,
-            'reference_link' => $item->reference_link,
             'reference_links' => $item->reference_links,
             'change_summary' => 'Initial publication',
             'created_by' => $user->id,
@@ -722,7 +724,7 @@ class KnowledgeBaseController extends Controller
         $primaryFilePath = !empty($attachments) ? $attachments[0]['file_path'] : null;
         $primaryFileName = !empty($attachments) ? $attachments[0]['file_name'] : null;
 
-        // Process reference links
+        // Process reference links (cleanly map to reference_links JSON array, ignore old singular field from frontend)
         $referenceLinks = $knowledgeBase->reference_links_list ?: [];
         if ($request->has('reference_links') && is_array($request->input('reference_links'))) {
             $referenceLinks = [];
@@ -733,10 +735,16 @@ class KnowledgeBaseController extends Controller
                 }
             }
         } elseif ($request->has('reference_link')) {
-            $link = trim((string) $request->input('reference_link'));
-            $referenceLinks = $link !== '' ? [$link] : [];
+            $rawLink = (string) $request->input('reference_link');
+            $decoded = json_decode($rawLink, true);
+            if (is_array($decoded)) {
+                $referenceLinks = array_values(array_filter(array_map('trim', $decoded)));
+            } else {
+                $link = trim($rawLink);
+                $referenceLinks = $link !== '' ? [$link] : [];
+            }
         }
-        $primaryRefLink = !empty($referenceLinks) ? $referenceLinks[0] : null;
+        $referenceLinks = array_values(array_unique($referenceLinks));
 
         // Match category name
         $categoryName = $knowledgeBase->category;
@@ -787,10 +795,7 @@ class KnowledgeBaseController extends Controller
                 'version_number' => $latestVersionNumber + 1,
                 'title' => $newTitle,
                 'content' => $newContent,
-                'file_path' => $primaryFilePath,
-                'file_name' => $primaryFileName,
                 'attachments' => $attachments,
-                'reference_link' => $primaryRefLink,
                 'reference_links' => $referenceLinks,
                 'change_summary' => $validated['change_summary'] ?? 'Updated article content and resources',
                 'created_by' => $user->id,
@@ -808,10 +813,7 @@ class KnowledgeBaseController extends Controller
             'status' => $validated['status'] ?? $knowledgeBase->status ?? 'published',
             'is_pinned' => array_key_exists('is_pinned', $validated) ? (bool) $validated['is_pinned'] : (bool) ($knowledgeBase->is_pinned ?? false),
             'tags' => array_key_exists('tags', $validated) ? $validated['tags'] : $knowledgeBase->tags,
-            'file_path' => $primaryFilePath,
-            'file_name' => $primaryFileName,
             'attachments' => $attachments,
-            'reference_link' => $primaryRefLink,
             'reference_links' => $referenceLinks,
             'updated_by' => $user->id,
         ];
@@ -882,10 +884,7 @@ class KnowledgeBaseController extends Controller
         $knowledgeBase->update([
             'title' => $version->title,
             'content' => $version->content,
-            'file_path' => $version->file_path,
-            'file_name' => $version->file_name,
             'attachments' => $version->attachments,
-            'reference_link' => $version->reference_link,
             'reference_links' => $version->reference_links,
             'updated_by' => $user->id,
         ]);
@@ -896,10 +895,7 @@ class KnowledgeBaseController extends Controller
             'version_number' => $latestVersionNumber + 1,
             'title' => $version->title,
             'content' => $version->content,
-            'file_path' => $version->file_path,
-            'file_name' => $version->file_name,
             'attachments' => $version->attachments,
-            'reference_link' => $version->reference_link,
             'reference_links' => $version->reference_links,
             'change_summary' => "Restored from version {$version->version_number}",
             'created_by' => $user->id,
@@ -1086,11 +1082,8 @@ class KnowledgeBaseController extends Controller
             'status' => 'draft',
             'is_pinned' => false,
             'tags' => $knowledgeBase->tags,
-            'file_path' => $newFilePath,
-            'file_name' => $newFileName,
             'attachments' => $newAttachments,
-            'reference_link' => $knowledgeBase->reference_link,
-            'reference_links' => $knowledgeBase->reference_links,
+            'reference_links' => $knowledgeBase->reference_links_list ?: [],
             'created_by' => $user->id,
             'updated_by' => $user->id,
         ]);
@@ -1113,10 +1106,7 @@ class KnowledgeBaseController extends Controller
             'version_number' => 1,
             'title' => $duplicate->title,
             'content' => $duplicate->content,
-            'file_path' => $duplicate->file_path,
-            'file_name' => $duplicate->file_name,
             'attachments' => $duplicate->attachments,
-            'reference_link' => $duplicate->reference_link,
             'reference_links' => $duplicate->reference_links,
             'change_summary' => "Duplicated from #{$knowledgeBase->id} ({$knowledgeBase->title})",
             'created_by' => $user->id,

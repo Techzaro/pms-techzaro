@@ -400,6 +400,9 @@ class Deliverable extends Model
         if (in_array($preset, ['24h', '24hours', '1d'])) {
             return \Carbon\Carbon::now()->subHours(24);
         }
+        if ($preset === 'today') {
+            return \Carbon\Carbon::today();
+        }
         if (in_array($preset, ['7d', '7days'])) {
             return \Carbon\Carbon::now()->subDays(7);
         }

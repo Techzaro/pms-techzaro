@@ -5,8 +5,9 @@ import { useTranslation } from "react-i18next";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { notify } from "../utils/notify";
-import { formatForDatetimeLocal } from "../utils/filterUtils";
+import { formatForDatetimeLocal, isUserActive } from "../utils/filterUtils";
 import MultiSelectDropdown from "./MultiSelectDropdown";
+import CustomSelect from "./CustomSelect";
 import ConfirmModal from "./ConfirmModal";
 
 /**
@@ -29,6 +30,8 @@ export default function TaskFilterBar({
   module = "tasks",
   isBulkMode = false,
   onToggleBulkMode,
+  users: propUsers,
+  projects: propProjects,
 }) {
   const { t } = useTranslation();
   const [users, setUsers] = useState([]);
@@ -113,13 +116,21 @@ export default function TaskFilterBar({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showViewsDropdown]);
 
-  // Options for multi-select dropdowns
-  const userOptions = users.map((u) => ({
-    value: u?.id,
-    label: u?.name || u?.email || "User",
-  }));
+  // Options for multi-select dropdowns (all users with active/inactive grouping)
+  const availableUsers = Array.isArray(propUsers) && propUsers.length > 0 ? propUsers : users;
+  const userOptions = availableUsers.map((u) => {
+    const active = isUserActive(u);
+    return {
+      value: u?.id,
+      label: u?.name || u?.email || "User",
+      isActive: active,
+      group: active ? "Active Users" : "Inactive / Resigned",
+      user: u,
+    };
+  });
 
-  const projectOptions = projects.map((p) => ({
+  const availableProjects = Array.isArray(propProjects) && propProjects.length > 0 ? propProjects : projects;
+  const projectOptions = availableProjects.map((p) => ({
     value: p?.id,
     label: (p?.title || "Project") + (p?.business_id ? ` (${p.business_id})` : ""),
   }));
@@ -158,6 +169,26 @@ export default function TaskFilterBar({
     { value: "Upcoming", label: t("Upcoming", { defaultValue: "Upcoming" }) },
     { value: "Custom Date", label: t("Custom Date", { defaultValue: "Custom Date" }) },
     { value: "No due date", label: t("No due date", { defaultValue: "No due date" }) },
+  ];
+
+  // Updated Since Filter Options
+  const updatedSinceOptions = [
+    { value: "", label: t("Any Time", { defaultValue: "Any Time" }) },
+    { value: "15m", label: t("Last 15 Mins", { defaultValue: "Last 15 Mins" }) },
+    { value: "1h", label: t("Last 1 Hour", { defaultValue: "Last 1 Hour" }) },
+    { value: "24h", label: t("Last 24 Hours", { defaultValue: "Last 24 Hours" }) },
+    { value: "today", label: t("Today", { defaultValue: "Today" }) },
+    { value: "7d", label: t("Last 7 Days", { defaultValue: "Last 7 Days" }) },
+    { value: "1mo", label: t("Last 1 Month", { defaultValue: "Last 1 Month" }) },
+    { value: "custom", label: t("Custom", { defaultValue: "Custom" }) },
+  ];
+
+  // Unit Options for Custom Updated Since
+  const unitOptions = [
+    { value: "minutes", label: t("Mins", { defaultValue: "Mins" }) },
+    { value: "hours", label: t("Hours", { defaultValue: "Hours" }) },
+    { value: "days", label: t("Days", { defaultValue: "Days" }) },
+    { value: "months", label: t("Months", { defaultValue: "Months" }) },
   ];
 
   const toArray = (val) => {
@@ -822,7 +853,7 @@ export default function TaskFilterBar({
           }}
         >
           {/* 1. Status Multi-Select Filter */}
-          <div style={{ flex: "1 1 170px", minWidth: 150 }}>
+          <div style={{ flex: "1 1 170px", minWidth: 150, position: "relative" }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
               {t("Status", { defaultValue: "Status" })}
             </label>
@@ -842,7 +873,7 @@ export default function TaskFilterBar({
           </div>
 
           {/* 2. Priority Multi-Select Filter */}
-          <div style={{ flex: "1 1 140px", minWidth: 130 }}>
+          <div style={{ flex: "1 1 140px", minWidth: 130, position: "relative" }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
               {t("Priority", { defaultValue: "Priority" })}
             </label>
@@ -862,7 +893,7 @@ export default function TaskFilterBar({
           </div>
 
           {/* 3. State / Activity Multi-Select Filter */}
-          <div style={{ flex: "1 1 150px", minWidth: 140 }}>
+          <div style={{ flex: "1 1 150px", minWidth: 140, position: "relative" }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
               {t("Activity / States", { defaultValue: "Activity / States" })}
             </label>
@@ -882,7 +913,7 @@ export default function TaskFilterBar({
           </div>
 
           {/* 4. Due State Multi-Select Filter */}
-          <div style={{ flex: "1 1 160px", minWidth: 150 }}>
+          <div style={{ flex: "1 1 160px", minWidth: 150, position: "relative" }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
               {t("Due State", { defaultValue: "Due State" })}
             </label>
@@ -903,7 +934,7 @@ export default function TaskFilterBar({
 
           {toArray(filters?.due_states || filters?.due_state).includes("Custom Date") && (
             <>
-              <div style={{ flex: "1 1 160px", minWidth: 150 }}>
+              <div style={{ flex: "1 1 160px", minWidth: 150, position: "relative" }}>
                 <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
                   {t("Due From", { defaultValue: "Due From" })}
                 </label>
@@ -925,7 +956,7 @@ export default function TaskFilterBar({
                   }}
                 />
               </div>
-              <div style={{ flex: "1 1 160px", minWidth: 150 }}>
+              <div style={{ flex: "1 1 160px", minWidth: 150, position: "relative" }}>
                 <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
                   {t("Due To", { defaultValue: "Due To" })}
                 </label>
@@ -951,7 +982,7 @@ export default function TaskFilterBar({
           )}
 
           {/* 5. Person (Assignee) Multi-Select Filter */}
-          <div style={{ flex: "1 1 160px", minWidth: 150 }}>
+          <div style={{ flex: "1 1 160px", minWidth: 150, position: "relative" }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
               {t("Assignee", { defaultValue: "Assignee" })}
             </label>
@@ -966,7 +997,7 @@ export default function TaskFilterBar({
           </div>
 
           {/* 6. Creator / Assigner Multi-Select Filter */}
-          <div style={{ flex: "1 1 160px", minWidth: 150 }}>
+          <div style={{ flex: "1 1 160px", minWidth: 150, position: "relative" }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
               {t("Creator / Assigner", { defaultValue: "Creator / Assigner" })}
             </label>
@@ -981,12 +1012,13 @@ export default function TaskFilterBar({
           </div>
 
           {/* 7. Project Multi-Select Filter */}
-          <div style={{ flex: "1 1 160px", minWidth: 150 }}>
+          <div style={{ flex: "1 1 160px", minWidth: 150, position: "relative" }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
               {t("Project", { defaultValue: "Project" })}
             </label>
             <MultiSelectDropdown
               size="sm"
+              align="right"
               value={toArray(filters?.project_id)}
               onChange={(val) => onFilterChange && onFilterChange("project_id", val)}
               options={projectOptions}
@@ -996,7 +1028,7 @@ export default function TaskFilterBar({
           </div>
 
           {/* 8. Start Date */}
-          <div style={{ flex: "1 1 160px", minWidth: 150 }}>
+          <div style={{ flex: "1 1 160px", minWidth: 150, position: "relative" }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
               {t("Start Date", { defaultValue: "Start Date" })}
             </label>
@@ -1020,7 +1052,7 @@ export default function TaskFilterBar({
           </div>
 
           {/* 9. End Date */}
-          <div style={{ flex: "1 1 160px", minWidth: 150 }}>
+          <div style={{ flex: "1 1 160px", minWidth: 150, position: "relative" }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
               {t("End Date", { defaultValue: "End Date" })}
             </label>
@@ -1044,41 +1076,26 @@ export default function TaskFilterBar({
           </div>
 
           {/* 10. Updated Since Filter */}
-          <div style={{ flex: "1 1 150px", minWidth: 140 }}>
+          <div style={{ flex: "1 1 150px", minWidth: 140, position: "relative" }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
               {t("Updated Since", { defaultValue: "Updated Since" })}
             </label>
-            <select
+            <CustomSelect
+              size="sm"
+              showSearch={false}
               value={filters?.updated_since || ""}
-              onChange={(e) => {
+              onChange={(val) => {
                 if (onFilterChange) {
-                  onFilterChange("updated_since", e.target.value);
-                  if (e.target.value === "custom" && !filters?.updated_since_unit) {
+                  onFilterChange("updated_since", val);
+                  if (val === "custom" && !filters?.updated_since_unit) {
                     onFilterChange("updated_since_unit", "hours");
                   }
                 }
               }}
-              style={{
-                width: "100%",
-                height: "36px",
-                padding: "4px 8px",
-                borderRadius: "8px",
-                border: "1px solid var(--border-color, #cbd5e1)",
-                background: "var(--bg-card, #ffffff)",
-                color: "var(--text-primary, #0f172a)",
-                fontSize: "12px",
-                outline: "none",
-                boxSizing: "border-box",
-              }}
-            >
-              <option value="">{t("Any Time", { defaultValue: "Any Time" })}</option>
-              <option value="15m">{t("Last 15 Mins", { defaultValue: "Last 15 Mins" })}</option>
-              <option value="1h">{t("Last 1 Hour", { defaultValue: "Last 1 Hour" })}</option>
-              <option value="24h">{t("Last 24 Hours", { defaultValue: "Last 24 Hours" })}</option>
-              <option value="7d">{t("Last 7 Days", { defaultValue: "Last 7 Days" })}</option>
-              <option value="1mo">{t("Last 1 Month", { defaultValue: "Last 1 Month" })}</option>
-              <option value="custom">{t("Custom", { defaultValue: "Custom" })}</option>
-            </select>
+              options={updatedSinceOptions}
+              placeholder={t("Any Time", { defaultValue: "Any Time" })}
+              searchPlaceholder={t("Search...", { defaultValue: "Search..." })}
+            />
           </div>
 
           {/* Conditional Custom Value and Unit for Updated Since */}
@@ -1112,27 +1129,15 @@ export default function TaskFilterBar({
                 <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #64748b)", display: "block", marginBottom: 4 }}>
                   {t("Unit", { defaultValue: "Unit" })}
                 </label>
-                <select
+                <CustomSelect
+                  size="sm"
+                  showSearch={false}
                   value={filters?.updated_since_unit || "hours"}
-                  onChange={(e) => onFilterChange && onFilterChange("updated_since_unit", e.target.value)}
-                  style={{
-                    width: "100%",
-                    height: "36px",
-                    padding: "4px 8px",
-                    borderRadius: "8px",
-                    border: "1px solid var(--border-color, #cbd5e1)",
-                    background: "var(--bg-card, #ffffff)",
-                    color: "var(--text-primary, #0f172a)",
-                    fontSize: "12px",
-                    outline: "none",
-                    boxSizing: "border-box",
-                  }}
-                >
-                  <option value="minutes">{t("Mins", { defaultValue: "Mins" })}</option>
-                  <option value="hours">{t("Hours", { defaultValue: "Hours" })}</option>
-                  <option value="days">{t("Days", { defaultValue: "Days" })}</option>
-                  <option value="months">{t("Months", { defaultValue: "Months" })}</option>
-                </select>
+                  onChange={(val) => onFilterChange && onFilterChange("updated_since_unit", val)}
+                  options={unitOptions}
+                  placeholder={t("Hours", { defaultValue: "Hours" })}
+                  searchPlaceholder={t("Search...", { defaultValue: "Search..." })}
+                />
               </div>
             </div>
           )}

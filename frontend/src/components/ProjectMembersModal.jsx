@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import UserSelectDropdown from "./UserSelectDropdown";
-import ReassignMemberTasksModal from "./ReassignMemberTasksModal";
+import ReassignMemberModal from "./ReassignMemberModal";
 import { authToken } from "../utils/auth";
 import { notify } from "../utils/notify";
 import API_URL from "../config/api";
@@ -290,7 +290,7 @@ export default function ProjectMembersModal({ isOpen, onClose, project, onSucces
     }
   };
 
-  const handleExecuteReassignAndRemove = async (reassignToUserId) => {
+  const handleExecuteReassignAndRemove = async (reassignToUserId, { selectedTaskIds = [], selectedDeliverableIds = [] } = {}) => {
     if (!project?.id || !memberToRemove) return;
     setReassignLoading(true);
     try {
@@ -303,7 +303,12 @@ export default function ProjectMembersModal({ isOpen, onClose, project, onSucces
           Accept: "application/json",
           Authorization: token ? `Bearer ${token}` : "",
         },
-        body: JSON.stringify({ reassign_to_user_id: reassignToUserId }),
+        body: JSON.stringify({
+          reassign_to_user_id: reassignToUserId,
+          replacement_user_id: reassignToUserId,
+          selected_task_ids: selectedTaskIds,
+          selected_deliverable_ids: selectedDeliverableIds,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -332,9 +337,10 @@ export default function ProjectMembersModal({ isOpen, onClose, project, onSucces
     }
   };
 
-  const reassignCandidateMembers = (users || []).filter(
-    (u) => Number(u.id) !== Number(memberToRemove?._originalId || memberToRemove?.id)
-  );
+  const projectMembersList = (users || []).filter((u) => {
+    const uId = Number(u._originalId || u.id);
+    return assignedUsers.includes(uId) && uId !== Number(memberToRemove?._originalId || memberToRemove?.id);
+  });
 
   const managerOptions = users.filter(
     (u) =>
@@ -519,7 +525,7 @@ export default function ProjectMembersModal({ isOpen, onClose, project, onSucces
           </div>
         </form>
 
-        <ReassignMemberTasksModal
+        <ReassignMemberModal
           isOpen={reassignModalOpen}
           onClose={() => {
             if (!reassignLoading) {
@@ -528,11 +534,13 @@ export default function ProjectMembersModal({ isOpen, onClose, project, onSucces
               setMemberActiveTasksData(null);
             }
           }}
-          memberToRemove={memberToRemove}
-          activeTasks={memberActiveTasksData?.active_tasks || []}
-          activeDeliverables={memberActiveTasksData?.active_deliverables || []}
+          project={project}
+          userToRemove={memberToRemove}
+          activeTasks={memberActiveTasksData?.tasks || memberActiveTasksData?.active_tasks || []}
+          activeDeliverables={memberActiveTasksData?.deliverables || memberActiveTasksData?.active_deliverables || []}
           totalActiveCount={memberActiveTasksData?.total_active_count || 0}
-          availableMembers={reassignCandidateMembers}
+          availableMembers={projectMembersList}
+          allUsers={users}
           onConfirm={handleExecuteReassignAndRemove}
           loading={reassignLoading}
         />

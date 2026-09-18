@@ -4,7 +4,9 @@ namespace App\Console\Commands;
 
 use App\Models\Master\Organization;
 use Illuminate\Console\Command;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class FixTenantColumns extends Command
 {
@@ -106,6 +108,11 @@ class FixTenantColumns extends Command
             ['name' => 'tags',                          'definition' => "JSON NULL"],
             ['name' => 'reference_link',                'definition' => "VARCHAR(2048) NULL AFTER `file_name`"],
             ['name' => 'attachments',                   'definition' => "JSON NULL AFTER `file_name`"],
+            ['name' => 'reference_links',               'definition' => "JSON NULL AFTER `reference_link`"],
+        ],
+        'kb_versions' => [
+            ['name' => 'attachments',                   'definition' => "JSON NULL AFTER `file_name`"],
+            ['name' => 'reference_link',                'definition' => "VARCHAR(2048) NULL AFTER `file_name`"],
             ['name' => 'reference_links',               'definition' => "JSON NULL AFTER `reference_link`"],
         ],
         'events' => [
@@ -970,6 +977,32 @@ class FixTenantColumns extends Command
                     $logs[] = ['type' => 'error', 'message' => "Failed to create `{$table}`: {$e->getMessage()}"];
                 }
             }
+        }
+
+        $tenantConnection = 'tenant_fix';
+
+        // Check knowledge_bases table
+        if (!Schema::connection($tenantConnection)->hasColumn('knowledge_bases', 'attachments')) {
+            Schema::connection($tenantConnection)->table('knowledge_bases', function (Blueprint $table) use ($tenantConnection) {
+                $table->json('attachments')->nullable();
+                if (!Schema::connection($tenantConnection)->hasColumn('knowledge_bases', 'reference_links')) {
+                    $table->json('reference_links')->nullable();
+                }
+            });
+            $logs[] = ['type' => 'info', 'message' => "  ✅ Added `knowledge_bases`.`attachments` and `reference_links`"];
+            $fixed += 2;
+        }
+
+        // Check kb_versions table
+        if (!Schema::connection($tenantConnection)->hasColumn('kb_versions', 'attachments')) {
+            Schema::connection($tenantConnection)->table('kb_versions', function (Blueprint $table) use ($tenantConnection) {
+                $table->json('attachments')->nullable();
+                if (!Schema::connection($tenantConnection)->hasColumn('kb_versions', 'reference_links')) {
+                    $table->json('reference_links')->nullable();
+                }
+            });
+            $logs[] = ['type' => 'info', 'message' => "  ✅ Added `kb_versions`.`attachments` and `reference_links`"];
+            $fixed += 2;
         }
 
         // Fix unique keys that are too restrictive

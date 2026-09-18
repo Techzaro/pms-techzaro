@@ -48,7 +48,7 @@ import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import { renderDynamicDates } from "../utils/tableDateUtils";
 import { formatDateTimeInline } from "../utils/formatDateTime";
-import { getUpdatedSinceThreshold } from "../utils/filterUtils";
+import { getUpdatedSinceThreshold, matchStatusFilter } from "../utils/filterUtils";
 import { isDelegationRejectedByMe, isDelegationRevokedFromMe, isDeliverableItem } from "../utils/delegationUtils";
 import "../components/ActionPopover.css";
 import "../pages/Task.css";
@@ -861,6 +861,14 @@ const SelfTasks = () => {
       });
     }
 
+    const selectedStatuses = Array.isArray(advancedFilters.statuses) && advancedFilters.statuses.length > 0
+      ? advancedFilters.statuses
+      : (Array.isArray(advancedFilters.status) && advancedFilters.status.length > 0 ? advancedFilters.status : []);
+
+    if (selectedStatuses.length > 0) {
+      list = list.filter((item) => matchStatusFilter(item?.status, selectedStatuses));
+    }
+
     if (statusFilter) {
       list = list.filter((item) => {
         const sf = String(statusFilter).toLowerCase();
@@ -917,7 +925,7 @@ const SelfTasks = () => {
     }
 
     return list;
-  }, [searchFilteredItems, statusFilter, advancedFilters.priority, advancedFilters.priorities, advancedFilters.updated_since, advancedFilters.updated_since_value, advancedFilters.updated_since_unit, pendingStatuses, inProgressStatuses, submittedStatuses, completedStatuses, pausedStatuses, declinedStatuses, abandonedStatuses]);
+  }, [searchFilteredItems, statusFilter, advancedFilters.priority, advancedFilters.priorities, advancedFilters.statuses, advancedFilters.status, advancedFilters.updated_since, advancedFilters.updated_since_value, advancedFilters.updated_since_unit, pendingStatuses, inProgressStatuses, submittedStatuses, completedStatuses, pausedStatuses, declinedStatuses, abandonedStatuses]);
 
   const taskIdList = filteredItems.map((i) => i.id);
 
@@ -1016,6 +1024,10 @@ const SelfTasks = () => {
             if (key === "priority" || key === "priorities") {
               updated.priority = val;
               updated.priorities = val;
+            }
+            if (key === "statuses" || key === "status") {
+              updated.statuses = val;
+              updated.status = val;
             }
             return updated;
           });

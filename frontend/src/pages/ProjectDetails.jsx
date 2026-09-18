@@ -75,7 +75,7 @@ import ActionPopover from "../components/ActionPopover";
 import Pagination from "../components/Pagination";
 import UnifiedActivityFeed from "../components/UnifiedActivityFeed";
 import ProjectMembersModal from "../components/ProjectMembersModal";
-import ReassignMemberTasksModal from "../components/ReassignMemberTasksModal";
+import ReassignMemberModal from "../components/ReassignMemberModal";
 import TaskAssigneeCell from "../components/TaskAssigneeCell";
 import "../components/ActionPopover.css";
 import { formatDateTimeShort, formatDateTime, formatDateTimeInline } from "../utils/formatDateTime";
@@ -1456,7 +1456,7 @@ function ProjectDetails() {
     setReassignModalOpen(true);
   };
 
-  const handleExecuteReassignAndRemove = async (reassignToUserId) => {
+  const handleExecuteReassignAndRemove = async (reassignToUserId, { selectedTaskIds = [], selectedDeliverableIds = [] } = {}) => {
     if (!project || !memberToRemove) return;
     setRemovingMemberLoading(true);
     try {
@@ -1468,7 +1468,12 @@ function ProjectDetails() {
           Accept: "application/json",
           Authorization: token ? `Bearer ${token}` : "",
         },
-        body: JSON.stringify({ reassign_to_user_id: reassignToUserId }),
+        body: JSON.stringify({
+          reassign_to_user_id: reassignToUserId,
+          replacement_user_id: reassignToUserId,
+          selected_task_ids: selectedTaskIds,
+          selected_deliverable_ids: selectedDeliverableIds,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -2140,7 +2145,12 @@ function ProjectDetails() {
                             <div className="project-task-table">
                                 <div className={`ptt-header ${currentUser?.role === "guest" ? "ptt-header--guest" : ""}`}>
                                 <div>{t("ID", { defaultValue: "ID" })}</div>
-                                {currentUser?.role !== "guest" && <div>{isShared || isCreator || isAdminOrManager ? t("Assigned To", { defaultValue: "Assigned To" }) : t("Assigned By", { defaultValue: "Assigned By" })}</div>}
+                                {currentUser?.role !== "guest" && (
+                                  <>
+                                    <div>{t("Assigned To", { defaultValue: "Assigned To" })}</div>
+                                    <div>{t("Assigned By", { defaultValue: "Assigned By" })}</div>
+                                  </>
+                                )}
                                 <div className="ptt-col-name">{t("Task Name", { defaultValue: "Task Name" })}</div>
                                 <div>{t("Status", { defaultValue: "Status" })}</div>
                                 <div>{t("Priority", { defaultValue: "Priority" })}</div>
@@ -2157,23 +2167,24 @@ function ProjectDetails() {
                                         <div className={`ptt-row ${currentUser?.role === "guest" ? "ptt-row--guest" : ""}`} key={tItem.id}>
                                           <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={tItem.id} businessId={tItem.business_id} />
                                            {currentUser?.role !== "guest" && (
-                                             <div>
-                                               {isShared || isCreator || isAdminOrManager ? (
+                                             <>
+                                               <div>
                                                  <TaskAssigneeCell
                                                    assignees={tItem.assignees}
                                                    assignee={tItem.assignee}
                                                    showRole={false}
                                                    avatarSize={24}
                                                  />
-                                               ) : (
+                                               </div>
+                                               <div>
                                                  <TaskAssigneeCell
-                                                   assignee={tItem.assigner}
+                                                   assignee={tItem.assigner || tItem.creator || tItem.created_by_user}
                                                    showRole={false}
                                                    avatarSize={24}
-                                                   fallbackName="System"
+                                                   fallbackName={tItem.created_by_name || t("System", { defaultValue: "System" })}
                                                  />
-                                               )}
-                                             </div>
+                                               </div>
+                                             </>
                                            )}
                                           <div className="ptt-col-name">
                                             <Link to={rolePath(`tasks/task-details/${isShared ? `shared_${tItem.shared_resource_id || tItem.id}` : tItem.id}`)} state={{ from: "project", projectId: project?.id || projectId, projectTitle: project?.title, returnUrl: location.pathname + (location.search || "?tab=tasks") }} className="ptt-task-link">
@@ -3720,7 +3731,7 @@ function ProjectDetails() {
       />
 
       {/* Reassign & Remove Modal */}
-      <ReassignMemberTasksModal
+      <ReassignMemberModal
         isOpen={reassignModalOpen}
         onClose={() => {
           if (!removingMemberLoading) {
@@ -3729,11 +3740,11 @@ function ProjectDetails() {
             setMemberActiveTasksData(null);
           }
         }}
-        memberToRemove={memberToRemove}
-        activeTasks={memberActiveTasksData?.active_tasks || []}
-        activeDeliverables={memberActiveTasksData?.active_deliverables || []}
+        project={project}
+        userToRemove={memberToRemove}
+        activeTasks={memberActiveTasksData?.tasks || memberActiveTasksData?.active_tasks || []}
+        activeDeliverables={memberActiveTasksData?.deliverables || memberActiveTasksData?.active_deliverables || []}
         totalActiveCount={memberActiveTasksData?.total_active_count || 0}
-        availableMembers={reassignCandidateMembers}
         onConfirm={handleExecuteReassignAndRemove}
         loading={removingMemberLoading}
       />

@@ -3800,7 +3800,10 @@ class DeliverableController extends Controller
             }
         }
 
-        $rawStatuses = $request->input('status', $request->input('statuses', []));
+        $rawStatuses = $request->input('statuses');
+        if ($rawStatuses === null || $rawStatuses === '') {
+            $rawStatuses = $request->input('status', []);
+        }
         if (is_string($rawStatuses) && str_contains($rawStatuses, ',')) {
             $rawStatuses = explode(',', $rawStatuses);
         }
@@ -3819,7 +3822,7 @@ class DeliverableController extends Controller
                     'Pending', 'pending', 'planned', 'Planning', 'Planned', 'draft', 'Draft',
                     'todo', 'Todo', 'to_do', 'To_Do', 'to-do', 'To-Do', 'TODO', 'TO_DO', 'new', 'New', 'NEW',
                     'not_started', 'Not Started', 'not started', 'not-started', 'Not-Started', 'NOT_STARTED',
-                    'unassigned', 'Unassigned', 'UNASSIGNED', 'reopened', 'Reopened', 'REOPENED',
+                    'unassigned', 'Unassigned', 'UNASSIGNED',
                 ],
                 'in_progress' => [
                     'In Progress', 'in_progress', 'in progress', 'in-progress', 'In-Progress', 'IN_PROGRESS',

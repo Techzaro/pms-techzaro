@@ -16,7 +16,7 @@ import CustomSelect from "./CustomSelect";
 import MultiSelectDropdown from "./MultiSelectDropdown";
 import LoadingButton from "./LoadingButton";
 import ConfirmModal from "./ConfirmModal";
-import ReassignMemberTasksModal from "./ReassignMemberTasksModal";
+import ReassignMemberModal from "./ReassignMemberModal";
 import { formatDateTime, toDatetimeLocal, toUTCIso, formatForMySQL, getNowDatetimeLocal } from "../utils/formatDateTime";
 import { publish } from "../utils/eventBus";
 import { notify, showSuccessMessage } from "../utils/notify";
@@ -473,7 +473,7 @@ const EditProjectModal = ({ project = {}, onClose, onProjectUpdated, restoreDraf
     }
   };
 
-  const handleExecuteReassignAndRemove = async (reassignToUserId) => {
+  const handleExecuteReassignAndRemove = async (reassignToUserId, { selectedTaskIds = [], selectedDeliverableIds = [] } = {}) => {
     if (!project?.id || !memberToRemove) return;
     setReassignLoading(true);
     try {
@@ -486,7 +486,12 @@ const EditProjectModal = ({ project = {}, onClose, onProjectUpdated, restoreDraf
           Accept: "application/json",
           Authorization: token ? `Bearer ${token}` : "",
         },
-        body: JSON.stringify({ reassign_to_user_id: reassignToUserId }),
+        body: JSON.stringify({
+          reassign_to_user_id: reassignToUserId,
+          replacement_user_id: reassignToUserId,
+          selected_task_ids: selectedTaskIds,
+          selected_deliverable_ids: selectedDeliverableIds,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -518,9 +523,11 @@ const EditProjectModal = ({ project = {}, onClose, onProjectUpdated, restoreDraf
     }
   };
 
-  const reassignCandidateMembers = (allUsers || []).filter(
-    (u) => Number(u.id) !== Number(memberToRemove?._originalId || memberToRemove?.id)
-  );
+  const projectMembersList = (allUsers || []).filter((u) => {
+    const uId = Number(u.id);
+    const assigned = (form.assigned_users || []).map((x) => Number(typeof x === "object" ? x.id : x));
+    return assigned.includes(uId) && uId !== Number(memberToRemove?._originalId || memberToRemove?.id);
+  });
 
   const handleAddPhase = () => {
     if (!phaseName.trim() || !phaseDate) return;
@@ -1764,7 +1771,7 @@ const EditProjectModal = ({ project = {}, onClose, onProjectUpdated, restoreDraf
         danger
       />
 
-      <ReassignMemberTasksModal
+      <ReassignMemberModal
         isOpen={reassignModalOpen}
         onClose={() => {
           if (!reassignLoading) {
@@ -1773,11 +1780,13 @@ const EditProjectModal = ({ project = {}, onClose, onProjectUpdated, restoreDraf
             setMemberActiveTasksData(null);
           }
         }}
-        memberToRemove={memberToRemove}
-        activeTasks={memberActiveTasksData?.active_tasks || []}
-        activeDeliverables={memberActiveTasksData?.active_deliverables || []}
+        project={project}
+        userToRemove={memberToRemove}
+        activeTasks={memberActiveTasksData?.tasks || memberActiveTasksData?.active_tasks || []}
+        activeDeliverables={memberActiveTasksData?.deliverables || memberActiveTasksData?.active_deliverables || []}
         totalActiveCount={memberActiveTasksData?.total_active_count || 0}
-        availableMembers={reassignCandidateMembers}
+        availableMembers={projectMembersList}
+        allUsers={allUsers}
         onConfirm={handleExecuteReassignAndRemove}
         loading={reassignLoading}
       />

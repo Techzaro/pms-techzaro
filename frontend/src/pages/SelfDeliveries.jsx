@@ -55,7 +55,7 @@ import AbandonModal from "../components/AbandonModal";
 import MarkTaskCompletedModal from "../components/MarkTaskCompletedModal";
 import TransferTaskDialog from "../components/TransferTaskDialog";
 import { formatDateTimeInline } from "../utils/formatDateTime";
-import { getUpdatedSinceThreshold } from "../utils/filterUtils";
+import { getUpdatedSinceThreshold, matchStatusFilter } from "../utils/filterUtils";
 import "../components/ActionPopover.css";
 import "../pages/Deliveries.css";
 import "../pages/Task.css";
@@ -206,7 +206,9 @@ function SelfDeliveries() {
     }
     const statusVal = advancedFilters.statuses?.length ? advancedFilters.statuses : advancedFilters.status;
     if (statusVal && statusVal.length > 0) {
-      params.append("status", Array.isArray(statusVal) ? statusVal.join(",") : statusVal);
+      const stArr = Array.isArray(statusVal) ? statusVal : [statusVal];
+      stArr.forEach((st) => params.append("statuses[]", st));
+      params.append("status", stArr.join(","));
     }
     if (advancedFilters.priority && advancedFilters.priority.length > 0) {
       params.append("priority", Array.isArray(advancedFilters.priority) ? advancedFilters.priority.join(",") : advancedFilters.priority);
@@ -704,27 +706,12 @@ function SelfDeliveries() {
         return pids.includes(pid);
       });
     }
-    if (advancedFilters.status && advancedFilters.status.length > 0) {
-      const sts = Array.isArray(advancedFilters.status) ? advancedFilters.status : [advancedFilters.status];
-      list = list.filter((item) => {
-        if (!item) return false;
-        return sts.some((st) => {
-          if (st === "due_today") {
-            const d = item.due_date || item.end_date || item.start_date ? new Date(item.due_date || item.end_date || item.start_date) : null;
-            const isToday = d && !isNaN(d.getTime()) && d.toDateString() === new Date().toDateString();
-            const isDone = ["approved", "completed", "done"].includes((item.status || "").toLowerCase());
-            return isToday && !isDone;
-          }
-          if (st === "pending") return ["pending", "planned", "Planning", "Planned"].includes(item.status);
-          if (st === "in_progress") return ["in_progress", "In Progress", "in-progress"].includes(item.status);
-          if (st === "paused") return ["paused", "pause", "Pause"].includes(item.status);
-          if (st === "transferred") return Array.isArray(item.delegation_chain) && item.delegation_chain.length > 0;
-          if (st === "rejected" || st === "declined") return item.status === "rejected" || item.status === "declined";
-          if (st === "abandoned") return item.status === "abandoned" || item.status === "abandon_requested";
-          if (st === "approved") return item.status === "approved" || item.status === "completed";
-          return item.status === st;
-        });
-      });
+    const selectedStatuses = Array.isArray(advancedFilters.statuses) && advancedFilters.statuses.length > 0
+      ? advancedFilters.statuses
+      : (Array.isArray(advancedFilters.status) && advancedFilters.status.length > 0 ? advancedFilters.status : []);
+
+    if (selectedStatuses.length > 0) {
+      list = list.filter((item) => matchStatusFilter(item?.status, selectedStatuses));
     }
     if (advancedFilters.priority && advancedFilters.priority.length > 0) {
       const prios = (Array.isArray(advancedFilters.priority) ? advancedFilters.priority : [advancedFilters.priority]).map((p) => String(p).toLowerCase());
@@ -865,6 +852,10 @@ function SelfDeliveries() {
               if (key === "priority" || key === "priorities") {
                 updated.priority = val;
                 updated.priorities = val;
+              }
+              if (key === "statuses" || key === "status") {
+                updated.statuses = val;
+                updated.status = val;
               }
               return updated;
             });

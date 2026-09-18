@@ -4,7 +4,7 @@
 }
 
 .msd-wrap.msd-open {
-  z-index: 9999;
+  z-index: 50;
 }
 
 .msd-trigger {
@@ -48,7 +48,8 @@
 }
 
 .msd-combo-input::placeholder {
-  color: var(--text-muted, #94a3b8);
+  color: var(--text-secondary, #64748b);
+  font-weight: 400;
 }
 
 .msd-selected-text {
@@ -62,8 +63,9 @@
 }
 
 .msd-placeholder-text {
-  color: var(--text-muted, #94a3b8);
+  color: var(--text-secondary, #64748b);
   font-size: 13px;
+  font-weight: 400;
   flex: 1;
   white-space: nowrap;
   overflow: hidden;
@@ -109,17 +111,25 @@
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
-  right: 0;
+  min-width: 100%;
+  width: max-content;
+  max-width: 320px;
+  box-sizing: border-box;
   background: var(--bg-card, #ffffff);
   border: 1px solid var(--border-color, #e2e8f0);
   border-radius: 8px;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
-  z-index: 99999;
+  z-index: 50;
   max-height: 260px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   padding: 4px;
+}
+
+.msd-dropdown-right {
+  left: auto;
+  right: 0;
 }
 
 .msd-select-all {
@@ -170,7 +180,7 @@
 
 .msd-option {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   padding: 8px 10px;
   font-size: 13px;
@@ -218,9 +228,10 @@
 
 .msd-option-label {
   flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  line-height: 1.25;
 }
 
 .msd-checkbox {
@@ -235,6 +246,7 @@
   flex-shrink: 0;
   transition: border-color 0.15s, background 0.15s;
   color: #fff;
+  margin-top: 2px;
 }
 
 .msd-checkbox.msd-checked {
@@ -250,6 +262,7 @@
 .msd-select-all .msd-checkbox {
   width: 15px;
   height: 15px;
+  margin-top: 0;
 }
 
 /* Compact size for filter bars */
@@ -263,10 +276,13 @@
 
 .msd-sm .msd-selected-text {
   font-size: 12px;
+  font-weight: 500;
 }
 
 .msd-sm .msd-placeholder-text {
   font-size: 12px;
+  font-weight: 400;
+  color: var(--text-secondary, #64748b);
 }
 
 .msd-sm .msd-combo-input {
@@ -280,9 +296,51 @@
 .msd-sm .msd-option {
   padding: 6px 10px;
   font-size: 12px;
+  align-items: flex-start;
+}
+
+.msd-sm .msd-option-label {
+  line-height: 1.25;
+}
+
+.msd-sm .msd-option .msd-checkbox {
+  margin-top: 1px;
 }
 
 .msd-sm .msd-select-all {
   padding: 6px 10px;
   font-size: 12px;
+}
+
+/* Group Headers */
+.msd-group-header {
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #64748b);
+  background: var(--bg-hover, #f8fafc);
+  border-bottom: 1px solid var(--border-color, #f1f5f9);
+  user-select: none;
+  cursor: default;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.msd-group-header--inactive {
+  margin-top: 4px;
+  border-top: 1px solid var(--border-color, #e2e8f0);
+  background: #fdf2f2;
+  color: #991b1b;
+}
+
+.msd-group-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.06);
+  color: inherit;
 }

@@ -7138,7 +7138,10 @@ $routing = $this->delegationService->routingPayload($task, $user);
      */
     private function applyDeliverableStatusFilterOnly(Request $request, $query)
     {
-        $rawStatuses = $request->input('statuses', $request->input('status', []));
+        $rawStatuses = $request->input('statuses');
+        if ($rawStatuses === null || $rawStatuses === '') {
+            $rawStatuses = $request->input('status', []);
+        }
         if (is_string($rawStatuses) && str_contains($rawStatuses, ',')) {
             $rawStatuses = explode(',', $rawStatuses);
         }
@@ -7157,7 +7160,7 @@ $routing = $this->delegationService->routingPayload($task, $user);
                     'Pending', 'pending', 'planned', 'Planning', 'Planned', 'draft', 'Draft',
                     'todo', 'Todo', 'to_do', 'To_Do', 'to-do', 'To-Do', 'TODO', 'TO_DO', 'new', 'New', 'NEW',
                     'not_started', 'Not Started', 'not started', 'not-started', 'Not-Started', 'NOT_STARTED',
-                    'unassigned', 'Unassigned', 'UNASSIGNED', 'reopened', 'Reopened', 'REOPENED',
+                    'unassigned', 'Unassigned', 'UNASSIGNED',
                 ],
                 'in_progress' => [
                     'In Progress', 'in_progress', 'in progress', 'in-progress', 'In-Progress', 'IN_PROGRESS',
@@ -7185,6 +7188,9 @@ $routing = $this->delegationService->routingPayload($task, $user);
 
             foreach ($rawStatuses as $st) {
                 $st = trim((string) $st);
+                if ($st === '' || strtolower($st) === 'all') {
+                    continue;
+                }
                 $stLower = strtolower($st);
 
                 if ($stLower === 'due_today') {
@@ -7282,7 +7288,10 @@ $routing = $this->delegationService->routingPayload($task, $user);
     private function applyStatusFilterOnly(Request $request, $query)
     {
         // ── 1. STATUSES FILTER (OR within statuses) ──
-        $rawStatuses = $request->input('statuses', $request->input('status', []));
+        $rawStatuses = $request->input('statuses');
+        if ($rawStatuses === null || $rawStatuses === '') {
+            $rawStatuses = $request->input('status', []);
+        }
         if (is_string($rawStatuses) && str_contains($rawStatuses, ',')) {
             $rawStatuses = explode(',', $rawStatuses);
         }
@@ -7301,7 +7310,7 @@ $routing = $this->delegationService->routingPayload($task, $user);
                     'Pending', 'pending', 'planned', 'Planning', 'Planned', 'draft', 'Draft',
                     'todo', 'Todo', 'to_do', 'To_Do', 'to-do', 'To-Do', 'TODO', 'TO_DO', 'new', 'New', 'NEW',
                     'not_started', 'Not Started', 'not started', 'not-started', 'Not-Started', 'NOT_STARTED',
-                    'unassigned', 'Unassigned', 'UNASSIGNED', 'reopened', 'Reopened', 'REOPENED',
+                    'unassigned', 'Unassigned', 'UNASSIGNED',
                 ],
                 'in_progress' => [
                     'In Progress', 'in_progress', 'in progress', 'in-progress', 'In-Progress', 'IN_PROGRESS',
@@ -7329,6 +7338,9 @@ $routing = $this->delegationService->routingPayload($task, $user);
 
             foreach ($rawStatuses as $st) {
                 $st = trim((string) $st);
+                if ($st === '' || strtolower($st) === 'all') {
+                    continue;
+                }
                 $stLower = strtolower($st);
 
                 if ($stLower === 'due_today') {
@@ -9345,7 +9357,10 @@ $routing = $this->delegationService->routingPayload($task, $user);
             return $sharedTasks;
         }
 
-        $rawStatuses = $request->input('statuses', $request->input('status', []));
+        $rawStatuses = $request->input('statuses');
+        if ($rawStatuses === null || $rawStatuses === '') {
+            $rawStatuses = $request->input('status', []);
+        }
         if (is_string($rawStatuses) && str_contains($rawStatuses, ',')) {
             $rawStatuses = explode(',', $rawStatuses);
         }
@@ -9364,7 +9379,7 @@ $routing = $this->delegationService->routingPayload($task, $user);
         $todayStr = Carbon::today()->toDateString();
 
         $statusGroups = [
-            'pending' => ['pending', 'planned', 'planning', 'draft', 'todo', 'to_do', 'to-do', 'new', 'not_started', 'not started', 'not-started', 'unassigned', 'reopened', ''],
+            'pending' => ['pending', 'planned', 'planning', 'draft', 'todo', 'to_do', 'to-do', 'new', 'not_started', 'not started', 'not-started', 'unassigned', ''],
             'in_progress' => ['in_progress', 'in progress', 'in-progress', 'doing', 'working', 'underway', 'under_way', 'acknowledged', 'started'],
             'paused' => ['paused', 'pause', 'hold', 'on_hold', 'on hold', 'on-hold'],
             'submitted' => ['submitted', 'review', 'in_review', 'under_review', 'submitted_late', 'awaiting_approval', 'awaiting_checkpoint'],

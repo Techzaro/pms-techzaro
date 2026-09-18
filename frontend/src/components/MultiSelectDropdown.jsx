@@ -3,7 +3,20 @@ import { useTranslation } from "react-i18next";
 import { getProjectDisplayName } from "../utils/projectUtils";
 import "./MultiSelectDropdown.css";
 
-const MultiSelectDropdown = ({ value = [], onChange, options = [], placeholder = "Select...", searchPlaceholder = "Search...", name, size = "md", className = "", showChips = false }) => {
+const MultiSelectDropdown = ({
+  value = [],
+  onChange,
+  options = [],
+  placeholder = "Select...",
+  searchPlaceholder = "Search...",
+  name,
+  size = "md",
+  className = "",
+  showChips = false,
+  showSearch = true,
+  disabled = false,
+  align = "left",
+}) => {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -31,6 +44,19 @@ const MultiSelectDropdown = ({ value = [], onChange, options = [], placeholder =
     return result;
   }, [options, q]);
 
+  const activeOptions = useMemo(() => {
+    return filtered.filter((o) => o.isActive !== false && o.group !== "Inactive / Resigned");
+  }, [filtered]);
+
+  const inactiveOptions = useMemo(() => {
+    return filtered.filter((o) => o.isActive === false || o.group === "Inactive / Resigned");
+  }, [filtered]);
+
+  const hasGroups = inactiveOptions.length > 0;
+  const displayOptions = useMemo(() => {
+    return hasGroups ? [...activeOptions, ...inactiveOptions] : filtered;
+  }, [hasGroups, activeOptions, inactiveOptions, filtered]);
+
   useEffect(() => {
     setHighlightedIndex(0);
   }, [search, open]);
@@ -42,8 +68,9 @@ const MultiSelectDropdown = ({ value = [], onChange, options = [], placeholder =
     }
   }, [highlightedIndex, open]);
 
-  const allVisibleSelected = filtered.length > 0 && filtered.every((o) => selectedSet.has(String(o.value)));
-  const someVisibleSelected = filtered.some((o) => selectedSet.has(String(o.value)));
+  const targetSelectOptions = hasGroups ? activeOptions : filtered;
+  const allVisibleSelected = targetSelectOptions.length > 0 && targetSelectOptions.every((o) => selectedSet.has(String(o.value)));
+  const someVisibleSelected = targetSelectOptions.some((o) => selectedSet.has(String(o.value)));
 
   const handleToggle = (optValue) => {
     const strVal = String(optValue);
@@ -55,11 +82,11 @@ const MultiSelectDropdown = ({ value = [], onChange, options = [], placeholder =
 
   const handleSelectAll = () => {
     if (allVisibleSelected) {
-      const visibleValues = new Set(filtered.map((o) => String(o.value)));
+      const visibleValues = new Set(targetSelectOptions.map((o) => String(o.value)));
       onChange(value.filter((v) => !visibleValues.has(String(v))));
     } else {
       const merged = new Set(value.map(String));
-      filtered.forEach((o) => merged.add(String(o.value)));
+      targetSelectOptions.forEach((o) => merged.add(String(o.value)));
       onChange(options.filter((o) => merged.has(String(o.value))).map((o) => o.value));
     }
   };
@@ -70,26 +97,35 @@ const MultiSelectDropdown = ({ value = [], onChange, options = [], placeholder =
   };
 
   const handleTriggerClick = () => {
-    if (!open) {
-      setSearch("");
-      setOpen(true);
-      setTimeout(() => inputRef.current?.focus(), 0);
+    if (disabled) return;
+    if (showSearch) {
+      if (!open) {
+        setSearch("");
+        setOpen(true);
+        setTimeout(() => inputRef.current?.focus(), 0);
+      }
+    } else {
+      setOpen((prev) => !prev);
     }
   };
 
   const handleArrowClick = (e) => {
     e.stopPropagation();
+    if (disabled) return;
     if (open) {
       setOpen(false);
       setSearch("");
     } else {
       setSearch("");
       setOpen(true);
-      setTimeout(() => inputRef.current?.focus(), 0);
+      if (showSearch) {
+        setTimeout(() => inputRef.current?.focus(), 0);
+      }
     }
   };
 
   const handleKeyDown = (e) => {
+    if (disabled) return;
     if (e.key === "Escape") {
       setSearch("");
       setOpen(false);
@@ -98,20 +134,25 @@ const MultiSelectDropdown = ({ value = [], onChange, options = [], placeholder =
       e.preventDefault();
       if (!open) {
         setOpen(true);
-        setTimeout(() => inputRef.current?.focus(), 0);
+        if (showSearch) setTimeout(() => inputRef.current?.focus(), 0);
       } else {
-        setHighlightedIndex((prev) => (prev < filtered.length - 1 ? prev + 1 : 0));
+        setHighlightedIndex((prev) => (prev < displayOptions.length - 1 ? prev + 1 : 0));
       }
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : filtered.length - 1));
+      if (!open) {
+        setOpen(true);
+        if (showSearch) setTimeout(() => inputRef.current?.focus(), 0);
+      } else {
+        setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : displayOptions.length - 1));
+      }
     } else if (e.key === "Enter") {
       e.preventDefault();
-      if (open && filtered[highlightedIndex]) {
-        handleToggle(filtered[highlightedIndex].value);
+      if (open && displayOptions[highlightedIndex]) {
+        handleToggle(displayOptions[highlightedIndex].value);
       } else if (!open) {
         setOpen(true);
-        setTimeout(() => inputRef.current?.focus(), 0);
+        if (showSearch) setTimeout(() => inputRef.current?.focus(), 0);
       }
     }
   };
@@ -130,9 +171,14 @@ const MultiSelectDropdown = ({ value = [], onChange, options = [], placeholder =
   }, [value, options, t]);
 
   return (
-    <div className={`msd-wrap ${size === "sm" ? "msd-sm" : ""} ${className} ${open ? "msd-open" : ""}`} ref={ref} tabIndex={0}>
+    <div
+      className={`msd-wrap ${size === "sm" ? "msd-sm" : ""} ${className} ${open ? "msd-open" : ""}`}
+      ref={ref}
+      tabIndex={disabled ? -1 : 0}
+      onKeyDown={handleKeyDown}
+    >
       <div className="msd-trigger" onClick={handleTriggerClick}>
-        {open ? (
+        {open && showSearch ? (
           <input
             ref={inputRef}
             type="text"
@@ -141,6 +187,7 @@ const MultiSelectDropdown = ({ value = [], onChange, options = [], placeholder =
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={handleKeyDown}
+            disabled={disabled}
           />
         ) : displayText ? (
           <span className="msd-selected-text">{displayText}</span>
@@ -214,8 +261,8 @@ const MultiSelectDropdown = ({ value = [], onChange, options = [], placeholder =
         </div>
       )}
       {open && (
-        <div className="msd-dropdown">
-          {filtered.length > 0 && (
+        <div className={`msd-dropdown ${align === "right" ? "msd-dropdown-right" : ""}`}>
+          {displayOptions.length > 0 && (
             <div className="msd-select-all" onClick={handleSelectAll}>
               <span className={`msd-checkbox ${allVisibleSelected ? "msd-checked" : someVisibleSelected ? "msd-partial" : ""}`}>
                 {allVisibleSelected && (
@@ -225,12 +272,67 @@ const MultiSelectDropdown = ({ value = [], onChange, options = [], placeholder =
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12" /></svg>
                 )}
               </span>
-              <span className="msd-select-all-text">{allVisibleSelected ? t("Deselect All") : t("Select All")}</span>
+              <span className="msd-select-all-text">{allVisibleSelected ? t("Deselect All") : (hasGroups ? t("Select All Active") : t("Select All"))}</span>
             </div>
           )}
           <div className="msd-options-list" ref={listRef}>
-            {filtered.length === 0 ? (
+            {displayOptions.length === 0 ? (
               <div className="msd-empty">{t("No matches found")}</div>
+            ) : hasGroups ? (
+              <>
+                {activeOptions.length > 0 && (
+                  <div className="msd-group-header">
+                    <span>{t("Active Users", { defaultValue: "Active Users" })}</span>
+                    <span className="msd-group-badge">{activeOptions.length}</span>
+                  </div>
+                )}
+                {activeOptions.map((opt, idx) => {
+                  const isSelected = selectedSet.has(String(opt.value));
+                  return (
+                    <div
+                      key={opt.value}
+                      className={`msd-option ${isSelected ? "msd-option-selected" : ""} ${idx === highlightedIndex ? "msd-highlighted" : ""}`}
+                      onClick={() => handleToggle(opt.value)}
+                      onMouseEnter={() => setHighlightedIndex(idx)}
+                    >
+                      <span className={`msd-checkbox ${isSelected ? "msd-checked" : ""}`}>
+                        {isSelected && (
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                        )}
+                      </span>
+                      <span className="msd-option-label">{opt.label}</span>
+                    </div>
+                  );
+                })}
+
+                {inactiveOptions.length > 0 && (
+                  <>
+                    <div className="msd-group-header msd-group-header--inactive">
+                      <span>{t("Inactive / Resigned", { defaultValue: "Inactive / Resigned" })}</span>
+                      <span className="msd-group-badge">{inactiveOptions.length}</span>
+                    </div>
+                    {inactiveOptions.map((opt, idx) => {
+                      const actualIdx = activeOptions.length + idx;
+                      const isSelected = selectedSet.has(String(opt.value));
+                      return (
+                        <div
+                          key={opt.value}
+                          className={`msd-option ${isSelected ? "msd-option-selected" : ""} ${actualIdx === highlightedIndex ? "msd-highlighted" : ""}`}
+                          onClick={() => handleToggle(opt.value)}
+                          onMouseEnter={() => setHighlightedIndex(actualIdx)}
+                        >
+                          <span className={`msd-checkbox ${isSelected ? "msd-checked" : ""}`}>
+                            {isSelected && (
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                            )}
+                          </span>
+                          <span className="msd-option-label" style={{ color: "var(--text-muted, #64748b)" }}>{opt.label}</span>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+              </>
             ) : (
               filtered.map((opt, idx) => {
                 const isSelected = selectedSet.has(String(opt.value));

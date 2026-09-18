@@ -101,12 +101,14 @@
   transform: rotate(180deg);
 }
 
-/* Dropdown */
 .usd-dropdown {
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
-  right: 0;
+  min-width: 100%;
+  width: max-content;
+  max-width: 320px;
+  box-sizing: border-box;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
   overflow: visible;
@@ -167,7 +169,7 @@
 
 .usd-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
   padding: 8px 14px;
@@ -176,7 +178,7 @@
   transition: background 0.15s;
   border-bottom: 1px solid #f8fafc;
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .usd-item:last-child {
@@ -204,7 +206,7 @@
 
 .usd-item-left {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   flex: 1;
   min-width: 0;
@@ -217,6 +219,7 @@
   accent-color: var(--color-primary);
   cursor: pointer;
   flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .usd-item-info {
@@ -231,6 +234,10 @@
   font-size: 14px;
   font-weight: 500;
   color: var(--text-primary);
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  line-height: 1.25;
 }
 
 .usd-role {
@@ -284,4 +291,37 @@
   color: #94a3b8;
   font-size: 14px;
   margin: 0;
+}
+
+/* Group Headers */
+.usd-group-header {
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #64748b);
+  background: var(--bg-hover, #f8fafc);
+  border-bottom: 1px solid var(--border-color, #f1f5f9);
+  user-select: none;
+  cursor: default;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.usd-group-header--inactive {
+  margin-top: 4px;
+  border-top: 1px solid var(--border-color, #e2e8f0);
+  background: #fdf2f2;
+  color: #991b1b;
+}
+
+.usd-group-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.06);
+  color: inherit;
 }

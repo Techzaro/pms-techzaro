@@ -130,6 +130,7 @@ export default function KnowledgeBaseEditor() {
   const [loading, setLoading] = useState(Boolean(id));
   const [savingStatus, setSavingStatus] = useState("saved"); // 'saved' | 'saving' | 'unsaved' | 'error'
   const [lastSavedTime, setLastSavedTime] = useState(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   // Active tab: 'editor' / 'details' | 'activity'
   const [activeTab, setActiveTab] = useState(isViewMode ? "details" : "editor");
@@ -146,7 +147,19 @@ export default function KnowledgeBaseEditor() {
   const [selectedCategoryOption, setSelectedCategoryOption] = useState(null);
   const categoryId = selectedCategoryOption ? selectedCategoryOption.value : "";
   const [visibilityLevel, setVisibilityLevel] = useState("organization");
-  const [projectId, setProjectId] = useState("");
+  const [selectedProjectIds, setSelectedProjectIds] = useState(
+    location.state?.projectId ? [String(location.state.projectId)] : []
+  );
+  const projectId = selectedProjectIds[0] ? String(selectedProjectIds[0]) : "";
+  const setProjectId = (val) => {
+    if (Array.isArray(val)) {
+      setSelectedProjectIds(val.map(String));
+    } else if (val) {
+      setSelectedProjectIds([String(val)]);
+    } else {
+      setSelectedProjectIds([]);
+    }
+  };
   const [selectedTeamIds, setSelectedTeamIds] = useState([]);
   const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [status, setStatus] = useState("published");
@@ -204,6 +217,17 @@ export default function KnowledgeBaseEditor() {
       return [{ file_path: d.file_path, file_name: d.file_name || d.file_path.split("/").pop() }];
     }
     return [];
+  };
+
+  const isUserActive = (u) => {
+    if (!u) return false;
+    if (u.active === false || u.active === 0 || u.active === "0") return false;
+    if (u.is_active === false || u.is_active === 0 || u.is_active === "0") return false;
+    if (typeof u.status === "string") {
+      const s = u.status.toLowerCase().trim();
+      if (["inactive", "resigned", "terminated", "deleted", "disabled"].includes(s)) return false;
+    }
+    return true;
   };
 
   const handleDownloadFile = async (filePath, fileName) => {
@@ -300,6 +324,8 @@ export default function KnowledgeBaseEditor() {
   const autosaveTimerRef = useRef(null);
   const initialLoadRef = useRef(true);
   const currentDocIdRef = useRef(id || null);
+  const lastSavedDataRef = useRef(null);
+  const isSavingRef = useRef(false);
 
   // 1. Fetch Dynamic Dropdowns (Categories, Projects, Teams, Users)
   useEffect(() => {
@@ -335,7 +361,7 @@ export default function KnowledgeBaseEditor() {
 
     // Pre-fill projectId if passed via navigation state
     if (location.state?.projectId) {
-      setProjectId(String(location.state.projectId));
+      setSelectedProjectIds([String(location.state.projectId)]);
     }
   }, [location.state]);
 
@@ -349,7 +375,10 @@ export default function KnowledgeBaseEditor() {
       setSelectedCategoryOption({ value: catVal, label: catName });
     }
     if (d.visibility_level !== undefined) setVisibilityLevel(d.visibility_level || "organization");
-    if (d.project_id !== undefined) setProjectId(d.project_id ? String(d.project_id) : "");
+    if (d.project_ids !== undefined || d.project_id !== undefined) {
+      const pRaw = d.project_ids || (d.project_id ? [d.project_id] : []);
+      setSelectedProjectIds(Array.isArray(pRaw) ? pRaw.map(String) : (pRaw ? [String(pRaw)] : []));
+    }
     if (d.team_ids !== undefined) setSelectedTeamIds(Array.isArray(d.team_ids) ? d.team_ids : []);
     if (d.user_ids !== undefined) setSelectedUserIds(Array.isArray(d.user_ids) ? d.user_ids : []);
     if (d.status !== undefined) setStatus(d.status || "published");
@@ -394,7 +423,28 @@ export default function KnowledgeBaseEditor() {
   useEffect(() => {
     if (!id) {
       setLoading(false);
-      initialLoadRef.current = false;
+      const initialProjects = location.state?.projectId ? [String(location.state.projectId)] : [];
+      const initialSnap = JSON.stringify({
+        title: "",
+        content: "",
+        category: "",
+        visibilityLevel: "organization",
+        selectedProjectIds: initialProjects,
+        status: "published",
+        isPinned: false,
+        tags: [],
+        referenceLinks: [],
+        selectedTeamIds: [],
+        selectedUserIds: [],
+        deletedFiles: [],
+        newFilesCount: 0,
+      });
+      lastSavedDataRef.current = initialSnap;
+      setHasUnsavedChanges(false);
+      setSavingStatus("saved");
+      setTimeout(() => {
+        initialLoadRef.current = false;
+      }, 500);
       return;
     }
 
@@ -418,18 +468,54 @@ export default function KnowledgeBaseEditor() {
             setSelectedCategoryOption({ value: catIdVal, label: catName });
           }
           setVisibilityLevel(data.visibility_level || "organization");
-          setProjectId(data.project_id ? String(data.project_id) : "");
-          setSelectedTeamIds(Array.isArray(data.team_ids) ? data.team_ids : []);
-          setSelectedUserIds(Array.isArray(data.user_ids) ? data.user_ids : []);
+          const fetchedProjects = data.project_ids
+            ? (Array.isArray(data.project_ids) ? data.project_ids.map(String) : [String(data.project_ids)])
+            : (Array.isArray(data.projects) && data.projects.length > 0
+                ? data.projects.map((p) => String(p.id))
+                : (data.project_id ? [String(data.project_id)] : []));
+          const loadedTeamIds = Array.isArray(data.team_ids) && data.team_ids.length > 0
+            ? data.team_ids.map(Number)
+            : (Array.isArray(data.visibilities)
+                ? data.visibilities.filter((v) => v.team_id).map((v) => Number(v.team_id))
+                : []);
+          setSelectedTeamIds(loadedTeamIds);
+
+          const loadedUserIds = Array.isArray(data.user_ids) && data.user_ids.length > 0
+            ? data.user_ids.map(Number)
+            : (Array.isArray(data.visibilities)
+                ? data.visibilities.filter((v) => v.user_id).map((v) => Number(v.user_id))
+                : []);
+          setSelectedUserIds(loadedUserIds);
+
           setStatus(data.status || "published");
           setIsPinned(Boolean(data.is_pinned));
           setIsFavorited(Boolean(data.is_favorited));
-          setTags(Array.isArray(data.tags) ? data.tags : typeof data.tags === "string" ? JSON.parse(data.tags || "[]") : []);
-          setReferenceLinks(parseReferenceLinks(data));
+          const loadedTags = Array.isArray(data.tags) ? data.tags : typeof data.tags === "string" ? JSON.parse(data.tags || "[]") : [];
+          setTags(loadedTags);
+          const loadedLinks = parseReferenceLinks(data);
+          setReferenceLinks(loadedLinks);
           setExistingFiles(parseAttachments(data));
           setFiles([]);
           setDeletedFiles([]);
           currentDocIdRef.current = data.id;
+
+          const initialSnap = JSON.stringify({
+            title: (data.title || "").trim(),
+            content: data.content || "",
+            category: String(data.category_id || data.category || ""),
+            visibilityLevel: data.visibility_level || "organization",
+            selectedProjectIds: fetchedProjects,
+            status: data.status || "published",
+            isPinned: Boolean(data.is_pinned),
+            tags: loadedTags,
+            referenceLinks: loadedLinks.map((l) => (typeof l === "string" ? l.trim() : "")).filter(Boolean),
+            selectedTeamIds: loadedTeamIds,
+            selectedUserIds: loadedUserIds,
+            deletedFiles: [],
+            newFilesCount: 0,
+          });
+          lastSavedDataRef.current = initialSnap;
+          setHasUnsavedChanges(false);
           setSavingStatus("saved");
           setLastSavedTime(new Date());
 
@@ -534,7 +620,58 @@ export default function KnowledgeBaseEditor() {
     }
   };
 
-  // 3. Save / Update Article Function
+  // 3. Compute normalized JSON snapshot of editor form state for deep comparison
+  const computeSnapshot = useCallback(() => {
+    const validLinks = Array.isArray(referenceLinks)
+      ? referenceLinks.map((l) => (typeof l === "string" ? l.trim() : "")).filter(Boolean)
+      : [];
+    return JSON.stringify({
+      title: (title || "").trim(),
+      content: content || "",
+      category: String(selectedCategoryOption?.value || categoryId || ""),
+      visibilityLevel: visibilityLevel || "organization",
+      selectedProjectIds: Array.isArray(selectedProjectIds) ? selectedProjectIds.map(String) : [],
+      status: status || "published",
+      isPinned: Boolean(isPinned),
+      tags: Array.isArray(tags) ? tags : [],
+      referenceLinks: validLinks,
+      selectedTeamIds: Array.isArray(selectedTeamIds) ? selectedTeamIds : [],
+      selectedUserIds: Array.isArray(selectedUserIds) ? selectedUserIds : [],
+      deletedFiles: Array.isArray(deletedFiles) ? deletedFiles : [],
+      newFilesCount: Array.isArray(files) ? files.length : 0,
+    });
+  }, [
+    title,
+    content,
+    selectedCategoryOption,
+    categoryId,
+    visibilityLevel,
+    selectedProjectIds,
+    status,
+    isPinned,
+    tags,
+    referenceLinks,
+    selectedTeamIds,
+    selectedUserIds,
+    deletedFiles,
+    files,
+  ]);
+
+  // 4. Track unsaved changes via deep comparison snapshot
+  useEffect(() => {
+    if (initialLoadRef.current || loading) return;
+    if (lastSavedDataRef.current === null) return;
+    const currentDataStr = computeSnapshot();
+    const isDirty = currentDataStr !== lastSavedDataRef.current;
+    setHasUnsavedChanges(isDirty);
+    if (isDirty) {
+      setSavingStatus("unsaved");
+    } else if (savingStatus !== "saving") {
+      setSavingStatus("saved");
+    }
+  }, [computeSnapshot, loading]);
+
+  // 5. Save / Update Article Function
   const saveArticle = useCallback(
     async (isManual = false, overrideStatus = null) => {
       if (!title.trim()) {
@@ -542,7 +679,10 @@ export default function KnowledgeBaseEditor() {
         return;
       }
 
+      if (isSavingRef.current) return;
+      isSavingRef.current = true;
       setSavingStatus("saving");
+
       try {
         const token = authToken();
         const fd = new FormData();
@@ -561,7 +701,12 @@ export default function KnowledgeBaseEditor() {
           }
         }
         fd.append("visibility_level", visibilityLevel);
-        if (projectId) fd.append("project_id", projectId);
+        if (selectedProjectIds && selectedProjectIds.length > 0) {
+          fd.append("project_id", String(selectedProjectIds[0]));
+          selectedProjectIds.forEach((pId) => {
+            if (pId) fd.append("project_ids[]", String(pId));
+          });
+        }
         fd.append("status", overrideStatus || status);
         fd.append("is_pinned", isPinned ? "1" : "0");
 
@@ -629,22 +774,44 @@ export default function KnowledgeBaseEditor() {
           setLastSavedTime(new Date());
 
           const savedItem = data.data;
+          let updatedLinks = validLinks;
           if (savedItem) {
             setExistingFiles(parseAttachments(savedItem));
             setFiles([]);
             setDeletedFiles([]);
             if (savedItem.reference_links || savedItem.reference_link) {
-              setReferenceLinks(parseReferenceLinks(savedItem));
+              const parsedL = parseReferenceLinks(savedItem);
+              setReferenceLinks(parsedL);
+              updatedLinks = parsedL.map((l) => (typeof l === "string" ? l.trim() : "")).filter(Boolean);
             }
           }
 
-          const savedDocId = data.data?.id || activeId;
+          // Reset snapshot so isDirty check knows current state is clean
           const finalStatus = overrideStatus || status;
+          const newSnapshot = JSON.stringify({
+            title: title.trim(),
+            content: content || "",
+            category: String(selectedCategoryOption?.value || categoryId || ""),
+            visibilityLevel: visibilityLevel || "organization",
+            selectedProjectIds: Array.isArray(selectedProjectIds) ? selectedProjectIds.map(String) : [],
+            status: finalStatus || "published",
+            isPinned: Boolean(isPinned),
+            tags: Array.isArray(tags) ? tags : [],
+            referenceLinks: updatedLinks,
+            selectedTeamIds: Array.isArray(selectedTeamIds) ? selectedTeamIds : [],
+            selectedUserIds: Array.isArray(selectedUserIds) ? selectedUserIds : [],
+            deletedFiles: [],
+            newFilesCount: 0,
+          });
+          lastSavedDataRef.current = newSnapshot;
+          setHasUnsavedChanges(false);
+
+          const savedDocId = data.data?.id || activeId;
           const actionType = isManual
             ? (finalStatus === "published" ? (activeId ? "Edited" : "Published") : "Edited")
             : "Edited";
 
-          // Activity Logging: Knowledge Base Document
+          // Activity Logging: Knowledge Base Document (only on manual save)
           if (isManual) {
             fetch(`${API_URL}/activity-logs`, {
               method: "POST",
@@ -677,7 +844,19 @@ export default function KnowledgeBaseEditor() {
                 body: JSON.stringify({ knowledge_base_id: data.data.id }),
               }).catch(() => {});
             }
-            if (location.state?.projectId) {
+            if (selectedProjectIds.length > 0) {
+              selectedProjectIds.forEach((pId) => {
+                fetch(`${API_URL}/projects/${pId}/knowledge-bases`, {
+                  method: "POST",
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                    Accept: "application/json",
+                  },
+                  body: JSON.stringify({ knowledge_base_id: data.data.id }),
+                }).catch(() => {});
+              });
+            } else if (location.state?.projectId) {
               fetch(`${API_URL}/projects/${location.state.projectId}/knowledge-bases`, {
                 method: "POST",
                 headers: {
@@ -702,26 +881,26 @@ export default function KnowledgeBaseEditor() {
       } catch (e) {
         setSavingStatus("error");
         if (isManual) notify.error(t("An error occurred while saving.", { defaultValue: "An error occurred while saving." }));
+      } finally {
+        isSavingRef.current = false;
       }
     },
-    [title, content, categoryId, selectedCategoryOption, visibilityLevel, projectId, status, isPinned, tags, selectedTeamIds, selectedUserIds, referenceLinks, deletedFiles, files]
+    [title, content, categoryId, selectedCategoryOption, visibilityLevel, selectedProjectIds, status, isPinned, tags, selectedTeamIds, selectedUserIds, referenceLinks, deletedFiles, files, t, notify, user, location.state]
   );
 
-  // 4. Debounced Autosave (Triggers 2s after typing stops if document exists)
+  // 6. Debounced Autosave (Triggers 2s after typing stops if document exists and has unsaved changes)
   useEffect(() => {
-    if (initialLoadRef.current) return;
+    if (initialLoadRef.current || loading) return;
+    if (!hasUnsavedChanges) return;
     if (!title.trim()) return;
-
-    setSavingStatus("unsaved");
+    if (!currentDocIdRef.current) return;
 
     if (autosaveTimerRef.current) {
       clearTimeout(autosaveTimerRef.current);
     }
 
     autosaveTimerRef.current = setTimeout(() => {
-      if (currentDocIdRef.current) {
-        saveArticle(false);
-      }
+      saveArticle(false);
     }, 2000);
 
     return () => {
@@ -729,7 +908,7 @@ export default function KnowledgeBaseEditor() {
         clearTimeout(autosaveTimerRef.current);
       }
     };
-  }, [title, content, categoryId, visibilityLevel, projectId, isPinned, tags, referenceLinks, deletedFiles, files, saveArticle]);
+  }, [hasUnsavedChanges, title, saveArticle, loading]);
 
   // 5. Version History Fetching
   const fetchVersions = async () => {
@@ -769,8 +948,30 @@ export default function KnowledgeBaseEditor() {
       if (res.ok && data.success) {
         notify.success(t("Version restored successfully!", { defaultValue: "Version restored successfully!" }));
         if (data.data) {
-          setTitle(data.data.title || "");
-          setContent(data.data.content || "");
+          const restoredTitle = data.data.title || "";
+          const restoredContent = data.data.content || "";
+          setTitle(restoredTitle);
+          setContent(restoredContent);
+
+          const restoredSnapshot = JSON.stringify({
+            title: restoredTitle.trim(),
+            content: restoredContent,
+            category: String(selectedCategoryOption?.value || categoryId || ""),
+            visibilityLevel: visibilityLevel || "organization",
+            selectedProjectIds: Array.isArray(selectedProjectIds) ? selectedProjectIds.map(String) : [],
+            status: status || "published",
+            isPinned: Boolean(isPinned),
+            tags: Array.isArray(tags) ? tags : [],
+            referenceLinks: Array.isArray(referenceLinks)
+              ? referenceLinks.map((l) => (typeof l === "string" ? l.trim() : "")).filter(Boolean)
+              : [],
+            selectedTeamIds: Array.isArray(selectedTeamIds) ? selectedTeamIds : [],
+            selectedUserIds: Array.isArray(selectedUserIds) ? selectedUserIds : [],
+            deletedFiles: [],
+            newFilesCount: Array.isArray(files) ? files.length : 0,
+          });
+          lastSavedDataRef.current = restoredSnapshot;
+          setHasUnsavedChanges(false);
         }
         setVersionsModalOpen(false);
         setSavingStatus("saved");
@@ -942,11 +1143,6 @@ export default function KnowledgeBaseEditor() {
     { value: "team", label: t("Team (Specific Team Members)", { defaultValue: "Team (Specific Team Members)" }) },
     { value: "custom", label: t("Custom (Select Specific Users & Teams)", { defaultValue: "Custom (Select Specific Users & Teams)" }) },
     { value: "private", label: t("Private (Only Me)", { defaultValue: "Private (Only Me)" }) },
-  ];
-
-  const projectOptions = [
-    { value: "", label: t("Select Target Project...", { defaultValue: "Select Target Project..." }) },
-    ...projects.map((p) => ({ value: String(p.id), label: p.title })),
   ];
 
   if (loading) {
@@ -1818,36 +2014,42 @@ export default function KnowledgeBaseEditor() {
                 />
               </div>
 
-            {/* DYNAMIC SECONDARY: TARGET PROJECT */}
+            {/* DYNAMIC SECONDARY: TARGET PROJECT (MultiSelectDropdown with checkboxes) */}
             {visibilityLevel === "project_team" && (
               <div>
                 <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
                   {t("Target Project", { defaultValue: "Target Project" })} <span style={{ color: "#ef4444" }}>*</span>
                 </label>
-                <CustomSelect
-                  name="project_id"
-                  value={projectId}
-                  onChange={(val) => setProjectId(val)}
-                  options={projectOptions}
+                <MultiSelectDropdown
+                  value={selectedProjectIds}
+                  onChange={(vals) => {
+                    const ids = Array.isArray(vals) ? vals.map(String) : [];
+                    setSelectedProjectIds(ids);
+                  }}
+                  options={projects.map((p) => ({
+                    value: String(p.id),
+                    label: (p.title || "Project") + (p.business_id ? ` (${p.business_id})` : ""),
+                  }))}
+                  placeholder={t("Select Target Projects...", { defaultValue: "Select Target Projects..." })}
+                  searchPlaceholder={t("Search projects...", { defaultValue: "Search projects..." })}
+                  showChips={true}
                 />
               </div>
             )}
 
-            {/* DYNAMIC SECONDARY: TARGET TEAM */}
+            {/* DYNAMIC SECONDARY: TARGET TEAM (MultiSelectDropdown with checkboxes) */}
             {visibilityLevel === "team" && (
               <div>
                 <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
                   {t("Target Team", { defaultValue: "Target Team" })} <span style={{ color: "#ef4444" }}>*</span>
                 </label>
-                <CustomSelect
-                  name="target_team_id"
-                  value={selectedTeamIds[0] ? String(selectedTeamIds[0]) : ""}
-                  onChange={(val) => setSelectedTeamIds(val ? [Number(val)] : [])}
-                  placeholder={t("Select Team...", { defaultValue: "Select Team..." })}
-                  options={[
-                    { value: "", label: t("Select Team...", { defaultValue: "Select Team..." }) },
-                    ...teams.map((tItem) => ({ value: String(tItem.id), label: tItem.name })),
-                  ]}
+                <MultiSelectDropdown
+                  value={selectedTeamIds}
+                  onChange={(vals) => setSelectedTeamIds(vals.map(Number))}
+                  options={teams.map((tItem) => ({ value: tItem.id, label: tItem.name }))}
+                  placeholder={t("Select Target Teams...", { defaultValue: "Select Target Teams..." })}
+                  searchPlaceholder={t("Search teams...", { defaultValue: "Search teams..." })}
+                  showChips={true}
                 />
               </div>
             )}
@@ -1876,10 +2078,12 @@ export default function KnowledgeBaseEditor() {
                   <MultiSelectDropdown
                     value={selectedUserIds}
                     onChange={(vals) => setSelectedUserIds(vals.map(Number))}
-                    options={usersList.map((u) => ({
-                      value: u.id,
-                      label: `${u.name}${u.role ? ` (${u.role})` : ""}`,
-                    }))}
+                    options={usersList
+                      .filter((u) => isUserActive(u) || selectedUserIds.includes(Number(u.id)) || selectedUserIds.includes(String(u.id)))
+                      .map((u) => ({
+                        value: u.id,
+                        label: `${u.name}${u.role ? ` (${u.role})` : ""}`,
+                      }))}
                     placeholder={t("Select Users...", { defaultValue: "Select Users..." })}
                     searchPlaceholder={t("Search users...", { defaultValue: "Search users..." })}
                     showChips={true}

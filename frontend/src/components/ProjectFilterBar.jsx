@@ -3,6 +3,7 @@ import { IoSearchOutline, IoFilterOutline } from "react-icons/io5";
 import { useTranslation } from "react-i18next";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
+import { isUserActive } from "../utils/filterUtils";
 import CustomSelect from "./CustomSelect";
 
 /**
@@ -39,7 +40,7 @@ export default function ProjectFilterBar({
 
   const userOptions = [
     { value: "", label: t("All Members", { defaultValue: "All Members" }) },
-    ...users.map((u) => ({ value: String(u.id), label: u.name })),
+    ...users.filter((u) => isUserActive(u) || String(filters?.user_id) === String(u.id)).map((u) => ({ value: String(u.id), label: u.name })),
   ];
 
   const statusOptions = [
@@ -207,6 +208,7 @@ export default function ProjectFilterBar({
               {t("Member / Assignee", { defaultValue: "Member / Assignee" })}
             </label>
             <CustomSelect
+              size="sm"
               name="filter_user_id"
               value={filters?.user_id || ""}
               onChange={(val) => onFilterChange("user_id", val)}
@@ -228,6 +230,8 @@ export default function ProjectFilterBar({
               {t("Status")}
             </label>
             <CustomSelect
+              size="sm"
+              showSearch={false}
               name="filter_status"
               value={filters?.status || ""}
               onChange={(val) => onFilterChange("status", val)}

@@ -60,73 +60,69 @@ class ProjectController extends Controller
     public function index()
     {
         $user = request()->user();
+        $userId = (int) $user->id;
         $filter = request()->query('filter');
 
-        if (in_array($user->role, ['admin', 'manager'])) {
-            $projectsQuery = Project::with(['creator:id,name,role', 'team:id,name', 'updatedBy:id,name,role'])
-                ->withCount(['tasks as total_tasks', 'tasks as completed_tasks' => function ($q) {
-                    $q->whereIn('status', $this->completedTaskStatuses());
-                }])
-                ->withCount(['tasks as approved_tasks' => function ($q) {
-                    $q->where('status', 'approved');
-                }])
-                ->withCount(['deliverables as pending_deliverables_count' => function ($q) {
-                    $q->whereNull('task_id')->where('status', 'pending');
-                }])
-                ->orderBy('sort_order')
-                ->latest('id');
-        } elseif ($user->role === 'guest') {
-            $projectsQuery = Project::whereJsonContains('guest_ids', $user->id)
-                ->with(['creator:id,name,role', 'team:id,name', 'updatedBy:id,name,role'])
-                ->withCount(['tasks as total_tasks', 'tasks as completed_tasks' => function ($q) {
-                    $q->whereIn('status', $this->completedTaskStatuses());
-                }])
-                ->withCount(['tasks as approved_tasks' => function ($q) {
-                    $q->where('status', 'approved');
-                }])
-                ->withCount(['deliverables as pending_deliverables_count' => function ($q) {
-                    $q->whereNull('task_id')->where('status', 'pending');
-                }])
-                ->orderBy('sort_order')
-                ->latest('id');
-        } else {
-            $userTeamIds = Team::where('leader_id', $user->id)
-                ->orWhereHas('members', fn ($q) => $q->where('users.id', $user->id))
-                ->pluck('id')
-                ->toArray();
+        $projectsQuery = Project::query();
 
-            $projectsQuery = Project::where(function ($q) use ($user, $userTeamIds) {
-                $q->whereHas('manuallyVisibleTo', fn ($q) => $q->where('user_id', $user->id))
-                    ->orWhere(function ($q) use ($user, $userTeamIds) {
-                        $q->where(function ($q) use ($user, $userTeamIds) {
-                            $q->where('created_by', $user->id)
-                                ->orWhereIn('team_id', $userTeamIds)
-                                ->orWhereHas('team.members', fn ($q) => $q->where('users.id', $user->id))
-                                ->orWhereHas('team', fn ($q) => $q->where('leader_id', $user->id));
+        // Only apply visibility checks if the user is not super_admin, admin, or manager
+        if (! in_array($user->role, ['admin', 'manager', 'super_admin'])) {
+            if ($user->role === 'guest') {
+                $projectsQuery->whereJsonContains('guest_ids', $userId);
+            } else {
+                $userTeamIds = Team::where('leader_id', $userId)
+                    ->orWhereHas('members', fn ($q) => $q->where('users.id', $userId))
+                    ->pluck('id')
+                    ->toArray();
 
-                            if (!empty($userTeamIds)) {
+                $hasProjectUserTable = \Illuminate\Support\Facades\Schema::hasTable('project_user');
+                $hasManagerIdColumn = \Illuminate\Support\Facades\Schema::hasColumn('projects', 'manager_id');
+
+                $projectsQuery->where(function ($q) use ($userId, $userTeamIds, $hasProjectUserTable, $hasManagerIdColumn) {
+                    $q->where('created_by', $userId)
+                      ->orWhereJsonContains('assigned_users', (string) $userId)
+                      ->orWhereJsonContains('assigned_users', (int) $userId)
+                      ->orWhereHas('manuallyVisibleTo', fn ($sq) => $sq->where('user_id', $userId));
+
+                    if ($hasManagerIdColumn) {
+                        $q->orWhere('manager_id', $userId);
+                    }
+
+                    if ($hasProjectUserTable) {
+                        $q->orWhereHas('members', function ($memberQuery) use ($userId) {
+                            $memberQuery->where('project_user.user_id', $userId)->orWhere('users.id', $userId);
+                        });
+                    }
+
+                    if (! empty($userTeamIds)) {
+                        $q->orWhere(function ($tq) use ($userId, $userTeamIds) {
+                            $tq->where(function ($inner) use ($userId, $userTeamIds) {
+                                $inner->whereIn('team_id', $userTeamIds);
                                 foreach ($userTeamIds as $tid) {
-                                    $q->orWhereJsonContains('team_ids', (int)$tid);
-                                    $q->orWhereJsonContains('team_ids', (string)$tid);
+                                    $inner->orWhereJsonContains('team_ids', (int) $tid)
+                                          ->orWhereJsonContains('team_ids', (string) $tid);
                                 }
-                            }
-                        })->whereDoesntHave('visibility', fn ($q) => $q->where('user_id', $user->id)->where('is_visible', false));
-                    })
-                    ->orWhereJsonContains('assigned_users', $user->id);
-            })
-                ->with(['creator:id,name,role', 'team:id,name', 'updatedBy:id,name,role'])
-                ->withCount(['tasks as total_tasks', 'tasks as completed_tasks' => function ($q) {
-                    $q->whereIn('status', $this->completedTaskStatuses());
-                }])
-                ->withCount(['tasks as approved_tasks' => function ($q) {
-                    $q->where('status', 'approved');
-                }])
-                ->withCount(['deliverables as pending_deliverables_count' => function ($q) {
-                    $q->whereNull('task_id')->where('status', 'pending');
-                }])
-                ->orderBy('sort_order')
-                ->latest('id');
+                                $inner->orWhereHas('team.members', fn ($mq) => $mq->where('users.id', $userId))
+                                      ->orWhereHas('team', fn ($lq) => $lq->where('leader_id', $userId));
+                            })->whereDoesntHave('visibility', fn ($vq) => $vq->where('user_id', $userId)->where('is_visible', false));
+                        });
+                    }
+                });
+            }
         }
+
+        $projectsQuery->with(['creator:id,name,role', 'team:id,name', 'updatedBy:id,name,role'])
+            ->withCount(['tasks as total_tasks', 'tasks as completed_tasks' => function ($q) {
+                $q->whereIn('status', $this->completedTaskStatuses());
+            }])
+            ->withCount(['tasks as approved_tasks' => function ($q) {
+                $q->where('status', 'approved');
+            }])
+            ->withCount(['deliverables as pending_deliverables_count' => function ($q) {
+                $q->whereNull('task_id')->where('status', 'pending');
+            }])
+            ->orderBy('sort_order')
+            ->latest('id');
 
         $rawStatuses = request()->query('status', request()->query('statuses'));
         if ($filter === 'active' || $rawStatuses === 'active') {
@@ -197,9 +193,19 @@ class ProjectController extends Controller
             }
             $userIds = array_values(array_filter(array_map('intval', $rawUserIds)));
             if (! empty($userIds)) {
-                $projectsQuery->where(function ($q) use ($userIds) {
+                $hasProjectUserTable = \Illuminate\Support\Facades\Schema::hasTable('project_user');
+                $hasManagerIdColumn = \Illuminate\Support\Facades\Schema::hasColumn('projects', 'manager_id');
+                $projectsQuery->where(function ($q) use ($userIds, $hasProjectUserTable, $hasManagerIdColumn) {
                     foreach ($userIds as $uid) {
-                        $q->orWhereJsonContains('assigned_users', $uid);
+                        $q->orWhereJsonContains('assigned_users', (int) $uid)
+                          ->orWhereJsonContains('assigned_users', (string) $uid)
+                          ->orWhere('created_by', (int) $uid);
+                        if ($hasManagerIdColumn) {
+                            $q->orWhere('manager_id', (int) $uid);
+                        }
+                    }
+                    if ($hasProjectUserTable) {
+                        $q->orWhereHas('members', fn ($mq) => $mq->whereIn('users.id', $userIds));
                     }
                 });
             }
@@ -332,7 +338,7 @@ class ProjectController extends Controller
     public function getTasks(Project $project)
     {
         $hasParentId = \Illuminate\Support\Facades\Schema::hasColumn('tasks', 'parent_id');
-        $columns = ['id', 'business_id', 'project_id', 'title', 'status', 'priority', 'end_date', 'assigned_to', 'assigned_by', 'current_owner'];
+        $columns = ['id', 'business_id', 'project_id', 'title', 'status', 'priority', 'end_date', 'assigned_to', 'assigned_by', 'creator_id', 'current_owner'];
         if ($hasParentId) {
             $columns[] = 'parent_id';
         }
@@ -341,6 +347,7 @@ class ProjectController extends Controller
             'assignee:id,name,email,role',
             'assignees:id,name,email,role',
             'assigner:id,name,email,role',
+            'creator:id,name,email,role',
             'currentOwner:id,name',
         ];
         if ($hasParentId) {
@@ -444,18 +451,49 @@ class ProjectController extends Controller
         $validated['priority'] = $validated['priority'] ?? 'Medium';
         $validated['status'] = $validated['status'] ?? 'in_progress';
 
-        if (! empty($validated['team_id']) && empty($validated['assigned_users'])) {
-            $team = Team::with('leader:id')->find($validated['team_id']);
-            if ($team && $team->leader_id) {
-                $validated['assigned_users'] = [$team->leader_id];
-            } else {
-                $validated['assigned_users'] = $validated['assigned_users'] ?? [];
-            }
-        } else {
-            $validated['assigned_users'] = $validated['assigned_users'] ?? [];
+        $rawAssigned = $validated['assigned_users'] ?? $request->input('assigned_users') ?? $request->input('members') ?? [];
+        if (is_string($rawAssigned)) {
+            $rawAssigned = json_decode($rawAssigned, true) ?? [];
         }
 
+        $allAssignedIds = collect(is_array($rawAssigned) ? $rawAssigned : [])
+            ->map(function ($item) {
+                if (is_array($item) && isset($item['id'])) return (int) $item['id'];
+                if (is_object($item) && isset($item->id)) return (int) $item->id;
+                return is_numeric($item) ? (int) $item : null;
+            })
+            ->filter(fn ($id) => ! is_null($id) && $id > 0)
+            ->values()
+            ->all();
+
+        if ($request->has('team_leads') || $request->has('team_lead_ids')) {
+            $rawLeads = $request->input('team_leads') ?? $request->input('team_lead_ids') ?? [];
+            if (is_string($rawLeads)) {
+                $rawLeads = json_decode($rawLeads, true) ?? [];
+            }
+            $leadIds = collect(is_array($rawLeads) ? $rawLeads : [])
+                ->map(fn ($item) => is_array($item) && isset($item['id']) ? (int) $item['id'] : (is_numeric($item) ? (int) $item : null))
+                ->filter(fn ($id) => ! is_null($id) && $id > 0)
+                ->values()
+                ->all();
+            $allAssignedIds = array_values(array_unique(array_merge($allAssignedIds, $leadIds)));
+        }
+
+        if (! empty($validated['team_id']) && empty($allAssignedIds)) {
+            $team = Team::with('leader:id')->find($validated['team_id']);
+            if ($team && $team->leader_id) {
+                $allAssignedIds[] = (int) $team->leader_id;
+            }
+        }
+
+        $validated['assigned_users'] = $allAssignedIds;
+
         $project = Project::create($validated);
+
+        if (\Illuminate\Support\Facades\Schema::hasTable('project_user')) {
+            $project->members()->sync($allAssignedIds);
+        }
+
         if (! empty($followers)) {
             $project->followers()->sync($followers);
         }
@@ -613,7 +651,9 @@ class ProjectController extends Controller
         // ── Authorization (single query for non-admin users) ──
         if (! $isAdminOrManager) {
             $isCreator = (int) $project->created_by === $userId;
-            $isAssigned = in_array($userId, array_map('intval', $project->assigned_users ?? []));
+            $isManager = (int) ($project->manager_id ?? 0) === $userId;
+            $isAssigned = in_array($userId, array_map('intval', (array) ($project->assigned_users ?? [])))
+                || (\Illuminate\Support\Facades\Schema::hasTable('project_user') && $project->users()->where('users.id', $userId)->exists());
             $isTeamLead = $user->role === 'team_lead';
             $isGuestClient = $user->role === 'guest' && $project->isAccessibleByGuest($user);
 
@@ -626,7 +666,7 @@ class ProjectController extends Controller
             $isManuallyVisible = false;
             $hasTasksUnderProject = false;
 
-            if (! $isCreator && ! $isAssigned && ! $isTeamLead && ! $isGuestClient) {
+            if (! $isCreator && ! $isManager && ! $isAssigned && ! $isTeamLead && ! $isGuestClient) {
                 try {
                     $checks = \DB::select("
                         SELECT
@@ -642,7 +682,7 @@ class ProjectController extends Controller
                 }
             }
 
-            if (! $isCreator && ! $isAssigned && ! $isTeamMember && ! $hasTasksUnderProject && ! $isManuallyVisible && ! $isTeamLead && ! $isGuestClient) {
+            if (! $isCreator && ! $isManager && ! $isAssigned && ! $isTeamMember && ! $hasTasksUnderProject && ! $isManuallyVisible && ! $isTeamLead && ! $isGuestClient) {
                 return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
             }
         }
@@ -662,11 +702,12 @@ $baseRelations = [
             $with = [
                 'assignees:id,name,email,role',
                 'assigner:id,name,email,role',
+                'creator:id,name,email,role',
                 'deliverables' => fn ($q) => $q->with(['assignee:id,name,email,role', 'creator:id,name,email,role']),
             ];
             if ($hasParentIdColumn) {
                 $with[] = 'parent:id,business_id,title';
-                $with['subtasks'] = fn ($sq) => $sq->with(['assignees:id,name,email,role', 'assigner:id,name,email,role']);
+                $with['subtasks'] = fn ($sq) => $sq->with(['assignees:id,name,email,role', 'assigner:id,name,email,role', 'creator:id,name,email,role']);
             }
 
             $withCount = [
@@ -736,12 +777,14 @@ $baseRelations = [
         $payload['tasks'] = $project->tasks->map(fn ($t) => [
             'id' => $t->id, 'business_id' => $t->business_id, 'title' => $t->title, 'status' => $t->status,
             'priority' => $t->priority, 'start_date' => $t->start_date, 'end_date' => $t->end_date, 'assigned_to' => $t->assigned_to,
-            'assigned_by' => $t->assigned_by, 'current_owner' => $t->current_owner, 'sort_order' => $t->sort_order,
+            'assigned_by' => $t->assigned_by, 'creator_id' => $t->creator_id, 'created_by' => $t->created_by ?? $t->creator_id,
+            'current_owner' => $t->current_owner, 'sort_order' => $t->sort_order,
             'total_deliverables' => $t->total_deliverables ?? 0,
             'approved_deliverables' => $t->approved_deliverables ?? 0,
             'pending_deliverables' => $t->pending_deliverables ?? 0,
-            'assignees' => $t->assignees->map(fn ($a) => ['id' => $a->id, 'name' => $a->name])->toArray(),
-            'assigner' => $t->assigner ? ['id' => $t->assigner->id, 'name' => $t->assigner->name, 'role' => $t->assigner->role] : null,
+            'assignees' => $t->assignees->map(fn ($a) => ['id' => $a->id, 'name' => $a->name, 'role' => $a->role ?? null])->toArray(),
+            'assigner' => $t->assigner ? ['id' => $t->assigner->id, 'name' => $t->assigner->name, 'role' => $t->assigner->role] : ($t->creator ? ['id' => $t->creator->id, 'name' => $t->creator->name, 'role' => $t->creator->role] : null),
+            'creator' => $t->creator ? ['id' => $t->creator->id, 'name' => $t->creator->name, 'role' => $t->creator->role] : null,
             'created_at' => $t->created_at,
             'updated_at' => $t->updated_at,
         ])->toArray();
@@ -1001,6 +1044,15 @@ $baseRelations = [
             ->toArray();
         $validated['updated_by'] = $user->id;
         $project->update($validated);
+
+        if (\Illuminate\Support\Facades\Schema::hasTable('project_user') && (array_key_exists('assigned_users', $validated) || $request->has('assigned_users') || $request->has('members') || $request->has('team_leads'))) {
+            $assignedToSync = collect(is_array($project->assigned_users) ? $project->assigned_users : [])
+                ->map(fn ($id) => is_array($id) ? (int) ($id['id'] ?? 0) : (int) $id)
+                ->filter(fn ($id) => $id > 0)
+                ->values()
+                ->all();
+            $project->members()->sync($assignedToSync);
+        }
 
         if ($request->has('followers')) {
             $project->followers()->sync($followers ?? []);
@@ -3103,7 +3155,8 @@ public function getEvents(Project $project): JsonResponse
             ->get(['id', 'title', 'business_id', 'status', 'priority', 'assigned_to', 'current_owner']);
 
         // 2. Active Deliverables (subtasks) for this project assigned to $user
-        $activeDeliverables = Deliverable::where(function ($dq) use ($project) {
+        $activeDeliverables = Deliverable::with(['task:id,title,business_id'])
+            ->where(function ($dq) use ($project) {
                 $dq->where('project_id', $project->id)
                    ->orWhereHas('task', fn ($tq) => $tq->where('project_id', $project->id));
             })
@@ -3143,7 +3196,7 @@ public function getEvents(Project $project): JsonResponse
 
     /**
      * Remove a member from a project with optional active task reassignment.
-     * If member has active tasks, reassign_to_user_id is mandatory.
+     * If member has active tasks, reassign_to_user_id is mandatory when items are selected.
      */
     public function removeAndReassignMember(Request $request, Project $project, User $user): JsonResponse
     {
@@ -3203,12 +3256,14 @@ public function getEvents(Project $project): JsonResponse
         $activeDeliverablesCount = $activeDeliverables->count();
         $totalActiveCount = $activeTasksCount + $activeDeliverablesCount;
 
-        $reassignToUserId = $request->input('reassign_to_user_id');
+        $reassignToUserId = $request->input('reassign_to_user_id') ?? $request->input('replacement_user_id');
+        $selectedTaskIds = $request->input('selected_task_ids');
+        $selectedDeliverableIds = $request->input('selected_deliverable_ids');
 
         if ($totalActiveCount > 0 && empty($reassignToUserId)) {
             return response()->json([
                 'success' => false,
-                'message' => 'This user has active tasks in this project. Please select another project member to reassign them to.',
+                'message' => 'This user has active tasks in this project. Please select a team member to reassign them to.',
                 'total_active_count' => $totalActiveCount,
                 'active_tasks_count' => $activeTasksCount,
                 'active_deliverables_count' => $activeDeliverablesCount,
@@ -3232,11 +3287,30 @@ public function getEvents(Project $project): JsonResponse
             }
         }
 
+        // Determine which tasks and deliverables to reassign vs unassign
+        if (is_array($selectedTaskIds)) {
+            $selectedTaskIdMap = array_flip(array_map('intval', $selectedTaskIds));
+            $tasksToReassign = $activeTasks->filter(fn ($t) => isset($selectedTaskIdMap[(int) $t->id]));
+            $tasksToUnassign = $activeTasks->filter(fn ($t) => ! isset($selectedTaskIdMap[(int) $t->id]));
+        } else {
+            $tasksToReassign = $activeTasks;
+            $tasksToUnassign = collect();
+        }
+
+        if (is_array($selectedDeliverableIds)) {
+            $selectedDelivIdMap = array_flip(array_map('intval', $selectedDeliverableIds));
+            $delivsToReassign = $activeDeliverables->filter(fn ($d) => isset($selectedDelivIdMap[(int) $d->id]));
+            $delivsToUnassign = $activeDeliverables->filter(fn ($d) => ! isset($selectedDelivIdMap[(int) $d->id]));
+        } else {
+            $delivsToReassign = $activeDeliverables;
+            $delivsToUnassign = collect();
+        }
+
         DB::beginTransaction();
         try {
-            // 1. Reassign active tasks if reassignment target is provided
-            if ($reassignUser) {
-                foreach ($activeTasks as $task) {
+            // 1. Process tasks reassignment
+            if ($reassignUser && $tasksToReassign->isNotEmpty()) {
+                foreach ($tasksToReassign as $task) {
                     $taskUpdates = [];
                     if ((int) $task->assigned_to === (int) $user->id) {
                         $taskUpdates['assigned_to'] = $reassignUser->id;
@@ -3271,9 +3345,37 @@ public function getEvents(Project $project): JsonResponse
                         ]);
                     } catch (\Throwable $e) {}
                 }
+            }
 
-                // 2. Reassign active deliverables (subtasks)
-                foreach ($activeDeliverables as $deliv) {
+            // 1b. Unassign non-selected tasks from the removed member
+            foreach ($tasksToUnassign as $task) {
+                $taskUpdates = [];
+                if ((int) $task->assigned_to === (int) $user->id) {
+                    $taskUpdates['assigned_to'] = null;
+                }
+                if ((int) $task->current_owner === (int) $user->id) {
+                    $taskUpdates['current_owner'] = null;
+                }
+                if (! empty($taskUpdates)) {
+                    $taskUpdates['updated_by'] = $authUser->id;
+                    $task->update($taskUpdates);
+                }
+                if (\Illuminate\Support\Facades\Schema::hasTable('task_user')) {
+                    $task->assignees()->detach($user->id);
+                }
+                try {
+                    $task->workflowEvents()->create([
+                        'type' => 'unassigned',
+                        'user_id' => $authUser->id,
+                        'description' => "Task unassigned from {$user->name} due to member removal from project {$project->title}",
+                        'created_at' => now(),
+                    ]);
+                } catch (\Throwable $e) {}
+            }
+
+            // 2. Process deliverables (subtasks) reassignment
+            if ($reassignUser && $delivsToReassign->isNotEmpty()) {
+                foreach ($delivsToReassign as $deliv) {
                     $delivUpdates = [];
                     if ((int) $deliv->assigned_to === (int) $user->id) {
                         $delivUpdates['assigned_to'] = $reassignUser->id;
@@ -3310,7 +3412,33 @@ public function getEvents(Project $project): JsonResponse
                 }
             }
 
-            // 3. Detach member from project
+            // 2b. Unassign non-selected deliverables from the removed member
+            foreach ($delivsToUnassign as $deliv) {
+                $delivUpdates = [];
+                if ((int) $deliv->assigned_to === (int) $user->id) {
+                    $delivUpdates['assigned_to'] = null;
+                }
+                if ((int) $deliv->current_owner === (int) $user->id) {
+                    $delivUpdates['current_owner'] = null;
+                }
+                if (! empty($delivUpdates)) {
+                    $delivUpdates['updated_by'] = $authUser->id;
+                    $deliv->update($delivUpdates);
+                }
+                if (\Illuminate\Support\Facades\Schema::hasTable('deliverable_user')) {
+                    $deliv->assignees()->detach($user->id);
+                }
+                try {
+                    $deliv->workflowEvents()->create([
+                        'type' => 'unassigned',
+                        'user_id' => $authUser->id,
+                        'description' => "Deliverable unassigned from {$user->name} due to member removal from project {$project->title}",
+                        'created_at' => now(),
+                    ]);
+                } catch (\Throwable $e) {}
+            }
+
+            // 3. Detach member from project and auto-attach replacement user if from "Add & Assign"
             $currentAssigned = $project->assigned_users ?? [];
             if (is_string($currentAssigned)) {
                 $currentAssigned = json_decode($currentAssigned, true) ?? [];
@@ -3321,7 +3449,7 @@ public function getEvents(Project $project): JsonResponse
                 ->values()
                 ->all();
 
-            // If tasks were reassigned to a user not in assigned_users, add them
+            // If tasks were reassigned to a user not in assigned_users, add them to project
             if ($reassignUser && ! in_array((int) $reassignUser->id, $updatedAssigned)) {
                 $updatedAssigned[] = (int) $reassignUser->id;
             }
@@ -3352,7 +3480,7 @@ public function getEvents(Project $project): JsonResponse
             try {
                 $msg = "Member {$user->name} was removed from the project.";
                 if ($reassignUser) {
-                    $msg .= " Active tasks ({$activeTasks->count()}) and subtasks ({$activeDeliverables->count()}) were reassigned to {$reassignUser->name}.";
+                    $msg .= " Active tasks ({$tasksToReassign->count()}) and subtasks ({$delivsToReassign->count()}) were reassigned to {$reassignUser->name}.";
                 }
                 $project->workflowEvents()->create([
                     'type' => 'member_removed',
@@ -3367,10 +3495,12 @@ public function getEvents(Project $project): JsonResponse
             return response()->json([
                 'success' => true,
                 'message' => $reassignUser
-                    ? "Member {$user->name} removed and {$totalActiveCount} active item(s) reassigned to {$reassignUser->name}."
+                    ? "Member {$user->name} removed and {$tasksToReassign->count()} task(s), {$delivsToReassign->count()} subtask(s) reassigned to {$reassignUser->name}."
                     : "Member {$user->name} removed successfully.",
-                'reassigned_tasks_count' => $activeTasks->count(),
-                'reassigned_deliverables_count' => $activeDeliverables->count(),
+                'reassigned_tasks_count' => $tasksToReassign->count(),
+                'reassigned_deliverables_count' => $delivsToReassign->count(),
+                'unassigned_tasks_count' => $tasksToUnassign->count(),
+                'unassigned_deliverables_count' => $delivsToUnassign->count(),
             ]);
         } catch (\Throwable $e) {
             DB::rollBack();

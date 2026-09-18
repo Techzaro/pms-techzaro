@@ -45,7 +45,7 @@ import API_URL from "../config/api";
 import { authToken, rolePath, getUser } from "../utils/auth";
 import { renderDynamicDates } from "../utils/tableDateUtils";
 import { formatDateTimeInline } from "../utils/formatDateTime";
-import { getUpdatedSinceThreshold } from "../utils/filterUtils";
+import { getUpdatedSinceThreshold, matchStatusFilter } from "../utils/filterUtils";
 import { isDelegationRejectedByMe, isDelegationRevokedFromMe, isDeliverableItem } from "../utils/delegationUtils";
 import { showSuccessMessage, toast } from "../utils/notify";
 import { useNotification } from "../context/NotificationContext";
@@ -446,6 +446,14 @@ const [customStartDate, setCustomStartDate] = useState("");
       });
     }
 
+    const selectedStatuses = Array.isArray(advancedFilters.statuses) && advancedFilters.statuses.length > 0
+      ? advancedFilters.statuses
+      : (Array.isArray(advancedFilters.status) && advancedFilters.status.length > 0 ? advancedFilters.status : []);
+
+    if (selectedStatuses.length > 0) {
+      list = list.filter((item) => matchStatusFilter(getEffectiveStatus(item), selectedStatuses));
+    }
+
     if (statusFilter) {
       const sf = String(statusFilter).toLowerCase();
       if (sf === "due_today") {
@@ -495,7 +503,7 @@ const [customStartDate, setCustomStartDate] = useState("");
     }
 
     return list;
-  }, [baseItems, statusFilter, advancedFilters.priority, advancedFilters.priorities, advancedFilters.updated_since, advancedFilters.updated_since_value, advancedFilters.updated_since_unit, pendingStatuses, inProgressStatuses, submittedStatuses, completedStatuses, pausedStatuses, declinedStatuses, abandonedStatuses]);
+  }, [baseItems, statusFilter, advancedFilters.priority, advancedFilters.priorities, advancedFilters.statuses, advancedFilters.status, advancedFilters.updated_since, advancedFilters.updated_since_value, advancedFilters.updated_since_unit, pendingStatuses, inProgressStatuses, submittedStatuses, completedStatuses, pausedStatuses, declinedStatuses, abandonedStatuses]);
 
   const taskIdList = filteredItems.map((i) => i.id);
 
@@ -910,6 +918,10 @@ const [customStartDate, setCustomStartDate] = useState("");
             if (key === "priority" || key === "priorities") {
               updated.priority = val;
               updated.priorities = val;
+            }
+            if (key === "statuses" || key === "status") {
+              updated.statuses = val;
+              updated.status = val;
             }
             return updated;
           });

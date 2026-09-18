@@ -37,6 +37,15 @@ class TaskMinResource extends JsonResource
                 'id' => $this->assigner->id,
                 'name' => $this->assigner->name,
                 'role' => $this->assigner->role,
+            ], fn () => $this->whenLoaded('creator', fn () => [
+                'id' => $this->creator->id,
+                'name' => $this->creator->name,
+                'role' => $this->creator->role,
+            ])),
+            'creator' => $this->whenLoaded('creator', fn () => [
+                'id' => $this->creator->id,
+                'name' => $this->creator->name,
+                'role' => $this->creator->role,
             ]),
             'total_deliverables' => $this->total_deliverables ?? 0,
             'approved_deliverables' => $this->approved_deliverables ?? 0,

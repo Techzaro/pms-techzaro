@@ -294,6 +294,10 @@ class Project extends Model
             $memberIds->push((int) $this->created_by);
         }
 
+        if (! empty($this->manager_id)) {
+            $memberIds->push((int) $this->manager_id);
+        }
+
         try {
             if (\Illuminate\Support\Facades\Schema::hasTable('project_user')) {
                 $pivotUserIds = $this->users()->pluck('users.id')->map(fn ($id) => (int) $id);
@@ -369,6 +373,12 @@ class Project extends Model
         return $this->belongsToMany(User::class, 'project_user')->withTimestamps();
     }
 
+    /** All members assigned to this project (alias to users relation). */
+    public function members(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'project_user')->withTimestamps();
+    }
+
     /** All users following this project (many-to-many). */
     public function followers(): BelongsToMany
     {
@@ -388,8 +398,8 @@ class Project extends Model
             return true;
         }
 
-        // Project Creator
-        if ((int) $this->created_by === $userId) {
+        // Project Creator or Manager
+        if ((int) $this->created_by === $userId || (int) ($this->manager_id ?? 0) === $userId) {
             return true;
         }
 
@@ -398,6 +408,19 @@ class Project extends Model
         if (in_array($userId, $assignedUsers, true)) {
             return true;
         }
+
+        // Check pivot table project_user
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasTable('project_user')) {
+                if ($this->relationLoaded('members')) {
+                    if ($this->members->contains('id', $userId)) return true;
+                } elseif ($this->relationLoaded('users')) {
+                    if ($this->users->contains('id', $userId)) return true;
+                } else {
+                    if ($this->members()->where('users.id', $userId)->exists()) return true;
+                }
+            }
+        } catch (\Throwable $e) {}
 
         // Primary Team check
         if (!empty($this->team_id)) {

@@ -26,6 +26,11 @@ export function getUpdatedSinceThreshold(preset, customVal, customUnit) {
   if (p === "24h" || p === "24_hours" || p === "24hours" || p === "1d") {
     return new Date(now.getTime() - 24 * 60 * 60 * 1000);
   }
+  if (p === "today") {
+    const d = new Date(now);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
   if (p === "7d" || p === "7_days" || p === "7days") {
     return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   }
@@ -81,3 +86,86 @@ export function formatForDatetimeLocal(val) {
   }
   return str;
 }
+
+/**
+ * Checks whether a user object is an active (non-resigned/terminated/disabled) employee.
+ * @param {Object} u - User object
+ * @returns {boolean}
+ */
+export function isUserActive(u) {
+  if (!u) return false;
+  if (u.active === false || u.active === 0 || u.active === "0") return false;
+  if (u.is_active === false || u.is_active === 0 || u.is_active === "0") return false;
+  if (u.deletion_requested === true || u.deletion_requested === 1 || u.deletion_requested === "1") return false;
+  if (typeof u.status === "string") {
+    const s = u.status.toLowerCase().trim();
+    if (["inactive", "resigned", "terminated", "deleted", "disabled", "archived", "suspended"].includes(s)) return false;
+  }
+  return true;
+}
+
+export const STATUS_MAP = {
+  pending: ["pending", "planned", "planning", "draft", "todo", "to_do", "to-do", "new", "not_started", "unassigned"],
+  in_progress: ["in_progress", "in progress", "in-progress", "doing", "working", "underway", "under_way", "acknowledged", "started"],
+  submitted: ["submitted", "review", "in_review", "under_review", "submitted_late", "awaiting_approval", "awaiting_checkpoint"],
+  completed: ["completed", "approved", "done", "finished", "closed"],
+  paused: ["paused", "pause", "hold", "on_hold", "on hold", "on-hold"],
+  declined: ["declined", "rejected", "failed", "rework_required"],
+  abandoned: ["abandoned", "abandon_requested", "cancelled", "canceled"],
+};
+
+/**
+ * Checks if a task/deliverable matches the selected status multi-select filter array.
+ * If selectedStatuses is empty or contains "all", returns true.
+ * Strictly excludes any item whose status does not belong to any of the selected statuses.
+ *
+ * @param {string} itemStatus - The status of the task or deliverable
+ * @param {Array<string>} selectedStatuses - Array of selected statuses from filter (e.g. ['Pending', 'In Progress'])
+ * @returns {boolean}
+ */
+export function matchStatusFilter(itemStatus, selectedStatuses) {
+  if (!selectedStatuses || !Array.isArray(selectedStatuses) || selectedStatuses.length === 0) {
+    return true;
+  }
+
+  const rawStatus = String(itemStatus || "").toLowerCase().trim();
+
+  return selectedStatuses.some((selected) => {
+    const s = String(selected || "").toLowerCase().trim();
+    if (!s || s === "all") return true;
+
+    if (s === "pending" || s === "planned" || s === "draft" || s === "todo") {
+      return (
+        STATUS_MAP.pending.includes(rawStatus) ||
+        rawStatus === "" ||
+        rawStatus === "null" ||
+        rawStatus === "undefined"
+      );
+    }
+    if (s === "in_progress" || s === "in progress" || s === "in-progress") {
+      return STATUS_MAP.in_progress.includes(rawStatus);
+    }
+    if (s === "submitted" || s === "review" || s === "in_review" || s === "under_review") {
+      return STATUS_MAP.submitted.includes(rawStatus);
+    }
+    if (s === "completed" || s === "approved" || s === "done") {
+      return STATUS_MAP.completed.includes(rawStatus);
+    }
+    if (s === "paused" || s === "pause" || s === "hold" || s === "on_hold") {
+      return STATUS_MAP.paused.includes(rawStatus);
+    }
+    if (s === "declined" || s === "rejected" || s === "failed") {
+      return STATUS_MAP.declined.includes(rawStatus);
+    }
+    if (s === "abandoned" || s === "cancelled" || s === "canceled" || s === "abandon_requested") {
+      return STATUS_MAP.abandoned.includes(rawStatus);
+    }
+    if (s === "reopened") {
+      return rawStatus === "reopened";
+    }
+
+    return rawStatus === s;
+  });
+}
+
+

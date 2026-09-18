@@ -8,6 +8,7 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { MdExpandMore } from "react-icons/md";
+import { isUserActive } from "../utils/filterUtils";
 import "./UserSelectDropdown.css";
 
 const UserSelectDropdown = ({
@@ -52,11 +53,14 @@ const UserSelectDropdown = ({
   const updateDropdownPosition = useCallback(() => {
     if (ref.current) {
       const rect = ref.current.getBoundingClientRect();
+      const minW = 280;
+      const calcWidth = Math.max(rect.width, minW);
       setDropdownStyle({
         position: "fixed",
         top: rect.bottom + 6,
         left: rect.left,
-        width: rect.width,
+        width: calcWidth,
+        minWidth: minW,
         maxHeight: Math.min(320, window.innerHeight - rect.bottom - 20),
         zIndex: 99999,
       });
@@ -88,19 +92,20 @@ const UserSelectDropdown = ({
   };
 
   const toggleAll = async () => {
-    const filteredIds = filteredUsers.map((u) => String(u.id));
-    const allSelected = filteredIds.every((id) => isUserSelected(id));
+    const targetUsers = activeUsers.length > 0 ? activeUsers : filteredUsers;
+    const targetIds = targetUsers.map((u) => String(u.id));
+    const allSelected = targetIds.every((id) => isUserSelected(id));
     if (allSelected) {
       if (typeof onBeforeRemove === "function" || onBeforeRemove === true) {
-        for (const user of filteredUsers) {
+        for (const user of targetUsers) {
           await toggleUser(user.id);
         }
         return;
       }
-      onChange(selectedIds.filter((id) => !filteredIds.includes(String(typeof id === "object" ? id?.id : id))));
+      onChange(selectedIds.filter((id) => !targetIds.includes(String(typeof id === "object" ? id?.id : id))));
     } else {
       const currentStrIds = selectedIds.map((id) => String(typeof id === "object" ? id?.id : id));
-      onChange([...new Set([...currentStrIds, ...filteredIds])]);
+      onChange([...new Set([...currentStrIds, ...targetIds])]);
     }
   };
 
@@ -129,14 +134,19 @@ const UserSelectDropdown = ({
   };
 
   const q = search.toLowerCase().trim();
+  const availableUsers = users || [];
   const filteredUsers = q
-    ? users.filter((u) =>
+    ? availableUsers.filter((u) =>
         u.name?.toLowerCase().includes(q) ||
         u.role?.toLowerCase().includes(q) ||
         u.department?.toLowerCase().includes(q) ||
         u.email?.toLowerCase().includes(q)
       )
-    : users;
+    : availableUsers;
+
+  const activeUsers = filteredUsers.filter((u) => isUserActive(u));
+  const inactiveUsers = filteredUsers.filter((u) => !isUserActive(u));
+  const displayUsers = [...activeUsers, ...inactiveUsers];
 
   const handleInputChange = (e) => {
     setSearch(e.target.value);
@@ -176,16 +186,19 @@ const UserSelectDropdown = ({
       inputRef.current?.blur();
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
-      setHighlightedIndex((prev) => (prev < filteredUsers.length ? prev + 1 : 0));
+      setHighlightedIndex((prev) => (prev < displayUsers.length ? prev + 1 : 0));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : filteredUsers.length));
+      setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : displayUsers.length));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      if (highlightedIndex === 0) {
+      if (highlightedIndex === 0 && !viewOnly && activeUsers.length > 0) {
         toggleAll();
-      } else if (filteredUsers[highlightedIndex - 1]) {
-        toggleUser(filteredUsers[highlightedIndex - 1].id);
+      } else {
+        const targetUser = displayUsers[viewOnly ? highlightedIndex : highlightedIndex - 1];
+        if (targetUser) {
+          toggleUser(targetUser.id);
+        }
       }
     }
   };
@@ -314,23 +327,30 @@ const UserSelectDropdown = ({
             </div>
           )}
           <div className="usd-dropdown-items" ref={listRef} style={{ maxHeight: "inherit" }}>
-            {filteredUsers.length === 0 ? (
+            {displayUsers.length === 0 ? (
               <p className="usd-empty">{search ? t("No users match your search.", { defaultValue: "No users match your search." }) : t("No users available.", { defaultValue: "No users available." })}</p>
             ) : (
               <>
-                {!viewOnly && (
+                {!viewOnly && activeUsers.length > 0 && (
                   <div className={`usd-item ${highlightedIndex === 0 ? "usd-item--highlighted" : ""}`} onMouseEnter={() => setHighlightedIndex(0)}>
                     <label className="usd-item-left">
                       <input
                         type="checkbox"
-                        checked={filteredUsers.length > 0 && filteredUsers.every((u) => isUserSelected(u.id))}
+                        checked={activeUsers.length > 0 && activeUsers.every((u) => isUserSelected(u.id))}
                         onChange={toggleAll}
                       />
-                      <span className="usd-name" style={{ fontWeight: 600 }}>{t("Select All", { defaultValue: "Select All" })}</span>
+                      <span className="usd-name" style={{ fontWeight: 600 }}>{t("Select All Active", { defaultValue: "Select All Active" })}</span>
                     </label>
                   </div>
                 )}
-                {filteredUsers.map((user, idx) => {
+
+                {activeUsers.length > 0 && (
+                  <div className="usd-group-header">
+                    <span>{t("Active Users", { defaultValue: "Active Users" })}</span>
+                    <span className="usd-group-badge">{activeUsers.length}</span>
+                  </div>
+                )}
+                {activeUsers.map((user, idx) => {
                   const isSelected = isUserSelected(user.id);
                   const itemIdx = viewOnly ? idx : idx + 1;
                   return (
@@ -361,6 +381,43 @@ const UserSelectDropdown = ({
                     </div>
                   );
                 })}
+
+                {inactiveUsers.length > 0 && (
+                  <>
+                    <div className="usd-group-header usd-group-header--inactive">
+                      <span>{t("Inactive / Resigned", { defaultValue: "Inactive / Resigned" })}</span>
+                      <span className="usd-group-badge">{inactiveUsers.length}</span>
+                    </div>
+                    {inactiveUsers.map((user, idx) => {
+                      const isSelected = isUserSelected(user.id);
+                      const itemIdx = viewOnly ? activeUsers.length + idx : activeUsers.length + idx + 1;
+                      return (
+                        <div key={user.id} className={`usd-item ${isSelected ? "usd-item--selected" : ""} ${highlightedIndex === itemIdx ? "usd-item--highlighted" : ""}`} onMouseEnter={() => setHighlightedIndex(itemIdx)}>
+                          <label className="usd-item-left">
+                            <input
+                              type="checkbox"
+                              checked={viewOnly ? false : isSelected}
+                              onChange={viewOnly ? undefined : () => toggleUser(user.id)}
+                              disabled={viewOnly}
+                            />
+                            <div className="usd-item-info">
+                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                <span className="usd-name" style={{ color: "var(--text-muted, #64748b)" }}>{user.name}</span>
+                                <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 4, background: "#fee2e2", color: "#991b1b", fontWeight: 600 }}>
+                                  {t(user.status || "Inactive", { defaultValue: user.status || "Inactive" })}
+                                </span>
+                              </div>
+                              <div className="usd-meta">
+                                {user.role && <span className="usd-role">{formatRole(user.role)}</span>}
+                                {user.department && <span className="usd-dept">{user.department}</span>}
+                              </div>
+                            </div>
+                          </label>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
               </>
             )}
           </div>
